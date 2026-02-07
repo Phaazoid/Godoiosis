@@ -26,6 +26,7 @@ var selected_unit: Unit = null
 
 func _ready() -> void:
 	spawn_test_units()
+	
 	friendly_action_menu.id_pressed.connect(_on_friendly_action_menu_pressed)
 
 func _on_friendly_action_menu_pressed(id: int) -> void:
@@ -59,7 +60,7 @@ func _unhandled_input(event):
 		#When you click a unit, select it
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			
-			if selected_unit == clickedUnit and clickedUnit != null:
+			if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit):
 				show_action_menu(event.global_position)
 			if selected_unit != clickedUnit and clickedUnit != null:
 				selected_unit = clickedUnit
@@ -97,6 +98,11 @@ func clear_selection() -> void:
 		selected_unit = null
 		game_state = GameState.IDLE
 		overlay.clear
+		
+func can_select(unit: Unit) -> bool:
+	if unit != null:
+		return unit.faction == Team.Faction.PLAYER
+	return false
 		
 		
 func enter_move_mode() -> void:
@@ -138,7 +144,7 @@ func movement_cost(cell: Vector2i, unit: Unit) -> int:
 	#Cost for other things on tiles
 	var other := get_unit_at_cell(cell)
 	if other != null:
-		if other.team != unit.team: 
+		if Team.is_enemy(unit.faction, other.faction): 
 			return CANNOT_WALK_TILE #Can't move past enemies
 			
 	return cost
@@ -211,12 +217,7 @@ func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) ->
 		
 	path.push_front(start)
 	return path
-				
-				
-		
-		
 	
-
 	
 func spawn_test_units() -> void:
 	var test_cells := [
