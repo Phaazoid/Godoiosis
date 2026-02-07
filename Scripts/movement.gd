@@ -1,0 +1,50 @@
+extends Node
+class_name Movement_Component
+
+@export var cell: Vector2i
+@export var move_speed := 120 #pixels per second
+
+var grid: TileMapLayer
+var path: Array[Vector2i] = []
+var moving := false
+
+func set_grid(grid_layer: TileMapLayer) -> void:
+	grid = grid_layer
+	
+func set_cell(new_cell: Vector2i) -> void:
+	cell = new_cell
+	get_parent().position = grid.map_to_local(cell)
+
+func move_along_path(new_path: Array[Vector2i]) ->void:
+	if new_path.size() <= 1:
+		return
+	path = new_path.duplicate()
+	path.pop_front()
+	moving = true
+	
+	_move_to_next_cell()
+	
+func _move_to_next_cell() -> void:
+	if path.is_empty():
+		moving = false
+		return
+	
+	var next_cell : Vector2i = path.pop_front()
+	var target_pos := grid.map_to_local(next_cell)
+	
+	cell = next_cell
+	
+	var tween := create_tween()
+	tween.tween_property(get_parent(), "position", target_pos, get_parent().position.distance_to(target_pos)/move_speed)
+	
+	tween.finished.connect(_move_to_next_cell)
+	
+
+# Called when the node enters the scene tree for the first time.
+func _ready() -> void:
+	pass # Replace with function body.
+
+
+# Called every frame. 'delta' is the elapsed time since the previous frame.
+func _process(delta: float) -> void:
+	pass

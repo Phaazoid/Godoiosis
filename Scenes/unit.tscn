@@ -1,0 +1,22 @@
+[gd_scene format=3 uid="uid://b8b4cvid06h4k"]
+
+[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Scripts/unit.gd" id="1_davkp"]
+[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Scripts/stats.gd" id="2_5wnup"]
+[ext_resource type="Texture2D" uid="uid://yyhluxjgn3rd" path="res://Art/Game Boy Advance - Fire Emblem_ The Sacred Stones - Miscellaneous - Map Sprites.png" id="2_lpvrq"]
+[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Scripts/movement.gd" id="3_1sk4h"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_3rt3l"]
+atlas = ExtResource("2_lpvrq")
+region = Rect2(25, 4106, 16, 16)
+
+[node name="Unit" type="Node2D" unique_id=1798603063]
+script = ExtResource("1_davkp")
+
+[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1465762726]
+texture = SubResource("AtlasTexture_3rt3l")
+
+[node name="Stats_Component" type="Node" parent="." unique_id=1612176193]
+script = ExtResource("2_5wnup")
+
+[node name="Movement_Component" type="Node" parent="." unique_id=742177134]
+script = ExtResource("3_1sk4h")
