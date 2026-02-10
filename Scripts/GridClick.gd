@@ -9,18 +9,21 @@ extends Node2D
 
 const OVERLAY_SOURCE := 0
 const OVERLAY_MOVE_ATLAS := Vector2i(4,0)
+const OVERLAY_ATTACK_ATLAS := Vector2i(1,0)
 const CANNOT_WALK_TILE := 99
 const OUT_OF_MAP_TILE := 999
 
 enum GameState {
 	IDLE,
 	UNIT_SELECTED,
+	ATTACK_TARGETING,
 	CHOOSING_MOVE	
 }
 
 var game_state: GameState = GameState.IDLE
 var last_cell: Vector2i = Vector2i(-999, -999)
 var selected_unit: Unit = null
+var current_attack_range : Array[Vector2i] = []
 
 
 
@@ -33,8 +36,20 @@ func _on_friendly_action_menu_pressed(id: int) -> void:
 	match id:
 		0: #Move
 			enter_move_mode()
+		1: #Attack
+			game_state = GameState.ATTACK_TARGETING
+			compute_attack_range(selected_unit)
+			draw_attack_range(current_attack_range)
 		3: #Cancel
 			clear_selection()
+
+func try_attack(attacker: Unit, target: Unit) -> void:
+	if target.movement.cell in current_attack_range:  #if the target is in range
+		target.combat.apply_damage(attacker.combat.attack)
+		return
+
+	if not attacker.combat.can_attack(attacker, target): #if the target is valid
+		return
 
 func is_walkable(cell: Vector2i) -> bool:
 	var tile_data: TileData =grid.get_cell_tile_data(cell)
@@ -59,31 +74,42 @@ func _unhandled_input(event):
 		
 		#When you click a unit, select it
 		if event.button_index == MOUSE_BUTTON_LEFT:
-			
-			if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit):
-				show_action_menu(event.global_position)
-			if selected_unit != clickedUnit and clickedUnit != null:
-				selected_unit = clickedUnit
-				game_state = GameState.UNIT_SELECTED
-				
 			match game_state:
+				GameState.IDLE:
+					if selected_unit != clickedUnit and clickedUnit != null:
+						selected_unit = clickedUnit
+						game_state = GameState.UNIT_SELECTED
+				GameState.UNIT_SELECTED:
+					if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit):
+						show_action_menu(event.global_position)
+					if selected_unit != clickedUnit and clickedUnit != null:
+						selected_unit = clickedUnit
 				GameState.CHOOSING_MOVE:
 					if overlay.get_cell_source_id(otherCell) != -1:
 						var result = compute_move_range(selected_unit)
 						var path = reconstruct_path(result.came_from, selected_unit.movement.cell, otherCell)
 						selected_unit.movement.move_along_path(path)
 						exit_move_mode()
-				
+				GameState.ATTACK_TARGETING:
+					#if overlay.get_cell_source_id(otherCell) != -1:
+					var targetedUnit : Unit = get_unit_at_cell(otherCell)
+					if targetedUnit != null:
+						try_attack(selected_unit, targetedUnit)
+						print("Unit at ", selected_unit.movement.cell, " Tried to attack unit at ", targetedUnit.movement.cell)
+					exit_move_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
+						
+			
 			update_selection_overlay()
+			print("Current Gamestate is " + GameState.keys()[game_state])
 		#Right click deselects all
 		if event.button_index == MOUSE_BUTTON_RIGHT:
 			selected_unit = null
 			game_state = GameState.IDLE
 			update_selection_overlay()
-		if selected_unit != null:
-			print("Currently selected unit is unit at ", selected_unit.movement.cell)
-		else:
-			print("There is no currently selected unit")
+		#if selected_unit != null:
+			#print("Currently selected unit is unit at ", selected_unit.movement.cell)
+		#else:
+			#print("There is no currently selected unit")
 
 func show_action_menu(pos: Vector2i) -> void:
 	friendly_action_menu.position = pos
@@ -118,13 +144,14 @@ func update_selection_overlay():
 		return
 	overlay.set_cell(selected_unit.movement.cell, 0, Vector2i(2,0))
 	
-func spawn_unit(cell:Vector2i) -> void:
+func spawn_unit(cell:Vector2i, faction: Team.Faction) -> Unit:
 	var unit = unit_scene.instantiate()
+	unit.faction = faction
 	units_root.add_child(unit)
-	
 	unit.movement.set_grid(grid)
 	unit.movement.set_cell(cell)
 	
+	return unit
 
 func movement_cost(cell: Vector2i, unit: Unit) -> int:
 	var data := grid.get_cell_tile_data(cell)
@@ -151,7 +178,7 @@ func movement_cost(cell: Vector2i, unit: Unit) -> int:
 	
 func compute_move_range(unit: Unit) -> Dictionary:
 	var start := unit.movement.cell
-	var max_cost := unit.stats.move_range
+	var max_cost := unit.movement.move_range
 	
 	var frontier := []
 	var cost_so_far := {}
@@ -198,6 +225,34 @@ func compute_move_range(unit: Unit) -> Dictionary:
 	return {"costs": cost_so_far,
 				"came_from": came_from
 	}
+	
+func compute_attack_range(unit: Unit) -> void:
+	var origin := unit.movement.cell
+	var max_range := unit.combat.get_range()
+
+	var results: Array[Vector2i] = []
+	var frontier: Array[Vector2i] = [origin]
+	var distance := { origin: 0 }
+
+	while frontier.size() > 0:
+		var current : Vector2i = frontier.pop_front()
+
+		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+			var next : Vector2i = current + dir
+
+			#if not grid.is_cell_valid(next):
+			#	continue
+
+			var new_dist : int = distance[current] + 1
+			if new_dist > max_range:
+				continue
+
+			if not distance.has(next):
+				distance[next] = new_dist
+				frontier.append(next)
+				results.append(next)
+				
+	current_attack_range = results
 			
 func draw_move_range(result: Dictionary):
 	overlay.clear()
@@ -206,6 +261,11 @@ func draw_move_range(result: Dictionary):
 		if cell == selected_unit.movement.cell:
 			continue
 		overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_MOVE_ATLAS)
+		
+func draw_attack_range(cells: Array[Vector2i]):
+	overlay.clear()
+	for cell in cells:
+		overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_ATTACK_ATLAS)
 
 func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	var path : Array[Vector2i] = []
@@ -228,7 +288,12 @@ func spawn_test_units() -> void:
 		Vector2i(5, 6),
 	]
 	for cell in test_cells:
-		spawn_unit(cell)
+		spawn_unit(cell, Team.Faction.PLAYER)
+		
+	var test_enemy : Unit = spawn_unit(Vector2i(4,4), Team.Faction.ENEMY)
+	var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
+	var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
+
 
 func _process(_delta):
 	var mouse_world: Vector2 = get_global_mouse_position()

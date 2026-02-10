@@ -3,6 +3,7 @@ class_name Movement_Component
 
 @export var cell: Vector2i
 @export var move_speed := 120 #pixels per second
+@export var move_range: int = 5
 
 var grid: TileMapLayer
 var path: Array[Vector2i] = []
