@@ -1,0 +1,40 @@
+[gd_scene format=3 uid="uid://cbuid8103rdvh"]
+
+[ext_resource type="Script" uid="uid://b4veciw4appba" path="res://Scenes/turn_banner.gd" id="1_5ipho"]
+
+[sub_resource type="FontFile" id="FontFile_5ipho"]
+cache/0/variation_coordinates = {}
+cache/0/face_index = 0
+cache/0/embolden = 0.0
+cache/0/transform = Transform2D(1, 0, 0, 1, 0, 0)
+cache/0/spacing_top = 0
+cache/0/spacing_bottom = 0
+cache/0/spacing_space = 0
+cache/0/spacing_glyph = 0
+cache/0/baseline_offset = 0.0
+cache/0/16/0/ascent = 0.0
+cache/0/16/0/descent = 0.0
+cache/0/16/0/underline_position = 0.0
+cache/0/16/0/underline_thickness = 0.0
+cache/0/16/0/scale = 1.0
+cache/0/50/0/ascent = 0.0
+cache/0/50/0/descent = 0.0
+cache/0/50/0/underline_position = 0.0
+cache/0/50/0/underline_thickness = 0.0
+cache/0/50/0/scale = 1.0
+
+[sub_resource type="LabelSettings" id="LabelSettings_l5qph"]
+line_spacing = 5.0
+font = SubResource("FontFile_5ipho")
+font_size = 50
+font_color = Color(0.68206215, 0.023964878, 1.92523e-07, 1)
+outline_size = 5
+outline_color = Color(0, 0, 0, 1)
+
+[node name="TurnBanner" type="CanvasLayer" unique_id=1739318152]
+script = ExtResource("1_5ipho")
+
+[node name="TurnLabel" type="Label" parent="." unique_id=1575186755]
+offset_right = 40.0
+offset_bottom = 23.0
+label_settings = SubResource("LabelSettings_l5qph")

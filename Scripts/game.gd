@@ -5,6 +5,9 @@ extends Node2D
 @onready var overlay: TileMapLayer = $Overlay
 @onready var units_root: Node2D = $Units
 @onready var friendly_action_menu: PopupMenu = $FriendlyUnitActionMenu
+@onready var pause_menu :PopupMenu = $PauseMenu
+@onready var turn_manager = $TurnManager
+@onready var turn_banner = $TurnBanner
 @export var unit_scene: PackedScene
 
 const OVERLAY_SOURCE := 0
@@ -25,12 +28,19 @@ var last_cell: Vector2i = Vector2i(-999, -999)
 var selected_unit: Unit = null
 var current_attack_range : Array[Vector2i] = []
 
-
-
 func _ready() -> void:
 	spawn_test_units()
-	
+	pause_menu.id_pressed.connect(_on_pause_menu_pressed)
 	friendly_action_menu.id_pressed.connect(_on_friendly_action_menu_pressed)
+	turn_manager.connect("turn_started", _on_turn_started)
+
+func _on_turn_started(phase):
+	if phase == TurnManager.TurnPhase.PLAYER:
+		turn_banner.show_label("Player Turn")
+		start_player_turn()
+	else:
+		turn_banner.show_label("Enemy Turn")
+		start_enemy_turn()
 
 func _on_friendly_action_menu_pressed(id: int) -> void:
 	match id:
@@ -42,6 +52,15 @@ func _on_friendly_action_menu_pressed(id: int) -> void:
 			draw_attack_range(current_attack_range)
 		3: #Cancel
 			clear_selection()
+		4: #Wait
+			selected_unit.has_acted = true
+			
+func _on_pause_menu_pressed(id: int) -> void:
+	match id:
+		1: #End Turn
+			#print("Current Turn is " + TurnManager.TurnPhase.keys()[turn_manager.current_turn])
+			turn_manager.end_turn()
+
 
 func try_attack(attacker: Unit, target: Unit) -> void:
 	if target.movement.cell in current_attack_range:  #if the target is in range
@@ -73,18 +92,19 @@ func _unhandled_input(event):
 		var clickedUnit : Unit = get_unit_at_cell(clickedCell)
 		
 		#When you click a unit, select it
-		if event.button_index == MOUSE_BUTTON_LEFT:
+		if event.button_index == MOUSE_BUTTON_LEFT and turn_manager.is_player_turn():
 			match game_state:
 				GameState.IDLE:
 					if selected_unit != clickedUnit and clickedUnit != null:
 						selected_unit = clickedUnit
 						game_state = GameState.UNIT_SELECTED
 				GameState.UNIT_SELECTED:
-					if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit):
+					if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit) and not selected_unit.has_acted:
 						show_action_menu(event.global_position)
 					if selected_unit != clickedUnit and clickedUnit != null:
 						selected_unit = clickedUnit
-				GameState.CHOOSING_MOVE:
+				GameState.CHOOSING_MOVE: 
+					#Currently bugged, stays in this game state if same unit chosen, but selector field disappears
 					if overlay.get_cell_source_id(otherCell) != -1:
 						var result = compute_move_range(selected_unit)
 						var path = reconstruct_path(result.came_from, selected_unit.movement.cell, otherCell)
@@ -100,20 +120,41 @@ func _unhandled_input(event):
 						
 			
 			update_selection_overlay()
-			print("Current Gamestate is " + GameState.keys()[game_state])
+			#print("Current Gamestate is " + GameState.keys()[game_state])
 		#Right click deselects all
-		if event.button_index == MOUSE_BUTTON_RIGHT:
+		if event.button_index == MOUSE_BUTTON_RIGHT and turn_manager.is_player_turn():
 			selected_unit = null
 			game_state = GameState.IDLE
 			update_selection_overlay()
+			show_pause_menu(event.global_position)
 		#if selected_unit != null:
 			#print("Currently selected unit is unit at ", selected_unit.movement.cell)
 		#else:
 			#print("There is no currently selected unit")
 
+func start_enemy_turn():
+	await get_tree().create_timer(2.0).timeout #later make small waits between each enemy movement. 
+	for unit in units_root.get_children():
+		if unit.faction == Team.Faction.ENEMY:
+			print("I am enemy") #do enemy actions here
+		
+	turn_manager.end_turn()
+	
+func start_player_turn():
+	reset_player_units()
+	
+func reset_player_units():
+	for unit in units_root.get_children():
+		if unit.faction == Team.Faction.PLAYER:
+			unit.has_acted = false
+
 func show_action_menu(pos: Vector2i) -> void:
 	friendly_action_menu.position = pos
 	friendly_action_menu.popup()
+
+func show_pause_menu(pos: Vector2i) -> void:
+	pause_menu.position = pos
+	pause_menu.popup()
 
 func exit_move_mode() -> void:
 	game_state = GameState.IDLE

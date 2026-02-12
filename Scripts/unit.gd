@@ -6,7 +6,8 @@ class_name Unit
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
 var current_position: Vector2i
-var selected := false
+var selected := false #Not actually being used atm
+var has_acted := false
 
 #Ownership
 @onready var faction: Team.Faction
