@@ -1,10 +1,17 @@
 extends Node2D
 class_name Unit
 
+#This is a container for everything that is a unit on the map.  These only exist during combat. 
+#These have different components (movement, combat) that allow them to work, and reference specific UnitInstances to get their data. 
+
+
 
 #Core statas
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
+@export var unit_data: UnitData
+
+var unit_instance: UnitInstance
 var current_position: Vector2i
 var selected := false #Not actually being used atm
 var has_acted := false
@@ -17,6 +24,16 @@ func set_selected(value: bool) -> void:
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	if unit_data == null:
+		push_error("Unit missing UnitData.")
+		return
+		
+	unit_instance = UnitInstance.new()
+	unit_instance.data = unit_data
+	unit_instance.initialize()	
+	
+	unit_instance.died.connect(_on_instance_died)
+	
 	match faction:
 		Team.Faction.PLAYER:
 			modulate = Color.WHITE
@@ -25,12 +42,26 @@ func _ready() -> void:
 		Team.Faction.ALLY:
 			modulate = Color(0.6, 0.8, 1)
 			
+func _on_instance_died():
+	die()
+			
+func get_stat(stat_name: String) -> int:
+	if unit_instance == null:
+		return -1
+	return unit_instance.get_stat(stat_name)
+
+func get_current_hp() -> int:
+	return unit_instance.get_current_hp()
+
+func get_faction() -> Team.Faction:
+	return faction
+			
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	pass
 	
 func die() -> void:
 	queue_free()
-	
+
 func change_faction(new_faction: Team.Faction) -> void:
 	faction = new_faction

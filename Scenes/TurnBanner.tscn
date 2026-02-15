@@ -1,8 +1,11 @@
 [gd_scene format=3 uid="uid://cbuid8103rdvh"]
 
-[ext_resource type="Script" uid="uid://b4veciw4appba" path="res://Scenes/turn_banner.gd" id="1_5ipho"]
+[ext_resource type="Script" uid="uid://b4veciw4appba" path="res://Scripts/turn_banner.gd" id="1_5ipho"]
 
 [sub_resource type="FontFile" id="FontFile_5ipho"]
+subpixel_positioning = 0
+msdf_pixel_range = 14
+msdf_size = 128
 cache/0/variation_coordinates = {}
 cache/0/face_index = 0
 cache/0/embolden = 0.0

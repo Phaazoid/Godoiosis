@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://pfo7dqpus5g6"]
+
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/hair_mcgee_evil.png" id="1_ortoj"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Scripts/UnitData.gd" id="2_2shj4"]
+
+[resource]
+script = ExtResource("2_2shj4")
+display_name = "BadGuy1"
+portrait = ExtResource("1_ortoj")
+base_stats = Dictionary[String, int]({
+"DEF": 3,
+"MAG": 3,
+"MHP": 20,
+"SPD": 4,
+"STR": 5,
+"WIL": 4
+})
+growth_ranges = Dictionary[String, Vector2i]({
+"DEF": Vector2i(1, 2),
+"HP": Vector2i(3, 6),
+"STR": Vector2i(0, 3)
+})
+metadata/_custom_type_script = "uid://cvvknuw621ar2"

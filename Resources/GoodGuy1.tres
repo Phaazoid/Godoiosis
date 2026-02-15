@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://df742kv5sx400"]
+
+[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/hair_mcgee.png" id="1_3gn4t"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Scripts/UnitData.gd" id="2_cmjg0"]
+
+[resource]
+script = ExtResource("2_cmjg0")
+display_name = "GoodGuy1"
+portrait = ExtResource("1_3gn4t")
+base_stats = Dictionary[String, int]({
+"MHP": 20,
+"STR": 5
+})
+metadata/_custom_type_script = "uid://cvvknuw621ar2"

@@ -8,6 +8,7 @@ extends Node2D
 @onready var pause_menu :PopupMenu = $PauseMenu
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
+@onready var unit_info_panel: Control = $CanvasLayer/UnitInfoPanelControl
 @export var unit_scene: PackedScene
 
 const OVERLAY_SOURCE := 0
@@ -64,7 +65,7 @@ func _on_pause_menu_pressed(id: int) -> void:
 
 func try_attack(attacker: Unit, target: Unit) -> void:
 	if target.movement.cell in current_attack_range:  #if the target is in range
-		target.combat.apply_damage(attacker.combat.attack)
+		target.combat.apply_damage(attacker.get_stat("STR"))
 		return
 
 	if not attacker.combat.can_attack(attacker, target): #if the target is valid
@@ -96,13 +97,13 @@ func _unhandled_input(event):
 			match game_state:
 				GameState.IDLE:
 					if selected_unit != clickedUnit and clickedUnit != null:
-						selected_unit = clickedUnit
+						select_unit(clickedUnit)
 						game_state = GameState.UNIT_SELECTED
 				GameState.UNIT_SELECTED:
 					if selected_unit == clickedUnit and clickedUnit != null and can_select(clickedUnit) and not selected_unit.has_acted:
 						show_action_menu(event.global_position)
 					if selected_unit != clickedUnit and clickedUnit != null:
-						selected_unit = clickedUnit
+						select_unit(clickedUnit)
 				GameState.CHOOSING_MOVE: 
 					#Currently bugged, stays in this game state if same unit chosen, but selector field disappears
 					if overlay.get_cell_source_id(otherCell) != -1:
@@ -113,7 +114,7 @@ func _unhandled_input(event):
 				GameState.ATTACK_TARGETING:
 					#if overlay.get_cell_source_id(otherCell) != -1:
 					var targetedUnit : Unit = get_unit_at_cell(otherCell)
-					if targetedUnit != null:
+					if targetedUnit != null and targetedUnit.get_faction() != selected_unit.get_faction():
 						try_attack(selected_unit, targetedUnit)
 						print("Unit at ", selected_unit.movement.cell, " Tried to attack unit at ", targetedUnit.movement.cell)
 					exit_move_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
@@ -123,7 +124,7 @@ func _unhandled_input(event):
 			#print("Current Gamestate is " + GameState.keys()[game_state])
 		#Right click deselects all
 		if event.button_index == MOUSE_BUTTON_RIGHT and turn_manager.is_player_turn():
-			selected_unit = null
+			deselect_unit()
 			game_state = GameState.IDLE
 			update_selection_overlay()
 			show_pause_menu(event.global_position)
@@ -158,13 +159,21 @@ func show_pause_menu(pos: Vector2i) -> void:
 
 func exit_move_mode() -> void:
 	game_state = GameState.IDLE
-	selected_unit = null
+	deselect_unit()
 	overlay.clear()
+	
+func select_unit(unit: Unit):
+	selected_unit = unit
+	unit_info_panel.set_unit(unit)
+
+func deselect_unit():
+	selected_unit = null
+	unit_info_panel.set_unit(null)
 
 func clear_selection() -> void:
-		selected_unit = null
-		game_state = GameState.IDLE
-		overlay.clear
+	deselect_unit()
+	game_state = GameState.IDLE
+	overlay.clear
 		
 func can_select(unit: Unit) -> bool:
 	if unit != null:
@@ -185,12 +194,13 @@ func update_selection_overlay():
 		return
 	overlay.set_cell(selected_unit.movement.cell, 0, Vector2i(2,0))
 	
-func spawn_unit(cell:Vector2i, faction: Team.Faction) -> Unit:
-	var unit = unit_scene.instantiate()
+func spawn_unit(cell:Vector2i, faction: Team.Faction, data: UnitData) -> Unit:
+	var unit: Unit = unit_scene.instantiate()
 	unit.faction = faction
+	unit.unit_data = data
 	units_root.add_child(unit)
 	unit.movement.set_grid(grid)
-	unit.movement.set_cell(cell)
+	unit.movement.set_cell(cell)	
 	
 	return unit
 
@@ -321,6 +331,9 @@ func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) ->
 	
 	
 func spawn_test_units() -> void:
+	var test_data_baddy := preload("res://Resources/BadGuy1.tres")
+	var test_data_goody := preload("res://Resources/GoodGuy1.tres")
+	
 	var test_cells := [
 		Vector2i(3, 3),
 		Vector2i(5, 3),
@@ -329,11 +342,11 @@ func spawn_test_units() -> void:
 		Vector2i(5, 6),
 	]
 	for cell in test_cells:
-		spawn_unit(cell, Team.Faction.PLAYER)
+		spawn_unit(cell, Team.Faction.PLAYER, test_data_goody)
 		
-	var test_enemy : Unit = spawn_unit(Vector2i(4,4), Team.Faction.ENEMY)
-	var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
-	var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
+	var test_enemy : Unit = spawn_unit(Vector2i(4,4), Team.Faction.ENEMY, test_data_baddy)
+	#var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
+	#var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
 
 
 func _process(_delta):
