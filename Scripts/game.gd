@@ -117,7 +117,7 @@ func _unhandled_input(event):
 					if targetedUnit != null and targetedUnit.get_faction() != selected_unit.get_faction():
 						try_attack(selected_unit, targetedUnit)
 						print("Unit at ", selected_unit.movement.cell, " Tried to attack unit at ", targetedUnit.movement.cell)
-					exit_move_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
+						exit_move_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 						
 			
 			update_selection_overlay()
@@ -164,11 +164,11 @@ func exit_move_mode() -> void:
 	
 func select_unit(unit: Unit):
 	selected_unit = unit
+	print("Selected unit is ", selected_unit)
 	unit_info_panel.set_unit(unit)
 
 func deselect_unit():
-	selected_unit = null
-	unit_info_panel.set_unit(null)
+	select_unit(null)
 
 func clear_selection() -> void:
 	deselect_unit()
@@ -272,8 +272,24 @@ func compute_move_range(unit: Unit) -> Dictionary:
 			cost_so_far[next] = new_cost
 			came_from[next] = current_cell
 			frontier.append({ "cell": next, "cost": new_cost })
+			
+	#Filter the tiles in movement for other blockers (so far just allies)
+	var reachable := {}
+	for cell in cost_so_far.keys():
+		var other := get_unit_at_cell(cell)
+
+		# Allow standing on your starting tile
+		if cell == start:
+			reachable[cell] = cost_so_far[cell]
+			continue
+
+		# Block ending on any occupied tile
+		if other != null:
+			continue
+
+		reachable[cell] = cost_so_far[cell]
 		
-	return {"costs": cost_so_far,
+	return {"costs": reachable,
 				"came_from": came_from
 	}
 	
@@ -345,6 +361,8 @@ func spawn_test_units() -> void:
 		spawn_unit(cell, Team.Faction.PLAYER, test_data_goody)
 		
 	var test_enemy : Unit = spawn_unit(Vector2i(4,4), Team.Faction.ENEMY, test_data_baddy)
+	var test_enemy2 : Unit = spawn_unit(Vector2i(5,5), Team.Faction.ENEMY, test_data_baddy)
+
 	#var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
 	#var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
 
@@ -367,8 +385,8 @@ func _process(_delta):
 	if tile_data.has_custom_data("walkable"):
 		walkable = tile_data.get_custom_data("walkable")
 
-	var atlas_coords := Vector2i(0,0)
-	if not walkable:
-		atlas_coords = Vector2i(1,0)
+	#var atlas_coords := Vector2i(0,0)
+	#if not walkable:
+	#	atlas_coords = Vector2i(1,0)
 		#This was for testing cell hovering and walkability.  
 	#overlay.set_cell(cell, 0, atlas_coords)

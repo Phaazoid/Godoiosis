@@ -84,11 +84,7 @@ func set_current_hp(value: int):
 	
 func apply_damage(amount: int):
 	set_current_hp(current_hp - amount)
-	
-	if current_hp <= 0:
-		current_hp = 0
-		emit_signal("died")
-	
+		
 	
 func is_dead() -> bool:
 	return current_hp <= 0

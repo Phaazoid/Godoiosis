@@ -28,6 +28,7 @@ layout_mode = 2
 script = ExtResource("4_uqtkw")
 
 [node name="PortraitTexture" type="TextureRect" parent="UnitInfoPanel/UnitStatusHBox/PortraitPanel" unique_id=1208957522]
+custom_minimum_size = Vector2(160, 160)
 layout_mode = 0
 stretch_mode = 5
 

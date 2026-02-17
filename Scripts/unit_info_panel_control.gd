@@ -7,22 +7,18 @@ var current_unit: Unit
 
 func set_unit(unit: Unit):
 	current_unit = unit
-	
+
 	if unit == null:
 		visible = false
-		return
+	else:
+		visible = true
 	
-	visible = true
 	status_hbox.set_unit(unit)
-	
-
-
 	
 func clear():
 	current_unit = null
 	visible = false
 	
-
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:

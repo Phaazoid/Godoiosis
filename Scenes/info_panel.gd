@@ -8,7 +8,18 @@ var unit: Unit
 
 
 func set_unit(target: Unit):
+	#To prevent duplicate stacking.  
+	if unit: 
+		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
+		unit.unit_instance.died.disconnect(_on_unit_died)
+		
 	unit = target
+	
+	
+	if unit == null:
+		name_label.text = ""
+		hp_label.text = ""
+		return
 	
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
@@ -25,7 +36,7 @@ func _refresh():
 		hp_label.text = "ERROR"
 		return
 	name_label.text = unit.unit_data.display_name
-	hp_label.text = str(unit.get_current_hp(), "/",	unit.get_stat("MHP"))
+	hp_label.text = str(unit.get_current_hp(), "/", unit.get_stat("MHP"))
 	
 func _on_hp_changed(current, max):
 	hp_label.text = str(current, "/", max)
