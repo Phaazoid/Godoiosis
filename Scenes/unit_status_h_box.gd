@@ -2,7 +2,7 @@ extends HBoxContainer
 class_name UnitStatusUI
 
 @onready var portrait_panel = $PortraitPanel
-@onready var info_panel = $InfoPanel
+@onready var stats_panel = $StatsPanel
 
 var unit: Unit
 
@@ -10,7 +10,7 @@ var unit: Unit
 func set_unit(target: Unit):
 	unit = target
 	portrait_panel.set_unit(unit)
-	info_panel.set_unit(unit)
+	stats_panel.set_unit(unit)
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:

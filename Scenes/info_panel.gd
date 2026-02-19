@@ -1,10 +1,31 @@
 extends Panel
 
-@onready var name_label: Label = $NameLabel
-@onready var hp_label: Label = $HPLabel
+@onready var name_label: Label = $StatsMargin/StatsVBox/HeaderHBox/NameLabel
+@onready var hp_label: Label = $StatsMargin/StatsVBox/HeaderHBox/HPLabel
 
 var unit: Unit
+@onready var stats_container = $StatsMargin/StatsVBox/StatsContainer
 
+func _populate_stats():
+	#Clear old rows
+	for child in stats_container.get_children():
+		child.queue_free()
+	
+	var stats := unit.get_all_stats()
+	var stat_names := stats.keys()
+	
+	for stat_name in stat_names:
+		var name_label := Label.new()
+		name_label.text = stat_name
+		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		
+		var value_label := Label.new()
+		value_label.text = str(stats[stat_name])
+		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		if stat_name != "MHP":
+			stats_container.add_child((name_label))
+			stats_container.add_child(value_label)
+		
 
 
 func set_unit(target: Unit):
@@ -36,7 +57,8 @@ func _refresh():
 		hp_label.text = "ERROR"
 		return
 	name_label.text = unit.unit_data.display_name
-	hp_label.text = str(unit.get_current_hp(), "/", unit.get_stat("MHP"))
+	hp_label.text = str(unit.get_current_hp(), "/", unit.get_base_stat("MHP"))
+	_populate_stats()
 	
 func _on_hp_changed(current, max):
 	hp_label.text = str(current, "/", max)

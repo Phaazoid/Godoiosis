@@ -6,15 +6,33 @@
 [ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Scenes/portrait_panel.gd" id="4_uqtkw"]
 [ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Scenes/info_panel.gd" id="5_s5bvs"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
+bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.103743516, 0.103743546, 0.10374344, 1)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_s5bvs"]
+bg_color = Color(0.21176471, 0.21176471, 0.21176471, 0.5529412)
+border_width_left = 4
+border_width_top = 4
+border_width_right = 4
+border_width_bottom = 4
+border_color = Color(0.12955853, 0.12955844, 0.12955844, 1)
+
 [node name="UnitInfoPanelControl" type="Control" unique_id=1128572749]
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_a3gw8")
 
 [node name="UnitInfoPanel" type="Panel" parent="." unique_id=79521181]
+custom_minimum_size = Vector2(320, 160)
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_yiwsu")
 script = ExtResource("1_avix1")
 
 [node name="UnitStatusHBox" type="HBoxContainer" parent="UnitInfoPanel" unique_id=820636243]
@@ -24,6 +42,7 @@ offset_bottom = 40.0
 script = ExtResource("3_ov1ts")
 
 [node name="PortraitPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=883391330]
+custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
 script = ExtResource("4_uqtkw")
 
@@ -32,20 +51,37 @@ custom_minimum_size = Vector2(160, 160)
 layout_mode = 0
 stretch_mode = 5
 
-[node name="InfoPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=1160511504]
+[node name="StatsPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=1160511504]
+custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_s5bvs")
 script = ExtResource("5_s5bvs")
 
-[node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/InfoPanel" unique_id=1267400032]
+[node name="StatsMargin" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel" unique_id=1105607699]
 layout_mode = 0
-offset_right = 1.0
-offset_bottom = 23.0
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 8
 
-[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/InfoPanel" unique_id=413307239]
-layout_mode = 0
-offset_top = 27.0
-offset_right = 1.0
-offset_bottom = 50.0
-
-[node name="InventoryPanel" type="VBoxContainer" parent="UnitInfoPanel/UnitStatusHBox" unique_id=301430278]
+[node name="StatsVBox" type="VBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin" unique_id=301430278]
 layout_mode = 2
+
+[node name="HeaderHBox" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=1569280146]
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=1267400032]
+layout_mode = 2
+
+[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=413307239]
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="HSeparator" type="HSeparator" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=625630440]
+layout_mode = 2
+
+[node name="StatsContainer" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=1391879818]
+layout_mode = 2
+columns = 4

@@ -45,13 +45,25 @@ func _ready() -> void:
 func _on_instance_died():
 	die()
 			
-func get_stat(stat_name: String) -> int:
+func get_base_stat(stat: String) -> int:
 	if unit_instance == null:
 		return -1
-	return unit_instance.get_stat(stat_name)
+	return unit_instance.get_base_stat(stat)
+	
+func get_effective_stat(stat: String) -> int:
+	return get_base_stat(stat) + get_modifier(stat)
+	
+func get_modifier(stat: String) -> int:
+	return unit_instance.modifiers.get(stat)
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
+	
+func get_all_stats() -> Dictionary:
+	var result := {}
+	for stat in unit_data.base_stats.keys():
+		result[stat] = get_base_stat(stat)
+	return result
 
 func get_faction() -> Team.Faction:
 	return faction

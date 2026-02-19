@@ -13,6 +13,9 @@ signal hp_changed(current, max)
 #Permanent stat storage (base + growth gains, other permanent additions)
 var stats: Dictionary = {}
 
+#all buffs and debuffs from everything. Terrain, items, enemy attacks, etc. 
+var stat_modifiers: Dictionary = {}
+
 #Battle stats
 var current_hp: int = 0
 #effective str, other things here
@@ -28,7 +31,7 @@ func initialize():
 	
 	#reset battle stats
 	_refresh_derived_stats()
-	current_hp = get_stat("MHP")
+	current_hp = get_base_stat("MHP")
 
 func level_up():
 	#Basic level up function, that increments stats randomly from a range pulled from UnitData. 
@@ -56,9 +59,9 @@ func initialize_at_level(target_level: int):
 	
 	for i in range(target_level - 1):
 		level_up()
-	current_hp = get_stat("MHP")
+	current_hp = get_base_stat("MHP")
 
-func get_stat(stat_name: String) -> int:
+func get_base_stat(stat_name: String) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
 	return 0
@@ -76,8 +79,8 @@ func get_current_hp() -> int:
 	return current_hp
 	
 func set_current_hp(value: int):
-	current_hp = clamp(value, 0, get_stat("MHP"))
-	emit_signal("hp_changed", current_hp, get_stat("MHP"))
+	current_hp = clamp(value, 0, get_base_stat("MHP"))
+	emit_signal("hp_changed", current_hp, get_base_stat("MHP"))
 	
 	if current_hp <= 0:
 		emit_signal("died")

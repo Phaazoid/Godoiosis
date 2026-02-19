@@ -65,7 +65,7 @@ func _on_pause_menu_pressed(id: int) -> void:
 
 func try_attack(attacker: Unit, target: Unit) -> void:
 	if target.movement.cell in current_attack_range:  #if the target is in range
-		target.combat.apply_damage(attacker.get_stat("STR"))
+		target.combat.apply_damage(attacker.get_base_stat("STR"))
 		return
 
 	if not attacker.combat.can_attack(attacker, target): #if the target is valid
