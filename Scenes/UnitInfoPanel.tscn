@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Scenes/unit_status_h_box.gd" id="3_ov1ts"]
 [ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Scenes/portrait_panel.gd" id="4_uqtkw"]
 [ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Scenes/info_panel.gd" id="5_s5bvs"]
+[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Scenes/inventory_panel.gd" id="6_yiwsu"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
 bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)
@@ -85,3 +86,16 @@ layout_mode = 2
 [node name="StatsContainer" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=1391879818]
 layout_mode = 2
 columns = 4
+
+[node name="InventoryPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=1204748592]
+layout_mode = 2
+script = ExtResource("6_yiwsu")
+
+[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel" unique_id=16924804]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="InventorySlots" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel/MarginContainer" unique_id=1887954267]
+layout_mode = 2
+columns = 2

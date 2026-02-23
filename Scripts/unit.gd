@@ -11,10 +11,13 @@ class_name Unit
 @onready var movement: Movement_Component = $Movement_Component
 @export var unit_data: UnitData
 
+const MAX_INVENTORY_SIZE := 6 #Balance actual size later
+
 var unit_instance: UnitInstance
 var current_position: Vector2i
 var selected := false #Not actually being used atm
 var has_acted := false
+var inventory : Array[Item] = []
 
 #Ownership
 @onready var faction: Team.Faction
@@ -24,13 +27,15 @@ func set_selected(value: bool) -> void:
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
+	
 	if unit_data == null:
 		push_error("Unit missing UnitData.")
 		return
-		
+
 	unit_instance = UnitInstance.new()
 	unit_instance.data = unit_data
-	unit_instance.initialize()	
+	unit_instance.initialize()
+	inventory.resize(MAX_INVENTORY_SIZE)
 	
 	unit_instance.died.connect(_on_instance_died)
 	
@@ -41,7 +46,19 @@ func _ready() -> void:
 			modulate = Color(1, 0.6, 0.6)
 		Team.Faction.ALLY:
 			modulate = Color(0.6, 0.8, 1)
-			
+	
+	
+func add_item(item: Item) -> bool:
+	for i in range (inventory.size()):
+		if inventory[i] == null:
+			inventory[i] = item
+			return true
+	return false
+	
+func remove_item(index: int):
+	if index >= 0 and index < inventory.size():
+		inventory[index] = null
+		
 func _on_instance_died():
 	die()
 			
