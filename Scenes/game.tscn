@@ -8,6 +8,7 @@
 [ext_resource type="PackedScene" uid="uid://b8b4cvid06h4k" path="res://Scenes/unit.tscn" id="5_7jktm"]
 [ext_resource type="PackedScene" uid="uid://cbuid8103rdvh" path="res://Scenes/TurnBanner.tscn" id="7_1l0tm"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
+[ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="9_h4fw4"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_feb5d"]
 texture = ExtResource("3_feb5d")
@@ -9358,20 +9359,6 @@ zoom = Vector2(2, 2)
 
 [node name="Units" type="Node2D" parent="." unique_id=431218200]
 
-[node name="FriendlyUnitActionMenu" type="PopupMenu" parent="." unique_id=2046255925]
-oversampling_override = 1.0
-item_count = 5
-item_0/text = "Move"
-item_0/id = 0
-item_1/text = "Attack"
-item_1/id = 1
-item_2/text = "Other"
-item_2/id = 2
-item_3/text = "Wait"
-item_3/id = 4
-item_4/text = "Cancel"
-item_4/id = 3
-
 [node name="PauseMenu" type="PopupMenu" parent="." unique_id=1809816356]
 item_count = 3
 item_0/text = "Inspect"
@@ -9383,9 +9370,9 @@ item_2/id = 2
 
 [node name="TurnBanner" parent="." unique_id=1739318152 instance=ExtResource("7_1l0tm")]
 
-[node name="CanvasLayer" type="CanvasLayer" parent="." unique_id=901426984]
+[node name="UnitInfo" type="CanvasLayer" parent="." unique_id=901426984]
 
-[node name="UnitInfoPanelControl" parent="CanvasLayer" unique_id=1128572749 instance=ExtResource("8_v158k")]
+[node name="UnitInfoPanelControl" parent="UnitInfo" unique_id=1128572749 instance=ExtResource("8_v158k")]
 anchors_preset = 14
 anchor_top = 0.5
 anchor_right = 1.0
@@ -9394,3 +9381,5 @@ offset_top = -324.0
 offset_bottom = -324.0
 grow_horizontal = 2
 grow_vertical = 2
+
+[node name="DevOverlay" parent="." unique_id=1904372676 instance=ExtResource("9_h4fw4")]

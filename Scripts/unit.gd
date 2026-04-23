@@ -14,7 +14,7 @@ class_name Unit
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 
 var unit_instance: UnitInstance
-var current_position: Vector2i
+#var current_position: Vector2i
 var selected := false #Not actually being used atm
 var has_acted := false
 var inventory : Array[Item] = []
@@ -61,6 +61,7 @@ func remove_item(index: int):
 		
 func _on_instance_died():
 	die()
+			
 			
 func get_base_stat(stat: String) -> int:
 	if unit_instance == null:

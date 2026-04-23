@@ -16,14 +16,19 @@ border_width_bottom = 2
 border_color = Color(0.103743516, 0.103743546, 0.10374344, 1)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_s5bvs"]
-bg_color = Color(0.21176471, 0.21176471, 0.21176471, 0.5529412)
+bg_color = Color(0.16470589, 0.16470589, 0.16470589, 0.5529412)
 border_width_left = 4
 border_width_top = 4
 border_width_right = 4
 border_width_bottom = 4
 border_color = Color(0.12955853, 0.12955844, 0.12955844, 1)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
 
 [node name="UnitInfoPanelControl" type="Control" unique_id=1128572749]
+visible = false
 layout_mode = 3
 anchors_preset = 0
 script = ExtResource("1_a3gw8")

@@ -6,14 +6,15 @@ class_name UnitInfoPanelControl
 var current_unit: Unit
 
 func set_unit(unit: Unit):
-	current_unit = unit
+	if current_unit != unit:
+		current_unit = unit
 
-	if unit == null:
-		visible = false
-	else:
-		visible = true
+		if unit == null:
+			visible = false
+		else:
+			visible = true
 	
-	status_hbox.set_unit(unit)
+		status_hbox.set_unit(unit)
 	
 func clear():
 	current_unit = null
