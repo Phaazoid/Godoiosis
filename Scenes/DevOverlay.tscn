@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://i2kwnt6y4jcd"]
 
-[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Scenes/dev_overlay.gd" id="1_sulrl"]
+[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Scripts/dev_overlay.gd" id="1_sulrl"]
 
 [node name="DevOverlay" type="CanvasLayer" unique_id=1904372676]
 visible = false
@@ -29,7 +29,7 @@ offset_left = 5.0
 offset_top = 10.0
 offset_right = 105.0
 offset_bottom = 41.0
-text = "Solider"
+text = "Soldier1"
 placeholder_text = "Name"
 
 [node name="FactionCheckBoxes" type="GridContainer" parent="Panel/MarginContainer/HBoxContainer/SpawnSection" unique_id=1333475274]
@@ -73,7 +73,7 @@ text = "ATK"
 
 [node name="SPDLabel" type="Label" parent="Panel/MarginContainer/HBoxContainer/SpawnSection/StatInput" unique_id=1337701736]
 layout_mode = 2
-text = "SPD"
+text = "LDR"
 
 [node name="WILLabel" type="Label" parent="Panel/MarginContainer/HBoxContainer/SpawnSection/StatInput" unique_id=1533385744]
 layout_mode = 2

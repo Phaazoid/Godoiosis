@@ -11,7 +11,7 @@ class_name Combat_Component
 func _ready() -> void:
 	var unit := owner as Unit
 	if unit == null:
-		push_error("CombatComponent must be a child of a Unit")
+		push_error("Combat Component must be a child of a Unit")
 		return
 	
 # Called every frame. 'delta' is the elapsed time since the previous frame.

@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://xi7p0x5hv2xm"]
 
-[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Scripts/UnitData.gd" id="1_8r65n"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/UnitData.gd" id="1_8r65n"]
 [ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/hair_mcgee_sky.png" id="1_nmr1o"]
 
 [resource]
@@ -8,6 +8,7 @@ script = ExtResource("1_8r65n")
 display_name = "GoodGuy2"
 portrait = ExtResource("1_nmr1o")
 base_stats = Dictionary[String, int]({
+"LDR": 2,
 "MHP": 20,
 "STR": 4
 })

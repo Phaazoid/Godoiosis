@@ -7,7 +7,7 @@ func set_unit(unit: Unit):
 		portrait_texture.texture = null
 		return
 	portrait_texture.texture = unit.unit_data.portrait
-	print("TextureRect size:", portrait_texture.size)
+	#print("TextureRect size:", portrait_texture.size)
 
 	portrait_texture.texture = unit.unit_data.portrait
 

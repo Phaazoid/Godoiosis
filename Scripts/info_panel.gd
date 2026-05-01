@@ -26,16 +26,12 @@ func _populate_stats():
 			stats_container.add_child((name_label))
 			stats_container.add_child(value_label)
 		
-
-
 func set_unit(target: Unit):
 	#To prevent duplicate stacking.  
 	if unit: 
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
-		
 	unit = target
-	
 	
 	if unit == null:
 		name_label.text = ""
@@ -49,7 +45,6 @@ func set_unit(target: Unit):
 	
 func _on_unit_died():
 	hp_label.text = "DED X_X"
-
 
 func _refresh():
 	if unit == null:

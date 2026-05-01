@@ -1,9 +1,9 @@
 [gd_scene format=3 uid="uid://b8b4cvid06h4k"]
 
-[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Scripts/unit.gd" id="1_davkp"]
-[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Scripts/combat.gd" id="2_5wnup"]
+[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Classes/unit.gd" id="1_davkp"]
+[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/combat.gd" id="2_5wnup"]
 [ext_resource type="Texture2D" uid="uid://yyhluxjgn3rd" path="res://Art/Game Boy Advance - Fire Emblem_ The Sacred Stones - Miscellaneous - Map Sprites.png" id="2_lpvrq"]
-[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Scripts/movement.gd" id="3_1sk4h"]
+[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/movement.gd" id="3_1sk4h"]
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_3rt3l"]
 atlas = ExtResource("2_lpvrq")

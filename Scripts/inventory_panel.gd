@@ -58,7 +58,6 @@ func set_unit(new_unit: Unit):
 	_refresh()
 	
 func _refresh():
-		
 	for i in range (Unit.MAX_INVENTORY_SIZE):
 		var slot = slots_container.get_child(i)
 		var icon = slot.get_node("SlotHBox/Icon")
@@ -71,7 +70,7 @@ func _refresh():
 		else:
 			icon.texture = null
 			name_label.text = "Empty"
-			name_label.modulate = Color(0.6, 0.6, 0.6)
+			name_label.modulate = Color(0.6, 0.616, 0.6, 1.0)
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:

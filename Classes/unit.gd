@@ -6,7 +6,7 @@ class_name Unit
 
 
 
-#Core statas
+#Core stats
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
 @export var unit_data: UnitData
@@ -14,10 +14,12 @@ class_name Unit
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 
 var unit_instance: UnitInstance
-#var current_position: Vector2i
 var selected := false #Not actually being used atm
 var has_acted := false
 var inventory : Array[Item] = []
+var squad: Squad
+var pending_grid : TileMapLayer
+var pending_cell : Vector2i
 
 #Ownership
 @onready var faction: Team.Faction
@@ -25,26 +27,36 @@ var inventory : Array[Item] = []
 func set_selected(value: bool) -> void:
 	selected = value
 
+func setup(grid : TileMapLayer, cell: Vector2i):
+	pending_grid = grid
+	pending_cell = cell
+
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	
 	if unit_data == null:
 		push_error("Unit missing UnitData.")
 		return
+	
+	#This exists because node parent/child relations don't exist until node is added to a tree
+	if pending_grid:
+		movement.set_grid(pending_grid)
+		movement.set_cell(pending_cell)
 
 	unit_instance = UnitInstance.new()
 	unit_instance.data = unit_data
 	unit_instance.initialize()
 	inventory.resize(MAX_INVENTORY_SIZE)
-	
 	unit_instance.died.connect(_on_instance_died)
+	squad = Squad.new()
+	squad.set_leader(self)
 	
 	match faction:
 		Team.Faction.PLAYER:
 			modulate = Color.WHITE
 		Team.Faction.ENEMY:
 			modulate = Color(1, 0.6, 0.6)
-		Team.Faction.ALLY:
+		Team.Faction.OTHER:
 			modulate = Color(0.6, 0.8, 1)
 	
 	
@@ -54,6 +66,15 @@ func add_item(item: Item) -> bool:
 			inventory[i] = item
 			return true
 	return false
+
+func get_unit_name() -> String:
+	return unit_data.display_name
+
+	
+func reset_squad():
+	var newSquad = Squad.new()
+	newSquad.set_leader(self)
+	squad = newSquad
 	
 func remove_item(index: int):
 	if index >= 0 and index < inventory.size():
@@ -89,6 +110,18 @@ func get_faction() -> Team.Faction:
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float) -> void:
 	pass
+
+func has_squad() -> bool:
+	if squad.get_members().size() == 1:
+		return false
+	else:
+		return true
+	
+func is_leader() -> bool:
+	if squad.get_leader() == self:
+		return true
+	else:
+		return false
 	
 func die() -> void:
 	queue_free()

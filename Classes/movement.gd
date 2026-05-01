@@ -9,14 +9,14 @@ var grid: TileMapLayer
 var path: Array[Vector2i] = []
 var moving := false
 
-func set_grid(grid_layer: TileMapLayer) -> void:
+func set_grid(grid_layer: TileMapLayer):
 	grid = grid_layer
 	
-func set_cell(new_cell: Vector2i) -> void:
+func set_cell(new_cell: Vector2i):
 	cell = new_cell
 	get_parent().position = grid.map_to_local(cell)
 
-func move_along_path(new_path: Array[Vector2i]) ->void:
+func move_along_path(new_path: Array[Vector2i]):
 	if new_path.size() <= 1:
 		return
 	path = new_path.duplicate()
@@ -25,7 +25,7 @@ func move_along_path(new_path: Array[Vector2i]) ->void:
 	
 	_move_to_next_cell()
 	
-func _move_to_next_cell() -> void:
+func _move_to_next_cell():
 	if path.is_empty():
 		moving = false
 		return

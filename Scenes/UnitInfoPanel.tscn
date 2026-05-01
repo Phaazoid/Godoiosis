@@ -1,11 +1,12 @@
 [gd_scene format=3 uid="uid://damgnt4d7qqj3"]
 
-[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Scripts/unit_info_panel_control.gd" id="1_a3gw8"]
+[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/unit_info_panel_control.gd" id="1_a3gw8"]
 [ext_resource type="Script" uid="uid://1elg13nm4kvd" path="res://Scripts/unit_info_panel.gd" id="1_avix1"]
-[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Scenes/unit_status_h_box.gd" id="3_ov1ts"]
-[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Scenes/portrait_panel.gd" id="4_uqtkw"]
-[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Scenes/info_panel.gd" id="5_s5bvs"]
-[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Scenes/inventory_panel.gd" id="6_yiwsu"]
+[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/unit_status_h_box.gd" id="3_ov1ts"]
+[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Scripts/portrait_panel.gd" id="4_uqtkw"]
+[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Scripts/info_panel.gd" id="5_s5bvs"]
+[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Scripts/inventory_panel.gd" id="6_yiwsu"]
+[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Scripts/squad_info_panel.gd" id="8_rlbgq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
 bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)
@@ -27,6 +28,13 @@ corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rlbgq"]
+bg_color = Color(0.13725491, 0.17254902, 0.22352941, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+
 [node name="UnitInfoPanelControl" type="Control" unique_id=1128572749]
 visible = false
 layout_mode = 3
@@ -36,34 +44,39 @@ script = ExtResource("1_a3gw8")
 [node name="UnitInfoPanel" type="Panel" parent="." unique_id=79521181]
 custom_minimum_size = Vector2(320, 160)
 layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+offset_top = 15.0
+offset_right = 320.0
+offset_bottom = 175.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_yiwsu")
 script = ExtResource("1_avix1")
 
-[node name="UnitStatusHBox" type="HBoxContainer" parent="UnitInfoPanel" unique_id=820636243]
+[node name="UnitStatusHBox" type="GridContainer" parent="UnitInfoPanel" unique_id=830887380]
 layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+offset_right = 328.0
+offset_bottom = 328.0
+columns = 2
 script = ExtResource("3_ov1ts")
 
-[node name="PortraitPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=883391330]
+[node name="HBoxContainer" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox" unique_id=520673113]
+layout_mode = 2
+
+[node name="PortraitPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer" unique_id=883391330]
 custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
 script = ExtResource("4_uqtkw")
 
-[node name="PortraitTexture" type="TextureRect" parent="UnitInfoPanel/UnitStatusHBox/PortraitPanel" unique_id=1208957522]
+[node name="PortraitTexture" type="TextureRect" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/PortraitPanel" unique_id=1208957522]
 custom_minimum_size = Vector2(160, 160)
 layout_mode = 0
 stretch_mode = 5
 
-[node name="StatsPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=1160511504]
+[node name="StatsPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer" unique_id=1160511504]
 custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_s5bvs")
 script = ExtResource("5_s5bvs")
 
-[node name="StatsMargin" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel" unique_id=1105607699]
+[node name="StatsMargin" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel" unique_id=1105607699]
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
@@ -72,23 +85,23 @@ theme_override_constants/margin_top = 8
 theme_override_constants/margin_right = 8
 theme_override_constants/margin_bottom = 8
 
-[node name="StatsVBox" type="VBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin" unique_id=301430278]
+[node name="StatsVBox" type="VBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin" unique_id=301430278]
 layout_mode = 2
 
-[node name="HeaderHBox" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=1569280146]
+[node name="HeaderHBox" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=1569280146]
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=1267400032]
+[node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=1267400032]
 layout_mode = 2
 
-[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=413307239]
+[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=413307239]
 layout_mode = 2
 horizontal_alignment = 2
 
-[node name="HSeparator" type="HSeparator" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=625630440]
+[node name="HSeparator" type="HSeparator" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=625630440]
 layout_mode = 2
 
-[node name="StatsContainer" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/StatsPanel/StatsMargin/StatsVBox" unique_id=1391879818]
+[node name="StatsContainer" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=1391879818]
 layout_mode = 2
 columns = 4
 
@@ -97,10 +110,34 @@ layout_mode = 2
 script = ExtResource("6_yiwsu")
 
 [node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel" unique_id=16924804]
+show_behind_parent = true
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
 
 [node name="InventorySlots" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel/MarginContainer" unique_id=1887954267]
 layout_mode = 2
 columns = 2
+
+[node name="SquadInfoPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=587355051]
+custom_minimum_size = Vector2(100, 70)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_rlbgq")
+script = ExtResource("8_rlbgq")
+
+[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/SquadInfoPanel" unique_id=1113387784]
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+theme_override_constants/margin_left = 5
+theme_override_constants/margin_top = 2
+theme_override_constants/margin_right = 2
+theme_override_constants/margin_bottom = 2
+
+[node name="SquadLabel" type="RichTextLabel" parent="UnitInfoPanel/UnitStatusHBox/SquadInfoPanel/MarginContainer" unique_id=271216556]
+custom_minimum_size = Vector2(500, 50)
+layout_mode = 2
