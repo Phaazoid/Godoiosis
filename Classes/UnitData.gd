@@ -9,6 +9,7 @@ class_name UnitData
 @export var base_stats: Dictionary[String, int]
 @export var growth_ranges: Dictionary[String, Vector2i]
 @export var innate_abilities: Array[String]
+@export var faction: Team.Faction
 
 
 # Called when the node enters the scene tree for the first time.

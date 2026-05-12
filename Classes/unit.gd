@@ -21,10 +21,7 @@ var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
 
-#Ownership
-@onready var faction: Team.Faction
-
-func set_selected(value: bool) -> void:
+func set_selected(value: bool):
 	selected = value
 
 func setup(grid : TileMapLayer, cell: Vector2i):
@@ -32,7 +29,7 @@ func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_cell = cell
 
 # Called when the node enters the scene tree for the first time.
-func _ready() -> void:
+func _ready():
 	
 	if unit_data == null:
 		push_error("Unit missing UnitData.")
@@ -51,7 +48,7 @@ func _ready() -> void:
 	squad = Squad.new()
 	squad.set_leader(self)
 	
-	match faction:
+	match unit_data.faction:
 		Team.Faction.PLAYER:
 			modulate = Color.WHITE
 		Team.Faction.ENEMY:
@@ -105,10 +102,10 @@ func get_all_stats() -> Dictionary:
 	return result
 
 func get_faction() -> Team.Faction:
-	return faction
+	return unit_data.faction
 			
 # Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
+func _process(delta: float):
 	pass
 
 func has_squad() -> bool:
@@ -126,5 +123,5 @@ func is_leader() -> bool:
 func die() -> void:
 	queue_free()
 
-func change_faction(new_faction: Team.Faction) -> void:
-	faction = new_faction
+func change_faction(new_faction: Team.Faction):
+	unit_data.faction = new_faction

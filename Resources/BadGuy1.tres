@@ -18,4 +18,5 @@ growth_ranges = Dictionary[String, Vector2i]({
 "HP": Vector2i(3, 6),
 "STR": Vector2i(0, 3)
 })
+faction = 1
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

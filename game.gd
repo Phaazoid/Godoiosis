@@ -4,14 +4,18 @@ extends Node2D
 @onready var grid : TileMapLayer = $Grid
 @onready var overlay: TileMapLayer = $Overlay
 @onready var units_root: Node2D = $Units
-@onready var pause_menu :PopupMenu = $PauseMenu
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
 @onready var unit_info_panel: Control = $UnitInfo/UnitInfoPanelControl
-@onready var dev_overlay : CanvasLayer = $DevOverlay
-@export var unit_scene: PackedScene
+@onready var dev_overlay: CanvasLayer = $DevOverlay
+@onready var overlay_manager: OverlayManager = $OverlayManager
+@onready var cursor_controller: CursorController = $CursorController
+@onready var camera_controller: CameraController = $CameraController
+
+signal hovered_cell_changed(cell: Vector2i, mouse_pos: Vector2i)
 
 const OVERLAY_SOURCE := 0
+const OVERLAY_DEFAULT_ATLAS := Vector2i(0, 0)
 const OVERLAY_MOVE_ATLAS := Vector2i(4,0)
 const OVERLAY_ATTACK_ATLAS := Vector2i(1,0)
 const OVERLAY_TARGET_ATLAS := Vector2i(3,0)
@@ -60,8 +64,11 @@ var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 
 func _ready() -> void:
 	spawn_test_units()
-	pause_menu.id_pressed.connect(_on_pause_menu_pressed)
+	hovered_cell_changed.connect(update_hover_visuals)
 	turn_manager.connect("turn_started", _on_turn_started)
+	
+	#This is for mouse controlling camera, putting a pin in that for now
+	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
 
 func _on_turn_started(phase):
@@ -99,24 +106,20 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			unit.squad.remove_member(unit)
 			
 
-func _on_pause_menu_pressed(id: int) -> void:
-	match id:
-		1: #End Turn
-			#print("Current Turn is " + TurnManager.TurnPhase.keys()[turn_manager.current_turn])
-			turn_manager.end_turn()
-
 func create_squad(unit: Unit):
 	game_state = GameState.CREATING_SQUAD
 	draw_create_squad(unit)
 	#Draw simple range from LDR, highlight valid units
 	
+	
 func enter_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_MOVE
+	camera_controller.center_on_position(unit.global_position)
 	draw_move_range(compute_move_range(unit), unit)
 	
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
-	draw_attack_range(compute_basic_range(unit, unit.combat.get_range()))
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, compute_basic_range(unit, unit.combat.get_range()), OVERLAY_DEFAULT_ATLAS)
 		
 func disband_squad(unit: Unit):
 	unit.squad.reassign_leader()
@@ -137,7 +140,7 @@ func is_walkable(cell: Vector2i) -> bool:
 	var tile_data: TileData =grid.get_cell_tile_data(cell)
 	if tile_data == null:
 		return false
-	return tile_data.get_custom_data("walkable")	
+	return tile_data.get_custom_data("walkable")
 	
 func get_unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units_root.get_children():
@@ -189,7 +192,8 @@ func _unhandled_input(event):
 				#GameState.TILE_SELECTED:
 					#print("hoo hoo")
 				GameState.CHOOSING_MOVE: 
-					if overlay.get_cell_source_id(otherCell) != -1:
+					#This is checking if you're clicking on a tile displayed in that overlay
+					if overlay_manager.move_overlay.get_cell_source_id(otherCell) != -1:
 						var result = compute_move_range(lastUnit)
 						var path = reconstruct_path(result.came_from, last_clicked_cell, otherCell)
 						lastUnit.movement.move_along_path(path)
@@ -247,13 +251,13 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 
 func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
 	var dist = joining_unit.movement.cell.distance_to(squad.leader.movement.cell)
-	if dist <= squad.get_max_range() and squad.leader.faction == joining_unit.faction and not joining_unit.has_squad() and not squad.get_members().has(joining_unit):
+	if dist <= squad.get_max_range() and squad.leader.get_faction() == joining_unit.get_faction() and not joining_unit.has_squad() and not squad.get_members().has(joining_unit):
 		return true
 	return false
 	
 func can_join_squad(unit: Unit, squad: Squad) -> bool:
 	var dist = unit.movement.cell.distance_to(squad.leader.movement.cell)
-	if dist <= squad.get_max_range() and squad.leader.faction == unit.faction and not squad.get_members().has(unit) and squad.leader.has_squad():
+	if dist <= squad.get_max_range() and squad.leader.get_faction() == unit.get_faction() and not squad.get_members().has(unit) and squad.leader.has_squad():
 		return true
 	return false
 	
@@ -262,7 +266,7 @@ func join_squad(unit: Unit, squad: Squad):
 		print("Are you sure you want to dissolve squad?")
 		unit.squad.reassign_leader()
 			
-		#TODO if yes, have to resolve other squad dissolving.  currently just resets it entirely, but command can fall to second highest leadership unit in squad?
+		#TODO if yes, have to resolve other squad dissolving. Currently next highest LDR becomes next squad leader.  
 	squad.add_member(unit)
 	#print("Squad now consists of ", squad.get_members())
 	
@@ -303,9 +307,6 @@ func show_action_menu(pos: Vector2i, items: Array, unit: Unit) -> void:
 	controller.setpos(pos)
 	controller.local_menu.popup()
 	
-func show_pause_menu(pos: Vector2i) -> void:
-	pause_menu.position = pos
-	pause_menu.popup()
 
 func exit_move_mode() -> void:
 	last_clicked_cell = Vector2i(-999, -999)
@@ -315,14 +316,19 @@ func exit_move_mode() -> void:
 func clear_selection():
 	game_state = GameState.IDLE
 	overlay.clear
+	overlay_manager.clear_all()
+	overlay_manager.clear_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+
 	
 func clear_selection_controller(controller):
 	game_state = GameState.IDLE
 	overlay.clear
-		
+	overlay_manager.clear_all()
+	overlay_manager.clear_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	
 func can_select(unit: Unit) -> bool:
 	if unit != null:
-		return unit.faction == Team.Faction.PLAYER
+		return unit.get_faction() == Team.Faction.PLAYER
 	return false
 		
 
@@ -333,7 +339,10 @@ func update_selection_overlay():
 		#return
 	#overlay.set_cell(selected_unit.movement.cell, 0, Vector2i(2,0))
 	
-func spawn_unit_properly(unit: Unit):
+func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
+	
+	var unit = UnitFactory.create_unit(data, grid, pos)
+
 	var cell = unit.pending_cell
 	var tile_data: TileData = unit.pending_grid.get_cell_tile_data(unit.pending_cell)
 	if tile_data == null:
@@ -348,23 +357,15 @@ func spawn_unit_properly(unit: Unit):
 		
 	if walkable: #TODO later change this for various unit types, i.e. flyers can spawn on rocks, etc
 		units_root.add_child(unit)
+		return unit
+	return null
 
-func spawn_unit(cell:Vector2i, faction: Team.Faction, data: UnitData) -> Unit:
-	#TODO check for walkable, etc
 	
-	var unit: Unit = unit_scene.instantiate()
-	unit.faction = faction
-	unit.unit_data = data
-	units_root.add_child(unit)
-	unit.movement.set_grid(grid)
-	unit.movement.set_cell(cell)	
-		
-	return unit
-	
-func create_unit_data(stats: Dictionary[String, int], name: String) -> UnitData:
+func create_unit_data(stats: Dictionary[String, int], name: String, faction: Team.Faction) -> UnitData:
 	var data = UnitData.new()
 	data.base_stats = stats
 	data.display_name = name
+	data.faction = faction
 	
 	return data
 
@@ -386,7 +387,7 @@ func movement_cost(cell: Vector2i, unit: Unit) -> int:
 	#Cost for other things on tiles
 	var other := get_unit_at_cell(cell)
 	if other != null:
-		if Team.is_enemy(unit.faction, other.faction): 
+		if Team.is_enemy(unit.get_faction(), other.get_faction()): 
 			return CANNOT_WALK_TILE #Can't move past enemies
 			
 	return cost
@@ -486,46 +487,58 @@ func compute_basic_range(unit: Unit, range: int) -> Array:
 	return results
 
 func draw_joinable_squads(joining_unit: Unit):
-	overlay.clear()
+	overlay_manager.clear_all()
+	var units: Array[Vector2i] = []
+	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if can_join_squad(joining_unit, unit.squad) and unit.is_leader():
 			for cell in compute_basic_range(unit, unit.get_base_stat("LDR")):
 				if get_unit_at_cell(cell) == null:
-					overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_SQUAD_SELECT_ATLAS)
-			overlay.set_cell(unit.movement.cell, OVERLAY_SOURCE, OVERLAY_UNIT_IN_SQUAD_ATLAS)
+					cells.append(cell)
+			units.append(unit.movement.cell)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OVERLAY_DEFAULT_ATLAS)
+	for cell in units:
+		overlay_manager.create_icon(cell, OverlayIcon.IconType.CROWN)
+		overlay_manager.create_icon(cell, OverlayIcon.IconType.SQUADMEMBER)
 
-func draw_squadmates(unit: Unit):
+
+
+func get_squadmates_icons(unit: Unit) -> Dictionary:
+	overlay_manager.clear_all()
+	var icons = {}
+	
 	for member in unit.squad.get_members():
 		if member != unit and member != unit.squad.leader:
-			overlay.set_cell(member.movement.cell, OVERLAY_SOURCE, OVERLAY_UNIT_IN_SQUAD_ATLAS)
-		if member != unit and member == unit.squad.leader:
-			overlay.set_cell(member.movement.cell, OVERLAY_SOURCE, OVERLAY_SQUAD_SELECT_ATLAS)
+			icons[member.movement.cell] = [OverlayIcon.IconType.SQUADMEMBER]
+			#overlay_manager.create_icon(overlay_manager.ICON_TEXTURES[OverlayIcon.IconType.SQUADMEMBER], member.movement.cell, OverlayIcon.IconType.SQUADMEMBER)
 
+		if member != unit and member == unit.squad.leader:
+			icons[member.movement.cell] = [OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.CROWN]
+			#overlay_manager.create_icon(overlay_manager.ICON_TEXTURES[OverlayIcon.IconType.SQUADMEMBER], member.movement.cell, OverlayIcon.IconType.SQUADMEMBER)
+			#overlay_manager.create_icon(overlay_manager.ICON_TEXTURES[OverlayIcon.IconType.CROWN], member.movement.cell, OverlayIcon.IconType.CROWN)
+	
+	return icons
 
 
 func draw_create_squad(unit: Unit):
 	overlay.clear()
+	var cells: Array[Vector2i] = []
 	for cell in compute_basic_range(unit, unit.get_base_stat("LDR")):
 		if cell != unit.movement.cell:
-			overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_SQUAD_SELECT_ATLAS)
+			cells.append(cell)
 		if get_unit_at_cell(cell) != null and can_squad_up(get_unit_at_cell(cell), unit.squad):
 			#print("My name is ", get_unit_at_cell(cell).get_unit_name(), " and it is ", get_unit_at_cell(cell).has_squad(), " that I'm in a squad")
-			overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_UNIT_IN_SQUAD_ATLAS)
-	
+			overlay_manager.create_icon(cell, OverlayIcon.IconType.TARGET)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OVERLAY_DEFAULT_ATLAS)
 
 func draw_move_range(result: Dictionary, unit: Unit):
-	overlay.clear()
-	
+	var cells: Array[Vector2i] = []
 	for cell in result.costs.keys():
 		if cell == unit.movement.cell:
 			continue
-		overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_MOVE_ATLAS)
+		cells.append(cell)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, cells, OVERLAY_DEFAULT_ATLAS)	
 		
-func draw_attack_range(cells: Array[Vector2i]):
-	overlay.clear()
-	for cell in cells:
-		overlay.set_cell(cell, OVERLAY_SOURCE, OVERLAY_ATTACK_ATLAS)
-
 func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
 	var path : Array[Vector2i] = []
 	var current := goal
@@ -540,7 +553,7 @@ func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) ->
 
 	
 	
-func spawn_test_units() -> void:
+func spawn_test_units():
 	var test_data_baddy := preload("res://Resources/BadGuy1.tres")
 	var test_data_goody := preload("res://Resources/GoodGuy1.tres")
 	
@@ -548,9 +561,10 @@ func spawn_test_units() -> void:
 		Vector2i(-1, -5)
 	]
 	for cell in test_cells:
-		spawn_unit(cell, Team.Faction.PLAYER, test_data_goody)
+		spawn_unit(test_data_goody, cell)
 		
-	var test_enemy : Unit = spawn_unit(Vector2i(4,4), Team.Faction.ENEMY, test_data_baddy)
+	var test_enemy : Unit = spawn_unit(test_data_baddy, Vector2i(4,4))
+	print(test_enemy)
 	var test_item : Item = preload("res://Resources/ChainSword.tres")
 	test_enemy.add_item(test_item)
 
@@ -560,79 +574,82 @@ func spawn_test_units() -> void:
 			"LDR" : 5	
 		}
 	
-	var data1 = create_unit_data(generic_stats, "GoodGuy 2")
-	var data2 = create_unit_data(generic_stats, "GoodGuyThree")
-	var data3 = create_unit_data(generic_stats, "BaddyNumeroDos")
+	var data1 = create_unit_data(generic_stats, "GoodGuy 2", Team.Faction.PLAYER)
+	var data2 = create_unit_data(generic_stats, "GoodGuyThree", Team.Faction.PLAYER)
+	var data3 = create_unit_data(generic_stats, "BaddyNumeroDos", Team.Faction.ENEMY)
 	
-	spawn_unit(Vector2i(-5, -5), Team.Faction.PLAYER, data1)
-	spawn_unit(Vector2i(-9, -5), Team.Faction.PLAYER, data2)
-	spawn_unit(Vector2i(4, 6), Team.Faction.ENEMY, data3)
+	
+	
+	spawn_unit(data1, Vector2i(-6, -5))
+	spawn_unit(data2, Vector2i(-8, -5))
+	spawn_unit(data3, Vector2i(4, 6))
 
 	#var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
 	#var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
 	
-func highlight_tile(gridpos: Vector2i) -> bool:
-	overlay.clear()
-	#TODO make sure this is in the actual grid.  will fail otherwise.  
-	#return true or false based on tile data walkable, like in _process below
-	overlay.set_cell(gridpos, OVERLAY_SOURCE, OVERLAY_TARGET_ATLAS)
-	return true
-
-
-func _process(_delta):
-	var mouse_world: Vector2 = get_global_mouse_position()
-	var hoveredCell: Vector2i = grid.local_to_map(grid.to_local(mouse_world))
+func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	var hoveredUnit : Unit = get_unit_at_cell(hoveredCell)
 	var tile_data: TileData = grid.get_cell_tile_data(hoveredCell)
+	
 	if tile_data == null:
 		return  # outside the map
 		
 	var walkable: bool = true
 	if tile_data.has_custom_data("walkable"): 
 		walkable = tile_data.get_custom_data("walkable")
-
+	
+	#Create Dictionary of icons to draw
+	#Clear all and redraw only this dictionary at the end 
+	var icons_to_draw = {}
+	
+	
 	if game_state == GameState.DEV_MODE:
-		if not walkable:
-			overlay.set_cell(hoveredCell, 0, OVERLAY_ATTACK_ATLAS)
+		if not walkable or hoveredUnit != null:
+			cursor_controller.set_state(CursorController.CursorState.INVALID)
 		else:
-			overlay.set_cell(hoveredCell, 0, OVERLAY_TARGET_ATLAS)
+			cursor_controller.set_state(CursorController.CursorState.DEFAULT)
+		cursor_controller.set_cursor_pos(hoveredCell)
 		dev_overlay.set_mousepos(hoveredCell)
 		
 	if game_state == GameState.IDLE: # and turn_manager.is_player_turn():
 		#Always show selected tile and info for what you're hovering over
+		overlay_manager.clear_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
+		cursor_controller.set_cursor_pos(hoveredCell)
 		if hoveredUnit != null:
 			unit_info_panel.set_unit(hoveredUnit)
-			overlay.set_cell(hoveredCell, 0, OVERLAY_TARGET_ATLAS)
+			cursor_controller.set_state(CursorController.CursorState.TARGET)
 			if hoveredUnit.has_squad():
-				draw_squadmates(hoveredUnit)
+				icons_to_draw = get_squadmates_icons(hoveredUnit) #Have this add to the dictionary of icons. 
 		else:
 			unit_info_panel.clear()
-			overlay.set_cell(hoveredCell, 0, OVERLAY_MOVE_ATLAS)
-	
+			cursor_controller.set_state(CursorController.CursorState.DEFAULT)
+		
 	if game_state == GameState.TILE_SELECTED:
-		overlay.set_cell(last_clicked_cell, 0, OVERLAY_TARGET_ATLAS)
-
-
-	#if game_state == GameState.TILE_SELECTED:
-	#No following overlay, flashing cursor on selected unit/tile
+		cursor_controller.set_state(CursorController.CursorState.TARGET)
+		cursor_controller.set_cursor_pos(last_clicked_cell)
 	
+	for cell in icons_to_draw.keys():
+		for icontype in icons_to_draw[cell]:
+			overlay_manager.create_icon(cell, icontype)
 		
 
-	if hoveredCell == last_hovered_cell:
+	
+func _process(_delta):
+	var mouse_world: Vector2 = get_global_mouse_position()
+	var hoveredCell: Vector2i = grid.local_to_map(grid.to_local(mouse_world))
+
+
+
+	if hoveredCell == last_hovered_cell: #everything after this only gets called if you change what cell you're hovering
 		return
 
+	hovered_cell_changed.emit(hoveredCell, get_viewport().get_mouse_position())
+	
 	last_hovered_cell = hoveredCell
 	
 	if game_state == GameState.DEV_MODE:
-		overlay.clear()
+		overlay_manager.clear_all()
+		#overlay_manager.clear_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
+
 	if game_state == GameState.IDLE:
-		overlay.clear()
-	
-		
-
-
-	#var atlas_coords := Vector2i(0,0)
-	#if not walkable:
-	#	atlas_coords = Vector2i(1,0)
-		#This was for testing cell hovering and walkability.  
-	#overlay.set_cell(cell, 0, atlas_coords)
+		overlay_manager.clear_all()

@@ -12,9 +12,8 @@ var posX = 0
 var posY = 0
 var faction: Team.Faction
 var error_message = ""
-var game: Node = null
-var unitInfo: Dictionary = {}
-var data : UnitData 
+var game: Node
+var data : UnitData
 var mousepos: Vector2i
 var soldier_increment = 1
 
@@ -104,7 +103,7 @@ func set_selected_faction():
 		"OtherCheckBox": 
 			faction = Team.Faction.OTHER
 			
-func build_unit_dictionary():
+func build_unit_data():
 	#TODO add portrait stuff to unitdata here
 	data = UnitData.new()
 	data.display_name = unit_name
@@ -114,23 +113,16 @@ func build_unit_dictionary():
 		"LDR" : stat_LDR,
 		"WIL" : stat_WIL
 	}
-	unitInfo["data"] = data
-	unitInfo["pos"] = Vector2i(posX, posY)
-	unitInfo["faction"] = faction
+	data.faction = faction
 
 func _unhandled_input(event) -> void:
 	if self.visible:
 		if event.is_action_pressed("dev_spawn_unit"):
 			_validate()
 			if valid:
-				build_unit_dictionary()
-				var new_unit = UnitFactory.create_unit(unitInfo, game.get_grid())
-				if new_unit == null:
-					push_error("Unit factory returned null")
-					return
-			#TODO move this out to a UnitSpawner or Game manager - sanatize unit spawning.  
-			#TODO Also make sure unit can only spawn on viable tiles, right now units can stack and spawn on rocks, etc
-				game.spawn_unit_properly(new_unit)
+				build_unit_data()
+				game.spawn_unit(data, mousepos)
+
 			else: 
 				print(error_message)
 				error_message = ""
