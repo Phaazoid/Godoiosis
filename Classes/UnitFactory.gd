@@ -13,11 +13,10 @@ static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> U
 	
 #TODO move builder functions from dev_overlay here
 
-# Called when the node enters the scene tree for the first time.
-func _ready() -> void:
-	pass # Replace with function body.
-
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass
+static func create_unit_data(stats: Dictionary[String, int], name: String, faction: Team.Faction) -> UnitData:
+	var data = UnitData.new()
+	data.base_stats = stats
+	data.display_name = name
+	data.faction = faction
+	
+	return data

@@ -13,10 +13,6 @@ func _ready() -> void:
 	if unit == null:
 		push_error("Combat Component must be a child of a Unit")
 		return
-	
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass
 
 func can_attack(attacker: Unit, target: Unit) -> bool:
 	if attacker == target:

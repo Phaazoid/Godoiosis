@@ -10,12 +10,6 @@ func _ready() -> void:
 	squad_label.bbcode_enabled = true
 	_refresh()
 
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass
-	
-	
 func set_unit(new_unit: Unit):
 	unit = new_unit
 	_refresh()

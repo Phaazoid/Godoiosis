@@ -1,0 +1,35 @@
+[gd_scene format=3 uid="uid://djnudhqoi3lqw"]
+
+[ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/UI/HoverInfoPanelControl.gd" id="1_gf6xf"]
+[ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/UI/Scripts/hover_info_grid_container.gd" id="2_jsdin"]
+
+[node name="HoverInfoPanelControl" type="Control" unique_id=98776626]
+z_index = 2
+layout_mode = 3
+anchors_preset = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("1_gf6xf")
+
+[node name="HoverPanel" type="Panel" parent="." unique_id=1990960389]
+custom_minimum_size = Vector2(160, 225)
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+
+[node name="HoverInfoGridContainer" type="GridContainer" parent="HoverPanel" unique_id=396953024]
+custom_minimum_size = Vector2(100, 100)
+layout_mode = 0
+offset_right = 40.0
+offset_bottom = 40.0
+script = ExtResource("2_jsdin")
+
+[node name="PortraitTexture" type="TextureRect" parent="HoverPanel/HoverInfoGridContainer" unique_id=1622082375]
+custom_minimum_size = Vector2(160, 160)
+layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="HoverPanel/HoverInfoGridContainer" unique_id=1066263610]
+layout_mode = 2
+
+[node name="HPLabel" type="Label" parent="HoverPanel/HoverInfoGridContainer" unique_id=1605526732]
+layout_mode = 2

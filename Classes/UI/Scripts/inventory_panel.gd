@@ -71,7 +71,3 @@ func _refresh():
 			icon.texture = null
 			name_label.text = "Empty"
 			name_label.modulate = Color(0.6, 0.616, 0.6, 1.0)
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass

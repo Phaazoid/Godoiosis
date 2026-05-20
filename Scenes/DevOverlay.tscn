@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://i2kwnt6y4jcd"]
 
-[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Scripts/dev_overlay.gd" id="1_sulrl"]
+[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Classes/UI/Scripts/dev_overlay.gd" id="1_sulrl"]
 
 [node name="DevOverlay" type="CanvasLayer" unique_id=1904372676]
 visible = false

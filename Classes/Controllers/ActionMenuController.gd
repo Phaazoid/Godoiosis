@@ -21,19 +21,9 @@ func _on_option_selected(action_id: int):
 	action_selected.emit(action_id, local_unit)
 	cleanup()
 	
-# Called when the node enters the scene tree for the first time.
-func _ready() -> void:
-	pass # Replace with function body.
-	
 func cleanup():
 	queue_free()
-	
 	
 func _on_popup_closed():
 	cleanup()
 	cancelled.emit(self)
-
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass

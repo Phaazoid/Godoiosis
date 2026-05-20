@@ -67,11 +67,6 @@ func _validate():
 
 	#TODO Portrait Check when portrait selection implemented, or perhaps just assign one
 
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass
-
 func set_mousepos(pos: Vector2i):
 	mousepos = pos
 	posX = pos.x

@@ -1,12 +1,11 @@
 [gd_scene format=3 uid="uid://damgnt4d7qqj3"]
 
-[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/unit_info_panel_control.gd" id="1_a3gw8"]
-[ext_resource type="Script" uid="uid://1elg13nm4kvd" path="res://Scripts/unit_info_panel.gd" id="1_avix1"]
-[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/unit_status_h_box.gd" id="3_ov1ts"]
-[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Scripts/portrait_panel.gd" id="4_uqtkw"]
-[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Scripts/info_panel.gd" id="5_s5bvs"]
-[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Scripts/inventory_panel.gd" id="6_yiwsu"]
-[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Scripts/squad_info_panel.gd" id="8_rlbgq"]
+[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/UI/UnitInfoPanelControl.gd" id="1_a3gw8"]
+[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/UI/UnitStatusGridContainer.gd" id="3_ov1ts"]
+[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/UI/Scripts/portrait_panel.gd" id="4_uqtkw"]
+[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/UI/Scripts/info_panel.gd" id="5_s5bvs"]
+[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/UI/Scripts/inventory_panel.gd" id="6_yiwsu"]
+[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/UI/Scripts/squad_info_panel.gd" id="8_rlbgq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
 bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)
@@ -44,11 +43,9 @@ script = ExtResource("1_a3gw8")
 [node name="UnitInfoPanel" type="Panel" parent="." unique_id=79521181]
 custom_minimum_size = Vector2(320, 160)
 layout_mode = 0
-offset_top = 15.0
 offset_right = 320.0
-offset_bottom = 175.0
+offset_bottom = 160.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_yiwsu")
-script = ExtResource("1_avix1")
 
 [node name="UnitStatusHBox" type="GridContainer" parent="UnitInfoPanel" unique_id=830887380]
 layout_mode = 0

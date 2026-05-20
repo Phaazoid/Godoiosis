@@ -29,6 +29,3 @@ func end_turn():
 		TurnPhase.ENEMY:
 			current_turn = TurnPhase.PLAYER
 			start_turn(TurnPhase.PLAYER)
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass

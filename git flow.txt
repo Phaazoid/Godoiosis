@@ -1,0 +1,14 @@
+git checkout -b feature-name
+
+git add .
+git commit -m "message"
+git push -u origin feature-name
+
+# later
+
+git checkout main
+git merge feature-name
+git push
+
+git branch -d feature-name
+git push origin --delete feature-name

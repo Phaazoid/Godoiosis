@@ -8,13 +8,15 @@ class_name CursorController
 enum CursorState {
 	DEFAULT,
 	TARGET,
-	INVALID
+	INVALID,
+	VALID
 }
 
 const CURSOR_TEXTURES = {
 	CursorState.DEFAULT: preload("res://Art/Icons/CursorIcon.png"),
 	CursorState.TARGET: preload("res://Art/Icons/SelectedIcon.png"),
-	CursorState.INVALID: preload("res://Art/Icons/NegativeIcon.png")
+	CursorState.INVALID: preload("res://Art/Icons/NegativeIcon.png"),
+	CursorState.VALID: preload("res://Art/Icons/PositiveIcon.png")
 }
 
 # Called when the node enters the scene tree for the first time.
@@ -32,7 +34,3 @@ func hide_cursor():
 	
 func show_cursor():
 	sprite.visible = true
-
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	pass

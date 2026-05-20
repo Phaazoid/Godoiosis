@@ -31,8 +31,6 @@ var max_world := Vector2(
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
-	#target_position = Vector2i(map_width * TILE_SIZE / 2, map_height * TILE_SIZE / 2)
-	
 	global_position = target_position
 
 func center_on_position(world_pos: Vector2):
@@ -40,12 +38,6 @@ func center_on_position(world_pos: Vector2):
 	target_position = world_pos
 	clamp_target_position()
 
-
-func on_hovered_cell_changed(cell: Vector2i, mouse_pos: Vector2i):
-	#var mouse_pos = get_viewport().get_mouse_position()
-	check_edge_scroll(mouse_pos)
-
-		
 func check_edge_scroll(mouse_pos: Vector2i):
 	var viewport_size = get_viewport_rect().size
 	print("size ", viewport_size)
@@ -65,14 +57,12 @@ func check_edge_scroll(mouse_pos: Vector2i):
 	
 	if move_dir != Vector2i.ZERO:
 		print("after direction", move_dir)
-		move_by_cell(Vector2i(move_dir))
+		move_by_cell()
 	
-func move_by_cell(direction: Vector2i):
-	#print(direction)
+func move_by_cell():
 	if is_moving: 
 		return
 	is_moving = true
-	#target_position += direction * TILE_SIZE
 	print("Target is " ,target_position)
 	clamp_target_position()
 	
@@ -100,6 +90,7 @@ func _process(delta: float) -> void:
 		global_position = target_position
 		is_moving = false
 	
+	#Always scroll at least one cell, and never snap back.  
 	keyboard_direction = Vector2.ZERO
 	if not lock_manual_input:
 		if Input.is_action_pressed("cam_right"):

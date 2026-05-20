@@ -4,8 +4,6 @@ class_name Unit
 #This is a container for everything that is a unit on the map.  These only exist during combat. 
 #These have different components (movement, combat) that allow them to work, and reference specific UnitInstances to get their data. 
 
-
-
 #Core stats
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
@@ -15,7 +13,6 @@ const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 
 var unit_instance: UnitInstance
 var selected := false #Not actually being used atm
-var has_acted := false
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
@@ -30,7 +27,6 @@ func setup(grid : TileMapLayer, cell: Vector2i):
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
-	
 	if unit_data == null:
 		push_error("Unit missing UnitData.")
 		return
@@ -45,8 +41,6 @@ func _ready():
 	unit_instance.initialize()
 	inventory.resize(MAX_INVENTORY_SIZE)
 	unit_instance.died.connect(_on_instance_died)
-	squad = Squad.new()
-	squad.set_leader(self)
 	
 	match unit_data.faction:
 		Team.Faction.PLAYER:
@@ -55,8 +49,7 @@ func _ready():
 			modulate = Color(1, 0.6, 0.6)
 		Team.Faction.OTHER:
 			modulate = Color(0.6, 0.8, 1)
-	
-	
+
 func add_item(item: Item) -> bool:
 	for i in range (inventory.size()):
 		if inventory[i] == null:
@@ -67,34 +60,32 @@ func add_item(item: Item) -> bool:
 func get_unit_name() -> String:
 	return unit_data.display_name
 
-	
 func reset_squad():
 	var newSquad = Squad.new()
 	newSquad.set_leader(self)
 	squad = newSquad
-	
+
 func remove_item(index: int):
 	if index >= 0 and index < inventory.size():
 		inventory[index] = null
 		
 func _on_instance_died():
 	die()
-			
-			
+
 func get_base_stat(stat: String) -> int:
 	if unit_instance == null:
 		return -1
 	return unit_instance.get_base_stat(stat)
-	
+
 func get_effective_stat(stat: String) -> int:
 	return get_base_stat(stat) + get_modifier(stat)
-	
+
 func get_modifier(stat: String) -> int:
 	return unit_instance.modifiers.get(stat)
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
-	
+
 func get_all_stats() -> Dictionary:
 	var result := {}
 	for stat in unit_data.base_stats.keys():
@@ -103,17 +94,13 @@ func get_all_stats() -> Dictionary:
 
 func get_faction() -> Team.Faction:
 	return unit_data.faction
-			
-# Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float):
-	pass
 
 func has_squad() -> bool:
 	if squad.get_members().size() == 1:
 		return false
 	else:
 		return true
-	
+
 func is_leader() -> bool:
 	if squad.get_leader() == self:
 		return true
@@ -125,3 +112,18 @@ func die() -> void:
 
 func change_faction(new_faction: Team.Faction):
 	unit_data.faction = new_faction
+
+func has_move_queued() -> bool:
+	for action in squad.action_queue:
+		if action.actor == self:
+			if action is MoveAction:
+				return true
+	return false
+
+func get_queued_move_cell() -> Vector2i:
+	if has_move_queued():
+		for action in squad.action_queue:
+			if action.actor == self:
+				if action is MoveAction:
+					return action.destination
+	return self.movement.cell
