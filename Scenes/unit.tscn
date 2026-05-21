@@ -1,14 +1,14 @@
 [gd_scene format=3 uid="uid://b8b4cvid06h4k"]
 
 [ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Classes/Unit.gd" id="1_8mmvs"]
-[ext_resource type="Texture2D" uid="uid://dwv13r7ee4qf6" path="res://Art/Basic_Soldier.png" id="2_x1v5g"]
+[ext_resource type="Texture2D" uid="uid://dwv13r7ee4qf6" path="res://Art/Units/MapSprites/Basic_Soldier.png" id="2_x1v5g"]
 [ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/CombatComponent.gd" id="3_ppost"]
 [ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/MovementComponent.gd" id="4_20lhf"]
 
 [node name="Unit" type="Node2D" unique_id=1798603063]
 script = ExtResource("1_8mmvs")
 
-[node name="Sprite2D" type="Sprite2D" parent="." unique_id=1465762726]
+[node name="MapSprite" type="Sprite2D" parent="." unique_id=1465762726]
 z_index = 1
 z_as_relative = false
 texture = ExtResource("2_x1v5g")

@@ -7,6 +7,7 @@ class_name Unit
 #Core stats
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
+@onready var map_sprite: Sprite2D = $MapSprite
 @export var unit_data: UnitData
 
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
@@ -56,6 +57,12 @@ func add_item(item: Item) -> bool:
 			inventory[i] = item
 			return true
 	return false
+
+func get_map_sprite_texture() -> Texture2D:
+	if map_sprite == null:
+		return null
+	
+	return map_sprite.texture 
 
 func get_unit_name() -> String:
 	return unit_data.display_name
@@ -116,7 +123,7 @@ func change_faction(new_faction: Team.Faction):
 func has_move_queued() -> bool:
 	for action in squad.action_queue:
 		if action.actor == self:
-			if action is MoveAction:
+			if action.action_type == BaseAction.ActionType.MOVE:
 				return true
 	return false
 
@@ -124,6 +131,6 @@ func get_queued_move_cell() -> Vector2i:
 	if has_move_queued():
 		for action in squad.action_queue:
 			if action.actor == self:
-				if action is MoveAction:
+				if action.action_type == BaseAction.ActionType.MOVE:
 					return action.destination
 	return self.movement.cell

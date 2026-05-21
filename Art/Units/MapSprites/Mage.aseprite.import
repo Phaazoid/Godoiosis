@@ -1,0 +1,14 @@
+[remap]
+
+importer="aseprite_wizard.plugin.noop"
+type="PackedDataContainer"
+uid="uid://c5g5klhmi2e8s"
+path="res://.godot/imported/Mage.aseprite-96bbb86304db66c87b73842e435770fc.res"
+
+[deps]
+
+source_file="res://Art/Units/MapSprites/Mage.aseprite"
+dest_files=["res://.godot/imported/Mage.aseprite-96bbb86304db66c87b73842e435770fc.res"]
+
+[params]
+

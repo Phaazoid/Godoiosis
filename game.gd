@@ -6,11 +6,12 @@ extends Node2D
 @onready var units_root: Node2D = $Units
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner
-@onready var unit_info_panel: Control = $UnitInfo/UnitInfoPanelControl
-@onready var hover_info_panel: Control = $UnitInfo/HoverInfoPanelControl
+@onready var unit_info_panel: Control = $UILayer/UnitInfoPanelControl
+@onready var hover_info_panel: Control = $UILayer/HoverInfoPanelControl
 @onready var dev_overlay: CanvasLayer = $DevOverlay
 @onready var overlay_manager: OverlayManager = $OverlayManager
 @onready var squad_manager: SquadManager = $SquadManager
+@onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
 @onready var cursor_controller: CursorController = $CursorController
 @onready var camera_controller: CameraController = $CameraController
 
@@ -80,6 +81,7 @@ func _ready() -> void:
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 	
+	
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
@@ -131,13 +133,11 @@ func execute_orders(unit):
 		overlay_manager.clear_planned_path(member)
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
 
-	
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
 	if unit.is_leader():
 		clip_invalid_squad_movement(unit)
 		
-
 func create_squad(unit: Unit):
 	game_state = GameState.CREATING_SQUAD
 	draw_create_squad(unit)
@@ -416,12 +416,14 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 		for cell in icons_to_draw.keys():
 			for icontype in icons_to_draw[cell]:
 				overlay_manager.create_icon(cell, icontype)
+	squad_action_queue_control.show_squad_actions(squad)
 
 func draw_squad_leader_range(squad: Squad, cell: Vector2i):		
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, squad.get_ldr_range_from_cell(cell), OVERLAY_DEFAULT_ATLAS)
 
 func _on_squad_has_no_actions(squad: Squad):
 	overlay_manager.clear_squad_range()
+	squad_action_queue_control.show_squad_actions(squad)
 	
 func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
 	overlay_manager.clear_planned_path(unit)
@@ -433,13 +435,14 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 	if unit.is_leader():
 		draw_squad_leader_range(squad, squad.leader.get_queued_move_cell())
 
+	squad_action_queue_control.show_squad_actions(squad)
+
 func _on_unit_action_queued(squad: Squad, action: BaseAction):
 	var unit = action.actor
 	if squad_manager.active_squad == squad and unit.has_squad():
 		draw_squad_leader_range(squad, squad.leader.get_queued_move_cell())
 		overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.SQUADMEMBER)
-		#if unit.is_leader():
-			#overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.CROWN)
+	squad_action_queue_control.show_squad_actions(squad)
 
 func movement_cost(cell: Vector2i, unit: Unit) -> int:
 	var data := grid.get_cell_tile_data(cell)
@@ -505,7 +508,6 @@ func compute_move_range(unit: Unit) -> Dictionary:
 			if cost_so_far.has(next) and new_cost >= cost_so_far[next]:
 				continue
 				
-			
 			cost_so_far[next] = new_cost
 			came_from[next] = current_cell
 			frontier.append({ "cell": next, "cost": new_cost})

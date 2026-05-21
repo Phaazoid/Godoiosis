@@ -1,0 +1,14 @@
+[remap]
+
+importer="aseprite_wizard.plugin.noop"
+type="PackedDataContainer"
+uid="uid://oyc8py1q1g8"
+path="res://.godot/imported/Dancer.aseprite-9fe1c5071a4c317cc97371a69e41f715.res"
+
+[deps]
+
+source_file="res://Art/Units/MapSprites/Dancer.aseprite"
+dest_files=["res://.godot/imported/Dancer.aseprite-9fe1c5071a4c317cc97371a69e41f715.res"]
+
+[params]
+

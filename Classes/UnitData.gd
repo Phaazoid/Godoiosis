@@ -5,7 +5,7 @@ class_name UnitData
 #basically immutable design draft
 
 @export var display_name: String = "Unit"
-@export var portrait: Texture2D = load("res://Art/faceless_one.png")
+@export var portrait: Texture2D = load("res://Art/Units/Portraits/faceless_one.png")
 @export var base_stats: Dictionary[String, int]
 @export var growth_ranges: Dictionary[String, Vector2i]
 @export var innate_abilities: Array[String]

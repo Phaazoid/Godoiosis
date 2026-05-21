@@ -1,0 +1,14 @@
+[remap]
+
+importer="aseprite_wizard.plugin.noop"
+type="PackedDataContainer"
+uid="uid://dahkq3sx8p5se"
+path="res://.godot/imported/Pirate.aseprite-82fdd60a896459aacc03eb4a8a572c89.res"
+
+[deps]
+
+source_file="res://Art/Units/MapSprites/Pirate.aseprite"
+dest_files=["res://.godot/imported/Pirate.aseprite-82fdd60a896459aacc03eb4a8a572c89.res"]
+
+[params]
+

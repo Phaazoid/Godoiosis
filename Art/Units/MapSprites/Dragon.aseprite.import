@@ -1,0 +1,14 @@
+[remap]
+
+importer="aseprite_wizard.plugin.noop"
+type="PackedDataContainer"
+uid="uid://b8h5f4bp0fyff"
+path="res://.godot/imported/Dragon.aseprite-995bab11af01324372c3989cb6dec106.res"
+
+[deps]
+
+source_file="res://Art/Units/MapSprites/Dragon.aseprite"
+dest_files=["res://.godot/imported/Dragon.aseprite-995bab11af01324372c3989cb6dec106.res"]
+
+[params]
+

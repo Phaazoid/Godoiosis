@@ -16,6 +16,7 @@
 [ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="9_h4fw4"]
 [ext_resource type="Texture2D" uid="uid://bm7hhevr6u8g5" path="res://Art/ArrowTileSheet.png" id="10_nnt18"]
 [ext_resource type="PackedScene" uid="uid://djnudhqoi3lqw" path="res://Scenes/HoverInfoPanelControl.tscn" id="12_rfjv2"]
+[ext_resource type="PackedScene" uid="uid://cqf51nnsk42dv" path="res://Scenes/SquadActionQueueControl.tscn" id="16_ewbju"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_o5yvi"]
 texture = ExtResource("4_ldgsr")
@@ -175,9 +176,9 @@ tile_set = SubResource("TileSet_fc0e3")
 
 [node name="TurnBanner" parent="." unique_id=1739318152 instance=ExtResource("7_1l0tm")]
 
-[node name="UnitInfo" type="CanvasLayer" parent="." unique_id=901426984]
+[node name="UILayer" type="CanvasLayer" parent="." unique_id=901426984]
 
-[node name="UnitInfoPanelControl" parent="UnitInfo" unique_id=1128572749 instance=ExtResource("8_v158k")]
+[node name="UnitInfoPanelControl" parent="UILayer" unique_id=1128572749 instance=ExtResource("8_v158k")]
 anchors_preset = 14
 anchor_top = 0.5
 anchor_right = 1.0
@@ -187,6 +188,8 @@ offset_bottom = -324.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="HoverInfoPanelControl" parent="UnitInfo" unique_id=98776626 instance=ExtResource("12_rfjv2")]
+[node name="HoverInfoPanelControl" parent="UILayer" unique_id=98776626 instance=ExtResource("12_rfjv2")]
+
+[node name="SquadActionQueueControl" parent="UILayer" unique_id=1755236960 instance=ExtResource("16_ewbju")]
 
 [node name="DevOverlay" parent="." unique_id=1904372676 instance=ExtResource("9_h4fw4")]

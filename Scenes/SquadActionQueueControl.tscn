@@ -1,0 +1,45 @@
+[gd_scene format=3 uid="uid://cqf51nnsk42dv"]
+
+[ext_resource type="Script" uid="uid://bc5mnwx7424ki" path="res://Classes/Controllers/SquadActionQueueControl.gd" id="1_voyyq"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_voyyq"]
+bg_color = Color(0.43137255, 0.16078432, 0, 0.8901961)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.27275372, 0.09041131, 0, 1)
+
+[node name="SquadActionQueueControl" type="Control" unique_id=1755236960]
+visible = false
+custom_minimum_size = Vector2(128, 0)
+layout_mode = 3
+anchors_preset = 0
+offset_right = 128.0
+offset_bottom = 40.0
+script = ExtResource("1_voyyq")
+
+[node name="BackgroundPanel" type="Panel" parent="." unique_id=1567639531]
+custom_minimum_size = Vector2(50, 50)
+layout_mode = 0
+offset_left = 1000.0
+offset_top = 100.0
+offset_right = 1128.0
+offset_bottom = 600.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_voyyq")
+
+[node name="MarginContainer" type="MarginContainer" parent="BackgroundPanel" unique_id=250797685]
+layout_mode = 0
+offset_top = 10.0
+offset_right = 64.0
+offset_bottom = 42.0
+
+[node name="ScrollContainer" type="ScrollContainer" parent="BackgroundPanel/MarginContainer" unique_id=1720702956]
+custom_minimum_size = Vector2(128, 500)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="ActionListBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/ScrollContainer" unique_id=1127182637]
+custom_minimum_size = Vector2(64, 32)
+layout_mode = 2
+alignment = 1

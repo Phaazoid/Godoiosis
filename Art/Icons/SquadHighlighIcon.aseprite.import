@@ -1,0 +1,14 @@
+[remap]
+
+importer="aseprite_wizard.plugin.noop"
+type="PackedDataContainer"
+uid="uid://bjy35pbc3p1mc"
+path="res://.godot/imported/SquadHighlighIcon.aseprite-0fa26bfdfc337f1d42e60c2cfec680e0.res"
+
+[deps]
+
+source_file="res://Art/Icons/SquadHighlighIcon.aseprite"
+dest_files=["res://.godot/imported/SquadHighlighIcon.aseprite-0fa26bfdfc337f1d42e60c2cfec680e0.res"]
+
+[params]
+

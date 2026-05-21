@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://pfo7dqpus5g6"]
 
-[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/hair_mcgee_evil.png" id="1_ortoj"]
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="1_ortoj"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/UnitData.gd" id="2_ortoj"]
 
 [resource]

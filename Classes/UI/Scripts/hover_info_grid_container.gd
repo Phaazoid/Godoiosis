@@ -20,7 +20,7 @@ func set_unit(target: Unit):
 
 		return
 	if unit.unit_data.portrait == null:
-		portrait_texture.texture = load("res://Art/faceless_one.png")
+		portrait_texture.texture = load("res://Art/Units/Portraits/faceless_one.png")
 	else:
 		portrait_texture.texture = unit.unit_data.portrait
 	

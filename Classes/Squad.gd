@@ -87,6 +87,9 @@ func get_planned_movement_destinations()  -> Array:
 func get_ldr_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
 	return GridUtils.cells_within_manhattan_range(cell, get_max_range())
 	
+func get_actions() -> Array[BaseAction]:
+	return action_queue.duplicate()
+	
 func _queue_action(action: BaseAction):
 	if action_queue.is_empty():
 		actions_became_active.emit(self, action)

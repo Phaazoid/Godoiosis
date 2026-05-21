@@ -1,0 +1,32 @@
+[gd_scene format=3 uid="uid://d0g73l0mt6aqc"]
+
+[ext_resource type="Script" uid="uid://fsvtlvbn45ve" path="res://Classes/ActionQueueRow.gd" id="1_fbndw"]
+
+[node name="ActionQueueRow" type="HBoxContainer" unique_id=552555432]
+custom_minimum_size = Vector2(128, 32)
+offset_right = 104.0
+offset_bottom = 32.0
+alignment = 1
+script = ExtResource("1_fbndw")
+
+[node name="ActorTexture" type="TextureRect" parent="." unique_id=1426592185]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 2
+stretch_mode = 5
+
+[node name="ActionIcon" type="TextureRect" parent="." unique_id=336764216]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 2
+stretch_mode = 5
+
+[node name="TargetTexture" type="TextureRect" parent="." unique_id=784272343]
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
+expand_mode = 2
+stretch_mode = 5
+
+[node name="DescriptionLabel" type="Label" parent="." unique_id=1194595699]
+visible = false
+layout_mode = 2
