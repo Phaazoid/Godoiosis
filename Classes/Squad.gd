@@ -44,6 +44,12 @@ func unit_has_queued_actions(unit: Unit) -> bool:
 			return true
 	return false
 
+func unit_has_action_type_queued(unit: Unit, type: BaseAction.ActionType) -> bool:
+	for action in action_queue:
+		if action.actor == unit and action.action_type == type:
+			return true
+	return false
+
 func has_any_queued_actions() -> bool:
 	if action_queue.is_empty():
 		return false
@@ -90,6 +96,14 @@ func get_ldr_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
 	
+func get_actions_of_type(type: BaseAction.ActionType) -> Array:
+	var actions = []
+	for action in action_queue:
+		if action.action_type == type:
+			actions.append(action)
+			
+	return actions
+			
 func _queue_action(action: BaseAction):
 	if action_queue.is_empty():
 		actions_became_active.emit(self, action)

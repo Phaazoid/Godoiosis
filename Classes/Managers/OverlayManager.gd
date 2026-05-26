@@ -6,30 +6,30 @@ class_name OverlayManager
 @onready var hover_overlay = $HoverOverlay
 @onready var squad_overlay = $SquadOverlay
 @onready var icon_overlay = $IconOverlay
-@onready var arrow_overlay = $ArrowOverlay
+@onready var arrow_icon_overlay: Node2D = $ArrowIconOverlay
 @onready var squadrange_overlay = $SquadRangeOverlay
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
 
 
-const PATH_ERROR := Vector2i(2, 1)
-const PATH_HORIZONTAL := Vector2i(3, 0)
-const PATH_VERTICAL := Vector2i(2, 0)
+const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
+const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
+const PATH_VERTICAL := preload("res://Art/Icons/ArrowIcons/vertical.png")
 
-const PATH_UP_RIGHT := Vector2i(4, 1)
-const PATH_UP_LEFT := Vector2i(5, 1)
-const PATH_DOWN_RIGHT := Vector2i(4, 0)
-const PATH_DOWN_LEFT := Vector2i(5, 0)
+const PATH_UP_RIGHT := preload("res://Art/Icons/ArrowIcons/topright.png")
+const PATH_UP_LEFT := preload("res://Art/Icons/ArrowIcons/topleft.png")
+const PATH_DOWN_RIGHT := preload("res://Art/Icons/ArrowIcons/bottomright.png")
+const PATH_DOWN_LEFT := preload("res://Art/Icons/ArrowIcons/bottomleft.png")
 
-const PATH_START_RIGHT := Vector2i(0, 0)
-const PATH_START_LEFT := Vector2i(1, 1)
-const PATH_START_UP := Vector2i(0, 1)
-const PATH_START_DOWN := Vector2i(1, 0)
+const PATH_START_RIGHT := preload("res://Art/Icons/ArrowIcons/startright.png")
+const PATH_START_LEFT := preload("res://Art/Icons/ArrowIcons/startleft.png")
+const PATH_START_UP := preload("res://Art/Icons/ArrowIcons/starttop.png")
+const PATH_START_DOWN := preload("res://Art/Icons/ArrowIcons/startbottom.png")
 
-const PATH_ARROW_RIGHT := Vector2i(6, 0)
-const PATH_ARROW_LEFT := Vector2i(7, 1)
-const PATH_ARROW_UP := Vector2i(6, 1)
-const PATH_ARROW_DOWN := Vector2i(7, 0)
+const PATH_ARROW_RIGHT := preload("res://Art/Icons/ArrowIcons/endfromleft.png")
+const PATH_ARROW_LEFT := preload("res://Art/Icons/ArrowIcons/endfromright.png")
+const PATH_ARROW_UP := preload("res://Art/Icons/ArrowIcons/endfrombottom.png")
+const PATH_ARROW_DOWN := preload("res://Art/Icons/ArrowIcons/endfromtop.png")
 
 
 const ICON_SCENE = preload("res://Scenes/OverlayIcon.tscn")
@@ -56,8 +56,9 @@ const ICON_TEXTURES = {
 
 var overlay_map = {}
 var icons_by_cell = {} # {Cell : { IconType : Icon } } 
-var planned_cells_by_unit := {} #{Unit : Array[Vector2i]}
+var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
+var hover_move_preview: MoveAction = null
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -66,7 +67,7 @@ func _ready() -> void:
 		OverlayType.ATTACK: attack_overlay,
 		OverlayType.HOVER: hover_overlay,
 		OverlayType.SQUAD: squad_overlay,
-		OverlayType.ARROW: arrow_overlay,
+		OverlayType.ARROW: arrow_icon_overlay,
 		OverlayType.SQUADRANGE: squadrange_overlay,
 		OverlayType.INVALIDMOVE: invalidmove_overlay
 	}
@@ -84,39 +85,60 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
 	layer.clear()
 	draw_cells(layer, cells, atlas_coord)
-	
-func cancel_path(unit: Unit):
-	for member in planned_cells_by_unit.keys():
-		if member == unit:
-			planned_cells_by_unit.erase(unit)
-	redraw_planned_paths()
 
-func show_planned_path(unit: Unit, path: Array[Vector2i]):
-	planned_cells_by_unit.erase(unit)
-	planned_cells_by_unit[unit] = path #Ignore starting cell
+func show_hover_move_path(move: MoveAction):
+	clear_hover_move_path()
+	hover_move_preview = move
+	draw_path_arrows(hover_move_preview)
+	hover_move_preview.set_preview_z_index(MoveAction.HOVERED_ARROW_Z_INDEX)
+	
+func clear_hover_move_path():
+	if hover_move_preview == null:
+		return
+		
+	hover_move_preview.clear_preview_sprites()
+	hover_move_preview = null
+	
+func show_planned_path(unit: Unit, move: MoveAction):
+	if planned_move_by_unit.has(unit):
+		var old_move: MoveAction = planned_move_by_unit[unit]
+		old_move.clear_preview_sprites()
+		
+	planned_move_by_unit[unit] = move
 	redraw_planned_paths()
 
 func get_planned_destinations() -> Array[Vector2i]:
 	var destinations: Array[Vector2i] = []
-	for path in planned_cells_by_unit.values():
-		destinations.append(path.back())
+	
+	for move: MoveAction in planned_move_by_unit.values():
+		destinations.append(move.back())
 		
 	return destinations
 
 func get_units_with_plans() -> Array:
-	return planned_cells_by_unit.keys()
+	return planned_move_by_unit.keys()
 
 func clear_planned_path(unit: Unit):
-	var cells = planned_cells_by_unit.get(unit, [])
-	for cell in cells:
-		arrow_overlay.erase_cell(cell)
-	planned_cells_by_unit.erase(unit)
+	if planned_move_by_unit.has(unit):
+		var move: MoveAction = planned_move_by_unit[unit]
+		move.clear_preview_sprites()
+	
+	planned_move_by_unit.erase(unit)
 	redraw_planned_paths()
 
+func clear_all_planned_paths():
+	clear_hover_move_path()
+	
+	for move: MoveAction in planned_move_by_unit.values():
+		move.clear_preview_sprites()
+	planned_move_by_unit.clear()
+
 func redraw_planned_paths():
-	arrow_overlay.clear()
-	for path in planned_cells_by_unit.values(): #Ignore starting cell
-		draw_path_arrows(arrow_overlay, path)
+	for action: MoveAction in planned_move_by_unit.values():
+		action.clear_preview_sprites()
+		
+	for action in planned_move_by_unit.values():
+		draw_path_arrows(action)
 
 func create_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
 	if icons_by_cell.has(cell):
@@ -177,46 +199,45 @@ func draw_cells(layer: TileMapLayer, cells: Array, atlas_coord: Vector2i):
 func is_valid_cell(cell: Vector2i) -> bool:
 	return move_overlay.get_used_rect().has_point(cell)
 	
-func draw_path_arrows(layer: TileMapLayer, path: Array[Vector2i]):
+func draw_path_arrows(move: MoveAction):
+	var path: Array[Vector2i] = move.get_move_path()
+	
 	if path.is_empty():
 		return
 	
 	if path.size() == 1:
-		layer.set_cell(path[0], SOURCE_ID, PATH_ERROR)
+		var sprite := _create_arrow_sprite(path[0], PATH_ERROR, move.is_valid)
+		move.add_preview_sprite(sprite)
 		return
 		
 	for i in range(path.size()):
 		var current := path[i]
+		var texture: Texture2D
 		
 		#Start tile
 		if i == 0:
 			var next := path[i + 1]
 			var dir := next - current
-			var atlas := _get_start_atlas(dir)
-			layer.set_cell(current, SOURCE_ID, atlas)
-			continue
+			texture = _get_start_atlas(dir)
 		
 		#End tile / arrowhead
-		if i == path.size() - 1:
+		elif i == path.size() - 1:
 			var previous := path[i - 1]
 			var dir := current - previous
-			var atlas := _get_arrowhead_atlas(dir)
-			layer.set_cell(current, SOURCE_ID, atlas)
-			continue
-		
-		#Middle tile
-		var previous := path[i - 1]
-		var next := path[i + 1]
-		
-		var dir_to_prev := previous - current
-		var dir_to_next := next - current
-		
-		var atlas := _get_path_segment_atlas(dir_to_prev, dir_to_next)
-		layer.set_cell(current, SOURCE_ID, atlas)
-	
-	
+			texture = _get_arrowhead_atlas(dir)
+			
+		#Middle tiles
+		else:
+			var previous := path[i - 1]
+			var next := path[i + 1]
+			var dir_to_prev := previous - current
+			var dir_to_next := next - current
+			texture = _get_path_segment_atlas(dir_to_prev, dir_to_next)
+			
+		var sprite := _create_arrow_sprite(current, texture, move.is_valid)
+		move.add_preview_sprite(sprite)
 
-func _get_arrowhead_atlas(dir: Vector2i) -> Vector2i:
+func _get_arrowhead_atlas(dir: Vector2i) -> Texture2D:
 	match dir:
 		Vector2i.UP:
 			return PATH_ARROW_UP
@@ -229,7 +250,7 @@ func _get_arrowhead_atlas(dir: Vector2i) -> Vector2i:
 		_:
 			return PATH_ERROR
 			
-func _get_start_atlas(dir: Vector2i) -> Vector2i:
+func _get_start_atlas(dir: Vector2i) -> Texture2D:
 	match dir:
 		Vector2i.UP:
 			return PATH_START_UP
@@ -242,7 +263,7 @@ func _get_start_atlas(dir: Vector2i) -> Vector2i:
 		_:
 			return PATH_ERROR
 			
-func _get_path_segment_atlas(from_dir: Vector2i, to_dir: Vector2i) -> Vector2i:
+func _get_path_segment_atlas(from_dir: Vector2i, to_dir: Vector2i) -> Texture2D:
 	#Horizontal
 	if _dirs_match(from_dir, to_dir, Vector2i.LEFT, Vector2i.RIGHT):
 		return PATH_HORIZONTAL
@@ -266,4 +287,35 @@ func _get_path_segment_atlas(from_dir: Vector2i, to_dir: Vector2i) -> Vector2i:
 #Just to keep my cases tighter
 func _dirs_match(a: Vector2i, b: Vector2i, dir1: Vector2i, dir2: Vector2i) -> bool:
 	return (a == dir1 and b == dir2) or (a == dir2 and b == dir1)
+	
+func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, valid: bool) -> Sprite2D:
+	var sprite := Sprite2D.new()
+	sprite.texture = texture
+	sprite.z_index = MoveAction.ARROW_BASE_Z_INDEX
+	sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+	
+	if valid:
+		sprite.modulate = Color.WHITE
+	else:
+		sprite.modulate = Color(1, .25, .25, .85)
+		
+	arrow_icon_overlay.add_child(sprite)
+	return sprite
+	
+	
+func on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit):
+	if previous_unit != null and is_instance_valid(previous_unit):
+		set_unit_path_hovered(previous_unit, false)
+	
+	if new_unit != null and is_instance_valid(new_unit):
+		set_unit_path_hovered(new_unit, true)
+	
+func set_unit_path_hovered(unit: Unit, hovered: bool):
+	if not planned_move_by_unit.has(unit):
+		return
+		
+	var move: MoveAction = planned_move_by_unit[unit]
+	move.set_preview_z_index(MoveAction.HOVERED_ARROW_Z_INDEX if hovered else MoveAction.ARROW_BASE_Z_INDEX)
+	
+	
 	

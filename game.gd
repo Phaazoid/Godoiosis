@@ -16,6 +16,14 @@ extends Node2D
 @onready var camera_controller: CameraController = $CameraController
 
 signal hovered_cell_changed(cell: Vector2i, mouse_pos: Vector2i)
+signal hovered_unit_changed(previous_unit: Unit, new_unit: Unit)
+
+const TERRAIN_ICONS := {
+	"grass" : preload("res://Art/Icons/TerrainIcons/grass.png"),
+	"rock" : preload("res://Art/Icons/TerrainIcons/rock.png"),
+	"mud" : preload("res://Art/Icons/TerrainIcons/mud.png"),
+	"error" : preload("res://Art/Icons/ArrowIcons/ERROR.png")	
+}
 
 const OVERLAY_SOURCE := 0
 const OVERLAY_DEFAULT_ATLAS := Vector2i(0, 0)
@@ -73,15 +81,12 @@ func _ready() -> void:
 	spawn_test_units()
 	hovered_cell_changed.connect(update_hover_visuals)
 	turn_manager.connect("turn_started", _on_turn_started)
-	#squad_manager.squad_actions_changed.connect(_on_squad_actions_changed)
-	#squad_manager.squad_created.connect(_on_squad_created)
-	#squad_manager.squad_deleted.connect(_on_squad_deleted)
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
-	
-	
+	hovered_unit_changed.connect(_on_hovered_unit_changed)
+	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
@@ -124,6 +129,14 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 
 func execute_orders(unit):
 	var squad = unit.squad
+	
+	if squad_manager.squad_has_invalid_actions(squad):
+		#showfeedback
+		for action in squad.action_queue:
+			if not action.is_valid:
+				action.actor.visuals.play_invalid_flash()
+		return
+		
 	for action in unit.squad.action_queue.duplicate():
 		if action.action_type == BaseAction.ActionType.MOVE:
 			action.actor.movement.move_along_path(action.path)
@@ -132,11 +145,21 @@ func execute_orders(unit):
 	for member in squad.members:
 		overlay_manager.clear_planned_path(member)
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
+	
+func sho_invalid_plan_feedback(squad: Squad):
+	for action in squad.action_queue:
+		if action.is_valid:
+			continue
+		
+		if action.action_type == BaseAction.ActionType.MOVE:
+			overlay_manager.play_invalid_path_feedback(action)
+		if action.actor != null:
+			action.actor.play_invalid_flash()
 
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
-	if unit.is_leader():
-		clip_invalid_squad_movement(unit)
+	#if unit.is_leader():
+	#	clip_invalid_squad_movement(unit)
 		
 func create_squad(unit: Unit):
 	game_state = GameState.CREATING_SQUAD
@@ -147,7 +170,6 @@ func enter_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_MOVE
 	#TODO - This is slightly intrusive?  Instead of always snapping to center, only snap when unit's move is off screen
 	#or maybe to the squad leader?
-	camera_controller.center_on_position(unit.global_position)
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_queued_move_cell())
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(unit), unit), OVERLAY_DEFAULT_ATLAS)
@@ -198,8 +220,8 @@ func _input(event):
 			exit_current_mode()
 			
 func _unhandled_input(event):
+	var mouse_world := get_global_mouse_position()
 	if event is InputEventMouseButton and event.pressed:
-		var mouse_world := get_global_mouse_position()
 		var clickedCell: Vector2i = grid.local_to_map(grid.to_local(mouse_world))
 		var clickedUnit : Unit = get_unit_at_cell(clickedCell)
 		var lastUnit = get_unit_at_cell(last_clicked_cell)
@@ -236,17 +258,22 @@ func _unhandled_input(event):
 					if compute_move_range(lastUnit).reachable.keys().has(clickedCell):
 						var path = reconstruct_path(compute_move_range(lastUnit).came_from, last_clicked_cell, clickedCell)
 						var move = MoveAction.new()
-						move.init(lastUnit, path)
+						move.init(lastUnit, path, get_Terrain_icon_at_cell(path.back()))
 						squad_manager.queue_action(lastUnit.squad, move)
-						overlay_manager.show_planned_path(lastUnit, path)
-						if lastUnit.is_leader():
-							clip_invalid_projected_squad_movement(lastUnit)
+						overlay_manager.show_planned_path(lastUnit, move)
+						#if lastUnit.is_leader():
+							#clip_invalid_projected_squad_movement(lastUnit)
 					exit_current_mode()
 					
 				GameState.ATTACK_TARGETING:
-					if clickedUnit != null and clickedUnit.get_faction() != get_unit_at_cell(last_clicked_cell).get_faction():
-						try_attack(lastUnit, clickedUnit, compute_basic_range(lastUnit, lastUnit.combat.get_range()))
-						#print("Unit at ", clickedUnit.movement.cell, " Tried to attack unit at ", targetedUnit.movement.cell)
+					if lastUnit != null:
+						var attack_range = compute_basic_range(lastUnit, lastUnit.combat.get_range())
+						if clickedCell in attack_range and clickedUnit != null and clickedUnit.get_faction() != get_unit_at_cell(last_clicked_cell).get_faction():
+							var attack = AttackAction.new()
+							attack.init(lastUnit, clickedUnit, clickedCell, lastUnit.get_base_stat("STR"))
+							squad_manager.queue_action(lastUnit.squad, attack)
+							#try_attack(lastUnit, clickedUnit, compute_basic_range(lastUnit, lastUnit.combat.get_range()))
+							#print("Unit at ", clickedUnit.movement.cell, " Tried to attack unit at ", targetedUnit.movement.cell)
 					exit_current_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 						
 			
@@ -260,7 +287,10 @@ func _unhandled_input(event):
 			#TODO Add close button to this panel
 			unit_info_panel.clear()
 			update_selection_overlay()
-			
+		
+	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE:
+		camera_controller.center_on_position(mouse_world)
+ 
 func populate_action_menu(cell: Vector2i) -> Array:
 	#TODO Order these explicitly instead of just order added to array
 	var options = []
@@ -368,6 +398,13 @@ func _on_action_menu_cancelled(controller):
 	update_hover_visuals(last_hovered_cell, get_viewport().get_mouse_position())
 
 func exit_current_mode():
+	overlay_manager.clear_hover_move_path()
+	
+	if squad_manager.active_squad != null:
+		squad_manager.validate_squad_plan(squad_manager.active_squad)
+		overlay_manager.redraw_planned_paths()
+		squad_action_queue_control.show_squad_actions(squad_manager.active_squad)
+	
 	last_clicked_cell = Vector2i(-999, -999)
 	clear_selection()
 	
@@ -434,7 +471,9 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 
 	if unit.is_leader():
 		draw_squad_leader_range(squad, squad.leader.get_queued_move_cell())
-
+	
+	squad_manager.validate_squad_plan(squad)
+	overlay_manager.redraw_planned_paths()
 	squad_action_queue_control.show_squad_actions(squad)
 
 func _on_unit_action_queued(squad: Squad, action: BaseAction):
@@ -442,6 +481,7 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 	if squad_manager.active_squad == squad and unit.has_squad():
 		draw_squad_leader_range(squad, squad.leader.get_queued_move_cell())
 		overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.SQUADMEMBER)
+	squad_manager.validate_squad_plan(squad)
 	squad_action_queue_control.show_squad_actions(squad)
 
 func movement_cost(cell: Vector2i, unit: Unit) -> int:
@@ -517,11 +557,7 @@ func compute_move_range(unit: Unit) -> Dictionary:
 	var squad_unreachable := {}
 	for cell in cost_so_far.keys():
 		var other_unit := get_unit_at_cell(cell)
-			
-		#If and ally is planning to move here, block
-		if squad_manager.active_squad != null and squad_manager.active_squad.get_planned_movement_destinations().has(cell):
-			continue
-		
+
 		#Gotta stay in the Leader's current movement range if they don't have a queued move  
 		if not unit.is_leader() and not unit.squad.get_leader().has_move_queued() and GridUtils.manhattan_distance(cell, unit.squad.get_leader().movement.cell) > unit.movement.move_range:
 			squad_unreachable[cell] = cost_so_far[cell]
@@ -532,8 +568,12 @@ func compute_move_range(unit: Unit) -> Dictionary:
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 			
-		# Block ending on any occupied tile where the ally is not planning to move
-		if other_unit != null and not other_unit.has_move_queued():
+		# Cannot walk onto spaces with non-squad members (and even those are potentially invalid - check SquadManager)
+		if other_unit != null and not unit.squad.get_members().has(other_unit):
+			continue
+		
+		#Cannot move onto own tile
+		if other_unit == unit:
 			continue
 
 		reachable[cell] = cost_so_far[cell]
@@ -667,6 +707,26 @@ func spawn_test_units():
 	#var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
 	#var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
 	
+func get_terrain_type_at_cell(cell:Vector2i) -> String:
+	var data := grid.get_cell_tile_data(cell)
+	
+	if data == null:
+		return "error"
+		
+	if data.has_custom_data("terrain_type"):
+		return str(data.get_custom_data("terrain_type"))
+		
+	return "error"
+	
+func get_Terrain_icon_at_cell(cell: Vector2i) -> Texture2D:
+	var terrain_type := get_terrain_type_at_cell(cell)
+	
+	if TERRAIN_ICONS.has(terrain_type):
+		return TERRAIN_ICONS[terrain_type]
+		
+	return TERRAIN_ICONS["error"]
+		
+	
 func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	var hoveredUnit : Unit = get_unit_at_cell(hoveredCell)
 	var tile_data: TileData = grid.get_cell_tile_data(hoveredCell)
@@ -723,16 +783,25 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	
 	if game_state == GameState.CHOOSING_MOVE:
 		var unit = get_unit_at_cell(last_clicked_cell)
-		overlay_manager.clear_planned_path(unit)
+		overlay_manager.clear_hover_move_path()
 		if unit.is_leader(): 
 			overlay_manager.clear_squad_range()
 		if unit.is_leader() and unit.has_squad() and compute_move_range(unit).reachable.keys().has(hoveredCell):
 			draw_squad_leader_range(unit.squad, hoveredCell)
+			
+			overlay_manager.redraw_planned_paths()
 		
 		if compute_move_range(unit).reachable.keys().has(hoveredCell):
 			cursor_controller.set_state(CursorController.CursorState.VALID)
 			var path = reconstruct_path(compute_move_range(unit).came_from, last_clicked_cell, hoveredCell)
-			overlay_manager.show_planned_path(unit, path)
+			var move = MoveAction.new()
+			move.init(unit, path, get_Terrain_icon_at_cell(path.back()))
+			
+			squad_manager.validate_squad_plan_preview(unit.squad, move)
+			
+			overlay_manager.show_hover_move_path(move)
+			overlay_manager.redraw_planned_paths()
+			squad_action_queue_control.show_squad_actions(unit.squad)
 		else:
 			cursor_controller.set_state(CursorController.CursorState.INVALID)
 		cursor_controller.set_cursor_pos(hoveredCell)
@@ -743,6 +812,13 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 
 func clear_icons(icons: Array[OverlayIcon.IconType]):
 	overlay_manager.clear_icon_types(icons)
+	
+func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit):
+	if previous_unit != null and is_instance_valid(previous_unit):
+		previous_unit.visuals.set_hovered(false)
+	
+	if new_unit != null and is_instance_valid(new_unit):
+		new_unit.visuals.set_hovered(true)
 		
 func _process(_delta):
 	var mouse_world: Vector2 = get_global_mouse_position()
@@ -750,7 +826,7 @@ func _process(_delta):
 
 	if hoveredCell == last_hovered_cell: #everything after this only gets called if you change what cell you're hovering
 		return
-
+		
+	hovered_unit_changed.emit(get_unit_at_cell(last_hovered_cell), get_unit_at_cell(hoveredCell))
 	hovered_cell_changed.emit(hoveredCell, get_viewport().get_mouse_position())
-	
 	last_hovered_cell = hoveredCell

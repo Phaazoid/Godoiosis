@@ -12,3 +12,5 @@ func setup(action: BaseAction):
 	action_icon.texture = action.get_action_icon()
 	target_texture.texture = action.get_target_texture()
 	description_label.text = action.get_description()
+	
+	action_icon.modulate = action.get_ui_modulate()

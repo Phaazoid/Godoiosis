@@ -8,6 +8,7 @@ class_name Unit
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
 @onready var map_sprite: Sprite2D = $MapSprite
+@onready var visuals: UnitVisuals = $UnitVisuals
 @export var unit_data: UnitData
 
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
@@ -132,5 +133,5 @@ func get_queued_move_cell() -> Vector2i:
 		for action in squad.action_queue:
 			if action.actor == self:
 				if action.action_type == BaseAction.ActionType.MOVE:
-					return action.destination
+					return action.get_destination()
 	return self.movement.cell

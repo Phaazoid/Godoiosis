@@ -14,7 +14,6 @@
 [ext_resource type="Texture2D" uid="uid://bdjohf4vqfwlu" path="res://Art/Icons/rangefill2.png" id="8_1phco"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
 [ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="9_h4fw4"]
-[ext_resource type="Texture2D" uid="uid://bm7hhevr6u8g5" path="res://Art/ArrowTileSheet.png" id="10_nnt18"]
 [ext_resource type="PackedScene" uid="uid://djnudhqoi3lqw" path="res://Scenes/HoverInfoPanelControl.tscn" id="12_rfjv2"]
 [ext_resource type="PackedScene" uid="uid://cqf51nnsk42dv" path="res://Scenes/SquadActionQueueControl.tscn" id="16_ewbju"]
 
@@ -68,30 +67,6 @@ texture = ExtResource("4_ldgsr")
 [sub_resource type="TileSet" id="TileSet_nb51f"]
 sources/0 = SubResource("TileSetAtlasSource_1phco")
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_ewbju"]
-texture = ExtResource("10_nnt18")
-margins = Vector2i(1, 1)
-separation = Vector2i(2, 2)
-0:0/0 = 0
-1:0/0 = 0
-2:0/0 = 0
-3:0/0 = 0
-4:0/0 = 0
-5:0/0 = 0
-6:0/0 = 0
-7:0/0 = 0
-0:1/0 = 0
-1:1/0 = 0
-2:1/0 = 0
-3:1/0 = 0
-4:1/0 = 0
-5:1/0 = 0
-6:1/0 = 0
-7:1/0 = 0
-
-[sub_resource type="TileSet" id="TileSet_85qyi"]
-sources/0 = SubResource("TileSetAtlasSource_ewbju")
-
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_feb5d"]
 texture = ExtResource("3_feb5d")
 0:0/0 = 0
@@ -130,7 +105,7 @@ z_index = 8
 script = ExtResource("4_h4fw4")
 
 [node name="MoveOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=2138292469]
-z_index = 5
+z_index = 2
 z_as_relative = false
 tile_set = SubResource("TileSet_rku1e")
 
@@ -149,7 +124,6 @@ tile_set = SubResource("TileSet_o5yvi")
 [node name="IconOverlay" type="Node2D" parent="OverlayManager" unique_id=944104881]
 
 [node name="PlannedActionOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=365189579]
-z_index = 9
 tile_set = SubResource("TileSet_1phco")
 
 [node name="SquadRangeOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=162259628]
@@ -158,9 +132,7 @@ tile_set = SubResource("TileSet_nnt18")
 [node name="InvalidMoveOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=364384559]
 tile_set = SubResource("TileSet_nb51f")
 
-[node name="ArrowOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=747631515]
-z_index = 5
-tile_set = SubResource("TileSet_85qyi")
+[node name="ArrowIconOverlay" type="Node2D" parent="OverlayManager" unique_id=1509738560]
 
 [node name="Units" type="Node2D" parent="." unique_id=431218200]
 
