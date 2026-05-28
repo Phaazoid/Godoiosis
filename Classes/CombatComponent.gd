@@ -8,7 +8,7 @@ class_name Combat_Component
 #or call comabt_component.setup(self) after instance is created
 
 # Called when the node enters the scene tree for the first time.
-func _ready() -> void:
+func _ready():
 	var unit := owner as Unit
 	if unit == null:
 		push_error("Combat Component must be a child of a Unit")
@@ -24,7 +24,7 @@ func can_attack(attacker: Unit, target: Unit) -> bool:
 func get_range() -> int:
 	return range
 
-func apply_damage(damage: int) -> void:
+func apply_damage(damage: int):
 	var unit := owner as Unit
 	if unit == null:
 		return

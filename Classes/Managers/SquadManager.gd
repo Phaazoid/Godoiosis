@@ -49,11 +49,22 @@ func join_squad(unit: Unit, target_squad: Squad):
 func validate_squad_plan(squad: Squad) -> bool:
 	return _validate_action_list(squad, squad.action_queue)
 	
+#We need to pass in an action list as well for the specific case of the hover preview, where we use a different action list than saved in the squad depending on cell hovered
 func _get_projected_cell_for_unit(unit: Unit, actions: Array[BaseAction]) -> Vector2i:
 	for action in actions:
 		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE:
 			return action.get_destination()
 	return unit.movement.cell
+	
+#Note - only treats valid actions as projected moves
+func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
+	if active_squad == null:
+		return null
+	for action in active_squad.get_actions():
+		if action.action_type == BaseAction.ActionType.MOVE and action.get_destination() == cell and action.is_valid:
+			return action.actor
+			
+	return null
 	
 func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 	var valid := true
@@ -63,7 +74,6 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 	
 	var projected_leader_cell := _get_projected_cell_for_unit(squad.leader, actions)
 	var leader_range := squad.get_ldr_range_from_cell(projected_leader_cell)
-	
 	for action in actions:
 		action.clear_validation_errors()
 		
@@ -106,7 +116,7 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 		
 		if moving_unit == squad.leader or not moving_unit.has_squad():
 			continue
-			
+
 		if not leader_range.has(action.get_destination()):
 			action.add_validation_error("Squad leader range invalidates other movement")
 			valid = false

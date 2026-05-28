@@ -7,6 +7,7 @@ class_name OverlayManager
 @onready var squad_overlay = $SquadOverlay
 @onready var icon_overlay = $IconOverlay
 @onready var arrow_icon_overlay: Node2D = $ArrowIconOverlay
+@onready var projected_unit_overlay: Node2D = $ProjectedUnitOverlay
 @onready var squadrange_overlay = $SquadRangeOverlay
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
@@ -35,6 +36,8 @@ const PATH_ARROW_DOWN := preload("res://Art/Icons/ArrowIcons/endfromtop.png")
 const ICON_SCENE = preload("res://Scenes/OverlayIcon.tscn")
 const SOURCE_ID = 0
 const ATLAS_COORDS = Vector2i(0,0)
+const ICON_Z_INDEX = 15
+
 
 enum OverlayType {
 	MOVE,
@@ -59,6 +62,7 @@ var icons_by_cell = {} # {Cell : { IconType : Icon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
 var hover_move_preview: MoveAction = null
+var projected_unit_sprites := {} # { Unit : Sprite2D }
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -149,6 +153,7 @@ func create_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.
 	icon_overlay.add_child(icon)
 	icon.setup(ICON_TEXTURES[type], cell, type)
 	icon.position = board_tilemap.map_to_local(cell) #+ offset
+	icon.z_index = ICON_Z_INDEX
 	
 	if !icons_by_cell.has(cell):
 		icons_by_cell[cell] = {}
@@ -317,5 +322,41 @@ func set_unit_path_hovered(unit: Unit, hovered: bool):
 	var move: MoveAction = planned_move_by_unit[unit]
 	move.set_preview_z_index(MoveAction.HOVERED_ARROW_Z_INDEX if hovered else MoveAction.ARROW_BASE_Z_INDEX)
 	
+func show_projected_unit(unit: Unit, cell: Vector2i):
+	clear_projected_unit(unit)
 	
+	var sprite := Sprite2D.new()
+	sprite.texture = unit.get_move_texture()
+	sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+	sprite.z_index = Unit.BASE_SPRITE_INDEX
 	
+	#Planning sprite modulation
+	sprite.modulate = Color(.7, .9, 1, .75)
+	var offset = Vector2i(0, -8)
+	sprite.offset = offset
+	projected_unit_overlay.add_child(sprite)
+	projected_unit_sprites[unit] = sprite
+	
+func clear_projected_unit(unit: Unit):
+	if not projected_unit_sprites.has(unit):
+		return
+	
+	var sprite: Sprite2D = projected_unit_sprites[unit]
+	
+	if is_instance_valid(sprite):
+		sprite.hide()
+		sprite.queue_free()
+		
+	projected_unit_sprites.erase(unit)
+	
+func clear_all_projected_sprites():
+	for unit in projected_unit_sprites.keys().duplicate():
+		clear_projected_unit(unit)
+		
+func redraw_projected_units():
+	clear_all_projected_sprites()
+	
+	for unit in planned_move_by_unit.keys():
+		var move: MoveAction = planned_move_by_unit[unit]
+		if move.is_valid:
+			show_projected_unit(unit, move.destination)

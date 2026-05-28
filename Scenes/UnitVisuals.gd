@@ -18,7 +18,7 @@ func _ready():
 	base_position = sprite.position
 	base_modulate = sprite.modulate
 	base_scale = sprite.scale
-	base_z_index = sprite.z_index
+	base_z_index = Unit.BASE_SPRITE_INDEX
 	
 func reset_visuals():
 	if sprite == null:
@@ -61,3 +61,8 @@ func set_hovered(value: bool):
 	else:
 		sprite.z_index = base_z_index
 	
+func set_projected(value: bool):
+	if value:
+		sprite.hide()
+	else:
+		sprite.show()

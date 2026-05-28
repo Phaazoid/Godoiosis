@@ -4,17 +4,19 @@ class_name AttackAction
 var target: Unit
 var damage: int
 var attack_range: Array[Vector2i] = []
+var origin_cell: Vector2i
 var target_cell: Vector2i
 
 var preview_sprites: Array[Node2D] = []
 
 const ATTACK_ICON := preload("res://Art/Icons/FightActionIcon.png")
 
-func init(attacker: Unit, target_unit: Unit, target_location: Vector2i, predicted_damage: int):
+func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i, predicted_damage: int):
 	actor = attacker
 	target = target_unit
 	target_cell = target_location
 	damage = predicted_damage
+	origin_cell = origin
 	action_type = BaseAction.ActionType.ATTACK
 	
 func execute():

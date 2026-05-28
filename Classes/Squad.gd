@@ -82,7 +82,7 @@ func validate_member_distance(unit: Unit) -> bool:
 func get_max_range() -> int:
 	return leader.get_base_stat("LDR") #This is a placeholder value for now
 	
-func get_planned_movement_destinations()  -> Array:
+func get_planned_movement_destinations() -> Array:
 	var cells = []
 	for action in action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE:

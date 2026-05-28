@@ -134,6 +134,8 @@ tile_set = SubResource("TileSet_nb51f")
 
 [node name="ArrowIconOverlay" type="Node2D" parent="OverlayManager" unique_id=1509738560]
 
+[node name="ProjectedUnitOverlay" type="Node2D" parent="OverlayManager" unique_id=240625312]
+
 [node name="Units" type="Node2D" parent="." unique_id=431218200]
 
 [node name="Grid" type="TileMapLayer" parent="." unique_id=2117630587]

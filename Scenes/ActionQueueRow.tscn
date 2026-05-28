@@ -13,7 +13,7 @@ script = ExtResource("1_fbndw")
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2
 expand_mode = 2
-stretch_mode = 5
+stretch_mode = 3
 
 [node name="ActionIcon" type="TextureRect" parent="." unique_id=336764216]
 custom_minimum_size = Vector2(32, 32)

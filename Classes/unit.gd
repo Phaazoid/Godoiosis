@@ -8,10 +8,12 @@ class_name Unit
 @onready var combat: Combat_Component = $Combat_Component
 @onready var movement: Movement_Component = $Movement_Component
 @onready var map_sprite: Sprite2D = $MapSprite
+@onready var move_sprite: Sprite2D = $MoveSprite
 @onready var visuals: UnitVisuals = $UnitVisuals
 @export var unit_data: UnitData
 
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
+const BASE_SPRITE_INDEX = 4
 
 var unit_instance: UnitInstance
 var selected := false #Not actually being used atm
@@ -43,6 +45,8 @@ func _ready():
 	unit_instance.initialize()
 	inventory.resize(MAX_INVENTORY_SIZE)
 	unit_instance.died.connect(_on_instance_died)
+	map_sprite.z_index = BASE_SPRITE_INDEX
+	move_sprite.z_index = BASE_SPRITE_INDEX
 	
 	match unit_data.faction:
 		Team.Faction.PLAYER:
@@ -64,7 +68,13 @@ func get_map_sprite_texture() -> Texture2D:
 		return null
 	
 	return map_sprite.texture 
-
+	
+func get_move_texture() -> Texture2D:
+	if move_sprite == null:
+		return null
+	
+	return move_sprite.texture
+	
 func get_unit_name() -> String:
 	return unit_data.display_name
 
