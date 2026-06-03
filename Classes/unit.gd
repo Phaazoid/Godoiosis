@@ -131,17 +131,44 @@ func die() -> void:
 func change_faction(new_faction: Team.Faction):
 	unit_data.faction = new_faction
 
-func has_move_queued() -> bool:
+func has_action_type_queued(actiontype: BaseAction.ActionType) -> bool:
 	for action in squad.action_queue:
 		if action.actor == self:
-			if action.action_type == BaseAction.ActionType.MOVE:
-				return true
+			if action.action_type == actiontype:
+				if action.action_type == BaseAction.ActionType.MOVE and action.is_hold_position:  #treat hold moves like not having a move queued
+					return false
+				else:
+					return true
 	return false
 
-func get_queued_move_cell() -> Vector2i:
-	if has_move_queued():
-		for action in squad.action_queue:
-			if action.actor == self:
-				if action.action_type == BaseAction.ActionType.MOVE:
-					return action.get_destination()
+func has_valid_move_queued() -> bool:
+	if self.has_action_type_queued(BaseAction.ActionType.MOVE):
+		var move = self.get_move_action()
+		if move.is_valid:
+			return true
+	return false
+	
+func get_unit_actions() -> Array[BaseAction]:
+	var actions = []
+	for action in squad.get_actions():
+		if action.actor == self:
+			actions.append(action)
+	return actions
+	
+func get_move_action() -> MoveAction:
+	for action in squad.get_actions():
+		if action.actor == self and action.action_type == BaseAction.ActionType.MOVE:
+			return action
+	return null
+	
+func has_any_actions() -> bool:
+	for action in squad.get_actions():
+		if action.actor == self:
+			return true
+	return false
+
+func get_projected_destination() -> Vector2i:
+	for action in squad.get_actions():
+		if action.actor == self and action.action_type == BaseAction.ActionType.MOVE and action.is_valid:
+			return action.get_destination()
 	return self.movement.cell

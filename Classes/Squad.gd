@@ -30,25 +30,6 @@ func _add_member(unit: Unit):
 	if not members.has(unit):
 		members.append(unit)
 		unit.squad = self
-	
-func get_actions_for_unit(unit: Unit) -> Array[BaseAction]:
-	var actions = []
-	for action in action_queue:
-		if action.actor == unit:
-			actions.append(action)
-	return actions
-	
-func unit_has_queued_actions(unit: Unit) -> bool:
-	for action in action_queue:
-		if action.actor == unit:
-			return true
-	return false
-
-func unit_has_action_type_queued(unit: Unit, type: BaseAction.ActionType) -> bool:
-	for action in action_queue:
-		if action.actor == unit and action.action_type == type:
-			return true
-	return false
 
 func has_any_queued_actions() -> bool:
 	if action_queue.is_empty():
@@ -105,22 +86,25 @@ func get_actions_of_type(type: BaseAction.ActionType) -> Array:
 	return actions
 			
 func _queue_action(action: BaseAction):
-	if action_queue.is_empty():
-		actions_became_active.emit(self, action)
+	var was_empty = action_queue.is_empty()
+		
+	#For now, enforce only one of each kind of action per unit in the queue.
+	for existing_action in action_queue.duplicate():
+		if existing_action.actor == action.actor and existing_action.action_type == action.action_type:
+			_remove_action(existing_action)
+			
 	action_queue.append(action)
 	action_queued.emit(self, action)
-	
+
+	if was_empty:
+		actions_became_active.emit(self, action)
+
 func _remove_action(action: BaseAction):
 	action_queue.erase(action)
 	action_cancelled.emit(self, action.actor, action.action_type)
 	
 	if action_queue.is_empty():
 		actions_became_empty.emit(self)
-		
-func remove_actions_for_unit(unit: Unit):
-	for action in action_queue:
-		if action.actor == unit:
-			_remove_action(action)
 
 func _clear_all_actions():
 	for action in action_queue.duplicate():

@@ -59,6 +59,7 @@ const ICON_TEXTURES = {
 
 var overlay_map = {}
 var icons_by_cell = {} # {Cell : { IconType : Icon } } 
+var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
 var hover_move_preview: MoveAction = null
@@ -144,7 +145,7 @@ func redraw_planned_paths():
 	for action in planned_move_by_unit.values():
 		draw_path_arrows(action)
 
-func create_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
+func create_cell_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
 	if icons_by_cell.has(cell):
 		if icons_by_cell[cell].has(type):
 			return icons_by_cell[cell][type]
@@ -161,12 +162,78 @@ func create_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.
 	icons_by_cell[cell][type] = icon
 	return icon
 	
+func create_unit_icon(unit: Unit, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
+	if unit == null:
+		return null
+		
+	if not icons_by_unit.has(unit):
+		icons_by_unit[unit] = {}
+		
+	if icons_by_unit[unit].has(type):
+		return icons_by_unit[unit][type]
+		
+	var icon := ICON_SCENE.instantiate()
+	icon_overlay.add_child(icon)
+	var cell := unit.get_projected_destination()
+	icon.setup(ICON_TEXTURES[type], cell, type)
+	icon.position = board_tilemap.map_to_local(cell) #+ offset
+	
+	icons_by_unit[unit][type] = icon
+	return icon
+
+func clear_unit_icon(unit: Unit, type: OverlayIcon.IconType):
+	if not icons_by_unit.has(unit):
+		return
+		
+	if not icons_by_unit[unit].has(type):
+		return
+		
+	var icon: OverlayIcon = icons_by_unit[unit][type]
+	if is_instance_valid(icon):
+		icon.hide()
+		icon.queue_free()
+	
+	icons_by_unit[unit].erase(type)
+	if icons_by_unit[unit].is_empty():
+		icons_by_unit.erase(unit)
+
+func clear_unit_icons(unit: Unit):
+	if not icons_by_unit.has(unit):
+		return
+		
+	for type in icons_by_unit[unit].keys().duplicate():
+		clear_unit_icon(unit, type)
+	
+func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
+	for unit in icons_by_unit.keys().duplicate():
+		for type in types:
+			clear_unit_icon(unit, type)
+	
+func redraw_squad_unit_icons(squad: Squad):
+	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	for member in squad.get_members():
+		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
+		if member == squad.get_leader():
+			create_unit_icon(member, OverlayIcon.IconType.CROWN)
+				
+func refresh_unit_icons():
+	for unit in icons_by_unit.keys().duplicate():
+		if not is_instance_id_valid(unit):
+			clear_unit_icons(unit)
+			continue
+		
+		var cell: Vector2i = unit.get_projected_destination()
+		var world_pos: Vector2i = board_tilemap.map_to_local(cell)
+		
+		for icon in icons_by_unit[unit].values():
+			if is_instance_valid(icon):
+				icon.move_to(cell)
+	
 func move_icon(icon: OverlayIcon, pos: Vector2i):
 	icon.move_to(pos)
 	
-func clear_icon_types(icontypes: Array[OverlayIcon.IconType]):
+func clear_cell_icon_types(icontypes: Array[OverlayIcon.IconType]):
 	var cells = icons_by_cell.keys().duplicate()
-
 	for cell: Vector2i in cells:
 		for type: OverlayIcon.IconType in icontypes:
 			if icons_by_cell.has(cell) and icons_by_cell[cell].has(type):
@@ -206,6 +273,12 @@ func is_valid_cell(cell: Vector2i) -> bool:
 	
 func draw_path_arrows(move: MoveAction):
 	var path: Array[Vector2i] = move.get_move_path()
+	
+	if move.is_hold_position:
+		if not move.is_valid:
+			var sprite := _create_arrow_sprite(move.destination, PATH_ERROR, false)
+			move.add_preview_sprite(sprite)
+		return
 	
 	if path.is_empty():
 		return
@@ -358,5 +431,6 @@ func redraw_projected_units():
 	
 	for unit in planned_move_by_unit.keys():
 		var move: MoveAction = planned_move_by_unit[unit]
+		unit.visuals.set_projected(move.is_valid)
 		if move.is_valid:
 			show_projected_unit(unit, move.destination)

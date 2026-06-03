@@ -1,6 +1,14 @@
 extends Object
 class_name GridUtils
 
+const TERRAIN_ICONS := {
+	"grass" : preload("res://Art/Icons/TerrainIcons/grass.png"),
+	"rock" : preload("res://Art/Icons/TerrainIcons/rock.png"),
+	"mud" : preload("res://Art/Icons/TerrainIcons/mud.png"),
+	"error" : preload("res://Art/Icons/ArrowIcons/ERROR.png")	
+}
+
+
 static func manhattan_distance(a: Vector2i, b: Vector2i) -> int:
 	return abs(a.x - b.x) + abs(a.y - b.y)
 
@@ -15,3 +23,33 @@ static func cells_within_manhattan_range(origin: Vector2i, range: int) -> Array[
 			if dist <= range:
 				cells.append(cell)
 	return cells
+
+static func cardinal_direction_between(from_cell: Vector2i, to_cell: Vector2i) -> Vector2:
+	var diff := to_cell - from_cell
+
+	if diff == Vector2i.ZERO:
+		return Vector2.ZERO
+
+	if abs(diff.x) >= abs(diff.y):
+		return Vector2(sign(diff.x), 0)
+
+	return Vector2(0, sign(diff.y))
+
+static func get_terrain_type_at_cell(grid: TileMapLayer, cell:Vector2i) -> String:
+	var data := grid.get_cell_tile_data(cell)
+	
+	if data == null:
+		return "error"
+		
+	if data.has_custom_data("terrain_type"):
+		return str(data.get_custom_data("terrain_type"))
+		
+	return "error"
+	
+static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Texture2D:
+	var terrain_type := get_terrain_type_at_cell(grid, cell)
+	
+	if TERRAIN_ICONS.has(terrain_type):
+		return TERRAIN_ICONS[terrain_type]
+		
+	return TERRAIN_ICONS["error"]

@@ -13,7 +13,6 @@ enum IconType {
 	SQUADMEMBER	
 }
 
-
 func setup(texture: Texture2D, cell: Vector2i, type: IconType):
 	sprite.texture = texture
 	target_cell = cell

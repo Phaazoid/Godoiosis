@@ -10,8 +10,11 @@ alignment = 1
 script = ExtResource("1_fbndw")
 
 [node name="ActorTexture" type="TextureRect" parent="." unique_id=1426592185]
-custom_minimum_size = Vector2(32, 32)
+clip_contents = true
+custom_minimum_size = Vector2(16, 16)
 layout_mode = 2
+size_flags_horizontal = 0
+size_flags_vertical = 0
 expand_mode = 2
 stretch_mode = 3
 

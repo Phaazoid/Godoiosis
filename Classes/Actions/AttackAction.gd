@@ -20,11 +20,18 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 	action_type = BaseAction.ActionType.ATTACK
 	
 func execute():
+	begin_execution()
 	if actor == null or target == null:
 		return
 		
+	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target.movement.cell)
+	
+	actor.visuals.play_attack_lunge(direction)
+	
 	target.combat.apply_damage(actor.get_base_stat("STR"))
 	
+	finish_execution()
+		
 func get_action_icon() -> Texture2D:
 	return ATTACK_ICON
 	

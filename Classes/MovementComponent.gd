@@ -5,6 +5,8 @@ class_name Movement_Component
 @export var move_speed := 120 #pixels per second
 @export var move_range: int = 5
 
+signal movement_finished
+
 var grid: TileMapLayer
 var path: Array[Vector2i] = []
 var moving := false
@@ -18,7 +20,10 @@ func set_cell(new_cell: Vector2i):
 
 func move_along_path(new_path: Array[Vector2i]):
 	if new_path.size() <= 1:
+		moving = false
+		movement_finished.emit()
 		return
+		
 	path = new_path.duplicate()
 	path.pop_front()
 	moving = true
@@ -28,6 +33,7 @@ func move_along_path(new_path: Array[Vector2i]):
 func _move_to_next_cell():
 	if path.is_empty():
 		moving = false
+		movement_finished.emit()
 		return
 	
 	var next_cell : Vector2i = path.pop_front()

@@ -4,6 +4,7 @@ class_name UnitVisuals
 @export var sprite: Sprite2D
 
 var visual_tween: Tween
+const TILE_SIZE = 16
 
 var base_position: Vector2
 var base_modulate: Color
@@ -66,3 +67,20 @@ func set_projected(value: bool):
 		sprite.hide()
 	else:
 		sprite.show()
+		
+func play_attack_lunge(direction: Vector2):
+	if sprite == null:
+		return
+		
+	if visual_tween:
+		visual_tween.kill()
+	
+	sprite.position = base_position
+	var lunge_distance = TILE_SIZE / 2
+	var lunge_pos = base_position + direction.normalized() * lunge_distance
+	visual_tween = create_tween()
+	
+	visual_tween.tween_property(sprite, "position", lunge_pos, 0.08)
+	visual_tween.tween_property(sprite, "position", base_position, 0.10)
+	
+	await visual_tween.finished

@@ -4,6 +4,7 @@ class_name SquadManager
 var squads: Array[Squad] = []
 var active_squad: Squad = null
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
+@onready var grid: TileMapLayer = $"../Grid"
 
 signal squad_created(squad: Squad)
 signal squad_deleted(squad: Squad)
@@ -11,6 +12,8 @@ signal squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.A
 signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
+
+var resolved_reactions_by_squad := {} # { Squad : Array[BaseAction] } For managing counter attacks
 
 
 func is_active_squad(squad: Squad):
@@ -63,7 +66,6 @@ func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
 	for action in active_squad.get_actions():
 		if action.action_type == BaseAction.ActionType.MOVE and action.get_destination() == cell and action.is_valid:
 			return action.actor
-			
 	return null
 	
 func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
@@ -80,7 +82,7 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 	for action in actions: 
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
-	
+
 	for member in squad.get_members() :#{Vector2i: Unit}
 		current_member_locations[member.movement.cell] = member
 	
@@ -108,7 +110,6 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 			valid = false
 			for action in actions_at_cell:
 				action.add_validation_error("Multiple units attempting to move here")
-				
 		
 	#Have to validate actions for the rest of the squad that can get canceled by the leader moving and shifting his range
 	for action in move_actions:
@@ -120,7 +121,6 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 		if not leader_range.has(action.get_destination()):
 			action.add_validation_error("Squad leader range invalidates other movement")
 			valid = false
-	
 	return valid
 
 func _unit_has_action_type_in_list(unit: Unit, action_type: BaseAction.ActionType, actions: Array[BaseAction]) -> bool:
@@ -129,7 +129,6 @@ func _unit_has_action_type_in_list(unit: Unit, action_type: BaseAction.ActionTyp
 			return true
 			
 	return false
-	
 	
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
 	var actions := squad.action_queue.duplicate()
@@ -155,6 +154,13 @@ func leave_squad(unit: Unit):
 		delete_squad(old_squad)
 		
 	create_squad(unit)
+
+func setup_hold_move_actions(squad: Squad):
+	for member in squad.get_members():
+		if not member.has_action_type_queued(BaseAction.ActionType.MOVE):
+			var hold_move := MoveAction.new()
+			hold_move.init_hold_position(member, GridUtils.get_terrain_icon_at_cell(grid, member.movement.cell))
+			squad._queue_action(hold_move)
 
 func delete_squad(squad: Squad):
 	if not squads.has(squad):
@@ -182,13 +188,51 @@ func set_has_acted(squad: Squad, acted: bool):
 	squad._set_has_acted(acted)
 	
 func remove_actions_for_unit(unit: Unit):
-	unit.squad.remove_actions_for_unit(unit)
+	var squad = unit.squad
+	for action in squad.action_queue.duplicate():
+		if action.actor == unit:
+			if action.action_type == BaseAction.ActionType.MOVE:
+				cancel_move_for_unit(action.actor)
+			else:
+				squad._remove_action(action)
+			
 	if not unit.squad.has_any_queued_actions() and active_squad == unit.squad:
 		active_squad = null
 		return
 	validate_squad_plan(unit.squad)
 	overlay_manager.redraw_planned_paths()
 	
+func cancel_move_for_unit(unit: Unit):
+	var squad = unit.squad
+	
+	for action in squad.action_queue.duplicate():
+		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE:
+			squad._remove_action(action)
+			
+	var hold_move = MoveAction.new()
+	hold_move.init_hold_position(unit,GridUtils.get_terrain_icon_at_cell(grid, unit.movement.cell))
+	squad._queue_action(hold_move)
+	
+	if only_hold_actions():
+		active_squad._clear_all_actions()
+		active_squad = null
+	
+	validate_squad_plan(squad)
+	overlay_manager.redraw_planned_paths()
+			
+func only_hold_actions() -> bool:
+	if active_squad == null:
+		return false
+		
+	for action in active_squad.action_queue:
+		if not action.action_type == BaseAction.ActionType.MOVE:
+			return false
+		if action.action_type == BaseAction.ActionType.MOVE and action.is_hold_position == false:
+			return false
+			
+	return true
+	
+
 func remove_action(squad: Squad, action: BaseAction):
 	squad._remove_action(action)
 
@@ -204,6 +248,18 @@ func squad_has_invalid_actions(squad: Squad) -> bool:
 		if not action.is_valid:
 			return true
 	return false
+
+func rebuild_reactions_for_squad(squad: Squad):
+	#var reactions := calculate_counterattacks(squad)
+	resolved_reactions_by_squad[squad] = 0 #reactions
+	
+func can_counter(countering_unit: Unit, target_unit: Unit, actions: Array[BaseAction]) -> bool: 
+	var counter_cell := countering_unit.get_projected_destination()
+	var target_cell := target_unit.get_projected_destination()
+
+	var distance = GridUtils.manhattan_distance(counter_cell, target_cell)
+	return distance <= countering_unit.combat.get_range()
+	 #For now just using simple manhatten distance range. Will need to update with lists of cells most likely.  
 
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):

@@ -5,12 +5,19 @@ var actor: Unit
 var priority
 var action_type: ActionType
 
+signal execute_finished
+
+var execution_complete := false
 var is_valid := true
 var validation_errors: Array[String] = []
+
+var is_reaction := false
+var show_in_queue := true
 
 enum ActionType {
 	MOVE,
 	ATTACK,
+	COUNTER_ATTACK,
 	WAIT,
 	SQUAD_MOVE
 }
@@ -55,6 +62,13 @@ func get_ui_modulate() -> Color:
 		return Color.WHITE
 		
 	return Color(1, .25, .25, 1)
+	
+func begin_execution():
+	execution_complete = false
+	
+func finish_execution():
+	execution_complete = true
+	execute_finished.emit()
 
 func execute():
-	pass
+	finish_execution()
