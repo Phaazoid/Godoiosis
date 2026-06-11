@@ -35,31 +35,7 @@ func has_any_queued_actions() -> bool:
 	if action_queue.is_empty():
 		return false
 	return true
-
-func _remove_member(unit: Unit): 
-	members.erase(unit)
-	unit.reset_squad()
-	
-func _reassign_leader():
-	members.erase(leader)
-	leader.reset_squad()
-	var newLeader: Unit = members[0]
-	for member in members:
-		if member.get_base_stat("LDR") > newLeader.get_base_stat("LDR"):
-			newLeader = member
-	leader = newLeader 
-
-	for member in members:
-		if not validate_member_distance(member):
-			_remove_member(member)
-
-func validate_member_distance(unit: Unit) -> bool:
-	var dist = unit.movement.cell.distance_to(leader.movement.cell)
-	if dist > get_max_range():
-		return false
-	else:
-		return true
-	
+		
 func get_max_range() -> int:
 	return leader.get_base_stat("LDR") #This is a placeholder value for now
 	

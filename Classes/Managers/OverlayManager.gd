@@ -259,6 +259,8 @@ func clear_all():
 	hover_overlay.clear()
 	squad_overlay.clear()
 	invalidmove_overlay.clear()
+	squadrange_overlay.clear()
+
 	
 func clear_squad_range():
 	squadrange_overlay.clear()

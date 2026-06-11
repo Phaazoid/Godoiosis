@@ -17,7 +17,7 @@ func _ready():
 func can_attack(attacker: Unit, target: Unit) -> bool:
 	if attacker == target:
 		return false
-	if not Team.is_enemy(attacker.faction, target.faction):
+	if not Team.is_enemy(attacker.get_faction(), target.get_faction()):
 		return false
 	return true
 	
@@ -30,3 +30,9 @@ func apply_damage(damage: int):
 		return
 	unit.unit_instance.apply_damage(damage)
 	
+func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vector2i) -> Array[Vector2i]:
+	return GridUtils.cells_within_manhattan_range(origin_cell, range)
+
+func can_hit_cell_from(origin_cell: Vector2i, target_cell: Vector2i) -> bool:
+	return get_attack_cells_from(origin_cell, target_cell).has(target_cell)
+ #For now just using simple manhatten distance range. Will need to update with lists of cells most likely.  

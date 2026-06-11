@@ -79,6 +79,8 @@ func _ready() -> void:
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
+	
+
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
@@ -124,7 +126,7 @@ func execute_orders(unit):
 	
 	squad_manager.validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
-	squad_action_queue_control.show_squad_actions(squad)
+	refresh_action_queue(squad)
 	
 	if squad_manager.squad_has_invalid_actions(squad):
 		for action in squad.action_queue:
@@ -136,7 +138,8 @@ func execute_orders(unit):
 
 	var move_actions := []
 	var attack_actions := []
-	
+	var counter_actions := squad_manager.calculate_counterattacks_for_squad(squad)	
+
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		match action.action_type:
@@ -145,9 +148,10 @@ func execute_orders(unit):
 			BaseAction.ActionType.ATTACK:
 				attack_actions.append(action)
 
-	await execute_action_phase(move_actions)
-	await execute_action_phase(attack_actions)
-	
+	await execute_action_phase_parallel(move_actions)
+	await execute_action_sequence(attack_actions)
+	await execute_action_sequence(counter_actions)
+
 	for action in squad.action_queue.duplicate():
 		squad_manager.remove_action(squad, action)
 
@@ -155,7 +159,7 @@ func execute_orders(unit):
 	for member in squad.members:
 		overlay_manager.clear_planned_path(member)
 
-func execute_action_phase(actions: Array):
+func execute_action_phase_parallel(actions: Array):
 	if actions.is_empty():
 		return
 	
@@ -177,16 +181,17 @@ func execute_action_phase(actions: Array):
 			
 		await get_tree().process_frame
 	
-func show_invalid_plan_feedback(squad: Squad):
-	for action in squad.action_queue:
-		if action.is_valid:
-			continue
-		
-		if action.action_type == BaseAction.ActionType.MOVE:
-			overlay_manager.play_invalid_path_feedback(action)
-		if action.actor != null:
-			action.actor.play_invalid_flash()
+func execute_action_sequence(actions: Array):
+	if actions.is_empty():
+		return
 
+	for action in actions:
+		action.begin_execution()
+		action.execute()
+
+		while not action.execution_complete:
+			await get_tree().process_frame
+	
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
 	#if unit.is_leader():
@@ -213,7 +218,7 @@ func enter_attack_mode(unit: Unit):
 	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, compute_basic_range(unit, unit.combat.get_range()), OVERLAY_DEFAULT_ATLAS)
 		
 func disband_squad(unit: Unit):
-	squad_manager.delete_squad(unit.squad)
+	squad_manager.disband_squad(unit.squad)
 	
 func join_squad_mode(unit: Unit):
 	game_state = GameState.CHOOSING_SQUAD
@@ -447,7 +452,8 @@ func exit_current_mode():
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
 		overlay_manager.redraw_planned_paths()
 		overlay_manager.redraw_projected_units()
-		squad_action_queue_control.show_squad_actions(squad_manager.active_squad)
+		refresh_action_queue(squad_manager.active_squad)
+
 	
 	last_clicked_cell = Vector2i(-999, -999)
 	clear_selection()
@@ -467,6 +473,14 @@ func clear_selection_controller(controller):
 
 func update_selection_overlay():
 	overlay.clear()
+	
+func refresh_action_queue(squad: Squad) -> void:
+	if squad == null:
+		squad_action_queue_control.show_display_entries([])
+		return
+	var entries := squad_manager.get_display_entries_for_squad(squad)
+	squad_action_queue_control.show_display_entries(entries)
+
 	
 func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	var unit = UnitFactory.create_unit(data, grid, pos)
@@ -498,16 +512,17 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 			for icontype in icons_to_draw[unit]:
 				overlay_manager.create_unit_icon(unit, icontype)
 	squad_manager.setup_hold_move_actions(squad)
-	squad_action_queue_control.show_squad_actions(squad)
+	refresh_action_queue(squad)
+
 
 func draw_squad_leader_range(squad: Squad, cell: Vector2i):		
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, squad.get_ldr_range_from_cell(cell), OVERLAY_DEFAULT_ATLAS)
 
 func _on_squad_has_no_actions(squad: Squad):
 	overlay_manager.clear_squad_range()
-	squad_action_queue_control.show_squad_actions(squad)
+	refresh_action_queue(squad)
 	overlay_manager.redraw_squad_unit_icons(squad)
-	
+
 func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
 	overlay_manager.clear_planned_path(unit)
 	if squad_manager.active_squad == squad:
@@ -520,22 +535,24 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 		
 	if actiontype == BaseAction.ActionType.MOVE:
 		unit.visuals.set_projected(false)
-	
+
 	squad_manager.validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 	overlay_manager.redraw_projected_units()
-	squad_action_queue_control.show_squad_actions(squad)
+	refresh_action_queue(squad)
 	overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_queued(squad: Squad, action: BaseAction):
 	var unit = action.actor
+
 	if action.action_type == BaseAction.ActionType.MOVE and action.is_valid and not action.is_hold_position:
 		unit.visuals.set_projected(true)
 	if squad_manager.active_squad == squad and unit.has_squad():
 		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
 		overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.SQUADMEMBER) #TODO Instead of a clear here, a refresh to projected cell.  
 	squad_manager.validate_squad_plan(squad)
-	squad_action_queue_control.show_squad_actions(squad)
+	refresh_action_queue(squad)
+
 	if unit.has_squad():
 		overlay_manager.redraw_squad_unit_icons(squad)
 
@@ -706,7 +723,6 @@ func draw_joinable_squads(joining_unit: Unit):
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OVERLAY_DEFAULT_ATLAS)
 
 func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
-	overlay_manager.clear_all()
 	var icons = {} # { Unit : Icon }
 	for member in squad.get_members():
 		if member != squad.leader:
@@ -808,7 +824,16 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	if game_state == GameState.IDLE: # and turn_manager.is_player_turn():
 		#Always show selected tile and info for what you're hovering over
 		cursor_controller.set_cursor_pos(hoveredCell)
+		overlay_manager.clear_all()
+
 		if hoveredUnit != null:
+			
+			if squad_manager.active_squad == null:
+				clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
+			
+			if hoveredUnit.has_squad():
+				draw_squad_leader_range(hoveredUnit.squad, hoveredUnit.squad.leader.get_projected_destination())
+
 			overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(hoveredUnit), hoveredUnit), OVERLAY_DEFAULT_ATLAS)
 			hover_info_panel.set_unit(hoveredUnit)
 			#cursor_controller.set_state(CursorController.CursorState.TARGET)
@@ -851,19 +876,21 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			cursor_controller.set_state(CursorController.CursorState.VALID)
 			var path = reconstruct_path(compute_move_range(unit).came_from, last_clicked_cell, hoveredCell)
 			var move = MoveAction.new()
+			var squad = unit.squad
 			move.init(unit, path,GridUtils.get_terrain_icon_at_cell(grid, path.back()))
 			
-			squad_manager.validate_squad_plan_preview(unit.squad, move)
+			squad_manager.validate_squad_plan_preview(squad, move)
 			
 			overlay_manager.show_hover_move_path(move)
 			#unit.visuals.set_projected(!move.is_valid)
 			
 			if unit.has_squad():
-				overlay_manager.redraw_squad_unit_icons(unit.squad)
+				overlay_manager.redraw_squad_unit_icons(squad)
 
 			overlay_manager.redraw_planned_paths()
 			overlay_manager.redraw_projected_units()
-			squad_action_queue_control.show_squad_actions(unit.squad)
+			refresh_action_queue(squad)
+
 		else:
 			cursor_controller.set_state(CursorController.CursorState.INVALID)
 		cursor_controller.set_cursor_pos(hoveredCell)

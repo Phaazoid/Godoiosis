@@ -6,6 +6,10 @@ var damage: int
 var attack_range: Array[Vector2i] = []
 var origin_cell: Vector2i
 var target_cell: Vector2i
+var target_texture: Texture2D
+var target_name := "Target"
+
+
 
 var preview_sprites: Array[Node2D] = []
 
@@ -18,15 +22,29 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 	damage = predicted_damage
 	origin_cell = origin
 	action_type = BaseAction.ActionType.ATTACK
-	
+
+	if target_unit != null and is_instance_valid(target_unit):
+		target_texture = target_unit.get_map_sprite_texture()
+		target_name = target_unit.get_unit_name()
+			
 func execute():
 	begin_execution()
 	if actor == null or target == null:
+		finish_execution()
 		return
+		
+	if not is_instance_valid(actor) or not is_instance_valid(target):
+		finish_execution()
+		return
+
+	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
+		finish_execution()
+		return
+
 		
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target.movement.cell)
 	
-	actor.visuals.play_attack_lunge(direction)
+	await actor.visuals.play_attack_lunge(direction)
 	
 	target.combat.apply_damage(actor.get_base_stat("STR"))
 	
@@ -36,8 +54,11 @@ func get_action_icon() -> Texture2D:
 	return ATTACK_ICON
 	
 func get_target_texture() -> Texture2D:
-	return target.get_map_sprite_texture() #OR UNIT SPRITE IF ATTACKING SOMEONE I GUESS
-	
+	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():
+		return target.get_map_sprite_texture()
+
+	return target_texture  #OR UNIT SPRITE IF ATTACKING SOMEONE I GUESS
+
 func get_description() -> String:
 	return "%s attacks" % actor.get_unit_name() + " it was super effective"
 
@@ -48,5 +69,11 @@ func clear_preview_sprites():
 		
 	preview_sprites.clear()
 	
+func get_target_name() -> String:
+	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():
+		return target.get_unit_name()
+
+	return target_name
+
 func add_preview_sprites(sprite: Node2D):
 	preview_sprites.append(sprite)

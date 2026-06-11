@@ -21,6 +21,7 @@ var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
+var equipped_weapon: WeaponData = null
 
 func set_selected(value: bool):
 	selected = value
@@ -78,13 +79,11 @@ func get_move_texture() -> Texture2D:
 func get_unit_name() -> String:
 	return unit_data.display_name
 
-func reset_squad():
-	var newSquad = Squad.new()
-	newSquad.set_leader(self)
-	squad = newSquad
-
 func remove_item(index: int):
 	if index >= 0 and index < inventory.size():
+		if inventory[index] == equipped_weapon:
+			equipped_weapon = null
+
 		inventory[index] = null
 		
 func _on_instance_died():
@@ -99,7 +98,7 @@ func get_effective_stat(stat: String) -> int:
 	return get_base_stat(stat) + get_modifier(stat)
 
 func get_modifier(stat: String) -> int:
-	return unit_instance.modifiers.get(stat)
+	return unit_instance.stat_modifiers.get(stat)
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()

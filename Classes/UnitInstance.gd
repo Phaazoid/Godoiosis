@@ -42,7 +42,7 @@ func level_up():
 	
 	level += 1
 	
-	for stat_name in data.frowth_ranges:    
+	for stat_name in data.growth_ranges:    
 		var range: Vector2i = data.growth_ranges[stat_name]
 		var gain = randi_range(range.x, range.y)
 		

@@ -34,6 +34,10 @@ static func cardinal_direction_between(from_cell: Vector2i, to_cell: Vector2i) -
 		return Vector2(sign(diff.x), 0)
 
 	return Vector2(0, sign(diff.y))
+	
+static func cardinal_direction_i_between(from_cell: Vector2i, to_cell: Vector2i) -> Vector2i:
+	var dir := cardinal_direction_between(from_cell, to_cell)
+	return Vector2i(int(dir.x), int(dir.y))
 
 static func get_terrain_type_at_cell(grid: TileMapLayer, cell:Vector2i) -> String:
 	var data := grid.get_cell_tile_data(cell)
@@ -53,3 +57,10 @@ static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Text
 		return TERRAIN_ICONS[terrain_type]
 		
 	return TERRAIN_ICONS["error"]
+	
+static func validate_member_distance(unit: Unit) -> bool:
+	var dist = manhattan_distance(unit.movement.cell, unit.squad.leader.movement.cell)
+	if dist > unit.squad.get_max_range():
+		return false
+	else:
+		return true

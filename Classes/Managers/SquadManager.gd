@@ -13,8 +13,6 @@ signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
 
-var resolved_reactions_by_squad := {} # { Squad : Array[BaseAction] } For managing counter attacks
-
 
 func is_active_squad(squad: Squad):
 	return squad == active_squad
@@ -41,13 +39,44 @@ func create_squad(leader: Unit) -> Squad:
 	squad_created.emit(squad)
 	return squad
 	
-func join_squad(unit: Unit, target_squad: Squad):
-	var old_squad = unit.squad
-	old_squad._remove_member(unit)
-	target_squad._add_member(unit)
-	
+func _detach_from_current_squad(unit: Unit): #This should be the only place that ever erases a unit from a squad
+	var old_squad := unit.squad
+	if old_squad == null:
+		return
+
+	old_squad.members.erase(unit)
+	check_reassign_leader(old_squad, unit)
+
 	if old_squad.get_members().is_empty():
-		delete_squad(old_squad)
+		destroy_empty_squad(old_squad)
+		
+func join_squad(unit: Unit, target_squad: Squad):
+	if unit.squad == target_squad:
+		return
+
+	_detach_from_current_squad(unit)
+	target_squad._add_member(unit)
+		
+func leave_squad(unit: Unit):
+	_detach_from_current_squad(unit)
+	create_squad(unit)
+
+func check_reassign_leader(squad: Squad, unit: Unit):
+	if squad.members.is_empty():
+		return
+		
+	if squad.leader != unit:
+		return
+	
+	var newLeader: Unit = squad.members[0]
+	for member in squad.members.duplicate():
+		if member.get_base_stat("LDR") > newLeader.get_base_stat("LDR"):
+			newLeader = member
+	squad.leader = newLeader 
+
+	for member in squad.members.duplicate():
+		if not GridUtils.validate_member_distance(member):
+			leave_squad(member)
 
 func validate_squad_plan(squad: Squad) -> bool:
 	return _validate_action_list(squad, squad.action_queue)
@@ -141,19 +170,6 @@ func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bo
 	actions.append(preview_action)
 	
 	return _validate_action_list(squad, actions)
-	
-func leave_squad(unit: Unit):
-	var old_squad := unit.squad
-	
-	if unit.is_leader():
-		old_squad._reassign_leader()
-	else:
-		old_squad._remove_member(unit)
-		
-	if old_squad.get_members().is_empty():
-		delete_squad(old_squad)
-		
-	create_squad(unit)
 
 func setup_hold_move_actions(squad: Squad):
 	for member in squad.get_members():
@@ -162,13 +178,25 @@ func setup_hold_move_actions(squad: Squad):
 			hold_move.init_hold_position(member, GridUtils.get_terrain_icon_at_cell(grid, member.movement.cell))
 			squad._queue_action(hold_move)
 
-func delete_squad(squad: Squad):
+func disband_squad(squad: Squad):
 	if not squads.has(squad):
 		return
 	
 	for member in squad.get_members().duplicate():
-		squad._remove_member(member)
+		squad.members.erase(member)
+		create_squad(member)
 		
+	destroy_empty_squad(squad)
+		
+func destroy_empty_squad(squad: Squad):
+	if squad == null:
+		return
+	if not squad.get_members().is_empty():
+		return
+
+	if active_squad == squad:
+		active_squad = null
+
 	squads.erase(squad)
 	squad_deleted.emit(squad)
 	squad.queue_free()
@@ -248,18 +276,95 @@ func squad_has_invalid_actions(squad: Squad) -> bool:
 		if not action.is_valid:
 			return true
 	return false
-
-func rebuild_reactions_for_squad(squad: Squad):
-	#var reactions := calculate_counterattacks(squad)
-	resolved_reactions_by_squad[squad] = 0 #reactions
 	
-func can_counter(countering_unit: Unit, target_unit: Unit, actions: Array[BaseAction]) -> bool: 
+func can_counter(countering_unit: Unit, target_unit: Unit) -> bool: 
+	if countering_unit == null or target_unit == null:
+		return false
+	if not is_instance_valid(countering_unit) or not is_instance_valid(target_unit):
+		return false
+	if not countering_unit.combat.can_counter:
+		return false
+	if not countering_unit.combat.can_attack(countering_unit, target_unit):
+		return false
+
 	var counter_cell := countering_unit.get_projected_destination()
 	var target_cell := target_unit.get_projected_destination()
 
-	var distance = GridUtils.manhattan_distance(counter_cell, target_cell)
-	return distance <= countering_unit.combat.get_range()
-	 #For now just using simple manhatten distance range. Will need to update with lists of cells most likely.  
+	return countering_unit.combat.can_hit_cell_from(counter_cell, target_cell)
+
+func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) -> Unit:
+	#This is where logic will need to live later, in order to determine who counter attacks who and why.  For now just pulls first member from list. 
+	for member in attacking_party:
+		if can_counter(countering_unit, member):
+			return member
+	return null
+
+func calculate_counterattacks_for_squad(attacking_squad: Squad) -> Array[CounterAttackAction]:
+	var counters: Array[CounterAttackAction] = []
+	var defender_groups_that_countered := {} # {Squad : bool} 
+	var attacking_units = attacking_squad.get_members()
+
+	for action in attacking_squad.action_queue:
+		if action.action_type != BaseAction.ActionType.ATTACK:
+			continue
+
+		var attack := action as AttackAction
+		var defender := attack.target
+
+		if defender == null or not is_instance_valid(defender):
+			continue
+
+		var defender_squad = defender.squad
+
+		if defender_groups_that_countered.has(defender_squad):
+			continue
+
+		for countering_unit in defender.squad.get_members():
+			var counter_target := choose_counter_target(countering_unit, attacking_units)
+			if counter_target == null:
+				continue
+				
+			var counter := CounterAttackAction.new()
+			counter.init_counter(countering_unit, counter_target, countering_unit.get_projected_destination(), attack)
+			counters.append(counter)
+
+		defender_groups_that_countered[defender_squad] = true
+
+	return counters
+
+func get_display_entries_for_squad(squad: Squad) -> Array[ActionQueueDisplayEntry]:
+	var entries: Array[ActionQueueDisplayEntry] = []
+
+	var move_actions: Array[BaseAction] = []
+	var attack_actions: Array[AttackAction] = []
+
+	for action in squad.action_queue:
+		match action.action_type:
+			BaseAction.ActionType.MOVE:
+				move_actions.append(action)
+			BaseAction.ActionType.ATTACK:
+				attack_actions.append(action as AttackAction)
+
+	var counter_actions := calculate_counterattacks_for_squad(squad)
+
+	if not move_actions.is_empty():
+		entries.append(ActionQueueDisplayEntry.header("MOVE"))
+		for action in move_actions:
+			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
+
+	if not attack_actions.is_empty():
+		if not entries.is_empty():
+			entries.append(ActionQueueDisplayEntry.divider())
+
+		entries.append(ActionQueueDisplayEntry.header("ATTACK"))
+		for attack in attack_actions:
+			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
+
+			for counter in counter_actions:
+				if counter.source_attack == attack:
+					entries.append(ActionQueueDisplayEntry.action_row(counter, 1))
+
+	return entries
 
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):
