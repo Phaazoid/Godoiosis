@@ -9,7 +9,7 @@ const BOTTOM_LEFT_POS = Vector2i(8, 475)
 var current_unit: Unit
 var screen_pos
 
-func set_unit(unit: Unit):
+func set_unit(unit: Unit, can_act := false):
 	if current_unit != unit:
 		current_unit = unit
 
@@ -19,7 +19,7 @@ func set_unit(unit: Unit):
 		else:
 			visible = true
 	
-		status_hbox.set_unit(unit)
+		status_hbox.set_unit(unit, can_act)
 		
 		#Going to be fullscreen later probably but for now this keeps it on the opposite side of the screen as the unit you select
 		screen_pos = get_viewport().get_canvas_transform() * unit.global_position

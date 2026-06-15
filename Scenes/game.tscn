@@ -6,6 +6,7 @@
 [ext_resource type="Script" uid="uid://ccyb45oc8osqf" path="res://Classes/Managers/SquadManager.gd" id="3_nb51f"]
 [ext_resource type="Script" uid="uid://bg1vqwce8ve4e" path="res://Classes/Controllers/CursorController.gd" id="3_o5yvi"]
 [ext_resource type="Script" uid="uid://cvnk17sime06w" path="res://Classes/Controllers/CameraController.gd" id="3_rku1e"]
+[ext_resource type="Script" uid="uid://csr88wyxc1rhp" path="res://Classes/Managers/ScenarioManager.gd" id="4_ewbju"]
 [ext_resource type="Script" uid="uid://2lmauvlhh6rs" path="res://Classes/Managers/OverlayManager.gd" id="4_h4fw4"]
 [ext_resource type="Texture2D" uid="uid://coaleb8oik4ri" path="res://Art/Basic_Tile_Overlay.png" id="4_ldgsr"]
 [ext_resource type="TileSet" uid="uid://br1jl2l6yxyuf" path="res://Resources/TestTiles.tres" id="4_v158k"]
@@ -13,7 +14,6 @@
 [ext_resource type="PackedScene" uid="uid://cbuid8103rdvh" path="res://Scenes/TurnBanner.tscn" id="7_1l0tm"]
 [ext_resource type="Texture2D" uid="uid://bdjohf4vqfwlu" path="res://Art/Icons/rangefill2.png" id="8_1phco"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
-[ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="9_h4fw4"]
 [ext_resource type="PackedScene" uid="uid://djnudhqoi3lqw" path="res://Scenes/HoverInfoPanelControl.tscn" id="12_rfjv2"]
 [ext_resource type="PackedScene" uid="uid://cqf51nnsk42dv" path="res://Scenes/SquadActionQueueControl.tscn" id="16_ewbju"]
 
@@ -88,6 +88,9 @@ script = ExtResource("3_i6g32")
 
 [node name="SquadManager" type="Node2D" parent="." unique_id=778895990]
 script = ExtResource("3_nb51f")
+
+[node name="ScenarioManager" type="Node2D" parent="." unique_id=2011645169]
+script = ExtResource("4_ewbju")
 
 [node name="CameraController" type="Node2D" parent="." unique_id=1096986601]
 script = ExtResource("3_rku1e")
@@ -165,5 +168,3 @@ grow_vertical = 2
 [node name="HoverInfoPanelControl" parent="UILayer" unique_id=98776626 instance=ExtResource("12_rfjv2")]
 
 [node name="SquadActionQueueControl" parent="UILayer" unique_id=1755236960 instance=ExtResource("16_ewbju")]
-
-[node name="DevOverlay" parent="." unique_id=1904372676 instance=ExtResource("9_h4fw4")]

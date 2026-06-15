@@ -1,7 +1,6 @@
 extends Node
 class_name Combat_Component
 
-@export var range: int = 1 #doesn't make sense for this to be stored in the unit, will come from weapon, later.  
 @export var can_counter: bool = true
 
 #if this breaks because this instance is initialized before _ready() finishes setting up unit_instance, move initialization to _enter_tree()
@@ -21,9 +20,6 @@ func can_attack(attacker: Unit, target: Unit) -> bool:
 		return false
 	return true
 	
-func get_range() -> int:
-	return range
-
 func apply_damage(damage: int):
 	var unit := owner as Unit
 	if unit == null:
@@ -31,8 +27,32 @@ func apply_damage(damage: int):
 	unit.unit_instance.apply_damage(damage)
 	
 func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vector2i) -> Array[Vector2i]:
-	return GridUtils.cells_within_manhattan_range(origin_cell, range)
+	var unit := owner as Unit
+	var weapon := unit.get_equipped_weapon() if unit != null else null
 
+	if weapon == null or weapon.attack_pattern == null:
+		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
+
+	return weapon.attack_pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
+	
 func can_hit_cell_from(origin_cell: Vector2i, target_cell: Vector2i) -> bool:
 	return get_attack_cells_from(origin_cell, target_cell).has(target_cell)
  #For now just using simple manhatten distance range. Will need to update with lists of cells most likely.  
+
+func get_all_attack_cells_from(origin_cell: Vector2i) -> Array[Vector2i]:
+	var unit := owner as Unit
+	var weapon := unit.get_equipped_weapon() if unit != null else null
+
+	if weapon == null or weapon.attack_pattern == null:
+		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
+
+	return weapon.attack_pattern.get_all_selectable_cells(unit, origin_cell)
+	
+func get_affected_cells_from(origin_cell: Vector2i, target_cell: Vector2i) -> Array[Vector2i]:
+	var unit := owner as Unit
+	var weapon := unit.get_equipped_weapon() if unit != null else null
+
+	if weapon == null or weapon.attack_pattern == null:
+		return [target_cell]
+
+	return weapon.attack_pattern.get_affected_cells(unit, origin_cell, target_cell)

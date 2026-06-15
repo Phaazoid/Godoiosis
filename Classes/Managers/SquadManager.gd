@@ -16,6 +16,13 @@ signal squad_action_queued(squad: Squad, action: BaseAction)
 
 func is_active_squad(squad: Squad):
 	return squad == active_squad
+	
+func any_squad_active() -> bool:
+	for squad in squads:
+		if not squad.get_actions().is_empty():
+			return true
+			
+	return false
 
 func is_another_squad_active(squad: Squad):
 	if active_squad == null:
@@ -115,6 +122,18 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 	for member in squad.get_members() :#{Vector2i: Unit}
 		current_member_locations[member.movement.cell] = member
 	
+	#Leader-range validity must be resolved BEFORE the occupancy check below,
+	#so that check can trust each move's is_valid flag.
+	for action in move_actions:
+		var moving_unit: Unit = action.actor
+		
+		if moving_unit == squad.leader or not moving_unit.has_squad():
+			continue
+
+		if not leader_range.has(action.get_destination()):
+			action.add_validation_error("Squad leader range invalidates other movement")
+			valid = false
+	
 	for action in move_actions:
 		var destination = action.destination
 			
@@ -126,11 +145,14 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 	for destination in actions_by_destination.keys():
 		var actions_at_cell: Array = actions_by_destination[destination]
 
-		#if destination is another squadmate with no move queued, move is invalid, remove from list to check
+		#A squadmate's cell only frees up if that squadmate has a VALID move AWAY from it.
+		#An invalid move (out of leader range) or a hold means they stay put — cell stays occupied.
 		if current_member_locations.has(destination):
 			var occupying_unit: Unit = current_member_locations[destination]
-			if not _unit_has_action_type_in_list(occupying_unit, BaseAction.ActionType.MOVE, actions):
+			if not _unit_has_valid_move_away_from(occupying_unit, destination, actions):
 				for action in actions_at_cell:
+					if action.actor == occupying_unit:
+						continue  # the occupant's own hold/stay on this cell is not a self-collision
 					action.add_validation_error("Destination occupied")
 					valid = false
 				continue
@@ -140,23 +162,12 @@ func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
 			for action in actions_at_cell:
 				action.add_validation_error("Multiple units attempting to move here")
 		
-	#Have to validate actions for the rest of the squad that can get canceled by the leader moving and shifting his range
-	for action in move_actions:
-		var moving_unit: Unit = action.actor
-		
-		if moving_unit == squad.leader or not moving_unit.has_squad():
-			continue
-
-		if not leader_range.has(action.get_destination()):
-			action.add_validation_error("Squad leader range invalidates other movement")
-			valid = false
 	return valid
 
-func _unit_has_action_type_in_list(unit: Unit, action_type: BaseAction.ActionType, actions: Array[BaseAction]) -> bool:
+func _unit_has_valid_move_away_from(unit: Unit, cell: Vector2i, actions: Array[BaseAction]) -> bool:
 	for action in actions:
-		if action.actor == unit and action.action_type == action_type:
+		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE and action.is_valid and action.get_destination() != cell:
 			return true
-			
 	return false
 	
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
@@ -200,6 +211,13 @@ func destroy_empty_squad(squad: Squad):
 	squads.erase(squad)
 	squad_deleted.emit(squad)
 	squad.queue_free()
+	
+func clear_all_squads():
+	active_squad = null
+	for squad in squads.duplicate():
+		squads.erase(squad)
+		squad_deleted.emit(squad)
+		squad.queue_free()
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
 	if active_squad != null and active_squad != squad:
@@ -223,11 +241,17 @@ func remove_actions_for_unit(unit: Unit):
 				cancel_move_for_unit(action.actor)
 			else:
 				squad._remove_action(action)
-			
-	if not unit.squad.has_any_queued_actions() and active_squad == unit.squad:
+
+	if only_hold_actions():
+		active_squad._clear_all_actions()
 		active_squad = null
 		return
-	validate_squad_plan(unit.squad)
+
+	if not squad.has_any_queued_actions() and active_squad == squad:
+		active_squad = null
+		return
+
+	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 	
 func cancel_move_for_unit(unit: Unit):
@@ -241,14 +265,10 @@ func cancel_move_for_unit(unit: Unit):
 	hold_move.init_hold_position(unit,GridUtils.get_terrain_icon_at_cell(grid, unit.movement.cell))
 	squad._queue_action(hold_move)
 	
-	if only_hold_actions():
-		active_squad._clear_all_actions()
-		active_squad = null
-	
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 			
-func only_hold_actions() -> bool:
+func only_hold_actions() -> bool: #checking if the only actions a squad has are the 'not move' action
 	if active_squad == null:
 		return false
 		
@@ -260,7 +280,6 @@ func only_hold_actions() -> bool:
 			
 	return true
 	
-
 func remove_action(squad: Squad, action: BaseAction):
 	squad._remove_action(action)
 
@@ -285,6 +304,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 	if not countering_unit.combat.can_counter:
 		return false
 	if not countering_unit.combat.can_attack(countering_unit, target_unit):
+		return false
+	if not countering_unit.has_equipped_weapon():
 		return false
 
 	var counter_cell := countering_unit.get_projected_destination()
@@ -365,6 +386,19 @@ func get_display_entries_for_squad(squad: Squad) -> Array[ActionQueueDisplayEntr
 					entries.append(ActionQueueDisplayEntry.action_row(counter, 1))
 
 	return entries
+	
+func handle_unit_death(unit: Unit):
+	var squad := unit.squad
+	if squad == null or not is_instance_valid(squad):
+		return
+
+	squad._remove_actions_for_actor_silent(unit)
+
+	_detach_from_current_squad(unit)
+
+	if is_instance_valid(squad) and not squad.get_members().is_empty():
+		validate_squad_plan(squad)
+		overlay_manager.redraw_planned_paths()
 
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):

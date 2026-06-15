@@ -27,3 +27,12 @@ func cleanup():
 func _on_popup_closed():
 	cleanup()
 	cancelled.emit(self)
+
+func _input(event):
+	if local_menu == null or not local_menu.visible:
+		return
+	if event is InputEventMouseButton and event.pressed:
+		var menu_rect := Rect2(local_menu.position, local_menu.size)
+		if not menu_rect.has_point(event.position):
+			local_menu.hide()
+			get_viewport().set_input_as_handled()

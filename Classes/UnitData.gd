@@ -10,3 +10,5 @@ class_name UnitData
 @export var growth_ranges: Dictionary[String, Vector2i]
 @export var innate_abilities: Array[String]
 @export var faction: Team.Faction
+@export var map_sprite: Texture2D = load("res://Art/Units/MapSprites/Basic_Soldier.png")
+@export var move_sprite: Texture2D = load("res://Art/Units/MapSprites/Basic_Soldier_Moving.png")

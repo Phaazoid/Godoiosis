@@ -9,9 +9,9 @@ class_name UnitStatusUI
 var unit: Unit
 
 
-func set_unit(target: Unit):
+func set_unit(target: Unit, can_act := false):
 	unit = target
 	portrait_panel.set_unit(unit)
 	stats_panel.set_unit(unit)
-	inventory_panel.set_unit(unit)
+	inventory_panel.set_unit(unit, can_act)
 	squad_panel.set_unit(unit)

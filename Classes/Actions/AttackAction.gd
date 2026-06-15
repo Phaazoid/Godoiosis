@@ -8,7 +8,8 @@ var origin_cell: Vector2i
 var target_cell: Vector2i
 var target_texture: Texture2D
 var target_name := "Target"
-
+var is_secondary_hit := false
+var volley: Array[AttackAction] = []
 
 
 var preview_sprites: Array[Node2D] = []
@@ -40,13 +41,13 @@ func execute():
 	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
 		finish_execution()
 		return
-
 		
-	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target.movement.cell)
+	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)	
 	
-	await actor.visuals.play_attack_lunge(direction)
-	
-	target.combat.apply_damage(actor.get_base_stat("STR"))
+	if not is_secondary_hit:
+		await actor.visuals.play_attack_lunge(direction)
+		
+	target.combat.apply_damage(damage)
 	
 	finish_execution()
 		
@@ -77,3 +78,26 @@ func get_target_name() -> String:
 
 func add_preview_sprites(sprite: Node2D):
 	preview_sprites.append(sprite)
+	
+static func create(attacker: Unit, origin: Vector2i, target: Unit, target_cell: Vector2i) -> AttackAction:
+	var weapon := attacker.get_equipped_weapon()
+	var damage := attacker.get_base_stat("STR")
+	if weapon != null:
+		damage = weapon.power + attacker.get_base_stat(weapon.scaling_stat)
+
+	var action := AttackAction.new()
+	action.init(attacker, origin, target, target_cell, damage)
+	return action
+	
+static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit]) -> Array[AttackAction]:
+	var volley_actions: Array[AttackAction] = []
+
+	for victim in victims:
+		var attack := AttackAction.create(attacker, origin, victim, aim_cell)
+		attack.is_secondary_hit = not volley_actions.is_empty()
+		volley_actions.append(attack)
+
+	for attack in volley_actions:
+		attack.volley = volley_actions
+
+	return volley_actions

@@ -1,0 +1,28 @@
+[gd_scene format=3 uid="uid://cxiu0yvwwxlgo"]
+
+[ext_resource type="PackedScene" uid="uid://b1qp1sxn6wnsi" path="res://Scenes/game.tscn" id="1_r150o"]
+[ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="2_idj7w"]
+
+[node name="Main" type="Node" unique_id=2063756715]
+
+[node name="GameContainer" type="SubViewportContainer" parent="." unique_id=1566195273]
+texture_filter = 1
+custom_minimum_size = Vector2(1152, 640)
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="GameView" type="SubViewport" parent="GameContainer" unique_id=2042839917]
+handle_input_locally = false
+gui_embed_subwindows = true
+size = Vector2i(1152, 640)
+render_target_update_mode = 4
+
+[node name="Game" parent="GameContainer/GameView" unique_id=743556953 instance=ExtResource("1_r150o")]
+texture_filter = 1
+
+[node name="DevOverlay" parent="." unique_id=1904372676 instance=ExtResource("2_idj7w")]
+size = Vector2i(600, 640)

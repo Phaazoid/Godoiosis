@@ -1,0 +1,18 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://Classes/AttackRanges/ForwardWidePattern.gd" id="1_66g3n"]
+[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_qeojs"]
+[ext_resource type="Script" path="res://Classes/ResourceData/WeaponData.gd" id="3_dimwd"]
+
+[sub_resource type="Resource" id="Resource_lifha"]
+script = ExtResource("1_66g3n")
+
+[resource]
+script = ExtResource("3_dimwd")
+power = 5
+attack_pattern = SubResource("Resource_lifha")
+weapon_type = "Chainsword"
+item_name = "SUPERMARIOBROTHERS"
+icon = ExtResource("2_qeojs")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

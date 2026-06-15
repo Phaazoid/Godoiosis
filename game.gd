@@ -7,7 +7,7 @@ extends Node2D
 @onready var turn_banner = $TurnBanner
 @onready var unit_info_panel: Control = $UILayer/UnitInfoPanelControl
 @onready var hover_info_panel: Control = $UILayer/HoverInfoPanelControl
-@onready var dev_overlay: CanvasLayer = $DevOverlay
+@onready var dev_overlay: DevOverlay = get_node("/root/Main/DevOverlay")
 @onready var overlay_manager: OverlayManager = $OverlayManager
 @onready var squad_manager: SquadManager = $SquadManager
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
@@ -68,8 +68,11 @@ enum GameState {
 var game_state: GameState = GameState.IDLE
 var last_clicked_cell: Vector2i = Vector2i(-999, -999)
 var last_hovered_cell: Vector2i = Vector2i(-999, -999)
+var brush_painting := false
 
 func _ready() -> void:
+	
+	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 	spawn_test_units()
 	hovered_cell_changed.connect(update_hover_visuals)
 	turn_manager.connect("turn_started", _on_turn_started)
@@ -91,6 +94,13 @@ func _on_turn_started(phase):
 	else:
 		turn_banner.show_label("Enemy Turn")
 		start_enemy_turn()
+
+func can_control(unit: Unit) -> bool:
+	if unit == null:
+		return false
+	if game_state == GameState.DEV_MODE:
+		return true
+	return unit.get_faction() == turn_manager.active_faction()
 		
 func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 	match action_id:
@@ -105,9 +115,7 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			squad_manager.set_has_acted(unit.squad, true)
 			clear_selection()
 		GAME_MENU_ENDTURN: #End Turn
-			clear_selection()
-			update_selection_overlay()
-			turn_manager.end_turn()
+			end_turn()
 		GAME_MENU_SQUADUP: 
 			create_squad(unit)
 		GAME_MENU_JOINSQUAD:
@@ -117,9 +125,15 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 		GAME_MENU_LEAVESQUAD:
 			squad_manager.leave_squad(unit)
 		GAME_MENU_INSPECT:
-			unit_info_panel.set_unit(unit)
+			unit_info_panel.set_unit(unit, can_control(unit))
 		GAME_MENU_EXECUTE_ORDERS:
 			execute_orders(unit)
+
+func end_turn():
+	clear_selection()
+	update_selection_overlay()
+	unit_info_panel.clear()
+	turn_manager.end_turn()
 
 func execute_orders(unit):
 	var squad = unit.squad
@@ -151,6 +165,9 @@ func execute_orders(unit):
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(attack_actions)
 	await execute_action_sequence(counter_actions)
+
+	if not is_instance_valid(squad):
+		return
 
 	for action in squad.action_queue.duplicate():
 		squad_manager.remove_action(squad, action)
@@ -194,8 +211,6 @@ func execute_action_sequence(actions: Array):
 	
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
-	#if unit.is_leader():
-	#	clip_invalid_squad_movement(unit)
 		
 func create_squad(unit: Unit):
 	game_state = GameState.CREATING_SQUAD
@@ -215,22 +230,14 @@ func enter_move_mode(unit: Unit):
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, compute_basic_range(unit, unit.combat.get_range()), OVERLAY_DEFAULT_ATLAS)
-		
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, unit.combat.get_all_attack_cells_from(unit.get_projected_destination()), OVERLAY_DEFAULT_ATLAS)
+	
 func disband_squad(unit: Unit):
 	squad_manager.disband_squad(unit.squad)
 	
 func join_squad_mode(unit: Unit):
 	game_state = GameState.CHOOSING_SQUAD
 	draw_joinable_squads(unit)
-
-func try_attack(attacker: Unit, target: Unit, attack_range: Array) -> void:
-	if target.movement.cell in attack_range:  #if the target is in range
-		target.combat.apply_damage(attacker.get_base_stat("STR"))
-		return
-
-	if not attacker.combat.can_attack(attacker, target): #if the target is valid
-		return
 
 func is_walkable(cell: Vector2i) -> bool:
 	var tile_data: TileData =grid.get_cell_tile_data(cell)
@@ -249,42 +256,54 @@ func cell_has_planned_movement(cell: Vector2i):
 			
 func _input(event):
 	if event.is_action_pressed("toggle_dev_overlay"):
-		dev_overlay.visible = !dev_overlay.visible
-		if dev_overlay.visible == true:
-			game_state = GameState.DEV_MODE
+		if not dev_overlay.visible:
+			dev_overlay.show_beside()
+			set_dev_mode(true)
 		else:
-			exit_current_mode()
-			
+			set_dev_mode(game_state != GameState.DEV_MODE)
+
+func set_dev_mode(active: bool):
+	exit_current_mode()
+	if active:
+		game_state = GameState.DEV_MODE
+	dev_overlay.sync_dev_mode_button(active)
+
+func get_clicked_unit(cell: Vector2i) -> Unit:
+	#Always hit the unit whose SPRITE is at this cell.
+	#A projected "ghost" (an active-squad unit with a valid queued move landing here)
+	#wins over a unit that physically sits here but has queued a valid move away from it.
+	var projected := squad_manager.get_projected_unit_from_cell(cell)
+	if projected != null:
+		return projected
+	var unit := get_unit_at_cell(cell)
+	if unit != null and not unit.has_valid_move_queued():
+		return unit
+	return null
+
 func _unhandled_input(event):
+	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
+		if event is InputEventMouseButton or event is InputEventMouseMotion:
+			_handle_tile_brush(event)
+			return
+			
 	var mouse_world := get_global_mouse_position()
 	if event is InputEventMouseButton and event.pressed:
 		var clickedCell: Vector2i = grid.local_to_map(grid.to_local(mouse_world))
-		#Note - invalid moves return null
-		var clickedProjectedUnit = squad_manager.get_projected_unit_from_cell(clickedCell)
 		var clickedUnit : Unit = get_unit_at_cell(clickedCell)
 		var lastUnit = get_unit_at_cell(last_clicked_cell)
 		var lastProjectedUnit = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
-
 		#When you click a unit, select it
 		#For now, controlling enemies is fine, for testing purposes.  But when enemy AI is brought in, will need to not allow player to control enemy. 
 		
-		if event.button_index == MOUSE_BUTTON_LEFT: #and turn_manager.is_player_turn():
+		if event.button_index == MOUSE_BUTTON_LEFT:
 			update_hover_visuals(clickedCell, get_viewport().get_mouse_position())
 			match game_state:
 				GameState.IDLE:
-					last_clicked_cell = clickedCell
-					game_state = GameState.TILE_SELECTED
-					if clickedUnit != null or clickedProjectedUnit != null:
-						if clickedUnit != null and clickedProjectedUnit == null and not clickedUnit.has_valid_move_queued():
-							var menu_options = populate_action_menu(clickedUnit)
-							show_action_menu(event.global_position, menu_options, clickedUnit)
-						elif clickedProjectedUnit != null:
-							var menu_options = populate_action_menu(clickedProjectedUnit)
-							show_action_menu(event.global_position, menu_options, clickedProjectedUnit)
-						else:
-							show_action_menu(event.global_position,[GAME_MENU_ENDTURN], clickedUnit)
-					else:
-						show_action_menu(event.global_position,[GAME_MENU_ENDTURN], clickedUnit)
+					var target := get_clicked_unit(clickedCell)
+					if target != null:
+						last_clicked_cell = clickedCell
+						game_state = GameState.TILE_SELECTED
+						show_action_menu(event.global_position, populate_action_menu(target), target)
 				GameState.CHOOSING_SQUAD:
 					if clickedUnit != null:
 						if can_join_squad(lastUnit, clickedUnit.squad):
@@ -311,22 +330,27 @@ func _unhandled_input(event):
 						#if lastUnit.is_leader():
 							#clip_invalid_projected_squad_movement(lastUnit)
 					exit_current_mode()
+				GameState.DEV_MODE:
+					if clickedUnit != null:
+						dev_overlay.unit_editor.edit_unit(clickedUnit)
 				GameState.ATTACK_TARGETING:
 					if lastUnit != null or lastProjectedUnit != null:
-						if lastUnit == null: #TODO make sure this works when attacking from where another unit was
+						if lastUnit == null:
 							lastUnit = lastProjectedUnit
-						var attack_range = compute_basic_range(lastUnit, lastUnit.combat.get_range())
-						if clickedCell in attack_range and clickedUnit != null and clickedUnit.get_faction() != lastUnit.get_faction():
-							var attack = AttackAction.new()
-							attack.init(lastUnit, lastUnit.get_projected_destination(), clickedUnit, clickedCell, lastUnit.get_base_stat("STR"))
-							squad_manager.queue_action(lastUnit.squad, attack)
+						var origin = lastUnit.get_projected_destination()
+						if lastUnit.combat.can_hit_cell_from(origin, clickedCell):
+							var affected = lastUnit.combat.get_affected_cells_from(origin, clickedCell)
+							var victims = gather_attack_victims(lastUnit, affected)
+							if not victims.is_empty():
+								for attack in AttackAction.create_volley(lastUnit, origin, clickedCell, victims):
+									squad_manager.queue_action(lastUnit.squad, attack)
 					exit_current_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 						
 			
 			update_selection_overlay()
 			#print("Current Gamestate is " + GameState.keys()[game_state])
 		#Right click deselects all
-		if event.button_index == MOUSE_BUTTON_RIGHT and turn_manager.is_player_turn() and game_state != GameState.DEV_MODE:
+		if event.button_index == MOUSE_BUTTON_RIGHT and game_state != GameState.DEV_MODE:
 			if game_state == GameState.CHOOSING_MOVE:
 				overlay_manager.clear_planned_path(get_unit_at_cell(last_clicked_cell))
 			exit_current_mode()
@@ -335,11 +359,20 @@ func _unhandled_input(event):
 			update_selection_overlay()
 		
 	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE:
-		camera_controller.center_on_position(mouse_world)
+		if game_state == GameState.DEV_MODE:
+			dev_overlay.spawn.try_spawn_at(last_hovered_cell)
+		else:
+			camera_controller.center_on_position(mouse_world)
  
 func populate_action_menu(unit: Unit) -> Array:
 	#TODO Order these explicitly instead of just order added to array
 	var options = []
+	
+	if not can_control(unit):
+		options.append(GAME_MENU_INSPECT)
+		if not squad_manager.any_squad_active():
+			options.append(GAME_MENU_ENDTURN)
+		return options
 	
 	if unit.squad.has_any_queued_actions() and unit.is_leader():
 		options.append(GAME_MENU_EXECUTE_ORDERS)
@@ -347,11 +380,11 @@ func populate_action_menu(unit: Unit) -> Array:
 	if not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad):
 		options.append(GAME_MENU_MOVE)
 		
-	if not unit.has_action_type_queued(BaseAction.ActionType.ATTACK) and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad):
+	if not unit.has_action_type_queued(BaseAction.ActionType.ATTACK) and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon():
 		options.append(GAME_MENU_ATTACK)
 		
 		#Once Squad is active, squad state cannot change through actions
-	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted:
+	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not squad_manager.any_squad_active():
 		if can_create_any_squad(unit):
 			options.append(GAME_MENU_SQUADUP)
 		if can_join_any_squad(unit):
@@ -361,13 +394,12 @@ func populate_action_menu(unit: Unit) -> Array:
 			if unit.squad.get_leader() == unit:
 				options.append(GAME_MENU_DISBAND_SQUAD)
 
-	if not unit.has_any_actions():
-		options.append(GAME_MENU_WAIT)
-
 	if unit != null:
 		options.append(GAME_MENU_INSPECT)
-
-	options.append(GAME_MENU_ENDTURN)
+	
+	if squad_manager.active_squad == null:
+		options.append(GAME_MENU_WAIT)
+		options.append(GAME_MENU_ENDTURN)
 	
 	if unit != null and unit.has_any_actions(): #TODO separate general cancel and cancel queued plans
 		options.append(GAME_MENU_CANCEL)
@@ -500,8 +532,15 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	if walkable: #TODO later change this for various unit types, i.e. flyers can spawn on rocks, etc
 		units_root.add_child(unit)
 		squad_manager.create_squad(unit)
+		unit.unit_died.connect(_on_unit_died)
 		return unit
 	return null
+	
+func _on_unit_died(unit: Unit):
+	overlay_manager.handle_unit_death(unit)
+	squad_manager.handle_unit_death(unit)
+	refresh_action_queue(squad_manager.active_squad)
+
 	
 func _on_squad_became_active(squad: Squad, action: BaseAction):
 	if squad.leader.has_squad():
@@ -630,13 +669,9 @@ func compute_move_range(unit: Unit) -> Dictionary:
 	for cell in cost_so_far.keys():
 		var other_unit := get_unit_at_cell(cell)
 
-		#Gotta stay in the Leader's current movement range if they don't have a queued move  
-		if not unit.is_leader() and not unit.squad.get_leader().has_action_type_queued(BaseAction.ActionType.MOVE) and GridUtils.manhattan_distance(cell, unit.squad.get_leader().movement.cell) > unit.movement.move_range:
-			squad_unreachable[cell] = cost_so_far[cell]
-			continue
-			
-		#If they do have a queued move, gotta stay in the *new* movement range
-		if not unit.is_leader() and unit.squad.get_leader().has_action_type_queued(BaseAction.ActionType.MOVE) and GridUtils.manhattan_distance(cell, unit.squad.get_leader().get_projected_destination()) > unit.movement.move_range:
+		#Members must stay within the leader's LDR range, measured from the leader's
+		#projected destination (which falls back to their current cell if no move is queued)
+		if not unit.is_leader() and GridUtils.manhattan_distance(cell, unit.squad.get_leader().get_projected_destination()) > unit.squad.get_max_range():
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 			
@@ -682,40 +717,12 @@ func compute_move_range(unit: Unit) -> Dictionary:
 #		# Key = physically reachable but squad-invalid cell.
 #		# Value = total movement cost from the unit's start cell to that cell.
 	
-func compute_basic_range(unit: Unit, range: int) -> Array:
-	var origin := unit.get_projected_destination()
-	var max_range := range
-
-	var results: Array[Vector2i] = []
-	var frontier: Array[Vector2i] = [origin]
-	var distance := { origin: 0 }
-
-	while frontier.size() > 0:
-		var current : Vector2i = frontier.pop_front()
-
-		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-			var next : Vector2i = current + dir
-
-			#if not grid.is_cell_valid(next):
-			#	continue
-
-			var new_dist : int = distance[current] + 1
-			if new_dist > max_range:
-				continue
-
-			if not distance.has(next):
-				distance[next] = new_dist
-				frontier.append(next)
-				results.append(next)
-				
-	return results
-
 func draw_joinable_squads(joining_unit: Unit):
 	overlay_manager.clear_all()
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			for cell in compute_basic_range(unit, unit.get_base_stat("LDR")):
+			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat("LDR")):
 				if get_unit_at_cell(cell) == null:
 					cells.append(cell)
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
@@ -734,7 +741,7 @@ func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
 func draw_create_squad(unit: Unit):
 	overlay.clear()
 	var cells: Array[Vector2i] = []
-	for cell in compute_basic_range(unit, unit.get_base_stat("LDR")):
+	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat("LDR")):
 		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)
@@ -773,13 +780,9 @@ func spawn_test_units():
 		
 	var test_enemy : Unit = spawn_unit(test_data_baddy, Vector2i(4,4))
 	var test_item : Item = preload("res://Resources/ChainSword.tres")
-	test_enemy.add_item(test_item)
+	test_enemy.add_item(test_item.duplicate(true))
 
-	var generic_stats: Dictionary[String, int] = { 
-			"MHP" : 20,
-			"STR" : 5,
-			"LDR" : 5	
-		}
+	var generic_stats := Stats.STAT_DEFAULTS.duplicate()
 	
 	var data1 = UnitFactory.create_unit_data(generic_stats, "GoodGuy 2", Team.Faction.PLAYER)
 	var data2 = UnitFactory.create_unit_data(generic_stats, "GoodGuyThree", Team.Faction.PLAYER)
@@ -789,8 +792,27 @@ func spawn_test_units():
 	spawn_unit(data2, Vector2i(-8, -5))
 	spawn_unit(data3, Vector2i(4, 6))
 
-	#var test_ally : Unit = spawn_unit(Vector2i(4,5), Team.Faction.ALLY)
-	#var test_other : Unit = spawn_unit(Vector2i(4,6), Team.Faction.OTHER)
+func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i]) -> Array[Unit]:
+	var victims: Array[Unit] = []
+	var weapon := attacker.get_equipped_weapon()
+	var hits_allies: bool = weapon != null and weapon.hits_allies
+
+	for cell in affected_cells:
+		var unit := get_unit_at_cell(cell)
+		if unit != null and unit.get_projected_destination() != cell:
+			unit = null #occupant is planning to leave this cell; their projected cell is what counts
+		if unit == null:
+			unit = squad_manager.get_projected_unit_from_cell(cell)
+
+		if unit == null or unit == attacker or victims.has(unit):
+			continue
+
+		if attacker.combat.can_attack(attacker, unit):
+			victims.append(unit)
+		elif hits_allies:
+			victims.append(unit)
+
+	return victims
 	
 func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	var hoveredUnit : Unit = get_unit_at_cell(hoveredCell)
@@ -819,9 +841,8 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 		else:
 			cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 		cursor_controller.set_cursor_pos(hoveredCell)
-		dev_overlay.set_mousepos(hoveredCell)
 		
-	if game_state == GameState.IDLE: # and turn_manager.is_player_turn():
+	if game_state == GameState.IDLE: 
 		#Always show selected tile and info for what you're hovering over
 		cursor_controller.set_cursor_pos(hoveredCell)
 		overlay_manager.clear_all()
@@ -836,7 +857,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 
 			overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(hoveredUnit), hoveredUnit), OVERLAY_DEFAULT_ATLAS)
 			hover_info_panel.set_unit(hoveredUnit)
-			#cursor_controller.set_state(CursorController.CursorState.TARGET)
 			var unreachable = compute_move_range(hoveredUnit).squad_unreachable.keys()
 			overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OVERLAY_DEFAULT_ATLAS)
 			if hoveredUnit.has_squad() and squad_manager.active_squad == null: #TODO later change this to muted colors if other squads are active
@@ -846,7 +866,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 		else:
 			hover_info_panel.clear()
 			overlay_manager.clear_all()
-			#overlay_manager.clear_squad_range()
 			cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 			if squad_manager.active_squad == null:
 				clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
@@ -862,6 +881,22 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	if game_state == GameState.CHOOSING_SQUAD:
 		cursor_controller.set_cursor_pos(hoveredCell)
 	
+	if game_state == GameState.ATTACK_TARGETING:
+		var attacker: Unit = get_unit_at_cell(last_clicked_cell)
+		if attacker == null:
+			attacker = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
+		var preview_cells: Array[Vector2i] = []
+		if attacker != null:
+			var origin := attacker.get_projected_destination()
+			if attacker.combat.can_hit_cell_from(origin, hoveredCell):
+				preview_cells = attacker.combat.get_affected_cells_from(origin, hoveredCell)
+		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
+
+		if preview_cells.is_empty():
+			cursor_controller.set_state(CursorController.CursorState.INVALID)
+		else:
+			cursor_controller.set_state(CursorController.CursorState.VALID)
+		cursor_controller.set_cursor_pos(hoveredCell)		
 	if game_state == GameState.CHOOSING_MOVE:
 		var unit = get_unit_at_cell(last_clicked_cell)
 		overlay_manager.clear_hover_move_path()
@@ -871,7 +906,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			draw_squad_leader_range(unit.squad, hoveredCell)
 			overlay_manager.redraw_planned_paths()
 			overlay_manager.redraw_projected_units()
-		
 		if compute_move_range(unit).reachable.keys().has(hoveredCell) or compute_move_range(unit).squad_unreachable.keys().has(hoveredCell):
 			cursor_controller.set_state(CursorController.CursorState.VALID)
 			var path = reconstruct_path(compute_move_range(unit).came_from, last_clicked_cell, hoveredCell)
@@ -890,7 +924,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			overlay_manager.redraw_planned_paths()
 			overlay_manager.redraw_projected_units()
 			refresh_action_queue(squad)
-
 		else:
 			cursor_controller.set_state(CursorController.CursorState.INVALID)
 		cursor_controller.set_cursor_pos(hoveredCell)
@@ -898,6 +931,26 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	for unit in icons_to_draw.keys():
 		for icontype in icons_to_draw[unit]:
 			overlay_manager.create_unit_icon(unit, icontype)
+
+
+func _handle_tile_brush(event):
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			brush_painting = event.pressed
+			if event.pressed:
+				_paint_tile()
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			_erase_tile()
+	elif event is InputEventMouseMotion and brush_painting:
+		_paint_tile()
+
+func _paint_tile():
+	var cell = grid.local_to_map(grid.to_local(get_global_mouse_position()))
+	grid.set_cell(cell, 0, dev_overlay.tile_brush.selected_tile)
+
+func _erase_tile():
+	var cell = grid.local_to_map(grid.to_local(get_global_mouse_position()))
+	grid.erase_cell(cell)
 
 func clear_icons(icons: Array[OverlayIcon.IconType]):
 	overlay_manager.clear_unit_icon_types(icons)

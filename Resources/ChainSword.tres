@@ -1,11 +1,19 @@
-[gd_resource type="Resource" script_class="Item" format=3 uid="uid://qm4wjlfxedbr"]
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://qm4wjlfxedbr"]
 
-[ext_resource type="Script" uid="uid://jytv7xrjv6l1" path="res://Classes/Items/Item.gd" id="1_0tu05"]
-[ext_resource type="Texture2D" uid="uid://sh11a7y1jcpb" path="res://Art/ChainSword.png" id="1_jajjd"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/ResourceData/WeaponData.gd" id="1_0tu05"]
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/AttackRanges/ManhattanRangePattern.gd" id="1_2ef22"]
+[ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_6hwc0"]
+
+[sub_resource type="Resource" id="Resource_0xm14"]
+script = ExtResource("1_2ef22")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("1_0tu05")
-item_name = "ChainSword"
-icon = ExtResource("1_jajjd")
-description = "Vroom Vroom "
-metadata/_custom_type_script = "uid://jytv7xrjv6l1"
+power = 3
+attack_pattern = SubResource("Resource_0xm14")
+weapon_type = "Chainsword"
+item_name = "Chainsword"
+icon = ExtResource("2_6hwc0")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

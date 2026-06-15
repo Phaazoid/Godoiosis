@@ -20,12 +20,6 @@ func get_leader() -> Unit:
 func get_members() -> Array:
 	return members
 	
-func contains_unit(unit: Unit) -> bool:
-	if members.has(unit):
-		return true
-	else:
-		return false
-	
 func _add_member(unit: Unit):
 	if not members.has(unit):
 		members.append(unit)
@@ -39,41 +33,36 @@ func has_any_queued_actions() -> bool:
 func get_max_range() -> int:
 	return leader.get_base_stat("LDR") #This is a placeholder value for now
 	
-func get_planned_movement_destinations() -> Array:
-	var cells = []
-	for action in action_queue:
-		if action.action_type == BaseAction.ActionType.MOVE:
-			cells.append(action.destination)
-		
-	return cells
-	
 func get_ldr_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
 	return GridUtils.cells_within_manhattan_range(cell, get_max_range())
 	
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
 	
-func get_actions_of_type(type: BaseAction.ActionType) -> Array:
-	var actions = []
-	for action in action_queue:
-		if action.action_type == type:
-			actions.append(action)
-			
-	return actions
-			
 func _queue_action(action: BaseAction):
 	var was_empty = action_queue.is_empty()
-		
-	#For now, enforce only one of each kind of action per unit in the queue.
+
+	#Enforce one order of each type per unit. A volley is one order
+	#spread across multiple actions, so volley siblings don't replace each other.
 	for existing_action in action_queue.duplicate():
-		if existing_action.actor == action.actor and existing_action.action_type == action.action_type:
-			_remove_action(existing_action)
-			
+		if existing_action.actor != action.actor or existing_action.action_type != action.action_type:
+			continue
+		if _is_volley_sibling(existing_action, action):
+			continue
+		_remove_action(existing_action)
+
 	action_queue.append(action)
 	action_queued.emit(self, action)
 
 	if was_empty:
 		actions_became_active.emit(self, action)
+
+func _is_volley_sibling(a: BaseAction, b: BaseAction) -> bool:
+	if not (a is AttackAction and b is AttackAction):
+		return false
+	if b.volley.is_empty():
+		return false
+	return a in b.volley
 
 func _remove_action(action: BaseAction):
 	action_queue.erase(action)
@@ -92,6 +81,13 @@ func _set_has_acted(acted: bool):
 	has_acted = acted
 	if acted:
 		_clear_all_actions()
+
+#Death-path removal: no signals. Death cleanup is not an order cancellation,
+#and the cancel handlers restore squad badges for units that must not get them.
+func _remove_actions_for_actor_silent(unit: Unit):
+	for action in action_queue.duplicate():
+		if action.actor == unit:
+			action_queue.erase(action)
 
 func _reset_squad():
 	has_acted = false

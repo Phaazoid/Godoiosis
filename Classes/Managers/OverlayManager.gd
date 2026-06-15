@@ -112,14 +112,6 @@ func show_planned_path(unit: Unit, move: MoveAction):
 	planned_move_by_unit[unit] = move
 	redraw_planned_paths()
 
-func get_planned_destinations() -> Array[Vector2i]:
-	var destinations: Array[Vector2i] = []
-	
-	for move: MoveAction in planned_move_by_unit.values():
-		destinations.append(move.back())
-		
-	return destinations
-
 func get_units_with_plans() -> Array:
 	return planned_move_by_unit.keys()
 
@@ -206,9 +198,12 @@ func clear_unit_icons(unit: Unit):
 	
 func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 	for unit in icons_by_unit.keys().duplicate():
+		if not is_instance_valid(unit):
+			_purge_unit_entry(unit)
+			continue
 		for type in types:
 			clear_unit_icon(unit, type)
-	
+
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
 	for member in squad.get_members():
@@ -216,19 +211,6 @@ func redraw_squad_unit_icons(squad: Squad):
 		if member == squad.get_leader():
 			create_unit_icon(member, OverlayIcon.IconType.CROWN)
 				
-func refresh_unit_icons():
-	for unit in icons_by_unit.keys().duplicate():
-		if not is_instance_id_valid(unit):
-			clear_unit_icons(unit)
-			continue
-		
-		var cell: Vector2i = unit.get_projected_destination()
-		var world_pos: Vector2i = board_tilemap.map_to_local(cell)
-		
-		for icon in icons_by_unit[unit].values():
-			if is_instance_valid(icon):
-				icon.move_to(cell)
-	
 func move_icon(icon: OverlayIcon, pos: Vector2i):
 	icon.move_to(pos)
 	
@@ -430,9 +412,30 @@ func clear_all_projected_sprites():
 		
 func redraw_projected_units():
 	clear_all_projected_sprites()
-	
-	for unit in planned_move_by_unit.keys():
+
+	for unit in planned_move_by_unit.keys().duplicate():
 		var move: MoveAction = planned_move_by_unit[unit]
+		if not is_instance_valid(unit):
+			move.clear_preview_sprites()
+			planned_move_by_unit.erase(unit)
+			continue
+
 		unit.visuals.set_projected(move.is_valid)
 		if move.is_valid:
 			show_projected_unit(unit, move.destination)
+			
+func handle_unit_death(unit: Unit):
+	clear_unit_icons(unit)
+	clear_planned_path(unit)
+	clear_projected_unit(unit)
+	if hover_move_preview != null and hover_move_preview.actor == unit:
+		clear_hover_move_path()
+		
+#Untyped parameter on purpose: freed objects cannot pass a typed Unit parameter
+func _purge_unit_entry(unit):
+	if not icons_by_unit.has(unit):
+		return
+	for icon in icons_by_unit[unit].values():
+		if is_instance_valid(icon):
+			icon.queue_free()
+	icons_by_unit.erase(unit)

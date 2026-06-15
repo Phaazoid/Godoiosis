@@ -12,6 +12,8 @@ class_name Unit
 @onready var visuals: UnitVisuals = $UnitVisuals
 @export var unit_data: UnitData
 
+signal unit_died(unit: Unit)
+
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
@@ -49,19 +51,23 @@ func _ready():
 	map_sprite.z_index = BASE_SPRITE_INDEX
 	move_sprite.z_index = BASE_SPRITE_INDEX
 	
-	match unit_data.faction:
-		Team.Faction.PLAYER:
-			modulate = Color.WHITE
-		Team.Faction.ENEMY:
-			modulate = Color(1, 0.6, 0.6)
-		Team.Faction.OTHER:
-			modulate = Color(0.6, 0.8, 1)
+	if unit_data.map_sprite != null:
+		map_sprite.texture = unit_data.map_sprite
+	if unit_data.move_sprite != null:
+		move_sprite.texture = unit_data.move_sprite
+	
+	_apply_faction_visuals()
 
 func add_item(item: Item) -> bool:
-	for i in range (inventory.size()):
+	for i in range(inventory.size()):
 		if inventory[i] == null:
 			inventory[i] = item
+
+			if equipped_weapon == null and item is WeaponData:
+				equipped_weapon = item
+
 			return true
+
 	return false
 
 func get_map_sprite_texture() -> Texture2D:
@@ -98,7 +104,7 @@ func get_effective_stat(stat: String) -> int:
 	return get_base_stat(stat) + get_modifier(stat)
 
 func get_modifier(stat: String) -> int:
-	return unit_instance.stat_modifiers.get(stat)
+	return unit_instance.stat_modifiers.get(stat, 0)
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
@@ -124,11 +130,24 @@ func is_leader() -> bool:
 	else:
 		return false
 	
-func die() -> void:
+func die():
+	unit_died.emit(self)
 	queue_free()
+
+func _apply_faction_visuals():
+	match unit_data.faction:
+		Team.Faction.PLAYER:
+			modulate = Color.WHITE
+		Team.Faction.ENEMY:
+			modulate = Color(1, 0.6, 0.6)
+		Team.Faction.OTHER:
+			modulate = Color(0.6, 0.8, 1)
+		_:
+			modulate = Color.WHITE
 
 func change_faction(new_faction: Team.Faction):
 	unit_data.faction = new_faction
+	_apply_faction_visuals()
 
 func has_action_type_queued(actiontype: BaseAction.ActionType) -> bool:
 	for action in squad.action_queue:
@@ -171,3 +190,37 @@ func get_projected_destination() -> Vector2i:
 		if action.actor == self and action.action_type == BaseAction.ActionType.MOVE and action.is_valid:
 			return action.get_destination()
 	return self.movement.cell
+	
+func get_equipped_weapon() -> WeaponData:
+	return equipped_weapon
+
+func has_equipped_weapon() -> bool:
+	return equipped_weapon != null
+
+func set_equipped_weapon(weapon: WeaponData) -> bool:
+	if weapon == null:
+		equipped_weapon = null
+		return true
+
+	if not inventory.has(weapon):
+		return false
+
+	equipped_weapon = weapon
+	return true
+
+func equip_weapon_from_inventory(index: int) -> bool:
+	if index < 0 or index >= inventory.size():
+		return false
+
+	var item := inventory[index]
+	if item == null:
+		return false
+
+	if not item is WeaponData:
+		return false
+
+	equipped_weapon = item
+	return true
+
+func unequip_weapon():
+	equipped_weapon = null

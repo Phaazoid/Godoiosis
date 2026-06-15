@@ -12,7 +12,7 @@ signal turn_started(phase)
 
 
 # Called when the node enters the scene tree for the first time.
-func _ready() -> void:
+func _ready():
 	start_turn(TurnPhase.PLAYER)
 
 func start_turn(phase: TurnPhase):
@@ -29,3 +29,9 @@ func end_turn():
 		TurnPhase.ENEMY:
 			current_turn = TurnPhase.PLAYER
 			start_turn(TurnPhase.PLAYER)
+
+func active_faction() -> Team.Faction:
+	return Team.Faction.PLAYER if current_turn == TurnPhase.PLAYER else Team.Faction.ENEMY
+	
+func set_active_faction(faction: Team.Faction):
+	current_turn = TurnPhase.ENEMY if faction == Team.Faction.ENEMY else TurnPhase.PLAYER
