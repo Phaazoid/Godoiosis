@@ -18,6 +18,10 @@ What migrated (2026-06-16): the old **Foundation, Bugs/Debt, Features, open Desi
 
 ## ✅ Recently completed
 
+**2026-06-16 — test harness GREEN (Tier-1 + Tier-2), scaffolding only, no gameplay code:**
+- **gdUnit4 stood up + invariant battery passing** → `tests/` (33 cases, 0 failures, **0 orphans, exit 0**, headless on Godot 4.6). Pins the settled squad spec as executable invariants: counter rules **C1–C7** (`tests/squad/test_counters.gd`), squad lifecycle **I1–I7** (`tests/squad/test_invariants.gd`), AoE/volley semantics (`tests/squad/test_volley.gd`), Tier-1 grid math (`tests/unit/test_grid_utils.gd`), and two **Law guards** — determinism + preview==execution (`tests/law/test_resolution_laws.gd`, the elemental/Will hook). Run: `powershell -File tests\run_tests.ps1`. Details + fixture design + findings in `tests/README.md`.
+- **Findings surfaced by the harness** (record, don't silently fix — gameplay code is user-typed): (1) **volley `AttackAction.volley` is a RefCounted self-cycle** → volley siblings never free after the queue clears (small per-AoE leak) → issue [#35](https://github.com/Phaazoid/Godoiosis/issues/35) (`type/debt`). (2) `GridUtils.cells_within_manhattan_range` `range`-shadow is **benign** (probe passes — cosmetic lint only). (3) **`WeaponData.can_counter` ignored** by the counter path (gate is only the `combat` component flag) → the weapon-editor toggle does nothing; confirmed a bug → issue [#34](https://github.com/Phaazoid/Godoiosis/issues/34) (`type/bug`, Milestone A). (4) I2 `disband_squad` direct-erase drift reconfirmed.
+
 **2026-06-16 — roadmap + foundation docs (design/scaffolding only, no gameplay code):**
 - **Elemental architecture LOCKED** → `docs/design/elemental-system.md` (E-invariants E1–E7; v1 slice = SHOCK × WET). Moved from open design-session to build-ready.
 - **Resolution-pipeline keystone** → `docs/design/resolution-pipeline.md` (R1–R8). Counters + elemental + Will are ONE derived-from-plan pipeline, not three; locks the seam before Phase 2 hardens.

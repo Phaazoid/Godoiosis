@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://dryyfwlkh65l6"]
+
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/AttackRanges/ManhattanRangePattern.gd" id="1_k3y1e"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/WeaponIcons/Fire.png" id="2_tbjsc"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/ResourceData/WeaponData.gd" id="3_021iu"]
+
+[sub_resource type="Resource" id="Resource_6agcu"]
+script = ExtResource("1_k3y1e")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("3_021iu")
+power = 5
+scaling_stat = "WIL"
+attack_pattern = SubResource("Resource_6agcu")
+hits_allies = true
+weapon_type = "FireRune"
+elemental_damage_type = "Fire"
+icon = ExtResource("2_tbjsc")
+description = "burn baby burn"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

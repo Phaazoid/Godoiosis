@@ -1,5 +1,7 @@
 # 1 — Test harness + invariant battery
 
+> **✅ STATUS: COMPLETE (2026-06-16).** gdUnit4 installed and green; Tier-1 + Tier-2 + Law guards all pass (33 cases, 0 orphans, exit 0). Canonical docs: `tests/README.md` (run + fixtures + findings) and the BACKLOG "Recently completed" entry. The prompt below is kept as the historical brief / for anyone extending the suite (e.g. attack-pattern geometry tests, more Law guards, or Phase-2 elemental coverage).
+
 **Lane A (Claude-owned) · run now, hands-off · no dependency** — but the first green run needs a Godot-available environment (see env note). Pairs with: protects the seams Prompt 2 refactors.
 
 ```
@@ -10,8 +12,9 @@ Goal: Stand up the test framework and pin the SETTLED squad spec as executable i
 This is Claude-owned scaffolding — tests/ and addons/ are in your standing edit exception (CLAUDE.md collaboration contract). You may install the addon, enable the plugin in project.godot, and write tests directly. Do NOT edit gameplay code (Classes/, Scenes/, game.gd); if something is hard to test, record it as a finding rather than refactoring it.
 
 Context already known (verify, don't re-derive):
-- addons/ exists and the project already uses an editor plugin (AsepriteWizard, enabled in project.godot [editor_plugins]). Add gdUnit4 the same way: res://addons/gdUnit4/plugin.cfg appended to the enabled array.
-- Godot may NOT be on PATH in this environment. Check (Get-Command godot). If absent, you can still install the addon files and WRITE tests, but the first green run must happen in the editor or a Godot-available shell — be explicit with the user about that handoff; do not claim green you didn't observe.
+- **gdUnit4 is ALREADY installed and green** (vendored to addons/gdUnit4, plugin enabled, Tier-1 verified 7/7 on Godot 4.6). This prompt now covers the REMAINING work: Tier-2 node-fixture suites (I1-I7, C1-C7, volley) + the two Law guards. Read tests/README.md for the verified workflow + gotchas first.
+- Run tests headless via `tests/run_tests.ps1` (or the raw command in tests/README.md). Godot 4.6 console exe: C:\Godot\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe. After adding any new gameplay class_name, run a one-time `<exe> --headless --path . --import` so global classes register.
+- The hard part is fixtures: Unit instances come from Scenes/unit.tscn (needs a UnitData); SquadManager has manager deps (overlay_manager, grid) so isolating it needs care. Build a tests/support/ helper (make_unit() + minimal board) FIRST, then write the suites.
 
 Steps:
 1. Pick a runner. Default to gdUnit4 (Godot-4-native; parameterized tests fit the numbered batteries) unless the user prefers GUT — confirm before installing.

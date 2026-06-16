@@ -14,7 +14,7 @@ Quick reference for controls and dev-tool shortcuts. Keep this updated as new bi
 | Key | Action |
 |-----|--------|
 | F1 | Toggle the dev tools window (`toggle_dev_overlay`) — enters/exits DEV_MODE |
-| Space | Spawn a unit at the hovered cell *(in dev mode, with the Spawn tool configured)* (`dev_spawn_unit`) |
+| Space | Spawn a unit at the hovered cell *(in dev mode, with the Spawn tool configured)* — hardcoded `KEY_SPACE` check in `game.gd`, not an Input Map action |
 | F2 | Reload the last-loaded scenario (`dev_reset_scenario`) — instant board reset |
 | Left-click a unit | (DEV_MODE) Edit that unit in the Unit Editor |
 | Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile |

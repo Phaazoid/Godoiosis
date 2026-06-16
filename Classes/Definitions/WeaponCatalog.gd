@@ -5,6 +5,7 @@ class_name WeaponCatalog
 const TYPES := {
 	"Chainsword": preload("res://Resources/ChainSword.tres"),
 	"Springspear": preload("res://Resources/Springspear.tres"),
+	"FireRune": preload("res://Resources/FireRune.tres")
 }
 
 # Saved customized variants — written by the Weapon Editor, scanned at runtime.

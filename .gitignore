@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# gdUnit4 test reports (generated)
+/reports/

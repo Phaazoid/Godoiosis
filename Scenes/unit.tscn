@@ -1,32 +1,237 @@
-[gd_scene format=3 uid="uid://b8b4cvid06h4k"]
+[gd_scene format=3 uid="uid://b7xrxookaq14i"]
 
-[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Classes/Unit.gd" id="1_ppost"]
-[ext_resource type="Texture2D" uid="uid://dwv13r7ee4qf6" path="res://Art/Units/MapSprites/Basic_Soldier.png" id="2_x1v5g"]
-[ext_resource type="Texture2D" uid="uid://deyav21j482j7" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_20lhf"]
-[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/CombatComponent.gd" id="3_ppost"]
-[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/MovementComponent.gd" id="4_20lhf"]
-[ext_resource type="Script" uid="uid://cv7o3b03q7eml" path="res://Scenes/UnitVisuals.gd" id="5_x1v5g"]
+[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Classes/DevTools/DevOverlay.gd" id="1_bot63"]
+[ext_resource type="Script" uid="uid://ddx3t4esgtshi" path="res://Classes/DevTools/SpawnTool.gd" id="2_4ne6x"]
+[ext_resource type="Script" uid="uid://36ifyaqa5h2v" path="res://Classes/DevTools/UnitEditorTool.gd" id="3_tb11o"]
+[ext_resource type="Script" uid="uid://fp1up4anr4xw" path="res://Classes/DevTools/WeaponEditorTool.gd" id="4_xfmrh"]
+[ext_resource type="Script" uid="uid://c4qnlqwcjwwh1" path="res://Classes/DevTools/Scenario.gd" id="5_wy6kt"]
+[ext_resource type="Script" uid="uid://dh3jl6n4f8qa8" path="res://Classes/DevTools/TileBrushTool.gd" id="6_wgsbd"]
 
-[node name="Unit" type="Node2D" unique_id=1798603063]
-z_as_relative = false
-script = ExtResource("1_ppost")
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
+bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
 
-[node name="MapSprite" type="Sprite2D" parent="." unique_id=1465762726]
-z_as_relative = false
-texture = ExtResource("2_x1v5g")
-offset = Vector2(0, -8)
-
-[node name="MoveSprite" type="Sprite2D" parent="." unique_id=1661276870]
+[node name="DevOverlay" type="Window" unique_id=1904372676]
+gui_embed_subwindows = true
+title = "Dev Tools"
+size = Vector2i(900, 360)
 visible = false
-texture = ExtResource("3_20lhf")
-centered = false
+script = ExtResource("1_bot63")
 
-[node name="Combat_Component" type="Node" parent="." unique_id=1612176193]
-script = ExtResource("3_ppost")
+[node name="Panel" type="Panel" parent="." unique_id=408557499]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="Movement_Component" type="Node" parent="." unique_id=742177134]
-script = ExtResource("4_20lhf")
+[node name="MarginContainer" type="MarginContainer" parent="Panel" unique_id=997844552]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
 
-[node name="UnitVisuals" type="Node" parent="." unique_id=1757472297 node_paths=PackedStringArray("sprite")]
-script = ExtResource("5_x1v5g")
-sprite = NodePath("../MapSprite")
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer" unique_id=2047553017]
+layout_mode = 2
+
+[node name="DevModeToggle" type="CheckButton" parent="Panel/MarginContainer/VBoxContainer" unique_id=1234134320]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Dev Mode Toggle"
+
+[node name="DevTabs" type="TabContainer" parent="Panel/MarginContainer/VBoxContainer" unique_id=1062693858]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+current_tab = 0
+
+[node name="Spawn" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1658763081]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 200)
+layout_mode = 2
+script = ExtResource("2_4ne6x")
+metadata/_tab_index = 0
+
+[node name="UnitNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" unique_id=1543092952]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 25)
+layout_mode = 2
+text = "Soldier1"
+placeholder_text = "Name"
+
+[node name="FactionCheckBoxes" type="GridContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" unique_id=1333475274]
+custom_minimum_size = Vector2(75, 25)
+layout_mode = 2
+columns = 3
+
+[node name="PlayerCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/FactionCheckBoxes" unique_id=1276337252]
+unique_name_in_owner = true
+layout_mode = 2
+button_pressed = true
+text = "Player"
+
+[node name="EnemyCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/FactionCheckBoxes" unique_id=966222468]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Enemy"
+
+[node name="OtherCheckBox" type="CheckBox" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/FactionCheckBoxes" unique_id=1974080667]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Other"
+
+[node name="StatInput" type="GridContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" unique_id=1722468506]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 25)
+layout_mode = 2
+columns = 4
+
+[node name="WeaponRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" unique_id=824005631]
+layout_mode = 2
+
+[node name="WeaponLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/WeaponRow" unique_id=313839466]
+layout_mode = 2
+text = "Weapon"
+
+[node name="WeaponDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/WeaponRow" unique_id=2013762213]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SpriteRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" unique_id=373928489]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/SpriteRow" unique_id=356273023]
+layout_mode = 2
+text = "Unit Sprite"
+
+[node name="SpriteDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/SpriteRow" unique_id=1830821036]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Unit Editor" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=513630184]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(300, 180)
+layout_mode = 2
+script = ExtResource("3_tb11o")
+metadata/_tab_index = 1
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Unit Editor" unique_id=2112758700]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="UnitEditorVbox" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Unit Editor/ScrollContainer" unique_id=1840912526]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Weapon Editor" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1368554550]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 150)
+layout_mode = 2
+script = ExtResource("4_xfmrh")
+metadata/_tab_index = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor" unique_id=382651101]
+layout_mode = 2
+
+[node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer" unique_id=304424042]
+layout_mode = 2
+
+[node name="WeaponLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer" unique_id=1930122686]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="NewButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer" unique_id=589552703]
+layout_mode = 2
+text = "New"
+
+[node name="WeaponNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer" unique_id=671083507]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Weapon Name"
+
+[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer" unique_id=1821793525]
+layout_mode = 2
+text = "Save"
+
+[node name="WeaponTypeDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer" unique_id=1677820295]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer" unique_id=225885286]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="WeaponEditorVbox" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/ScrollContainer" unique_id=1341118687]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="Scenario" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1548913735]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("5_wy6kt")
+metadata/_tab_index = 3
+
+[node name="ScenarioRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1524370160]
+layout_mode = 2
+
+[node name="ScenarioNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=1875216039]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 25)
+layout_mode = 2
+placeholder_text = "Scenario name"
+
+[node name="SaveScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=818624335]
+layout_mode = 2
+text = "Save"
+
+[node name="ScenarioDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=1217769002]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="LoadScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=31186477]
+layout_mode = 2
+text = "Load"
+
+[node name="Tile Brush" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1905779567]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("6_wgsbd")
+metadata/_tab_index = 4
+
+[node name="Panel" type="Panel" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush" unique_id=1425842195]
+custom_minimum_size = Vector2(50, 50)
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_1dnd3")
+
+[node name="TileBrushRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel" unique_id=780181410]
+layout_mode = 0
+offset_right = 213.0
+offset_bottom = 40.0
+
+[node name="TileBoxCheck" type="CheckBox" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow" unique_id=38756860]
+layout_mode = 2
+text = "Tile Brush on/off"
+
+[node name="TileDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow" unique_id=83984031]
+unique_name_in_owner = true
+layout_mode = 2
+
+[connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevModeToggle" to="." method="_on_dev_mode_toggled"]
+[connection signal="text_changed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/UnitNameInput" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_unit_name_input_text_changed"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/WeaponRow/WeaponDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_weapon_dropdown_item_selected"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/SpriteRow/SpriteDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_sprite_dropdown_item_selected"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer/WeaponLoadDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor" method="_load_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer/NewButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor" method="_on_new_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer/SaveButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor" method="_on_save_pressed"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor/VBoxContainer/HBoxContainer/WeaponTypeDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Weapon Editor" method="_on_type_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow/SaveScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_save_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow/LoadScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_load_pressed"]
+[connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow/TileBoxCheck" to="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush" method="_on_tile_brush_toggled"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow/TileDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush" method="_on_tile_dropdown_item_selected"]

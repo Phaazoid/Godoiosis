@@ -44,16 +44,15 @@ Tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript. Solo hobbyist develo
 
 ## Milestones
 
-- **P — rapid prototyping sandbox** (current): scenario save/load, one-key reset, in-game unit editor, tile brush, persist-tweak-to-disk.
+- **P — rapid prototyping sandbox** (COMPLETE 2026-06-13): scenario save/load, one-key reset, in-game unit editor, tile brush, weapon authoring, persist-tweak-to-disk.
 - **A — artist-attractor demo**: placeholder art, squad combat, ~3 weapon pattern types, small elemental sample, archetype AI (hold-position / rushdown / balanced), 1–2 handcrafted levels with win/loss.
-- **B — vertical slice** (post-artist): story, audio, economy, leveling.
+- **B — vertical slice** (post-artist): story, audio, economy, progression/customization (NOT leveling — see `docs/design/progression.md`).
 
-Certainty map: **squads are settled** (`docs/design/squad-system.md`); everything else is fluid — build *architecture + experiments*, not final specs.
+Certainty map: **squads are settled** (`docs/design/squad-system.md`). **Progression (no leveling) and Will/death have an agreed direction** (`docs/design/progression.md`, `docs/design/will-and-death.md`) — firmer than fluid, with open forks. Genuinely fluid: runes, weapon specifics, elemental — build *architecture + experiments*, not final specs.
 
 ## Known debt
 
-- Dead code: old `try_attack()` region in `game.gd` (~line 229).
 - AoE victim lists don't re-resolve when moves are re-planned after queuing — belongs in `validate_squad_plan`.
 - Volley cancel propagation needed if per-row queue cancel UI ever arrives (`volley` array already linked).
 - `ForwardLinePattern` ≅ `ForwardWidePattern(width=1)` — consolidation candidate.
-- Death is currently just `queue_free()` — the death/Will/downed-state system is undesigned (see wiki: "The art of not dying", "Limb Loss and Prosthesis").
+- Death = `Unit.unit_died` fan-out + `queue_free()` (mechanical floor only). Downed/Will/limb-loss now has an **agreed design** in `docs/design/will-and-death.md` (deterministic stakes ladder; forks open) — not yet implemented (no downed state in code).
