@@ -74,3 +74,4 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_
 - Death handling: a unit hitting 0 HP currently just frees itself — squad cleanup on death is undesigned (blocked on the death/Will/downed-state design, which intersects squads heavily: leader downs, defending downed allies).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.
 - Squad-formation UX rules (who may join whom, range checks at join time) live partly in `game.gd` (`can_join_squad`, `can_squad_up`) — candidates to migrate into `SquadManager`.
+- **Squad archetypes by leader specialization** (idea, undesigned): a leader's dominant stat could shape the squad's identity — e.g. a DEF leader yields a defensive squad (holds ground, blocks for members). Intersects the surfaced weapon/Will "block" thread ([weapons.md](weapons.md)). Captured from the wiki scratchpad during the #32 triage.

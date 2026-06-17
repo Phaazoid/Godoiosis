@@ -122,3 +122,10 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 7. **[OPEN] Dual-cast / joint transmutation** between alchemists (Stone lore + some L5 runes imply it) — squad-flavored co-cast?
 
 Cross-refs: [progression.md](progression.md), [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), `../../CLAUDE.md` (the three laws). Sibling session: **Elemental system** (backlog 🔴). Wiki distilled: `Systems Mechanics/Alchemy.docx` (newest half), `Economy/Items/Runes/*`, `Story/World Mechanics/Alchemy/*`, `Story/Plot/World History/*`, `Story/Locations/Paracelsus/*`, `Story/Characters/Playable/Isaac.docx`, `Story/Themes/*`, `Battle Mechanics/Elemental Combinatrix.docx`, `Code/Algorithms/Rune Based Algorithms.docx`, `Systems Mechanics/Stats Overview.docx`.
+
+## Captured ideas — wiki scratchpad (2026-06-17)
+
+Folds into the open forks above; noted during the #32 triage:
+
+- **Rune-carving as the customization UX** (fork 1): players physically *carve* runes — a tactile front-end to the capacity-board model.
+- **Innate / untested affinities** (fork 2): unlisted units might use a given rune *poorly* without a formal affinity, and affinities can be **grown, not created** — fitting the no-leveling identity-stat model. (Lore guardrail: gold transmutation is *possible* but consumes more runestone than the gold is worth — flavor, not a player action.)

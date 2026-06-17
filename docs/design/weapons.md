@@ -1,0 +1,50 @@
+# Weapons — Identities & Philosophy
+
+**Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
+
+## The architecture (implemented — [LOCKED shape])
+
+A weapon is **policy + geometry**, split the same way as the rest of combat (see `../../CLAUDE.md`):
+
+- **`WeaponData` = policy** — `power`, `scaling_stat`, `can_counter`, `hits_allies`, `weapon_type`, `elemental_damage_type`, plus a reference to an `attack_pattern`.
+- **`AttackPattern` = geometry** — pure cell math (selectable vs affected cells). Terrain/LoS filtering belongs at the resolution layer, not the pattern (planned flag: `arcs_over_obstacles`).
+- Weapons are **content authored as `.tres`**: base types in `WeaponCatalog.TYPES`, customized variants written by the in-game Weapon Editor to `Resources/WeaponVariants/`. **Implemented base types so far: Chainsword, Springspear, FireRune** — the families below are the design target, not all built yet.
+
+> **Enum debt (#7):** `weapon_type` and `elemental_damage_type` are currently `String`s. They're fixed vocabularies → migrate to enums/registries (append-only once persisted in saved `.tres`). The family list below is the canonical `weapon_type` vocabulary.
+
+## Cross-cutting principles ([WORKSHOP])
+
+- **No accuracy, no crit % (Law #1).** The wiki is full of "crit chance / accuracy / dodge" — all dead. The named replacement: a **charge system / mid-battle decisions** plus the elemental **combinatrix** ([elemental-system.md](elemental-system.md)) as the deterministic stand-in for "big hits." Every "% chance to X" below is reframed as a deterministic trigger (a charge, a state, a position) or cut.
+- **Scaling is a stat blend.** The wiki says each weapon scales from a mix of **Speed / Skill / Strength**. ⚠️ *Drift to resolve:* the implemented `scaling_stat` enum is `STR / LDR / WIL / MHP` (no Spd/Skill) and takes **one** stat, not a blend. Reconcile when the statline firms up — add Spd/Skill, or express a blend at the resolution layer. **[OPEN]**
+- **Weapon triangle — purpose [OPEN].** A triangle is wanted, but with accuracy gone, *what does it decide?* Leading candidate (from `Main info` + scratchpad): it governs **blocking** cost/effectiveness, not hit chance (going against it might risk weapon-breaking). Tied to the block thread below.
+- **Build / weight gate (captured idea).** From a dev note (FE Engage's "build"): a weapon is usable **without penalty** until a unit's build/weight threshold, penalized past it — a deterministic mobility/weight curve, not a hard lock. **[captured, unplaced]**
+- **The 5th-tier power spike.** Each weapon's upgrade tree has a deliberate **5th-tier spike** — a customization payoff, not steady leveling (fits [progression.md](progression.md)'s go-wide model). Tree contents = economy, deferred.
+
+## ⚠ Surfaced thread — "blocking / guard" (no doc, no code yet)
+
+Recurs across `Main info` + `Precombat Popup` + scratchpad: **adjacent units can block once per engagement**, gated by weapon type & range, paid from a stat (DEF/health), mitigated/worsened by the weapon triangle, and possibly **stopping elemental effects** from landing. Ranged weapons (carbines) might block melee at high weapon-break risk. Per the dev (#32 era-check): **big maybe — revisit after elemental + Will land**; it may fold into Will, be a squad option, or seed a separate "abilities" system. Captured so the families can hint at it; **not a commitment.**
+
+## The seven weapon families (identities — [WORKSHOP])
+
+Each family = a fantasy + a role + a **signature class mechanic** (the wiki's per-family toggle), stated **de-randomized**.
+
+| Family (`weapon_type`) | Identity | Signature mechanic (de-RNG'd) |
+|---|---|---|
+| **Chainsword** | The mechanist's baseline blade — steady melee. | **Revved** — toggle: trade damage/speed for deterministic **dismemberment pressure** (a maim threshold; ties to [will-and-death.md](will-and-death.md)). |
+| **Drill** *(aka War Auger)* | Heavy, terrain-shaping bruiser. | **Burrow** — erect defensive or obstructive **terrain modifications** ([terrain.md](terrain.md)); the melee terrain-engineer. |
+| **Springspear** | Reach + the shock-combo enabler. | **Impale / Vault** — spring it into a **ranged** weapon (overworld action); winding back in costs time. The classic combinatrix shock partner. |
+| **Carbine** | Pressure-rifle ranged DPS. | **Headshot** — reframed from "+crit %" to a **charged precision shot** (deterministic). Per-weapon range bands (1–2 / 2–3). |
+| **Bludgeon** *(aka Kinetic Mace)* | Control via forced movement. | **Pummel** — **knock units a few tiles** (deterministic shove; pairs with terrain hazards / pit edges). |
+| **Chemical Spitter** | Close-range elemental applicator + support. | **Bio-hazard** — high front-loaded close damage; the **status-delivery** family (fire/ice/shock/corrode/heal variants → [elemental-system.md](elemental-system.md)). |
+| **Prosthetic** | The augmentation weapon (an *arm*, not a held tool). | **Inhuman** — **no STR scaling**; replaces STR with a static, upgradeable value; weapon-breakable only while equipped. The mechanist↔alchemist axis ([progression.md](progression.md)); the involuntary door from limb-loss ([will-and-death.md](will-and-death.md)). |
+
+*(Per-weapon flavor — The Broadburner, The Aegis, The Burn Notice, the Salve, etc. — is **content, deferred.** The named weapons in the wiki `Weapon List` are a flavor bank to draw from when authoring `.tres`, not a spec.)*
+
+## Locked vs open
+
+- **Locked-ish:** the policy/pattern architecture; the seven family identities + their signature-mechanic *fantasy*; no-accuracy/no-crit.
+- **Open (long-horizon):** all numbers; the scaling-stat blend (Spd/Skill vs the current enum); the weapon triangle's exact role; blocking; upgrade trees (economy); which families get built past the current three.
+
+## Sources & cross-refs
+
+Wiki: `Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`. Code: `WeaponData`, `WeaponCatalog`, `AttackPattern`. See [elemental-system.md](elemental-system.md), [progression.md](progression.md), [will-and-death.md](will-and-death.md), [terrain.md](terrain.md); issues #7 (enums), #25 (ranges).
