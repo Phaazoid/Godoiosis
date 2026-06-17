@@ -49,7 +49,7 @@ Run **`/agent-queue`** to have Claude scan the `agent/claude` issues and advance
 
 ## Design wiki
 
-`C:\Iosis\Drive Wiki` — exported Google Drive wiki. **Partially ancient**: anything mentioning crits/hit-miss/action-points, plus all of `Code/Headers/`, is from a GameMaker-era version. The export has **no recoverable dates** (verified; don't re-investigate) — judge era by content and confirm with the user. Distill surviving material into `docs/design/` with user sign-off.
+`C:\Iosis\Drive Wiki` — exported Google Drive wiki. **Partially ancient**: anything mentioning crits/hit-miss/action-points, plus all of `Code/Headers/`, is from a GameMaker-era version. The export has **no recoverable dates** (verified; don't re-investigate) — judge era by content and confirm with the user. Distill surviving material into `docs/design/` with user sign-off. **Triage complete (2026-06-17, #32) — see [`docs/design/wiki-triage.md`](docs/design/wiki-triage.md): the design-session systems plus weapons/terrain/philosophy are distilled; everything else is logged distilled / discard (GameMaker-era) / defer. Don't re-triage from scratch.**
 
 ## Milestones
 
