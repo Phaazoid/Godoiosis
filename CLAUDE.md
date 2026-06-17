@@ -9,6 +9,15 @@ Tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript. Solo hobbyist develo
 - Claude MAY directly create/edit: `CLAUDE.md`, `docs/`, `tests/`, GitHub issue text, and other non-gameplay scaffolding (standing exception granted 2026-06-12).
 - After walkthroughs land, *verify by reading the actual files* before debugging from theory — transcription drift is the most common failure mode.
 
+## GitHub issue workflow (Claude ↔ human handoff)
+
+Open work lives in [GitHub Issues](https://github.com/Phaazoid/Godoiosis/issues). Two **mutually exclusive** assignment labels say whose turn it is (exactly one per open issue):
+
+- **`agent/claude`** — Claude owns the next step: draft/revise a fix walkthrough, or (for `tests/` & `docs/`) just do the work directly.
+- **`agent/human`** — a human owns the next step: type a posted walkthrough, make a design decision, or test. Flip an issue back to `agent/claude` (with a reply) when a fix needs rework.
+
+Run **`/agent-queue`** to have Claude scan the `agent/claude` issues and advance each one, then hand back. Every comment Claude posts under the user's account **leads with `🤖 Claude says:`** and **ends with** `— Claude (Opus 4.8) · <date>`, authored via the Write tool → `gh issue comment --body-file` (never an inline non-ASCII arg — Windows PowerShell 5.1 mojibakes it before upload; see the encoding note in `tests/README.md`). After acting, Claude flips the label to `agent/human`.
+
 ## Design laws (non-negotiable)
 
 1. **No randomness in gameplay.** No hit/miss rolls, no crit chance, nothing. Combat is fully deterministic. (Old design docs mentioning crits predate this law.)
