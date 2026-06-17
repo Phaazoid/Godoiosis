@@ -45,6 +45,14 @@ Each family = a fantasy + a role + a **signature class mechanic** (the wiki's pe
 - **Locked-ish:** the policy/pattern architecture; the seven family identities + their signature-mechanic *fantasy*; no-accuracy/no-crit.
 - **Open (long-horizon):** all numbers; the scaling-stat blend (Spd/Skill vs the current enum); the weapon triangle's exact role; blocking; upgrade trees (economy); which families get built past the current three.
 
+## Captured ideas — scratchpad (2026-06-17)
+
+From the idea inbox; **captured, not locked** — these are fluid (weapon specifics) per the certainty map.
+
+- **Revved Chainsword grinds terrain.** A revved Chainsword could **chew through Cover (and similar destructible terrain) over a turn** — extending "attack the map" from elemental/Drill work into *sustained melee*. Gives the **Revved** toggle a second use beyond dismemberment pressure, and a melee answer to entrenched defenders. Deterministic (attrition telegraphed across the turn, Law #1). Cross-ref [terrain.md](terrain.md) ("Attack the map", Cover).
+- **Range-dependent damage / damage bands.** Weapons whose damage varies with distance: a carbine/crossbow that hits **harder at range**, a shotgun / Chemical Spitter that hits **harder up close**, a Springspear AoE with a **sweet-spot middle tile** (peak damage at the pattern's center). Generalizes the Carbine's existing range bands into a damage-by-cell curve. *Architecture note:* damage stops being a single `power` — it becomes **per-cell / per-band**, either a damage weight attached to each cell of the `AttackPattern` (geometry already enumerates the cells) or a range→power map on `WeaponData`. Squarely the **#25 (ranges)** thread.
+- **Mutable scaling to avoid forced weapon pairings.** Tension: stats are fixed ([progression.md](progression.md)) and weapons scale off a stat, so optimal play could **lock a character to one weapon type**. Two outs that keep customization real, both fitting the policy/pattern model + the `WeaponVariants` authoring pipeline: (a) weapon **mods/variants that change the `scaling_stat`**; (b) static **sub-varieties** of each family with different set scalings (the dev's old weapon drawings) — so no single weapon is always best for a given statline. Interacts with the scaling-stat drift flagged above.
+
 ## Sources & cross-refs
 
 Wiki: `Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`. Code: `WeaponData`, `WeaponCatalog`, `AttackPattern`. See [elemental-system.md](elemental-system.md), [progression.md](progression.md), [will-and-death.md](will-and-death.md), [terrain.md](terrain.md); issues #7 (enums), #25 (ranges).

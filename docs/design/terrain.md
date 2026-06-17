@@ -43,6 +43,8 @@ Each is **deterministic and telegraphed**. ✦ = also an elemental state (shared
 
 Terrain is a **target**, not just a backdrop — this is where terrain & elemental overlap most, so they're owned jointly: Drill/EARTH break boulders (open paths, leave Cover rubble) · FIRE burns brambles · EARTH raises a destructible wall · WATER floods low ground (→ freeze → Ice bridge) · conductive rails. The full list lives in [elemental-interactions.md](elemental-interactions.md) ("attack the map"); **terrain.md owns the persistent-state bookkeeping, elemental owns the reaction.**
 
+*Captured (2026-06-17, scratchpad):* destructible terrain may also wear down to **sustained melee**, not only elemental/Drill work — e.g. a **revved Chainsword chewing through Cover over a turn** ([weapons.md](weapons.md)). Deterministic attrition (telegraphed across the turn), giving melee a terrain-attack lane. Not committed — captured.
+
 ## Atmosphere as chemistry (captured — [WORKSHOP], from scratchpad)
 
 A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model. **Not committed — captured.**
