@@ -36,10 +36,10 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-<!-- Add bullets below. Delete this example whenever:
-- (weapons) what if a revved chainsword could chew through Cover terrain over a turn?
--->
+<!-- Empty — swept 2026-06-17. Drop new ideas as bullets here, then run /scratchpad-sweep. -->
 
 ## 🗂 Dispersed (log)
 
-<!-- Claude moves processed ideas here:  - <gist> → <where it went> (YYYY-MM-DD) -->
+- Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)
+- Range-dependent damage / sweet-spot patterns (carbine harder at range, shotgun up close, Springspear AoE center tile) → weapons.md (Captured ideas); relates to issue #25 (2026-06-17)
+- Fixed stats may force weapon pairings → mutable scaling via weapon mods/variants or sub-varieties → weapons.md (Captured ideas) + progression.md (2026-06-17)
