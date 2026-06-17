@@ -53,4 +53,12 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 - Roguelike power-normalization for imported units.
 - See [will-and-death.md](will-and-death.md) for the Will / limb-loss forks.
 
-Cross-refs: [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), `../../CLAUDE.md` (design laws).
+## Captured ideas — wiki scratchpad (2026-06-17, unsorted)
+
+Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
+
+- **Randomness in *upgrades* is allowed; randomness in *combat* is not.** Law #1 governs the battlefield — but offering a **random subset of choices** when a proficiency/weapon advances (à la *Mewgenics*) is fine, and even encourages experimentation. The meta-layer may roll dice; the turn never does.
+- **Optional job/class-lite layer.** Classless-first stays the default, but an adopted "job" (spend X resource → role Z) could grant a flat stat change / stat caps (a tank caps movement) plus a trainable ability pool, swappable if you re-qualify. *"Even in a classless society, people have jobs."*
+- **Double-attacks as a weapon property, not a stat rule.** Rather than FE's speed-derived doubling, make multi-hit a property of specific weapons, **gated** by stats (better stats → more uses) — keeps growth horizontal.
+
+Cross-refs: [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), [weapons.md](weapons.md), `../../CLAUDE.md` (design laws).
