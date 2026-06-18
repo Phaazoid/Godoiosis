@@ -39,7 +39,7 @@ Load-bearing reminders that depend on systems that don't exist yet. Keep as-is.
 |---|---|
 | `game.gd:532` — flyers spawning on non-walkable tiles | unit movement-classes |
 | `game.gd:648` — more tile-walkability values (flyers vs. nothing) | unit movement-classes |
-| `game.gd:862` — muted squad-icon colours when another squad is active | multi-squad visual layer |
+| `game.gd:862` — muted squad-icon colours when another squad is active | multi-squad visual layer — now tracked under **#44** (visual clarity) |
 | `Classes/Squad.gd:94` — preserve status actions when clearing the queue | a status-effect system (explicitly "if that becomes a thing") |
 
 ## 4 · Overdue — worth doing now
@@ -47,19 +47,19 @@ Load-bearing reminders that depend on systems that don't exist yet. Keep as-is.
 | Where | Comment | Verdict |
 |---|---|---|
 | `game.gd:648` (magic-number half) | was `if move_cost > 98: #...This is bad, placeholder logic. Fix later.` | **Already fixed in your working tree** (uncommitted): swapped to `CANNOT_WALK_TILE` and reworded to the forward-looking flyer note. Just commit it. This was the one genuine code smell — and you caught it yourself. |
-| `game.gd:460-462` | `#TODO ... it's own game state - IN_MENU ... mouse icon changes while menu is up ... erratic behavior` | **Real, user-visible jank**, and there's still no `IN_MENU` in the `GameState` enum. Strongest *remaining* overdue item. Confirm it still repros after the June SubViewport refactor before investing. |
+| `game.gd:460-462` | `#TODO ... it's own game state - IN_MENU ... mouse icon changes while menu is up ... erratic behavior` | **Real, user-visible jank**, and there's still no `IN_MENU` in the `GameState` enum. Strongest *remaining* overdue item. Confirm it still repros after the June SubViewport refactor before investing. The Control-based menu rebuild (**#26**) is the natural fix — check there first. |
 
 ## 5 · Near-term polish — your call (not overdue, not far-future)
 
 Legitimate, achievable now, nothing forcing the timing.
 
-| Where | Idea |
-|---|---|
-| `game.gd:357` | Close button on the unit info panel (today it's right-click-only; the panel has no button). |
-| `game.gd:368` | Order the action-menu items explicitly instead of by append order. |
-| `game.gd:404` | Split "cancel everything" vs. "cancel just queued plans." |
-| `game.gd:878` | Colour-code the squad-target cursor (valid/invalid) — `CursorState.VALID/INVALID` already exist, so this is cheap. |
-| `Classes/UnitFactory.gd:14` | Move the unit-builder functions out of `dev_overlay` into `UnitFactory` (matches the "game.gd is overweight, move domain logic out" guidance). |
+| Where | Idea | Routed to (2026-06-18) |
+|---|---|---|
+| `game.gd:357` | Close button on the unit info panel (today it's right-click-only; the panel has no button). | **#43** (new) |
+| `game.gd:368` | Order the action-menu items explicitly instead of by append order. | **#26** (menu revamp) |
+| `game.gd:404` | Split "cancel everything" vs. "cancel just queued plans." | **#26** — further-future option |
+| `game.gd:878` | Colour-code the squad-target cursor (valid/invalid) — `CursorState.VALID/INVALID` already exist, so this is cheap. | **#44** (visual clarity umbrella) |
+| `Classes/UnitFactory.gd:14` | Move the unit-builder functions out of `dev_overlay` into `UnitFactory`. Confirmed **not yet migrated** (`SpawnTool.build_unit_data()` still does `UnitData.new()`). | **#22** (now "slim down game.gd + SquadManager.gd") |
 
 ---
 
