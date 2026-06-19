@@ -25,9 +25,8 @@ func _refresh_variant_list():
 func _rebase_on_type(index: int):
 	var key = WeaponCatalog.TYPES.keys()[index]
 	current_weapon = WeaponCatalog.TYPES[key].duplicate(true)
-	current_weapon.weapon_type = key
 	populate()
-
+	
 func _on_type_selected(index: int):
 	_rebase_on_type(index)
 
@@ -36,11 +35,8 @@ func _load_selected(index: int):
 		return
 	current_weapon = _variants[_variants.keys()[index]].duplicate(true)
 	name_input.text = current_weapon.item_name
-	var t_idx = WeaponCatalog.TYPES.keys().find(current_weapon.weapon_type)
-	if t_idx >= 0:
-		type_dropdown.select(t_idx)
 	populate()
-
+	
 func _on_new_pressed():
 	_rebase_on_type(type_dropdown.selected)
 	name_input.text = ""

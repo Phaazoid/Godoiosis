@@ -15,19 +15,18 @@ func _populate_stats():
 	var stat_names := stats.keys()
 	
 	for stat_name in stat_names:
-		if stat_name == "MHP":
+		if stat_name == Stats.Stat.MHP:
 			continue   # skip before allocating (MHP shows in the header already)
 		var name_label := Label.new()
-		name_label.text = stat_name
+		name_label.text = Stats.Stat.keys()[stat_name]
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		
 		var value_label := Label.new()
 		value_label.text = str(stats[stat_name])
 		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		if stat_name != "MHP":
-			stats_container.add_child((name_label))
-			stats_container.add_child(value_label)
-		
+		stats_container.add_child(name_label)
+		stats_container.add_child(value_label)
+
 func set_unit(target: Unit):
 	#To prevent duplicate stacking.  
 	if unit: 
@@ -54,7 +53,7 @@ func _refresh():
 		hp_label.text = "ERROR"
 		return
 	name_label.text = unit.unit_data.display_name
-	hp_label.text = str(unit.get_current_hp(), "/", unit.get_base_stat("MHP"))
+	hp_label.text = str(unit.get_current_hp(), "/", unit.get_base_stat(Stats.Stat.MHP))
 	_populate_stats()
 	
 func _on_hp_changed(current, max):

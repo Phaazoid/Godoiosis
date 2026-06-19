@@ -67,9 +67,9 @@ func test_i4_has_squad_means_has_squadmates() -> void:
 # I5 — when the leader leaves, leadership reassigns to the highest-LDR member; the new
 # leader is a member of its own squad.
 func test_i5_leadership_reassigns_to_highest_ldr() -> void:
-	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {"LDR": 5})
-	var low := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"LDR": 2})
-	var high := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), {"LDR": 4})
+	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 5})
+	var low := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 2})
+	var high := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), {Stats.Stat.LDR: 4})
 	_sm.join_squad(low, leader.squad)
 	_sm.join_squad(high, leader.squad)
 
@@ -81,9 +81,9 @@ func test_i5_leadership_reassigns_to_highest_ldr() -> void:
 
 # I5 (tie) — equal LDR breaks on member order: the earlier member keeps leadership.
 func test_i5_leadership_tie_breaks_on_member_order() -> void:
-	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {"LDR": 5})
-	var first := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"LDR": 3})
-	var second := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), {"LDR": 3})
+	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 5})
+	var first := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	var second := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1), {Stats.Stat.LDR: 3})
 	_sm.join_squad(first, leader.squad)
 	_sm.join_squad(second, leader.squad)
 
@@ -94,9 +94,9 @@ func test_i5_leadership_tie_breaks_on_member_order() -> void:
 # I6 — members must stay within the leader's LDR range; after reassignment, out-of-range
 # members are detached into solo squads. Tight LDR (1) pushes the distant member out.
 func test_i6_out_of_range_members_detach_after_reassign() -> void:
-	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {"LDR": 1})
-	var near := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"LDR": 1})
-	var far := H.spawn_solo(self, _sm, ENEMY, Vector2i(4, 0), {"LDR": 1})
+	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 1})
+	var near := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 1})
+	var far := H.spawn_solo(self, _sm, ENEMY, Vector2i(4, 0), {Stats.Stat.LDR: 1})
 	_sm.join_squad(near, leader.squad)   # join doesn't range-check
 	_sm.join_squad(far, leader.squad)
 

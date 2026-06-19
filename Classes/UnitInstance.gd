@@ -21,7 +21,6 @@ var current_hp: int = 0
 #effective str, other things here
 
 
-
 func initialize():
 	if data == null:
 		push_error("UnitInstance has no UnitData assigned.")
@@ -31,8 +30,8 @@ func initialize():
 	
 	#reset battle stats
 	_refresh_derived_stats()
-	current_hp = get_base_stat("MHP")
-
+	current_hp = get_base_stat(Stats.Stat.MHP)
+	
 func level_up():
 	#Basic level up function, that increments stats randomly from a range pulled from UnitData. 
 	#This is a little too basic/similar to FE for my taste, but we haven't really decided on how we
@@ -59,9 +58,9 @@ func initialize_at_level(target_level: int):
 	
 	for i in range(target_level - 1):
 		level_up()
-	current_hp = get_base_stat("MHP")
-
-func get_base_stat(stat_name: String) -> int:
+	current_hp = get_base_stat(Stats.Stat.MHP)
+	
+func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
 	return 0
@@ -79,9 +78,9 @@ func get_current_hp() -> int:
 	return current_hp
 	
 func set_current_hp(value: int):
-	current_hp = clamp(value, 0, get_base_stat("MHP"))
-	emit_signal("hp_changed", current_hp, get_base_stat("MHP"))
-	
+	current_hp = clamp(value, 0, get_base_stat(Stats.Stat.MHP))
+	emit_signal("hp_changed", current_hp, get_base_stat(Stats.Stat.MHP))
+
 	if current_hp <= 0:
 		emit_signal("died")
 	

@@ -31,12 +31,12 @@ const OVERLAY_CHILD_NAMES := [
 
 # Sensible defaults so a bare unit has HP (MHP), can deal damage (STR) and can
 # lead a small squad (LDR). Individual tests override only what they care about.
-const BASELINE_STATS := {"MHP": 10, "STR": 5, "LDR": 3, "WIL": 5, "SPD": 5}
+const BASELINE_STATS := {Stats.Stat.MHP: 10, Stats.Stat.STR: 5, Stats.Stat.LDR: 3, Stats.Stat.WIL: 5, Stats.Stat.SPD: 5}
 
 # Build a UnitData with baseline stats patched by `overrides`.
 static func make_unit_data(overrides: Dictionary, faction: Team.Faction) -> UnitData:
 	var data := UnitData.new()
-	var stats: Dictionary[String, int] = {}
+	var stats: Dictionary[Stats.Stat, int] = {}
 	for key in BASELINE_STATS:
 		stats[key] = BASELINE_STATS[key]
 	for key in overrides:

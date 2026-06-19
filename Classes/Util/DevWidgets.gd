@@ -52,6 +52,37 @@ static func add_lineedit(container: Node, label_text: String, initial_value: Str
 	row.add_child(edit)
 	container.add_child(row)
 
+# Parse an enum @export hint_string into ordered {name, value} entries. Godot emits
+# "Name0,Name1,..." for contiguous 0-based enums, or "Name:Val,..." when the values are
+# explicit / non-sequential. Handle both so the dropdown maps labels -> real enum ints.
+static func parse_enum_hint(hint_string: String) -> Array:
+	var entries := []
+	var parts := hint_string.split(",", false)
+	for i in parts.size():
+		var part: String = parts[i]
+		var colon := part.find(":")
+		if colon != -1:
+			entries.append({"name": part.substr(0, colon), "value": int(part.substr(colon + 1))})
+		else:
+			entries.append({"name": part, "value": i})
+	return entries
+
+# Dropdown for an int-backed enum property: shows the names, reports back the enum int.
+static func add_enum_option(container: Node, label_text: String, hint_string: String, current: int, on_change: Callable) -> void:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	var option := OptionButton.new()
+	var entries := parse_enum_hint(hint_string)
+	for i in entries.size():
+		option.add_item(entries[i]["name"])
+		if entries[i]["value"] == current:
+			option.select(i)
+	option.item_selected.connect(func(idx): on_change.call(entries[idx]["value"]))
+	row.add_child(label)
+	row.add_child(option)
+	container.add_child(row)
+
 static func build_resource_editor(container: Node, resource: Resource, rebuild: Callable, skip: Array = []) -> void:
 	for prop in resource.get_property_list():
 		if prop.name in skip:
@@ -67,7 +98,10 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 
 	match prop.type:
 		TYPE_INT:
-			add_spinbox(container, label, value, func(v): resource.set(prop.name, int(v)))
+			if prop.hint == PROPERTY_HINT_ENUM:
+				add_enum_option(container, label, prop.hint_string, value, func(v): resource.set(prop.name, v))
+			else:
+				add_spinbox(container, label, value, func(v): resource.set(prop.name, int(v)))
 		TYPE_FLOAT:
 			add_spinbox(container, label, value, func(v): resource.set(prop.name, v))
 		TYPE_BOOL:

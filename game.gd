@@ -715,7 +715,7 @@ func draw_joinable_squads(joining_unit: Unit):
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat("LDR")):
+			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat(Stats.Stat.LDR)):
 				if get_unit_at_cell(cell) == null:
 					cells.append(cell)
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
@@ -734,7 +734,7 @@ func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
 func draw_create_squad(unit: Unit):
 	overlay.clear()
 	var cells: Array[Vector2i] = []
-	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat("LDR")):
+	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_base_stat(Stats.Stat.LDR)):
 		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)

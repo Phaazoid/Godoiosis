@@ -13,7 +13,7 @@ static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> U
 	
 #TODO move builder functions from dev_overlay here
 
-static func create_unit_data(stats: Dictionary[String, int], name: String, faction: Team.Faction) -> UnitData:
+static func create_unit_data(stats: Dictionary[Stats.Stat, int], name: String, faction: Team.Faction) -> UnitData:
 	var data = UnitData.new()
 	data.base_stats = stats
 	data.display_name = name

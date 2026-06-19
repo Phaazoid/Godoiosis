@@ -5,7 +5,7 @@ class_name SpawnTool
 
 var game
 
-var stat_values: Dictionary[String, int] = {}
+var stat_values: Dictionary[Stats.Stat, int] = {}
 var unit_name
 var faction: Team.Faction
 var selected_weapon: WeaponData = null
@@ -24,7 +24,7 @@ func init(p_game):
 	for stat in Stats.STAT_DEFAULTS:
 		stat_values[stat] = Stats.STAT_DEFAULTS[stat]
 		var label := Label.new()
-		label.text = stat
+		label.text = Stats.Stat.keys()[stat]
 		stat_grid.add_child(label)
 		var box := SpinBox.new()
 		box.min_value = 0
@@ -32,7 +32,7 @@ func init(p_game):
 		box.value = stat_values[stat]
 		box.value_changed.connect(func(v): stat_values[stat] = int(v))
 		stat_grid.add_child(box)
-
+		
 	unit_name = %UnitNameInput.text
 	faction = Team.Faction.PLAYER
 	%PlayerCheckBox.button_group = faction_group
@@ -68,7 +68,7 @@ func _validate():
 	unit_name = _unique_unit_name(unit_name)
 	for stat in stat_values:
 		if stat_values[stat] < 0 or stat_values[stat] > 100:
-			error_message += "and invalid %s " % stat
+			error_message += "and invalid %s " % Stats.Stat.keys()[stat]
 			valid = false
 	if faction == null:
 		error_message += "and invalid faction "

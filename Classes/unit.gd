@@ -101,15 +101,15 @@ func remove_item(index: int):
 func _on_instance_died():
 	die()
 
-func get_base_stat(stat: String) -> int:
+func get_base_stat(stat: Stats.Stat) -> int:
 	if unit_instance == null:
 		return -1
 	return unit_instance.get_base_stat(stat)
 
-func get_effective_stat(stat: String) -> int:
+func get_effective_stat(stat: Stats.Stat) -> int:
 	return get_base_stat(stat) + get_modifier(stat)
 
-func get_modifier(stat: String) -> int:
+func get_modifier(stat: Stats.Stat) -> int:
 	return unit_instance.stat_modifiers.get(stat, 0)
 
 func get_current_hp() -> int:

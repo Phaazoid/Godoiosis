@@ -79,8 +79,8 @@ static func _base_damage(attacker: Unit) -> int:
 	var weapon := attacker.get_equipped_weapon()
 	if weapon != null:
 		return weapon.power + attacker.get_effective_stat(weapon.scaling_stat)
-	return attacker.get_effective_stat("STR")
-
+	return attacker.get_effective_stat(Stats.Stat.STR)
+	
 static func _elements_of(attacker: Unit) -> Array[Elemental.Element]:
 	var result: Array[Elemental.Element] = []
 	var weapon := attacker.get_equipped_weapon()

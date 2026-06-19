@@ -40,9 +40,9 @@ func _attack(attacker: Unit, target: Unit) -> AttackAction:
 # --- E1/E3/E4: WATER sets WET, the next SHOCK sees it and electrocutes ---
 
 func test_water_then_shock_electrocutes() -> void:
-	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {"STR": 0}, true, 4)
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {"MHP": 50})
+	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 50})
 	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 
@@ -64,9 +64,9 @@ func test_water_then_shock_electrocutes() -> void:
 # --- E6/R6: reordering the combo changes the outcome ---
 
 func test_order_is_the_lever() -> void:
-	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {"STR": 0}, true, 4)
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {"MHP": 50})
+	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 50})
 	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 
@@ -85,8 +85,8 @@ func test_order_is_the_lever() -> void:
 # --- R2/E2: pure -- live unit state is never touched at plan time ---
 
 func test_resolver_leaves_live_state_untouched() -> void:
-	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"MHP": 50})
+	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
 
 	var water := _attack(alch, target)
@@ -102,8 +102,8 @@ func test_resolver_leaves_live_state_untouched() -> void:
 # --- R2/E2: same plan -> same result ---
 
 func test_determinism_same_plan_same_result() -> void:
-	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"MHP": 50})
+	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
@@ -125,8 +125,8 @@ func test_determinism_same_plan_same_result() -> void:
 # --- E8: every reaction matching the pre-hit snapshot fires; mults multiply, bonuses sum ---
 
 func test_e8_all_matching_reactions_compose() -> void:
-	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"MHP": 99})
+	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 99})
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
@@ -151,8 +151,8 @@ func test_e8_all_matching_reactions_compose() -> void:
 # --- E7: counters are in the chain -- they carry elements and can complete a combo ---
 
 func test_e7_counter_can_complete_a_combo() -> void:
-	var p := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var e := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"STR": 0}, true, 4)
+	var p := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var e := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
 	e.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 	p.add_element_state(Elemental.State.WET)        # the counter's target is already WET
 
@@ -174,8 +174,8 @@ func test_e7_counter_can_complete_a_combo() -> void:
 # --- E5: reactions/counters are derived every pass, never stored as player orders ---
 
 func test_e5_resolution_does_not_mutate_the_queue() -> void:
-	var p := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {"STR": 0}, true, 4)
-	var e := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {"STR": 0}, true, 4)
+	var p := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
+	var e := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
 	var attack := _attack(p, e)
 	p.squad._queue_action(attack)
 

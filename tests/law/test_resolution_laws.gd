@@ -44,8 +44,8 @@ func test_counter_derivation_is_deterministic() -> void:
 # AttackAction.execute()'s animation await and target the value contract directly.
 func test_previewed_damage_equals_applied_damage() -> void:
 	var sm := _sm
-	var attacker := H.spawn_solo(self, sm, PLAYER, Vector2i(0, 0), {"STR": 4}, true, 6)
-	var target := H.spawn_solo(self, sm, ENEMY, Vector2i(1, 0), {"MHP": 20})
+	var attacker := H.spawn_solo(self, sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4}, true, 6)
+	var target := H.spawn_solo(self, sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20})
 	var start_hp := target.get_current_hp()
 
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)

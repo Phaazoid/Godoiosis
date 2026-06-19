@@ -1,6 +1,6 @@
 # Resolution Pipeline — the one place consequences are derived
 
-**Status: LOCKED CONTRACT (keystone) — ratified 2026-06-18 (#5).** A foundational decision agreed **before the elemental build (Phase 2) hardens**, because Phase 2 is where this pipeline is first built.
+**Status: LOCKED CONTRACT (keystone) — ratified 2026-06-18 (#5); v1 IMPLEMENTED 2026-06-19 (#28) — base + elemental stages live in `Classes/Managers/PlanResolver.gd` (with `ResolvedPlan`/`ResolvedOutcome`), proven by `tests/elemental/` (E1–E8). The Will stage is the next addition behind elemental.** A foundational decision agreed **before the elemental build (Phase 2) hardens**, because Phase 2 is where this pipeline is first built.
 
 > **Locked 2026-06-18 (#5):** R1–R8 ratified, plus three clarifications folded in for Will's sake — **R4** threads HP (+ a Will slot), not element-states-only; **R7** counter *derivation* reads the threaded hypothetical (liveness-ready); **R8** the `ResolvedOutcome` is the single source of truth for damage (`AttackAction` stops computing it). Deferred (not locked): volley / simultaneous-hit ordering within one AoE — revisit when tile states or multi-hit-same-target arrive. This doc sits *above* the counter rules in [squad-system.md](squad-system.md) and the [elemental](elemental-system.md) / [will-and-death](will-and-death.md) designs: it defines the single seam all three plug into. The **contract (R1–R8)** is what's being locked; class names are illustrative.
 

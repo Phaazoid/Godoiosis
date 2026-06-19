@@ -1,6 +1,6 @@
 # Elemental System — Combinatrix
 
-**Status: WORKING DESIGN — architecture LOCKED, content FLUID.** The resolution architecture (the plan-time resolver, below) is a firm commitment; treat the **E-invariants** like the squad spec — violating them is a bug. The model decisions below were ratified 2026-06-16. Everything *downstream* — which elements exist, which reactions, magnitudes, the status lifecycle — is deliberately unsettled and brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from there.
+**Status: WORKING DESIGN — architecture LOCKED, content FLUID; v1 slice (SHOCK × WET) IMPLEMENTED 2026-06-19 (#28) — `PlanResolver` + `Elemental`/`ElementReaction`/`ReactionCatalog`, E1–E8 green in `tests/elemental/`.** The resolution architecture (the plan-time resolver, below) is a firm commitment; treat the **E-invariants** like the squad spec — violating them is a bug. The model decisions below were ratified 2026-06-16. Everything *downstream* — which elements exist, which reactions, magnitudes, the status lifecycle — is deliberately unsettled and brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from there.
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
