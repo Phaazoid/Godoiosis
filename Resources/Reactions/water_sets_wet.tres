@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="ElementReaction" format=3]
+
+[ext_resource type="Script" path="res://Classes/Definitions/ElementalReaction.gd" id="1_xcbtu"]
+
+[resource]
+script = ExtResource("1_xcbtu")
+incoming_element = 2
+add_states = Array[int]([1])
+popup = "Wet"

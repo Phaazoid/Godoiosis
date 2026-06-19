@@ -365,41 +365,46 @@ func calculate_counterattacks_for_squad(attacking_squad: Squad) -> Array[Counter
 		defender_groups_that_countered[defender_squad] = true
 
 	return counters
+	
+func resolve_plan(squad: Squad) -> ResolvedPlan:
+	var plan := ResolvedPlan.new()
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK:
+			plan.attacks.append(action as AttackAction)
+	plan.counters = calculate_counterattacks_for_squad(squad)
+	PlanResolver.resolve(plan)
+	return plan
 
 func get_display_entries_for_squad(squad: Squad) -> Array[ActionQueueDisplayEntry]:
 	var entries: Array[ActionQueueDisplayEntry] = []
 
 	var move_actions: Array[BaseAction] = []
-	var attack_actions: Array[AttackAction] = []
-
 	for action in squad.action_queue:
-		match action.action_type:
-			BaseAction.ActionType.MOVE:
-				move_actions.append(action)
-			BaseAction.ActionType.ATTACK:
-				attack_actions.append(action as AttackAction)
+		if action.action_type == BaseAction.ActionType.MOVE:
+			move_actions.append(action)
 
-	var counter_actions := calculate_counterattacks_for_squad(squad)
+	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
+	var plan := resolve_plan(squad)
 
 	if not move_actions.is_empty():
 		entries.append(ActionQueueDisplayEntry.header("MOVE"))
 		for action in move_actions:
 			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
 
-	if not attack_actions.is_empty():
+	if not plan.attacks.is_empty():
 		if not entries.is_empty():
 			entries.append(ActionQueueDisplayEntry.divider())
 
 		entries.append(ActionQueueDisplayEntry.header("ATTACK"))
-		for attack in attack_actions:
+		for attack in plan.attacks:
 			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
 
-			for counter in counter_actions:
+			for counter in plan.counters:
 				if counter.source_attack == attack:
 					entries.append(ActionQueueDisplayEntry.action_row(counter, 1))
 
 	return entries
-	
+
 func handle_unit_death(unit: Unit):
 	var squad := unit.squad
 	if squad == null or not is_instance_valid(squad):

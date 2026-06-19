@@ -24,6 +24,12 @@ var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
 var equipped_weapon: WeaponData = null
+# Battle-scoped elemental states (boolean — you have it or you don't). These live on
+# the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
+# owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
+# threads a COPY of this set forward as a hypothetical; live mutation is execution-only.
+var element_states: Array[Elemental.State] = []
+
 
 func set_selected(value: bool):
 	selected = value
@@ -108,6 +114,18 @@ func get_modifier(stat: String) -> int:
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
+
+func has_element_state(state: Elemental.State) -> bool:
+	return element_states.has(state)
+
+func add_element_state(state: Elemental.State) -> void:
+	if state == Elemental.State.NONE:
+		return
+	if not element_states.has(state):
+		element_states.append(state)
+
+func remove_element_state(state: Elemental.State) -> void:
+	element_states.erase(state)
 
 func get_all_stats() -> Dictionary:
 	var result := {}

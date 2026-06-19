@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="ElementReaction" format=3]
+
+[ext_resource type="Script" path="res://Classes/Definitions/ElementalReaction.gd" id="1_ryvc4"]
+
+[resource]
+script = ExtResource("1_ryvc4")
+incoming_element = 3
+required_state = 1
+damage_bonus = 5
+remove_states = Array[int]([1])
+popup = "Electrocuted!"

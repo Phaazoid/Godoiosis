@@ -7,4 +7,4 @@ extends Item
 @export var can_counter := true
 @export var hits_allies := false
 @export var weapon_type: String = ""
-@export var elemental_damage_type: String = ""
+@export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE

@@ -12,5 +12,10 @@ func setup(action: BaseAction):
 	action_icon.texture = action.get_action_icon()
 	target_texture.texture = action.get_target_texture()
 	description_label.text = action.get_description()
-	
+
+	if action is AttackAction:
+		var summary := (action as AttackAction).get_outcome_summary()
+		if summary != "":
+			description_label.text += "    " + summary
+
 	action_icon.modulate = action.get_ui_modulate()

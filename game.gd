@@ -150,22 +150,18 @@ func execute_orders(unit):
 		
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
 
+	var plan := squad_manager.resolve_plan(squad)
 	var move_actions := []
-	var attack_actions := []
-	var counter_actions := squad_manager.calculate_counterattacks_for_squad(squad)	
 
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
-		match action.action_type:
-			BaseAction.ActionType.MOVE:
-				move_actions.append(action)
-			BaseAction.ActionType.ATTACK:
-				attack_actions.append(action)
+		if action.action_type == BaseAction.ActionType.MOVE:
+			move_actions.append(action)
 
 	await execute_action_phase_parallel(move_actions)
-	await execute_action_sequence(attack_actions)
-	await execute_action_sequence(counter_actions)
-
+	await execute_action_sequence(plan.attacks)
+	await execute_action_sequence(plan.counters)
+	
 	if not is_instance_valid(squad):
 		return
 
