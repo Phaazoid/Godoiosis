@@ -89,6 +89,15 @@ func _remove_actions_for_actor_silent(unit: Unit):
 		if action.actor == unit:
 			action_queue.erase(action)
 
+# Cancel a whole volley given any one of its members (an AoE is one order).
+func _remove_volley(member: AttackAction) -> void:
+	if member.volley.is_empty():
+		_remove_action(member)
+		return
+	for sib in member.volley.duplicate():   # duplicate: removal mutates the queue, not this array
+		_remove_action(sib)
+	member.volley.clear()                    # break the RefCounted cycle (see #35)
+
 func _reset_squad():
 	has_acted = false
 	action_queue.clear() #TODO later if giving units status negative actions or whatnot, don't want to fully clear this. Can easily filter if that becomes a thing

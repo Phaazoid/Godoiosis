@@ -219,8 +219,6 @@ func create_squad(unit: Unit):
 	
 func enter_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_MOVE
-	#TODO - This is slightly intrusive?  Instead of always snapping to center, only snap when unit's move is off screen
-	#or maybe to the squad leader?
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(unit), unit), OVERLAY_DEFAULT_ATLAS)
@@ -344,11 +342,10 @@ func _unhandled_input(event):
 							if not victims.is_empty():
 								for attack in AttackAction.create_volley(lastUnit, origin, clickedCell, victims):
 									squad_manager.queue_action(lastUnit.squad, attack)
-					exit_current_mode() #will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
+					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 						
 			
 			update_selection_overlay()
-			#print("Current Gamestate is " + GameState.keys()[game_state])
 		#Right click deselects all
 		if event.button_index == MOUSE_BUTTON_RIGHT and game_state != GameState.DEV_MODE:
 			if game_state == GameState.CHOOSING_MOVE:
@@ -588,7 +585,7 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 		unit.visuals.set_projected(true)
 	if squad_manager.active_squad == squad and unit.has_squad():
 		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
-		overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.SQUADMEMBER) #TODO Instead of a clear here, a refresh to projected cell.  
+		overlay_manager.clear_target_icon_by_cell(unit.movement.cell, OverlayIcon.IconType.SQUADMEMBER)  
 	squad_manager.validate_squad_plan(squad)
 	refresh_action_queue(squad)
 
@@ -645,7 +642,7 @@ func compute_move_range(unit: Unit) -> Dictionary:
 			var next : Vector2i = current_cell + dir
 			var move_cost : int = movement_cost(next, unit)
 			
-			if move_cost > 98: #CANNOT_WALK_TILE = 99.  This is bad, placeholder logic.  Fix later.  
+			if move_cost > CANNOT_WALK_TILE:  #TODO Later will need more values if some tiles can be walked over by some units (fliers) but some tiles can't be walked over by anything  
 				continue
 			
 			# Bounds check
@@ -861,8 +858,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OVERLAY_DEFAULT_ATLAS)
 			if hoveredUnit.has_squad() and squad_manager.active_squad == null: #TODO later change this to muted colors if other squads are active
 				icons_to_draw = get_squad_icons(hoveredUnit.squad) #Have this add to the dictionary of icons. 
-			#if hoveredUnit.has_squad():
-			#	draw_squad_leader_range(hoveredUnit.squad) #TODO - implement selective tile map deletion
 		else:
 			hover_info_panel.clear()
 			overlay_manager.clear_all()

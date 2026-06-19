@@ -66,7 +66,7 @@ func get_description() -> String:
 func clear_preview_sprites():
 	for sprite in preview_sprites:
 		if is_instance_valid(sprite):
-			sprite.queue_free
+			sprite.queue_free()
 		
 	preview_sprites.clear()
 	

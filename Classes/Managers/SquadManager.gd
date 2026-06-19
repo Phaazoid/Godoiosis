@@ -103,8 +103,19 @@ func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
 		if action.action_type == BaseAction.ActionType.MOVE and action.get_destination() == cell and action.is_valid:
 			return action.actor
 	return null
-	
+
 func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
+	var max_passes := squad.get_members().size() + 1
+	var valid := true
+	for _i in range(max_passes):
+		var before := actions.map(func(a): return a.is_valid)
+		valid = _validate_action_list_once(squad, actions)   # current body, factored out
+		var after := actions.map(func(a): return a.is_valid)
+		if before == after:
+			break   # fixpoint reached
+	return valid
+
+func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> bool:
 	var valid := true
 	var move_actions := []
 	var actions_by_destination = {} #{Vector2i : Array[MoveActions]}
@@ -281,12 +292,14 @@ func only_hold_actions() -> bool: #checking if the only actions a squad has are 
 	return true
 	
 func remove_action(squad: Squad, action: BaseAction):
-	squad._remove_action(action)
+	if action is AttackAction and not (action as AttackAction).volley.is_empty():
+		squad._remove_volley(action)
+	else:
+		squad._remove_action(action)
 
 	if not squad.has_any_queued_actions() and active_squad == squad:
 		active_squad = null
 		return
-		
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 

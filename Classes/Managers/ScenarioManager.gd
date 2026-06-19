@@ -62,6 +62,12 @@ func load_scenario(path: String):
 	var members_by_squad_id := {}
 
 	for entry in scenario.unit_entries:
+		if entry.unit_data == null:
+			# A referenced resource failed to resolve (deleted/moved since saving).
+			# Skip rather than crash on the null deref below.
+			push_error("Scenario '%s': skipping a unit whose unit_data could not be resolved." % path)
+			continue
+
 		var unit: Unit = game.spawn_unit(entry.unit_data.duplicate(true), entry.cell)
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
@@ -69,6 +75,7 @@ func load_scenario(path: String):
 
 		if entry.equipped_weapon != null:
 			unit.add_item(entry.equipped_weapon.duplicate(true))
+		# (already null-safe: a dropped weapon simply leaves the unit unarmed)
 
 		if entry.squad_id == -1:
 			continue

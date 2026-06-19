@@ -211,9 +211,6 @@ func redraw_squad_unit_icons(squad: Squad):
 		if member == squad.get_leader():
 			create_unit_icon(member, OverlayIcon.IconType.CROWN)
 				
-func move_icon(icon: OverlayIcon, pos: Vector2i):
-	icon.move_to(pos)
-	
 func clear_cell_icon_types(icontypes: Array[OverlayIcon.IconType]):
 	var cells = icons_by_cell.keys().duplicate()
 	for cell: Vector2i in cells:
