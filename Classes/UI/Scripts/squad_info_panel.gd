@@ -15,15 +15,15 @@ func set_unit(new_unit: Unit):
 	_refresh()
 
 func _refresh():
-	var display_text = ""
-
 	if unit == null:
-		display_text += "No Unit"
+		squad_label.text = "No Unit"
 		return
 	
 	if unit.squad.get_members().size() == 1:
 		squad_label.text = "No Squad"
 		return
+		
+	var display_text = ""
 		
 	display_text += "Squad Leader: "
 	display_text += "[color=gold]" + unit.squad.get_leader().get_unit_name() + "[/color]\n"

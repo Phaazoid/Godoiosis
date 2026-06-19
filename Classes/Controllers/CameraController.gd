@@ -3,6 +3,7 @@ class_name CameraController
 
 @onready var camera: Camera2D = $Camera2D
 const TILE_SIZE = 16
+const CELL_WORLD := TILE_SIZE * 2   # 32px/cell — matches your existing min/max_world math
 
 var map_width = 32
 var map_height = 20
@@ -32,7 +33,7 @@ var max_world := Vector2(
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	global_position = target_position
-
+	
 func center_on_position(world_pos: Vector2):
 	lock_manual_input = true
 	target_position = world_pos
@@ -40,10 +41,7 @@ func center_on_position(world_pos: Vector2):
 
 func check_edge_scroll(mouse_pos: Vector2i):
 	var viewport_size = get_viewport_rect().size
-	print("size ", viewport_size)
-	print("Mouse ", mouse_pos)
 	var move_dir = Vector2i.ZERO
-	print("starting direction", move_dir)
 
 	if mouse_pos.x < edge_size:
 		move_dir.x -= 1
@@ -56,14 +54,12 @@ func check_edge_scroll(mouse_pos: Vector2i):
 		move_dir.y += 1
 	
 	if move_dir != Vector2i.ZERO:
-		print("after direction", move_dir)
 		move_by_cell()
 	
 func move_by_cell():
 	if is_moving: 
 		return
 	is_moving = true
-	print("Target is " ,target_position)
 	clamp_target_position()
 	
 	
@@ -81,11 +77,15 @@ func clamp_target_position():
 		min_world.y + half_view.y,
 		max_world.y - half_view.y
 	)
-
+	
+func refresh_bounds(grid: TileMapLayer):
+	var used := grid.get_used_rect()
+	min_world = Vector2(used.position) * CELL_WORLD
+	max_world = Vector2(used.position + used.size) * CELL_WORLD
+	clamp_target_position()
 	
 # Called every frame. 'delta' is the elapsed time since the previous frame.
-func _process(delta: float) -> void:
-	global_position = global_position.lerp(target_position, move_speed * delta)
+func _process(delta: float):
 	if global_position.distance_to(target_position) < 1:
 		global_position = target_position
 		is_moving = false

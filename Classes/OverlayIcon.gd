@@ -17,6 +17,3 @@ func setup(texture: Texture2D, cell: Vector2i, type: IconType):
 	sprite.texture = texture
 	target_cell = cell
 	icon_type = type
-	
-func move_to(pos: Vector2i):
-	target_cell = pos

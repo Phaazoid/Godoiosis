@@ -15,6 +15,8 @@ func _populate_stats():
 	var stat_names := stats.keys()
 	
 	for stat_name in stat_names:
+		if stat_name == "MHP":
+			continue   # skip before allocating (MHP shows in the header already)
 		var name_label := Label.new()
 		name_label.text = stat_name
 		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
