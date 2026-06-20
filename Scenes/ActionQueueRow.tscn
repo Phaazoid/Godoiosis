@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://d0g73l0mt6aqc"]
 
-[ext_resource type="Script" uid="uid://fsvtlvbn45ve" path="res://Classes/UI/ActionQueueRow.gd" id="1_fbndw"]
+[ext_resource type="Script" uid="uid://fsvtlvbn45ve" path="res://Classes/ui/ActionQueueRow.gd" id="1_fbndw"]
 
 [node name="ActionQueueRow" type="HBoxContainer" unique_id=552555432]
 custom_minimum_size = Vector2(128, 32)

@@ -1,5 +1,5 @@
 extends Node
-class_name Combat_Component
+class_name CombatComponent
 
 @export var can_counter: bool = true
 

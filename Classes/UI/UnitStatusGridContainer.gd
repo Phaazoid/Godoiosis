@@ -1,5 +1,5 @@
 extends GridContainer
-class_name UnitStatusUI
+class_name UnitStatusGridContainer
 
 @onready var portrait_panel = $HBoxContainer/PortraitPanel
 @onready var stats_panel = $HBoxContainer/StatsPanel

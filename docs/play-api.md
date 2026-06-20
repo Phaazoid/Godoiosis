@@ -28,7 +28,7 @@ queues actions, and resolves them with **no grid or visuals**
   is deterministic (Law #1), the API can *preview exact results before committing.*
 - **State application separates from animation** → a move is `movement.cell`; an attack is
   `combat.apply_damage()` + element-state deltas once `.resolved` is set
-  ([`AttackAction.gd:51`](../Classes/Actions/AttackAction.gd)). The `await … lunge`/tween parts are
+  ([`AttackAction.gd:51`](../Classes/actions/AttackAction.gd)). The `await … lunge`/tween parts are
   cosmetic only — a headless executor skips them.
 
 ## Architecture: one core, swappable transports

@@ -12,8 +12,8 @@ class-level statics.
 
 | Piece | File | Owner |
 |---|---|---|
-| Registry: `enum Flag`, `DEFS` metadata, `is_on()` + state | `Classes/Definitions/Experiments.gd` | infra |
-| Dev tab: a live toggle per flag | `Classes/DevTools/ExperimentsTool.gd` + `Scenes/DevOverlay.tscn` | UI |
+| Registry: `enum Flag`, `DEFS` metadata, `is_on()` + state | `Classes/dev/Experiments.gd` | infra |
+| Dev tab: a live toggle per flag | `Classes/dev/ExperimentsTool.gd` + `Scenes/DevOverlay.tscn` | UI |
 | Persistence | `user://experiments.cfg` (keyed by flag name) | infra |
 | Guards | `tests/experiments/test_experiments.gd` | infra |
 

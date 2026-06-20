@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://b8b4cvid06h4k"]
 
-[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Classes/Unit.gd" id="1_ppost"]
+[ext_resource type="Script" uid="uid://dhg5ca1pm27oj" path="res://Classes/units/Unit.gd" id="1_ppost"]
 [ext_resource type="Texture2D" uid="uid://dwv13r7ee4qf6" path="res://Art/Units/MapSprites/Basic_Soldier.png" id="2_x1v5g"]
 [ext_resource type="Texture2D" uid="uid://deyav21j482j7" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_20lhf"]
-[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/CombatComponent.gd" id="3_ppost"]
-[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/MovementComponent.gd" id="4_20lhf"]
-[ext_resource type="Script" uid="uid://cv7o3b03q7eml" path="res://Scenes/UnitVisuals.gd" id="5_x1v5g"]
+[ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/units/CombatComponent.gd" id="3_ppost"]
+[ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/units/MovementComponent.gd" id="4_20lhf"]
+[ext_resource type="Script" uid="uid://cv7o3b03q7eml" path="res://Classes/units/UnitVisuals.gd" id="5_x1v5g"]
 
 [node name="Unit" type="Node2D" unique_id=1798603063]
 z_as_relative = false
@@ -21,10 +21,10 @@ visible = false
 texture = ExtResource("3_20lhf")
 centered = false
 
-[node name="Combat_Component" type="Node" parent="." unique_id=1612176193]
+[node name="CombatComponent" type="Node" parent="." unique_id=1612176193]
 script = ExtResource("3_ppost")
 
-[node name="Movement_Component" type="Node" parent="." unique_id=742177134]
+[node name="MovementComponent" type="Node" parent="." unique_id=742177134]
 script = ExtResource("4_20lhf")
 
 [node name="UnitVisuals" type="Node" parent="." unique_id=1757472297 node_paths=PackedStringArray("sprite")]

@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3]
 
-[ext_resource type="Script" path="res://Classes/AttackRanges/ForwardLinePattern.gd" id="1_dvvqc"]
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_dvvqc"]
 [ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_7wfx7"]
-[ext_resource type="Script" path="res://Classes/ResourceData/WeaponData.gd" id="3_7y358"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponData.gd" id="3_7y358"]
 
 [sub_resource type="Resource" id="Resource_2iqjs"]
 script = ExtResource("1_dvvqc")

@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://damgnt4d7qqj3"]
 
-[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/UI/UnitInfoPanelControl.gd" id="1_a3gw8"]
-[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/UI/UnitStatusGridContainer.gd" id="3_ov1ts"]
-[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/UI/Scripts/portrait_panel.gd" id="4_uqtkw"]
-[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/UI/Scripts/info_panel.gd" id="5_s5bvs"]
-[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/UI/Scripts/inventory_panel.gd" id="6_yiwsu"]
-[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/UI/Scripts/squad_info_panel.gd" id="8_rlbgq"]
+[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/ui/UnitInfoPanelControl.gd" id="1_a3gw8"]
+[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/ui/UnitStatusGridContainer.gd" id="3_ov1ts"]
+[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/portrait_panel.gd" id="4_uqtkw"]
+[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/ui/info_panel.gd" id="5_s5bvs"]
+[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/ui/inventory_panel.gd" id="6_yiwsu"]
+[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/ui/squad_info_panel.gd" id="8_rlbgq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
 bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)

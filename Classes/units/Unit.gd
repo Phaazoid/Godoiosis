@@ -5,8 +5,8 @@ class_name Unit
 #These have different components (movement, combat) that allow them to work, and reference specific UnitInstances to get their data. 
 
 #Core stats
-@onready var combat: Combat_Component = $Combat_Component
-@onready var movement: Movement_Component = $Movement_Component
+@onready var combat: CombatComponent = $CombatComponent
+@onready var movement: MovementComponent = $MovementComponent
 @onready var map_sprite: Sprite2D = $MapSprite
 @onready var move_sprite: Sprite2D = $MoveSprite
 @onready var visuals: UnitVisuals = $UnitVisuals

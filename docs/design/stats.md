@@ -85,4 +85,4 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 - **Squad range** tuning (now decoupled from LDR; static default — see [squad-system.md](squad-system.md)).
 - **Jobs** — an elective ±1–2 stat-nudge layer with tradeoffs (could make a unit a slightly better leader); whole feature is long-horizon (see [progression.md](progression.md)).
 
-Cross-refs: [progression.md](progression.md), [squad-system.md](squad-system.md), [will-and-death.md](will-and-death.md), [weapons.md](weapons.md), [philosophy.md](philosophy.md), `../../CLAUDE.md` (laws). Code: `Classes/Definitions/Stats.gd`.
+Cross-refs: [progression.md](progression.md), [squad-system.md](squad-system.md), [will-and-death.md](will-and-death.md), [weapons.md](weapons.md), [philosophy.md](philosophy.md), `../../CLAUDE.md` (laws). Code: `Classes/core/Stats.gd`.

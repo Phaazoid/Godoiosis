@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://df742kv5sx400"]
 
 [ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="1_3gn4t"]
-[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/UnitData.gd" id="2_3gn4t"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="2_3gn4t"]
 
 [resource]
 script = ExtResource("2_3gn4t")

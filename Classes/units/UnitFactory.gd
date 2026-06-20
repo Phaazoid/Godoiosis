@@ -2,7 +2,7 @@ extends Object
 class_name UnitFactory
 
 static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> Unit:
-	var unit_scene = preload("res://Scenes/unit.tscn")
+	var unit_scene = preload("res://Scenes/Unit.tscn")
 	var unit = unit_scene.instantiate()
 	
 	

@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cbuid8103rdvh"]
 
-[ext_resource type="Script" uid="uid://b4veciw4appba" path="res://Classes/UI/Scripts/turn_banner.gd" id="1_5ipho"]
+[ext_resource type="Script" uid="uid://b4veciw4appba" path="res://Classes/ui/turn_banner.gd" id="1_5ipho"]
 
 [sub_resource type="FontFile" id="FontFile_5ipho"]
 subpixel_positioning = 0

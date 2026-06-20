@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://djnudhqoi3lqw"]
 
-[ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/UI/HoverInfoPanelControl.gd" id="1_gf6xf"]
-[ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/UI/Scripts/hover_info_grid_container.gd" id="2_jsdin"]
+[ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/ui/HoverInfoPanelControl.gd" id="1_gf6xf"]
+[ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/ui/hover_info_grid_container.gd" id="2_jsdin"]
 
 [node name="HoverInfoPanelControl" type="Control" unique_id=98776626]
 z_index = 2

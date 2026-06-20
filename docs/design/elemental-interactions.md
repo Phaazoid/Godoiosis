@@ -1,6 +1,6 @@
 # Elemental Interactions — Idea Bank
 
-**Status: BRAINSTORM, now being curated (v2 — 2026-06-16).** Content pool for the combinatrix: elements, states, what states *do*, reactions, and the flavor layers around them. The *architecture* that executes all of this is locked in [elemental-system.md](elemental-system.md) — every entry here is just data that plugs into the resolver as an `ElementReaction` or a `State` effect. If an idea fights an E-invariant there, the invariant wins.
+**Status: BRAINSTORM, now being curated (v2 — 2026-06-16).** Content pool for the combinatrix: elements, states, what states *do*, reactions, and the flavor layers around them. The *architecture* that executes all of this is locked in [elemental-system.md](elemental-system.md) — every entry here is just data that plugs into the resolver as an `ElementalReaction` or a `State` effect. If an idea fights an E-invariant there, the invariant wins.
 
 **Ground rules:** everything deterministic (Law #1 — no "chance to"; "20%" becomes a flat/scaled number). Everything should reward **ordering** and **alchemist + mechanist squad synergy** (combos replace crits). Lean hard into the **old-alchemy + steampunk** identity: *in this world the discredited science is the true physics.*
 

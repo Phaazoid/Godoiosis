@@ -1,11 +1,11 @@
 [gd_scene format=3 uid="uid://i2kwnt6y4jcd"]
 
-[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Classes/DevTools/DevOverlay.gd" id="1_sulrl"]
-[ext_resource type="Script" uid="uid://c4qnlqwcjwwh1" path="res://Classes/DevTools/Scenario.gd" id="2_1dnd3"]
-[ext_resource type="Script" uid="uid://36ifyaqa5h2v" path="res://Classes/DevTools/UnitEditorTool.gd" id="2_356n8"]
-[ext_resource type="Script" uid="uid://ddx3t4esgtshi" path="res://Classes/DevTools/SpawnTool.gd" id="2_s2u0l"]
-[ext_resource type="Script" uid="uid://dh3jl6n4f8qa8" path="res://Classes/DevTools/TileBrushTool.gd" id="3_1dnd3"]
-[ext_resource type="Script" uid="uid://fp1up4anr4xw" path="res://Classes/DevTools/WeaponEditorTool.gd" id="3_16gjg"]
+[ext_resource type="Script" uid="uid://107o47mpupbn" path="res://Classes/dev/DevOverlay.gd" id="1_sulrl"]
+[ext_resource type="Script" uid="uid://c4qnlqwcjwwh1" path="res://Classes/dev/ScenarioTool.gd" id="2_1dnd3"]
+[ext_resource type="Script" uid="uid://36ifyaqa5h2v" path="res://Classes/dev/UnitEditorTool.gd" id="2_356n8"]
+[ext_resource type="Script" uid="uid://ddx3t4esgtshi" path="res://Classes/dev/SpawnTool.gd" id="2_s2u0l"]
+[ext_resource type="Script" uid="uid://dh3jl6n4f8qa8" path="res://Classes/dev/TileBrushTool.gd" id="3_1dnd3"]
+[ext_resource type="Script" uid="uid://fp1up4anr4xw" path="res://Classes/dev/WeaponEditorTool.gd" id="3_16gjg"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)

@@ -1,5 +1,5 @@
 extends Resource
-class_name ElementReaction
+class_name ElementalReaction
 
 # A data rule: when an attack carrying `incoming_element` hits a target holding
 # `required_state`, the reaction fires — changing damage and/or adding/removing

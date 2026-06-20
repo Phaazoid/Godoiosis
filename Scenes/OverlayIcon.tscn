@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dbroldccl75io"]
 
-[ext_resource type="Script" uid="uid://bkq8armc50byy" path="res://Classes/OverlayIcon.gd" id="1_cc7yh"]
+[ext_resource type="Script" uid="uid://bkq8armc50byy" path="res://Classes/board/OverlayIcon.gd" id="1_cc7yh"]
 
 [node name="OverlayIcon" type="Node2D" unique_id=1020508672]
 script = ExtResource("1_cc7yh")

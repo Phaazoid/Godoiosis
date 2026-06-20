@@ -34,8 +34,22 @@ Run **`/agent-queue`** to have Claude scan the `agent/claude` issues and advance
 - `WeaponData` = **policy** (power, scaling_stat, can_counter, hits_allies) + `AttackPattern` resources = **geometry** (selectable cells vs affected cells). Patterns stay pure geometry; terrain/LoS filtering belongs at the resolution layer when it arrives (planned weapon flag: `arcs_over_obstacles`).
 - Execution order: moves (parallel) → attacks (sequential — combo order matters for future elemental) → counters (sequential).
 - `OverlayManager` — all board visuals (tile overlays, icons, path arrows, projected units).
-- Dev tools: `Classes/UI/Scripts/dev_overlay.gd` — spawner, reflection-based weapon editor (`get_property_list` walker), pattern swapper (`ProjectSettings.get_global_class_list`), sprite catalog (folder scan).
-- Registries: `Stats.gd` (`STAT_DEFAULTS` is the canonical stat list), `WeaponCatalog.gd`. Rule: game content lists → domain-named registry; single-system config → stays local.
+- Dev tools: `Classes/dev/DevOverlay.gd` (+ per-tool scripts in `Classes/dev/`) — spawner, reflection-based weapon editor (`get_property_list` walker), pattern swapper (`ProjectSettings.get_global_class_list`), sprite catalog (folder scan).
+- Registries: `Classes/core/Stats.gd` (`STAT_DEFAULTS` is the canonical stat list), `Classes/weapons/WeaponCatalog.gd`. Rule: game content lists → domain-named registry; single-system config → stays local.
+
+## Code layout (`Classes/`, reorganized 2026-06-20 — by game domain, not Godot type)
+
+Most scripts are reached by `class_name` (global), so folders are for humans navigating. `game.gd` stays at the repo root (entry coordinator).
+- `core/` — cross-cutting vocabulary used everywhere: `Stats`, `GridUtils`.
+- `units/` — the `Unit` node + its parts: `UnitData`/`UnitInstance`/`UnitFactory`/`UnitVisuals`, `MovementComponent`, `CombatComponent`.
+- `squads/` — `Squad`, `SquadManager`, `Team`.
+- `actions/` — player orders + resolution: `BaseAction`→`Move`/`Attack`/`CounterAttack`, `PlanResolver`, `ResolvedPlan`/`ResolvedOutcome`.
+- `weapons/` — `WeaponData`/`WeaponCatalog`/`Item`; `weapons/patterns/` = `AttackPattern` geometry.
+- `elemental/` — `Elemental`, `ElementalReaction`, `ReactionCatalog`.
+- `board/` — overlays (`OverlayManager`/`OverlayIcon`), board rules (`RulesService`/`BoardContext`), `CameraController`/`CursorController`.
+- `flow/` — `TurnManager`, `ScenarioManager` + `ScenarioData`/`ScenarioUnitEntry`.
+- `ui/` — all player-facing HUD (panels, action-queue, `ActionMenuController`); flattened — the old `UI/Scripts/` split is gone.
+- `dev/` — dev-only tools (`DevOverlay` + per-tool scripts, `DevWidgets`, `Experiments`).
 
 ## Sharp edges (each of these has already bitten once)
 

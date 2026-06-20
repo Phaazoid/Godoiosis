@@ -24,8 +24,6 @@ const OVERLAY_ATTACK_ATLAS := Vector2i(1,0)
 const OVERLAY_TARGET_ATLAS := Vector2i(3,0)
 const OVERLAY_SQUAD_SELECT_ATLAS := Vector2i(5,0)
 const OVERLAY_UNIT_IN_SQUAD_ATLAS := Vector2i(6, 0)
-const CANNOT_WALK_TILE := 99
-const OUT_OF_MAP_TILE := 999
 
 const GAME_MENU_MOVE := 0
 const GAME_MENU_ATTACK := 1
@@ -588,127 +586,17 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 	if unit.has_squad():
 		overlay_manager.redraw_squad_unit_icons(squad)
 
-func movement_cost(cell: Vector2i, unit: Unit) -> int:
-	var data := grid.get_cell_tile_data(cell)
-	if data == null:
-		return OUT_OF_MAP_TILE
-	if is_walkable(cell) == false:
-		return CANNOT_WALK_TILE
-	if not grid.get_used_rect().has_point(cell):
-		return OUT_OF_MAP_TILE
-		
-	var cost : int = 0 #Base tile costs are stored in the Grid custom data
-	
-	#Terrain weight
-	if data.has_custom_data("move_cost"):
-		cost += data.get_custom_data("move_cost")
-	
-	#Cost for other things on tiles
-	var other := get_unit_at_cell(cell)
-	if other != null:
-		if Team.is_enemy(unit.get_faction(), other.get_faction()): 
-			return CANNOT_WALK_TILE #Can't move past enemies
-			
-	return cost
-	
+func _all_units() -> Array[Unit]:
+	var result: Array[Unit] = []
+	for child in units_root.get_children():
+		result.append(child as Unit)
+	return result
+
+func _board() -> BoardContext:
+	return BoardContext.new(grid, _all_units(), squad_manager)
+
 func compute_move_range(unit: Unit) -> Dictionary:
-	var start := unit.movement.cell
-	var max_cost := unit.movement.move_range
-	
-	var frontier := []
-	var cost_so_far := {}
-	var came_from := {}
-	
-	frontier.append({"cell": start, "cost": 0})
-	cost_so_far[start] = 0
-	came_from[start] = start
-	
-	while frontier.size() > 0:
-		#pop the cheapest item
-		frontier.sort_custom(func(a, b): return a.cost < b.cost)
-		var current = frontier.pop_front()
-		var current_cell : Vector2i = current.cell
-		
-		for dir in [
-			Vector2i.UP,
-			Vector2i.DOWN,
-			Vector2i.LEFT,
-			Vector2i.RIGHT 
-		]:
-			var next : Vector2i = current_cell + dir
-			var move_cost : int = movement_cost(next, unit)
-			
-			if move_cost > CANNOT_WALK_TILE:  #TODO Later will need more values if some tiles can be walked over by some units (fliers) but some tiles can't be walked over by anything  
-				continue
-			
-			# Bounds check
-			if not grid.get_used_rect().has_point(next):
-				continue
-				
-			var new_cost : int = cost_so_far[current_cell] + move_cost
-			if new_cost > max_cost:
-				continue
-				
-			if cost_so_far.has(next) and new_cost >= cost_so_far[next]:
-				continue
-				
-			cost_so_far[next] = new_cost
-			came_from[next] = current_cell
-			frontier.append({ "cell": next, "cost": new_cost})
-			
-	#Filter the tiles in movement for other blockers (so far just allies)
-	var reachable := {}
-	var squad_unreachable := {}
-	for cell in cost_so_far.keys():
-		var other_unit := get_unit_at_cell(cell)
-
-		#Members must stay within the leader's LDR range, measured from the leader's
-		#projected destination (which falls back to their current cell if no move is queued)
-		if not unit.is_leader() and GridUtils.manhattan_distance(cell, unit.squad.get_leader().get_projected_destination()) > unit.squad.get_max_range():
-			squad_unreachable[cell] = cost_so_far[cell]
-			continue
-			
-		# Cannot walk onto spaces with non-squad members (and even those are potentially invalid - check SquadManager)
-		if other_unit != null and not unit.squad.get_members().has(other_unit):
-			continue
-		
-		#Cannot move onto own tile
-		if other_unit == unit:
-			continue
-
-		reachable[cell] = cost_so_far[cell]
-		
-	return {
-		# reachable: { Vector2i cell : int movement_cost }
-		# Cells this unit can legally select as movement destinations.
-		"reachable": reachable,
-		
-		# came_from: { Vector2i cell : Vector2i previous_cell }
-		# Used to reconstruct the path from the unit's start cell to a selected destination.
-		"came_from": came_from,
-		
-		# squad_unreachable: { Vector2i cell : int movement_cost }
-		# Cells physically reachable by this unit, but invalid because they fall outside
-		# the squad leader's current/projected LDR range.
-		"squad_unreachable": squad_unreachable
-	}
-
-#	"reachable": Dictionary[Vector2i, int],
-#		# Cells this unit is allowed to select as movement destinations.
-#		# Key = reachable cell.
-#		# Value = total movement cost from the unit's start cell to that cell.
-#
-#	"came_from": Dictionary[Vector2i, Vector2i],
-#		# Path reconstruction map for every cell found by the movement search.
-#		# Key = discovered cell.
-#		# Value = previous cell on the cheapest known path from start to that cell.
-#		# Used by reconstruct_path(came_from, start, goal).
-#
-#	"squad_unreachable": Dictionary[Vector2i, int],
-#		# Cells the unit could physically reach with its movement range,
-#		# but cannot legally select because they fall outside the squad leader's LDR range.
-#		# Key = physically reachable but squad-invalid cell.
-#		# Value = total movement cost from the unit's start cell to that cell.
+	return RulesService.compute_move_range(unit, _board())
 	
 func draw_joinable_squads(joining_unit: Unit):
 	overlay_manager.clear_all()
@@ -751,15 +639,7 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 	return cells
 	
 func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vector2i) -> Array[Vector2i]:
-	var path : Array[Vector2i] = []
-	var current := goal
-	
-	while current != start:
-		path.push_front(current)
-		current = came_from[current]
-		
-	path.push_front(start)
-	return path
+	return RulesService.reconstruct_path(came_from, start, goal)
 
 func spawn_test_units():
 	var test_data_baddy := preload("res://Resources/BadGuy1.tres")
@@ -786,27 +666,8 @@ func spawn_test_units():
 	spawn_unit(data3, Vector2i(4, 6))
 
 func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i]) -> Array[Unit]:
-	var victims: Array[Unit] = []
-	var weapon := attacker.get_equipped_weapon()
-	var hits_allies: bool = weapon != null and weapon.hits_allies
+	return RulesService.gather_attack_victims(attacker, affected_cells, _board())
 
-	for cell in affected_cells:
-		var unit := get_unit_at_cell(cell)
-		if unit != null and unit.get_projected_destination() != cell:
-			unit = null #occupant is planning to leave this cell; their projected cell is what counts
-		if unit == null:
-			unit = squad_manager.get_projected_unit_from_cell(cell)
-
-		if unit == null or unit == attacker or victims.has(unit):
-			continue
-
-		if attacker.combat.can_attack(attacker, unit):
-			victims.append(unit)
-		elif hits_allies:
-			victims.append(unit)
-
-	return victims
-	
 func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	var hoveredUnit : Unit = get_unit_at_cell(hoveredCell)
 	var projectedHoveredUnit : Unit = squad_manager.get_projected_unit_from_cell(hoveredCell)

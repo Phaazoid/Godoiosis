@@ -1,5 +1,5 @@
 extends Node
-class_name Movement_Component
+class_name MovementComponent
 
 @export var cell: Vector2i
 @export var move_speed := 120 #pixels per second

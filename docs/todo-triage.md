@@ -4,8 +4,8 @@ A one-time sweep of every `#TODO` left in the gameplay code, sorted into bins.
 Vendor code (`addons/gdUnit4/`) is excluded — those TODOs belong to the test
 framework, not to us.
 
-**Found:** 13 comments — 11 in `game.gd`, 1 in `Classes/Squad.gd`,
-1 in `Classes/UnitFactory.gd`.
+**Found:** 13 comments — 11 in `game.gd`, 1 in `Classes/squads/Squad.gd`,
+1 in `Classes/units/UnitFactory.gd`.
 
 **Method:** every verdict was checked against the surrounding code, not just the
 comment text.
@@ -40,7 +40,7 @@ Load-bearing reminders that depend on systems that don't exist yet. Keep as-is.
 | `game.gd:532` — flyers spawning on non-walkable tiles | unit movement-classes |
 | `game.gd:648` — more tile-walkability values (flyers vs. nothing) | unit movement-classes |
 | `game.gd:862` — muted squad-icon colours when another squad is active | multi-squad visual layer — now tracked under **#44** (visual clarity) |
-| `Classes/Squad.gd:94` — preserve status actions when clearing the queue | a status-effect system (explicitly "if that becomes a thing") |
+| `Classes/squads/Squad.gd:94` — preserve status actions when clearing the queue | a status-effect system (explicitly "if that becomes a thing") |
 
 ## 4 · Overdue — worth doing now
 
@@ -59,7 +59,7 @@ Legitimate, achievable now, nothing forcing the timing.
 | `game.gd:368` | Order the action-menu items explicitly instead of by append order. | **#26** (menu revamp) |
 | `game.gd:404` | Split "cancel everything" vs. "cancel just queued plans." | **#26** — further-future option |
 | `game.gd:878` | Colour-code the squad-target cursor (valid/invalid) — `CursorState.VALID/INVALID` already exist, so this is cheap. | **#44** (visual clarity umbrella) |
-| `Classes/UnitFactory.gd:14` | Move the unit-builder functions out of `dev_overlay` into `UnitFactory`. Confirmed **not yet migrated** (`SpawnTool.build_unit_data()` still does `UnitData.new()`). | **#22** (now "slim down game.gd + SquadManager.gd") |
+| `Classes/units/UnitFactory.gd:14` | Move the unit-builder functions out of `dev_overlay` into `UnitFactory`. Confirmed **not yet migrated** (`SpawnTool.build_unit_data()` still does `UnitData.new()`). | **#22** (now "slim down game.gd + SquadManager.gd") |
 
 ---
 

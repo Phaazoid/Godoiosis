@@ -8,8 +8,8 @@ class_name ReactionCatalog
 
 const REACTION_DIR := "res://Resources/Reactions/"
 
-static func get_all() -> Array[ElementReaction]:
-	var reactions: Array[ElementReaction] = []
+static func get_all() -> Array[ElementalReaction]:
+	var reactions: Array[ElementalReaction] = []
 	if not DirAccess.dir_exists_absolute(REACTION_DIR):
 		return reactions
 	var files := DirAccess.get_files_at(REACTION_DIR)
@@ -18,6 +18,6 @@ static func get_all() -> Array[ElementReaction]:
 		if not file.ends_with(".tres"):
 			continue
 		var res = load(REACTION_DIR + file)
-		if res is ElementReaction:
+		if res is ElementalReaction:
 			reactions.append(res)
 	return reactions

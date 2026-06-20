@@ -1,6 +1,6 @@
 # Elemental System — Combinatrix
 
-**Status: WORKING DESIGN — architecture LOCKED, content FLUID; v1 slice (SHOCK × WET) IMPLEMENTED 2026-06-19 (#28) — `PlanResolver` + `Elemental`/`ElementReaction`/`ReactionCatalog`, E1–E8 green in `tests/elemental/`.** The resolution architecture (the plan-time resolver, below) is a firm commitment; treat the **E-invariants** like the squad spec — violating them is a bug. The model decisions below were ratified 2026-06-16. Everything *downstream* — which elements exist, which reactions, magnitudes, the status lifecycle — is deliberately unsettled and brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from there.
+**Status: WORKING DESIGN — architecture LOCKED, content FLUID; v1 slice (SHOCK × WET) IMPLEMENTED 2026-06-19 (#28) — `PlanResolver` + `Elemental`/`ElementalReaction`/`ReactionCatalog`, E1–E8 green in `tests/elemental/`.** The resolution architecture (the plan-time resolver, below) is a firm commitment; treat the **E-invariants** like the squad spec — violating them is a bug. The model decisions below were ratified 2026-06-16. Everything *downstream* — which elements exist, which reactions, magnitudes, the status lifecycle — is deliberately unsettled and brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from there.
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
@@ -27,7 +27,7 @@ So a combo is two beats: hit 1's element sets a state; hit 2's element reacts wi
 
 ## The plan-time resolver (the spine)
 
-The load-bearing decision, forced by the existing code. Today `AttackAction.create()` ([AttackAction.gd:82](../../Classes/Actions/AttackAction.gd)) computes `damage` **once, in isolation, at queue time** and `execute()` replays that frozen number. Elements break "in isolation": a later hit's damage depends on what earlier hits did to the target's state. Law #2 (the queue never lies) forbids deferring that to execution — the preview would show the wrong number.
+The load-bearing decision, forced by the existing code. Today `AttackAction.create()` ([AttackAction.gd:82](../../Classes/actions/AttackAction.gd)) computes `damage` **once, in isolation, at queue time** and `execute()` replays that frozen number. Elements break "in isolation": a later hit's damage depends on what earlier hits did to the target's state. Law #2 (the queue never lies) forbids deferring that to execution — the preview would show the wrong number.
 
 **Resolution: one deterministic resolver pass over the whole ordered plan.** It walks the plan in execution order (moves → attacks → counters), threads a *hypothetical* copy of state forward, resolves each hit against that evolving state, and writes final damage + state-deltas onto each action. Preview and execution both consume that result. Execution computes nothing — it plays back.
 
@@ -50,7 +50,7 @@ Derived-from-plan logic — same family as `SquadManager.calculate_counterattack
 
 ## Reactions as data
 
-Small resources, edited in the reflection-based dev editor (same grain as `WeaponData` / `AttackPattern`). Proposed `ElementReaction` shape:
+Small resources, edited in the reflection-based dev editor (same grain as `WeaponData` / `AttackPattern`). Proposed `ElementalReaction` shape:
 
 | field | meaning |
 |---|---|

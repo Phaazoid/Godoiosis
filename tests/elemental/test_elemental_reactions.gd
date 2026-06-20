@@ -16,16 +16,16 @@ func before_test() -> void:
 
 # --- in-code reactions ---
 
-func _water_sets_wet() -> ElementReaction:
-	var r := ElementReaction.new()
+func _water_sets_wet() -> ElementalReaction:
+	var r := ElementalReaction.new()
 	r.incoming_element = Elemental.Element.WATER
 	r.required_state = Elemental.State.NONE          # setup: fires on the element alone
 	var adds: Array[Elemental.State] = [Elemental.State.WET]
 	r.add_states = adds
 	return r
 
-func _shock_electrocute(bonus: int = 5) -> ElementReaction:
-	var r := ElementReaction.new()
+func _shock_electrocute(bonus: int = 5) -> ElementalReaction:
+	var r := ElementalReaction.new()
 	r.incoming_element = Elemental.Element.SHOCK
 	r.required_state = Elemental.State.WET
 	r.damage_bonus = bonus
@@ -52,7 +52,7 @@ func test_water_then_shock_electrocutes() -> void:
 	plan.attacks.append(water)
 	plan.attacks.append(shock)
 
-	var reactions: Array[ElementReaction] = [_water_sets_wet(), _shock_electrocute(5)]
+	var reactions: Array[ElementalReaction] = [_water_sets_wet(), _shock_electrocute(5)]
 	PlanResolver.resolve(plan, reactions)
 
 	assert_int(water.resolved.damage).is_equal(4)                                   # base only
@@ -76,7 +76,7 @@ func test_order_is_the_lever() -> void:
 	plan.attacks.append(shock)   # SHOCK first -- target not WET yet
 	plan.attacks.append(water)   # WATER too late
 
-	var reactions: Array[ElementReaction] = [_water_sets_wet(), _shock_electrocute(5)]
+	var reactions: Array[ElementalReaction] = [_water_sets_wet(), _shock_electrocute(5)]
 	PlanResolver.resolve(plan, reactions)
 
 	assert_int(shock.resolved.damage).is_equal(4)                                    # no bonus
@@ -92,7 +92,7 @@ func test_resolver_leaves_live_state_untouched() -> void:
 	var water := _attack(alch, target)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(water)
-	var reactions: Array[ElementReaction] = [_water_sets_wet()]
+	var reactions: Array[ElementalReaction] = [_water_sets_wet()]
 
 	assert_bool(target.element_states.is_empty()).is_true()
 	PlanResolver.resolve(plan, reactions)
@@ -107,7 +107,7 @@ func test_determinism_same_plan_same_result() -> void:
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
-	var reactions: Array[ElementReaction] = [_shock_electrocute(5)]
+	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
 
 	var s1 := _attack(mech, target)
 	var p1 := ResolvedPlan.new()
@@ -130,17 +130,17 @@ func test_e8_all_matching_reactions_compose() -> void:
 	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
-	var r_mult := ElementReaction.new()
+	var r_mult := ElementalReaction.new()
 	r_mult.incoming_element = Elemental.Element.SHOCK
 	r_mult.required_state = Elemental.State.WET
 	r_mult.damage_mult = 2.0
 
-	var r_bonus := ElementReaction.new()
+	var r_bonus := ElementalReaction.new()
 	r_bonus.incoming_element = Elemental.Element.SHOCK
 	r_bonus.required_state = Elemental.State.WET
 	r_bonus.damage_bonus = 3
 
-	var reactions: Array[ElementReaction] = [r_mult, r_bonus]
+	var reactions: Array[ElementalReaction] = [r_mult, r_bonus]
 	var shock := _attack(mech, target)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(shock)
@@ -162,7 +162,7 @@ func test_e7_counter_can_complete_a_combo() -> void:
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	plan.counters = _sm.calculate_counterattacks_for_squad(p.squad)
-	var reactions: Array[ElementReaction] = [_shock_electrocute(5)]
+	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
 	PlanResolver.resolve(plan, reactions)
 
 	assert_int(plan.counters.size()).is_greater(0)

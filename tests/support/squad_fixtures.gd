@@ -5,7 +5,7 @@
 # requires a one-time `--import` pass — gdUnit4 rescans tests/ at run time.
 #
 # Design notes that make node fixtures tractable (learned from reading the code):
-#   * Unit is a scene (Scenes/unit.tscn). It must have `unit_data` set BEFORE it
+#   * Unit is a scene (Scenes/Unit.tscn). It must have `unit_data` set BEFORE it
 #     enters the tree, or _ready() push_errors and skips building unit_instance.
 #   * Unit._ready() only wires movement to a grid if setup() was called first, so
 #     we DON'T call setup() — we set `movement.cell` directly (a plain field).
@@ -20,7 +20,7 @@
 #     queue_action / cancel_* wrappers (which redraw overlays) stay out of scope.
 extends RefCounted
 
-const UNIT_SCENE := preload("res://Scenes/unit.tscn")
+const UNIT_SCENE := preload("res://Scenes/Unit.tscn")
 
 # OverlayManager's nine @onready child overlays. Supplied as bare Node2Ds so its
 # _ready (which only sets each one's modulate) runs without error.

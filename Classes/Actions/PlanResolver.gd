@@ -7,7 +7,7 @@ class_name PlanResolver
 # base damage -> elemental (-> Will in Phase 3). Writes one ResolvedOutcome per action
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
-static func resolve(plan: ResolvedPlan, reactions: Array[ElementReaction] = ReactionCatalog.get_all()) -> void:
+static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all()) -> void:
 	var hypo: Dictionary = {}   # Unit -> _Hypo (the threaded working copy)
 	for atk in plan.attacks:
 		_resolve_one(atk, reactions, hypo)
@@ -17,7 +17,7 @@ static func resolve(plan: ResolvedPlan, reactions: Array[ElementReaction] = Reac
 			continue
 		_resolve_one(ctr, reactions, hypo)
 
-static func _resolve_one(action: AttackAction, reactions: Array[ElementReaction], hypo: Dictionary) -> void:
+static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary) -> void:
 	var outcome := ResolvedOutcome.new()
 	var attacker := action.actor
 	var target := action.target
