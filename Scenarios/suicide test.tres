@@ -18,10 +18,10 @@
 script = ExtResource("6_506fj")
 display_name = "GoodGuy1"
 portrait = ExtResource("5_crpss")
-base_stats = Dictionary[String, int]({
-"LDR": 1,
-"MHP": 20,
-"STR": 5
+base_stats = Dictionary[int, int]({
+2: 1,
+0: 20,
+1: 5
 })
 map_sprite = ExtResource("3_ktj6r")
 move_sprite = ExtResource("4_rgd8f")
@@ -51,16 +51,14 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("6_506fj")
 display_name = "BadGuy1"
 portrait = ExtResource("10_va7vr")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"STR": 5,
-"WIL": 4
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 4
 })
-growth_ranges = Dictionary[String, Vector2i]({
-"DEF": Vector2i(1, 2),
-"HP": Vector2i(3, 6),
-"STR": Vector2i(0, 3)
+growth_ranges = Dictionary[int, Vector2i]({
+1: Vector2i(0, 3)
 })
 faction = 1
 map_sprite = ExtResource("3_ktj6r")
@@ -79,12 +77,11 @@ is_leader = true
 script = ExtResource("6_506fj")
 display_name = "GoodGuy 2"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 map_sprite = ExtResource("3_ktj6r")
 move_sprite = ExtResource("4_rgd8f")
@@ -100,12 +97,11 @@ is_leader = true
 script = ExtResource("6_506fj")
 display_name = "GoodGuyThree"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 map_sprite = ExtResource("3_ktj6r")
 move_sprite = ExtResource("4_rgd8f")
@@ -121,12 +117,11 @@ is_leader = true
 script = ExtResource("6_506fj")
 display_name = "BaddyNumeroDos"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("3_ktj6r")
@@ -155,12 +150,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("6_506fj")
 display_name = "Soldier1"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 map_sprite = ExtResource("12_e4dmj")
 move_sprite = ExtResource("12_e4dmj")
@@ -189,12 +183,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("6_506fj")
 display_name = "Soldier2"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 map_sprite = ExtResource("12_e4dmj")
 move_sprite = ExtResource("12_e4dmj")
@@ -223,12 +216,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("6_506fj")
 display_name = "Soldier3"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 map_sprite = ExtResource("12_e4dmj")
 move_sprite = ExtResource("12_e4dmj")
@@ -258,12 +250,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("6_506fj")
 display_name = "Soldier4"
 portrait = ExtResource("11_6bpjd")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+2: 5,
+0: 20,
+1: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("13_x0ps1")

@@ -29,16 +29,28 @@ const OVERLAY_CHILD_NAMES := [
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
 ]
 
-# Sensible defaults so a bare unit has HP (MHP), can deal damage (STR) and can
-# lead a small squad (LDR). Individual tests override only what they care about.
-const BASELINE_STATS := {Stats.Stat.MHP: 10, Stats.Stat.STR: 5, Stats.Stat.LDR: 3, Stats.Stat.WIL: 5, Stats.Stat.SPD: 5}
+# Test-tuned values for the few stats the suites actually reason about: low MHP so a couple
+# of hits kill, STR for damage, LDR for squad capacity. Keyed by NAME and applied only when
+# that stat exists in the live roster, so the fixture never hardcodes the (still-placeholder)
+# stat set — adding or removing a stat can't break these tests at parse time. Every other
+# live stat is seeded from its canonical default.
+const TEST_TUNING := {"MHP": 10, "STR": 5, "LDR": 3}
+
+# Baseline stats for a fixture unit: the live roster seeded from Stats.STAT_DEFAULTS, then
+# patched with TEST_TUNING (skipping any tuned stat that isn't in the current roster).
+static func baseline_stats() -> Dictionary[Stats.Stat, int]:
+	var stats: Dictionary[Stats.Stat, int] = {}
+	for stat in Stats.STAT_DEFAULTS:
+		stats[stat] = Stats.STAT_DEFAULTS[stat]
+	for stat_name in TEST_TUNING:
+		if stat_name in Stats.Stat:
+			stats[Stats.Stat[stat_name]] = TEST_TUNING[stat_name]
+	return stats
 
 # Build a UnitData with baseline stats patched by `overrides`.
 static func make_unit_data(overrides: Dictionary, faction: Team.Faction) -> UnitData:
 	var data := UnitData.new()
-	var stats: Dictionary[Stats.Stat, int] = {}
-	for key in BASELINE_STATS:
-		stats[key] = BASELINE_STATS[key]
+	var stats := baseline_stats()
 	for key in overrides:
 		stats[key] = overrides[key]
 	data.base_stats = stats

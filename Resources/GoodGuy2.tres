@@ -7,9 +7,9 @@
 script = ExtResource("1_8r65n")
 display_name = "GoodGuy2"
 portrait = ExtResource("1_nmr1o")
-base_stats = Dictionary[String, int]({
-"LDR": 2,
-"MHP": 20,
-"STR": 4
+base_stats = Dictionary[int, int]({
+2: 2,
+0: 20,
+1: 4
 })
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

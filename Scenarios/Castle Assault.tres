@@ -1,17 +1,17 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://2p35yixqgkte"]
 
-[ext_resource type="Script" path="res://Classes/ResourceData/ScenarioData.gd" id="1_58p3y"]
-[ext_resource type="Script" path="res://Classes/ResourceData/ScenarioUnitEntry.gd" id="2_p28ji"]
-[ext_resource type="Script" path="res://Classes/AttackRanges/ManhattanRangePattern.gd" id="3_ayafk"]
-[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
-[ext_resource type="Script" path="res://Classes/ResourceData/WeaponData.gd" id="5_5q7c0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
-[ext_resource type="Script" path="res://Classes/UnitData.gd" id="8_1v4i7"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/General.png" id="9_sclll"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Sage.png" id="10_05mom"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="11_p8p7o"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="12_4n2k3"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/ResourceData/ScenarioData.gd" id="1_58p3y"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/ResourceData/ScenarioUnitEntry.gd" id="2_p28ji"]
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/AttackRanges/ManhattanRangePattern.gd" id="3_ayafk"]
+[ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/ResourceData/WeaponData.gd" id="5_5q7c0"]
+[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
+[ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/UnitData.gd" id="8_1v4i7"]
+[ext_resource type="Texture2D" uid="uid://dt0jmba48go5e" path="res://Art/Units/MapSprites/General.png" id="9_sclll"]
+[ext_resource type="Texture2D" uid="uid://tefyc25l3jam" path="res://Art/Units/MapSprites/Sage.png" id="10_05mom"]
+[ext_resource type="Texture2D" uid="uid://blok5uhqdbsn8" path="res://Art/Units/MapSprites/Mage.png" id="11_p8p7o"]
+[ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="12_4n2k3"]
 
 [sub_resource type="Resource" id="Resource_58p3y"]
 script = ExtResource("3_ayafk")
@@ -23,7 +23,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_58p3y")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -33,12 +33,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier1"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("6_5bmpp")
@@ -61,7 +60,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_5q7c0")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -71,12 +70,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier2"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("6_5bmpp")
@@ -99,7 +97,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_sclll")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -109,12 +107,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier3"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("6_5bmpp")
@@ -135,7 +132,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_e22kq")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -145,12 +142,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier4"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("9_sclll")
@@ -171,7 +167,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_l5o8g")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -181,12 +177,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier5"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 faction = 1
 map_sprite = ExtResource("10_05mom")
@@ -210,7 +205,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_jydfm")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -220,12 +215,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier6"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("11_p8p7o")
 move_sprite = ExtResource("11_p8p7o")
@@ -247,7 +241,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_facq7")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -257,12 +251,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier7"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("11_p8p7o")
 move_sprite = ExtResource("11_p8p7o")
@@ -284,7 +277,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_8ihxj")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -294,12 +287,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier8"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("11_p8p7o")
 move_sprite = ExtResource("11_p8p7o")
@@ -321,7 +313,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_dfmft")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -331,12 +323,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier9"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("11_p8p7o")
 move_sprite = ExtResource("11_p8p7o")
@@ -356,7 +347,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_c67dd")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -366,12 +357,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier10"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")
@@ -391,7 +381,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_n1xpj")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -401,12 +391,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier111"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")
@@ -427,7 +416,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_hl70j")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -437,12 +426,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier121212"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")
@@ -462,7 +450,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_f8j6y")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -472,12 +460,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier113113113"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")
@@ -497,7 +484,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_tnex3")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -507,12 +494,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier111411141114"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")
@@ -533,7 +519,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("5_5q7c0")
 power = 3
 attack_pattern = SubResource("Resource_pxvdd")
-weapon_type = "Chainsword"
+weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
@@ -543,12 +529,11 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 script = ExtResource("8_1v4i7")
 display_name = "Soldier111151111511115"
 portrait = ExtResource("7_qfk2f")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 30,
-"SPD": 6,
-"STR": 5,
-"WIL": 5
+base_stats = Dictionary[int, int]({
+0: 30,
+1: 5,
+2: 5,
+3: 5
 })
 map_sprite = ExtResource("12_4n2k3")
 move_sprite = ExtResource("12_4n2k3")

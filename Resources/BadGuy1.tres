@@ -7,16 +7,14 @@
 script = ExtResource("2_ortoj")
 display_name = "BadGuy1"
 portrait = ExtResource("1_ortoj")
-base_stats = Dictionary[String, int]({
-"LDR": 5,
-"MHP": 20,
-"STR": 5,
-"WIL": 4
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 4
 })
-growth_ranges = Dictionary[String, Vector2i]({
-"DEF": Vector2i(1, 2),
-"HP": Vector2i(3, 6),
-"STR": Vector2i(0, 3)
+growth_ranges = Dictionary[int, Vector2i]({
+1: Vector2i(0, 3)
 })
 faction = 1
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

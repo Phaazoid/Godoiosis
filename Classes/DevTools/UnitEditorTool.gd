@@ -24,7 +24,7 @@ func populate_unit_editor(unit):
 	DevWidgets.add_label(unit_editor_container, "Editing: " + unit.get_unit_name())
 
 	for stat in unit.unit_instance.stats:
-		DevWidgets.add_spinbox(unit_editor_container, stat, unit.unit_instance.stats[stat], func(v): unit.unit_instance.stats[stat] = int(v))
+		DevWidgets.add_spinbox(unit_editor_container, Stats.Stat.keys()[stat], unit.unit_instance.stats[stat], func(v): unit.unit_instance.stats[stat] = int(v))
 
 	DevWidgets.add_spinbox(unit_editor_container, "Current HP", unit.get_current_hp(), func(v): unit.unit_instance.set_current_hp(maxi(1, int(v))))
 
