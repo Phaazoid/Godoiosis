@@ -11,10 +11,9 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 [resource]
 script = ExtResource("3_021iu")
 power = 5
-scaling_stat = "WIL"
+scaling_stat = 3
 attack_pattern = SubResource("Resource_6agcu")
 hits_allies = true
-weapon_type = "FireRune"
 elemental_damage_type = 1
 icon = ExtResource("2_tbjsc")
 description = "burn baby burn"
