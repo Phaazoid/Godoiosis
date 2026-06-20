@@ -1,6 +1,8 @@
 # Squad System — Locked Specification
 
-**Status: SETTLED** — the project's one stable system. Changes to anything below should be deliberate design decisions, not implementation drift. (Drafted 2026-06-12 by Claude from the implemented system; pending user sign-off.)
+**Status: SETTLED — with one deliberate redesign pending (2026-06-20): LDR's meaning.** Changes to anything below should be deliberate design decisions, not implementation drift. (Drafted 2026-06-12 by Claude from the implemented system; pending user sign-off.)
+
+> **Design update — 2026-06-20 ([stats.md](stats.md)).** LDR is being repurposed from *squad range* to a **squad-capacity budget**: squad **size** = budget − per-member costs, and costs drop with **relationship/familiarity** (which also grows combat synergy). **Squad range is decoupled from LDR** → a **static default**, to be tuned in playtest. The invariants below still describe the *current code* (LDR-as-Manhattan-range); the flagged ones — **I5, I6, V3** — change when this lands. This is the deliberate decision the SETTLED status invites, not drift.
 
 ## Purpose
 
@@ -20,8 +22,8 @@ Numbered for test coverage. Violating any of these is a bug, full stop.
 - **I2.** Only `SquadManager` creates or destroys squads, and only `SquadManager._detach_from_current_squad()` removes a member. No other code calls `members.erase()`.
 - **I3.** Every live squad appears in `SquadManager.squads`; destroyed squads are removed from it and freed. No "ghost squads" holding units.
 - **I4.** `Unit.has_squad()` answers "does this unit have squadmates" (`members.size() > 1`) — not "does a squad object exist" (that's always true, per I1).
-- **I5.** The leader is always a member of their own squad. When the leader leaves/dies, leadership reassigns to the member with the highest LDR stat (first-in-member-order breaks ties).
-- **I6.** Members must stand within the leader's LDR range (Manhattan). After leader reassignment, out-of-range members are detached into solo squads (`check_reassign_leader`).
+- **I5.** The leader is always a member of their own squad. When the leader leaves/dies, leadership reassigns to the member with the highest LDR stat (first-in-member-order breaks ties). **[→ 2026-06-20: LDR now = squad-capacity budget; "highest LDR leads" still holds (biggest capacity commands) — see banner.]**
+- **I6.** Members must stand within the leader's LDR range (Manhattan). After leader reassignment, out-of-range members are detached into solo squads (`check_reassign_leader`). **[→ 2026-06-20: range becomes a static default, not LDR-derived — see banner.]**
 - **I7.** Spawning a unit creates its solo squad (`spawn_unit` → `create_squad`).
 
 ## Action queue rules
@@ -37,7 +39,7 @@ Run on every queue change; actions carry `is_valid` + error strings rather than 
 
 - **V1.** Two units may not plan moves to the same destination.
 - **V2.** A move may not target a cell occupied by a squadmate who isn't moving away.
-- **V3.** Non-leader moves must land inside the leader's *projected* LDR range (the leader's own planned destination counts, not their current cell).
+- **V3.** Non-leader moves must land inside the leader's *projected* LDR range (the leader's own planned destination counts, not their current cell). **[→ 2026-06-20: range becomes a static default, not LDR-derived — see banner.]**
 
 ## Counter-attack rules
 
@@ -70,6 +72,7 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_
 
 ## Known gaps / future work
 
+- **LDR redesign (2026-06-20) not yet in code:** squad **size**-by-budget and per-member familiarity costs are undesigned in code; squad **range** still reads LDR (the `Squad.gd` range getter returns the leader's LDR as a placeholder) and should become a static default. Combat synergy + cost-reduction ride on familiarity, not LDR. See the banner + [stats.md](stats.md); touches I5/I6 and V3.
 - AoE victim lists don't re-resolve when moves are re-planned after the volley is queued (fix belongs in `validate_squad_plan`).
 - Death handling: a unit hitting 0 HP currently just frees itself — squad cleanup on death is undesigned (blocked on the death/Will/downed-state design, which intersects squads heavily: leader downs, defending downed allies).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.

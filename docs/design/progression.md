@@ -5,7 +5,7 @@
 ## Core stance
 
 - **No XP / no leveling.** Units do not gain levels or level-up stat growth.
-- **Stats are fixed. No stat training (benched 2026-06-15).** A unit *is* its statline. (This reverses an earlier idea of training Will/Leadership — cut because trainable stats risk late-game immortality, and trainable **LDR** especially would break squads: squad range and squad size key off LDR, so boosting it = runaway squad power. Squads are already the strongest tool in the game.)
+- **Stats are innate identity, not grindable (training benched 2026-06-15; refined 2026-06-20, see [stats.md](stats.md)).** A unit *is* its statline — no XP, no stat-training treadmill. Stats *may* still shift, but **only** via authored events (story beats) or elective-with-cost choices (jobs, prosthetics), and only within a **bounded drift band** (smaller than the innate spread between units; prosthetics excepted). (This reverses an earlier idea of *training* Will/Leadership — cut because a trainable treadmill risks late-game immortality, and a grindable **LDR** especially would break squads: squad **size** keys off LDR-as-a-budget, so pumping it = runaway squad power. Squads are already the strongest tool in the game.)
 - **Progression is horizontal:** power lives in **augmentation, skill, and relationships**, never in an intrinsic unit level. A late-recruited unit is never "20 levels behind" — only gear/proficiency/connections behind, all bounded and partly transferable.
 
 Why this fits Iosis: matches the top axiom *"setting up the battle should be half the fun"* (prep, not a between-battle slot machine), honors **Law #1** (the old level-up RNG is gone), and keeps late units + the planned roguelike side-mode usable.
@@ -15,7 +15,7 @@ Why this fits Iosis: matches the top axiom *"setting up the battle should be hal
 1. **Gear** — weapons, stat-boosting armor, upgrades.
 2. **Prosthetics** — the mechanist↔alchemist axis (below).
 3. **Weapon proficiency** (mechanist-leaning) and **aura points / runes** (alchemist-leaning) — grown via *training goals* (below).
-4. **Squad connections** — relational bonuses (e.g., LDR familiarity). Additive, **never decaying**, and **plot-seedable** (a story-introduced "old friend of X" arrives pre-connected — no grind, and it keeps connection bonuses from locking your roster).
+4. **Squad connections** — relational bonuses: familiarity from fielding units together **lowers their LDR-budget cost** and grows **combat synergy** (the levers ride on familiarity, not on pumping LDR — see [stats.md](stats.md), [squad-system.md](squad-system.md)). Additive, **never decaying**, and **plot-seedable** (a story-introduced "old friend of X" arrives pre-connected — no grind, and it keeps connection bonuses from locking your roster).
 
 ## Proficiency training goals (anti-grind growth)
 
@@ -62,4 +62,4 @@ Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
 - **Double-attacks as a weapon property, not a stat rule.** Rather than FE's speed-derived doubling, make multi-hit a property of specific weapons, **gated** by stats (better stats → more uses) — keeps growth horizontal.
 - **Fixed stats shouldn't force weapon pairings.** A consequence of the fixed-stat stance: since weapons scale off a stat, optimal play risks **locking each character to one weapon type**. Candidate outs (detailed in [weapons.md](weapons.md)): weapon **mods/variants that change the scaling stat**, or **sub-varieties** of each family with differing set scalings — so customization stays meaningful and no single weapon is always best for a statline.
 
-Cross-refs: [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), [weapons.md](weapons.md), `../../CLAUDE.md` (design laws).
+Cross-refs: [stats.md](stats.md), [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), [weapons.md](weapons.md), `../../CLAUDE.md` (design laws).
