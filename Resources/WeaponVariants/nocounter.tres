@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_tw8q5"]
+[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_kmcdo"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponData.gd" id="3_uqgel"]
+
+[sub_resource type="Resource" id="Resource_i7jr8"]
+script = ExtResource("1_tw8q5")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("3_uqgel")
+power = 3
+attack_pattern = SubResource("Resource_i7jr8")
+can_counter = false
+weapon_type = 1
+item_name = "nocounter"
+icon = ExtResource("2_kmcdo")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_jddoe"]
+[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_rvmah"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponData.gd" id="3_coctb"]
+
+[sub_resource type="Resource" id="Resource_7qcci"]
+script = ExtResource("1_jddoe")
+max_range = 2
+max_and_a_half = true
+min_range = 2
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("3_coctb")
+power = 3
+attack_pattern = SubResource("Resource_7qcci")
+can_counter = false
+weapon_type = 1
+item_name = "2.5TEST"
+icon = ExtResource("2_rvmah")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

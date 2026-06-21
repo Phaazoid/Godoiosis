@@ -64,3 +64,20 @@ static func validate_member_distance(unit: Unit) -> bool:
 		return false
 	else:
 		return true
+
+# Blended Manhattan/Chebyshev range (#25). `integral` = Manhattan reach; `and_a_half`
+# bevels in the diagonal corners of that ring (Chebyshev <= integral AND Manhattan
+# <= integral + 1): {1, true} = all 8 neighbours, {2, true} = next ring with corners
+# clipped. No floats — the bool is the only legal fraction. cells_within_manhattan_range
+# is deliberately left alone; this is the additive sibling.
+static func cells_within_blended_range(origin: Vector2i, integral: int, and_a_half: bool) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var reach := integral + (1 if and_a_half else 0)
+	# The [-integral, integral] iteration box already guarantees Chebyshev <= integral,
+	# so inside we only test Manhattan against `reach`.
+	for x in range(origin.x - integral, origin.x + integral + 1):
+		for y in range(origin.y - integral, origin.y + integral + 1):
+			var cell := Vector2i(x, y)
+			if abs(cell.x - origin.x) + abs(cell.y - origin.y) <= reach:
+				cells.append(cell)
+	return cells

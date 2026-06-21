@@ -320,6 +320,8 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 		return false
 	if not countering_unit.has_equipped_weapon():
 		return false
+	if not countering_unit.get_equipped_weapon().can_counter:
+		return false
 
 	var counter_cell := countering_unit.get_projected_destination()
 	var target_cell := target_unit.get_projected_destination()

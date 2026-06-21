@@ -2,10 +2,11 @@ class_name ManhattanRangePattern
 extends AttackPattern
 
 @export var max_range := 1
+@export var max_and_a_half := false   # .5 step: bevel in the diagonal corners of the max ring
 @export var min_range := 1
 
 func get_selectable_cells(user: Unit, origin_cell: Vector2i, facing_hint: Vector2i) -> Array[Vector2i]:
-	var all_cells := GridUtils.cells_within_manhattan_range(origin_cell, max_range)
+	var all_cells := GridUtils.cells_within_blended_range(origin_cell, max_range, max_and_a_half)
 	return all_cells.filter(func(cell): return GridUtils.manhattan_distance(origin_cell, cell) >= min_range)
 
 func get_all_selectable_cells(user: Unit, origin_cell: Vector2i) -> Array[Vector2i]:

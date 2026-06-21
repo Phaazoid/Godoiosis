@@ -44,3 +44,24 @@ func test_cells_within_manhattan_range_radius_zero_is_just_origin() -> void:
 func test_cells_within_manhattan_range_excludes_diagonal_corners() -> void:
 	# (1,1) is Manhattan distance 2, so radius 1 must NOT include it.
 	assert_array(GridUtils.cells_within_manhattan_range(Vector2i(0, 0), 1)).not_contains([Vector2i(1, 1)])
+
+# --- Blended Manhattan/Chebyshev range (#25) ---
+# Semantics locked 2026-06-19: a cell is in {N, and_a_half} iff chebyshev <= N AND
+# manhattan <= N + (1 if and_a_half else 0). No floats; the bool is the only fraction.
+
+func test_blended_range_is_manhattan_when_not_half() -> void:
+	# and_a_half = false must reproduce the existing diamond exactly — backward-compat for every saved .tres.
+	for n in [0, 1, 2, 3]:
+		var blended := GridUtils.cells_within_blended_range(Vector2i.ZERO, n, false)
+		var diamond := GridUtils.cells_within_manhattan_range(Vector2i.ZERO, n)
+		assert_array(blended).contains_exactly_in_any_order(diamond)
+
+func test_blended_half_adds_the_diagonal_layer() -> void:
+	# {1, true} = the full 3x3 (all 8 neighbours + origin); the diagonals are what the half adds.
+	var ring1 := GridUtils.cells_within_blended_range(Vector2i.ZERO, 1, true)
+	assert_int(ring1.size()).is_equal(9)
+	assert_array(ring1).contains([Vector2i(1, 1), Vector2i(-1, -1)])
+	# {2, true} = the 5x5 with its four corners clipped (manhattan 4 > reach 3).
+	var ring2 := GridUtils.cells_within_blended_range(Vector2i.ZERO, 2, true)
+	assert_int(ring2.size()).is_equal(21)
+	assert_array(ring2).not_contains([Vector2i(2, 2)])

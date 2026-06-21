@@ -223,7 +223,7 @@ func enter_move_mode(unit: Unit):
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
 	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, unit.combat.get_all_attack_cells_from(unit.get_projected_destination()), OVERLAY_DEFAULT_ATLAS)
-	
+
 func disband_squad(unit: Unit):
 	squad_manager.disband_squad(unit.squad)
 	
@@ -330,14 +330,14 @@ func _unhandled_input(event):
 						if lastUnit == null:
 							lastUnit = lastProjectedUnit
 						var origin = lastUnit.get_projected_destination()
-						if lastUnit.combat.can_hit_cell_from(origin, clickedCell):
+						# Directional weapons aim by direction; point weapons need the cell in range.
+						if lastUnit.combat.is_directional_attack() or lastUnit.combat.can_hit_cell_from(origin, clickedCell):
 							var affected = lastUnit.combat.get_affected_cells_from(origin, clickedCell)
 							var victims = gather_attack_victims(lastUnit, affected)
 							if not victims.is_empty():
 								for attack in AttackAction.create_volley(lastUnit, origin, clickedCell, victims):
 									squad_manager.queue_action(lastUnit.squad, attack)
-					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
-						
+					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 			
 			update_selection_overlay()
 		#Right click deselects all
@@ -740,7 +740,9 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 		var preview_cells: Array[Vector2i] = []
 		if attacker != null:
 			var origin := attacker.get_projected_destination()
-			if attacker.combat.can_hit_cell_from(origin, hoveredCell):
+			# Directional: any non-zero facing is a legal aim (the whole spread is the target).
+			# Point: the hovered cell itself must be in range.
+			if attacker.combat.is_directional_attack() or attacker.combat.can_hit_cell_from(origin, hoveredCell):
 				preview_cells = attacker.combat.get_affected_cells_from(origin, hoveredCell)
 		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
 
@@ -748,7 +750,8 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			cursor_controller.set_state(CursorController.CursorState.INVALID)
 		else:
 			cursor_controller.set_state(CursorController.CursorState.VALID)
-		cursor_controller.set_cursor_pos(hoveredCell)		
+		cursor_controller.set_cursor_pos(hoveredCell)
+
 	if game_state == GameState.CHOOSING_MOVE:
 		var unit = get_unit_at_cell(last_clicked_cell)
 		overlay_manager.clear_hover_move_path()

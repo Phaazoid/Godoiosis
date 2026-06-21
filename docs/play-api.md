@@ -162,13 +162,13 @@ visual calls. Saved scenarios under `res://Scenarios/` become playtest fixtures.
 
 ## Build milestones (ownership)
 
-| # | Milestone | Owner | Notes |
+| # | Milestone | Status | Notes |
 |---|---|---|---|
-| **M1** | `RulesService` extraction from `game.gd` | **User types** | Complex (Law #2-sensitive, threads board context) → one mid-build checkpoint. Add a test that range/path/victims match pre-refactor. |
-| **M2** | `PlaySession` + **view renderer** + headless scenario loader | **Claude writes** | Renderer = the token-efficient, spatial text view tuned for an LLM player (see *State representation*). Validate via a one-shot **batch** script that plays a scripted match and dumps the trace. |
-| **M3** | File-bridge interactive loop (`HeadlessHost`) | **Claude writes** | Claude plays a live headless match turn-by-turn. |
-| **M4** | `LiveBridge` node in the real game | **Later** | Same commands; user watches Claude play on screen. |
-| **tests** | `tests/play/` suite | **Claude writes** | preview == execute end-to-end (Law #2); `PlaySession` never mutates outside `execute()`. |
+| **M1** | `RulesService` extraction from `game.gd` | ✅ done (committed) | Lives in `Classes/board/`; `game.gd` delegates via wrappers; advances #22. |
+| **M2** | `PlaySession` + view renderer + headless scenario loader | ✅ done 2026-06-20 | `play/{play_session,board_view,board_builder,play_host}.gd`; 3-char `[actor][terrain][overlay]` view; loads `.tres` scenarios (real Castle Assault verified). |
+| **M3** | File-bridge interactive loop | ✅ done 2026-06-20 | `play/play_bridge.gd`: polls `playrun/command.json`, writes `playrun/state.txt` with a monotonic `id` handshake. Cmds: new/load/overview/focus/move/attack/cancel/preview/execute/endturn/quit. |
+| **M4** | `LiveBridge` node in the real game | ⬜ next / optional | Host the same bridge inside the running game so a human can watch. |
+| **tests** | `tests/play/` + `tests/rules/` | ✅ green | preview == execute (Law #2); no mutation outside `execute()`; scenario round-trip. Full suite 60+/60+, 0 orphans. |
 
 ## Limits (honest scope)
 

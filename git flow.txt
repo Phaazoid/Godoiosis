@@ -12,3 +12,14 @@ git push
 
 git branch -d feature-name
 git push origin --delete feature-name
+
+Spend 30 minutes reading about EF Core.
+Add a TicketService to your Blazor app.
+Inject that service into the page.
+Make the page use the service instead of its local list.
+Learn enough LINQ to query tickets.
+Read one article about Azure App Service and Azure SQL.
+Prepare 3 stories:
+difficult bug
+learning something quickly
+working with non-technical stakeholders

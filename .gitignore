@@ -25,3 +25,6 @@ Thumbs.db
 
 # gdUnit4 test reports (generated)
 /reports/
+
+# Play API interactive bridge runtime files (#46 M3)
+/playrun/

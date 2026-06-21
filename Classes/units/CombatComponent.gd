@@ -56,3 +56,13 @@ func get_affected_cells_from(origin_cell: Vector2i, target_cell: Vector2i) -> Ar
 		return [target_cell]
 
 	return weapon.attack_pattern.get_affected_cells(unit, origin_cell, target_cell)
+	
+# Does the equipped weapon aim by facing (forward line/wide) rather than at a specific cell?
+# game.gd uses this so directional attacks can target a DIRECTION (the whole spread fires)
+# instead of requiring the clicked cell to be a spread member. No pattern / no weapon = point.
+func is_directional_attack() -> bool:
+	var unit := owner as Unit
+	var weapon := unit.get_equipped_weapon() if unit != null else null
+	if weapon == null or weapon.attack_pattern == null:
+		return false
+	return weapon.attack_pattern.is_directional()

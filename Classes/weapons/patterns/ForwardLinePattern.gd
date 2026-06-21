@@ -16,3 +16,6 @@ func get_selectable_cells(user: Unit, origin_cell: Vector2i, facing_hint: Vector
 
 func get_affected_cells(user: Unit, origin_cell: Vector2i, target_cell: Vector2i) -> Array[Vector2i]:
 	return get_selectable_cells(user, origin_cell, target_cell)
+
+func is_directional() -> bool:
+	return true
