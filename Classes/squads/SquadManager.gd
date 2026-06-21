@@ -180,7 +180,23 @@ func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> boo
 			valid = false
 			for action in actions_at_cell:
 				action.add_validation_error("Multiple units attempting to move here")
-		
+
+	# Re-validate rescues: the rescuer must still END its (projected) move adjacent to a
+	# still-downed ally. Mirrors the AoE re-derivation debt — a move re-planned away from the
+	# body invalidates the rescue, and a target rescued by someone else first drops out too.
+	for action in actions:
+		if action is RescueAction:
+			var rescue := action as RescueAction
+			var target: Unit = rescue.target
+			if target == null or not is_instance_valid(target) or not target.is_downed():
+				rescue.add_validation_error("Rescue target is no longer down")
+				valid = false
+				continue
+			var rescuer_cell := _get_projected_cell_for_unit(rescue.actor, actions)
+			if not GridUtils.cells_within_manhattan_range(rescuer_cell, 1).has(target.movement.cell):
+				rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
+				valid = false
+
 	return valid
 
 func _unit_has_valid_move_away_from(unit: Unit, cell: Vector2i, actions: Array[BaseAction]) -> bool:
@@ -239,6 +255,17 @@ func clear_all_squads():
 		squad.queue_free()
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
+	# Downed/dead units can't be ordered. This is the single order chokepoint (Law #3 —
+	# future AI funnels here too), so one check here covers every actor.
+	if action.actor != null and not action.actor.is_active():
+		return false
+
+	# Main actions lock out movement: a move must precede the main action, never follow it
+	# (so attacks resolve from the unit's final position — no attack-then-flee). The menu
+	# already hides the option; this backstops every caller, including AI.
+	if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and action.actor.has_main_action_queued():
+		return false
+
 	if active_squad != null and active_squad != squad:
 		return false
 
@@ -248,7 +275,6 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	overlay_manager.redraw_planned_paths()
 
 	return true
-
 func set_has_acted(squad: Squad, acted: bool):
 	squad._set_has_acted(acted)
 	
@@ -397,6 +423,11 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
 
+	var rescue_actions: Array[BaseAction] = []
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.RESCUE:
+			rescue_actions.append(action)
+
 	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
 	var plan := resolve_plan(squad, board)
 	
@@ -414,8 +445,15 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
 
 			for counter in plan.counters:
-				if counter.source_attack == attack:
+				if counter.source_attack == attack and not counter.resolved.skipped:
 					entries.append(ActionQueueDisplayEntry.action_row(counter, 1))
+
+	if not rescue_actions.is_empty():
+		if not entries.is_empty():
+			entries.append(ActionQueueDisplayEntry.divider())
+		entries.append(ActionQueueDisplayEntry.header("RESCUE"))
+		for action in rescue_actions:
+			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
 
 	return entries
 
@@ -427,6 +465,22 @@ func handle_unit_death(unit: Unit):
 	squad._remove_actions_for_actor_silent(unit)
 
 	_detach_from_current_squad(unit)
+
+	if is_instance_valid(squad) and not squad.get_members().is_empty():
+		validate_squad_plan(squad)
+		overlay_manager.redraw_planned_paths()
+
+func handle_unit_downed(unit: Unit):
+	# Twin of handle_unit_death's squad cleanup — but the unit SURVIVES as a body on the
+	# board, so it can't be left squad-less (invariant: every unit is in exactly one squad).
+	# leave_squad() detaches it from its old squad AND gives it a fresh solo squad.
+	var squad := unit.squad
+	if squad == null or not is_instance_valid(squad):
+		return
+
+	squad._remove_actions_for_actor_silent(unit)   # cancel the downed unit's planned orders
+
+	leave_squad(unit)                              # eject: detach from old squad + become solo
 
 	if is_instance_valid(squad) and not squad.get_members().is_empty():
 		validate_squad_plan(squad)

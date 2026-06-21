@@ -40,6 +40,10 @@ func execute():
 	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
 		finish_execution()
 		return
+		
+	if resolved != null and resolved.skipped:
+		finish_execution()                          # counter-er went down/dead this pass — no lunge, no damage
+		return
 
 	var direction = GridUtils.cardinal_direction_between(actor.get_projected_destination(), target_cell)
 

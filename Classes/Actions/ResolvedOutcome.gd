@@ -11,3 +11,4 @@ var states_removed: Array[Elemental.State] = []
 var popups: Array[String] = []
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 # Phase 3 (Will) reads damage + target_hp_after to set a lifecycle result here.
+var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview

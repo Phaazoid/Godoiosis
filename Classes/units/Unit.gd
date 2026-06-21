@@ -9,10 +9,12 @@ class_name Unit
 @onready var movement: MovementComponent = $MovementComponent
 @onready var map_sprite: Sprite2D = $MapSprite
 @onready var move_sprite: Sprite2D = $MoveSprite
+@onready var downed_sprite: Sprite2D = $DownedSprite
 @onready var visuals: UnitVisuals = $UnitVisuals
 @export var unit_data: UnitData
 
 signal unit_died(unit: Unit)
+signal went_downed(unit: Unit)
 
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
@@ -28,6 +30,24 @@ var equipped_weapon: WeaponData = null
 # owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
 # threads a COPY of this set forward as a hypothetical; live mutation is execution-only.
 var element_states: Array[Elemental.State] = []
+
+# --- Lifecycle (docs/design/will-and-death.md) ---
+# State is battle-scoped: it resets each mission, like element_states, so it lives on the
+# transient Unit. (Will — the PERSISTENT resource — lives on UnitInstance. Different sides
+# of the persistence seam.)
+enum LifecycleState { ACTIVE, DOWNED, DEAD }
+var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
+
+# The rung a would-be-fatal hit lands on. STUB: only DOWN/KILL exist today; MAIM (Will-
+# exhausted) and CRISIS join once the Will resource + Forks 2-3 land. Runtime-only enum,
+# so it can grow freely.
+enum LethalRung { DOWN, KILL }
+
+# Stub overkill ceiling: a hit exceeding remaining HP by more than this kills outright
+# (will-and-death.md rung 3 — so low-HP units aren't immortal). Tune to taste; replaced
+# by Will math later.
+const OVERKILL_CEILING := 10
+
 
 func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_grid = grid
@@ -51,12 +71,14 @@ func _ready():
 	unit_instance.died.connect(_on_instance_died)
 	map_sprite.z_index = BASE_SPRITE_INDEX
 	move_sprite.z_index = BASE_SPRITE_INDEX
+	downed_sprite.z_index = BASE_SPRITE_INDEX
 	
 	if unit_data.map_sprite != null:
 		map_sprite.texture = unit_data.map_sprite
 	if unit_data.move_sprite != null:
 		move_sprite.texture = unit_data.move_sprite
-	
+	if unit_data.downed_sprite != null:
+		downed_sprite.texture = unit_data.downed_sprite
 	_apply_faction_visuals()
 
 func add_item(item: Item) -> bool:
@@ -144,8 +166,62 @@ func is_leader() -> bool:
 		return false
 	
 func die():
+	lifecycle_state = LifecycleState.DEAD
 	unit_died.emit(self)
 	queue_free()
+
+func take_damage(damage: int) -> void:
+	# Lifecycle-aware combat damage entry (CombatComponent routes here). Raw HP math stays
+	# on UnitInstance; the down/kill DECISION is battle-scoped, so it lives here on the Unit.
+	if lifecycle_state == LifecycleState.DEAD:
+		return
+	if lifecycle_state == LifecycleState.DOWNED:
+		die()                                   # Fork 3 (provisional): hitting a downed unit kills it
+		return
+	var hp := get_current_hp()
+	if damage < hp:
+		unit_instance.apply_damage(damage)      # survivable hit — ordinary HP loss, no rung decision
+		return
+	# Would-be-fatal: pick the rung instead of dying automatically.
+	match _select_lethal_rung(damage, hp):
+		LethalRung.KILL:
+			unit_instance.apply_damage(damage)  # HP -> 0 -> died -> _on_instance_died -> die()
+		LethalRung.DOWN:
+			_go_downed()
+
+func _select_lethal_rung(damage: int, hp: int) -> LethalRung:
+	# STUB of will-and-death.md's deterministic stakes ladder. No Will yet:
+	#   overkill (exceeds remaining HP by more than the ceiling) -> KILL (rung 3)
+	#   otherwise                                                -> DOWN (rung 1, the safe down)
+	# Rungs 2 (MAIM / Will-exhausted) and 4 (CRISIS) are gated on the Will resource + forks.
+	# This is the SINGLE home of the rung decision: when the resolution pipeline grows its
+	# Will stage (resolution-pipeline.md R7), it calls this at plan time and the preview
+	# renders the result (Law #2). Today it runs only at execution time.
+	var overkill := damage - hp
+	if overkill > OVERKILL_CEILING:
+		return LethalRung.KILL
+	return LethalRung.DOWN
+
+func _go_downed() -> void:
+	lifecycle_state = LifecycleState.DOWNED
+	unit_instance.set_current_hp(1)             # clings at 1 HP (stub) — stays >0, so no death emission
+	_show_downed_sprite(true)
+	went_downed.emit(self)
+
+func _show_downed_sprite(downed: bool) -> void:
+	# Default downed art lives on $DownedSprite (per-unit override applied in _ready). Revive
+	# flips this back. Visibility swap keeps MapSprite as the single texture for everything else.
+	map_sprite.visible = not downed
+	downed_sprite.visible = downed
+
+func is_active() -> bool:
+	return lifecycle_state == LifecycleState.ACTIVE
+
+func is_downed() -> bool:
+	return lifecycle_state == LifecycleState.DOWNED
+
+func is_dead() -> bool:
+	return lifecycle_state == LifecycleState.DEAD
 
 func _apply_faction_visuals():
 	match unit_data.faction:
@@ -161,6 +237,12 @@ func _apply_faction_visuals():
 func change_faction(new_faction: Team.Faction):
 	unit_data.faction = new_faction
 	_apply_faction_visuals()
+
+func has_main_action_queued() -> bool:
+	for action in squad.action_queue:
+		if action.actor == self and action.is_main_action():
+			return true
+	return false
 
 func has_action_type_queued(actiontype: BaseAction.ActionType) -> bool:
 	for action in squad.action_queue:
@@ -237,3 +319,11 @@ func equip_weapon_from_inventory(index: int) -> bool:
 
 func unequip_weapon():
 	equipped_weapon = null
+	
+func revive() -> void:
+	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
+	# its solo squad; rescue does NOT auto-rejoin the old one (per design).
+	if lifecycle_state != LifecycleState.DOWNED:
+		return
+	lifecycle_state = LifecycleState.ACTIVE
+	_show_downed_sprite(false)

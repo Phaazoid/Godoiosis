@@ -110,6 +110,7 @@ func build_unit_data():
 	data.faction = faction
 	data.map_sprite = selected_sprite["idle"]
 	data.move_sprite = selected_sprite["moving"]
+	data.downed_sprite = selected_sprite["downed"]
 
 func try_spawn_at(cell: Vector2i) -> void:
 	_validate()
@@ -139,8 +140,12 @@ func _build_sprite_catalog() -> void:
 			continue
 		if file.ends_with("_Moving.png"):
 			continue
+		if file.ends_with("_Downed.png"):
+			continue
 		var sprite_name := file.get_basename()
 		var idle: Texture2D = load(SPRITE_DIR + file)
 		var moving_path := SPRITE_DIR + sprite_name + "_Moving.png"
 		var moving: Texture2D = load(moving_path) if ResourceLoader.exists(moving_path) else idle
-		sprite_catalog[sprite_name] = {"idle": idle, "moving": moving}
+		var downed_path := SPRITE_DIR + sprite_name + "_Downed.png"
+		var downed: Texture2D = load(downed_path) if ResourceLoader.exists(downed_path) else null
+		sprite_catalog[sprite_name] = {"idle": idle, "moving": moving, "downed": downed}

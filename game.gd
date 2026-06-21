@@ -37,6 +37,8 @@ const GAME_MENU_LEAVESQUAD := 8
 const GAME_MENU_DISBAND_SQUAD := 9
 const GAME_MENU_INSPECT := 10
 const GAME_MENU_EXECUTE_ORDERS := 11
+const GAME_MENU_RESCUE := 12
+
 #Can update this as we want things like icons, hover descriptions, etc for each menu item
 const ACTION_DATA = {
 	GAME_MENU_MOVE: {"name": "Move"},
@@ -49,7 +51,8 @@ const ACTION_DATA = {
 	GAME_MENU_LEAVESQUAD: {"name": "Leave Squad"},
 	GAME_MENU_DISBAND_SQUAD: {"name": "Disband Squad"},
 	GAME_MENU_INSPECT: {"name": "Inspect"},
-	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"}
+	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
+	GAME_MENU_RESCUE: {"name": "Rescue"}
 }
 
 enum GameState {
@@ -60,13 +63,15 @@ enum GameState {
 	CHOOSING_SQUAD,
 	CREATING_SQUAD,
 	BETWEEN_TURNS,
-	DEV_MODE
+	DEV_MODE,
+	RESCUE_TARGETING
 }
 
 var game_state: GameState = GameState.IDLE
 var last_clicked_cell: Vector2i = Vector2i(-999, -999)
 var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 var brush_painting := false
+var _downed_pending: Array[Unit] = []   # units downed mid-execution; ejected after the pass (see _process_downed_pending)
 
 func _ready() -> void:
 	
@@ -98,6 +103,8 @@ func can_control(unit: Unit) -> bool:
 		return false
 	if game_state == GameState.DEV_MODE:
 		return true
+	if not unit.is_active():        # downed/dead units can't be commanded (will-and-death.md)
+		return false
 	return unit.get_faction() == turn_manager.active_faction()
 		
 func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
@@ -126,12 +133,21 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			unit_info_panel.set_unit(unit, can_control(unit))
 		GAME_MENU_EXECUTE_ORDERS:
 			execute_orders(unit)
+		GAME_MENU_RESCUE:
+			enter_rescue_mode(unit)
 
 func end_turn():
 	clear_selection()
 	update_selection_overlay()
 	unit_info_panel.clear()
 	turn_manager.end_turn()
+
+func enter_rescue_mode(unit: Unit):
+	game_state = GameState.RESCUE_TARGETING
+	var cells: Array[Vector2i] = []
+	for ally in get_adjacent_downed_allies(unit):
+		cells.append(ally.movement.cell)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, cells, OVERLAY_TARGET_ATLAS)
 
 func execute_orders(unit):
 	var squad = unit.squad
@@ -150,15 +166,21 @@ func execute_orders(unit):
 
 	var plan := squad_manager.resolve_plan(squad, _board())
 	var move_actions := []
+	var rescue_actions := []
 
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
+		elif action.action_type == BaseAction.ActionType.RESCUE:
+			rescue_actions.append(action)
 
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(plan.attacks)
 	await execute_action_sequence(plan.counters)
+	await execute_action_sequence(rescue_actions)
+
+	_process_downed_pending()
 	
 	if not is_instance_valid(squad):
 		return
@@ -269,6 +291,20 @@ func get_clicked_unit(cell: Vector2i) -> Unit:
 		return unit
 	return null
 
+func get_adjacent_downed_allies(unit: Unit) -> Array[Unit]:
+	# Downed allies orthogonally adjacent to where this unit will END UP (projected position,
+	# so "move next to the body, then rescue" works). Faction-based, not squad-based — the
+	# downed unit was ejected into its own solo squad, but it's still on your team.
+	var result: Array[Unit] = []
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
+		if cell == origin:
+			continue
+		var other := get_unit_at_cell(cell)
+		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result
+
 func _unhandled_input(event):
 	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
@@ -336,7 +372,15 @@ func _unhandled_input(event):
 								# legality gate: you can't aim an attack that currently hits nobody.
 								squad_manager.queue_action(lastUnit.squad, AttackAction.create(lastUnit, origin, null, clickedCell))
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
-			
+				GameState.RESCUE_TARGETING:
+					if lastUnit == null:
+						lastUnit = lastProjectedUnit
+					if lastUnit != null and clickedUnit != null and clickedUnit in get_adjacent_downed_allies(lastUnit):
+						var rescue := RescueAction.new()
+						rescue.init(lastUnit, clickedUnit)
+						squad_manager.queue_action(lastUnit.squad, rescue)
+					exit_current_mode()
+
 			update_selection_overlay()
 		#Right click deselects all
 		if event.button_index == MOUSE_BUTTON_RIGHT and game_state != GameState.DEV_MODE:
@@ -366,12 +410,15 @@ func populate_action_menu(unit: Unit) -> Array:
 	if unit.squad.has_any_queued_actions() and unit.is_leader():
 		options.append(GAME_MENU_EXECUTE_ORDERS)
 
-	if not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad):
+	if not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad):
 		options.append(GAME_MENU_MOVE)
-		
-	if not unit.has_action_type_queued(BaseAction.ActionType.ATTACK) and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon():
+
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon():
 		options.append(GAME_MENU_ATTACK)
-		
+
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and not get_adjacent_downed_allies(unit).is_empty():
+		options.append(GAME_MENU_RESCUE)
+
 		#Once Squad is active, squad state cannot change through actions
 	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not squad_manager.any_squad_active():
 		if can_create_any_squad(unit):
@@ -522,6 +569,7 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 		units_root.add_child(unit)
 		squad_manager.create_squad(unit)
 		unit.unit_died.connect(_on_unit_died)
+		unit.went_downed.connect(_on_unit_downed)
 		return unit
 	return null
 	
@@ -529,8 +577,25 @@ func _on_unit_died(unit: Unit):
 	overlay_manager.handle_unit_death(unit)
 	squad_manager.handle_unit_death(unit)
 	refresh_action_queue(squad_manager.active_squad)
-
 	
+func _on_unit_downed(unit: Unit):
+	# The down fires INSIDE AttackAction.execute(). The unit's state (DOWNED, 1 HP) is already
+	# set in _go_downed; defer the squad/overlay cleanup until the execution pass settles, so
+	# we never mutate squads while execute_orders is mid-await.
+	if not _downed_pending.has(unit):
+		_downed_pending.append(unit)
+
+func _process_downed_pending():
+	if _downed_pending.is_empty():
+		return
+	for unit in _downed_pending:
+		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
+			continue   # finished off later in the same pass — the death path already cleaned it up
+		overlay_manager.handle_unit_death(unit)   # clear its planning overlays (not its board presence)
+		squad_manager.handle_unit_downed(unit)    # eject into a solo squad — safe now, execution is over
+	_downed_pending.clear()
+	refresh_action_queue(squad_manager.active_squad)
+
 func _on_squad_became_active(squad: Squad, action: BaseAction):
 	if squad.leader.has_squad():
 		var icons_to_draw = {}
@@ -742,6 +807,21 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			# Point: the hovered cell itself must be in range.
 			if attacker.combat.is_directional_attack() or attacker.combat.can_hit_cell_from(origin, hoveredCell):
 				preview_cells = attacker.combat.get_affected_cells_from(origin, hoveredCell)
+		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
+
+		if preview_cells.is_empty():
+			cursor_controller.set_state(CursorController.CursorState.INVALID)
+		else:
+			cursor_controller.set_state(CursorController.CursorState.VALID)
+		cursor_controller.set_cursor_pos(hoveredCell)
+
+	if game_state == GameState.RESCUE_TARGETING:
+		var rescuer: Unit = get_unit_at_cell(last_clicked_cell)
+		if rescuer == null:
+			rescuer = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
+		var preview_cells: Array[Vector2i] = []
+		if rescuer != null and hoveredUnit != null and hoveredUnit in get_adjacent_downed_allies(rescuer):
+			preview_cells.append(hoveredCell)
 		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
 
 		if preview_cells.is_empty():

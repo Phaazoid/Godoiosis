@@ -48,7 +48,13 @@ func _queue_action(action: BaseAction):
 	#Enforce one order of each type per unit. A volley is one order
 	#spread across multiple actions, so volley siblings don't replace each other.
 	for existing_action in action_queue.duplicate():
-		if existing_action.actor != action.actor or existing_action.action_type != action.action_type:
+		if existing_action.actor != action.actor:
+			continue
+		# Replace a same-type order, AND enforce one main action per unit — attack, rescue,
+		# etc. contend for one slot. A volley is one order across siblings, so exempt those.
+		var same_type = existing_action.action_type == action.action_type
+		var main_conflict = action.is_main_action() and existing_action.is_main_action()
+		if not same_type and not main_conflict:
 			continue
 		if _is_volley_sibling(existing_action, action):
 			continue

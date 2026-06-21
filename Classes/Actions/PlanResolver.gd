@@ -13,7 +13,9 @@ static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = Re
 		_resolve_one(atk, reactions, hypo)
 	for ctr in plan.counters:
 		if not _counter_actor_live(ctr, hypo):
-			ctr.resolved = ResolvedOutcome.new()   # skipped — no-op playback (Phase 3)
+			var no_op := ResolvedOutcome.new()
+			no_op.skipped = true
+			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
 			continue
 		_resolve_one(ctr, reactions, hypo)
 
@@ -89,10 +91,14 @@ static func _elements_of(attacker: Unit) -> Array[Elemental.Element]:
 	return result
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
-	# R7 liveness flag — always true in Phase 2. Phase 3's Will stage flips this on:
-	# a counter-er downed/killed earlier in the pass cannot counter. The threaded HP
-	# is already in `hypo` for that check.
-	return true
+	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded
+	# HP carries every attack's (and prior counter's) damage; <= 0 means a fatal hit landed on
+	# this unit — downed or dead, either way no counter. The counter-er (action.actor) is only
+	# in `hypo` if it was personally hit this pass; an untouched squadmate isn't -> still live.
+	var counterer := action.actor
+	if counterer == null or not hypo.has(counterer):
+		return true
+	return hypo[counterer].hp > 0
 
 static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 	if not hypo.has(unit):

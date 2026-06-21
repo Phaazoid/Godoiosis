@@ -24,7 +24,7 @@ func apply_damage(damage: int):
 	var unit := owner as Unit
 	if unit == null:
 		return
-	unit.unit_instance.apply_damage(damage)
+	unit.take_damage(damage)
 	
 func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vector2i) -> Array[Vector2i]:
 	var unit := owner as Unit

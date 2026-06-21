@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" uid="uid://deyav21j482j7" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_20lhf"]
 [ext_resource type="Script" uid="uid://b7k2ahcx71v4r" path="res://Classes/units/CombatComponent.gd" id="3_ppost"]
 [ext_resource type="Script" uid="uid://2jus8bopterf" path="res://Classes/units/MovementComponent.gd" id="4_20lhf"]
+[ext_resource type="Texture2D" uid="uid://cxaxsc32mh1ld" path="res://Art/Units/MapSprites/Basic_Soldier_Downed.png" id="4_uqujc"]
 [ext_resource type="Script" uid="uid://cv7o3b03q7eml" path="res://Classes/units/UnitVisuals.gd" id="5_x1v5g"]
 
 [node name="Unit" type="Node2D" unique_id=1798603063]
@@ -20,6 +21,11 @@ offset = Vector2(0, -8)
 visible = false
 texture = ExtResource("3_20lhf")
 centered = false
+
+[node name="DownedSprite" type="Sprite2D" parent="." unique_id=1421651320]
+visible = false
+texture = ExtResource("4_uqujc")
+offset = Vector2(0, -8)
 
 [node name="CombatComponent" type="Node" parent="." unique_id=1612176193]
 script = ExtResource("3_ppost")

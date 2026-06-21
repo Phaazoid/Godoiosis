@@ -9,5 +9,6 @@ class_name UnitData
 @export var base_stats: Dictionary[Stats.Stat, int]
 @export var innate_abilities: Array[String]
 @export var faction: Team.Faction
-@export var map_sprite: Texture2D = load("res://Art/Units/MapSprites/Basic_Soldier.png")
-@export var move_sprite: Texture2D = load("res://Art/Units/MapSprites/Basic_Soldier_Moving.png")
+@export var map_sprite: Texture2D 
+@export var move_sprite: Texture2D 
+@export var downed_sprite: Texture2D 
