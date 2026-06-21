@@ -29,8 +29,9 @@ func test_counter_derivation_is_deterministic() -> void:
 	var attack := AttackAction.create(a1, a1.movement.cell, d1, d1.movement.cell)
 	a1.squad._queue_action(attack)
 
-	var first := sm.calculate_counterattacks_for_squad(a1.squad)
-	var second := sm.calculate_counterattacks_for_squad(a1.squad)
+	var attacks: Array[AttackAction] = [attack]
+	var first := sm.calculate_counterattacks_for_squad(a1.squad, attacks)
+	var second := sm.calculate_counterattacks_for_squad(a1.squad, attacks)
 
 	assert_int(second.size()).is_equal(first.size())
 	assert_int(first.size()).is_greater(0)   # guard against vacuously-equal empties
@@ -49,9 +50,9 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	var start_hp := target.get_current_hp()
 
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
-	attacker.squad._queue_action(attack)
-
-	var plan := sm.resolve_plan(attacker.squad)
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
 	var previewed := attack.resolved.damage   # weapon.power(6) + effective STR(4), via the resolver
 
 	target.combat.apply_damage(previewed)      # the execution seam

@@ -161,7 +161,7 @@ func test_e7_counter_can_complete_a_combo() -> void:
 
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
-	plan.counters = _sm.calculate_counterattacks_for_squad(p.squad)
+	plan.counters = _sm.calculate_counterattacks_for_squad(p.squad, plan.attacks)
 	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
 	PlanResolver.resolve(plan, reactions)
 
@@ -180,6 +180,8 @@ func test_e5_resolution_does_not_mutate_the_queue() -> void:
 	p.squad._queue_action(attack)
 
 	var before := p.squad.action_queue.size()
-	_sm.resolve_plan(p.squad)
-	_sm.resolve_plan(p.squad)
+	var units: Array[Unit] = [p, e]
+	var board := BoardContext.new(_sm.grid, units, _sm)
+	_sm.resolve_plan(p.squad, board)
+	_sm.resolve_plan(p.squad, board)
 	assert_int(p.squad.action_queue.size()).is_equal(before)   # only the player's order remains

@@ -162,7 +162,7 @@ func preview() -> Dictionary:
 			if not action.is_valid:
 				errs.append("%s: %s" % [handle_for(action.actor), ", ".join(action.validation_errors)])
 		return {"ok": false, "error": "plan has invalid actions", "invalid": errs}
-	var plan := squad_manager.resolve_plan(squad)
+	var plan := squad_manager.resolve_plan(squad, _board())
 	return {"ok": true, "plan": _describe_plan(squad, plan)}
 
 func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
@@ -200,7 +200,7 @@ func execute() -> Dictionary:
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
-	var plan := squad_manager.resolve_plan(squad)   # resolve BEFORE moving (projected positions)
+	var plan := squad_manager.resolve_plan(squad, _board())   # resolve BEFORE moving (projected positions)
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()

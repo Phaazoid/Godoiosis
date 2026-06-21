@@ -343,18 +343,13 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) 
 			return member
 	return null
 
-func calculate_counterattacks_for_squad(attacking_squad: Squad) -> Array[CounterAttackAction]:
+func calculate_counterattacks_for_squad(attacking_squad: Squad, attacks: Array[AttackAction]) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
-	var defender_groups_that_countered := {} # {Squad : bool} 
+	var defender_groups_that_countered := {} # {Squad : bool}
 	var attacking_units = attacking_squad.get_members()
 
-	for action in attacking_squad.action_queue:
-		if action.action_type != BaseAction.ActionType.ATTACK:
-			continue
-
-		var attack := action as AttackAction
+	for attack in attacks:
 		var defender := attack.target
-
 		if defender == null or not is_instance_valid(defender):
 			continue
 
@@ -376,16 +371,25 @@ func calculate_counterattacks_for_squad(attacking_squad: Squad) -> Array[Counter
 
 	return counters
 	
-func resolve_plan(squad: Squad) -> ResolvedPlan:
+func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
+	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
+	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
+	# projection-aware, so a re-planned move re-targets the blast — like counters.
 	for action in squad.action_queue:
-		if action.action_type == BaseAction.ActionType.ATTACK:
-			plan.attacks.append(action as AttackAction)
-	plan.counters = calculate_counterattacks_for_squad(squad)
+		if action.action_type != BaseAction.ActionType.ATTACK:
+			continue
+		var aim := action as AttackAction
+		var origin := aim.actor.get_projected_destination()
+		var affected := aim.actor.combat.get_affected_cells_from(origin, aim.target_cell)
+		var victims := RulesService.gather_attack_victims(aim.actor, affected, board)
+		for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims):
+			plan.attacks.append(atk)
+	plan.counters = calculate_counterattacks_for_squad(squad, plan.attacks)
 	PlanResolver.resolve(plan)
 	return plan
 
-func get_display_entries_for_squad(squad: Squad) -> Array[ActionQueueDisplayEntry]:
+func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[ActionQueueDisplayEntry]:
 	var entries: Array[ActionQueueDisplayEntry] = []
 
 	var move_actions: Array[BaseAction] = []
@@ -394,8 +398,8 @@ func get_display_entries_for_squad(squad: Squad) -> Array[ActionQueueDisplayEntr
 			move_actions.append(action)
 
 	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
-	var plan := resolve_plan(squad)
-
+	var plan := resolve_plan(squad, board)
+	
 	if not move_actions.is_empty():
 		entries.append(ActionQueueDisplayEntry.header("MOVE"))
 		for action in move_actions:

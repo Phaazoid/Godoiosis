@@ -84,3 +84,28 @@ func test_volley_siblings_coexist_in_queue() -> void:
 		if action is AttackAction:
 			attack_count += 1
 	assert_int(attack_count).is_equal(2)
+
+# Volley cancel propagation (#19): cancelling ONE member of a volley cancels the whole volley
+# (an AoE is one order). SquadManager.remove_action routes an AttackAction with a non-empty
+# volley through Squad._remove_volley, which removes every sibling and clears the shared array.
+func test_cancelling_one_volley_member_cancels_the_whole_volley() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var v1 := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
+	var v2 := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0))
+	var v3 := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 0))
+	var volley := _make_volley(attacker, Vector2i(2, 0), [v1, v2, v3])
+	for atk in volley:
+		attacker.squad._queue_action(atk)
+	assert_int(_attack_count(attacker.squad)).is_equal(3)   # all three queued
+
+	_sm.remove_action(attacker.squad, volley[1])            # cancel a single (secondary) member
+
+	assert_int(_attack_count(attacker.squad)).is_equal(0)   # the whole volley is gone
+
+# AttackActions remaining in a squad's queue.
+func _attack_count(squad: Squad) -> int:
+	var n := 0
+	for action in squad.action_queue:
+		if action is AttackAction:
+			n += 1
+	return n

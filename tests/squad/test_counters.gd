@@ -22,7 +22,8 @@ func before_test() -> void:
 func _counters_for(attacker: Unit, target: Unit) -> Array[CounterAttackAction]:
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	attacker.squad._queue_action(attack)
-	return _sm.calculate_counterattacks_for_squad(attacker.squad)
+	var attacks: Array[AttackAction] = [attack]
+	return _sm.calculate_counterattacks_for_squad(attacker.squad, attacks)
 
 # C1 — every unit in the defending party gets the opportunity to counter (once per
 # plan). Two adjacent defenders => two counters off a single attack.
@@ -81,7 +82,8 @@ func test_c4_defending_party_responds_once_per_plan() -> void:
 	a1.squad._queue_action(atk1)   # different actors => both attacks stay queued
 	a1.squad._queue_action(atk2)
 
-	var counters := _sm.calculate_counterattacks_for_squad(a1.squad)
+	var attacks: Array[AttackAction] = [atk1, atk2]
+	var counters := _sm.calculate_counterattacks_for_squad(a1.squad, attacks)
 
 	assert_int(counters.size()).is_equal(2)          # one per defender member, not four
 	for c in counters:

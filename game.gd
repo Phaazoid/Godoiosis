@@ -148,7 +148,7 @@ func execute_orders(unit):
 		
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
 
-	var plan := squad_manager.resolve_plan(squad)
+	var plan := squad_manager.resolve_plan(squad, _board())
 	var move_actions := []
 
 	for action in squad.action_queue.duplicate():
@@ -330,8 +330,11 @@ func _unhandled_input(event):
 							var affected = lastUnit.combat.get_affected_cells_from(origin, clickedCell)
 							var victims = gather_attack_victims(lastUnit, affected)
 							if not victims.is_empty():
-								for attack in AttackAction.create_volley(lastUnit, origin, clickedCell, victims):
-									squad_manager.queue_action(lastUnit.squad, attack)
+								# Store the AIM only (actor + aimed cell). The volley is re-derived from
+								# CURRENT projected positions at resolve time (#15) — re-planned moves change
+								# who's hit. null target = "victims derived later". gather here is just the
+								# legality gate: you can't aim an attack that currently hits nobody.
+								squad_manager.queue_action(lastUnit.squad, AttackAction.create(lastUnit, origin, null, clickedCell))
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 			
 			update_selection_overlay()
@@ -496,7 +499,7 @@ func refresh_action_queue(squad: Squad) -> void:
 	if squad == null:
 		squad_action_queue_control.show_display_entries([])
 		return
-	var entries := squad_manager.get_display_entries_for_squad(squad)
+	var entries := squad_manager.get_display_entries_for_squad(squad, _board())
 	squad_action_queue_control.show_display_entries(entries)
 
 	
