@@ -25,9 +25,9 @@ func test_i1_unit_belongs_to_exactly_one_squad() -> void:
 	assert_array(u.squad.members).contains_exactly([u])
 	assert_array(_sm.squads).contains([u.squad])
 
-# I2 — _detach_from_current_squad is the member-removal path; its observable contract
-# is "removed here, rehomed as solo." (Known drift: disband_squad also erases members
-# directly — recorded in squad-system.md / BACKLOG, not fixed in gameplay code here.)
+# I2 — member removal funnels through Squad._erase_member() (the sole members.erase caller,
+# #23); its callers are _detach_from_current_squad (single-unit) and disband_squad (bulk).
+# This test pins the observable single-unit contract: "removed here, rehomed as solo."
 func test_i2_detach_removes_and_rehomes_member() -> void:
 	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
 	var member := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))

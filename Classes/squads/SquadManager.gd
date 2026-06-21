@@ -105,15 +105,23 @@ func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
 	return null
 
 func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
+	# Reset is_valid ONCE up front. Each pass then layers invalidations WITHOUT resetting,
+	# so an invalidation found in one pass stays visible to the occupancy reads in the next.
+	# (Resetting every pass made the loop recompute the same order-dependent answer — #16.)
+	for action in actions:
+		action.clear_validation_errors()
+
 	var max_passes := squad.get_members().size() + 1
-	var valid := true
 	for _i in range(max_passes):
 		var before := actions.map(func(a): return a.is_valid)
-		valid = _validate_action_list_once(squad, actions)   # current body, factored out
-		var after := actions.map(func(a): return a.is_valid)
-		if before == after:
-			break   # fixpoint reached
-	return valid
+		_validate_action_list_once(squad, actions)
+		if actions.map(func(a): return a.is_valid) == before:
+			break
+
+	for action in actions:
+		if not action.is_valid:
+			return false
+	return true
 
 func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> bool:
 	var valid := true
@@ -124,7 +132,7 @@ func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> boo
 	var projected_leader_cell := _get_projected_cell_for_unit(squad.leader, actions)
 	var leader_range := squad.get_ldr_range_from_cell(projected_leader_cell)
 	for action in actions:
-		action.clear_validation_errors()
+		action.clear_validation_messages()
 		
 	for action in actions: 
 		if action.action_type == BaseAction.ActionType.MOVE:

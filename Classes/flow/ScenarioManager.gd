@@ -13,6 +13,18 @@ const SCENARIO_DIR := "res://Scenarios/"
 
 var last_loaded_path := ""
 
+# Entries whose unit_data failed to resolve (resource deleted/moved since saving) come back
+# null. Drop them with a push_error instead of letting load_scenario null-deref (#13). Pure +
+# static so it's unit-testable without the game scene.
+static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
+	var result: Array[ScenarioUnitEntry] = []
+	for entry in scenario.unit_entries:
+		if entry.unit_data == null:
+			push_error("Scenario: skipping a unit whose unit_data could not be resolved.")
+			continue
+		result.append(entry)
+	return result
+
 func save_scenario(scenario_name: String):
 	if scenario_name.strip_edges() == "":
 		push_warning("Scenario needs a name")
@@ -61,13 +73,7 @@ func load_scenario(path: String):
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
 
-	for entry in scenario.unit_entries:
-		if entry.unit_data == null:
-			# A referenced resource failed to resolve (deleted/moved since saving).
-			# Skip rather than crash on the null deref below.
-			push_error("Scenario '%s': skipping a unit whose unit_data could not be resolved." % path)
-			continue
-
+	for entry in valid_entries(scenario):
 		var unit: Unit = game.spawn_unit(entry.unit_data.duplicate(true), entry.cell)
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)

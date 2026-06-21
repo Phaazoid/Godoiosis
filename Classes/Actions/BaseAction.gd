@@ -72,3 +72,6 @@ func finish_execution():
 
 func execute():
 	finish_execution()
+	
+func clear_validation_messages():
+	validation_errors.clear()

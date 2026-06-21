@@ -109,6 +109,17 @@ func test_c6_armed_unit_in_same_geometry_does_counter() -> void:
 
 	assert_int(_counters_for(a, d).size()).is_equal(1)
 
+# C6 (weapon policy) — even armed and in range, a unit whose EQUIPPED WEAPON has
+# can_counter = false does not counter. Same geometry as the armed control above, so the
+# per-weapon flag is the only difference. Guards #34: SquadManager.can_counter must consult
+# the per-WEAPON flag, not only the per-unit Combat component flag.
+func test_c6_weapon_can_counter_false_blocks_counter() -> void:
+	var a := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var d := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {}, true)    # armed, adjacent
+	d.equipped_weapon.can_counter = false
+
+	assert_int(_counters_for(a, d).size()).is_equal(0)
+
 # C7 — bystander parties never counter: only the attacked party responds. A reachable
 # bystander squad is never consulted because no attack targets it.
 func test_c7_bystander_parties_never_counter() -> void:

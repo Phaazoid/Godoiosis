@@ -19,7 +19,7 @@ Squads are Iosis's distinctive mechanic. Units group under a leader, plan togeth
 Numbered for test coverage. Violating any of these is a bug, full stop.
 
 - **I1.** Every unit on the board belongs to exactly one managed squad at all times. A solo unit is a 1-member squad, not squadless.
-- **I2.** Only `SquadManager` creates or destroys squads, and only `SquadManager._detach_from_current_squad()` removes a member. No other code calls `members.erase()`.
+- **I2.** Only `SquadManager` creates or destroys squads. All member removal funnels through `Squad._erase_member()` — the sole caller of `members.erase()` (mirrors the sole adder `_add_member`). Its callers: `_detach_from_current_squad()` (single-unit — join/leave/death) and `disband_squad()` (bulk teardown). (Chokepoint added 2026-06-21, [#23](https://github.com/Phaazoid/Godoiosis/issues/23).)
 - **I3.** Every live squad appears in `SquadManager.squads`; destroyed squads are removed from it and freed. No "ghost squads" holding units.
 - **I4.** `Unit.has_squad()` answers "does this unit have squadmates" (`members.size() > 1`) — not "does a squad object exist" (that's always true, per I1).
 - **I5.** The leader is always a member of their own squad. When the leader leaves/dies, leadership reassigns to the member with the highest LDR stat (first-in-member-order breaks ties). **[→ 2026-06-20: LDR now = squad-capacity budget; "highest LDR leads" still holds (biggest capacity commands) — see banner.]**
