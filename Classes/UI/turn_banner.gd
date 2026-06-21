@@ -8,7 +8,7 @@ func show_label(text: String):
 	
 	#turn_label.modulate.a = 0
 	var tween = create_tween()
-	#modulate:a ain't workin'.  thing pops in and out.  maybe do something.  
+	#TODO - make this effect fancier.  Fade in/out, blue for player team, red for enemy.  
 	#tween.tween_property(self, "modulate:a", 1.0, 0.3)
 	tween.tween_interval(1.0)
 	#tween.tween_property(self, "modulate:a", 0.0, 0.5)

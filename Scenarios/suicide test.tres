@@ -57,9 +57,6 @@ base_stats = Dictionary[int, int]({
 1: 5,
 3: 4
 })
-growth_ranges = Dictionary[int, Vector2i]({
-1: Vector2i(0, 3)
-})
 faction = 1
 map_sprite = ExtResource("3_ktj6r")
 move_sprite = ExtResource("4_rgd8f")

@@ -243,9 +243,6 @@ func get_unit_at_cell(cell: Vector2i) -> Unit:
 			return unit
 	return null
 
-func cell_has_planned_movement(cell: Vector2i):
-	return overlay_manager.get_planned_destinations().has(cell)
-			
 func _input(event):
 	if event.is_action_pressed("toggle_dev_overlay"):
 		if not dev_overlay.visible:
@@ -319,8 +316,6 @@ func _unhandled_input(event):
 						overlay_manager.show_planned_path(lastUnit, move)
 						if move.is_valid:
 							overlay_manager.show_projected_unit(lastUnit, move.destination)
-						#if lastUnit.is_leader():
-							#clip_invalid_projected_squad_movement(lastUnit)
 					exit_current_mode()
 				GameState.DEV_MODE:
 					if clickedUnit != null:

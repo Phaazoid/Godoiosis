@@ -10,6 +10,7 @@
 
 - **HP-like.** Has a **max** and a **current**; current is built and spent. Own display bar under HP, different color.
 - **Max Will is innate per unit** — a **capacity stat** on the statline (see [stats.md](stats.md)): an identity number, not a progression one. Not trainable/grindable; it may shift only via authored/elective events within the bounded drift band (per [stats.md](stats.md) / [progression.md](progression.md)).
+- **Persists between missions (decided 2026-06-21, #8).** Both max (innate) and current Will live on **`UnitInstance`** — the persistent-identity store — *not* the transient combat `Unit`. A unit carries its spent/built Will forward: burnout becomes a campaign-level state that pairs with recovery and the authored economy. (Storage boundary formalized in [resolution-pipeline.md](resolution-pipeline.md), "The persistence seam.")
 - **Built** via squad activity (leader inspiration) and combos. **Lost** via expenditure and enemy **intimidation**.
 - Ability rungs gate on **max-Will thresholds** (an identity gate, since max is fixed).
 
@@ -50,8 +51,8 @@ Will-driven abilities are **their own system to design later.** Locked principle
 
 ## Open forks (need dev + co-dev)
 
-1. **Persist vs reset:** does Will carry between missions (Three Houses "motivation" — burned-out units need recovery, a campaign-level resource that pairs with the authored economy) or reset each mission (simpler)?
-2. **Individual vs squad-pooled Will** (or both): personal grit vs the squad's collective nerve. Leans on fork 1. *(Stats session 2026-06-20 leans **per-unit, squad-fed** — personal stakes, but the squad refills the pool; revisit in playtest.)*
+1. ~~**Persist vs reset**~~ — **RESOLVED 2026-06-21 (#8): Will PERSISTS between missions**, stored on `UnitInstance` (the persistent-identity store). Burned-out units carry depletion forward (Three Houses "motivation"): a campaign-level resource paired with recovery + the authored economy. The transient↔persistent boundary is formalized in [resolution-pipeline.md](resolution-pipeline.md). *(Fork number kept — other docs cite forks by number.)*
+2. **Individual vs squad-pooled Will** (or both): personal grit vs the squad's collective nerve. *(Fork 1 now decided — per-unit Will persists on `UnitInstance`; this fork is only whether a squad-level pool **also** exists, which would be additive, not a relocation. Stats session 2026-06-20 leans **per-unit, squad-fed** — personal stakes, but the squad refills the pool; revisit in playtest.)*
 3. **Downed-attack outcome:** straight kill (current lean) vs a deterministic maim option.
 4. **Limb-loss scope:** only the Will-exhausted rung, or also a possible Crisis consequence?
 5. **Naming:** Will → Tenacity, or a reframed fiction.

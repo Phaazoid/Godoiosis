@@ -81,7 +81,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 - **Move/Speed** — base stat vs. derived from Weight. (A ghost `SPD` lingers in scenario `.tres` + test fixtures but never entered the enum — retire it.)
 - **STR ↔ inventory weight / carry limits.**
-- **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled; persist vs. reset between missions (see [will-and-death.md](will-and-death.md)).
+- **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
 - **Squad range** tuning (now decoupled from LDR; static default — see [squad-system.md](squad-system.md)).
 - **Jobs** — an elective ±1–2 stat-nudge layer with tradeoffs (could make a unit a slightly better leader); whole feature is long-horizon (see [progression.md](progression.md)).
 

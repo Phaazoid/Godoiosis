@@ -51,7 +51,7 @@ func _detach_from_current_squad(unit: Unit): #This should be the only place that
 	if old_squad == null:
 		return
 
-	old_squad.members.erase(unit)
+	old_squad._erase_member(unit)
 	check_reassign_leader(old_squad, unit)
 
 	if old_squad.get_members().is_empty():
@@ -205,7 +205,7 @@ func disband_squad(squad: Squad):
 		return
 	
 	for member in squad.get_members().duplicate():
-		squad.members.erase(member)
+		squad._erase_member(member)
 		create_squad(member)
 		
 	destroy_empty_squad(squad)

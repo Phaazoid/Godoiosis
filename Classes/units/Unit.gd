@@ -18,7 +18,6 @@ const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
 var unit_instance: UnitInstance
-var selected := false #Not actually being used atm
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
@@ -29,10 +28,6 @@ var equipped_weapon: WeaponData = null
 # owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
 # threads a COPY of this set forward as a hypothetical; live mutation is execution-only.
 var element_states: Array[Elemental.State] = []
-
-
-func set_selected(value: bool):
-	selected = value
 
 func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_grid = grid

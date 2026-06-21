@@ -25,6 +25,9 @@ func _add_member(unit: Unit):
 		members.append(unit)
 		unit.squad = self
 
+func _erase_member(unit: Unit):
+	members.erase(unit)
+
 func has_any_queued_actions() -> bool:
 	if action_queue.is_empty():
 		return false

@@ -13,8 +13,5 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 4
 })
-growth_ranges = Dictionary[int, Vector2i]({
-1: Vector2i(0, 3)
-})
 faction = 1
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

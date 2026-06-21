@@ -77,13 +77,18 @@ A dedicated resolver invoked by `SquadManager` (already the derived-action home 
 
 Building Phase 2 against this contract costs almost nothing extra now and saves rebuilding the resolver/preview in Phase 3.
 
-## The persistence seam (already half-built — relevant to two open forks)
+## The persistence seam — FORMALIZED (#8, decided 2026-06-21)
 
-The code already splits **transient vs persistent**: the `Unit` *node* ("these only exist during combat") holds a `UnitInstance` *resource* ("persistent changes… stat changes, limb loss, weapon proficiency"). HP lives on `UnitInstance`. So the forks resolve against an **existing** seam, not a hypothetical one:
+The code splits **transient vs persistent**, and that split is now the **locked boundary** — no feature invents its own persistence. The `Unit` *node* ("these only exist during combat") holds a `UnitInstance` *resource* (the canonical persistent-identity store; HP already lives there). The rule, decided once so elemental and Will don't each grow a private store:
 
-- **Element states** (elemental fork 3): v1 is boolean and chain-scoped → they live on the **transient `Unit`** (and on the resolver's hypothetical copy during the pass). The deferred over-time layer can revisit.
-- **Will** (will-and-death fork 1, persist-vs-reset): if Will **persists** between missions, it belongs on **`UnitInstance`** — which already advertises a home for "limb loss." If it **resets** per mission, transient `Unit` suffices.
+- **Transient `Unit` node = battle-scoped.** Everything that resets at mission start: v1 boolean element states (`Unit.element_states`, live in code), projected position, the resolver's per-pass hypothetical copy. Re-created per spawn.
+- **Persistent `UnitInstance` resource = identity across missions.** The *only* persistent store: fixed stats, HP, limb loss, weapon proficiency, **and Will**. Anything needing cross-mission memory lands here. *(The cross-mission save/load wiring is the future campaign layer — today `UnitInstance` is `.new()`'d per spawn, so nothing actually survives a mission yet; what's locked is **where** persistent state belongs, so each feature rides along once that layer exists rather than being stranded on the transient node.)*
 
-(Note: `UnitInstance` currently still contains `level` / `level_up()` / `growth_ranges` / `randi_range`, which predate and contradict the no-leveling decision in [progression.md](progression.md). Reconcile that when this seam is formalized — tracked in the backlog.)
+Both features that hung on this seam are now resolved:
+
+- **Element states** (elemental fork 3): boolean + chain-scoped → **transient `Unit`** (built; threaded as a copy through the resolver pass). The deferred over-time layer can revisit.
+- **Will** (will-and-death fork 1, persist-vs-reset): **PERSISTS → `UnitInstance`** (decided #8, 2026-06-21). Max Will (innate identity) and current Will both live on the persistent store, beside the limb-loss it already advertises. Fork 2 (individual vs squad-*pooled* Will) stays open but is compatible: per-unit Will sits on `UnitInstance` regardless; a squad pool, if added, is **additive**, not a relocation.
+
+> **Paired reconcile (#12) — DONE 2026-06-21:** the benched `level` / `level_up()` / `randi_range` leveling path (predating and contradicting no-leveling, [progression.md](progression.md)) was stripped from `UnitInstance`, along with the now-dead `growth_ranges` on `UnitData`. The store is now clean — *fixed stats, no growth; home for HP / limb-loss / proficiency / Will.* ([#12](https://github.com/Phaazoid/Godoiosis/issues/12))
 
 Cross-refs: [squad-system.md](squad-system.md) (execution model, the counter prototype), [elemental-system.md](elemental-system.md) (E1–E8 = the elemental stage of this pipeline), [will-and-death.md](will-and-death.md) (the Will/death stage), [progression.md](progression.md) (UnitInstance / persistence), `../../CLAUDE.md` (Laws #1/#2).
