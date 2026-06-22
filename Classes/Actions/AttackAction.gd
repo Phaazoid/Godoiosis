@@ -15,6 +15,8 @@ var volley: Array[AttackAction] = []
 var preview_sprites: Array[Node2D] = []
 
 const ATTACK_ICON := preload("res://Art/Icons/FightActionIcon.png")
+const DOWN_ICON := preload("res://Art/Icons/Down.png")
+const KILL_ICON := preload("res://Art/Icons/DedIcon.png")
 
 func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i):
 	actor = attacker
@@ -62,6 +64,12 @@ func execute():
 	finish_execution()
 
 func get_action_icon() -> Texture2D:
+	if resolved != null:
+		match resolved.lethality:
+			ResolvedOutcome.Lethality.DOWNED:
+				return DOWN_ICON
+			ResolvedOutcome.Lethality.KILLED:
+				return KILL_ICON
 	return ATTACK_ICON
 
 func get_target_texture() -> Texture2D:

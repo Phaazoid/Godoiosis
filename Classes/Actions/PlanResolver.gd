@@ -53,6 +53,8 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 				removes.append(s)
 		if reaction.popup != "":
 			outcome.popups.append(reaction.popup)
+		if reaction.icon != null:
+			outcome.reaction_icons.append(reaction.icon)
 
 	# remove-wins on conflict -> net-disjoint delta sets
 	var net_added: Array[Elemental.State] = []
@@ -71,9 +73,17 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	for s in outcome.states_added:
 		if not target_hypo.states.has(s):
 			target_hypo.states.append(s)
+
+	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
+	# it (Law #2). Reads pre-hit HP, so it runs BEFORE the subtraction below.
+	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, outcome.damage)
+	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
+		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
+	elif outcome.lethality == ResolvedOutcome.Lethality.KILLED:
+		target_hypo.lifecycle = Unit.LifecycleState.DEAD
+
 	target_hypo.hp -= outcome.damage
 	outcome.target_hp_after = target_hypo.hp
-	# (Will stage, Phase 3: read outcome.damage + target_hypo.hp here -> lifecycle.)
 
 	action.resolved = outcome
 
@@ -106,8 +116,25 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.position = unit.get_projected_destination()
 		h.states = unit.element_states.duplicate()
 		h.hp = unit.get_current_hp()
+		h.lifecycle = unit.lifecycle_state
 		hypo[unit] = h
 	return hypo[unit]
+
+static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, damage: int) -> ResolvedOutcome.Lethality:
+	# Mirror of Unit.take_damage (Law #2 — preview must equal execution):
+	#   already DEAD        -> no-op (NONE)
+	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
+	#   damage < hp         -> survivable (NONE)
+	#   overkill > ceiling  -> KILLED, else DOWNED
+	if lifecycle == Unit.LifecycleState.DEAD:
+		return ResolvedOutcome.Lethality.NONE
+	if lifecycle == Unit.LifecycleState.DOWNED:
+		return ResolvedOutcome.Lethality.KILLED
+	if damage < hp_before:
+		return ResolvedOutcome.Lethality.NONE
+	if damage - hp_before > Unit.OVERKILL_CEILING:
+		return ResolvedOutcome.Lethality.KILLED
+	return ResolvedOutcome.Lethality.DOWNED
 
 # Per-unit threaded hypothetical (R4). Will-ready: HP is threaded now; `will` is the
 # reserved Phase-3 slot.
@@ -115,4 +142,5 @@ class _Hypo:
 	var position: Vector2i
 	var states: Array[Elemental.State] = []
 	var hp: int = 0
+	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
 	# var will: int = 0   # Phase 3

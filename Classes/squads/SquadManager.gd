@@ -411,7 +411,17 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		var victims := RulesService.gather_attack_victims(aim.actor, affected, board)
 		for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims):
 			plan.attacks.append(atk)
-	plan.counters = calculate_counterattacks_for_squad(squad, plan.attacks)
+	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
+	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the
+	# attack loop above uses — so an AoE counter splashes everyone in the blast, not just its
+	# chosen target. (Parallels the #15 "derive victims, don't store" rule for attacks.)
+	for aim in calculate_counterattacks_for_squad(squad, plan.attacks):
+		var c_origin := aim.actor.get_projected_destination()
+		var c_aim_cell := aim.target.get_projected_destination()
+		var c_affected := aim.actor.combat.get_affected_cells_from(c_origin, c_aim_cell)
+		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board)
+		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
+			plan.counters.append(ctr)
 	PlanResolver.resolve(plan)
 	return plan
 

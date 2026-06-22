@@ -29,3 +29,4 @@ class_name ElementalReaction
 # Feedback hooks, surfaced in preview + playback.
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""
+@export var icon: Texture2D           # queue/board symbol shown when this reaction FIRES (e.g. the spark)
