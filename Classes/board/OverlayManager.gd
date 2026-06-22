@@ -38,6 +38,8 @@ const SOURCE_ID = 0
 const ATLAS_COORDS = Vector2i(0,0)
 const ICON_Z_INDEX = 15
 
+const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
+const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
 
 enum OverlayType {
 	MOVE,
@@ -385,12 +387,23 @@ func show_projected_unit(unit: Unit, cell: Vector2i):
 	sprite.z_index = Unit.BASE_SPRITE_INDEX
 	
 	#Planning sprite modulation
-	sprite.modulate = Color(.7, .9, 1, .75)
+	sprite.modulate = PROJECTED_MODULATE
 	var offset = Vector2i(0, -8)
 	sprite.offset = offset
 	projected_unit_overlay.add_child(sprite)
 	projected_unit_sprites[unit] = sprite
-	
+
+func has_projected_unit(unit: Unit) -> bool:
+	return projected_unit_sprites.has(unit)
+
+func set_projected_unit_highlighted(unit: Unit, value: bool) -> void:
+	if not projected_unit_sprites.has(unit):
+		return
+	var sprite: Sprite2D = projected_unit_sprites[unit]
+	if not is_instance_valid(sprite):
+		return
+	sprite.modulate = PROJECTED_HIGHLIGHT if value else PROJECTED_MODULATE
+
 func clear_projected_unit(unit: Unit):
 	if not projected_unit_sprites.has(unit):
 		return

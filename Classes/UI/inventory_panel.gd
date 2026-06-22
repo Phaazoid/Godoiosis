@@ -154,12 +154,21 @@ func _refresh():
 		if unit and i < unit.inventory.size() and unit.inventory[i] != null:
 			var item = unit.inventory[i]
 			icon.texture = item.icon
+
+			var display_name = item.item_name
 			if item == unit.get_equipped_weapon():
-				name_label.text = item.item_name + "  (E)"
+				display_name += "  (E)"
 				name_label.modulate = COLOR_EQUIPPED
 			else:
-				name_label.text = item.item_name
 				name_label.modulate = Color(1, 1, 1, 1)
+
+			# Append elemental damage type for weapons that have one.
+			if item is WeaponData:
+				var elem := (item as WeaponData).elemental_damage_type
+				if elem != Elemental.Element.NONE:
+					display_name += "  [%s]" % Elemental.Element.keys()[elem].capitalize()
+
+			name_label.text = display_name
 		else:
 			icon.texture = null
 			name_label.text = "Empty"

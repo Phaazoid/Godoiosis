@@ -429,18 +429,16 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 	var entries: Array[ActionQueueDisplayEntry] = []
 
 	var move_actions: Array[BaseAction] = []
+	var rescue_actions: Array[BaseAction] = []
 	for action in squad.action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
-
-	var rescue_actions: Array[BaseAction] = []
-	for action in squad.action_queue:
-		if action.action_type == BaseAction.ActionType.RESCUE:
+		elif action.action_type == BaseAction.ActionType.RESCUE:
 			rescue_actions.append(action)
 
 	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
 	var plan := resolve_plan(squad, board)
-	
+
 	if not move_actions.is_empty():
 		entries.append(ActionQueueDisplayEntry.header("MOVE"))
 		for action in move_actions:
@@ -449,14 +447,9 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 	if not plan.attacks.is_empty():
 		if not entries.is_empty():
 			entries.append(ActionQueueDisplayEntry.divider())
-
 		entries.append(ActionQueueDisplayEntry.header("ATTACK"))
 		for attack in plan.attacks:
 			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
-
-			for counter in plan.counters:
-				if counter.source_attack == attack and not counter.resolved.skipped:
-					entries.append(ActionQueueDisplayEntry.action_row(counter, 1))
 
 	if not rescue_actions.is_empty():
 		if not entries.is_empty():
@@ -464,6 +457,19 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 		entries.append(ActionQueueDisplayEntry.header("RESCUE"))
 		for action in rescue_actions:
 			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
+
+	# Counters last, in their own section — derived, not stored (Law #2). A skipped counter
+	# (the counterer went down/dead this pass) is hidden.
+	var live_counters: Array[BaseAction] = []
+	for counter in plan.counters:
+		if not counter.resolved.skipped:
+			live_counters.append(counter)
+	if not live_counters.is_empty():
+		if not entries.is_empty():
+			entries.append(ActionQueueDisplayEntry.divider())
+		entries.append(ActionQueueDisplayEntry.header("COUNTER"))
+		for counter in live_counters:
+			entries.append(ActionQueueDisplayEntry.action_row(counter, 0))
 
 	return entries
 

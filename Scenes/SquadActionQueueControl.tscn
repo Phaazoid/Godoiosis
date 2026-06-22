@@ -23,9 +23,9 @@ script = ExtResource("1_voyyq")
 custom_minimum_size = Vector2(50, 50)
 layout_mode = 0
 offset_left = 1000.0
-offset_top = 100.0
-offset_right = 1128.0
-offset_bottom = 600.0
+offset_top = 25.0
+offset_right = 1145.0
+offset_bottom = 525.0
 theme_override_styles/panel = SubResource("StyleBoxFlat_voyyq")
 
 [node name="MarginContainer" type="MarginContainer" parent="BackgroundPanel" unique_id=250797685]
@@ -34,12 +34,13 @@ offset_top = 10.0
 offset_right = 64.0
 offset_bottom = 42.0
 
-[node name="ScrollContainer" type="ScrollContainer" parent="BackgroundPanel/MarginContainer" unique_id=1720702956]
+[node name="VBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer" unique_id=839256563]
+layout_mode = 2
+
+[node name="SectionsBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=1989633923]
 custom_minimum_size = Vector2(128, 500)
 layout_mode = 2
-horizontal_scroll_mode = 0
 
-[node name="ActionListBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/ScrollContainer" unique_id=1127182637]
-custom_minimum_size = Vector2(64, 32)
+[node name="ExecuteButton" type="Button" parent="BackgroundPanel/MarginContainer/VBox" unique_id=350332695]
+custom_minimum_size = Vector2(145, 36)
 layout_mode = 2
-alignment = 1

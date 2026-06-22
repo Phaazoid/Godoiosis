@@ -7,25 +7,25 @@ var unit: Unit
 @onready var stats_container = $StatsMargin/StatsVBox/StatsContainer
 
 func _populate_stats():
-	#Clear old rows
+	# Clear old rows
 	for child in stats_container.get_children():
 		child.queue_free()
-	
+
 	var stats := unit.get_all_stats()
 	var stat_names := stats.keys()
-	
+
 	for stat_name in stat_names:
 		if stat_name == Stats.Stat.MHP:
-			continue   # skip before allocating (MHP shows in the header already)
-		var name_label := Label.new()
-		name_label.text = Stats.Stat.keys()[stat_name]
-		name_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		
-		var value_label := Label.new()
-		value_label.text = str(stats[stat_name])
-		value_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		stats_container.add_child(name_label)
-		stats_container.add_child(value_label)
+			continue
+		var name_lbl := Label.new()
+		name_lbl.text = Stats.Stat.keys()[stat_name]
+		name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		var value_lbl := Label.new()
+		value_lbl.text = str(stats[stat_name])
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		stats_container.add_child(name_lbl)
+		stats_container.add_child(value_lbl)
 
 func set_unit(target: Unit):
 	#To prevent duplicate stacking.  

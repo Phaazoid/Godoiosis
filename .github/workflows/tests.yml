@@ -1,0 +1,50 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cache Godot binary
+        id: cache-godot
+        uses: actions/cache@v4
+        with:
+          path: godot-bin/
+          key: godot-4.6-stable-linux-x86_64
+
+      - name: Download Godot 4.6
+        if: steps.cache-godot.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://github.com/godotengine/godot/releases/download/4.6-stable/Godot_v4.6-stable_linux.x86_64.zip
+          unzip -q Godot_v4.6-stable_linux.x86_64.zip
+          mkdir godot-bin
+          mv Godot_v4.6-stable_linux.x86_64 godot-bin/godot
+
+      - name: Ensure Godot is executable
+        run: chmod +x godot-bin/godot
+
+      - name: Import project
+        run: godot-bin/godot --headless --path . --import
+
+      - name: Run tests
+        run: |
+          godot-bin/godot --headless --path . \
+            -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
+            -a res://tests \
+            --ignoreHeadlessMode
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ github.run_number }}
+          path: reports/

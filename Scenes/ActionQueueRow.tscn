@@ -9,6 +9,12 @@ offset_bottom = 32.0
 alignment = 1
 script = ExtResource("1_fbndw")
 
+[node name="CancelButton" type="Button" parent="." unique_id=1540100166]
+custom_minimum_size = Vector2(20, 20)
+layout_mode = 2
+focus_mode = 0
+text = "X"
+
 [node name="ActorTexture" type="TextureRect" parent="." unique_id=1426592185]
 custom_minimum_size = Vector2(32, 32)
 layout_mode = 2

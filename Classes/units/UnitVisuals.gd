@@ -5,6 +5,7 @@ class_name UnitVisuals
 
 var visual_tween: Tween
 const TILE_SIZE = 16
+const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
 
 var base_position: Vector2
 var base_modulate: Color
@@ -61,7 +62,17 @@ func set_hovered(value: bool):
 		sprite.z_index = base_z_index + 5
 	else:
 		sprite.z_index = base_z_index
-	
+
+func set_highlighted(value: bool) -> void:
+	if sprite == null:
+		return
+	if value:
+		sprite.modulate = HIGHLIGHT_MODULATE
+		set_hovered(true)       # also bumps z_index so the unit reads on top
+	else:
+		sprite.modulate = base_modulate
+		set_hovered(false)
+
 func set_projected(value: bool):
 	if value:
 		sprite.hide()

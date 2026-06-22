@@ -5,6 +5,7 @@
 [ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/portrait_panel.gd" id="4_uqtkw"]
 [ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/ui/info_panel.gd" id="5_s5bvs"]
 [ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/ui/inventory_panel.gd" id="6_yiwsu"]
+[ext_resource type="Script" uid="uid://dped5mpr4jp3w" path="res://Classes/ui/UnitStatesBar.gd" id="7_jcfpm"]
 [ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/ui/squad_info_panel.gd" id="8_rlbgq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
@@ -138,3 +139,13 @@ theme_override_constants/margin_bottom = 2
 [node name="SquadLabel" type="RichTextLabel" parent="UnitInfoPanel/UnitStatusHBox/SquadInfoPanel/MarginContainer" unique_id=271216556]
 custom_minimum_size = Vector2(500, 50)
 layout_mode = 2
+
+[node name="UnitStatesBar" type="HBoxContainer" parent="UnitInfoPanel" unique_id=150209455]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 0
+script = ExtResource("7_jcfpm")

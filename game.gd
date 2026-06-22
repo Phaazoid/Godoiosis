@@ -72,6 +72,7 @@ var last_clicked_cell: Vector2i = Vector2i(-999, -999)
 var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 var brush_painting := false
 var _downed_pending: Array[Unit] = []   # units downed mid-execution; ejected after the pass (see _process_downed_pending)
+var _highlighted_queue_units: Array[Unit] = []
 
 func _ready() -> void:
 	
@@ -83,9 +84,11 @@ func _ready() -> void:
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
+	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
+	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
+	squad_action_queue_control.row_hover_changed.connect(_on_queue_row_hover_changed)
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
-	
 
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
@@ -192,6 +195,12 @@ func execute_orders(unit):
 	for member in squad.members:
 		overlay_manager.clear_planned_path(member)
 
+func _on_queue_execute_requested() -> void:
+	var squad := squad_manager.active_squad
+	if squad == null:
+		return
+	execute_orders(squad.get_leader())
+
 func execute_action_phase_parallel(actions: Array):
 	if actions.is_empty():
 		return
@@ -227,7 +236,73 @@ func execute_action_sequence(actions: Array):
 	
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
-		
+
+func _on_queue_cancel_requested(display_action: BaseAction):
+	if display_action == null or display_action.actor == null:
+		return
+	var unit: Unit = display_action.actor
+	var squad: Squad = unit.squad
+	if squad == null:
+		return
+
+	match display_action.action_type:
+		BaseAction.ActionType.MOVE:
+			# Cancelling a move also cancels the unit's main action: an attack/rescue is planned
+			# to resolve from the unit's POST-move position (move-before-main rule), so without the
+			# move it's stale — wrong origin/range, maybe hitting nobody, and nothing re-validates
+			# it. The move+main combo is cancelled as a unit.
+			squad_manager.cancel_move_for_unit(unit)
+			_cancel_stored_main_action(unit, squad)
+		BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE:
+			# Displayed attacks are DERIVED volley members (rebuilt each resolve), not stored
+			# orders. Remove the unit's stored MAIN action (its aim) — that re-derives the
+			# volley AND its counters away on the next refresh.
+			_cancel_stored_main_action(unit, squad)
+		_:
+			pass   # counters etc. are derived — their X is inert
+
+func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
+	for action in squad.action_queue.duplicate():
+		if action.actor == unit and action.is_main_action():
+			squad_manager.remove_action(squad, action)
+			return
+
+func _highlight_unit(unit: Unit, on: bool) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	# A unit with a valid queued move is drawn as a projected "ghost" (its real sprite is
+	# hidden). Highlight whichever sprite is actually on screen.
+	if overlay_manager.has_projected_unit(unit):
+		overlay_manager.set_projected_unit_highlighted(unit, on)
+	else:
+		unit.visuals.set_highlighted(on)
+
+func _squad_all_committed(squad: Squad) -> bool:
+	# True when every member has locked in at least one REAL order — a main action, or a
+	# non-hold move. A bare hold-position move does not count.
+	for member in squad.get_members():
+		if not (member.has_main_action_queued() or member.has_valid_move_queued()):
+			return false
+	return true
+
+func _on_queue_row_hover_changed(action: BaseAction, hovering: bool) -> void:
+	for u in _highlighted_queue_units:
+		_highlight_unit(u, false)
+	_highlighted_queue_units.clear()
+
+	if not hovering or action == null:
+		return
+
+	if is_instance_valid(action.actor):
+		_highlight_unit(action.actor, true)
+		_highlighted_queue_units.append(action.actor)
+
+	if action is AttackAction:
+		var target := (action as AttackAction).target
+		if target != null and is_instance_valid(target):
+			_highlight_unit(target, true)
+			_highlighted_queue_units.append(target)
+
 func create_squad(unit: Unit):
 	game_state = GameState.CREATING_SQUAD
 	draw_create_squad(unit)
@@ -545,11 +620,21 @@ func update_selection_overlay():
 func refresh_action_queue(squad: Squad) -> void:
 	if squad == null:
 		squad_action_queue_control.show_display_entries([])
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
 	var entries := squad_manager.get_display_entries_for_squad(squad, _board())
 	squad_action_queue_control.show_display_entries(entries)
 
-	
+	var can_execute: bool = (squad_manager.active_squad == squad
+		and not squad_manager.only_hold_actions()
+		and not squad_manager.squad_has_invalid_actions(squad))
+	if not can_execute:
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
+	elif _squad_all_committed(squad):
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.ALL_COMMITTED)
+	else:
+		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
+
 func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	var unit = UnitFactory.create_unit(data, grid, pos)
 
@@ -617,7 +702,12 @@ func _on_squad_has_no_actions(squad: Squad):
 	overlay_manager.redraw_squad_unit_icons(squad)
 
 func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType):
-	overlay_manager.clear_planned_path(unit)
+	# Only a MOVE cancel may clear the unit's move visuals. Cancelling a main action
+	# (attack/rescue) must leave a still-queued move — arrow and projected ghost — untouched.
+	if actiontype == BaseAction.ActionType.MOVE:
+		overlay_manager.clear_planned_path(unit)
+		unit.visuals.set_projected(false)
+
 	if squad_manager.active_squad == squad:
 		overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.SQUADMEMBER)
 		if unit.is_leader():
@@ -625,9 +715,6 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 
 	if unit.is_leader():
 		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
-		
-	if actiontype == BaseAction.ActionType.MOVE:
-		unit.visuals.set_projected(false)
 
 	squad_manager.validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
@@ -773,7 +860,7 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 				draw_squad_leader_range(hoveredUnit.squad, hoveredUnit.squad.leader.get_projected_destination())
 
 			overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(hoveredUnit), hoveredUnit), OVERLAY_DEFAULT_ATLAS)
-			hover_info_panel.set_unit(hoveredUnit)
+			_show_hover_panel(hoveredUnit)
 			var unreachable = compute_move_range(hoveredUnit).squad_unreachable.keys()
 			overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OVERLAY_DEFAULT_ATLAS)
 			if hoveredUnit.has_squad() and squad_manager.active_squad == null: #TODO later change this to muted colors if other squads are active
@@ -865,6 +952,18 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 		for icontype in icons_to_draw[unit]:
 			overlay_manager.create_unit_icon(unit, icontype)
 
+func _show_hover_panel(hovered: Unit) -> void:
+	# Inspect + hover must never overlap. While a unit is inspected:
+	#   - hovering that SAME unit adds nothing -> suppress the hover panel
+	#   - hovering a DIFFERENT unit -> force it onto the opposite screen half
+	if unit_info_panel.is_showing():
+		if unit_info_panel.is_showing_unit(hovered):
+			hover_info_panel.clear()
+			return
+		var half: int = HoverInfoPanelControl.Half.BOTTOM if unit_info_panel.is_on_top() else HoverInfoPanelControl.Half.TOP
+		hover_info_panel.set_unit(hovered, half)
+	else:
+		hover_info_panel.set_unit(hovered)
 
 func _handle_tile_brush(event):
 	if event is InputEventMouseButton:

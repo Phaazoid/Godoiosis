@@ -28,8 +28,15 @@ script = ExtResource("2_jsdin")
 custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
 
-[node name="NameLabel" type="Label" parent="HoverPanel/HoverInfoGridContainer" unique_id=1066263610]
+[node name="NameRow" type="HBoxContainer" parent="HoverPanel/HoverInfoGridContainer" unique_id=1830318233]
 layout_mode = 2
+
+[node name="NameLabel" type="Label" parent="HoverPanel/HoverInfoGridContainer/NameRow" unique_id=1066263610]
+layout_mode = 2
+
+[node name="StatesRow" type="HBoxContainer" parent="HoverPanel/HoverInfoGridContainer/NameRow" unique_id=125542146]
+layout_mode = 2
+theme_override_constants/separation = 2
 
 [node name="HPLabel" type="Label" parent="HoverPanel/HoverInfoGridContainer" unique_id=1605526732]
 layout_mode = 2
