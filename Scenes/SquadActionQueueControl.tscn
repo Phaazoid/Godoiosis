@@ -10,6 +10,14 @@ border_width_right = 3
 border_width_bottom = 3
 border_color = Color(0.27275372, 0.09041131, 0, 1)
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_3ao6u"]
+bg_color = Color(0.92941177, 0, 0, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0, 0, 0, 1)
+
 [node name="SquadActionQueueControl" type="Control" unique_id=1755236960]
 visible = false
 custom_minimum_size = Vector2(128, 0)
@@ -44,3 +52,4 @@ layout_mode = 2
 [node name="ExecuteButton" type="Button" parent="BackgroundPanel/MarginContainer/VBox" unique_id=350332695]
 custom_minimum_size = Vector2(145, 36)
 layout_mode = 2
+theme_override_styles/normal = SubResource("StyleBoxFlat_3ao6u")

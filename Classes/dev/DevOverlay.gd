@@ -11,6 +11,7 @@ class_name DevOverlay
 func _ready() -> void:
 	(%Scenario as ScenarioTool).init(scenario_manager)
 	spawn.init(game)
+	tile_brush.game = game
 	close_requested.connect(_on_close_requested)
 	%DevTabs.tab_changed.connect(_on_tab_changed)
 	var tabs := %DevTabs

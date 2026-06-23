@@ -89,7 +89,7 @@ func _ready() -> void:
 	squad_action_queue_control.row_hover_changed.connect(_on_queue_row_hover_changed)
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
-
+	camera_controller.refresh_bounds(grid)
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
@@ -965,6 +965,18 @@ func _show_hover_panel(hovered: Unit) -> void:
 	else:
 		hover_info_panel.set_unit(hovered)
 
+# Dev: reset the playable map to a solid width x height rectangle from (0,0), filled with
+# `fill_tile`. Carve odd shapes afterward with the brush's right-click erase. refresh_bounds
+# then re-derives the camera clamp from the new used_rect.
+func resize_map(width: int, height: int, fill_tile: Vector2i) -> void:
+	width = maxi(1, width)
+	height = maxi(1, height)
+	grid.clear()
+	for x in range(width):
+		for y in range(height):
+			grid.set_cell(Vector2i(x, y), 0, fill_tile)
+	camera_controller.refresh_bounds(grid)
+
 func _handle_tile_brush(event):
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -979,11 +991,13 @@ func _handle_tile_brush(event):
 func _paint_tile():
 	var cell = grid.local_to_map(grid.to_local(get_global_mouse_position()))
 	grid.set_cell(cell, 0, dev_overlay.tile_brush.selected_tile)
-
+	camera_controller.refresh_bounds(grid)
+	
 func _erase_tile():
 	var cell = grid.local_to_map(grid.to_local(get_global_mouse_position()))
 	grid.erase_cell(cell)
-
+	camera_controller.refresh_bounds(grid)
+	
 func clear_icons(icons: Array[OverlayIcon.IconType]):
 	overlay_manager.clear_unit_icon_types(icons)
 	

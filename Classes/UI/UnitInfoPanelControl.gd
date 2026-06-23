@@ -11,6 +11,12 @@ var current_unit: Unit
 var screen_pos
 var _on_top := false   # true when the panel is parked on the TOP half
 
+func _ready() -> void:
+	$UnitInfoPanel/CloseButton.pressed.connect(_on_close_button_pressed)
+
+func _on_close_button_pressed() -> void:
+	clear()
+
 func set_unit(unit: Unit, can_act := false):
 	if current_unit != unit:
 		current_unit = unit

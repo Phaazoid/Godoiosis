@@ -35,6 +35,9 @@ border_width_top = 2
 border_width_right = 2
 border_width_bottom = 2
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jcfpm"]
+bg_color = Color(1, 0, 0, 1)
+
 [node name="UnitInfoPanelControl" type="Control" unique_id=1128572749]
 visible = false
 layout_mode = 3
@@ -149,3 +152,11 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 0
 script = ExtResource("7_jcfpm")
+
+[node name="CloseButton" type="Button" parent="UnitInfoPanel" unique_id=1787164880]
+custom_minimum_size = Vector2(24, 24)
+layout_mode = 1
+offset_right = 24.0
+offset_bottom = 31.0
+theme_override_styles/normal = SubResource("StyleBoxFlat_jcfpm")
+text = "X"
