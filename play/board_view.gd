@@ -12,10 +12,19 @@ static func render_overview(session) -> String:
 	var bounds := _content_bounds(session)
 	var lines: Array[String] = []
 	lines.append("Turn: %s" % session._faction_name(session.active_faction()))
-	lines.append(_grid_block(session, bounds, {}))
+	lines.append(_grid_block(session, bounds, _downed_overlay(session)))
 	lines.append("")
 	lines.append(_legend(session))
 	return "\n".join(lines)
+
+# Mark every downed-but-alive body on the board ("v"). Downed units cling at 1 HP, are out
+# of action, and have been ejected into solo squads — but they still occupy their cell.
+static func _downed_overlay(session) -> Dictionary:
+	var overlay := {}
+	for unit in session.live_units():
+		if unit.is_downed():
+			overlay[unit.movement.cell] = "v"
+	return overlay
 
 static func render_focus(session, handle: String) -> String:
 	var unit: Unit = session.unit_by_handle(handle)
@@ -30,9 +39,12 @@ static func render_focus(session, handle: String) -> String:
 	if unit.has_equipped_weapon():
 		for cell in unit.combat.get_all_attack_cells_from(unit.get_projected_destination()):
 			overlay[cell] = "*" if overlay.has(cell) else "x"
+	for other in session.live_units():
+		if other.is_downed() and not overlay.has(other.movement.cell):
+			overlay[other.movement.cell] = "v"
 	overlay[unit.movement.cell] = "@"
 	var lines: Array[String] = []
-	lines.append("focus %s (%s)   + move   - breaks leader range   x attack   @ here" % [handle, unit.get_unit_name()])
+	lines.append("focus %s (%s)   + move   - breaks leader range   x attack   v downed   @ here" % [handle, unit.get_unit_name()])
 	lines.append(_grid_block(session, _content_bounds(session), overlay))
 	lines.append("")
 	lines.append("  " + _unit_line(session, unit))
@@ -53,8 +65,13 @@ static func render_preview(session) -> String:
 	for a in plan.attacks:
 		lines.append("  ATTACK %s -> %s : %d dmg%s" % [a.actor, a.target, a.dmg, _hp_tag(a)])
 	for c in plan.counters:
-		lines.append("    ctr  %s -> %s : %d dmg%s" % [c.actor, c.target, c.dmg, _hp_tag(c)])
-	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty():
+		if c.skipped:
+			lines.append("    ctr  %s : none (downed/killed before it could strike back)" % c.actor)
+		else:
+			lines.append("    ctr  %s -> %s : %d dmg%s" % [c.actor, c.target, c.dmg, _hp_tag(c)])
+	for r in plan.rescues:
+		lines.append("  RESCUE %s -> %s (revives to 1 hp)" % [r.actor, r.target])
+	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty() and plan.rescues.is_empty():
 		lines.append("  (empty plan)")
 	return "\n".join(lines)
 
@@ -69,8 +86,10 @@ static func render_result(events: Array) -> String:
 # ---- internals ----
 
 static func _hp_tag(a: Dictionary) -> String:
-	if a.lethal:
+	if a.lethality == ResolvedOutcome.Lethality.KILLED:
 		return " -> DIES"
+	if a.lethality == ResolvedOutcome.Lethality.DOWNED:
+		return " -> DOWNED (clings at 1 hp)"
 	if a.hp_after >= 0:
 		return " -> %d hp" % a.hp_after
 	return ""
@@ -117,8 +136,13 @@ static func _unit_at(session, cell: Vector2i) -> Unit:
 
 static func _legend(session) -> String:
 	var lines: Array[String] = ["Units:"]
+	var any_downed := false
 	for unit in session.live_units():
 		lines.append("  " + _unit_line(session, unit))
+		if unit.is_downed():
+			any_downed = true
+	if any_downed:
+		lines[0] = "Units:   (v = downed body on board; finish it or rescue it)"
 	return "\n".join(lines)
 
 static func _unit_line(session, unit: Unit) -> String:
@@ -133,16 +157,33 @@ static func _unit_line(session, unit: Unit) -> String:
 	var wep := "(unarmed)"
 	if unit.has_equipped_weapon():
 		wep = _weapon_str(unit.get_equipped_weapon())
-	return "%s %s  %s  hp%d/%d  %s  %s" % [
+	var state := "  [DOWNED]" if unit.is_downed() else ""
+	return "%s %s  %s  hp%d/%d  %s  %s%s" % [
 		session.handle_for(unit), unit.get_unit_name(), fac,
 		unit.get_current_hp(), unit.get_base_stat(Stats.Stat.MHP),
-		squad_tag, wep,
+		squad_tag, wep, state,
 	]
 
 static func _weapon_str(w: WeaponData) -> String:
-	var s := "%s pow%d" % [WeaponData.WeaponType.keys()[w.weapon_type], w.power]
+	# Show the PATTERN, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly
+	# different shape (omnidirectional Manhattan vs a 1-tile directional ForwardWide), which
+	# decides reach AND who can counter. Hiding it once made a correct no-counter look like a bug.
+	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], w.power, _pattern_str(w.attack_pattern)]
 	if w.elemental_damage_type != Elemental.Element.NONE:
 		s += "/" + Elemental.Element.keys()[w.elemental_damage_type]
 	if w.can_counter:
 		s += "/ctr"
+	if w.hits_allies:
+		s += "/ff"   # friendly-fire: its blast hits allies in range too
 	return s
+
+static func _pattern_str(p: AttackPattern) -> String:
+	if p == null:
+		return "melee[1]"
+	if p is ManhattanRangePattern:
+		return "Manhattan[%d-%d%s]" % [p.min_range, p.max_range, ("+" if p.max_and_a_half else "")]
+	if p is ForwardWidePattern:
+		return "ForwardWide[L%d W%d]" % [p.length, p.width]
+	if p is ForwardLinePattern:
+		return "ForwardLine[L%d]" % p.length
+	return "pattern?"

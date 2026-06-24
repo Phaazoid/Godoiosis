@@ -14,6 +14,10 @@ extends SceneTree
 #   move   {"unit": "A", "x": 4, "y": 0}
 #   attack {"unit": "A", "x": 5, "y": 0}
 #   cancel {"unit": "A"}
+#   rescue {"unit": "A", "target": "b"}   - A picks up adjacent downed ally b (a main action)
+#   join   {"unit": "B", "leader": "A"}   - B joins A's squad (squad-up / join)
+#   leave  {"unit": "B"}                  - B leaves its squad (back to solo)
+#   disband{"unit": "A"}                  - A (squad leader) disbands its squad
 #   execute | endturn            - resolve+apply the plan / pass the turn
 #   quit                         - shut the bridge down
 
@@ -89,6 +93,18 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"cancel":
 			var r = _session.cancel(str(args.get("unit", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"rescue":
+			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"join":
+			var r = _session.join(str(args.get("unit", "")), str(args.get("leader", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
+		"leave":
+			var r = _session.leave(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
+		"disband":
+			var r = _session.disband(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
 		"execute":
 			var r = _session.execute()
 			if not r.ok:

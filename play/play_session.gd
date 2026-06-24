@@ -15,6 +15,7 @@ var overlay_manager: OverlayManager
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
+var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors game._downed_pending)
 
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
@@ -39,9 +40,28 @@ func _register(unit: Unit) -> void:
 		_next_player += 1
 	if not unit.unit_died.is_connected(_on_unit_died):
 		unit.unit_died.connect(_on_unit_died)
+	if not unit.went_downed.is_connected(_on_unit_downed):
+		unit.went_downed.connect(_on_unit_downed)
 
 func _on_unit_died(unit: Unit) -> void:
 	squad_manager.handle_unit_death(unit)
+
+func _on_unit_downed(unit: Unit) -> void:
+	# The down fires INSIDE the attack/counter pass (take_damage -> _go_downed). Defer the
+	# squad ejection until the pass settles, exactly like game._on_unit_downed, so we never
+	# restructure squads mid-resolution.
+	if not _downed_pending.has(unit):
+		_downed_pending.append(unit)
+
+func _process_downed_pending() -> void:
+	# Twin of game._process_downed_pending: eject each survivor-but-downed unit into a solo
+	# squad. Skip any that got finished off (KILLED) later in the same pass — death already
+	# cleaned those up.
+	for unit in _downed_pending:
+		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
+			continue
+		squad_manager.handle_unit_downed(unit)
+	_downed_pending.clear()
 
 # ---- queries ----
 
@@ -131,10 +151,10 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	var victims := RulesService.gather_attack_victims(unit, affected, _board())
 	if victims.is_empty():
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
-	var any_ok := false
-	for attack in AttackAction.create_volley(unit, origin, aim, victims):
-		if squad_manager.queue_action(unit.squad, attack):
-			any_ok = true
+	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
+	# (#15), mirroring game.gd. Pre-expanding a volley here made resolve_plan re-expand each member
+	# -> N^2 hits for AoE weapons. `victims` above is used only to validate + describe the aim.
+	var any_ok := squad_manager.queue_action(unit.squad, AttackAction.create(unit, origin, null, aim))
 	if not any_ok:
 		return {"ok": false, "error": "another squad is already active this turn"}
 	var names: Array[String] = []
@@ -148,6 +168,106 @@ func cancel(handle: String) -> Dictionary:
 		return {"ok": false, "error": "no unit '%s'" % handle}
 	squad_manager.remove_actions_for_unit(unit)
 	return {"ok": true, "summary": "cancelled %s's orders" % handle}
+
+# ---- rescue + squad management (drives the same SquadManager / RescueAction as the player) ----
+
+func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
+	var rescuer := unit_by_handle(rescuer_handle)
+	var gate := _controllable(rescuer, rescuer_handle)
+	if not gate.ok:
+		return gate
+	var target := unit_by_handle(target_handle)
+	if target == null:
+		return {"ok": false, "error": "no unit '%s'" % target_handle}
+	if not _adjacent_downed_allies(rescuer).has(target):
+		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
+	var action := RescueAction.new()
+	action.init(rescuer, target)
+	if not squad_manager.queue_action(rescuer.squad, action):
+		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
+	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
+
+# Downed allies orthogonally adjacent to where the rescuer will END UP (projected cell), same
+# team — mirrors game.get_adjacent_downed_allies ("move next to the body, then rescue").
+func _adjacent_downed_allies(unit: Unit) -> Array[Unit]:
+	var result: Array[Unit] = []
+	var board := _board()
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
+		if cell == origin:
+			continue
+		var other := board.unit_at_cell(cell)
+		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result
+
+# member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
+# "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
+# nothing has committed to acting yet.
+func join(member_handle: String, leader_handle: String) -> Dictionary:
+	var member := unit_by_handle(member_handle)
+	var leader := unit_by_handle(leader_handle)
+	if member == null:
+		return {"ok": false, "error": "no unit '%s'" % member_handle}
+	if leader == null:
+		return {"ok": false, "error": "no unit '%s'" % leader_handle}
+	if member == leader:
+		return {"ok": false, "error": "a unit can't join itself"}
+	if member.squad == leader.squad:
+		return {"ok": false, "error": "%s is already in %s's squad" % [member_handle, leader_handle]}
+	if leader.get_faction() != active_faction():
+		return {"ok": false, "error": "can only reorganize your own (%s) squads this turn" % _faction_name(active_faction())}
+	if member.get_faction() != leader.get_faction():
+		return {"ok": false, "error": "different factions can't squad up"}
+	var gate := _squad_change_gate(member.squad, leader.squad)
+	if not gate.ok:
+		return gate
+	if member.has_any_actions():
+		return {"ok": false, "error": "%s has queued orders — cancel them before squadding up" % member_handle}
+	var reach := leader.squad.get_max_range()
+	if GridUtils.manhattan_distance(member.movement.cell, leader.movement.cell) > reach:
+		return {"ok": false, "error": "%s is outside %s's leader range (%d)" % [member_handle, leader_handle, reach]}
+	squad_manager.join_squad(member, leader.squad)
+	return {"ok": true, "summary": "%s joined %s's squad" % [member_handle, leader_handle]}
+
+func leave(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.has_squad():
+		return {"ok": false, "error": "%s is already solo" % handle}
+	if unit.get_faction() != active_faction():
+		return {"ok": false, "error": "can only reorganize your own squads this turn"}
+	var gate := _squad_change_gate(unit.squad, unit.squad)
+	if not gate.ok:
+		return gate
+	squad_manager.leave_squad(unit)
+	return {"ok": true, "summary": "%s left its squad (now solo)" % handle}
+
+func disband(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	if unit == null:
+		return {"ok": false, "error": "no unit '%s'" % handle}
+	if not unit.has_squad():
+		return {"ok": false, "error": "%s isn't in a multi-unit squad" % handle}
+	if not unit.is_leader():
+		return {"ok": false, "error": "only the leader can disband (%s isn't its squad's leader)" % handle}
+	if unit.get_faction() != active_faction():
+		return {"ok": false, "error": "can only reorganize your own squads this turn"}
+	var gate := _squad_change_gate(unit.squad, unit.squad)
+	if not gate.ok:
+		return gate
+	squad_manager.disband_squad(unit.squad)
+	return {"ok": true, "summary": "%s disbanded its squad" % handle}
+
+# Once any squad has committed to acting this turn, membership is frozen (mirrors the player UI,
+# which only offers squad options when no squad is active and neither squad has acted).
+func _squad_change_gate(squad_a: Squad, squad_b: Squad) -> Dictionary:
+	if squad_manager.active_squad != null:
+		return {"ok": false, "error": "a squad is already acting this turn — squad changes are locked"}
+	if squad_a.has_acted or squad_b.has_acted:
+		return {"ok": false, "error": "a squad that has acted can't change this turn"}
+	return {"ok": true}
 
 # ---- preview (pure look-ahead) ----
 
@@ -176,18 +296,25 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 	var counters: Array = []
 	for ctr in plan.counters:
 		counters.append(_describe_attack(ctr))
-	return {"moves": moves, "attacks": attacks, "counters": counters}
+	var rescues: Array = []
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.RESCUE:
+			rescues.append({"actor": handle_for(action.actor), "target": handle_for((action as RescueAction).target)})
+	return {"moves": moves, "attacks": attacks, "counters": counters, "rescues": rescues}
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
 	var dmg := r.damage if r != null else 0
 	var hp_after := r.target_hp_after if r != null else -1
+	var lethality := r.lethality if r != null else ResolvedOutcome.Lethality.NONE
+	var skipped := r.skipped if r != null else false
 	return {
 		"actor": handle_for(atk.actor),
 		"target": handle_for(atk.target),
 		"dmg": dmg,
 		"hp_after": hp_after,
-		"lethal": hp_after <= 0,
+		"lethality": lethality,   # NONE / DOWNED / KILLED (mirrors Unit.take_damage — Law #2)
+		"skipped": skipped,       # counter-er was downed/killed earlier this pass -> no counter
 	}
 
 # ---- execute (headless application of the resolved plan) ----
@@ -216,6 +343,20 @@ func execute() -> Dictionary:
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 
+	# 4) rescues — revive downed allies (mirrors RescueAction.execute minus animation)
+	for action in squad.action_queue.duplicate():
+		if action.action_type == BaseAction.ActionType.RESCUE:
+			var rescue_action := action as RescueAction
+			var downed := rescue_action.target
+			if downed != null and is_instance_valid(downed) and downed.is_downed():
+				downed.revive()
+				if is_instance_valid(downed.squad):
+					squad_manager.set_has_acted(downed.squad, true)   # the rescued unit is spent this turn
+				events.append("%s rescues %s" % [handle_for(rescue_action.actor), handle_for(downed)])
+
+	# 5) eject units downed during the pass into solo squads (mirrors game._process_downed_pending)
+	_process_downed_pending()
+
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
 	if is_instance_valid(squad):
 		for action in squad.action_queue.duplicate():
@@ -236,13 +377,23 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	var r := atk.resolved
 	if r == null:
 		return
-	target.combat.apply_damage(r.damage)
+	if r.skipped:
+		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
+	target.combat.apply_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
 	for s in r.states_removed:
 		target.remove_element_state(s)
 	for s in r.states_added:
 		target.add_element_state(s)
-	var suffix := " (DIES)" if (target.is_queued_for_deletion() or target.get_current_hp() <= 0) else ""
-	events.append("%s hits %s for %d%s" % [handle_for(actor), handle_for(target), r.damage, suffix])
+	events.append("%s hits %s for %d%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality)])
+
+func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
+	match lethality:
+		ResolvedOutcome.Lethality.KILLED:
+			return " (DIES)"
+		ResolvedOutcome.Lethality.DOWNED:
+			return " (DOWNED)"
+		_:
+			return ""
 
 # ---- turn flow ----
 
