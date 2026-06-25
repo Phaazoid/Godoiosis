@@ -93,13 +93,16 @@ func _ready() -> void:
 	#This is for mouse controlling camera, putting a pin in that for now
 	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
 
-func _on_turn_started(phase):
-	if phase == TurnManager.TurnPhase.PLAYER:
-		turn_banner.show_label("Player Turn")
-		start_player_turn()
-	else:
-		turn_banner.show_label("Enemy Turn")
-		start_enemy_turn()
+func _on_turn_started(faction: Team.Faction):
+	_tick_downed_countdowns(faction)
+	# A faction with no commandable (active) units has nothing to do — its downed clocks already
+	# ticked above, so pass straight to the next. Guard against an all-downed board, where skipping
+	# would recurse with no faction left to stop on.
+	if not _faction_has_active_units(faction) and _board_has_active_units():
+		turn_manager.end_turn(_present_factions())
+		return
+	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
+	start_faction_turn(faction)
 
 func can_control(unit: Unit) -> bool:
 	if unit == null:
@@ -143,7 +146,7 @@ func end_turn():
 	clear_selection()
 	update_selection_overlay()
 	unit_info_panel.clear()
-	turn_manager.end_turn()
+	turn_manager.end_turn(_present_factions())
 
 func enter_rescue_mode(unit: Unit):
 	game_state = GameState.RESCUE_TARGETING
@@ -555,17 +558,11 @@ func can_join_squad(unit: Unit, squad: Squad) -> bool:
 		return true
 	return false
 	
-func start_enemy_turn():
+func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.BETWEEN_TURNS
-	await get_tree().create_timer(1.0).timeout #later make small waits between each enemy movement. 
+	await get_tree().create_timer(1.0).timeout #later make small waits between each enemy movement.
 	game_state = GameState.IDLE
-	squad_manager.reset_faction_actions(Team.Faction.ENEMY)
-
-func start_player_turn():
-	game_state = GameState.BETWEEN_TURNS
-	await get_tree().create_timer(1.0).timeout #later make small waits between each enemy movement. 
-	game_state = GameState.IDLE
-	squad_manager.reset_faction_actions(Team.Faction.PLAYER)
+	squad_manager.reset_faction_actions(faction)
 	
 func show_action_menu(pos: Vector2i, items: Array, unit: Unit):
 	#TODO This should probably be it's own game state - IN_MENU or something.  
@@ -600,8 +597,13 @@ func exit_current_mode():
 	
 	last_clicked_cell = Vector2i(-999, -999)
 	clear_selection()
-	
-func clear_selection():	
+
+func _tick_downed_countdowns(faction: Team.Faction):
+	for unit in _all_units():
+		if unit.is_downed() and unit.get_faction() == faction:
+			unit.tick_downed_countdown()
+
+func clear_selection():
 	game_state = GameState.IDLE
 
 	overlay.clear()
@@ -617,7 +619,7 @@ func clear_selection_controller(controller):
 func update_selection_overlay():
 	overlay.clear()
 	
-func refresh_action_queue(squad: Squad) -> void:
+func refresh_action_queue(squad: Squad):
 	if squad == null:
 		squad_action_queue_control.show_display_entries([])
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
@@ -741,13 +743,39 @@ func _all_units() -> Array[Unit]:
 	for child in units_root.get_children():
 		result.append(child as Unit)
 	return result
+	
+func _present_factions() -> Array[Team.Faction]:
+	# Distinct factions with at least one living unit (active OR downed). Downed units keep their
+	# faction in the cycle so its downed clocks keep ticking; dead (queue_freed) units are excluded.
+	var seen: Dictionary = {}
+	var result: Array[Team.Faction] = []
+	for unit in _all_units():
+		if unit.is_dead():
+			continue
+		var f := unit.get_faction()
+		if not seen.has(f):
+			seen[f] = true
+			result.append(f)
+	return result
+
+func _faction_has_active_units(faction: Team.Faction) -> bool:
+	for unit in _all_units():
+		if unit.get_faction() == faction and unit.is_active():
+			return true
+	return false
+
+func _board_has_active_units() -> bool:
+	for unit in _all_units():
+		if unit.is_active():
+			return true
+	return false
 
 func _board() -> BoardContext:
 	return BoardContext.new(grid, _all_units(), squad_manager)
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
-	
+
 func draw_joinable_squads(joining_unit: Unit):
 	overlay_manager.clear_all()
 	var cells: Array[Vector2i] = []

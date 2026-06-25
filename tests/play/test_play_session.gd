@@ -113,7 +113,6 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	var scenario := ScenarioData.new()
 	scenario.tile_data = src.grid.tile_map_data
 	scenario.active_faction = ENEMY
-	scenario.turn_phase = TurnManager.TurnPhase.ENEMY
 	var entry := ScenarioUnitEntry.new()
 	entry.unit_data = _data("Loaded", PLAYER)
 	entry.cell = Vector2i(2, 3)

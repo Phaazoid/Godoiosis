@@ -10,6 +10,7 @@ func set_unit(target: Unit):
 	if unit:
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
+		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
 	unit = target
 
 	if unit == null:
@@ -26,7 +27,8 @@ func set_unit(target: Unit):
 
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.unit_instance.hp_changed.connect(_on_hp_changed)
-
+	unit.downed_countdown_changed.connect(_on_countdown_changed)
+	
 	_refresh()
 
 func _on_unit_died():
@@ -38,8 +40,19 @@ func _refresh():
 		hp_label.text = "ERROR"
 		return
 	name_label.text = unit.unit_data.display_name
-	hp_label.text = str(unit.get_current_hp(), "/", unit.get_base_stat(Stats.Stat.MHP))
 	StateIcons.populate(states_row, unit.element_states)
+	_refresh_hp()
+
+func _refresh_hp():
+	if unit == null:
+		return
+	var text := str(unit.get_current_hp(), "/", unit.get_base_stat(Stats.Stat.MHP))
+	if unit.is_downed() and unit.downed_turns_remaining > 0:
+		text += "  (down: %d)" % unit.downed_turns_remaining
+	hp_label.text = text
 
 func _on_hp_changed(current, max):
 	hp_label.text = str(current, "/", max)
+
+func _on_countdown_changed(_turns: int):
+	_refresh_hp()

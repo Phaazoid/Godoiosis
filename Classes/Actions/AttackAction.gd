@@ -64,13 +64,20 @@ func execute():
 	finish_execution()
 
 func get_action_icon() -> Texture2D:
+	var lethal := _lethality_icon()
+	return lethal if lethal != null else ATTACK_ICON
+
+# The down/kill icon for this hit's predicted lethality, or null if it's non-lethal.
+# Shared with CounterAttackAction so the rung -> icon mapping lives in one place
+# (Law #2: a lethal counter must read the same as a lethal attack).
+func _lethality_icon() -> Texture2D:
 	if resolved != null:
 		match resolved.lethality:
 			ResolvedOutcome.Lethality.DOWNED:
 				return DOWN_ICON
 			ResolvedOutcome.Lethality.KILLED:
 				return KILL_ICON
-	return ATTACK_ICON
+	return null
 
 func get_target_texture() -> Texture2D:
 	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():

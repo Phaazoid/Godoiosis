@@ -48,6 +48,11 @@ enum LethalRung { DOWN, KILL }
 # by Will math later.
 const OVERKILL_CEILING := 10
 
+# Turns remaining before a downed unit dies without rescue. Starts at 3 when
+# the unit goes down, ticks once per player-turn start, dies at 0. -1 = not counting.
+var downed_turns_remaining: int = -1
+
+signal downed_countdown_changed(turns_remaining: int)
 
 func setup(grid : TileMapLayer, cell: Vector2i):
 	pending_grid = grid
@@ -170,7 +175,7 @@ func die():
 	unit_died.emit(self)
 	queue_free()
 
-func take_damage(damage: int) -> void:
+func take_damage(damage: int):
 	# Lifecycle-aware combat damage entry (CombatComponent routes here). Raw HP math stays
 	# on UnitInstance; the down/kill DECISION is battle-scoped, so it lives here on the Unit.
 	if lifecycle_state == LifecycleState.DEAD:
@@ -202,13 +207,23 @@ func _select_lethal_rung(damage: int, hp: int) -> LethalRung:
 		return LethalRung.KILL
 	return LethalRung.DOWN
 
-func _go_downed() -> void:
+func _go_downed():
 	lifecycle_state = LifecycleState.DOWNED
-	unit_instance.set_current_hp(1)             # clings at 1 HP (stub) — stays >0, so no death emission
+	unit_instance.set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
+	downed_turns_remaining = 3
 	_show_downed_sprite(true)
 	went_downed.emit(self)
+	downed_countdown_changed.emit(downed_turns_remaining)
 
-func _show_downed_sprite(downed: bool) -> void:
+func tick_downed_countdown():
+	if lifecycle_state != LifecycleState.DOWNED:
+		return
+	downed_turns_remaining -= 1
+	downed_countdown_changed.emit(downed_turns_remaining)
+	if downed_turns_remaining <= 0:
+		die()
+
+func _show_downed_sprite(downed: bool):
 	# Default downed art lives on $DownedSprite (per-unit override applied in _ready). Revive
 	# flips this back. Visibility swap keeps MapSprite as the single texture for everything else.
 	map_sprite.visible = not downed
@@ -319,11 +334,13 @@ func equip_weapon_from_inventory(index: int) -> bool:
 
 func unequip_weapon():
 	equipped_weapon = null
-	
-func revive() -> void:
+
+
+func revive():
 	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
 	# its solo squad; rescue does NOT auto-rejoin the old one (per design).
 	if lifecycle_state != LifecycleState.DOWNED:
 		return
 	lifecycle_state = LifecycleState.ACTIVE
+	downed_turns_remaining = -1
 	_show_downed_sprite(false)

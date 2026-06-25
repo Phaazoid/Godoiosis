@@ -34,7 +34,6 @@ func save_scenario(scenario_name: String):
 	scenario.scenario_name = scenario_name
 	scenario.tile_data = grid.tile_map_data
 	scenario.active_faction = turn_manager.active_faction()
-	scenario.turn_phase = turn_manager.current_turn
 	
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
@@ -101,7 +100,6 @@ func load_scenario(path: String):
 		for member in members_by_squad_id[squad_id]:
 			squad_manager.join_squad(member, leader.squad)
 			
-	turn_manager.current_turn = scenario.turn_phase
 	turn_manager.set_active_faction(scenario.active_faction)
 	last_loaded_path = path
 

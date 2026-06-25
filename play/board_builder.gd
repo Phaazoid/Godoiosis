@@ -119,6 +119,5 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		for member in members[squad_id]:
 			board.squad_manager.join_squad(member, leader.squad)
 
-	board.turn_manager.current_turn = scenario.turn_phase
 	board.turn_manager.set_active_faction(scenario.active_faction)
 	return spawned

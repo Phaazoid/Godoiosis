@@ -26,7 +26,11 @@ signal row_hover_changed(action: BaseAction, hovering: bool)
 func _ready() -> void:
 	execute_button.text = "Execute Orders"
 	execute_button.focus_mode = Control.FOCUS_NONE
-	execute_button.pressed.connect(func(): execute_requested.emit())
+	execute_button.pressed.connect(_execute)
+	
+func _execute():
+	execute_requested.emit()
+	execute_button.hide()
 
 func show_display_entries(entries: Array[ActionQueueDisplayEntry]):
 	_clear_sections()
@@ -36,6 +40,7 @@ func show_display_entries(entries: Array[ActionQueueDisplayEntry]):
 		return
 
 	visible = true
+	execute_button.show()
 
 	var current_list: VBoxContainer = null
 	for entry in entries:

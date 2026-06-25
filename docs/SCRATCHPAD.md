@@ -36,7 +36,20 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-<!-- Empty — swept 2026-06-17. Drop new ideas as bullets here, then run /scratchpad-sweep. -->
+Volley attacks could be grouped in one action queue row, perhaps expanded when clicked on.
+This could mean 
+
+when units are highlighted, they should flash like the exeuction button rather than just glow
+
+when highlighting counter attacks, the enemy unit's attack range should display
+
+in the action queue, you should be able to click and drag attacks to re-order them.  
+
+More info in the action queue - both damage done on hit and total health before and after
+
+In regards to will generation - every unit in this game is going to have aura, and a primary aura type.  This could correspond with temperaments.  Units could generate will in different ways depending on their temperament, in or out of battle.  Perhaps there is no "get will" task outside of battle, but different tasks that you would normally otherwise assign units to give more or less will to different units depending on their temperament.  
+
+When Claude playtests, save each frame of text generated boards so that we can observe what the playtest did.  Make sure Claude has equivalent tools in its playtesting sessions to what the player can do in game to inspect the game state (including unit stats, where units can move, squad members, elemental state, anything there is a visual indicator for)
 
 ## 🗂 Dispersed (log)
 
