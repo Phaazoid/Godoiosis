@@ -57,6 +57,8 @@ Two structural classes:
 
 Constitution's classic jobs — survivability and carry/poise — are already owned by **HP** and **Weight**. No distinct teeth → cut. Status-resistance, if ever wanted, routes through **gear/runes**, not a dedicated stat.
 
+> **Reconsideration raised (2026-06-26, scratchpad — reopens this cut, NOT re-added):** the dev floated **CON as a defensive *scaling* stat** — the defensive counterpart to the offensive scalars (STR/DEX/PER), scaling **defensive bonuses** on weapons that use it + armor/gear. That's a *different* job than the survivability/carry roles cut above (HP/Weight own those), so it might clear the teeth bar on "scales gear/defensive properties" the way STR/DEX scale offence. **Tensions to resolve before it enters the roster:** (1) DEF is currently **gear-only / derived**, never on the statline — a CON-scaled DEF reintroduces a defensive *unit* number the gear-only stance deliberately avoided; (2) scaling alone isn't teeth ("scaling rides on stats that already pass"). Needs a stats-session / co-dev decision — flagged, not adopted.
+
 ## Identity: where it lives
 
 - **The soul is in the story layer** — portrait, personality, dialogue. That frees the *mechanical* layer to lean loadout-heavy without characters going soulless.
