@@ -95,7 +95,7 @@ layout_mode = 2
 [node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=1267400032]
 layout_mode = 2
 
-[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=413307239]
+[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=413307239]
 layout_mode = 2
 horizontal_alignment = 2
 

@@ -3,6 +3,14 @@
 [ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/ui/HoverInfoPanelControl.gd" id="1_gf6xf"]
 [ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/ui/hover_info_grid_container.gd" id="2_jsdin"]
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ernvn"]
+bg_color = Color(0.83109, 0.50150293, 0.39258364, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0, 0, 0, 1)
+
 [node name="HoverInfoPanelControl" type="Control" unique_id=98776626]
 z_index = 2
 layout_mode = 3
@@ -16,6 +24,7 @@ custom_minimum_size = Vector2(160, 225)
 layout_mode = 0
 offset_right = 40.0
 offset_bottom = 40.0
+theme_override_styles/panel = SubResource("StyleBoxFlat_ernvn")
 
 [node name="HoverInfoGridContainer" type="GridContainer" parent="HoverPanel" unique_id=396953024]
 custom_minimum_size = Vector2(100, 100)

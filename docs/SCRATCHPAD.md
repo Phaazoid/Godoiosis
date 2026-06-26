@@ -51,6 +51,12 @@ In regards to will generation - every unit in this game is going to have aura, a
 
 When Claude playtests, save each frame of text generated boards so that we can observe what the playtest did.  Make sure Claude has equivalent tools in its playtesting sessions to what the player can do in game to inspect the game state (including unit stats, where units can move, squad members, elemental state, anything there is a visual indicator for)
 
+Actual bars for health/will (and later LDR if it is spent for things)
+
+Perhaps there is a 4th scaling stat beside STR/PER/DEX, CON.  Constitution can scale defensive bonsuses for weapons with them, and armor/gear, etc.  
+
+The action queue needs another scrollbox, to contain the other scrollboxes.  There are too many action types now, so not only can each action list overflow, but the overal list of action types can too.  
+
 ## 🗂 Dispersed (log)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)

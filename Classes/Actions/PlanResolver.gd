@@ -75,10 +75,14 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 			target_hypo.states.append(s)
 
 	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
-	# it (Law #2). Reads pre-hit HP, so it runs BEFORE the subtraction below.
-	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, outcome.damage)
+	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below.
+	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
+		target_hypo.will -= UnitInstance.DOWN_WILL_COST
+	elif outcome.lethality == ResolvedOutcome.Lethality.MAIMED:
+		target_hypo.lifecycle = Unit.LifecycleState.DOWNED   # a maim IS a down — same lifecycle
+		target_hypo.will = 0
 	elif outcome.lethality == ResolvedOutcome.Lethality.KILLED:
 		target_hypo.lifecycle = Unit.LifecycleState.DEAD
 
@@ -117,15 +121,17 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.states = unit.element_states.duplicate()
 		h.hp = unit.get_current_hp()
 		h.lifecycle = unit.lifecycle_state
+		h.will = unit.unit_instance.get_current_will()
 		hypo[unit] = h
 	return hypo[unit]
 
-static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, damage: int) -> ResolvedOutcome.Lethality:
-	# Mirror of Unit.take_damage (Law #2 — preview must equal execution):
+static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int) -> ResolvedOutcome.Lethality:
+	# Mirror of Unit.take_damage + _go_downed (Law #2 — preview must equal execution):
 	#   already DEAD        -> no-op (NONE)
 	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
 	#   damage < hp         -> survivable (NONE)
-	#   overkill > ceiling  -> KILLED, else DOWNED
+	#   overkill > ceiling  -> KILLED
+	#   otherwise           -> a down; MAIMED if Will can't pay the flat cost, else DOWNED
 	if lifecycle == Unit.LifecycleState.DEAD:
 		return ResolvedOutcome.Lethality.NONE
 	if lifecycle == Unit.LifecycleState.DOWNED:
@@ -134,6 +140,8 @@ static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, d
 		return ResolvedOutcome.Lethality.NONE
 	if damage - hp_before > Unit.OVERKILL_CEILING:
 		return ResolvedOutcome.Lethality.KILLED
+	if will_before < UnitInstance.DOWN_WILL_COST:
+		return ResolvedOutcome.Lethality.MAIMED
 	return ResolvedOutcome.Lethality.DOWNED
 
 # Per-unit threaded hypothetical (R4). Will-ready: HP is threaded now; `will` is the
@@ -143,4 +151,4 @@ class _Hypo:
 	var states: Array[Elemental.State] = []
 	var hp: int = 0
 	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
-	# var will: int = 0   # Phase 3
+	var will: int = 0   # threaded so a multi-hit pass previews maim correctly (Law #2)

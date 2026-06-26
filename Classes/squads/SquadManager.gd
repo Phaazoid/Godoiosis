@@ -430,12 +430,15 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 
 	var move_actions: Array[BaseAction] = []
 	var rescue_actions: Array[BaseAction] = []
+	var rally_actions: Array[BaseAction] = []
 	for action in squad.action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
 		elif action.action_type == BaseAction.ActionType.RESCUE:
 			rescue_actions.append(action)
-
+		elif action.action_type == BaseAction.ActionType.RALLY:
+			rally_actions.append(action)
+			
 	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
 	var plan := resolve_plan(squad, board)
 
@@ -456,6 +459,13 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 			entries.append(ActionQueueDisplayEntry.divider())
 		entries.append(ActionQueueDisplayEntry.header("RESCUE"))
 		for action in rescue_actions:
+			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
+
+	if not rally_actions.is_empty():
+		if not entries.is_empty():
+			entries.append(ActionQueueDisplayEntry.divider())
+		entries.append(ActionQueueDisplayEntry.header("RALLY"))
+		for action in rally_actions:
 			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
 
 	# Counters last, in their own section — derived, not stored (Law #2). A skipped counter

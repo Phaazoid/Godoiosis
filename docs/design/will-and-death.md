@@ -19,14 +19,16 @@ Why this is better: it removes the harsh "low Will → you just die" cliff (nobo
 - `Unit.LifecycleState {ACTIVE, DOWNED, DEAD}`; `take_damage()` funnels a would-be-fatal hit through `_select_lethal_rung()` → DOWN (cling at 1 HP) or, past `OVERKILL_CEILING`, DEAD.
 - Squad ejection on down (deferred to after the pass — `game._downed_pending`/`_process_downed_pending`); counter liveness (R7 — `PlanResolver._counter_actor_live` + `ResolvedOutcome.skipped`); the **main-action rule** (attack/rescue mutually exclusive, must follow a move); a **manual `RescueAction`** (+ `Unit.revive()` to 1 HP); the down/kill queue-icon preview; the 3-turn **downed countdown**.
 
-**Stub / not built — where the redesign lands:**
-- The **Will resource** — max/current on `UnitInstance`; the flat down-cost spend; maim-when-can't-afford; the display bar; `_select_lethal_rung` reading Will instead of just `OVERKILL_CEILING`.
-- **Crisis Mode**, the **Rally** action, the **Law #2 down/maim preview text**, **maim effects**, between-battle recovery.
+**Built 2026-06-25 — the Will resource (provisional; Claude-guided / user-typed, [#33](https://github.com/Phaazoid/Godoiosis/issues/33)):**
+- `UnitInstance.current_will` (max = the WIL stat, capped at `MAX_WILL = 20`), the **flat down-cost spend** (`DOWN_WILL_COST = 5`) at `_go_downed`, **maim-when-can't-afford** (`maimed_part` enum splitting L/R arm+leg, default `ARM_RIGHT`), the **Law #2 down/maim/kill preview** (`ResolvedOutcome.Lethality.MAIMED` threaded through `PlanResolver`; icon `DownMaim.png` + text), the **Will readout** (hover status icons + inspect text), and the **`RallyAction`** (a regular main action — see Rally below).
+
+**Stub / not built:**
+- **Crisis Mode** (the live high-Will interrupt); **maim effects** (what losing the limb *does* — deferred to progression.md); **between-battle recovery**; the deterministic **which-limb** choice (hard-coded ARM today).
 
 ## The resource
 
 - **Per-unit limb/integrity buffer.** Has a max and a current; spent, *not* regenerated in-battle. Own display bar under HP, different colour.
-- **Max Will = innate WIL stat** ([stats.md](stats.md)) — an identity number, not grindable; shifts only via the authored/elective drift band. ~2–3 downs' worth for an average unit *(placeholder)*.
+- **Max Will = the innate WIL stat** ([stats.md](stats.md)), **capped at `MAX_WILL = 20`** (`min(WIL, 20)`) — an identity number, set per-unit (incl. via the dev editor), shifting only via the authored/elective drift band. Default WIL ≈ 5, so bump it for a deep pool. ~4 downs' worth at WIL 20 / cost 5. (Shown on its own HP/WIL line, not as a stat row.)
 - **Persists between missions** ([#8](https://github.com/Phaazoid/Godoiosis/issues/8), on `UnitInstance`). Burnout is a campaign-level state paired with between-battle recovery (the Three Houses "motivation" feel).
 - **It gates limbs, never life.** (The whole reframe.)
 
@@ -56,7 +58,7 @@ The reframe made downing the *universal safe net*, so Crisis is **no longer a de
 
 **In-fight: depletion-only.** Within a fight Will mostly moves one direction — *down*. That is the dread the system runs on ("watch Will drain toward the cliff"). The grill's key catch: **every in-battle generator fights that cliff** — a passive tick is a boring timer that trivializes downs; kills/combos snowball and feel gamey ("why does a kill restore your nerve to *not die*?"). So Will is not freely generated in combat. Two sanctioned exceptions:
 
-- **Rally** — a **third main action** (beside Attack and Rescue; slots in like `RescueAction`, via `BaseAction.is_main_action()`). Consumes the unit's **entire turn** (main + move, in place — it forbids the pre-move, so the unit hunkers down where it stands). Restores Will toward a **partial cap only** (never to full), and **restores less on each successive use that battle** (diminishing returns). A safe pocket therefore *cannot* be milked to max — it's structurally impossible, so there's no need to police where/when players Rally. Lean on **scenario pressure** (objectives, advancing threats) to punish pure turtling — that's a level-design job. *(Optional flavour/limit: gate Rally to units near their leader — the old "leader inspiration" idea's natural home.)*
+- **Rally** — a **third main action** (beside Attack and Rescue; via `BaseAction.is_main_action()`). **As built (2026-06-25, simplified per dev call): a *regular* main action** — Move-then-Rally is allowed (no hunker-in-place), restoring a **flat diminishing amount** (`RALLY_BASE = 6`, then −`RALLY_FALLOFF = 2` per use that battle, dropped once it would give < 1), clamped to max. `rally_count` is battle-scoped (resets each mission, lives on the transient `Unit`). *Fuller vision (deferred):* consume the whole turn in place and restore only toward a **partial cap** (never full) so a safe pocket can't be milked — for now the diminishing amount + the max clamp do that job. Lean on **scenario pressure** to punish pure turtling (level-design). *(Optional later: gate Rally to units near their leader — the old "leader inspiration" idea's home.)*
 - The other in-fight relief valve is simply **rescue** — you recover *units* (drag the body back, fragile at 1 HP and low Will), not *nerve*.
 
 **Between battles: full recovery (campaign layer — deferred).** Rest + a **task-assignment metagame**: benched units are assigned to tasks that recover Will (and other benefits), even running in parallel with a battle they weren't brought to. This is the true home of "generation" and an authored economy lever. It is its own design pass, later.
@@ -81,6 +83,6 @@ Will-driven abilities are their own later system. Locked principle: **thresholds
 4. **Limb-loss scope** — **the maim rung only** (Crisis *kills*, it doesn't maim). *Provisional.*
 5. ~~**Naming**~~ — **Will** (kept; it reads *better* under the limb-buffer framing — you spend it to stay whole, and out of it the body pays).
 
-**Open / tuning knobs (all placeholders):** the flat down-cost `N`; max-Will magnitude; the Crisis Will-gate threshold (absolute vs fraction of max); the Rally partial cap + decay curve; the Crisis surge size and duration.
+**Open / tuning knobs (placeholders; current values in parens):** the flat down-cost `N` (**5**); max-Will magnitude (**= WIL stat, capped at 20**); the Rally base + falloff (**6, −2, floor at <1**); **which limb a maim takes** (enum now splits L/R arm+leg; selection still hard-coded **ARM_RIGHT** — deterministic stat-derived candidate, never RNG); the Crisis Will-gate threshold (absolute vs fraction of max); the Crisis surge size and duration.
 
 Cross-refs: [stats.md](stats.md), [progression.md](progression.md) (prosthetics / aura / regrowth), [squad-system.md](squad-system.md), [resolution-pipeline.md](resolution-pipeline.md) (the Will stage, R7), `../../CLAUDE.md` (Laws #1/#2).

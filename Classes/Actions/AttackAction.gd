@@ -17,6 +17,7 @@ var preview_sprites: Array[Node2D] = []
 const ATTACK_ICON := preload("res://Art/Icons/FightActionIcon.png")
 const DOWN_ICON := preload("res://Art/Icons/Down.png")
 const KILL_ICON := preload("res://Art/Icons/DedIcon.png")
+const MAIM_ICON := preload("res://Art/Icons/DownMaim.png")
 
 func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i):
 	actor = attacker
@@ -67,14 +68,13 @@ func get_action_icon() -> Texture2D:
 	var lethal := _lethality_icon()
 	return lethal if lethal != null else ATTACK_ICON
 
-# The down/kill icon for this hit's predicted lethality, or null if it's non-lethal.
-# Shared with CounterAttackAction so the rung -> icon mapping lives in one place
-# (Law #2: a lethal counter must read the same as a lethal attack).
 func _lethality_icon() -> Texture2D:
 	if resolved != null:
 		match resolved.lethality:
 			ResolvedOutcome.Lethality.DOWNED:
 				return DOWN_ICON
+			ResolvedOutcome.Lethality.MAIMED:
+				return MAIM_ICON
 			ResolvedOutcome.Lethality.KILLED:
 				return KILL_ICON
 	return null
@@ -127,6 +127,13 @@ func get_outcome_summary() -> String:
 		return ""
 	var parts: Array[String] = []
 	parts.append("-%d" % resolved.damage)
+	match resolved.lethality:
+		ResolvedOutcome.Lethality.DOWNED:
+			parts.append("DOWNS")
+		ResolvedOutcome.Lethality.MAIMED:
+			parts.append("MAIMS (no Will)")
+		ResolvedOutcome.Lethality.KILLED:
+			parts.append("KILLS")
 	for p in resolved.popups:
 		parts.append(p)
 	for s in resolved.states_added:

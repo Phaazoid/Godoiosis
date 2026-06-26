@@ -19,6 +19,12 @@ signal went_downed(unit: Unit)
 const MAX_INVENTORY_SIZE := 6 #Balance actual size later
 const BASE_SPRITE_INDEX = 4
 
+# --- Rally (in-fight Will relief, will-and-death.md). rally_count is BATTLE-scoped — diminishing
+# returns must restart each mission — so it lives here on the transient Unit, not on UnitInstance. ---
+const RALLY_BASE := 6       # Will restored by the first rally this battle
+const RALLY_FALLOFF := 2    # each further rally restores this much less; below 1 it's not offered
+var rally_count: int = 0
+
 var unit_instance: UnitInstance
 var inventory : Array[Item] = []
 var squad: Squad
@@ -210,6 +216,7 @@ func _select_lethal_rung(damage: int, hp: int) -> LethalRung:
 func _go_downed():
 	lifecycle_state = LifecycleState.DOWNED
 	unit_instance.set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
+	unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
 	downed_turns_remaining = 3
 	_show_downed_sprite(true)
 	went_downed.emit(self)
@@ -335,7 +342,6 @@ func equip_weapon_from_inventory(index: int) -> bool:
 func unequip_weapon():
 	equipped_weapon = null
 
-
 func revive():
 	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
 	# its solo squad; rescue does NOT auto-rejoin the old one (per design).
@@ -344,3 +350,17 @@ func revive():
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
+
+func next_rally_amount() -> int:
+	return RALLY_BASE - RALLY_FALLOFF * rally_count
+
+func can_rally() -> bool:
+	# Offered while the next rally restores >= 1 Will and there's room to restore into.
+	return is_active() and next_rally_amount() >= 1 and unit_instance.get_current_will() < unit_instance.get_max_will()
+
+func rally() -> void:
+	var amount := next_rally_amount()
+	if amount < 1:
+		return
+	unit_instance.set_current_will(unit_instance.get_current_will() + amount)
+	rally_count += 1

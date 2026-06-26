@@ -20,15 +20,16 @@ enum ActionType {
 	COUNTER_ATTACK,
 	WAIT,
 	SQUAD_MOVE,
-	RESCUE
+	RESCUE,
+	RALLY
 }
 
 func is_main_action() -> bool:
 	# Main actions are the mutually-exclusive headline orders — a unit gets at most ONE per
 	# turn (attack, rescue, and future contenders share the slot). MOVE stays separate.
 	# Add new main action types here.
-	return action_type == ActionType.ATTACK or action_type == ActionType.RESCUE
-	
+	return action_type == ActionType.ATTACK or action_type == ActionType.RESCUE or action_type == ActionType.RALLY
+
 func get_actor_texture() -> Texture2D:
 	if actor == null:
 		return null

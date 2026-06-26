@@ -38,6 +38,7 @@ const GAME_MENU_DISBAND_SQUAD := 9
 const GAME_MENU_INSPECT := 10
 const GAME_MENU_EXECUTE_ORDERS := 11
 const GAME_MENU_RESCUE := 12
+const GAME_MENU_RALLY := 13
 
 #Can update this as we want things like icons, hover descriptions, etc for each menu item
 const ACTION_DATA = {
@@ -52,7 +53,8 @@ const ACTION_DATA = {
 	GAME_MENU_DISBAND_SQUAD: {"name": "Disband Squad"},
 	GAME_MENU_INSPECT: {"name": "Inspect"},
 	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
-	GAME_MENU_RESCUE: {"name": "Rescue"}
+	GAME_MENU_RESCUE: {"name": "Rescue"},
+	GAME_MENU_RALLY: {"name": "Rally"}
 }
 
 enum GameState {
@@ -141,6 +143,8 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			execute_orders(unit)
 		GAME_MENU_RESCUE:
 			enter_rescue_mode(unit)
+		GAME_MENU_RALLY:
+			queue_rally(unit)
 
 func end_turn():
 	clear_selection()
@@ -173,18 +177,22 @@ func execute_orders(unit):
 	var plan := squad_manager.resolve_plan(squad, _board())
 	var move_actions := []
 	var rescue_actions := []
-
+	var rally_actions := []
+	
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
 		elif action.action_type == BaseAction.ActionType.RESCUE:
 			rescue_actions.append(action)
-
+		elif action.action_type == BaseAction.ActionType.RALLY:
+			rally_actions.append(action)
+			
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(plan.attacks)
 	await execute_action_sequence(plan.counters)
 	await execute_action_sequence(rescue_actions)
+	await execute_action_sequence(rally_actions)
 
 	_process_downed_pending()
 	
@@ -497,6 +505,9 @@ func populate_action_menu(unit: Unit) -> Array:
 	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and not get_adjacent_downed_allies(unit).is_empty():
 		options.append(GAME_MENU_RESCUE)
 
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.can_rally():
+		options.append(GAME_MENU_RALLY)
+
 		#Once Squad is active, squad state cannot change through actions
 	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not squad_manager.any_squad_active():
 		if can_create_any_squad(unit):
@@ -519,7 +530,13 @@ func populate_action_menu(unit: Unit) -> Array:
 		options.append(GAME_MENU_CANCEL)
 		
 	return options
-	
+
+func queue_rally(unit: Unit):
+	var rally := RallyAction.new()
+	rally.init(unit)
+	squad_manager.queue_action(unit.squad, rally)
+	clear_selection()
+
 func clip_invalid_projected_squad_movement(unit: Unit):
 	var squad = unit.squad	
 	for member in squad.get_members():
