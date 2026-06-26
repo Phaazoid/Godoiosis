@@ -36,29 +36,20 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-Volley attacks could be grouped in one action queue row, perhaps expanded when clicked on.
-This could mean 
-
-when units are highlighted, they should flash like the exeuction button rather than just glow
-
-when highlighting counter attacks, the enemy unit's attack range should display
-
-in the action queue, you should be able to click and drag attacks to re-order them.  
-
-More info in the action queue - both damage done on hit and total health before and after
-
-In regards to will generation - every unit in this game is going to have aura, and a primary aura type.  This could correspond with temperaments.  Units could generate will in different ways depending on their temperament, in or out of battle.  Perhaps there is no "get will" task outside of battle, but different tasks that you would normally otherwise assign units to give more or less will to different units depending on their temperament.  
-
-When Claude playtests, save each frame of text generated boards so that we can observe what the playtest did.  Make sure Claude has equivalent tools in its playtesting sessions to what the player can do in game to inspect the game state (including unit stats, where units can move, squad members, elemental state, anything there is a visual indicator for)
-
-Actual bars for health/will (and later LDR if it is spent for things)
-
-Perhaps there is a 4th scaling stat beside STR/PER/DEX, CON.  Constitution can scale defensive bonsuses for weapons with them, and armor/gear, etc.  
-
-The action queue needs another scrollbox, to contain the other scrollboxes.  There are too many action types now, so not only can each action list overflow, but the overal list of action types can too.  
+_(empty — last swept 2026-06-26)_
 
 ## 🗂 Dispersed (log)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)
 - Range-dependent damage / sweet-spot patterns (carbine harder at range, shotgun up close, Springspear AoE center tile) → weapons.md (Captured ideas); relates to issue #25 (2026-06-17)
 - Fixed stats may force weapon pairings → mutable scaling via weapon mods/variants or sub-varieties → weapons.md (Captured ideas) + progression.md (2026-06-17)
+- Volley attacks grouped into one expandable action-queue row → #49 Action Queue UX (graduated from #44) (2026-06-26)
+- Highlighted units should flash (like the Execute button) rather than just glow → #44 (shares the flash-for-attention motif with #1) (2026-06-26)
+- Hovering/selecting a counter in the queue shows the countering enemy's attack range → #44 (extends the on-hover enemy-range item) (2026-06-26)
+- Click-drag to reorder attacks in the action queue → #49 Action Queue UX (2026-06-26)
+- More action-queue info per row: damage on hit + target HP before→after (`ResolvedOutcome.target_hp_after` already threaded) → #49 Action Queue UX (2026-06-26)
+- Will generation via aura/temperament; out-of-battle Will falls out of ordinary task-assignment (no dedicated Will-farm task) → will-and-death.md Generation (captured idea) + xref alchemy-kit.md / progression.md (2026-06-26)
+- Playtest: persist every rendered board frame + give Claude inspect parity with the in-game player (stats, move range, squad, elemental state) → #46 Play API (2026-06-26)
+- Real HP/Will bars (and later LDR) instead of text readouts → #44 (2026-06-26)
+- CON as a 4th, defensive scaling stat (scales gear/weapon defensive bonuses) → stats.md "Cut: CON" reconsideration — **REOPENS a decided cut**, needs a stats-session/co-dev decision (2026-06-26)
+- Action queue needs an outer scrollbox — the *list of action-type sections* can overflow, not just each section → #49 Action Queue UX (2026-06-26)
