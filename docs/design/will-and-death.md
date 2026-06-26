@@ -63,6 +63,8 @@ The reframe made downing the *universal safe net*, so Crisis is **no longer a de
 
 **Between battles: full recovery (campaign layer — deferred).** Rest + a **task-assignment metagame**: benched units are assigned to tasks that recover Will (and other benefits), even running in parallel with a battle they weren't brought to. This is the true home of "generation" and an authored economy lever. It is its own design pass, later.
 
+> **Captured idea (2026-06-26, from the scratchpad — not locked):** tie Will generation to **aura / temperament**. Every unit has an aura and a **primary aura type** ([alchemy-kit.md](alchemy-kit.md)), which could map to a **temperament**; units would then generate Will *differently by temperament*, in and out of battle. The promising twist for the between-battle layer: maybe there's **no dedicated "recover Will" task** at all — instead the *ordinary* task-assignments you'd make anyway yield **more or less Will per unit by temperament**, so the recovery economy falls out of normal assignment choices rather than a grindy Will-farm chore (honors the anti-grind rubric, [progression.md](progression.md)). Could also give temperament an in-battle flavour hook (e.g. who Rallies well).
+
 ## Law #2 requirement (preview honesty) — NOT built
 
 The attack preview **must surface** "this downs them," "no Will → maimed," and Crisis-eligibility — otherwise resolution produces surprise outcomes and breaks Law #2 / the no-surprise axiom. The down/kill **icon** preview exists; the **text form + the maim case** do not. Will / down / maim are **derived from the plan** (like counters), in the resolution pipeline's **Will stage (R7, after elemental)** — never stored player orders.
