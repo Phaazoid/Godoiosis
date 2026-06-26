@@ -76,7 +76,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
 	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below.
-	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage)
+	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage, target_hypo.in_crisis, target_hypo.start_hp)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
@@ -120,18 +120,32 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.position = unit.get_projected_destination()
 		h.states = unit.element_states.duplicate()
 		h.hp = unit.get_current_hp()
+		h.start_hp = unit.get_current_hp()
 		h.lifecycle = unit.lifecycle_state
 		h.will = unit.unit_instance.get_current_will()
+		h.in_crisis = unit.in_crisis
 		hypo[unit] = h
 	return hypo[unit]
 
-static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int) -> ResolvedOutcome.Lethality:
+static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int, in_crisis: bool, start_hp: int) -> ResolvedOutcome.Lethality:
 	# Mirror of Unit.take_damage + _go_downed (Law #2 — preview must equal execution):
 	#   already DEAD        -> no-op (NONE)
 	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
 	#   damage < hp         -> survivable (NONE)
 	#   overkill > ceiling  -> KILLED
 	#   otherwise           -> a down; MAIMED if Will can't pay the flat cost, else DOWNED
+	#
+	# Crisis is special (dev call 2026-06-26): it never downs/maims (a would-be-down is death),
+	# and EVERY independently-lethal hit stays flagged KILLED even after the unit "dies" earlier
+	# in the pass — the player must see that dodging one fatal counter won't save them; the others
+	# kill too. "Independently lethal" = the hit alone would fell the unit at its pass-start HP.
+	# (Execution still only kills once; the extra skulls telegraph stakes, not damage.)
+	if in_crisis:
+		if lifecycle == Unit.LifecycleState.DEAD:
+			return ResolvedOutcome.Lethality.KILLED if damage >= start_hp else ResolvedOutcome.Lethality.NONE
+		if damage >= hp_before:
+			return ResolvedOutcome.Lethality.KILLED
+		return ResolvedOutcome.Lethality.NONE
 	if lifecycle == Unit.LifecycleState.DEAD:
 		return ResolvedOutcome.Lethality.NONE
 	if lifecycle == Unit.LifecycleState.DOWNED:
@@ -152,3 +166,5 @@ class _Hypo:
 	var hp: int = 0
 	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
 	var will: int = 0   # threaded so a multi-hit pass previews maim correctly (Law #2)
+	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
+	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this

@@ -4,6 +4,7 @@ const DOWNED_ICON := preload("res://Art/Icons/Down.png")
 const SEVERED_ARM := preload("res://Art/Icons/SeveredArm.png")
 const SEVERED_LEG := preload("res://Art/Icons/SeveredLeg.png")
 const STATUS_ICON_SIZE := Vector2i(16, 16)
+const CRISIS_ICON := preload("res://Art/Icons/DedIcon.png")
 
 var unit: Unit
 @onready var portrait_texture = $PortraitTexture
@@ -67,6 +68,8 @@ func _refresh_status_icons():
 		_add_status_count(unit.downed_turns_remaining)
 	if unit.unit_instance.is_maimed():
 		_add_status_icon(_maim_icon())
+	if unit.in_crisis:
+		_add_status_icon(CRISIS_ICON)
 
 func _maim_icon() -> Texture2D:
 	if unit.unit_instance.maimed_part == UnitInstance.MaimedPart.LEG_LEFT or unit.unit_instance.maimed_part == UnitInstance.MaimedPart.LEG_RIGHT:

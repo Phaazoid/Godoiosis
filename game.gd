@@ -97,6 +97,7 @@ func _ready() -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	_tick_downed_countdowns(faction)
+	_tick_crisis_surges(faction)
 	# A faction with no commandable (active) units has nothing to do — its downed clocks already
 	# ticked above, so pass straight to the next. Guard against an all-downed board, where skipping
 	# would recurse with no faction left to stop on.
@@ -195,7 +196,7 @@ func execute_orders(unit):
 	await execute_action_sequence(rally_actions)
 
 	_process_downed_pending()
-	
+
 	if not is_instance_valid(squad):
 		return
 
@@ -244,6 +245,8 @@ func execute_action_sequence(actions: Array):
 
 		while not action.execution_complete:
 			await get_tree().process_frame
+
+		await _offer_pending_crisis()   # live Crisis interrupt: fire the instant a unit drops, before the next hit
 	
 func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
@@ -327,6 +330,21 @@ func enter_move_mode(unit: Unit):
 	if not unit.is_leader():
 		var unreachable = compute_move_range(unit).squad_unreachable.keys()
 		overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, unreachable, OVERLAY_DEFAULT_ATLAS)
+
+func _offer_pending_crisis() -> void:
+	# Crisis is a LIVE interrupt (will-and-death.md): the offer must fire the moment a unit goes
+	# down — BEFORE a later hit in the same pass kills the downed unit. We poll between hits here
+	# (the sequence loop is already async) instead of awaiting inside the synchronous take_damage
+	# path, and instead of the old end-of-pass offer (which never fired when a follow-up counter
+	# finished the unit first). Squad ejection stays deferred to _process_downed_pending.
+	for unit in _downed_pending.duplicate():
+		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
+			continue
+		if unit.crisis_offered_pending:
+			unit.crisis_offered_pending = false
+			if await _offer_crisis(unit):
+				unit.enter_crisis()
+				_downed_pending.erase(unit)   # back on its feet — not ejected at pass end
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
@@ -620,6 +638,11 @@ func _tick_downed_countdowns(faction: Team.Faction):
 		if unit.is_downed() and unit.get_faction() == faction:
 			unit.tick_downed_countdown()
 
+func _tick_crisis_surges(faction: Team.Faction):
+	for unit in _all_units():
+		if unit.get_faction() == faction:
+			unit.advance_crisis_surge()
+
 func clear_selection():
 	game_state = GameState.IDLE
 
@@ -689,7 +712,7 @@ func _on_unit_downed(unit: Unit):
 	if not _downed_pending.has(unit):
 		_downed_pending.append(unit)
 
-func _process_downed_pending():
+func _process_downed_pending() -> void:
 	if _downed_pending.is_empty():
 		return
 	for unit in _downed_pending:
@@ -699,6 +722,11 @@ func _process_downed_pending():
 		squad_manager.handle_unit_downed(unit)    # eject into a solo squad — safe now, execution is over
 	_downed_pending.clear()
 	refresh_action_queue(squad_manager.active_squad)
+
+func _offer_crisis(unit: Unit) -> bool:
+	# Live center-screen interrupt, awaited from the post-pass settle so combat is effectively
+	# frozen while the player chooses (will-and-death.md Crisis interrupt).
+	return await CrisisPrompt.show_prompt($UILayer, unit.get_unit_name())
 
 func _on_squad_became_active(squad: Squad, action: BaseAction):
 	if squad.leader.has_squad():

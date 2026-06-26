@@ -64,6 +64,8 @@ func _refresh_hp():
 	text += "  WIL %d/%d" % [unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
 	if unit.unit_instance.is_maimed():
 		text += " [MAIMED]"
+	if unit.in_crisis:
+		text += " [CRISIS]"
 	hp_label.text = text
 
 func _on_hp_changed(_current, _max):

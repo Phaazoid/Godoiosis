@@ -54,6 +54,20 @@ enum LethalRung { DOWN, KILL }
 # by Will math later.
 const OVERKILL_CEILING := 10
 
+# --- Crisis Mode (opt-in gambit; will-and-death.md, #33). Offered as a live interrupt when a
+# FULL-Will unit would go down: accept -> up at low HP with a one-turn scaling-stat surge, but
+# Will locks at 0 and there is no safety net (a would-be-down is death) for the rest of the
+# battle. All of this is battle-scoped, so it lives here on the transient Unit. ---
+const CRISIS_WILL_GATE := UnitInstance.MAX_WILL        # full Will (20) — an identity gate (placeholder)
+const CRISIS_REVIVE_HP := 5                            # HP the unit stands back up with (placeholder)
+const CRISIS_SURGE := 5                                # +this to each scaling stat for the surge turn (placeholder)
+const CRISIS_SURGE_STATS: Array[Stats.Stat] = [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER]  # "scaling stats" (assumption)
+
+var in_crisis: bool = false              # afflicted (skull icon, Will locked, die-on-down) for the battle
+var crisis_offered_pending: bool = false # this down qualified for the offer (set at down-time, read post-pass)
+var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
+var crisis_surge_active: bool = false    # surge is currently applied (cleared at the following turn start)
+
 # Turns remaining before a downed unit dies without rescue. Starts at 3 when
 # the unit goes down, ticks once per player-turn start, dies at 0. -1 = not counting.
 var downed_turns_remaining: int = -1
@@ -194,6 +208,9 @@ func take_damage(damage: int):
 		unit_instance.apply_damage(damage)      # survivable hit — ordinary HP loss, no rung decision
 		return
 	# Would-be-fatal: pick the rung instead of dying automatically.
+	if in_crisis:
+		die()   # Crisis traded the safety net away — a would-be-down is death now (will-and-death.md)
+		return
 	match _select_lethal_rung(damage, hp):
 		LethalRung.KILL:
 			unit_instance.apply_damage(damage)  # HP -> 0 -> died -> _on_instance_died -> die()
@@ -214,6 +231,7 @@ func _select_lethal_rung(damage: int, hp: int) -> LethalRung:
 	return LethalRung.DOWN
 
 func _go_downed():
+	crisis_offered_pending = is_crisis_eligible()  # capture BEFORE spend — eligibility reads FULL Will
 	lifecycle_state = LifecycleState.DOWNED
 	unit_instance.set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
 	unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
@@ -356,7 +374,8 @@ func next_rally_amount() -> int:
 
 func can_rally() -> bool:
 	# Offered while the next rally restores >= 1 Will and there's room to restore into.
-	return is_active() and next_rally_amount() >= 1 and unit_instance.get_current_will() < unit_instance.get_max_will()
+	# Crisis locks Will at 0 for the battle, so Rally is refused outright.
+	return is_active() and not in_crisis and next_rally_amount() >= 1 and unit_instance.get_current_will() < unit_instance.get_max_will()
 
 func rally() -> void:
 	var amount := next_rally_amount()
@@ -364,3 +383,44 @@ func rally() -> void:
 		return
 	unit_instance.set_current_will(unit_instance.get_current_will() + amount)
 	rally_count += 1
+	
+func is_crisis_eligible() -> bool:
+	# Crisis is gated by a FULL Will pool (will-and-death.md). Provisional: PLAYER-only (the live
+	# offer is a player decision; enemy AI would use its own path), and the gate is MAX_WILL (20),
+	# an identity gate so only high-WIL units ever qualify.
+	return get_faction() == Team.Faction.PLAYER \
+		and not in_crisis \
+		and unit_instance.get_current_will() >= CRISIS_WILL_GATE
+
+func enter_crisis():
+	# Player accepted the live offer (game._process_downed_pending). The unit went DOWNED during the
+	# pass; reverse that into the gambit: up at CRISIS_REVIVE_HP, Will locked at 0, surge primed for
+	# next turn, no safety net for the rest of the battle.
+	in_crisis = true
+	lifecycle_state = LifecycleState.ACTIVE
+	downed_turns_remaining = -1
+	_show_downed_sprite(false)
+	unit_instance.maimed_part = UnitInstance.MaimedPart.NONE  # Crisis kills, never maims (had full Will anyway)
+	unit_instance.set_current_hp(CRISIS_REVIVE_HP)
+	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
+	crisis_surge_pending = true
+
+func advance_crisis_surge():
+	# Called at this unit's faction-turn start. The surge runs for exactly one turn:
+	# pending -> (this turn) active -> (next turn) cleared. Applying from the NEXT turn keeps the
+	# Crisis-entry pass to "survives standing" only (will-and-death.md ripple containment).
+	if crisis_surge_active:
+		_clear_crisis_surge()
+	elif crisis_surge_pending:
+		_apply_crisis_surge()
+
+func _apply_crisis_surge():
+	for stat in CRISIS_SURGE_STATS:
+		unit_instance.stat_modifiers[stat] = get_modifier(stat) + CRISIS_SURGE
+	crisis_surge_pending = false
+	crisis_surge_active = true
+
+func _clear_crisis_surge():
+	for stat in CRISIS_SURGE_STATS:
+		unit_instance.stat_modifiers[stat] = get_modifier(stat) - CRISIS_SURGE
+	crisis_surge_active = false
