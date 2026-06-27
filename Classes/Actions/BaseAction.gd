@@ -33,12 +33,8 @@ func is_main_action() -> bool:
 func get_actor_texture() -> Texture2D:
 	if actor == null:
 		return null
-	
-	if actor.is_leader() and actor.has_squad():
-		return preload("res://Art/Icons/CrownIcon.png")	
-	
 	return actor.get_map_sprite_texture()
-	
+
 func get_action_icon() -> Texture2D:
 	return null
 	

@@ -45,8 +45,12 @@ offset_bottom = 42.0
 [node name="VBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer" unique_id=839256563]
 layout_mode = 2
 
-[node name="SectionsBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=1989633923]
-custom_minimum_size = Vector2(128, 500)
+[node name="OuterScroll" type="ScrollContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=944768170]
+custom_minimum_size = Vector2(0, 475)
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="SectionsBox" type="VBoxContainer" parent="BackgroundPanel/MarginContainer/VBox/OuterScroll" unique_id=1989633923]
 layout_mode = 2
 
 [node name="ExecuteButton" type="Button" parent="BackgroundPanel/MarginContainer/VBox" unique_id=350332695]

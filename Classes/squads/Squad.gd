@@ -107,6 +107,30 @@ func _remove_volley(member: AttackAction) -> void:
 		_remove_action(sib)
 	member.volley.clear()                    # break the RefCounted cycle (see #35)
 
+# Reorder the stored ATTACK aims to follow the given actor order (one aim per unit — the AoE
+# volley is re-derived at resolve, so each row maps to its aim by actor). resolve_plan iterates
+# action_queue in order, so queue order IS combo order: this re-times the elemental combo
+# deterministically — a planned reorder, Law #2 intact. Non-attack orders keep their place.
+func reorder_attacks_by_actor(ordered_actors: Array) -> void:
+	var attack_aims: Array[BaseAction] = []
+	for action in action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK:
+			attack_aims.append(action)
+	if attack_aims.size() <= 1:
+		return
+	attack_aims.sort_custom(func(a, b): return ordered_actors.find(a.actor) < ordered_actors.find(b.actor))
+
+	var rebuilt: Array[BaseAction] = []
+	var inserted := false
+	for action in action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK:
+			if not inserted:
+				rebuilt.append_array(attack_aims)   # drop the reordered block at the first attack slot
+				inserted = true
+		else:
+			rebuilt.append(action)
+	action_queue = rebuilt
+
 func _reset_squad():
 	has_acted = false
 	action_queue.clear() #TODO later if giving units status negative actions or whatnot, don't want to fully clear this. Can easily filter if that becomes a thing

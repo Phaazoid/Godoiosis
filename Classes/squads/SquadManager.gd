@@ -287,17 +287,9 @@ func remove_actions_for_unit(unit: Unit):
 			else:
 				squad._remove_action(action)
 
-	if only_hold_actions():
-		active_squad._clear_all_actions()
-		active_squad = null
-		return
-
-	if not squad.has_any_queued_actions() and active_squad == squad:
-		active_squad = null
-		return
-
-	validate_squad_plan(squad)
-	overlay_manager.redraw_planned_paths()
+	# Empty OR hold-only => the squad reverts to inactive. only_hold_actions() also reports true
+	# for an empty queue, so this subsumes the old separate "no actions left" branch.
+	revert_if_only_hold(squad)
 	
 func cancel_move_for_unit(unit: Unit):
 	var squad = unit.squad
@@ -323,6 +315,17 @@ func only_hold_actions() -> bool: #checking if the only actions a squad has are 
 		if action.action_type == BaseAction.ActionType.MOVE and action.is_hold_position == false:
 			return false
 			
+	return true
+
+# A squad stripped down to only hold-position moves (or nothing real) has no orders worth
+# committing, so it stops being active — its queue closes and another squad can be selected.
+# Mirrors the revert inside remove_actions_for_unit; call it from cancel paths that DON'T funnel
+# through there — notably the action-queue X button. Returns true if it actually reverted.
+func revert_if_only_hold(squad: Squad) -> bool:
+	if active_squad != squad or not only_hold_actions():
+		return false
+	squad._clear_all_actions()   # fires actions_became_empty -> queue + board cleanup
+	active_squad = null
 	return true
 	
 func remove_action(squad: Squad, action: BaseAction):

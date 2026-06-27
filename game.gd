@@ -89,6 +89,7 @@ func _ready() -> void:
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.row_hover_changed.connect(_on_queue_row_hover_changed)
+	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
 	camera_controller.refresh_bounds(grid)
@@ -275,6 +276,11 @@ func _on_queue_cancel_requested(display_action: BaseAction):
 		_:
 			pass   # counters etc. are derived — their X is inert
 
+	# Any cancel that strips the squad down to only hold-position moves (or nothing real) ends its
+	# activation, exactly like the other cancel paths. Without this the X button left hold-only
+	# squads "active", keeping the queue open and blocking selection of another squad.
+	squad_manager.revert_if_only_hold(squad)
+
 func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
 	for action in squad.action_queue.duplicate():
 		if action.actor == unit and action.is_main_action():
@@ -298,6 +304,13 @@ func _squad_all_committed(squad: Squad) -> bool:
 		if not (member.has_main_action_queued() or member.has_valid_move_queued()):
 			return false
 	return true
+
+func _on_queue_reorder_attacks(ordered_actors: Array) -> void:
+	var squad: Squad = squad_manager.active_squad
+	if squad == null or not is_instance_valid(squad):
+		return
+	squad.reorder_attacks_by_actor(ordered_actors)
+	refresh_action_queue(squad)   # re-resolve + redraw: the queue now reflects the new combo order
 
 func _on_queue_row_hover_changed(action: BaseAction, hovering: bool) -> void:
 	for u in _highlighted_queue_units:

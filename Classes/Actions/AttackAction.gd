@@ -127,6 +127,10 @@ func get_outcome_summary() -> String:
 		return ""
 	var parts: Array[String] = []
 	parts.append("-%d" % resolved.damage)
+	# HP context: "before -> after". Attacks only subtract HP, so before = after + damage
+	# (R4 threads target_hp_after). Shows whether the hit actually matters, not just its size.
+	var hp_before: int = resolved.target_hp_after + resolved.damage
+	parts.append("(%d->%d)" % [hp_before, resolved.target_hp_after])
 	match resolved.lethality:
 		ResolvedOutcome.Lethality.DOWNED:
 			parts.append("DOWNS")
