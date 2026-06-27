@@ -11,8 +11,6 @@ func init_counter(counter_unit: Unit, target_unit: Unit, attack_origin: Vector2i
 
 	action_type = ActionType.COUNTER_ATTACK
 	source_attack = source
-	is_reaction = true
-	show_in_queue = true
 
 func get_description() -> String:
 	return "%s counters %s" % [actor.get_unit_name(), get_target_name()]

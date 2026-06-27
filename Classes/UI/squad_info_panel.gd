@@ -15,10 +15,10 @@ func set_unit(new_unit: Unit):
 	_refresh()
 
 func _refresh():
-	if unit == null:
+	if unit == null or is_instance_valid(unit):
 		squad_label.text = "No Unit"
 		return
-	
+
 	if unit.squad.get_members().size() == 1:
 		squad_label.text = "No Squad"
 		return

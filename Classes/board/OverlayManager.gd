@@ -65,6 +65,7 @@ var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
 var hover_move_preview: MoveAction = null
+var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
 
 # Called when the node enters the scene tree for the first time.
@@ -100,11 +101,12 @@ func show_hover_move_path(move: MoveAction):
 	hover_move_preview.set_preview_z_index(MoveAction.HOVERED_ARROW_Z_INDEX)
 	
 func clear_hover_move_path():
-	if hover_move_preview == null:
-		return
-		
-	hover_move_preview.clear_preview_sprites()
-	hover_move_preview = null
+	if hover_move_preview != null:
+		hover_move_preview.clear_preview_sprites()
+		hover_move_preview = null
+	for m in hover_move_previews:
+		m.clear_preview_sprites()
+	hover_move_previews.clear()
 	
 func show_planned_path(unit: Unit, move: MoveAction):
 	if planned_move_by_unit.has(unit):
@@ -449,3 +451,10 @@ func _purge_unit_entry(unit):
 		if is_instance_valid(icon):
 			icon.queue_free()
 	icons_by_unit.erase(unit)
+	
+func show_hover_move_paths(moves: Array[MoveAction]):
+	clear_hover_move_path()
+	hover_move_previews = moves
+	for m in hover_move_previews:
+		draw_path_arrows(m)
+		m.set_preview_z_index(MoveAction.HOVERED_ARROW_Z_INDEX)

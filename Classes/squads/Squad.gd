@@ -84,8 +84,9 @@ func _clear_all_actions():
 	for action in action_queue.duplicate():
 		action_queue.erase(action)
 		action_cancelled.emit(self, action.actor, action.action_type)
+		_break_volley_cycle(action)
 	actions_became_empty.emit(self)
-		
+
 func _set_has_acted(acted: bool):
 	has_acted = acted
 	if acted:
@@ -97,6 +98,7 @@ func _remove_actions_for_actor_silent(unit: Unit):
 	for action in action_queue.duplicate():
 		if action.actor == unit:
 			action_queue.erase(action)
+			_break_volley_cycle(action)
 
 # Cancel a whole volley given any one of its members (an AoE is one order).
 func _remove_volley(member: AttackAction) -> void:
@@ -133,4 +135,13 @@ func reorder_attacks_by_actor(ordered_actors: Array) -> void:
 
 func _reset_squad():
 	has_acted = false
+	for action in action_queue:
+		_break_volley_cycle(action)
 	action_queue.clear() #TODO later if giving units status negative actions or whatnot, don't want to fully clear this. Can easily filter if that becomes a thing
+
+# Break the volley RefCounted cycle when actions leave the queue for good.
+# create_volley() shares one Array[AttackAction] across all siblings, so each
+# sibling strong-refs the array that strong-refs it -> the island never frees.
+func _break_volley_cycle(action: BaseAction) -> void:
+	if action is AttackAction and not action.volley.is_empty():
+		action.volley.clear()

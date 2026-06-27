@@ -28,7 +28,7 @@ func _populate_stats():
 
 func set_unit(target: Unit):
 	#To prevent duplicate stacking.  
-	if unit: 
+	if unit != null and is_instance_valid(unit):
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
 		unit.unit_instance.will_changed.disconnect(_on_will_changed)

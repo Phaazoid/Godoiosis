@@ -3,6 +3,10 @@ class_name UnitEditorTool
 
 @onready var unit_editor_container := %UnitEditorVbox
 var editing_unit: Unit = null
+var game   # injected by DevOverlay
+
+func init(p_game):
+	game = p_game
 
 func edit_unit(unit):
 	editing_unit = unit
@@ -38,6 +42,16 @@ func populate_unit_editor(unit):
 	delete_button.text = "Delete Unit"
 	delete_button.pressed.connect(func(): _delete_unit(unit))
 	unit_editor_container.add_child(delete_button)
+
+	var move_button := Button.new()
+	move_button.text = "Move (then click a cell)"
+	move_button.pressed.connect(func(): _arm_move())
+	unit_editor_container.add_child(move_button)
+
+	var dup_button := Button.new()
+	dup_button.text = "Duplicate (then click a cell)"
+	dup_button.pressed.connect(func(): _arm_duplicate())
+	unit_editor_container.add_child(dup_button)
 
 func _add_inventory_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Inventory")
@@ -110,3 +124,11 @@ func _delete_unit(unit: Unit):
 		unit.die()
 	editing_unit = null
 	populate_unit_editor(null)
+	
+func _arm_move() -> void:
+	if game != null and is_instance_valid(editing_unit):
+		game.dev_controller.arm_move(editing_unit)
+
+func _arm_duplicate() -> void:
+	if game != null and is_instance_valid(editing_unit):
+		game.dev_controller.arm_duplicate(editing_unit)

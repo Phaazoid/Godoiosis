@@ -104,13 +104,13 @@ func set_selected_faction():
 			faction = Team.Faction.OTHER
 
 func build_unit_data():
-	data = UnitData.new()
-	data.display_name = unit_name
-	data.base_stats = stat_values.duplicate()
-	data.faction = faction
-	data.map_sprite = selected_sprite["idle"]
-	data.move_sprite = selected_sprite["moving"]
-	data.downed_sprite = selected_sprite["downed"]
+	data = UnitFactory.create_unit_data(
+		stat_values.duplicate(),
+		unit_name,
+		faction,
+		selected_sprite["idle"],
+		selected_sprite["moving"],
+		selected_sprite["downed"])
 
 func try_spawn_at(cell: Vector2i) -> void:
 	_validate()

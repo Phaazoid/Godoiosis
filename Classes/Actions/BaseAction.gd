@@ -2,24 +2,16 @@ extends RefCounted
 class_name BaseAction
 
 var actor: Unit
-var priority
 var action_type: ActionType
-
-signal execute_finished
 
 var execution_complete := false
 var is_valid := true
 var validation_errors: Array[String] = []
 
-var is_reaction := false
-var show_in_queue := true
-
 enum ActionType {
 	MOVE,
 	ATTACK,
 	COUNTER_ATTACK,
-	WAIT,
-	SQUAD_MOVE,
 	RESCUE,
 	RALLY
 }
@@ -31,7 +23,7 @@ func is_main_action() -> bool:
 	return action_type == ActionType.ATTACK or action_type == ActionType.RESCUE or action_type == ActionType.RALLY
 
 func get_actor_texture() -> Texture2D:
-	if actor == null:
+	if actor == null or not is_instance_valid(actor):
 		return null
 	return actor.get_map_sprite_texture()
 
@@ -72,7 +64,6 @@ func begin_execution():
 	
 func finish_execution():
 	execution_complete = true
-	execute_finished.emit()
 
 func execute():
 	finish_execution()

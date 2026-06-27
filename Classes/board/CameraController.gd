@@ -4,6 +4,7 @@ class_name CameraController
 @onready var camera: Camera2D = $Camera2D
 const TILE_SIZE = 16
 const CELL_WORLD := TILE_SIZE * 2   # 32px/cell — matches your existing min/max_world math
+const EDIT_MARGIN_CELLS := 8
 
 var map_width = 32
 var map_height = 20
@@ -39,49 +40,25 @@ func center_on_position(world_pos: Vector2):
 	target_position = world_pos
 	clamp_target_position()
 
-func check_edge_scroll(mouse_pos: Vector2i):
-	var viewport_size = get_viewport_rect().size
-	var move_dir = Vector2i.ZERO
-
-	if mouse_pos.x < edge_size:
-		move_dir.x -= 1
-	elif mouse_pos.x > viewport_size.x - edge_size:
-		move_dir.x += 1
-	
-	if mouse_pos.y < edge_size:
-		move_dir.y -= 1
-	elif mouse_pos.y > viewport_size.y - edge_size:
-		move_dir.y += 1
-	
-	if move_dir != Vector2i.ZERO:
-		move_by_cell()
-	
-func move_by_cell():
-	if is_moving: 
-		return
-	is_moving = true
-	clamp_target_position()
-	
-	
 func clamp_target_position():
 	var viewport_size = get_viewport_rect().size
 	var visible_size = viewport_size / camera.zoom
 	var half_view = visible_size / 2
-	target_position.x = clamp(
-		target_position.x,
-		min_world.x + half_view.x,
-		max_world.x - half_view.x
-	)
-	target_position.y = clamp(
-		target_position.y,
-		min_world.y + half_view.y,
-		max_world.y - half_view.y
-	)
-	
+	target_position.x = _clamp_axis(target_position.x, min_world.x, max_world.x, half_view.x)
+	target_position.y = _clamp_axis(target_position.y, min_world.y, max_world.y, half_view.y)
+
+func _clamp_axis(value: float, lo: float, hi: float, half: float) -> float:
+	# Map smaller than the view on this axis -> bounds invert (lo+half > hi-half).
+	# Center the map instead of letting clamp() thrash.
+	if hi - lo <= half * 2.0:
+		return (lo + hi) / 2.0
+	return clamp(value, lo + half, hi - half)
+
 func refresh_bounds(grid: TileMapLayer):
 	var used := grid.get_used_rect()
-	min_world = Vector2(used.position) * CELL_WORLD
-	max_world = Vector2(used.position + used.size) * CELL_WORLD
+	var margin := Vector2(EDIT_MARGIN_CELLS, EDIT_MARGIN_CELLS) * CELL_WORLD
+	min_world = Vector2(used.position) * CELL_WORLD - margin
+	max_world = Vector2(used.position + used.size) * CELL_WORLD + margin
 	clamp_target_position()
 	
 # Called every frame. 'delta' is the elapsed time since the previous frame.

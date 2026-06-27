@@ -515,6 +515,157 @@ func handle_unit_downed(unit: Unit):
 		validate_squad_plan(squad)
 		overlay_manager.redraw_planned_paths()
 
+# --- squad-formation eligibility (migrated from game.gd, #22) ---
+
+func can_create_any_squad(creating_unit: Unit) -> bool:
+	if creating_unit.has_squad() or creating_unit.squad.has_acted:
+		return false
+	for unit in _all_units():
+		if can_squad_up(unit, creating_unit.squad):
+			return true
+	return false
+
+func can_join_any_squad(joining_unit: Unit) -> bool:
+	for unit in _all_units():
+		if can_join_squad(joining_unit, unit.squad) and unit.squad.leader.has_squad() and not unit.squad.has_acted and not joining_unit.squad.has_acted:
+			return true
+	return false
+
+func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
+	var dist = GridUtils.manhattan_distance(joining_unit.movement.cell, squad.leader.movement.cell)
+	if dist <= squad.get_max_range() and squad.leader.get_faction() == joining_unit.get_faction() and not joining_unit.has_squad() and not squad.get_members().has(joining_unit) and not joining_unit.squad.has_acted and squad.action_queue.is_empty() and not squad.has_acted and not joining_unit.has_any_actions():
+		return true
+	return false
+
+func can_join_squad(unit: Unit, squad: Squad) -> bool:
+	var dist = GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell)
+	if dist <= squad.get_max_range() and squad.leader.get_faction() == unit.get_faction() and not squad.get_members().has(unit) and squad.leader.has_squad() and not squad.has_acted and not unit.squad.has_acted:
+		return true
+	return false
+
+func _all_units() -> Array[Unit]:
+	# Every unit belongs to exactly one managed squad (solo units get a 1-member squad),
+	# so flattening squad membership enumerates the whole board exactly once — and replaces
+	# game.gd's units_root sweep, which these predicates no longer have access to.
+	var result: Array[Unit] = []
+	for squad in squads:
+		for member in squad.get_members():
+			result.append(member)
+	return result
+	
+# --- Group Move solver (migrated from game.gd, #22 / #4) ---
+# Domain logic: assigns each squad member a destination that best preserves its path-cost
+# offset to the leader. Deterministic (Law #1). `board` is passed in (SquadManager has no
+# _board()); it's a snapshot keyed on actual cells, so it stays valid across the queued moves.
+
+func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext) -> Array[MoveAction]:
+	var moves: Array[MoveAction] = []
+	var leader := squad.get_leader()
+	var leader_start := leader.movement.cell
+	var displacement := leader_destination - leader_start
+
+	var leader_path := RulesService.reconstruct_path(RulesService.compute_move_range(leader, board).came_from, leader_start, leader_destination)
+	var leader_move := MoveAction.new()
+	leader_move.init(leader, leader_path, GridUtils.get_terrain_icon_at_cell(grid, leader_destination))
+	moves.append(leader_move)
+
+	# Cohesion leash from the leader's new cell (path-far cells split the squad around walls).
+	var leader_field := _path_hops(leader_destination, board)
+	var leash: int = squad.get_max_range() * 2
+
+	var taken := { leader_destination: true }
+
+	for member in squad.get_members():
+		if member == leader:
+			continue
+
+		var target: Vector2i = member.movement.cell + displacement
+		var to_target := _path_hops(target, board)
+
+		# Member reach against the leader's NEW cell (override) -> no need to queue the leader first,
+		# which is what lets this same plan run as a non-committing hover preview.
+		var reach := RulesService.compute_move_range(member, board, leader_destination)
+		var here: Vector2i = member.movement.cell
+
+		var candidates := {}
+		for cell in reach.reachable.keys():
+			if taken.has(cell):
+				continue
+			if leader_field.get(cell, 999999) > leash:
+				continue
+			candidates[cell] = reach.reachable[cell]
+		if not taken.has(here) and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_range() and leader_field.get(here, 999999) <= leash:
+			candidates[here] = 0
+
+		if candidates.is_empty():
+			continue
+
+		var have_best := false
+		var best: Vector2i = here
+		var best_to_target := 0
+		var best_cost := 0
+		for cell in candidates.keys():
+			var d: int = to_target.get(cell, 999999)
+			var cost: int = candidates[cell]
+			if not have_best \
+				or d < best_to_target \
+				or (d == best_to_target and cost < best_cost) \
+				or (d == best_to_target and cost == best_cost and _cell_before(cell, best)):
+				have_best = true
+				best = cell
+				best_to_target = d
+				best_cost = cost
+
+		taken[best] = true
+		if best == here:
+			continue
+
+		var member_path := RulesService.reconstruct_path(reach.came_from, here, best)
+		var member_move := MoveAction.new()
+		member_move.init(member, member_path, GridUtils.get_terrain_icon_at_cell(grid, best))
+		moves.append(member_move)
+
+	return moves
+
+func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext) -> void:
+	for move in plan_group_move(squad, leader_destination, board):
+		queue_action(squad, move)
+		overlay_manager.show_planned_path(move.actor, move)
+		if move.is_valid:
+			overlay_manager.show_projected_unit(move.actor, move.destination)
+	validate_squad_plan(squad)
+	overlay_manager.redraw_planned_paths()
+	overlay_manager.redraw_projected_units()
+
+func _path_hops(source: Vector2i, board: BoardContext) -> Dictionary:
+	# Terrain-aware hop-distance (BFS over walkable cells) from `source` -> { cell: hops }.
+	# Unweighted by design — formation cares about how terrain connects, not move-cost. O(cells)
+	# with no frontier sort, so it doesn't hitch like the old weighted cost field.
+	var dist := { source: 0 }
+	var queue := [source]
+	var head := 0
+	while head < queue.size():
+		var cell: Vector2i = queue[head]
+		head += 1
+		var d: int = dist[cell] + 1
+		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+			var next: Vector2i = cell + dir
+			if dist.has(next):
+				continue
+			if not board.grid.get_used_rect().has_point(next):
+				continue
+			if not board.is_walkable(next):
+				continue
+			dist[next] = d
+			queue.append(next)
+	return dist
+
+func _cell_before(a: Vector2i, b: Vector2i) -> bool:
+	# Row-major tie-break so the solver is fully deterministic.
+	if a.y != b.y:
+		return a.y < b.y
+	return a.x < b.x
+
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):
 		squad.action_cancelled.connect(_on_squad_action_cancelled)

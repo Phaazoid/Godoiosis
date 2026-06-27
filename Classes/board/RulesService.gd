@@ -29,7 +29,7 @@ static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> in
 
 	return cost
 
-static func compute_move_range(unit: Unit, board: BoardContext) -> Dictionary:
+static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null) -> Dictionary:
 	var start := unit.movement.cell
 	var max_cost := unit.movement.move_range
 
@@ -67,10 +67,19 @@ static func compute_move_range(unit: Unit, board: BoardContext) -> Dictionary:
 
 	var reachable := {}
 	var squad_unreachable := {}
+
+	var leader_pos: Vector2i
+	if leader_cell != null:
+		leader_pos = leader_cell
+	elif not unit.is_leader():
+		leader_pos = unit.squad.get_leader().get_projected_destination()
+	else:
+		leader_pos = unit.movement.cell   # unused for leaders (filter below is gated on not is_leader)
+
 	for cell in cost_so_far.keys():
 		var other_unit := board.unit_at_cell(cell)
 
-		if not unit.is_leader() and GridUtils.manhattan_distance(cell, unit.squad.get_leader().get_projected_destination()) > unit.squad.get_max_range():
+		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_range():
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 

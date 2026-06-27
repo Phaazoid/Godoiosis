@@ -31,7 +31,6 @@ func _on_tile_dropdown_item_selected(index: int):
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
 
-
 func _build_extra_controls() -> void:
 	# Part 2: visible erase hint (the tab tooltip already says it, but this is in-panel).
 	var note := Label.new()
@@ -67,4 +66,4 @@ func _build_extra_controls() -> void:
 func _on_resize_pressed() -> void:
 	if game == null:
 		return
-	game.resize_map(int(_width_spin.value), int(_height_spin.value), selected_tile)
+	game.dev_controller.resize_map(int(_width_spin.value), int(_height_spin.value), selected_tile)
