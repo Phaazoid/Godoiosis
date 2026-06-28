@@ -12,3 +12,4 @@ class_name UnitData
 @export var map_sprite: Texture2D 
 @export var move_sprite: Texture2D 
 @export var downed_sprite: Texture2D 
+@export var base_aura: Dictionary[Elemental.Element, int]

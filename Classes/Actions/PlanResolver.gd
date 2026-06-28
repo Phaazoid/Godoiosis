@@ -94,7 +94,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 static func _base_damage(attacker: Unit) -> int:
 	var weapon := attacker.get_equipped_weapon()
 	if weapon != null:
-		return weapon.power + attacker.get_effective_stat(weapon.scaling_stat)
+		return weapon.base_damage(attacker)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 	
 static func _elements_of(attacker: Unit) -> Array[Elemental.Element]:

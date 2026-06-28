@@ -16,6 +16,10 @@ var stats: Dictionary = {}
 #all buffs and debuffs from everything. Terrain, items, enemy attacks, etc. 
 var stat_modifiers: Dictionary = {}
 
+# Per-element aura — persistent damage scaling for runes (docs/design/alchemy-kit.md).
+# Mirrors `stats`: seeded from UnitData.base_aura, grows over a unit's life.
+var aura: Dictionary = {}
+
 #Battle stats
 var current_hp: int = 0
 #effective str, other things here
@@ -40,7 +44,7 @@ func initialize():
 		return
 	#base current stats off of the data without editing the values in UnitData that we're pulling from
 	stats = data.base_stats.duplicate(true) 
-	
+	aura = data.base_aura.duplicate(true)
 	#reset battle stats
 	_refresh_derived_stats()
 	current_hp = get_base_stat(Stats.Stat.MHP)
@@ -106,3 +110,6 @@ func spend_will_for_down() -> bool:
 
 func is_maimed() -> bool:
 	return maimed_part != MaimedPart.NONE
+	
+func get_element_aura(element: Elemental.Element) -> int:
+	return aura.get(element, 0)

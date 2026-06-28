@@ -59,6 +59,25 @@ const ACTION_DATA = {
 	GAME_MENU_GROUP_MOVE: {"name": "Group Move"}
 }
 
+# Single source of truth for the action menu's print order. Any GAME_MENU_* not listed here
+# is dropped from the menu — keep it complete when you add items.
+const MENU_ORDER := [
+	GAME_MENU_EXECUTE_ORDERS,
+	GAME_MENU_MOVE,
+	GAME_MENU_GROUP_MOVE,
+	GAME_MENU_ATTACK,
+	GAME_MENU_RESCUE,
+	GAME_MENU_RALLY,
+	GAME_MENU_SQUADUP,
+	GAME_MENU_JOINSQUAD,
+	GAME_MENU_LEAVESQUAD,
+	GAME_MENU_DISBAND_SQUAD,
+	GAME_MENU_WAIT,
+	GAME_MENU_CANCEL,
+	GAME_MENU_INSPECT,
+	GAME_MENU_ENDTURN,
+]
+
 enum GameState {
 	IDLE,
 	TILE_SELECTED,
@@ -461,7 +480,7 @@ func _unhandled_input(event):
 					if target != null:
 						last_clicked_cell = clickedCell
 						game_state = GameState.TILE_SELECTED
-						show_action_menu(event.global_position, populate_action_menu(target), target)
+						show_action_menu(get_viewport().get_mouse_position(), populate_action_menu(target), target)
 				GameState.CHOOSING_SQUAD:
 					if clickedUnit != null:
 						if squad_manager.can_join_squad(lastUnit, clickedUnit.squad):
@@ -503,14 +522,10 @@ func _unhandled_input(event):
 						var origin = lastUnit.get_projected_destination()
 						# Directional weapons aim by direction; point weapons need the cell in range.
 						if lastUnit.combat.is_directional_attack() or lastUnit.combat.can_hit_cell_from(origin, clickedCell):
-							var affected = lastUnit.combat.get_affected_cells_from(origin, clickedCell)
-							var victims = gather_attack_victims(lastUnit, affected)
-							if not victims.is_empty():
-								# Store the AIM only (actor + aimed cell). The volley is re-derived from
-								# CURRENT projected positions at resolve time (#15) — re-planned moves change
-								# who's hit. null target = "victims derived later". gather here is just the
-								# legality gate: you can't aim an attack that currently hits nobody.
-								squad_manager.queue_action(lastUnit.squad, AttackAction.create(lastUnit, origin, null, clickedCell))
+							# #47: cells are the target. A legal aim is queueable whether or not a unit
+							# is there — victims (and later terrain effects, #50) are derived at resolve
+							# time (#15). Store the AIM only (actor + aimed cell); null target = derived later.
+							squad_manager.queue_action(lastUnit.squad, AttackAction.create(lastUnit, origin, null, clickedCell))
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 				GameState.RESCUE_TARGETING:
 					if lastUnit == null:
@@ -589,7 +604,11 @@ func populate_action_menu(unit: Unit) -> Array:
 	if unit != null and unit.has_any_actions(): #TODO separate general cancel and cancel queued plans
 		options.append(GAME_MENU_CANCEL)
 		
-	return options
+	var ordered := []
+	for id in MENU_ORDER:
+		if options.has(id):
+			ordered.append(id)
+	return ordered
 
 func queue_rally(unit: Unit):
 	var rally := RallyAction.new()
@@ -603,23 +622,20 @@ func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.IDLE
 	squad_manager.reset_faction_actions(faction)
 	
-func show_action_menu(pos: Vector2i, items: Array, unit: Unit):
 	#TODO This should probably be it's own game state - IN_MENU or something.  
 	#Can call an end menu function from the popup hide that calls update visuals instead.  
 	#Right now, mouse icon changes while menu is up and you hover around, so a new state could be used to stop erratic behavoir like that
-	var controller = ActionMenuController.new()
-	controller.setup(unit)
+func show_action_menu(pos: Vector2i, items: Array, unit: Unit):
+	var controller := ActionMenuController.new()
 	add_child(controller)
-	
+	controller.setup(unit)
+
 	controller.action_selected.connect(_on_friendly_action_menu_pressed)
 	controller.cancelled.connect(clear_selection_controller)
-	controller.local_menu.clear()
-	for item in items:
-		controller.local_menu.add_item(ACTION_DATA[item].name, item)
-		
-	controller.setpos(pos)
-	controller.local_menu.popup()
 	controller.cancelled.connect(_on_action_menu_cancelled)
+
+	controller.populate(items, ACTION_DATA)
+	controller.setpos(pos)
 
 func _on_action_menu_cancelled(controller):
 	update_hover_visuals(last_hovered_cell, get_viewport().get_mouse_position())
@@ -892,9 +908,6 @@ func spawn_test_units():
 	spawn_unit(data2, Vector2i(-8, -5))
 	spawn_unit(data3, Vector2i(4, 6))
 
-func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i]) -> Array[Unit]:
-	return RulesService.gather_attack_victims(attacker, affected_cells, _board())
-
 func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	var hoveredUnit : Unit = get_unit_at_cell(hoveredCell)
 	var projectedHoveredUnit : Unit = squad_manager.get_projected_unit_from_cell(hoveredCell)
@@ -902,7 +915,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 		hoveredUnit = null
 	if projectedHoveredUnit != null:
 		hoveredUnit = projectedHoveredUnit
-	
 	
 	var tile_data: TileData = grid.get_cell_tile_data(hoveredCell)
 	if tile_data == null:

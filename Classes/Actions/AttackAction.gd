@@ -29,21 +29,22 @@ func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: 
 	if target_unit != null and is_instance_valid(target_unit):
 		target_texture = target_unit.get_map_sprite_texture()
 		target_name = target_unit.get_unit_name()
+	else:
+		target_name = "Tile %s" % target_location   # cell-targeted attack (#47)
 
 func execute():
 	begin_execution()
-	if actor == null or target == null:
+	# Actor must be live to swing. (target may be null = a cell-targeted attack, #47.)
+	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
 		finish_execution()
 		return
 
-	if not is_instance_valid(actor) or not is_instance_valid(target):
+	# A UNIT attack whose target vanished this pass — nothing to hit, no lunge (unchanged).
+	# A null target is intentional (a cell attack) and falls through to the lunge.
+	if target != null and (not is_instance_valid(target) or target.is_queued_for_deletion()):
 		finish_execution()
 		return
 
-	if actor.is_queued_for_deletion() or target.is_queued_for_deletion():
-		finish_execution()
-		return
-		
 	if resolved != null and resolved.skipped:
 		finish_execution()                          # counter-er went down/dead this pass — no lunge, no damage
 		return
@@ -53,9 +54,9 @@ func execute():
 	if not is_secondary_hit:
 		await actor.visuals.play_attack_lunge(direction)
 
-	# Pure playback of the resolved outcome (R3) — no recomputation. Damage and state
-	# deltas both come from the resolver, so execution exactly matches the preview (Law #2).
-	if resolved != null:
+	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
+	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
+	if target != null and resolved != null:
 		target.combat.apply_damage(resolved.damage)
 		for s in resolved.states_removed:
 			target.remove_element_state(s)
@@ -123,7 +124,7 @@ static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, 
 	return volley_actions
 
 func get_outcome_summary() -> String:
-	if resolved == null:
+	if resolved == null or target == null:   # cell attack (#47) — no unit outcome to summarize
 		return ""
 	var parts: Array[String] = []
 	parts.append("-%d" % resolved.damage)

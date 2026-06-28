@@ -1,6 +1,8 @@
 # Alchemist's Kit — Architecture & Open Questions
 
-**Status: WORKING DESIGN (session 2026-06-16, lore-grounded pass).** The stack shape + materia model are locked; the **rune customization model is a PROPOSAL under active workshop** (the dev's main open question); two forks resolved this pass (summons deferred, no RES stat). Per the backlog this is an *architecture + open-questions map, not a final spec*. Milestone-B content (a tiny elemental sample is Milestone A). **No alchemy code exists yet** (grep-verified 2026-06-16 — clean slate).
+**Status: WORKING DESIGN (session 2026-06-16, lore-grounded pass; rune/aura model RATIFIED + first code 2026-06-27).** The stack shape + materia model are locked; the **rune customization model is now LOCKED-ish** — a rune is a blank, element-agnostic *container* an alchemist **inscribes** with transmutation carvings, sized **S/M/L** by capacity, channeled through per-element **aura** with a one-point leeway (model below, ratified with the dev 2026-06-27). Two earlier forks resolved (summons deferred, no RES stat). Per the backlog this is an *architecture + open-questions map, not a final spec*. Milestone-B content (a tiny elemental sample is Milestone A).
+
+**Code substrate now landing (2026-06-27, supersedes the earlier "no alchemy code exists" note):** `EquippableData` base (weapons + runes share one equip slot) → `WeaponData` (stat-scaled) and `RuneData` (the container) + `TransmutationData` (the carving = the actual attack, aura-scaled); a per-element `aura` map on `UnitData`/`UnitInstance`. **Firing a chosen transmutation through the resolver is the NEXT slice** — the data model + channeling/capacity land first (tested); combat integration follows.
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
@@ -30,9 +32,9 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 | Layer | Question it answers | Notes |
 |---|---|---|
 | **Affinity** | *Can you touch this element at all?* | Heritable, fixed-ish identity. Most alchemists: one primary (+ latent). Isaac: alkahest = all. |
-| **Aura** (per element) | *How hard does it hit?* | Damage scaling. Grows **modestly** — authored sources + capped proficiency goals, **not** free casting ([progression.md](progression.md)). |
+| **Aura** (per element) | *How hard does it hit?* | Damage scaling, stored as a **per-element map** on the unit (`UnitInstance.aura`). Most units hold **little or none**; a trained alchemist has a **primary** element (high) + often one or two **tertiaries** (low). A channeled transmutation scales off the **sum** of the wielder's aura across its constituent elements. Grows **modestly** — authored sources + capped proficiency goals, **not** free casting ([progression.md](progression.md)). |
 | **Proficiency** | *What can you do with it?* | Practice unlocks more advanced transmutations/inscriptions. Capped training goals, anti-grind. |
-| **Rune** | *Your customizable focus.* | Inscribed runestone; a loadout of transmutations; reusable; scarce at the supply level. (Model below.) |
+| **Rune** | *Your customizable focus.* | A **blank, element-agnostic** runestone an alchemist **inscribes** with transmutation carvings; sized **S/M/L** = how much it can hold; reusable; scarce at the supply level. (Model below.) |
 | **Materia** | *Fuel + etching medium.* | Terrain-ambient (free/weak) / carried-pure (strong) / rare-reagent (gate). Also etches runes + feeds mechanist gear. |
 
 > **Aura × Rune × Materia → Transmutation → (element tags + statuses) → Combinatrix.** The combinatrix is the wiki's own **deterministic replacement for crits** ("combos replace the notion of critical hits") — exactly what Law #1 needs.
@@ -42,23 +44,28 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 Five: **Fire, Water, Earth, Air, Aether.** Oppositions Fire↔Water, Earth↔Air. Aether = life / spirit / the heavens. Hidden sixth: **Alkahest** — the base element all others derive from; chaos/taboo; the heritable-affinity root (Isaac).
 *Flavor hook:* the four classical elements map to the medical humors → choleric / phlegmatic / melancholic / sanguine — a ready-made way to characterize pre-built alchemist units.
 
-## Runes — what a rune is **[LOCKED]**, customization **[WORKSHOP]**
+## Runes — the inscribable container **[RATIFIED 2026-06-27]**
 
-**A rune = a chunk of finite runestone (an "alkahest battery") inscribed with geometric symbol(s) that give the raw alkahest *shape*, wielded by an affinity-bearing alchemist who directs it.** Reusable, never expires, **not** consumed per cast. Scarcity lives at the **runestone supply** (economy), not in use-limits — confirmed by the dev. A rune keys to an element *or a combination*, and **the inscription is the customization surface.**
+**A blank rune is a chunk of finite runestone — blank, alkahest-saturated rock that is *element- and pattern-agnostic* until inscribed.** Alchemists **carve transmutation reactions** onto it; those carvings *are* the attacks (see Transmutations below). A rune is therefore **not** an attack and **not** "one element" — it is a **customizable loadout** of however many carvings fit. Reusable, never expires, **not** consumed per cast; scarcity lives at the **runestone supply** (economy), not in use-limits.
 
-Corrects v1's error: **not** "five runes, one per element" (that was the stale `Alchemy.docx` layer).
+Corrects two earlier errors: **not** "five runes, one per element" (stale `Alchemy.docx` layer), and **not** "one rune = one fixed attack" (the misleading `FireRune.tres` throwaway — that file is just an example fire *weapon*, not the rune model).
 
-**[WORKSHOP] Proposed customization model — the capacity board:**
-- A runestone has a **grade** (the wiki's "5 sizes," reinterpreted) = a **capacity budget.**
-- You **etch** transmutations onto it; each costs capacity (more advanced/powerful = more). Etching **consumes materia** ("etching specific materia changes functionality" — dev) → customizing a rune *spends elemental reagents*.
-- What you *may* etch is gated by **affinity** (element you can touch) + **aura/proficiency** (advancement).
-- Result: each rune is a **precious, customizable loadout board.** Runestone scarcity → meaningful choices about what each rune becomes → feeds the *"setting up the battle is half the fun"* axiom (prep-layer crafting).
-- Answers the dev's *how many / why / how*: **how many** = capacity-bounded; **how** = etch with materia; **why customizable** = scarcity makes each board precious, breadth keeps alchemists tactically wide.
-- *Other pole of the spectrum (if this feels too heavy):* a rune is just an **elemental key** and the transmutation is chosen at cast-time from what aura/proficiency/materia allow — simpler, but discards the desired customization. Current lean: **capacity board.**
+**Size = capacity.** Simplified to **S / M / L** for now (the wiki's "5 sizes" collapses later):
+- **S (small)** — the beginner's tool; holds only the most **basic** carvings (a single tier-1). Common, easy to come by.
+- **M (medium)** — holds more: e.g. **three tier-2** carvings, *or* **one tier-3 + one tier-1**.
+- **L (large)** — the big board; holds a lot.
 
-Engine analogy: a rune ≈ a customized resource instance (like saved **WeaponData variants**); the etching UI ≈ the existing **weapon authoring tool**; each etched transmutation ≈ `WeaponData`(policy) + `AttackPattern`(geometry) + element tags.
+Mechanically: each rune has a **capacity budget**; each carving has a **cost** (≈ its tier — bigger/more-complex carvings cost more). You may inscribe while `Σ costs ≤ capacity`. The S budget being **1** makes S *naturally* tier-1-only (a tier-2 costs 2 > 1) — no separate rule needed. Exact numbers are placeholder ([RuneData.gd](../../Classes/items/RuneData.gd) `CAPACITY`); the curve is a tuning knob, not settled balance.
 
-**[OPEN] within the rune model:** element-locked vs multi-element runes; the exact capacity/cost curve; how an *inscription* becomes known (ancient scrolls as story-gated blueprints? proficiency tiers? both?); whether grade is fixed at mining or upgradable.
+**Channeling — the aura gate (with the runestone's leeway).** Holding a carving isn't enough; the wielder must have the **aura** to channel it:
+- A transmutation needs **≥ 1 aura in each of its constituent elements** to be channeled.
+- The runestone itself, saturated with alkahest, grants **one free point of leeway** — it covers the requirement for **exactly one** element you'd otherwise lack. So a unit with **0 aura everywhere** can still channel **any single-element (tier-1) carving** — at **no scaling** (0 aura adds 0 damage), but it fires.
+- A unit with **1 point of fire aura** can channel **fire + any one other element** (fire is covered by real aura; the partner rides the leeway) — which is why a fire-leaning alchemist wants a rune loaded with **fire-based combos**.
+- Two-or-more *uncovered* elements (e.g. a tier-3 at zero aura, or water+earth on a fire-only unit) → **can't channel** — the single leeway point isn't enough.
+
+Engine analogy: `RuneData` ≈ a customized resource instance (like a saved `WeaponData` variant) that **holds an array of `TransmutationData`**; the future carving/etching UI ≈ the existing **weapon authoring tool**; each carving ≈ `TransmutationData` = `AttackPattern`(geometry) + element set + power, aura-scaled.
+
+**[OPEN] within the rune model:** the capacity/cost numbers; multi-element damage scaling (**sum of auras** for now — vs primary-only); per-element aura *floors* above 1 for stronger carvings; how a carving is *learned* (story-gated scrolls? proficiency? both?); whether size is fixed at mining or upgradable; element-locked vs free inscription. Materia (the etching medium + cast fuel) is **deferred** — see below.
 
 ## Materia — model **[LOCKED]** (dev caveats), tuning **[OPEN]**
 
@@ -72,20 +79,23 @@ Engine analogy: a rune ≈ a customized resource instance (like saved **WeaponDa
 - **Terrain *is* the ambient-materia map:** positioning/pathing matter (stand by your source, deny the enemy theirs); **mechanist terraforming** (drills) reshapes the alchemy economy mid-battle.
 - **[OPEN]** consumption/recharge of *carried* materia; ambient infinite vs thinning; dowsing for hidden caches.
 
-## Transmutations — the content unit (effects-first) **[LOCKED method]**, schema **[PROPOSED]**
+## Transmutations — the content unit (the carving = the attack) **[first code 2026-06-27]**
 
-Design the **effect first**, then derive its requirements. Proposed recipe shape:
+A **transmutation** is one inscribed reaction — the thing that actually fires. **Tier = number of constituent elements** (tier-1 = one element, tier-2 = two combined, tier-3 = three…). Design the **effect first**, then derive its requirements. Built shape (`TransmutationData`, schema still growing):
 
 ```
-Transmutation {
-  required_element(s) + min rune grade
-  aura_requirement: {element -> amount}      # deterministic canCast decrement
-  materia_band: ambient | pure | rare-reagent
-  effect: damage | status | terrain-mod | heal(aether) | summon | utility(move/wall)
-  pattern + range
-  timing: instant | over-time (EoT)
-}
+TransmutationData (the carving)
+  elements: [Element]            # constituent elements; TIER = elements.size()
+  power + attack_pattern         # base damage + geometry (a fireball vs a fire-WALL)
+  carving_cost                   # capacity it eats on a rune (default = tier; bigger carvings cost more)
+  can_counter / hits_allies
+  base_damage(wielder) = power + Σ aura[e over elements]   # aura-scaled, flat parallel to weapons
+  can_channel(wielder)           # ≥1 aura per element, minus the rune's one leeway point
+  — materia_band                 # DEFERRED — some carvings will require fuel; not modeled yet
+  — effect / timing / damage-type # status | terrain-mod | heal(aether) | instant vs EoT — still PROPOSED
 ```
+
+**Same element, different carving = different attack.** A simple fire carving is a plain **fireball** (front-loaded damage, point/short range). A more complex fire carving is an **AoE fire-wall** (less up-front damage + range, more DoT, more tiles affected) — same element, bigger `carving_cost`, different `attack_pattern`. *Combining* elements opens new reactions: **Aether + Water → "Soul Dew"** (an AoE splash with a lesser healing quality — Aether is the life/stability element); **Aether + Earth → "Stone Armor"** (an enchantment: heavier but tougher armor). *(Names/effects are illustrative, not a build list.)*
 
 - **Engine fit:** rides the **existing action-queue / volley machinery**; fully deterministic; previewable (Law #2).
 - **[PROPOSED] Damage type is a property of the *effect*, not the element.** Resolves "earth is an attack but it's a physical rock": an earth transmutation that hurls a boulder deals **physical** damage (→ **DEF**); a fire transmutation deals a **burn** (→ specific gear, below). The element decides *flavor + combinatrix tags*; the effect decides *damage category*.
@@ -113,9 +123,9 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 
 ## Open forks (the map)
 
-1. **[WORKSHOP] Rune customization model** — capacity-board (proposed) details: element-locked vs multi-element; capacity/cost curve; how inscriptions are learned; grade fixed vs upgradable.
-2. **[OPEN] Affinity expansion** — fixed at birth, or story/Stone-gated ways to gain an element? (The old "place aura points to start a new element" is stale; needs a non-leveling answer.)
-3. **[OPEN] Aura cost model** — per-transmutation `{element→amt}` (lean) vs powers-of-2 tiers; the `canCast` decrement as the deterministic mechanism.
+1. **[RATIFIED 2026-06-27] Rune customization model** — the **capacity-board** won: blank element-agnostic rune; inscribe transmutation carvings; **size (S/M/L) = capacity**; channeling gated by per-element aura + a one-point leeway. *Still open (tuning, not shape):* the capacity numbers + cost curve; multi-element scaling (**sum** of auras now — vs primary-only); per-element aura *floors* above 1 for stronger carvings; how a carving is *learned* (story scrolls vs proficiency); size fixed-at-mining vs upgradable; element-locked vs free inscription.
+2. **[OPEN] Affinity expansion** — fixed at birth, or story/Stone-gated ways to gain an element? (The old "place aura points to start a new element" is stale; needs a non-leveling answer.) *Note:* the channeling leeway already realizes the "uses a rune **poorly** without affinity" idea — 0 aura still channels the simplest carvings, just with no scaling.
+3. **[REFRAMED 2026-06-27] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (≥1 per element, minus the rune's one leeway point). No per-cast spend — **materia** is the consumable (and it's deferred). Open: per-element floors above 1; sum vs primary scaling.
 4. **[OPEN] Materia** consumption/recharge; ambient infinite vs thinning; dowsing.
 5. **[RESOLVED 2026-06-16] Summons** (automaton/golem/demon/puppet/dragon-taming) → **deferred.** Liked, but too complex for now; revisit post-Milestone-A.
 6. **[RESOLVED 2026-06-16] Defense stat** → **no RES.** Physical→DEF; elemental→specific gear + possible armor proficiency.

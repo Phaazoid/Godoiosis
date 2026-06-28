@@ -2,6 +2,9 @@
 # never frozen at queue time. Re-planning a squadmate's move after the attack is queued must
 # change who the blast hits — the same "derive, don't store" rule counters already follow.
 #
+# Updated for #47 (attacks target CELLS): an empty blast now resolves to ONE cell attack
+# (target == null), not to zero attacks — the aim survives; units are a consequence of it.
+#
 # Setup uses a friendly-fire weapon (hits_allies) so a squadmate standing in / walking into
 # the blast counts as a victim, and a pattern-less weapon (affected == [aim cell]) so the
 # blast is the single aimed cell. The attacker's squad is the active one, so squadmate moves
@@ -28,9 +31,11 @@ func test_resolve_retargets_when_a_squadmate_moves_into_the_blast() -> void:
 	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0)))
 	var board := _board_with([attacker, mate])
 
-	# Before the move: (1,0) is empty, so the blast hits nobody.
+	# Before the move: (1,0) is empty, so the aim resolves to a CELL attack (#47 — no victim,
+	# target null), not nothing.
 	var before := _sm.resolve_plan(attacker.squad, board)
-	assert_int(before.attacks.size()).is_equal(0)
+	assert_int(before.attacks.size()).is_equal(1)
+	assert_object(before.attacks[0].target).is_null()
 	_break_volleys(before)
 
 	# The squadmate re-plans a move INTO the blast cell.
@@ -67,8 +72,10 @@ func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 	mate.squad._queue_action(move)
 	_sm.validate_squad_plan(attacker.squad)
 
+	# The squadmate left the blast, so the aim resolves to a CELL attack (#47 — target null).
 	var after := _sm.resolve_plan(attacker.squad, board)
-	assert_int(after.attacks.size()).is_equal(0)
+	assert_int(after.attacks.size()).is_equal(1)
+	assert_object(after.attacks[0].target).is_null()
 	_break_volleys(after)
 
 func _board_with(units_in: Array) -> BoardContext:

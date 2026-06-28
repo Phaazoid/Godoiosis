@@ -424,3 +424,8 @@ func _clear_crisis_surge():
 	for stat in CRISIS_SURGE_STATS:
 		unit_instance.stat_modifiers[stat] = get_modifier(stat) - CRISIS_SURGE
 	crisis_surge_active = false
+
+func get_element_aura(element: Elemental.Element) -> int:
+	if unit_instance == null:
+		return 0
+	return unit_instance.get_element_aura(element)

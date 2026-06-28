@@ -412,8 +412,14 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		var origin := aim.actor.get_projected_destination()
 		var affected := aim.actor.combat.get_affected_cells_from(origin, aim.target_cell)
 		var victims := RulesService.gather_attack_victims(aim.actor, affected, board)
-		for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims):
-			plan.attacks.append(atk)
+		if victims.is_empty():
+			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
+			# (target stays null = no unit hit). It plays out and is where terrain effects will
+			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
+			plan.attacks.append(AttackAction.create(aim.actor, origin, null, aim.target_cell))
+		else:
+			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims):
+				plan.attacks.append(atk)
 	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
 	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the
 	# attack loop above uses — so an AoE counter splashes everyone in the blast, not just its
