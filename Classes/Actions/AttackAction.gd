@@ -10,7 +10,7 @@ var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
 var volley: Array[AttackAction] = []
-
+var transmutation: TransmutationData = null   # set when a rune fires a carving (#30); null = weapon attack
 
 var preview_sprites: Array[Node2D] = []
 
@@ -110,11 +110,12 @@ static func create(attacker: Unit, origin: Vector2i, target: Unit, target_cell: 
 	action.init(attacker, origin, target, target_cell)
 	return action
 
-static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit]) -> Array[AttackAction]:
+static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], transmutation: TransmutationData = null) -> Array[AttackAction]:
 	var volley_actions: Array[AttackAction] = []
 
 	for victim in victims:
 		var attack := AttackAction.create(attacker, origin, victim, aim_cell)
+		attack.transmutation = transmutation
 		attack.is_secondary_hit = not volley_actions.is_empty()
 		volley_actions.append(attack)
 

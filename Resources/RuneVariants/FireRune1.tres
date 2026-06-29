@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dx1l8hljkyor2"]
+
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/items/TransmutationData.gd" id="1_f57nc"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/items/RuneData.gd" id="2_m0he7"]
+[ext_resource type="Resource" uid="uid://cyixd5k6kftlk" path="res://Resources/TransmutationData/Fireball.tres" id="2_t3s6l"]
+
+[resource]
+script = ExtResource("2_m0he7")
+size = 1
+inscriptions = Array[ExtResource("1_f57nc")]([ExtResource("2_t3s6l")])
+item_name = "fiya"
+metadata/_custom_type_script = "uid://ckrp1phgirys0"

@@ -32,6 +32,9 @@ const PATH_ARROW_LEFT := preload("res://Art/Icons/ArrowIcons/endfromright.png")
 const PATH_ARROW_UP := preload("res://Art/Icons/ArrowIcons/endfrombottom.png")
 const PATH_ARROW_DOWN := preload("res://Art/Icons/ArrowIcons/endfromtop.png")
 
+const TERRAIN_BURNING_ICON := preload("res://Art/Icons/TerrainIcons/Fire.png")
+const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye
+const TERRAIN_PREVIEW_MODULATE := Color(1, 1, 1, 0.5)     # ghost the pending-ignite marker (Part B)
 
 const ICON_SCENE = preload("res://Scenes/OverlayIcon.tscn")
 const SOURCE_ID = 0
@@ -64,6 +67,8 @@ var icons_by_cell = {} # {Cell : { IconType : Icon } }
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
+var terrain_live_sprites := {}                       # Vector2i -> Sprite2D (persists across selection)
+var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
@@ -107,7 +112,26 @@ func clear_hover_move_path():
 	for m in hover_move_previews:
 		m.clear_preview_sprites()
 	hover_move_previews.clear()
-	
+
+# Plan-time preview of pending deposits (Law #2 — the queue/board shows the ignite BEFORE you
+# execute). Ephemeral: redrawn on plan change, cleared on deselect, like the planning overlays.
+func show_terrain_preview(cells: Array[Vector2i]) -> void:
+	clear_terrain_preview()
+	for cell in cells:
+		var sprite := Sprite2D.new()
+		sprite.texture = TERRAIN_BURNING_ICON
+		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+		sprite.z_index = TERRAIN_Z_INDEX
+		sprite.modulate = TERRAIN_PREVIEW_MODULATE
+		icon_overlay.add_child(sprite)
+		terrain_preview_sprites.append(sprite)
+
+func clear_terrain_preview() -> void:
+	for sprite in terrain_preview_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	terrain_preview_sprites.clear()
+
 func show_planned_path(unit: Unit, move: MoveAction):
 	if planned_move_by_unit.has(unit):
 		var old_move: MoveAction = planned_move_by_unit[unit]
@@ -244,7 +268,25 @@ func clear_all():
 	invalidmove_overlay.clear()
 	squadrange_overlay.clear()
 
-	
+# The live terrain state on the board (#50). Drawn from TerrainStateManager after execution,
+# NOT cleared by clear_all/selection changes — a burning tile stays burning regardless of what
+# you click. Its own sprite dict, so the icon/overlay clears never touch it.
+func redraw_terrain_live(burning_cells: Array[Vector2i]) -> void:
+	_clear_terrain_live()
+	for cell in burning_cells:
+		var sprite := Sprite2D.new()
+		sprite.texture = TERRAIN_BURNING_ICON
+		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+		sprite.z_index = TERRAIN_Z_INDEX
+		icon_overlay.add_child(sprite)
+		terrain_live_sprites[cell] = sprite
+
+func _clear_terrain_live() -> void:
+	for sprite in terrain_live_sprites.values():
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	terrain_live_sprites.clear()
+
 func clear_squad_range():
 	squadrange_overlay.clear()
 	

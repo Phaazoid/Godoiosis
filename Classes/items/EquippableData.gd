@@ -1,24 +1,15 @@
 class_name EquippableData
 extends Item
 
-# Shared base for anything a unit equips into its combat slot. Weapons and runes both
-# extend this so the equip slot, inventory, and resolver treat them uniformly, while each
-# subclass keeps its own divergent fields (docs/design/alchemy-kit.md — the stack).
+# Shared base for anything a unit slots into its single equip slot — today WeaponData and
+# RuneData. Its only job is to be the slot's TYPE, so the equip slot, inventory, and save
+# entry can hold "an equippable" without caring which kind (docs/design/alchemy-kit.md).
 #
-# The combat/resolution layer reads ONLY this surface; what it SCALES off is polymorphic
-# (base_damage below). WeaponData scales its built-in attack off a stat; a rune presents a
-# selected inscribed TransmutationData, which scales off per-element aura (wired when firing lands).
-#
-# These @exports moved up from WeaponData. .tres serialize @exports by NAME, so the move is
-# transparent to existing weapon resources. APPEND-ONLY for any enums (serialized as ints).
+# Deliberately has NO combat surface. A weapon carries its own built-in attack (WeaponData);
+# a rune is an inert container that FIRES a selected inscribed TransmutationData. The resolver
+# reads that "attack source" (weapon | transmutation), never a bare EquippableData — so a rune
+# does nothing in melee. Combat sites cast `as WeaponData`; a rune yields null -> inert path.
 
-@export var power: int = 0
-@export var attack_pattern: AttackPattern
-@export var can_counter := true
-@export var hits_allies := false
-@export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE
-
-# Base damage this equippable contributes for a given wielder. Overridden per subclass;
-# the resolver calls this instead of branching on type (E1 base-damage stage).
-func base_damage(wielder: Unit) -> int:
-	return power
+# Which side of the world an attack affects (#50). Shared vocabulary: both WeaponData.targets
+# and TransmutationData.targets are this enum. APPEND-ONLY (serializes as an int in .tres).
+enum TargetMode { UNIT, MAP, BOTH }

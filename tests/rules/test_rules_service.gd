@@ -43,7 +43,7 @@ func test_gather_victims_picks_enemies_not_allies() -> void:
 func test_gather_victims_includes_allies_when_weapon_hits_allies() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
-	attacker.get_equipped_weapon().hits_allies = true
+	(attacker.get_equipped_weapon() as WeaponData).hits_allies = true
 
 	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(0, 1)], _board())
 

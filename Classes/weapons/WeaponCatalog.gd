@@ -4,9 +4,8 @@ class_name WeaponCatalog
 # Base weapon TYPES — hardcoded, never edited in-game (edit the .tres in the inspector).
 const TYPES := {
 	"Chainsword": preload("res://Resources/ChainSword.tres"),
-	"Springspear": preload("res://Resources/Springspear.tres"),
-	"FireRune": preload("res://Resources/FireRune.tres")
-}
+	"Springspear": preload("res://Resources/Springspear.tres")
+	}
 
 # Saved customized variants — written by the Weapon Editor, scanned at runtime.
 const VARIANT_DIR := "res://Resources/WeaponVariants/"

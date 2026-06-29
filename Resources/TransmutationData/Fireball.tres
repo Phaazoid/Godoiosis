@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://cyixd5k6kftlk"]
+
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_mq7ng"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/items/TransmutationData.gd" id="1_o3s3f"]
+[ext_resource type="Texture2D" uid="uid://d26i1cvn6ffwl" path="res://Art/Icons/WeaponIcons/Fire.png" id="2_bcr2w"]
+
+[sub_resource type="Resource" id="Resource_oh8u4"]
+script = ExtResource("1_mq7ng")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("1_o3s3f")
+display_name = "Fireball"
+elements = Array[int]([1])
+power = 5
+attack_pattern = SubResource("Resource_oh8u4")
+hits_allies = true
+carving_cost = 1
+popup = "Fireball!"
+icon = ExtResource("2_bcr2w")
+targets = 2
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"

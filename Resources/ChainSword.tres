@@ -10,9 +10,9 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("1_0tu05")
+weapon_type = 1
 power = 3
 attack_pattern = SubResource("Resource_0xm14")
-weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("2_6hwc0")
 description = "Vroom Vroom"

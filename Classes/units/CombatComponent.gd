@@ -28,12 +28,10 @@ func apply_damage(damage: int):
 	
 func get_attack_cells_from(origin_cell: Vector2i, target_hint_cell: Vector2i) -> Array[Vector2i]:
 	var unit := owner as Unit
-	var weapon := unit.get_equipped_weapon() if unit != null else null
-
-	if weapon == null or weapon.attack_pattern == null:
+	var pattern := _active_pattern(unit)
+	if pattern == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
-
-	return weapon.attack_pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
+	return pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
 	
 func can_hit_cell_from(origin_cell: Vector2i, target_cell: Vector2i) -> bool:
 	return get_attack_cells_from(origin_cell, target_cell).has(target_cell)
@@ -41,28 +39,35 @@ func can_hit_cell_from(origin_cell: Vector2i, target_cell: Vector2i) -> bool:
 
 func get_all_attack_cells_from(origin_cell: Vector2i) -> Array[Vector2i]:
 	var unit := owner as Unit
-	var weapon := unit.get_equipped_weapon() if unit != null else null
-
-	if weapon == null or weapon.attack_pattern == null:
+	var pattern := _active_pattern(unit)
+	if pattern == null:
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
-
-	return weapon.attack_pattern.get_all_selectable_cells(unit, origin_cell)
+	return pattern.get_all_selectable_cells(unit, origin_cell)
 	
 func get_affected_cells_from(origin_cell: Vector2i, target_cell: Vector2i) -> Array[Vector2i]:
 	var unit := owner as Unit
-	var weapon := unit.get_equipped_weapon() if unit != null else null
-
-	if weapon == null or weapon.attack_pattern == null:
+	var pattern := _active_pattern(unit)
+	if pattern == null:
 		return [target_cell]
-
-	return weapon.attack_pattern.get_affected_cells(unit, origin_cell, target_cell)
+	return pattern.get_affected_cells(unit, origin_cell, target_cell)
 	
 # Does the equipped weapon aim by facing (forward line/wide) rather than at a specific cell?
 # game.gd uses this so directional attacks can target a DIRECTION (the whole spread fires)
 # instead of requiring the clicked cell to be a spread member. No pattern / no weapon = point.
 func is_directional_attack() -> bool:
 	var unit := owner as Unit
-	var weapon := unit.get_equipped_weapon() if unit != null else null
-	if weapon == null or weapon.attack_pattern == null:
+	var pattern := _active_pattern(unit)
+	if pattern == null:
 		return false
-	return weapon.attack_pattern.is_directional()
+	return pattern.is_directional()
+
+# Reach pattern = the carving a rune would fire, else the equipped weapon's pattern. Centralizes
+# the rune-vs-weapon choice so every reach query and the targeting overlay agree. #30 slice B2.
+func _active_pattern(unit: Unit) -> AttackPattern:
+	if unit == null:
+		return null
+	var fired := unit.get_fired_transmutation()
+	if fired != null:
+		return fired.attack_pattern
+	var weapon := unit.get_equipped_weapon() as WeaponData
+	return weapon.attack_pattern if weapon != null else null

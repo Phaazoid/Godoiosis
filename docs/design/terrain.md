@@ -2,6 +2,8 @@
 
 **Status: CATALOG (workshop).** Distilled 2026-06-17 (issue #32) from `Systems Mechanics/Terrain Modification` and the terrain/weather threads in [elemental-interactions.md](elemental-interactions.md), reconciled with the implemented tile model. Per the dev: terrain and elemental are **two docs that reference each other heavily** — this one catalogs **what tiles can be and do** (not all of it elemental); the elemental docs own the *reaction* rules. AP-cost and "Avo" numbers from the wiki are stripped (Law #1 / no action points / no dodge).
 
+> **Build status — #50 slice 1 (2026-06-28, headless).** The dynamic per-cell state store now exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState.BURNING` as the first state and a `Terrain.Kind` enum mapping the authored `terrain_type` strings. It's fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). Proven in `tests/terrain/test_cell_effects.gd`. Still LEFT: live execution apply + the preview overlay (slice 2, landed together for Law #2), `water + ice` state×state reactions (slice 3), and the `ScenarioData.tile_data` round-trip.
+
 ## The tile model (implemented — [LOCKED shape])
 
 The board is a `TileMapLayer` (`Grid`). Tiles already carry **custom data** the game reads today:

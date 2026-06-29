@@ -164,7 +164,13 @@ static func _unit_line(session, unit: Unit) -> String:
 		squad_tag, wep, state,
 	]
 
-static func _weapon_str(w: WeaponData) -> String:
+static func _weapon_str(e: EquippableData) -> String:
+	var rune := e as RuneData
+	if rune != null:
+		return "rune[%s x%d]" % [RuneData.Size.keys()[rune.size], rune.inscriptions.size()]
+	var w := e as WeaponData
+	if w == null:
+		return "(equip)"
 	# Show the PATTERN, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly
 	# different shape (omnidirectional Manhattan vs a 1-tile directional ForwardWide), which
 	# decides reach AND who can counter. Hiding it once made a correct no-counter look like a bug.

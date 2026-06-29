@@ -31,8 +31,8 @@ func test_aoe_counter_splashes_friendlies_in_the_blast() -> void:
 	var counterer := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, ENEMY, Vector2i(-1, 0), {}, false)   # weaponless: a victim, never a counterer
 	_sm.join_squad(ally, counterer.squad)
-	counterer.equipped_weapon.attack_pattern = TwoCellBlast.new()
-	counterer.equipped_weapon.hits_allies = true
+	(counterer.get_equipped_weapon() as WeaponData).attack_pattern = TwoCellBlast.new()
+	(counterer.get_equipped_weapon() as WeaponData).hits_allies = true
 
 	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, counterer, counterer.movement.cell))
 	var board := _board_with([attacker, counterer, ally])
@@ -56,8 +56,8 @@ func test_aoe_counter_without_friendly_fire_spares_allies() -> void:
 	var counterer := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, ENEMY, Vector2i(-1, 0), {}, false)
 	_sm.join_squad(ally, counterer.squad)
-	counterer.equipped_weapon.attack_pattern = TwoCellBlast.new()
-	counterer.equipped_weapon.hits_allies = false
+	(counterer.get_equipped_weapon() as WeaponData).attack_pattern = TwoCellBlast.new()
+	(counterer.get_equipped_weapon() as WeaponData).hits_allies = false
 
 	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, counterer, counterer.movement.cell))
 	var board := _board_with([attacker, counterer, ally])

@@ -355,9 +355,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 		return false
 	if not countering_unit.combat.can_attack(countering_unit, target_unit):
 		return false
-	if not countering_unit.has_equipped_weapon():
-		return false
-	if not countering_unit.get_equipped_weapon().can_counter:
+	if not countering_unit.attack_source_can_counter():
 		return false
 
 	var counter_cell := countering_unit.get_projected_destination()
@@ -416,9 +414,11 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
 			# (target stays null = no unit hit). It plays out and is where terrain effects will
 			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
-			plan.attacks.append(AttackAction.create(aim.actor, origin, null, aim.target_cell))
+			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
+			cell_attack.transmutation = aim.transmutation
+			plan.attacks.append(cell_attack)
 		else:
-			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims):
+			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.transmutation):
 				plan.attacks.append(atk)
 	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
 	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the
@@ -431,7 +431,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
-	PlanResolver.resolve(plan)
+	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board, TerrainReactionCatalog.get_all())
 	return plan
 
 func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[ActionQueueDisplayEntry]:

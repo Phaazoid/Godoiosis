@@ -97,6 +97,7 @@ var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 var _downed_pending: Array[Unit] = []   # units downed mid-execution; ejected after the pass (see _process_downed_pending)
 var _highlighted_queue_units: Array[Unit] = []
 var dev_controller: DevController
+var terrain_states: TerrainStateManager
 
 func _ready() -> void:
 	dev_controller = DevController.new()
@@ -118,8 +119,9 @@ func _ready() -> void:
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
 	camera_controller.refresh_bounds(grid)
-	#This is for mouse controlling camera, putting a pin in that for now
-	#hovered_cell_changed.connect(camera_controller.on_hovered_cell_changed)
+	terrain_states = TerrainStateManager.new()
+	terrain_states.name = "TerrainStateManager"
+	add_child(terrain_states)
 
 func _on_turn_started(faction: Team.Faction):
 	_tick_downed_countdowns(faction)
@@ -147,7 +149,7 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 		GAME_MENU_MOVE:
 			enter_move_mode(unit)
 		GAME_MENU_ATTACK: #Attack
-			enter_attack_mode(unit)
+			_begin_attack(unit)
 		GAME_MENU_CANCEL: #Cancel
 			cancel_orders(unit)
 			clear_selection()
@@ -174,6 +176,45 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			queue_rally(unit)
 		GAME_MENU_GROUP_MOVE:
 			enter_group_move_mode(unit)
+
+# Attack entry (#30 C): a rune with several channelable carvings opens a pick menu first; a
+# single carving auto-selects it; a weapon fires no transmutation. Reset first so a stale pick
+# never leaks into a new aim.
+func _begin_attack(unit: Unit) -> void:
+	unit.active_transmutation = null
+	var rune := unit.get_equipped_weapon() as RuneData
+	if rune != null:
+		var fireable := rune.channelable(unit)
+		if fireable.size() > 1:
+			show_transmutation_menu(get_viewport().get_mouse_position(), fireable, unit)
+			return
+		if not fireable.is_empty():
+			unit.active_transmutation = fireable[0]
+	enter_attack_mode(unit)
+
+func show_transmutation_menu(pos: Vector2i, transmutations: Array[TransmutationData], unit: Unit) -> void:
+	var controller := ActionMenuController.new()
+	add_child(controller)
+	controller.setup(unit)
+
+	# Synthetic items: index -> {name}, so the Control-based ActionMenuController (#26) renders the
+	# carving list without a bespoke menu class.
+	var items := []
+	var data := {}
+	for i in range(transmutations.size()):
+		items.append(i)
+		data[i] = { "name": transmutations[i].display_name }
+
+	controller.action_selected.connect(func(idx, picking_unit): _on_transmutation_picked(picking_unit, transmutations[idx]))
+	controller.cancelled.connect(clear_selection_controller)
+	controller.cancelled.connect(_on_action_menu_cancelled)
+
+	controller.populate(items, data)
+	controller.setpos(pos)
+
+func _on_transmutation_picked(unit: Unit, transmutation: TransmutationData) -> void:
+	unit.active_transmutation = transmutation
+	enter_attack_mode(unit)
 
 func end_turn():
 	clear_selection()
@@ -219,6 +260,7 @@ func execute_orders(unit):
 			
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(plan.attacks)
+	_apply_cell_effects(plan.cell_effects)
 	await execute_action_sequence(plan.counters)
 	await execute_action_sequence(rescue_actions)
 	await execute_action_sequence(rally_actions)
@@ -269,7 +311,14 @@ func execute_action_phase_parallel(actions: Array):
 			return
 			
 		await get_tree().process_frame
-	
+
+# Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
+# the attack phase that produced them. Burning-only for now; generalizes as more tile states land.
+func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
+	for effect in cell_effects:
+		terrain_states.apply(effect)
+	overlay_manager.redraw_terrain_live(terrain_states.cells_with(Terrain.TileState.BURNING))
+
 func execute_action_sequence(actions: Array):
 	if actions.is_empty():
 		return
@@ -525,7 +574,9 @@ func _unhandled_input(event):
 							# #47: cells are the target. A legal aim is queueable whether or not a unit
 							# is there — victims (and later terrain effects, #50) are derived at resolve
 							# time (#15). Store the AIM only (actor + aimed cell); null target = derived later.
-							squad_manager.queue_action(lastUnit.squad, AttackAction.create(lastUnit, origin, null, clickedCell))
+							var attack := AttackAction.create(lastUnit, origin, null, clickedCell)
+							attack.transmutation = lastUnit.get_fired_transmutation()
+							squad_manager.queue_action(lastUnit.squad, attack)
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 				GameState.RESCUE_TARGETING:
 					if lastUnit == null:
@@ -668,6 +719,7 @@ func clear_selection():
 
 	overlay.clear()
 	overlay_manager.clear_all()
+	overlay_manager.clear_terrain_preview()
 	if squad_manager.active_squad == null:
 		overlay_manager.clear_squad_range()
 	if squad_manager.active_squad == null:
@@ -682,11 +734,12 @@ func update_selection_overlay():
 func refresh_action_queue(squad: Squad):
 	if squad == null:
 		squad_action_queue_control.show_display_entries([])
+		overlay_manager.clear_terrain_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
 	var entries := squad_manager.get_display_entries_for_squad(squad, _board())
 	squad_action_queue_control.show_display_entries(entries)
-
+	_preview_terrain_effects(squad)
 	var can_execute: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions()
 		and not squad_manager.squad_has_invalid_actions(squad))
@@ -696,6 +749,16 @@ func refresh_action_queue(squad: Squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.ALL_COMMITTED)
 	else:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
+
+# Law #2 board preview: the cells the active plan WILL ignite, derived from the same resolver pass
+# the queue panel reads. Ghosted so it reads as "pending", not "already on fire".
+func _preview_terrain_effects(squad: Squad) -> void:
+	var plan := squad_manager.resolve_plan(squad, _board())
+	var cells: Array[Vector2i] = []
+	for effect in plan.cell_effects:
+		if effect.states_added.has(Terrain.TileState.BURNING) and not cells.has(effect.cell):
+			cells.append(effect.cell)
+	overlay_manager.show_terrain_preview(cells)
 
 func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	var unit = UnitFactory.create_unit(data, grid, pos)

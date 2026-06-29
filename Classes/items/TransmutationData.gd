@@ -17,6 +17,7 @@ const AURA_FLOOR := 1   # min aura per constituent element needed to channel (be
 @export var carving_cost: int = 0   # capacity it eats on a rune; 0 = derive from tier()
 @export var popup: String = ""
 @export var icon: Texture2D
+@export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
 # materia: DEFERRED — some carvings will require fuel; not modeled yet.
 
 func tier() -> int:
@@ -45,3 +46,9 @@ func can_channel(wielder: Unit, leeway: int = 1) -> bool:
 		if wielder.get_element_aura(e) < AURA_FLOOR:
 			uncovered += 1
 	return uncovered <= leeway
+	
+func get_elements() -> Array[Elemental.Element]:
+	return elements
+
+func hits_map() -> bool:
+	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH

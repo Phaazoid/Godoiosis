@@ -1,7 +1,0 @@
-[gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dryyfwlkh65l6"]
-
-[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/items/RuneData.gd" id="1_084gq"]
-
-[resource]
-script = ExtResource("1_084gq")
-metadata/_custom_type_script = "uid://ckrp1phgirys0"

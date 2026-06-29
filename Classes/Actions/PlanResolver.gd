@@ -7,10 +7,17 @@ class_name PlanResolver
 # base damage -> elemental (-> Will in Phase 3). Writes one ResolvedOutcome per action
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
-static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all()) -> void:
+static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
 	var hypo: Dictionary = {}   # Unit -> _Hypo (the threaded working copy)
 	for atk in plan.attacks:
 		_resolve_one(atk, reactions, hypo)
+		# Cell-effect stage (#50): the attack also deposits terrain effects onto its target cell.
+		# Only runs when a board is supplied — the unit-only resolver path and the existing tests
+		# pass none, so they're untouched. (Counters depositing terrain effects is a later slice.)
+		if board != null:
+			var cell_effect := _resolve_cell_effect(atk, board, terrain_reactions)
+			if cell_effect != null:
+				plan.cell_effects.append(cell_effect)
 	for ctr in plan.counters:
 		if not _counter_actor_live(ctr, hypo):
 			var no_op := ResolvedOutcome.new()
@@ -28,12 +35,12 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		return
 
 	# --- base damage stage (E1: the calc that used to live in AttackAction.create) ---
-	var base := _base_damage(attacker)
+	var base := _source_base_damage(action)
 	outcome.base_damage = base
 
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	var target_hypo: _Hypo = _hypo_for(target, hypo)
-	var elements := _elements_of(attacker)
+	var elements := _source_elements(action)
 	var mult := 1.0
 	var bonus := 0
 	var adds: Array[Elemental.State] = []
@@ -91,18 +98,33 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	action.resolved = outcome
 
-static func _base_damage(attacker: Unit) -> int:
-	var weapon := attacker.get_equipped_weapon()
+# The attack's source surface: a fired transmutation (rune) if the order carries one, else the
+# attacker's equipped weapon. A rune casts to null here -> it contributes nothing in melee (its
+# attack rides on the transmutation instead). Both real sources expose base_damage(wielder) /
+# get_elements() / hits_map(), so the resolver reads them uniformly and stays fully typed. #30.
+static func _source_base_damage(action: AttackAction) -> int:
+	var attacker := action.actor
+	if action.transmutation != null:
+		return action.transmutation.base_damage(attacker)
+	var weapon := attacker.get_equipped_weapon() as WeaponData
 	if weapon != null:
 		return weapon.base_damage(attacker)
 	return attacker.get_effective_stat(Stats.Stat.STR)
-	
-static func _elements_of(attacker: Unit) -> Array[Elemental.Element]:
-	var result: Array[Elemental.Element] = []
-	var weapon := attacker.get_equipped_weapon()
-	if weapon != null and weapon.elemental_damage_type != Elemental.Element.NONE:
-		result.append(weapon.elemental_damage_type)
-	return result
+
+static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
+	if action.transmutation != null:
+		return action.transmutation.get_elements()
+	var weapon := action.actor.get_equipped_weapon() as WeaponData
+	if weapon != null:
+		return weapon.get_elements()
+	var none: Array[Elemental.Element] = []
+	return none
+
+static func _source_hits_map(action: AttackAction) -> bool:
+	if action.transmutation != null:
+		return action.transmutation.hits_map()
+	var weapon := action.actor.get_equipped_weapon() as WeaponData
+	return weapon != null and weapon.hits_map()
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded
@@ -168,3 +190,40 @@ class _Hypo:
 	var will: int = 0   # threaded so a multi-hit pass previews maim correctly (Law #2)
 	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
 	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this
+
+# Cell-effect stage (#50 / the #47 cell-effect channel). The attack deposits its element(s)
+# onto its target cell; terrain reactions turn that into tile-state changes (FIRE on a tree ->
+# BURNING). Pure like the rest of the pass — reads the board snapshot, writes a ResolvedCellEffect.
+# Returns null when nothing fires: a unit-only attack, no element, or no matching reaction.
+static func _resolve_cell_effect(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
+	var attacker := action.actor
+	if attacker == null or not is_instance_valid(attacker):
+		return null
+	if not _source_hits_map(action):
+		return null                                  # unit-only attack -> deposits nothing
+	var elements := _source_elements(action)
+	if elements.is_empty():
+		return null
+	var kind := board.terrain_kind_at(action.target_cell)
+	var effect := ResolvedCellEffect.new()
+	effect.cell = action.target_cell
+	var fired := false
+	for reaction in terrain_reactions:
+		if not elements.has(reaction.incoming_element):
+			continue
+		if reaction.required_kind != Terrain.Kind.NONE and reaction.required_kind != kind:
+			continue
+		if reaction.required_tile_state != Terrain.TileState.NONE:
+			continue                                 # later slice: match against the live tile-state store
+		for s in reaction.add_tile_states:
+			if not effect.states_added.has(s):
+				effect.states_added.append(s)
+		for s in reaction.remove_tile_states:
+			if not effect.states_removed.has(s):
+				effect.states_removed.append(s)
+		if reaction.popup != "":
+			effect.popups.append(reaction.popup)
+		if reaction.icon != null:
+			effect.icons.append(reaction.icon)
+		fired = true
+	return effect if fired else null

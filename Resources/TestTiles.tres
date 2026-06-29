@@ -1,10 +1,9 @@
 [gd_resource type="TileSet" format=3 uid="uid://br1jl2l6yxyuf"]
 
-[sub_resource type="CompressedTexture2D" id="CompressedTexture2D_1t1ls"]
-load_path = "res://.godot/imported/Solaria Demo Tiles.png-f0e8244e31d8292cf3ca42d4150da1a5.ctex"
+[ext_resource type="Texture2D" uid="uid://ecc1uluccnee" path="res://Art/Solaria Demo Tiles.png" id="1_halkr"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_e2o6t"]
-texture = SubResource("CompressedTexture2D_1t1ls")
+texture = ExtResource("1_halkr")
 3:0/0 = 0
 4:0/0 = 0
 5:0/0 = 0
@@ -86,7 +85,10 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 6:3/0 = 0
 7:3/size_in_atlas = Vector2i(1, 2)
 7:3/0 = 0
+7:3/0/custom_data_0 = true
 8:3/0 = 0
+8:3/0/custom_data_0 = true
+8:3/0/custom_data_2 = "bush"
 9:3/0 = 0
 10:3/0 = 0
 11:3/0 = 0
@@ -114,6 +116,8 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 5:4/0/custom_data_1 = 2
 5:4/0/custom_data_2 = "mud"
 8:4/0 = 0
+8:4/0/custom_data_0 = true
+8:4/0/custom_data_2 = "bush"
 9:4/0 = 0
 10:4/0 = 0
 11:4/0 = 0
@@ -159,7 +163,9 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 3:6/0 = 0
 4:6/0 = 0
 5:6/0 = 0
+5:6/0/custom_data_2 = "water"
 6:6/0 = 0
+6:6/0/custom_data_2 = "water"
 9:6/0 = 0
 10:6/0 = 0
 11:6/0 = 0
@@ -182,7 +188,9 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 3:7/0 = 0
 4:7/0 = 0
 5:7/0 = 0
+5:7/0/custom_data_2 = "water"
 6:7/0 = 0
+6:7/0/custom_data_2 = "water"
 7:7/0 = 0
 8:7/0 = 0
 9:7/0 = 0
@@ -346,7 +354,6 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 2:2/0 = 0
 7:0/size_in_atlas = Vector2i(3, 3)
 7:0/0 = 0
-7:0/0/custom_data_2 = "tree"
 6:10/size_in_atlas = Vector2i(3, 5)
 6:10/0 = 0
 2:12/0 = 0
@@ -367,6 +374,9 @@ texture = SubResource("CompressedTexture2D_1t1ls")
 12:13/0 = 0
 12:14/0 = 0
 15:9/0 = 0
+18:13/0 = 0
+18:13/0/custom_data_1 = 1
+18:13/0/custom_data_2 = "tree"
 
 [resource]
 custom_data_layer_0/name = "walkable"

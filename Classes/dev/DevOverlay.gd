@@ -12,7 +12,7 @@ func _ready() -> void:
 	(%Scenario as ScenarioTool).init(scenario_manager)
 	spawn.init(game)
 	unit_editor.init(game)
-	tile_brush.game = game
+	tile_brush.init(game)
 	close_requested.connect(_on_close_requested)
 	%DevTabs.tab_changed.connect(_on_tab_changed)
 	var tabs := %DevTabs

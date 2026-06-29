@@ -43,8 +43,8 @@ func test_water_then_shock_electrocutes() -> void:
 	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 50})
-	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
-	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
+	(alch.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.WATER
+	(mech.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.SHOCK
 
 	var water := _attack(alch, target)
 	var shock := _attack(mech, target)
@@ -67,8 +67,8 @@ func test_order_is_the_lever() -> void:
 	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 50})
-	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
-	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
+	(alch.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.WATER
+	(mech.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.SHOCK
 
 	var shock := _attack(mech, target)
 	var water := _attack(alch, target)
@@ -87,7 +87,7 @@ func test_order_is_the_lever() -> void:
 func test_resolver_leaves_live_state_untouched() -> void:
 	var alch := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
-	alch.equipped_weapon.elemental_damage_type = Elemental.Element.WATER
+	(alch.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.WATER
 
 	var water := _attack(alch, target)
 	var plan := ResolvedPlan.new()
@@ -104,7 +104,7 @@ func test_resolver_leaves_live_state_untouched() -> void:
 func test_determinism_same_plan_same_result() -> void:
 	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
-	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
+	(mech.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
 	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
@@ -127,7 +127,7 @@ func test_determinism_same_plan_same_result() -> void:
 func test_e8_all_matching_reactions_compose() -> void:
 	var mech := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 99})
-	mech.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
+	(mech.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.SHOCK
 	target.add_element_state(Elemental.State.WET)
 
 	var r_mult := ElementalReaction.new()
@@ -153,7 +153,7 @@ func test_e8_all_matching_reactions_compose() -> void:
 func test_e7_counter_can_complete_a_combo() -> void:
 	var p := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 4)
 	var e := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.STR: 0}, true, 4)
-	e.equipped_weapon.elemental_damage_type = Elemental.Element.SHOCK
+	(e.get_equipped_weapon() as WeaponData).elemental_damage_type = Elemental.Element.SHOCK
 	p.add_element_state(Elemental.State.WET)        # the counter's target is already WET
 
 	var attack := _attack(p, e)

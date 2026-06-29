@@ -36,7 +36,11 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-_(empty — last swept 2026-06-26)_
+While pondering on the design for the dev tools for runes/transmutation reactions vs weapons, I initially did not want transmuation reactions to be editable, as opposed to weapons.  My reasoning was this - while players will be able to customize weapons over the course of the game, and runes, with transmutation reactions, the transmutation reactions themselves will be from a fixed set that will not be changeable.  But after thinking a bit, I thought, why not?  Wouldn't it be really cool if players could build their own transmutations?  If we can boil them down to how they effect each element, combination, etc in a deterministic way, it'd be a neat thing to customize.  They are already gated by size, so its easy to balance, too.  This is definitley a further off thing, but I want it as its own PR - transmutation creation system.  
+
+Axis of balance for runes include
+Range, base power, elements used, how much of which elements used (2 wind 1 fire scales twice as much off of wind than fire), map/player/both hit, elemental effects (from creating cover to blowing enemies to burning the surrounding area)
+
 
 ## 🗂 Dispersed (log)
 

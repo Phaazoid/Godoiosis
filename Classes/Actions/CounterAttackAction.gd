@@ -22,9 +22,14 @@ func get_action_icon() -> Texture2D:
 static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction) -> Array[CounterAttackAction]:
 	var counters: Array[CounterAttackAction] = []
 	var volley: Array[AttackAction] = []
+	# The carving this unit fires reactively (null for a weapon-wielder -> the resolver uses the
+	# weapon). Derived here, not stored, so the counter's damage/elements match the carving's
+	# pattern that reach already used. #30.
+	var transmutation := counter_unit.get_fired_transmutation()
 	for victim in victims:
 		var counter := CounterAttackAction.new()
 		counter.init_counter(counter_unit, victim, origin, source)
+		counter.transmutation = transmutation
 		counter.is_secondary_hit = not counters.is_empty()   # only the first lunges
 		counters.append(counter)
 		volley.append(counter)

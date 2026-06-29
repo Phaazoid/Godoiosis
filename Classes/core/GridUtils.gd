@@ -5,7 +5,9 @@ const TERRAIN_ICONS := {
 	"grass" : preload("res://Art/Icons/TerrainIcons/grass.png"),
 	"rock" : preload("res://Art/Icons/TerrainIcons/rock.png"),
 	"mud" : preload("res://Art/Icons/TerrainIcons/mud.png"),
-	"error" : preload("res://Art/Icons/ArrowIcons/ERROR.png")	
+	"error" : preload("res://Art/Icons/ArrowIcons/ERROR.png"),
+	"tree" : preload("res://Art/Icons/TerrainIcons/tree.png"),
+	"water" : preload("res://Art/Icons/TerrainIcons/water.png")
 }
 
 

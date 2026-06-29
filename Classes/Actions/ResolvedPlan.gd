@@ -8,3 +8,6 @@ class_name ResolvedPlan
 
 var attacks: Array[AttackAction] = []
 var counters: Array[CounterAttackAction] = []
+
+# Terrain consequences derived this pass (#50). Empty unless the resolver ran with a board.
+var cell_effects: Array[ResolvedCellEffect] = []

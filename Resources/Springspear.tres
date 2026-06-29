@@ -10,10 +10,10 @@ metadata/_custom_type_script = "uid://bbbfksnb0tted"
 
 [resource]
 script = ExtResource("1_k35ie")
+weapon_type = 3
 power = 3
 attack_pattern = SubResource("Resource_53yhi")
 hits_allies = true
-weapon_type = 3
 item_name = "Springspear"
 icon = ExtResource("2_2qhfs")
 description = "I think that enemy got... the point"

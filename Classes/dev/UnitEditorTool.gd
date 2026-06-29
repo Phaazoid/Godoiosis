@@ -53,10 +53,22 @@ func populate_unit_editor(unit):
 	dup_button.pressed.connect(func(): _arm_duplicate())
 	unit_editor_container.add_child(dup_button)
 
+# Weapons + authored rune variants, in one ordered list, so a unit can equip either. Built here
+# and reused by both the picker and the pick handler so their indices stay in lockstep. #30 D.
+func _equippable_catalog() -> Dictionary:
+	var items := {}
+	var weapons := WeaponCatalog.get_editable()
+	for k in weapons:
+		items[k] = weapons[k]
+	var runes := RuneCatalog.get_editable()
+	for k in runes:
+		items[k] = runes[k]
+	return items
+
 func _add_inventory_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Inventory")
 
-	var weapons := WeaponCatalog.get_editable()   # name -> WeaponData (no "None")
+	var weapons := _equippable_catalog()   # name -> EquippableData (weapons + authored runes)
 	var weapon_keys := weapons.keys()
 	var equip_group := ButtonGroup.new()
 
@@ -87,7 +99,7 @@ func _add_inventory_section(unit: Unit):
 		var equip_btn := CheckBox.new()
 		equip_btn.text = "Equip"
 		equip_btn.button_group = equip_group
-		equip_btn.disabled = not (current_item is WeaponData)
+		equip_btn.disabled = not (current_item is EquippableData)
 		equip_btn.button_pressed = (current_item != null and current_item == unit.get_equipped_weapon())
 		equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(unit, i))
 		row.add_child(equip_btn)
@@ -98,21 +110,21 @@ func _on_slot_picked(unit: Unit, index: int, opt_index: int):
 	if opt_index == 0:
 		_set_slot(unit, index, null)
 	else:
-		var weapons := WeaponCatalog.get_editable()
-		_set_slot(unit, index, weapons[weapons.keys()[opt_index - 1]])
+		var items := _equippable_catalog()
+		_set_slot(unit, index, items[items.keys()[opt_index - 1]])
 
-func _set_slot(unit: Unit, index: int, weapon: WeaponData):
+func _set_slot(unit: Unit, index: int, weapon: EquippableData):
 	var was_equipped = (unit.inventory[index] != null and unit.inventory[index] == unit.get_equipped_weapon())
 	unit.inventory[index] = weapon.duplicate(true) if weapon != null else null
 	if was_equipped:
 		unit.unequip_weapon()
-	if unit.inventory[index] is WeaponData and unit.get_equipped_weapon() == null:
+	if unit.inventory[index] is EquippableData and unit.get_equipped_weapon() == null:
 		unit.set_equipped_weapon(unit.inventory[index])
 	populate_unit_editor(unit)
 
 func _equip_slot(unit: Unit, index: int):
 	var item = unit.inventory[index]
-	if item is WeaponData:
+	if item is EquippableData:
 		unit.set_equipped_weapon(item)
 	populate_unit_editor(unit)
 

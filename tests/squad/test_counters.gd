@@ -118,7 +118,7 @@ func test_c6_armed_unit_in_same_geometry_does_counter() -> void:
 func test_c6_weapon_can_counter_false_blocks_counter() -> void:
 	var a := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var d := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {}, true)    # armed, adjacent
-	d.equipped_weapon.can_counter = false
+	(d.get_equipped_weapon() as WeaponData).can_counter = false
 
 	assert_int(_counters_for(a, d).size()).is_equal(0)
 

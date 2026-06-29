@@ -30,7 +30,8 @@ var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
-var equipped_weapon: WeaponData = null
+var active_transmutation: TransmutationData = null   # the carving picked to fire this aim (#30 C); null = auto
+var equipped_weapon: EquippableData = null
 # Battle-scoped elemental states (boolean — you have it or you don't). These live on
 # the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
 # owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
@@ -111,7 +112,7 @@ func add_item(item: Item) -> bool:
 		if inventory[i] == null:
 			inventory[i] = item
 
-			if equipped_weapon == null and item is WeaponData:
+			if equipped_weapon == null and item is EquippableData:
 				equipped_weapon = item
 
 			return true
@@ -326,13 +327,13 @@ func get_projected_destination() -> Vector2i:
 			return action.get_destination()
 	return self.movement.cell
 	
-func get_equipped_weapon() -> WeaponData:
+func get_equipped_weapon() -> EquippableData:
 	return equipped_weapon
 
 func has_equipped_weapon() -> bool:
 	return equipped_weapon != null
 
-func set_equipped_weapon(weapon: WeaponData) -> bool:
+func set_equipped_weapon(weapon: EquippableData) -> bool:
 	if weapon == null:
 		equipped_weapon = null
 		return true
@@ -351,7 +352,7 @@ func equip_weapon_from_inventory(index: int) -> bool:
 	if item == null:
 		return false
 
-	if not item is WeaponData:
+	if not item is EquippableData:
 		return false
 
 	equipped_weapon = item
@@ -429,3 +430,34 @@ func get_element_aura(element: Elemental.Element) -> int:
 	if unit_instance == null:
 		return 0
 	return unit_instance.get_element_aura(element)
+
+# The carving this unit would fire right now: a rune auto-picks its first channelable carving
+# (slice C lets the player choose); a weapon-wielder fires none (null = use the weapon). #30 B2.
+func get_fired_transmutation() -> TransmutationData:
+	if active_transmutation != null:
+		return active_transmutation
+	var rune := get_equipped_weapon() as RuneData
+	if rune != null:
+		var fireable := rune.channelable(self)
+		if not fireable.is_empty():
+			return fireable[0]
+	return null
+	
+# Does this unit's CURRENT attack source permit a counter? A rune-wielder counters by firing a
+# channelable carving (TransmutationData.can_counter); a weapon-wielder uses the weapon's flag; a
+# unit with no source -- unarmed, or a rune with nothing channelable ("just a rock") -- can't. #30.
+func attack_source_can_counter() -> bool:
+	var fired := get_fired_transmutation()
+	if fired != null:
+		return fired.can_counter
+	var weapon := get_equipped_weapon() as WeaponData
+	return weapon != null and weapon.can_counter
+	
+	# Does this unit's CURRENT attack source splash allies (friendly fire)? Carving (rune) else weapon
+# -- the AoE mirror of attack_source_can_counter. A unit with no source never friendly-fires. #30.
+func attack_source_hits_allies() -> bool:
+	var fired := get_fired_transmutation()
+	if fired != null:
+		return fired.hits_allies
+	var weapon := get_equipped_weapon() as WeaponData
+	return weapon != null and weapon.hits_allies

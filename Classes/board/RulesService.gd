@@ -110,8 +110,7 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 
 static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext) -> Array[Unit]:
 	var victims: Array[Unit] = []
-	var weapon := attacker.get_equipped_weapon()
-	var hits_allies: bool = weapon != null and weapon.hits_allies
+	var hits_allies := attacker.attack_source_hits_allies()
 
 	for cell in affected_cells:
 		var unit := board.unit_at_cell(cell)
