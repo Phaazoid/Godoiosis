@@ -1,6 +1,8 @@
 class_name Terrain
 extends Object
 
+const BURNING_TILE_DAMAGE := 5
+
 # Tile vocabulary for #50 — deliberately SEPARATE from Elemental (dev call 2026-06-28).
 # A tile's condition is its own enum, not Elemental.State; the two stay independent until
 # something explicitly bridges them. docs/design/terrain.md owns the persistent bookkeeping.
@@ -11,6 +13,7 @@ extends Object
 enum TileState {
 	NONE,
 	BURNING,
+	FROZEN
 }
 
 # Static authored tile content. DERIVED at runtime from the tileset's "terrain_type"
@@ -31,6 +34,7 @@ const _KIND_BY_NAME := {
 	"mud": Kind.MUD,
 	"rock": Kind.ROCK,
 	"tree": Kind.TREE,
+	"water": Kind.WATER,
 }
 
 static func kind_from_string(terrain_type: String) -> Kind:

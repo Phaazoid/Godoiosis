@@ -34,6 +34,7 @@ func save_scenario(scenario_name: String):
 	scenario.scenario_name = scenario_name
 	scenario.tile_data = grid.tile_map_data
 	scenario.active_faction = turn_manager.active_faction()
+	scenario.terrain_states = game.terrain_states.to_state_dict()
 	
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
@@ -68,6 +69,8 @@ func load_scenario(path: String):
 	_clear_board()
 
 	grid.tile_map_data = scenario.tile_data
+	game.terrain_states.load_state_dict(scenario.terrain_states)
+	overlay_manager.redraw_terrain_live(game.terrain_states)
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}

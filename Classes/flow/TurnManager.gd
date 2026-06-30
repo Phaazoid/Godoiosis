@@ -7,6 +7,7 @@ var active: Team.Faction = Team.Faction.PLAYER
 var turn_order: Array[Team.Faction] = []
 
 signal turn_started(faction: Team.Faction)
+signal round_completed
 
 func active_faction() -> Team.Faction:
 	return active
@@ -24,7 +25,10 @@ func end_turn(present_factions: Array[Team.Faction]):
 	if turn_order.is_empty():
 		return
 	var i := turn_order.find(active)               # -1 if the active faction was wiped on its own turn
-	active = turn_order[(i + 1) % turn_order.size()]
+	var next := (i + 1) % turn_order.size()
+	active = turn_order[next]
+	if next == 0:
+		round_completed.emit()
 	turn_started.emit(active)
 
 # The live order: every declared faction (Team.all_factions, enum order) that has a unit on the

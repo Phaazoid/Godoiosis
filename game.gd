@@ -117,6 +117,7 @@ func _ready() -> void:
 	squad_action_queue_control.row_hover_changed.connect(_on_queue_row_hover_changed)
 	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
 	hovered_unit_changed.connect(_on_hovered_unit_changed)
+	turn_manager.round_completed.connect(_on_round_completed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
 	camera_controller.refresh_bounds(grid)
 	terrain_states = TerrainStateManager.new()
@@ -217,10 +218,25 @@ func _on_transmutation_picked(unit: Unit, transmutation: TransmutationData) -> v
 	enter_attack_mode(unit)
 
 func end_turn():
+	await _apply_burning_tile_damage(turn_manager.active_faction())
 	clear_selection()
 	update_selection_overlay()
 	unit_info_panel.clear()
 	turn_manager.end_turn(_present_factions())
+
+func _on_round_completed() -> void:
+	terrain_states.tick_states()
+	overlay_manager.redraw_terrain_live(terrain_states)
+
+# End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
+# through take_damage so downs/kills apply, then the crisis-offer + eject the attack pass uses.
+func _apply_burning_tile_damage(faction: Team.Faction) -> void:
+	for cell in terrain_states.cells_with(Terrain.TileState.BURNING):
+		var unit := get_unit_at_cell(cell)
+		if unit != null and unit.is_active() and unit.get_faction() == faction:
+			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
+	await _offer_pending_crisis()
+	_process_downed_pending()
 
 func enter_rescue_mode(unit: Unit):
 	game_state = GameState.RESCUE_TARGETING
@@ -317,7 +333,7 @@ func execute_action_phase_parallel(actions: Array):
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 	for effect in cell_effects:
 		terrain_states.apply(effect)
-	overlay_manager.redraw_terrain_live(terrain_states.cells_with(Terrain.TileState.BURNING))
+	overlay_manager.redraw_terrain_live(terrain_states)
 
 func execute_action_sequence(actions: Array):
 	if actions.is_empty():
@@ -899,7 +915,7 @@ func _board_has_active_units() -> bool:
 	return false
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states)
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())

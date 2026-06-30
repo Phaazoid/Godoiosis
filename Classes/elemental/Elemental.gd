@@ -16,6 +16,7 @@ enum Element {
 	FIRE,
 	WATER,
 	SHOCK,
+	ICE
 }
 
 enum State {

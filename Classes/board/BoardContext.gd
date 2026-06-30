@@ -9,11 +9,13 @@ class_name BoardContext
 var grid: TileMapLayer
 var units: Array[Unit]
 var squad_manager: SquadManager
+var terrain_states: TerrainStateManager
 
-func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager) -> void:
+func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null) -> void:
 	grid = grid_layer
 	units = unit_list
 	squad_manager = manager
+	terrain_states = states
 
 func unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units:
@@ -22,6 +24,8 @@ func unit_at_cell(cell: Vector2i) -> Unit:
 	return null
 
 func is_walkable(cell: Vector2i) -> bool:
+	if terrain_states != null and terrain_states.has_state(cell, Terrain.TileState.FROZEN):
+		return true
 	var tile_data: TileData = grid.get_cell_tile_data(cell)
 	if tile_data == null:
 		return false

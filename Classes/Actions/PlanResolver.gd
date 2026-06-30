@@ -11,12 +11,13 @@ static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = Re
 	var hypo: Dictionary = {}   # Unit -> _Hypo (the threaded working copy)
 	for atk in plan.attacks:
 		_resolve_one(atk, reactions, hypo)
-		# Cell-effect stage (#50): the attack also deposits terrain effects onto its target cell.
-		# Only runs when a board is supplied — the unit-only resolver path and the existing tests
-		# pass none, so they're untouched. (Counters depositing terrain effects is a later slice.)
-		if board != null:
-			var cell_effect := _resolve_cell_effect(atk, board, terrain_reactions)
-			if cell_effect != null:
+		# Cell-effect stage (#50): a map-hitting attack deposits terrain effects across its WHOLE
+		# blast footprint, not just the aimed cell — parity with how AoE damage hits every cell.
+		# Derived once per aim: a volley's secondaries share the footprint, so only its lead member
+		# (is_secondary_hit == false) deposits. Runs only with a board (unit-only callers pass none);
+		# counters still skip the stage (a later slice).
+		if board != null and not atk.is_secondary_hit:
+			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
 	for ctr in plan.counters:
 		if not _counter_actor_live(ctr, hypo):
@@ -25,6 +26,12 @@ static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = Re
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
 			continue
 		_resolve_one(ctr, reactions, hypo)
+		# A live, map-hitting counter ignites its own footprint too (#50) — same channel as an
+		# attack. Sits after the liveness `continue`, so a skipped counter never deposits; gated
+		# identically (lead volley member only, board only).
+		if board != null and not ctr.is_secondary_hit:
+			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
+				plan.cell_effects.append(cell_effect)
 
 static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary) -> void:
 	var outcome := ResolvedOutcome.new()
@@ -191,22 +198,35 @@ class _Hypo:
 	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
 	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this
 
-# Cell-effect stage (#50 / the #47 cell-effect channel). The attack deposits its element(s)
-# onto its target cell; terrain reactions turn that into tile-state changes (FIRE on a tree ->
-# BURNING). Pure like the rest of the pass — reads the board snapshot, writes a ResolvedCellEffect.
-# Returns null when nothing fires: a unit-only attack, no element, or no matching reaction.
-static func _resolve_cell_effect(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
+# Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
+# element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
+# hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->
+# BURNING). Pure like the rest of the pass — reads the board snapshot, returns one ResolvedCellEffect
+# per reacting cell. Empty when nothing fires: a unit-only attack, no element, or no cell reacts.
+static func _resolve_cell_effects(action: AttackAction, board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> Array[ResolvedCellEffect]:
+	var effects: Array[ResolvedCellEffect] = []
 	var attacker := action.actor
 	if attacker == null or not is_instance_valid(attacker):
-		return null
+		return effects
 	if not _source_hits_map(action):
-		return null                                  # unit-only attack -> deposits nothing
+		return effects                                  # unit-only attack -> deposits nothing
 	var elements := _source_elements(action)
 	if elements.is_empty():
-		return null
-	var kind := board.terrain_kind_at(action.target_cell)
+		return effects
+	# The footprint is the SAME geometry the volley fired over (get_affected_cells_from), so the
+	# deposit lands exactly where the blast did — every cell, occupied or not.
+	for cell in attacker.combat.get_affected_cells_from(action.origin_cell, action.target_cell):
+		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
+		if effect != null:
+			effects.append(effect)
+	return effects
+
+# One cell's terrain reaction: match the incoming elements against the tile's kind and return the
+# resolved deposit, or null when no reaction fires there.
+static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
+	var kind := board.terrain_kind_at(cell)
 	var effect := ResolvedCellEffect.new()
-	effect.cell = action.target_cell
+	effect.cell = cell
 	var fired := false
 	for reaction in terrain_reactions:
 		if not elements.has(reaction.incoming_element):
@@ -214,7 +234,8 @@ static func _resolve_cell_effect(action: AttackAction, board: BoardContext, terr
 		if reaction.required_kind != Terrain.Kind.NONE and reaction.required_kind != kind:
 			continue
 		if reaction.required_tile_state != Terrain.TileState.NONE:
-			continue                                 # later slice: match against the live tile-state store
+			if board.terrain_states == null or not board.terrain_states.has_state(cell, reaction.required_tile_state):
+				continue
 		for s in reaction.add_tile_states:
 			if not effect.states_added.has(s):
 				effect.states_added.append(s)

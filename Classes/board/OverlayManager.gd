@@ -32,7 +32,11 @@ const PATH_ARROW_LEFT := preload("res://Art/Icons/ArrowIcons/endfromright.png")
 const PATH_ARROW_UP := preload("res://Art/Icons/ArrowIcons/endfrombottom.png")
 const PATH_ARROW_DOWN := preload("res://Art/Icons/ArrowIcons/endfromtop.png")
 
-const TERRAIN_BURNING_ICON := preload("res://Art/Icons/TerrainIcons/Fire.png")
+const TERRAIN_STATE_ICONS: Dictionary = {
+	Terrain.TileState.BURNING: preload("res://Art/Icons/TerrainIcons/Fire.png"),
+	Terrain.TileState.FROZEN: preload("res://Art/Icons/TerrainIcons/Ice.png"),
+}
+
 const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye
 const TERRAIN_PREVIEW_MODULATE := Color(1, 1, 1, 0.5)     # ghost the pending-ignite marker (Part B)
 
@@ -67,7 +71,7 @@ var icons_by_cell = {} # {Cell : { IconType : Icon } }
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
-var terrain_live_sprites := {}                       # Vector2i -> Sprite2D (persists across selection)
+var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
@@ -119,7 +123,7 @@ func show_terrain_preview(cells: Array[Vector2i]) -> void:
 	clear_terrain_preview()
 	for cell in cells:
 		var sprite := Sprite2D.new()
-		sprite.texture = TERRAIN_BURNING_ICON
+		sprite.texture = TERRAIN_STATE_ICONS[Terrain.TileState.BURNING]
 		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
 		sprite.z_index = TERRAIN_Z_INDEX
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE
@@ -271,18 +275,20 @@ func clear_all():
 # The live terrain state on the board (#50). Drawn from TerrainStateManager after execution,
 # NOT cleared by clear_all/selection changes — a burning tile stays burning regardless of what
 # you click. Its own sprite dict, so the icon/overlay clears never touch it.
-func redraw_terrain_live(burning_cells: Array[Vector2i]) -> void:
+func redraw_terrain_live(states: TerrainStateManager) -> void:
 	_clear_terrain_live()
-	for cell in burning_cells:
-		var sprite := Sprite2D.new()
-		sprite.texture = TERRAIN_BURNING_ICON
-		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
-		sprite.z_index = TERRAIN_Z_INDEX
-		icon_overlay.add_child(sprite)
-		terrain_live_sprites[cell] = sprite
+	for state in TERRAIN_STATE_ICONS:
+		var icon: Texture2D = TERRAIN_STATE_ICONS[state]
+		for cell in states.cells_with(state):
+			var sprite := Sprite2D.new()
+			sprite.texture = icon
+			sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+			sprite.z_index = TERRAIN_Z_INDEX
+			icon_overlay.add_child(sprite)
+			terrain_live_sprites.append(sprite)
 
 func _clear_terrain_live() -> void:
-	for sprite in terrain_live_sprites.values():
+	for sprite in terrain_live_sprites:
 		if is_instance_valid(sprite):
 			sprite.queue_free()
 	terrain_live_sprites.clear()
