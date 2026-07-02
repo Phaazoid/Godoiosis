@@ -71,22 +71,45 @@ func handle_tile_brush(event) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
 			if event.pressed:
-				_paint_tile()
+				_paint()
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_erase_tile()
+			_erase()
 	elif event is InputEventMouseMotion and _brush_painting:
-		_paint_tile()
+		_paint()
 
-func _paint_tile() -> void:
+func _paint() -> void:
 	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.ZONE:
+		_paint_zone(cell)
+	else:
+		_paint_tile(cell)
+
+func _erase() -> void:
+	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.ZONE:
+		_erase_zone(cell)
+	else:
+		_erase_tile(cell)
+
+func _paint_tile(cell: Vector2i) -> void:
 	game.grid.set_cell(cell, 0, game.dev_overlay.tile_brush.selected_tile)
 	game.camera_controller.refresh_bounds(game.grid)
 
-func _erase_tile() -> void:
-	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+func _erase_tile(cell: Vector2i) -> void:
 	game.grid.erase_cell(cell)
 	game.camera_controller.refresh_bounds(game.grid)
 
+func _paint_zone(cell: Vector2i) -> void:
+	var zone_name = game.dev_overlay.tile_brush.selected_zone_name()
+	if zone_name == "":
+		return
+	game.zone_manager.paint_cell(zone_name, cell)
+	game.overlay_manager.redraw_zones(game.zone_manager)
+
+func _erase_zone(cell: Vector2i) -> void:
+	game.zone_manager.erase_cell(cell)
+	game.overlay_manager.redraw_zones(game.zone_manager)
+	
 func resize_map(width: int, height: int, fill_tile: Vector2i) -> void:
 	width = maxi(1, width)
 	height = maxi(1, height)

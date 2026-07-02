@@ -35,7 +35,8 @@ func save_scenario(scenario_name: String):
 	scenario.tile_data = grid.tile_map_data
 	scenario.active_faction = turn_manager.active_faction()
 	scenario.terrain_states = game.terrain_states.to_state_dict()
-	
+	scenario.zones = game.zone_manager.to_dict()
+
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
 			continue
@@ -45,6 +46,10 @@ func save_scenario(scenario_name: String):
 		entry.cell = unit.movement.cell
 		entry.squad_id = squad_manager.squads.find(unit.squad)
 		entry.is_leader = unit.is_leader()
+		if entry.is_leader:
+			entry.squad_name = unit.squad.squad_name
+			entry.squad_archetype = unit.squad.archetype
+			entry.squad_zone = unit.squad.zone_name
 
 		if unit.has_equipped_weapon():
 			entry.equipped_weapon = unit.get_equipped_weapon().duplicate(true)
@@ -70,7 +75,8 @@ func load_scenario(path: String):
 
 	grid.tile_map_data = scenario.tile_data
 	game.terrain_states.load_state_dict(scenario.terrain_states)
-	overlay_manager.redraw_terrain_live(game.terrain_states)
+	game.zone_manager.load_dict(scenario.zones)
+	overlay_manager.redraw_zones(game.zone_manager)
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -90,6 +96,10 @@ func load_scenario(path: String):
 
 		if entry.is_leader:
 			leaders_by_squad_id[entry.squad_id] = unit
+			unit.squad.squad_name = entry.squad_name
+			unit.squad.archetype = entry.squad_archetype
+			unit.squad.zone_name = entry.squad_zone
+			unit.squad.home_cell = entry.cell
 		else:
 			if not members_by_squad_id.has(entry.squad_id):
 				members_by_squad_id[entry.squad_id] = []

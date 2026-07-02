@@ -1,10 +1,18 @@
 extends Node
 class_name Squad
 
+
+const NO_HOME := Vector2i(-999999, -999999)
+
 var leader: Unit
 var members: Array[Unit] = []
 var action_queue: Array[BaseAction] = []
 var has_acted: bool = false
+var squad_name := ""
+var archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
+var zone_name := ""   # painted zone this squad is bound to (Sentry); "" = none
+var home_cell := NO_HOME   # sentry post: set at scenario load; first sentry turn fixes it otherwise
+
 signal actions_became_active(squad: Squad, action: BaseAction)
 signal actions_became_empty(squad: Squad)
 signal action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.ActionType)

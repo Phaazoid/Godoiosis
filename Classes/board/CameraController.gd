@@ -14,7 +14,9 @@ var keyboard_direction := Vector2.ZERO
 var lock_manual_input := false
 var last_move_dir := Vector2.ZERO
 var was_moving := false
-
+var ai_locked := false        # true for the whole duration of an AI-controlled turn
+var follow_unit: Unit = null  # while set, target_position tracks this unit every frame
+var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
 @export var scroll_speed := 250
@@ -61,15 +63,20 @@ func refresh_bounds(grid: TileMapLayer):
 	max_world = Vector2(used.position + used.size) * CELL_WORLD + margin
 	clamp_target_position()
 	
-# Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta: float):
+	if _panning:
+		return
+
+	if is_instance_valid(follow_unit):
+		target_position = follow_unit.global_position
+
 	if global_position.distance_to(target_position) < 1:
 		global_position = target_position
 		is_moving = false
 	
 	#Always scroll at least one cell, and never snap back.  
 	keyboard_direction = Vector2.ZERO
-	if not lock_manual_input:
+	if not lock_manual_input and not ai_locked:
 		if Input.is_action_pressed("cam_right"):
 			keyboard_direction.x += 1
 		if Input.is_action_pressed("cam_left"):
@@ -113,11 +120,29 @@ func snap_to_grid():
 	else:
 		target_position.y = round(target_position.y / TILE_SIZE) * TILE_SIZE		
 
+func set_ai_locked(locked: bool) -> void:
+	ai_locked = locked
+	if not locked:
+		follow_unit = null
+
+func follow(unit: Unit) -> void:
+	follow_unit = unit
 	
-	
-	
-	
-	
-	
-	
-	
+# Smoothly pans from wherever the camera currently is to `unit`'s position over a FIXED
+# duration (not fixed speed) -- a short hop and a cross-map jump read at the same pace,
+# giving the player a consistent beat to reorient before the next squad acts. Switches to
+# continuous follow() once the pan lands.
+func pan_to(unit: Unit, duration: float = 2.0) -> void:
+	follow_unit = null
+	_panning = true
+	var start := global_position
+	var dest: Vector2 = unit.global_position
+	var tween := create_tween()
+	tween.tween_method(_apply_pan_position, start, dest, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	await tween.finished
+	_panning = false
+	follow(unit)
+
+func _apply_pan_position(pos: Vector2) -> void:
+	global_position = pos
+	target_position = pos

@@ -11,7 +11,7 @@ class_name OverlayManager
 @onready var squadrange_overlay = $SquadRangeOverlay
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
-
+@onready var zone_overlay = $ZoneOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
@@ -94,7 +94,12 @@ func _ready() -> void:
 	hover_overlay.modulate = Color(1, 1, 0)
 	squad_overlay.modulate = Color(0.6, 0.4, 0.8, 0.7)
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
-	
+	zone_overlay.modulate = Color(1, 0.5, 0, 0.35)
+	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
+
+func set_zone_visibility(shown: bool) -> void:
+	zone_overlay.visible = shown
+
 func modulate_overlay(type: int, rgba: Color):
 	overlay_map[type].modulate = rgba
 
@@ -102,6 +107,14 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
 	layer.clear()
 	draw_cells(layer, cells, atlas_coord)
+
+# Painted AI zones (Sentry archetype). Persistent like terrain -- not cleared by
+# clear_all/selection changes. All zones share one tint for now; painted regions read as
+# distinct by shape/position, not color.
+func redraw_zones(zones: ZoneManager) -> void:
+	zone_overlay.clear()
+	for name in zones.zone_names():
+		draw_cells(zone_overlay, zones.cells_in(name), ATLAS_COORDS)
 
 func show_hover_move_path(move: MoveAction):
 	clear_hover_move_path()

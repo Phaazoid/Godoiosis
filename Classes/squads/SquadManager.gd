@@ -564,7 +564,7 @@ func _all_units() -> Array[Unit]:
 # offset to the leader. Deterministic (Law #1). `board` is passed in (SquadManager has no
 # _board()); it's a snapshot keyed on actual cells, so it stays valid across the queued moves.
 
-func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext) -> Array[MoveAction]:
+func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
 	var leader_start := leader.movement.cell
@@ -599,9 +599,12 @@ func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCon
 				continue
 			if leader_field.get(cell, 999999) > leash:
 				continue
+			if allowed_cells != null and not allowed_cells.has(cell):
+				continue
 			candidates[cell] = reach.reachable[cell]
 		if not taken.has(here) and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_range() and leader_field.get(here, 999999) <= leash:
-			candidates[here] = 0
+			if allowed_cells == null or allowed_cells.has(here):
+				candidates[here] = 0
 
 		if candidates.is_empty():
 			continue
@@ -633,8 +636,8 @@ func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCon
 
 	return moves
 
-func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext) -> void:
-	for move in plan_group_move(squad, leader_destination, board):
+func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> void:
+	for move in plan_group_move(squad, leader_destination, board, allowed_cells):
 		queue_action(squad, move)
 		overlay_manager.show_planned_path(move.actor, move)
 		if move.is_valid:

@@ -132,6 +132,9 @@ tile_set = SubResource("TileSet_1phco")
 [node name="SquadRangeOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=162259628]
 tile_set = SubResource("TileSet_nnt18")
 
+[node name="ZoneOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1517273389]
+tile_set = SubResource("TileSet_nnt18")
+
 [node name="InvalidMoveOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=364384559]
 tile_set = SubResource("TileSet_nb51f")
 

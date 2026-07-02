@@ -6,3 +6,6 @@ class_name ScenarioUnitEntry
 @export var equipped_weapon: EquippableData
 @export var squad_id := -1   #entries sharing an id form one squad; -1 = solo
 @export var is_leader := false
+@export var squad_name := ""
+@export var squad_archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
+@export var squad_zone := ""   # only meaningful on the leader's entry; "" = none

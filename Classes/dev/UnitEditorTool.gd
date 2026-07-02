@@ -36,6 +36,8 @@ func populate_unit_editor(unit):
 
 	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[unit.get_faction()], func(s): _set_unit_faction(unit, s))
 
+	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", unit.squad.squad_name, func(s): unit.squad.squad_name = s)
+
 	_add_inventory_section(unit)
 
 	var delete_button := Button.new()

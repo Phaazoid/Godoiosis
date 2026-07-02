@@ -6,6 +6,10 @@ const SOURCE_ID := 0
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var game   # injected by DevOverlay.init
+enum PaintMode { TERRAIN, ZONE }
+var paint_mode := PaintMode.TERRAIN
+var _zone_name := ""
+var _zone_name_row: HBoxContainer
 
 # Parallel to the dropdown: a terrain_type label + the atlas coords that paints it. Built by
 # scanning the board tileset for tiles carrying a "terrain_type" custom-data value, so any
@@ -63,6 +67,14 @@ func _on_tile_dropdown_item_selected(index: int):
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
 
+func _on_resize_pressed() -> void:
+	if game == null:
+		return
+	game.dev_controller.resize_map(int(_width_spin.value), int(_height_spin.value), selected_tile)
+	
+func selected_zone_name() -> String:
+	return _zone_name.strip_edges()
+
 func _build_extra_controls() -> void:
 	# Part 2: visible erase hint (the tab tooltip already says it, but this is in-panel).
 	var note := Label.new()
@@ -95,7 +107,14 @@ func _build_extra_controls() -> void:
 
 	add_child(row)
 
-func _on_resize_pressed() -> void:
-	if game == null:
-		return
-	game.dev_controller.resize_map(int(_width_spin.value), int(_height_spin.value), selected_tile)
+	# Part 3: zone paint mode (Sentry archetype regions).
+	# Part 3: zone paint mode (Sentry archetype regions). The terrain dropdown and the zone
+	# name field are mode-specific -- show whichever the active mode uses.
+	DevWidgets.add_checkbox(self, "Paint Zones (instead of terrain)", false, _on_zone_mode_toggled)
+	_zone_name_row = DevWidgets.add_lineedit(self, "Zone Name", "", func(s): _zone_name = s)
+	_zone_name_row.visible = false
+	
+func _on_zone_mode_toggled(pressed: bool) -> void:
+	paint_mode = PaintMode.ZONE if pressed else PaintMode.TERRAIN
+	tile_dropdown.visible = not pressed
+	_zone_name_row.visible = pressed

@@ -6,10 +6,11 @@ class_name DevOverlay
 @onready var tile_brush: TileBrushTool = get_node("%Tile Brush")
 @onready var unit_editor: UnitEditorTool = get_node("%Unit Editor")
 @onready var spawn: SpawnTool = get_node("%Spawn")
+@onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 
 func _ready() -> void:
-	(%Scenario as ScenarioTool).init(scenario_manager)
+	scenario_tool.init(scenario_manager, game)
 	spawn.init(game)
 	unit_editor.init(game)
 	tile_brush.init(game)
@@ -25,19 +26,29 @@ func _ready() -> void:
 func _on_close_requested():
 	hide()
 	game.set_dev_mode(false)
+	_update_zone_visibility()
 
 func _on_tab_changed(_tab: int):
 	var current = %DevTabs.get_current_tab_control()
 	if current == spawn:
 		spawn.refresh_weapons()
+	if current == scenario_tool:
+		scenario_tool.refresh_squads()
 	if current != tile_brush:
 		tile_brush.deactivate()
-		
+	_update_zone_visibility()
+
+# Zones are authoring scaffolding -- visible only while actively painting (this window up
+# AND the Tile Brush tab current), never during play.
+func _update_zone_visibility() -> void:
+	game.overlay_manager.set_zone_visibility(visible and %DevTabs.get_current_tab_control() == tile_brush)
+
 func show_beside():
 	var main_pos := DisplayServer.window_get_position(DisplayServer.MAIN_WINDOW_ID)
 	var main_size := DisplayServer.window_get_size(DisplayServer.MAIN_WINDOW_ID)
 	position = main_pos + Vector2i(main_size.x + 16, 0)
 	show()
+	_update_zone_visibility()
 
 func sync_dev_mode_button(active: bool):
 	dev_mode_toggle.set_pressed_no_signal(active)

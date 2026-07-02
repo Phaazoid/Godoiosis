@@ -88,7 +88,8 @@ enum GameState {
 	CREATING_SQUAD,
 	BETWEEN_TURNS,
 	DEV_MODE,
-	RESCUE_TARGETING
+	RESCUE_TARGETING,
+	AI_TURN
 }
 
 var game_state: GameState = GameState.IDLE
@@ -97,12 +98,26 @@ var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 var _downed_pending: Array[Unit] = []   # units downed mid-execution; ejected after the pass (see _process_downed_pending)
 var _highlighted_queue_units: Array[Unit] = []
 var dev_controller: DevController
+var ai_controller: AIController
 var terrain_states: TerrainStateManager
+var zone_manager: ZoneManager
 
 func _ready() -> void:
 	dev_controller = DevController.new()
 	dev_controller.game = self
 	add_child(dev_controller)
+	
+	ai_controller = AIController.new()
+	ai_controller.game = self
+	add_child(ai_controller)
+	
+	terrain_states = TerrainStateManager.new()
+	terrain_states.name = "TerrainStateManager"
+	add_child(terrain_states)
+
+	zone_manager = ZoneManager.new()
+	zone_manager.name = "ZoneManager"
+	add_child(zone_manager)
 	
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 	spawn_test_units()
@@ -120,9 +135,7 @@ func _ready() -> void:
 	turn_manager.round_completed.connect(_on_round_completed)
 	hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
 	camera_controller.refresh_bounds(grid)
-	terrain_states = TerrainStateManager.new()
-	terrain_states.name = "TerrainStateManager"
-	add_child(terrain_states)
+	
 
 func _on_turn_started(faction: Team.Faction):
 	_tick_downed_countdowns(faction)
@@ -135,6 +148,11 @@ func _on_turn_started(faction: Team.Faction):
 		return
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
+
+# The board is fully hands-off for the player while an AI faction resolves its turn -- no
+# selection, no menu, no queue-panel interaction (Execute/Cancel/reorder).
+func _board_locked_for_player() -> bool:
+	return game_state == GameState.AI_TURN
 
 func can_control(unit: Unit) -> bool:
 	if unit == null:
@@ -300,7 +318,9 @@ func enter_group_move_mode(unit: Unit):
 	# Pick the squad's destination from the leader's own reachable tiles.
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(unit), unit), OVERLAY_DEFAULT_ATLAS)
 
-func _on_queue_execute_requested() -> void:
+func _on_queue_execute_requested():
+	if _board_locked_for_player():
+		return
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return
@@ -352,6 +372,8 @@ func cancel_orders(unit): #clears all actions for unit
 	squad_manager.remove_actions_for_unit(unit)
 
 func _on_queue_cancel_requested(display_action: BaseAction):
+	if _board_locked_for_player():
+		return
 	if display_action == null or display_action.actor == null:
 		return
 	var unit: Unit = display_action.actor
@@ -405,6 +427,8 @@ func _squad_all_committed(squad: Squad) -> bool:
 	return true
 
 func _on_queue_reorder_attacks(ordered_actors: Array) -> void:
+	if _board_locked_for_player():
+		return
 	var squad: Squad = squad_manager.active_squad
 	if squad == null or not is_instance_valid(squad):
 		return
@@ -527,7 +551,10 @@ func _unhandled_input(event):
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
 			dev_controller.handle_tile_brush(event)
 			return
-			
+
+	if _board_locked_for_player():
+		return
+
 	var mouse_world := get_global_mouse_position()
 	if event is InputEventMouseButton and event.pressed:
 		var clickedCell: Vector2i = grid.local_to_map(grid.to_local(mouse_world))
@@ -688,6 +715,13 @@ func start_faction_turn(faction: Team.Faction):
 	await get_tree().create_timer(1.0).timeout #later make small waits between each enemy movement.
 	game_state = GameState.IDLE
 	squad_manager.reset_faction_actions(faction)
+
+	if ai_controller.is_ai_faction(faction):
+		game_state = GameState.AI_TURN
+		camera_controller.set_ai_locked(true)
+		await ai_controller.take_faction_turn(faction, _board())
+		camera_controller.set_ai_locked(false)
+		return
 	
 	#TODO This should probably be it's own game state - IN_MENU or something.  
 	#Can call an end menu function from the popup hide that calls update visuals instead.  
@@ -758,7 +792,8 @@ func refresh_action_queue(squad: Squad):
 	_preview_terrain_effects(squad)
 	var can_execute: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions()
-		and not squad_manager.squad_has_invalid_actions(squad))
+		and not squad_manager.squad_has_invalid_actions(squad)
+		and not _board_locked_for_player())
 	if not can_execute:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 	elif _squad_all_committed(squad):
@@ -823,6 +858,11 @@ func _process_downed_pending() -> void:
 	refresh_action_queue(squad_manager.active_squad)
 
 func _offer_crisis(unit: Unit) -> bool:
+	# An AI-controlled faction decides its own Crisis -- no player-facing prompt, always yes
+	# (deterministic; a smarter AI crisis policy is a later pass). Tracks the dev AI toggle,
+	# so hotseat-controlled factions still prompt.
+	if ai_controller.is_ai_faction(unit.get_faction()):
+		return true
 	# Live center-screen interrupt, awaited from the post-pass settle so combat is effectively
 	# frozen while the player chooses (will-and-death.md Crisis interrupt).
 	return await CrisisPrompt.show_prompt($UILayer, unit.get_unit_name())
@@ -915,7 +955,7 @@ func _board_has_active_units() -> bool:
 	return false
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager)
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())

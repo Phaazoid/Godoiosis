@@ -22,11 +22,12 @@ extends RefCounted
 
 const UNIT_SCENE := preload("res://Scenes/Unit.tscn")
 
-# OverlayManager's nine @onready child overlays. Supplied as bare Node2Ds so its
-# _ready (which only sets each one's modulate) runs without error.
+# OverlayManager's @onready child overlays. Supplied as bare Node2Ds so its
+# _ready (which only sets each one's modulate/visibility) runs without error.
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "SquadOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
+	"ZoneOverlay",
 ]
 
 # Test-tuned values for the few stats the suites actually reason about: low MHP so a couple

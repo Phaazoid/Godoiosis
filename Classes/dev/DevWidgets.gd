@@ -40,7 +40,7 @@ static func add_option(container: Node, label_text: String, options: Array, curr
 	row.add_child(option)
 	container.add_child(row)
 
-static func add_lineedit(container: Node, label_text: String, initial_value: String, on_change: Callable) -> void:
+static func add_lineedit(container: Node, label_text: String, initial_value: String, on_change: Callable) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
@@ -51,6 +51,7 @@ static func add_lineedit(container: Node, label_text: String, initial_value: Str
 	row.add_child(label)
 	row.add_child(edit)
 	container.add_child(row)
+	return row
 
 # Parse an enum @export hint_string into ordered {name, value} entries. Godot emits
 # "Name0,Name1,..." for contiguous 0-based enums, or "Name:Val,..." when the values are

@@ -198,6 +198,18 @@ layout_mode = 2
 layout_mode = 2
 text = "Load"
 
+[node name="AIToggleList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=585167637]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=144604209]
+layout_mode = 2
+text = "Squads"
+
+[node name="SquadList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1095340861]
+unique_name_in_owner = true
+layout_mode = 2
+
 [node name="Tile Brush" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1905779567]
 unique_name_in_owner = true
 visible = false

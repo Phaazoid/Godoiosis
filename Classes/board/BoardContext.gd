@@ -10,12 +10,14 @@ var grid: TileMapLayer
 var units: Array[Unit]
 var squad_manager: SquadManager
 var terrain_states: TerrainStateManager
+var zones: ZoneManager
 
-func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null) -> void:
+func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null) -> void:
 	grid = grid_layer
 	units = unit_list
 	squad_manager = manager
 	terrain_states = states
+	zones = zone_manager
 
 func unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units:

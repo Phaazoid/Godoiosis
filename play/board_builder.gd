@@ -10,11 +10,12 @@ const TILESET_PATH := "res://Resources/TestTiles.tres"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true, move_cost=1, terrain_type="grass" in TestTiles.tres
 
-# OverlayManager's nine @onready child overlays — supplied as bare Node2Ds so its _ready
-# (which only sets each one's modulate) runs without error.
+# OverlayManager's @onready child overlays — supplied as bare Node2Ds so its _ready
+# (which only sets each one's modulate/visibility) runs without error.
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "SquadOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
+	"ZoneOverlay",
 ]
 
 # Build the node graph under `parent` (a node already in the SceneTree). Returns refs by name.

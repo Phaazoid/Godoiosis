@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_813pw"]
+[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_cve80"]
+[ext_resource type="Script" path="res://Classes/items/WeaponData.gd" id="3_fpbyw"]
+
+[sub_resource type="Resource" id="Resource_icmb4"]
+script = ExtResource("1_813pw")
+metadata/_custom_type_script = "uid://bbbfksnb0tted"
+
+[resource]
+script = ExtResource("3_fpbyw")
+power = 3
+attack_pattern = SubResource("Resource_icmb4")
+elemental_damage_type = 4
+targets = 2
+weapon_type = 3
+item_name = "Freezer"
+icon = ExtResource("2_cve80")
+description = "I think that enemy got... the point"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"
