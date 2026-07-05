@@ -57,15 +57,18 @@ Corrects two earlier errors: **not** "five runes, one per element" (stale `Alche
 
 Mechanically: each rune has a **capacity budget**; each carving has a **cost** (≈ its tier — bigger/more-complex carvings cost more). You may inscribe while `Σ costs ≤ capacity`. The S budget being **1** makes S *naturally* tier-1-only (a tier-2 costs 2 > 1) — no separate rule needed. Exact numbers are placeholder ([RuneData.gd](../../Classes/items/RuneData.gd) `CAPACITY`); the curve is a tuning knob, not settled balance.
 
-**Channeling — the aura gate (with the runestone's leeway).** Holding a carving isn't enough; the wielder must have the **aura** to channel it:
-- A transmutation needs **≥ 1 aura in each of its constituent elements** to be channeled.
-- The runestone itself, saturated with alkahest, grants **one free point of leeway** — it covers the requirement for **exactly one** element you'd otherwise lack. So a unit with **0 aura everywhere** can still channel **any single-element (tier-1) carving** — at **no scaling** (0 aura adds 0 damage), but it fires.
-- A unit with **1 point of fire aura** can channel **fire + any one other element** (fire is covered by real aura; the partner rides the leeway) — which is why a fire-leaning alchemist wants a rune loaded with **fire-based combos**.
-- Two-or-more *uncovered* elements (e.g. a tier-3 at zero aura, or water+earth on a fire-only unit) → **can't channel** — the single leeway point isn't enough.
+**Channeling — temper + trained leeway [REWRITTEN 2026-07-04, supersedes the flat rune-leeway point].** Holding a carving isn't enough; the wielder must have the **aura** to channel it:
+- **Runes are tempered:** a blank's first carving permanently colors the stone to its primary element; every later carving must contain the temper and can't be primarily another element (2A+1F never fits a fire-tempered stone).
+- **Floors = weight, temper always earned:** channeling needs real aura ≥ each element's sigil *weight*, and the temper element can **never** be brute-forced (3-Fire demands true fire-3).
+- **Trained leeway:** real aura in the temper element = the brute-force budget for the array's *other* elements, breadth and depth alike, point for point. 1 fire aura → 1F+1X and no more; higher training brute-forces more — which is why a fire-leaning alchemist wants a rune loaded with **fire-based combos**.
+- **Strain:** every brute-forced point costs recoil HP (superlinear; numbers open); **carried materia can absorb strain** (fuel substitutes for talent). Deterministic + previewed (Law #2).
+- **0 aura = cannot channel at all** — the Rebecca rule (runes are inert rock in her hands; canon story beat). The old "0-aura unit can still channel any single-element carving" doctrine is **dead, reversed at the 2026-07-04 grill.**
+
+Full model + rationale: [transmutation-model-proposal.md](transmutation-model-proposal.md) → *Temper & channeling*.
 
 Engine analogy: `RuneData` ≈ a customized resource instance (like a saved `WeaponData` variant) that **holds an array of `TransmutationData`**; the future carving/etching UI ≈ the existing **weapon authoring tool**; each carving ≈ `TransmutationData` = `AttackPattern`(geometry) + element set + power, aura-scaled.
 
-**[OPEN] within the rune model:** the capacity/cost numbers; multi-element damage scaling (**sum of auras** for now — vs primary-only); per-element aura *floors* above 1 for stronger carvings; how a carving is *learned* (story-gated scrolls? proficiency? both?); whether size is fixed at mining or upgradable; element-locked vs free inscription. Materia (the etching medium + cast fuel) is **deferred** — see below.
+**Within the rune model (updated 2026-07-04):** capacity/cost numbers **pseudo-locked** — two knobs: circle cap 1/2/3 (max sigils per carving) + capacity 1/3/6 (Σ sigils per rune), playtest-tunable; aura *floors* **resolved** (= sigil weight; temper never brute-forced — see Channeling above); carving *knowledge* **resolved** (discovery/codex + scroll hints + recruit knowledge-merge; mark availability is progression content — transmutation doc, grill resolutions #2–3); element-locked inscription **resolved** (the temper rule). *Still open:* multi-element damage scaling (**sum of auras** for now — vs primary-only); whether size is fixed at mining or upgradable. Materia (the etching medium + cast fuel) is **deferred** — see below.
 
 ## Materia — model **[LOCKED]** (dev caveats), tuning **[OPEN]**
 
@@ -81,11 +84,13 @@ Engine analogy: `RuneData` ≈ a customized resource instance (like a saved `Wea
 
 ## Transmutations — the content unit (the carving = the attack) **[first code 2026-06-27]**
 
-A **transmutation** is one inscribed reaction — the thing that actually fires. **Tier = number of constituent elements** (tier-1 = one element, tier-2 = two combined, tier-3 = three…). Design the **effect first**, then derive its requirements. Built shape (`TransmutationData`, schema still growing):
+A **transmutation** is one inscribed reaction — the thing that actually fires. **Its internals now follow the sigil/flourish anatomy** ([transmutation-model-proposal.md](transmutation-model-proposal.md), provisional, first code 2026-07-02): weighted element sigils + slot-capped shaping flourishes; exotics (ice, shock…) are *derived* tags, not elements. Design the **effect first**, then derive its requirements. Built shape (`TransmutationData`, schema still growing):
 
 ```
 TransmutationData (the carving)
-  elements: [Element]            # constituent elements; TIER = elements.size()
+  sigils: [Element]              # repeats = weight ("2 Fire, 1 Earth"); base elements only
+  flourishes: [Flourish.Type]    # shaping marks; slots = 2×sigils−1; opposites reject;
+                                 #   derive exotics (Water+Stillness→ICE); magnitudes DEFERRED
   power + attack_pattern         # base damage + geometry (a fireball vs a fire-WALL)
   carving_cost                   # capacity it eats on a rune (default = tier; bigger carvings cost more)
   can_counter / hits_allies
@@ -123,9 +128,9 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 
 ## Open forks (the map)
 
-1. **[RATIFIED 2026-06-27] Rune customization model** — the **capacity-board** won: blank element-agnostic rune; inscribe transmutation carvings; **size (S/M/L) = capacity**; channeling gated by per-element aura + a one-point leeway. *Still open (tuning, not shape):* the capacity numbers + cost curve; multi-element scaling (**sum** of auras now — vs primary-only); per-element aura *floors* above 1 for stronger carvings; how a carving is *learned* (story scrolls vs proficiency); size fixed-at-mining vs upgradable; element-locked vs free inscription.
-2. **[OPEN] Affinity expansion** — fixed at birth, or story/Stone-gated ways to gain an element? (The old "place aura points to start a new element" is stale; needs a non-leveling answer.) *Note:* the channeling leeway already realizes the "uses a rune **poorly** without affinity" idea — 0 aura still channels the simplest carvings, just with no scaling.
-3. **[REFRAMED 2026-06-27] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (≥1 per element, minus the rune's one leeway point). No per-cast spend — **materia** is the consumable (and it's deferred). Open: per-element floors above 1; sum vs primary scaling.
+1. **[RATIFIED 2026-06-27, numbers + gates grilled 2026-07-04] Rune customization model** — the **capacity-board** won: blank element-agnostic rune (until *tempered* by its first carving); inscribe transmutation carvings; **size = two knobs** (circle cap 1/2/3 + capacity 1/3/6, pseudo-locked); channeling = temper + weight floors + trained leeway with strain (see Channeling above). *Still open (tuning, not shape):* multi-element scaling (**sum** of auras now — vs primary-only); size fixed-at-mining vs upgradable; strain/materia-offset numbers.
+2. **[OPEN] Affinity expansion** — fixed at birth, or story/Stone-gated ways to gain an element? (The old "place aura points to start a new element" is stale; needs a non-leveling answer.) *Note REVERSED 2026-07-04:* 0 aura now channels **nothing** (the Rebecca rule); "uses a rune poorly without affinity" is realized instead by **brute force under strain**, which requires *some* trained aura in the rune's temper. Canon flavor: aura is born, **depth of wielding is trained**.
+3. **[REFRAMED 2026-06-27, floors resolved 2026-07-04] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (floors = sigil weight; temper earned; trained leeway for the rest, priced in strain). No per-cast spend — **materia** is the consumable (and it's deferred). Open: sum vs primary scaling.
 4. **[OPEN] Materia** consumption/recharge; ambient infinite vs thinning; dowsing.
 5. **[RESOLVED 2026-06-16] Summons** (automaton/golem/demon/puppet/dragon-taming) → **deferred.** Liked, but too complex for now; revisit post-Milestone-A.
 6. **[RESOLVED 2026-06-16] Defense stat** → **no RES.** Physical→DEF; elemental→specific gear + possible armor proficiency.
@@ -138,4 +143,4 @@ Cross-refs: [progression.md](progression.md), [will-and-death.md](will-and-death
 Folds into the open forks above; noted during the #32 triage:
 
 - **Rune-carving as the customization UX** (fork 1): players physically *carve* runes — a tactile front-end to the capacity-board model.
-- **Innate / untested affinities** (fork 2): unlisted units might use a given rune *poorly* without a formal affinity, and affinities can be **grown, not created** — fitting the no-leveling identity-stat model. (Lore guardrail: gold transmutation is *possible* but consumes more runestone than the gold is worth — flavor, not a player action.)
+- **Innate / untested affinities** (fork 2): unlisted units might use a given rune *poorly* without a formal affinity *(the "0-aura channels weakly" half REVERSED 2026-07-04 — see fork 2; the "poorly" idea survives as brute-force-under-strain)*, and affinities can be **grown, not created** — fitting the no-leveling identity-stat model. (Lore guardrail: gold transmutation is *possible* but consumes more runestone than the gold is worth — flavor, not a player action.)

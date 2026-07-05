@@ -35,7 +35,7 @@ func _alchemist(aura: Dictionary) -> Unit:
 func _fireball(power: int, mode: EquippableData.TargetMode) -> TransmutationData:
 	var t: TransmutationData = TransmutationData.new()
 	t.power = power
-	t.elements.assign([Elemental.Element.FIRE])
+	t.sigils.assign([Elemental.Element.FIRE])
 	t.targets = mode
 	return t
 

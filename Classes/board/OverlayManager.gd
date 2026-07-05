@@ -92,7 +92,8 @@ func _ready() -> void:
 	move_overlay.modulate = Color(1, 1, 0, .5)
 	attack_overlay.modulate = Color(1, 0, 0, .5)
 	hover_overlay.modulate = Color(1, 1, 0)
-	squad_overlay.modulate = Color(0.6, 0.4, 0.8, 0.7)
+	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
+	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
 	zone_overlay.modulate = Color(1, 0.5, 0, 0.35)
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
@@ -107,6 +108,13 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
 	layer.clear()
 	draw_cells(layer, cells, atlas_coord)
+
+	# Move overlay always wins tiles it shares with squad tint (avoids alpha-stacked orange+yellow
+	# bleed where a unit's move range overlaps its squad's leader range).
+	if type == OverlayType.MOVE:
+		for cell in cells:
+			squad_overlay.erase_cell(cell)
+			squadrange_overlay.erase_cell(cell)
 
 # Painted AI zones (Sentry archetype). Persistent like terrain -- not cleared by
 # clear_all/selection changes. All zones share one tint for now; painted regions read as

@@ -1,8 +1,8 @@
 extends Object
 class_name TransmutationCatalog
 
-# Carvings authored as .tres in the inspector (dev-tools call: their authoring stays out of the
-# tools). Scanned so the rune editor can offer them to inscribe. docs/design/alchemy-kit.md.
+# Carvings authored in the dev Attack Editor tab (or the inspector), saved as .tres here.
+# Scanned so the rune editor can offer them to inscribe. docs/design/alchemy-kit.md.
 const CARVING_DIR := "res://Resources/TransmutationData/"
 
 static func get_all() -> Dictionary:

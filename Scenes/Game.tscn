@@ -12,8 +12,8 @@
 [ext_resource type="TileSet" uid="uid://br1jl2l6yxyuf" path="res://Resources/TestTiles.tres" id="4_v158k"]
 [ext_resource type="Texture2D" uid="uid://bmsvpw377pueh" path="res://Art/Basic_Hover_Tile.png" id="5_ldgsr"]
 [ext_resource type="PackedScene" uid="uid://cbuid8103rdvh" path="res://Scenes/TurnBanner.tscn" id="7_1l0tm"]
-[ext_resource type="Texture2D" uid="uid://bdjohf4vqfwlu" path="res://Art/Icons/rangefill2.png" id="8_1phco"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
+[ext_resource type="Texture2D" uid="uid://bcoyc0w1aws1m" path="res://Basic_Tile_Overlay.png" id="10_alh3a"]
 [ext_resource type="PackedScene" uid="uid://djnudhqoi3lqw" path="res://Scenes/HoverInfoPanelControl.tscn" id="12_rfjv2"]
 [ext_resource type="PackedScene" uid="uid://cqf51nnsk42dv" path="res://Scenes/SquadActionQueueControl.tscn" id="16_ewbju"]
 
@@ -54,7 +54,7 @@ texture = ExtResource("4_ldgsr")
 sources/0 = SubResource("TileSetAtlasSource_rfjv2")
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_nb51f"]
-texture = ExtResource("8_1phco")
+texture = ExtResource("10_alh3a")
 0:0/0 = 0
 
 [sub_resource type="TileSet" id="TileSet_nnt18"]

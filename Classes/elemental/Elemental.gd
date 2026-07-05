@@ -9,17 +9,29 @@ class_name Elemental
 # APPEND-ONLY. These serialize as ints in saved .tres; reordering or deleting a value
 # silently corrupts existing resources (enum note in elemental-system.md). Always add
 # new values at the END. NONE = 0 is the unset default, so an omitted/default .tres
-# field loads cleanly as "no element / no state". 
+# field loads cleanly as "no element / no state".
 
 enum Element {
 	NONE,
 	FIRE,
 	WATER,
 	SHOCK,
-	ICE
+	ICE,
+	EARTH,
+	AIR,
+	AETHER,
 }
 
 enum State {
 	NONE,
 	WET,
 }
+
+# The five base elements: the only Sigils, the only aura carriers. Exotics (ICE, SHOCK,
+# ...) are DERIVED result tags — docs/design/transmutation-model-proposal.md.
+const SIGIL_ELEMENTS: Array[Element] = [
+	Element.FIRE, Element.WATER, Element.EARTH, Element.AIR, Element.AETHER,
+]
+
+static func is_sigil_element(e: Element) -> bool:
+	return SIGIL_ELEMENTS.has(e)

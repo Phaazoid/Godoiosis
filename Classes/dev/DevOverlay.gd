@@ -18,10 +18,11 @@ func _ready() -> void:
 	%DevTabs.tab_changed.connect(_on_tab_changed)
 	var tabs := %DevTabs
 	tabs.set_tab_tooltip(0, "Spawn units — configure here, then hover the board + Space to place.")
-	tabs.set_tab_tooltip(1, "Author weapons — load a preset or start new, edit, name, and save.")
-	tabs.set_tab_tooltip(2, "Click a unit in dev mode to edit it here.")
-	tabs.set_tab_tooltip(3, "Save / load board scenarios. F2 resets the current one.")
-	tabs.set_tab_tooltip(4, "Paint tiles — left-drag paints, right-click erases.")
+	tabs.set_tab_tooltip(1, "Click a unit in dev mode to edit it here.")
+	tabs.set_tab_tooltip(2, "Author items — weapons and runes. Load a preset or start new, edit, name, save.")
+	tabs.set_tab_tooltip(3, "Author attack carvings — sigil weights + flourishes; runes inscribe these.")
+	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
+	tabs.set_tab_tooltip(5, "Paint tiles — left-drag paints, right-click erases.")
 
 func _on_close_requested():
 	hide()

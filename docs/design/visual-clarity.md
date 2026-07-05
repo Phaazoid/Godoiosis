@@ -31,6 +31,13 @@ plus the running order of the queue-UX checklist. Update it as items land.
 5. **Numbers carry units of context.** A bare `-5` tells you the hit; `12 -> 7` tells you whether
    it matters. Prefer showing the *consequence* of a number, not just the number.
 
+6. **The tooltip doctrine — never require memorizing the table** (from the 2026-07-04 transmutation
+   grill). Hovering any elemental effect on the field shows an easy-access list of what it reacts
+   with; hovering any carried rune, same deal. The elemental/transmutation system is deliberately
+   too big to memorize — reactive tooltips are the contract that keeps discovery fun instead of
+   homework. (Board-side #44 scope; pairs with the codex's "public geometry, private lexicon"
+   policy in [transmutation-model-proposal.md](transmutation-model-proposal.md).)
+
 ## #49 Action Queue UX — checklist & order
 
 Running order (cheapest / highest-clarity-per-effort first):

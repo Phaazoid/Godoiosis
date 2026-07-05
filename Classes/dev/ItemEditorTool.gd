@@ -1,14 +1,14 @@
 extends MarginContainer
-class_name WeaponEditorTool
+class_name ItemEditorTool
 
-@onready var weapon_editor_container := %WeaponEditorVbox
-@onready var type_dropdown: OptionButton = %WeaponTypeDropdown
-@onready var load_dropdown: OptionButton = %WeaponLoadDropdown
-@onready var name_input: LineEdit = %WeaponNameInput
+@onready var editor_container := %ItemEditorVbox
+@onready var type_dropdown: OptionButton = %ItemTypeDropdown
+@onready var load_dropdown: OptionButton = %ItemLoadDropdown
+@onready var name_input: LineEdit = %ItemNameInput
 
-# Authors either a WeaponData or a RuneData (the equip slot takes both). Reuses the same scene
-# nodes: the type dropdown lists weapon bases + rune sizes; the field area renders the weapon
-# reflectively or a bespoke rune inscribe-list. Tab still reads "Weapon Editor" (rename = point 3).
+# Authors either a WeaponData or a RuneData (the equip slot takes both). The type dropdown
+# lists weapon bases + rune sizes; the field area renders the weapon reflectively or a
+# bespoke rune inscribe-list. Carvings are authored in the Attack Editor tab.
 var current_item: EquippableData = null
 var _variants := {}
 
@@ -79,25 +79,25 @@ func _on_save_pressed():
 	_refresh_variant_list()
 
 func populate():
-	for child in weapon_editor_container.get_children():
-		weapon_editor_container.remove_child(child)
+	for child in editor_container.get_children():
+		editor_container.remove_child(child)
 		child.queue_free()
 	if current_item == null:
 		return
 	if current_item is RuneData:
 		_populate_rune_editor(current_item)
 	else:
-		DevWidgets.build_resource_editor(weapon_editor_container, current_item, populate, ["weapon_type", "item_name"])
+		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "item_name"])
 
 # A rune is a size + a capacity-bounded list of inscribed carvings. We only choose WHICH carvings
-# to inscribe (they're authored as .tres elsewhere); inscribe() enforces the capacity budget.
+# to inscribe (authored in the Attack Editor tab); inscribe() enforces the capacity budget.
 func _populate_rune_editor(rune: RuneData):
 	var on_size := func(v):
 		rune.size = v
 		populate()
-	DevWidgets.add_enum_option(weapon_editor_container, "Size", ",".join(RuneData.Size.keys()), rune.size, on_size)
-	DevWidgets.add_label(weapon_editor_container, "Capacity: %d / %d used" % [rune.used_capacity(), rune.capacity()])
-	DevWidgets.add_label(weapon_editor_container, "Inscriptions:")
+	DevWidgets.add_enum_option(editor_container, "Size", ",".join(RuneData.Size.keys()), rune.size, on_size)
+	DevWidgets.add_label(editor_container, "Capacity: %d / %d used" % [rune.used_capacity(), rune.capacity()])
+	DevWidgets.add_label(editor_container, "Inscriptions:")
 
 	for i in range(rune.inscriptions.size()):
 		var carving: TransmutationData = rune.inscriptions[i]
@@ -114,11 +114,11 @@ func _populate_rune_editor(rune: RuneData):
 			populate()
 		)
 		row.add_child(remove)
-		weapon_editor_container.add_child(row)
+		editor_container.add_child(row)
 
 	var carvings := TransmutationCatalog.get_all()
 	if carvings.is_empty():
-		DevWidgets.add_label(weapon_editor_container, "(no carvings in Resources/TransmutationData/)")
+		DevWidgets.add_label(editor_container, "(no carvings in Resources/TransmutationData/)")
 		return
 	var add_row := HBoxContainer.new()
 	var picker := OptionButton.new()
@@ -135,7 +135,7 @@ func _populate_rune_editor(rune: RuneData):
 			push_warning("Not enough capacity to inscribe %s" % key)
 	)
 	add_row.add_child(add_btn)
-	weapon_editor_container.add_child(add_row)
+	editor_container.add_child(add_row)
 
 func _carving_label(carving: TransmutationData) -> String:
 	return carving.display_name if carving.display_name != "" else "carving"
