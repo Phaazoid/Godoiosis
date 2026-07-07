@@ -47,7 +47,7 @@ Counters are **derived**: recomputed from the current plan whenever it changes, 
 
 - **C1.** When party X attacks party Y, every unit in Y gets the opportunity to counter **once per plan**. A "party" is the whole squad (a lone unit is a party of one).
 - **C2.** A countering unit may target *any* unit in the attacking party that it can reach — not just the unit that attacked. (The sacrificial-frontliner rule: a long-range attacker exposes nearby squadmates to the response.)
-- **C3.** Target choice is deterministic. Current policy: first valid target in attacking-party member order. **[OPEN — placeholder policy. Candidates: closest, lowest HP, leader-first. Lives in `choose_counter_target`; changing it touches nothing else.]**
+- **C3.** Target choice is deterministic. Current policy: first valid target in attacking-party member order. **[OPEN — placeholder policy. Candidates: closest, lowest HP, leader-first. Lives in `choose_counter_target`; changing it touches nothing else. 2026-07-06: taunt/bodyguard **job abilities override** whatever the default is ([jobs.md](jobs.md) squad posture); the default itself stays a feel-test placeholder.]**
 - **C4.** A defending party responds at most once per attacking squad's plan, triggered by the first attack against it in queue order.
 - **C5.** Faction gate: `can_attack` (via `Team.is_enemy`) filters counters — friendly-fire victims never counter their own side.
 - **C6.** Weaponless units cannot counter. A unit's counter reach is its weapon pattern from its *projected* position, with free rotation (no facing persistence on the board — revisit if facing becomes a mechanic).

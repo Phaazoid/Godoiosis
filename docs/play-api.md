@@ -182,3 +182,8 @@ pressure-test scenarios — through the exact API the archetype AI will later us
 - Run-dir location: `user://playruns/<id>/` vs. a `res://` path under the repo (gitignored).
 - Does `PlaySession` live in `Classes/` (gameplay-adjacent) or a new `tools/`/`play/` dir?
 - Per-command id transport details / timeout + error envelope.
+
+## BREAK doctrine hooks (R9, 2026-07-05 — see [resolution-pipeline.md](design/resolution-pipeline.md))
+
+- `execute()`'s event log gains **BREAK entries** (divergence point, cause class, re-resolved suffix) — no re-planning verbs needed, since orders stand after a BREAK.
+- A **player-side choice-point** (Crisis) in a headless run needs one small verb: the host writes an "awaiting choice" envelope (`choice_id`, the offer, the two branches' previews) and blocks; the driver answers with `answer(choice_id, accept: bool)`. That is the *only* mid-execution input the bridge will ever need under R9's orders-stand aftermath.

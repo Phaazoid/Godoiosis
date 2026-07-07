@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://d1218casms8qb"]
+
+[ext_resource type="Texture2D" uid="uid://ysa7poog58u7" path="res://Art/Units/MapSprites/Priest_Downed.png" id="1_3vukd"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_1705b"]
+[ext_resource type="Texture2D" uid="uid://b6203vr2vlac3" path="res://Art/Units/MapSprites/Priest.png" id="2_qd4a6"]
+[ext_resource type="Texture2D" uid="uid://cpxuk13uu7yem" path="res://Art/Units/MapSprites/Priest_Moving.png" id="3_5m26v"]
+[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_0k3kp"]
+
+[resource]
+script = ExtResource("1_1705b")
+display_name = "Dorian"
+portrait = ExtResource("4_0k3kp")
+base_stats = Dictionary[int, int]({
+0: 12,
+1: 1,
+2: 4,
+3: 20,
+4: 8,
+5: 7
+})
+map_sprite = ExtResource("2_qd4a6")
+move_sprite = ExtResource("3_5m26v")
+downed_sprite = ExtResource("1_3vukd")
+base_aura = Dictionary[int, int]({
+7: 5
+})
+metadata/_custom_type_script = "uid://cvvknuw621ar2"

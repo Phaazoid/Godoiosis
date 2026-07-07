@@ -29,35 +29,49 @@ A number is a stat only if it has **teeth** — it must do at least one of:
 
 ## The roster
 
-Two structural classes:
+Three structural classes *(third added 2026-07-05, audit A3)*:
 
-- **Input stats** (STR, DEX, PER) — scalar feeds for scaling / gates / physics. *"How good are you at X."*
+- **Input stats** (STR, DEX, PER, CON *— adopted 2026-07-06*) — scalar feeds for scaling / gates / physics. *"How good are you at X."*
+
+**The band doctrine (2026-07-06):** every input stat casts a **small, coarse, bounded shadow** on a capacity/readout — **DEX→MOV** ([jobs.md](jobs.md) band), **CON→MHP** (extremes ≤4–5 apart, all else equal), **PER→LDR** (small; fixed inputs mean no runaway budget), **STR→carry** (the parked slot). Bands are never grindable — inputs are fixed.
 - **Capacity stats** (HP, WIL, LDR) — a pool you spend or allocate. *"How much of X you manage."* Their depth lives in the **build-and-spend flow**, not the raw number — which is how they avoid the "more = better" cliche.
+- **Channel stats** (per-element **AURA** ×5 — off the `Stats.Stat` enum; its own map + affinity set on `UnitInstance`) — *"how deep can you reach into element X."* Gates + scales transmutation channeling (floors = sigil weight; temper never brute-forced). The **one sanctioned growth number**: grown within genetic affinities, scarce and event-sized, **taxed −1 per lost limb** (highest pool first). Data model: [alchemy-kit.md](alchemy-kit.md) → *Aura*.
 
 | Layer | Contents |
 |---|---|
-| **Base statline** (innate, authored, echoes the portrait) | HP · STR · DEX · PER · LDR · WIL |
-| **Derived** (computed, never authored) | Weight (body + prosthetics + inventory) · DEF (gear only) |
+| **Base statline** (innate, authored, echoes the portrait) | HP · STR · DEX · PER · CON · LDR · WIL |
+| **Derived** (computed, never authored) | Weight (**body term = CON** + prosthetics + inventory) · DEF (gear only) |
 | **Effective** | base ± gear modifiers (`get_effective_stat`) |
-| **Cut** | CON |
-| **Parked** | Move/Speed · STR↔carry-limits |
+| **Channel** (off-enum, per-element) | AURA ×5 (+ the hidden Alkahest — never displayed; Isaac reads as aura in all) |
+| **Cut** | *(none — CON adopted 2026-07-06, see below)* |
+| **Parked** | STR↔carry-limits (the band doctrine's open slot) |
 
 ### Per-stat job
 
 - **HP** — survivability. The one sanctioned "everyone wants more."
 - **STR / Heft** — gates + scales heavy & signature weapons; helps anchor against shoves. Story: the bruiser.
 - **DEX / Finesse** — gates + scales fast/precise weapons (double-hit). Story: the duelist/scout.
-- **PER / Perception** — sight & reveal (the *only* honest hidden-info channel — philosophy Axiom 4); weapon range bands. Story: the watchful one.
+- **PER / Perception** — sight & reveal (the *only* honest hidden-info channel — philosophy Axiom 4); weapon range bands; reveals enemy jobs ([jobs.md](jobs.md)); small LDR band. Story: the watchful one.
+- **CON / Constitution** *(adopted 2026-07-06)* — gates + scales defensive gear; the body term of Weight; small MHP band. Story: the unbreakable one.
 - **LDR / Leadership** — a **squad-capacity budget** (see [squad-system.md](squad-system.md)). Continuous, not binary — some units are simply better leaders.
 - **WIL / Will** *(provisional — may become "Tenacity")* — the **death-ladder pool** (see [will-and-death.md](will-and-death.md)).
 - **Weight** *(derived)* — pushability (air/water/mace/dirt), swim/terrain, maybe movement.
 - **DEF** *(derived, gear-only)* — damage mitigation; never on the statline.
 
-### Cut: CON
+### CON — ADOPTED 2026-07-06 (mini-grill, post-JOBS; the reconsideration below resolved)
 
-Constitution's classic jobs — survivability and carry/poise — are already owned by **HP** and **Weight**. No distinct teeth → cut. Status-resistance, if ever wanted, routes through **gear/runes**, not a dedicated stat.
+The 2026-06-20 cut is reversed **with teeth this time** — scaling alone still isn't teeth, so CON earns its slot by:
+
+1. **Physics:** CON is the **body term of derived Weight** (pushability/swim — finally says where Weight's "body" comes from).
+2. **Gate:** CON gates **heavy armor** exactly the way STR gates heavy weapons.
+3. **Scaling rides on top:** CON scales defensive-gear bonuses — as a **multiplier with no base**. Naked CON grants zero DEF, so the **DEF-is-gear-only stance survives intact** (no innate tanky-person number).
+4. **Band:** CON casts a small **MHP band** (extremes ≤4–5 MHP apart — placeholder; the CON analogue of DEX→MOV).
+
+Riders: **min-1 chip rule** — no hit ever deals 0 (that's "level-20 general vs level-5 scouts" land; every hit matters, Into-the-Breach lean). **CON is NOT limb-slotted** — it's the torso/constitution stat; prosthetic *plating* may buff it (honors the 2026-07-04 prosthetics rider) but no limb averages it. Status-resistance still routes through **gear/runes**, never CON. Code: **append-only into `Stats.Stat`** + the `.tres` data-migration sharp edge applies.
 
 > **Reconsideration raised (2026-06-26, scratchpad — reopens this cut, NOT re-added):** the dev floated **CON as a defensive *scaling* stat** — the defensive counterpart to the offensive scalars (STR/DEX/PER), scaling **defensive bonuses** on weapons that use it + armor/gear. That's a *different* job than the survivability/carry roles cut above (HP/Weight own those), so it might clear the teeth bar on "scales gear/defensive properties" the way STR/DEX scale offence. **Tensions to resolve before it enters the roster:** (1) DEF is currently **gear-only / derived**, never on the statline — a CON-scaled DEF reintroduces a defensive *unit* number the gear-only stance deliberately avoided; (2) scaling alone isn't teeth ("scaling rides on stats that already pass"). Needs a stats-session / co-dev decision — flagged, not adopted.
+>
+> **Third vote + declared intent (2026-07-05):** the dev states *"I want to include it as a scaling stat for defensive gear"* — after the scratchpad vote (2026-06-26) and the prosthetics rider (2026-07-04 grill: prosthetic parts wanting CON-style buffs). Still gated on a **grill session**, because the thing CON would scale — **defensive gear** — is itself not thoroughly outlined (the DEF-gear-only stance, gear stat-cost tradeoffs, the block thread in [weapons.md](weapons.md), Cover's DEF bonus in [terrain.md](terrain.md) all touch it). **Queued: a CON + defensive-gear grill.** If adopted: append-only into `Stats.Stat`.
 
 ## Identity: where it lives
 
@@ -81,10 +95,10 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 ## Open forks
 
-- **Move/Speed** — base stat vs. derived from Weight. (A ghost `SPD` lingers in scenario `.tres` + test fixtures but never entered the enum — retire it.)
+- ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV deferred to the CON grill. (The ghost `SPD` in scenario `.tres` + fixtures — still retire it.)
 - **STR ↔ inventory weight / carry limits.**
 - **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
 - **Squad range** tuning (now decoupled from LDR; static default — see [squad-system.md](squad-system.md)).
-- **Jobs** — an elective ±1–2 stat-nudge layer with tradeoffs (could make a unit a slightly better leader); whole feature is long-horizon (see [progression.md](progression.md)).
+- ~~**Jobs**~~ — **RATIFIED 2026-07-06, own doc: [jobs.md](jobs.md)** (LDR/WIL take the big job influence; input stats ±1–2; ceilings-not-prereqs clamping *effective* stats; MOV ownership).
 
 Cross-refs: [progression.md](progression.md), [squad-system.md](squad-system.md), [will-and-death.md](will-and-death.md), [weapons.md](weapons.md), [philosophy.md](philosophy.md), `../../CLAUDE.md` (laws). Code: `Classes/core/Stats.gd`.

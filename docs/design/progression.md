@@ -31,8 +31,8 @@ Open: what counts as "doing the thing"; the no-opportunity case (partial fill vs
 
 Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two classes, two ends of **how augmented a unit's body is.**
 
-- **Prosthetics raise physical stats.** Lose a limb → lose that limb's stat contribution; a prosthetic restores it and is **upgradable** (a pricey stat-raising path — and the *only* sanctioned way to exceed a unit's fixed natural statline). Arms → Str; legs → Spd/Dex. (Granularity — other parts/stats — TBD.)
-- **Replacing natural limbs lowers natural aura capacity.** Chroming up (mechanist) trades aura for physical power. Full-flesh = max aura (alchemist end); heavily-augmented = strong physical, little aura (mechanist end). Every unit sits somewhere on this line and slides by choosing what to replace.
+- **Prosthetics raise physical stats — via the limb-slot model** (canonical since the 2026-07-04/05 grills, [will-and-death.md](will-and-death.md)): limbs are equipment slots, the natural limb is the default gear; effective STR = mean of the two **arm** slots, effective DEX = mean of the two **leg** slots (rounded up). A prosthetic brings its **own built-in stat** and is **upgradable** — the *only* sanctioned way to exceed a unit's fixed natural statline. **Arms → STR; legs → DEX** (no SPD stat — DEX owns the speed role). Weapon-model prosthetics also equip as integrated weapons, scaling off their own STR ([weapons.md](weapons.md)).
+- **Limb loss costs aura — ratified 2026-07-05 (audit A3): −1 aura point per lost limb**, taken from the **highest pool (ties → primary affinity)**. Aura rides *living flesh* — a missing limb and a prosthetic both count, and elective amputation pays the same. Chroming up (mechanist) trades alchemic depth for physical power; full-flesh = full aura (alchemist end); heavily-augmented = strong physical, little aura (mechanist end). **Natural regrowth restores the point.** Every unit sits somewhere on this line and slides by choosing what to replace ([alchemy-kit.md](alchemy-kit.md) → *Aura data model*).
 - **Natural-limb regrowth** (alchemical) is the alchemist's out: regrow a *natural* limb — **pricier, slower, more resource-intensive** than a prosthetic, but it **preserves aura / the alchemist build**. The escape hatch when a favorite alchemist is maimed and you don't want to respec them mechanist.
 - *How* a limb is lost (involuntary maiming vs elective amputation) lives in [will-and-death.md](will-and-death.md).
 
@@ -61,5 +61,18 @@ Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
 - **Optional job/class-lite layer.** Classless-first stays the default, but an adopted "job" (spend X resource → role Z) could grant a flat stat change / stat caps (a tank caps movement) plus a trainable ability pool, swappable if you re-qualify. *"Even in a classless society, people have jobs."*
 - **Double-attacks as a weapon property, not a stat rule.** Rather than FE's speed-derived doubling, make multi-hit a property of specific weapons, **gated** by stats (better stats → more uses) — keeps growth horizontal.
 - **Fixed stats shouldn't force weapon pairings.** A consequence of the fixed-stat stance: since weapons scale off a stat, optimal play risks **locking each character to one weapon type**. Candidate outs (detailed in [weapons.md](weapons.md)): weapon **mods/variants that change the scaling stat**, or **sub-varieties** of each family with differing set scalings — so customization stays meaningful and no single weapon is always best for a statline.
+
+### Jobs — pre-grill stances (dev, 2026-07-06) — **GRILLED same day; canon now lives in [jobs.md](jobs.md)**
+
+Kept as the session's input record; the owner doc supersedes anything drifting below.
+
+- **Scope lean: squad-native and beyond** — between "doctrine" (squad-aware jobs) and "company" (jobs unified with training goals / between-battle tasks); the grill settles where exactly.
+- **Jobs are the sanctioned way to vary the ungrowable stats.** LDR and WIL (and MOV) take **bigger** job influence than the input stats, which get only slight nudges — since these stats can't grow, job choice is how they vary within a unit's life.
+- **Stats don't feed abilities.** Both stat differences AND abilities fall out of job choice / customization; WIL/LDR never gate or fuel the ability layer directly.
+- **Squad-relationship spectrum, not squad-mandate:** some jobs boost squad *leaders* (an incentive track for would-be leaders), some boost *team play* as a member, some push **solo/loner** play. Not every job reshapes a squad.
+- **Confirmed consumers:** counter-target policy (taunt/bodyguard abilities — squad-system C3), squad-leader doctrine influence, temperament linkage, roguelike drafting, the four-slot ability taxonomy (Action / Reaction / Passive / Movement — ability *sources* split between jobs and gear), job-gated squad verbs ("our squad is stronger with an X in it"), **unique story jobs** (also cover for Isaac's alkahest without tipping the player), **legibility** (an enemy's job telegraphs its *kit*, complementing AI archetypes telegraphing *behavior*; PER may reveal enemy jobs).
+- **Economy jobs: maybe** — only ever as a dev-authored dial (the faucet-free economy stands).
+- **Boundary (2026-07-06):** weapon-side abilities (Revved, Burrow, weapon-tied guard, sniper overwatch) belong to the **weapon parts system** ([weapons.md](weapons.md) → *The parts system*), not jobs.
+- **Naming:** the mission board is the **Bounty Board** (renamed from the wiki's "job board" — mercenary contracts, a narrative side-mission tool that may *influence* jobs but is a different thing).
 
 Cross-refs: [stats.md](stats.md), [will-and-death.md](will-and-death.md), [squad-system.md](squad-system.md), [weapons.md](weapons.md), `../../CLAUDE.md` (design laws).

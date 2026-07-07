@@ -45,6 +45,11 @@ Range, base power, elements used, how much of which elements used (2 wind 1 fire
 -Potential targets for actions (attack, rescue) get highlighted on the map when the menu option for the action is hovered
 
 
+OH oh oh just hit a story beat in my head that this all ties together with very nicely - In the plot, Rebecca, Isaac's sister, tests at the military academy with him before the attack, and has no affinity.  As someone who always really wanted to do alchemy this is a huge blow to her.  In the ensuing attack, she is disarmed.  HOWEVER What if we flipped the order of events around a bit.  Isaac is tested first.  He has every affinity?!  While confirming, before Rebecca can even test, the attack on the camp happens.  The disarming happens.  Rebecca therefore, would lose 1 affinity point.  However.  Rebecca is Isaac's sister.  If we're going by genetics, she should have a point in alkahest, just like him.  If she lost one point... She would zero out.  She actually also has an alkahest affinity, but nobody knows, since alkahest presents as having an affinity for everything.  
+
+The only issue with this is - what if the player decides to take isaac down the maim route in story, before training in any element?  
+
+
 ## 🗂 Dispersed (log)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)

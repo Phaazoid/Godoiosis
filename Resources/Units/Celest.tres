@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://82drex4vkegf"]
+
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_fcqhm"]
+[ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="1_k0y5m"]
+[ext_resource type="Texture2D" uid="uid://tefyc25l3jam" path="res://Art/Units/MapSprites/Sage.png" id="2_q2f78"]
+[ext_resource type="Texture2D" uid="uid://m5wt0n84c1v1" path="res://Art/Units/MapSprites/Sage_Moving.png" id="3_u06gf"]
+[ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="4_mtdcs"]
+
+[resource]
+script = ExtResource("1_fcqhm")
+display_name = "Celest"
+portrait = ExtResource("4_mtdcs")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 2,
+2: 6,
+3: 20,
+4: 4,
+5: 12
+})
+map_sprite = ExtResource("2_q2f78")
+move_sprite = ExtResource("3_u06gf")
+downed_sprite = ExtResource("1_k0y5m")
+base_aura = Dictionary[int, int]({
+1: 2,
+5: 1,
+7: 3
+})
+metadata/_custom_type_script = "uid://cvvknuw621ar2"

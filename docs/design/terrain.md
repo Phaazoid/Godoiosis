@@ -36,7 +36,7 @@ Each is **deterministic and telegraphed**. ✦ = also an elemental state (shared
 - **Flammable** (object) — catches from adjacent Fire; forests/timber are Flammable children; burns down over turns.
 - **Powder Barrel** (object) — chain-explodes on AoE/Fire; **inert while Wet**.
 - **Landmine** (object) — AoE when crossed; type sets damage/range.
-- **Cover** (object) — defensive benefit to occupants (DEF; the "Avo" half is dead under Law #1 → reframe as flat mitigation or a block bonus).
+- **Cover** (object) — defensive benefit to occupants: **flat mitigation, NOT CON-scaled** (decided 2026-07-06 — terrain doesn't care who stands in it; the "Avo" half stays dead under Law #1). **Captured (2026-07-06): shaped terrain wants variety** — flat damage-debuff cover, costs-more-to-cross, damaging-to-cross — an authoring axis for Drill/Burrow, transmutation, and maps alike.
 - **Fault** (ground) — heavy move penalty; strips object mods.
 - **Tornado** (atmosphere) — Air damage on cross + **shove** (the wiki's "move randomly 1 square" → de-RNG'd to a deterministic directional shove).
 - **Moving terrain** — fast rivers, trains, landslides, airships (fixed paths; de-randomized "moving terrain" — see elemental-interactions "fixed-path lava/rivers").

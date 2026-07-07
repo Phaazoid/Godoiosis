@@ -19,6 +19,10 @@ plus the running order of the queue-UX checklist. Update it as items land.
    - **Mute / desaturate** = "this is inactive or out of focus" (e.g. non-active squad icons).
    - **Color-code** = validity (valid vs invalid target/cursor), reusing
      `CursorController.CursorState.VALID/INVALID`.
+   - **BREAK banner** (full-screen flash, 2026-07-05) = "the plan diverged — the resolver re-entered"
+     (resolution-pipeline R9). Fires on every BREAK, *both sides* — your trap shattering the enemy's
+     turn earns the same moment. Reserved exclusively for R9 BREAKs; never reuse it for mere emphasis,
+     or the signal dies.
    Don't let two motifs collide (e.g. don't also *flash* something that's merely highlighted).
 
 3. **Most important info first, at a glance.** A row should read left-to-right in priority order:

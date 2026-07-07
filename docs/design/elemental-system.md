@@ -29,7 +29,7 @@ So a combo is two beats: hit 1's element sets a state; hit 2's element reacts wi
 
 The load-bearing decision, forced by the existing code. Today `AttackAction.create()` ([AttackAction.gd:82](../../Classes/actions/AttackAction.gd)) computes `damage` **once, in isolation, at queue time** and `execute()` replays that frozen number. Elements break "in isolation": a later hit's damage depends on what earlier hits did to the target's state. Law #2 (the queue never lies) forbids deferring that to execution — the preview would show the wrong number.
 
-**Resolution: one deterministic resolver pass over the whole ordered plan.** It walks the plan in execution order (moves → attacks → counters), threads a *hypothetical* copy of state forward, resolves each hit against that evolving state, and writes final damage + state-deltas onto each action. Preview and execution both consume that result. Execution computes nothing — it plays back.
+**Resolution: one deterministic resolver pass over the whole ordered plan.** It walks the plan in execution order (moves → attacks → counters), threads a *hypothetical* copy of state forward, resolves each hit against that evolving state, and writes final damage + state-deltas onto each action. Preview and execution both consume that result. Execution computes nothing — it plays back. *(Amended 2026-07-05: except at R9 BREAK points, where execution re-enters the resolver — see [resolution-pipeline.md](resolution-pipeline.md), the BREAK doctrine.)*
 
 ### Resolver invariants (E1–E8)
 

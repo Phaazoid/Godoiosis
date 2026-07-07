@@ -1,0 +1,27 @@
+[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://b3nnfkt85unrg"]
+
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_02q80"]
+[ext_resource type="Texture2D" uid="uid://dnujumhyrhxk1" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_pp1ba"]
+[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="2_eboe8"]
+[ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="3_e65li"]
+[ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="4_7fkxf"]
+
+[resource]
+script = ExtResource("1_02q80")
+display_name = "Aster"
+portrait = ExtResource("4_7fkxf")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 3,
+3: 20,
+4: 8,
+5: 2
+})
+map_sprite = ExtResource("2_eboe8")
+move_sprite = ExtResource("3_e65li")
+downed_sprite = ExtResource("1_pp1ba")
+base_aura = Dictionary[int, int]({
+2: 1
+})
+metadata/_custom_type_script = "uid://cvvknuw621ar2"

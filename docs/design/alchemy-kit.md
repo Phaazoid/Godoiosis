@@ -31,7 +31,7 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 
 | Layer | Question it answers | Notes |
 |---|---|---|
-| **Affinity** | *Can you touch this element at all?* | Heritable, fixed-ish identity. Most alchemists: one primary (+ latent). Isaac: alkahest = all. |
+| **Affinity** | *Can you touch this element at all?* | Heritable, fixed-ish identity. Most alchemists: one primary (+ latent). Isaac: alkahest = all — **universal breadth, trained depth** (ratified 2026-07-05: aura-1 everywhere; depth trained like anyone). |
 | **Aura** (per element) | *How hard does it hit?* | Damage scaling, stored as a **per-element map** on the unit (`UnitInstance.aura`). Most units hold **little or none**; a trained alchemist has a **primary** element (high) + often one or two **tertiaries** (low). A channeled transmutation scales off the **sum** of the wielder's aura across its constituent elements. Grows **modestly** — authored sources + capped proficiency goals, **not** free casting ([progression.md](progression.md)). |
 | **Proficiency** | *What can you do with it?* | Practice unlocks more advanced transmutations/inscriptions. Capped training goals, anti-grind. |
 | **Rune** | *Your customizable focus.* | A **blank, element-agnostic** runestone an alchemist **inscribes** with transmutation carvings; sized **S/M/L** = how much it can hold; reusable; scarce at the supply level. (Model below.) |
@@ -43,6 +43,16 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 
 Five: **Fire, Water, Earth, Air, Aether.** Oppositions Fire↔Water, Earth↔Air. Aether = life / spirit / the heavens. Hidden sixth: **Alkahest** — the base element all others derive from; chaos/taboo; the heritable-affinity root (Isaac).
 *Flavor hook:* the four classical elements map to the medical humors → choleric / phlegmatic / melancholic / sanguine — a ready-made way to characterize pre-built alchemist units.
+
+## Aura — the data model **[RATIFIED 2026-07-05, audit A3]**
+
+Two fields, both on the persistent store (`UnitInstance`, per the #8 seam):
+
+- **Affinity — a binary set, genetic, immutable.** Which of the five elements this unit can *ever* grow aura in. Its **own persisted field** — NOT derivable from "aura ≥ 1," because the limb tax can zero a pool while the affinity (the growth right) persists. Rebecca: the empty set. Isaac: all five (the hidden Alkahest rendered as breadth — see Special cases).
+- **Aura — a per-element map of grown integers** (`UnitInstance.aura`, already in code). Authored **starting values are the innate identity** (the prodigy starts fire-2, the dabbler fire-1); growth is **scarce and event-sized** — each new point is a big achievement and a **combinatrix tier-key** (aura-2 opens weight-2 sigils — the trained-depth ladder, [transmutation-model-proposal.md](transmutation-model-proposal.md)). **No ceiling number: scarcity is the cap** (authored grants + capped training goals; content itself soft-caps depth at weight-3).
+- **The limb tax: −1 aura point per lost limb** — aura rides *living flesh*. A missing limb and a prosthetic both count; elective amputation pays the same. The point comes off the **highest pool (ties → primary affinity)** — specialists bleed depth: *no masters of all* (the counterweight to inflated prosthetic statlines). It can zero a pool — or a whole novice into the **Rebecca state** (runes inert) — until **natural regrowth restores the point** (that is regrowth's documented purpose; a prosthetic keeps it lost). The bench/maim UI must preview channeling losses — the stranded-tempered-runes guard.
+- **The hidden sixth is never displayed** — no Alkahest bar; Isaac simply shows aura in every element.
+- *Still open (tuning, deliberate):* multi-element damage scaling — weighted **sum** (as coded) vs primary-only.
 
 ## Runes — the inscribable container **[RATIFIED 2026-06-27]**
 
@@ -118,7 +128,7 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 ## Special cases
 
 - **Aether sourcing [PROPOSED]:** life-keyed, not a normal ranged attack — a **life-dense herb** (also a potion ingredient → tradeoff), sapping living tiles, the alchemist's **own/ally HP**, or a **permanent MaxHP sacrifice** for a one-time surge.
-- **Alkahest / the Stone [story-tied]:** the **Alkahest affinity** (Isaac) = universal wildcard (any rune, no elemental affinity). Pure alkahest = a world-endingly dangerous universal solvent only affines can "bend"; the True Stone needs a **joint transmutation by multiple affines**. False Stones (the Cartel's doomed human-sacrifice experiments) are crude imitations. Story-gated power.
+- **Alkahest / the Stone [story-tied]:** the **Alkahest affinity** (Isaac) = universal wildcard — read as **universal breadth, trained depth** (ratified 2026-07-05, audit A6): aura-1 in *every* element, so he can channel *something* on any rune holding a weight-1-temper carving, and trains depth like anyone (his ceiling exists everywhere; others' in one element). "Any carving at any weight" is a **story-tier Alkahest beat**, not his baseline — the temper is never brute-forced, even for Isaac. Pure alkahest = a world-endingly dangerous universal solvent only affines can "bend"; the True Stone needs a **joint transmutation by multiple affines**. False Stones (the Cartel's doomed human-sacrifice experiments) are crude imitations. Story-gated power.
 - **Imbue / artifice [PROPOSED]:** alchemists imbue mechanist **weapon parts with materia** → elemental weapon upgrades (e.g. the Broadburner's built-in fire, overridable by a fire-alchemist's aura). Bridges to `WeaponData`/variants + the mechanist economy.
 
 ## Scope & sequencing
@@ -129,7 +139,7 @@ Every wiki "chance of crit / 20% shock / Hit-50 / Avo" → a **deterministic com
 ## Open forks (the map)
 
 1. **[RATIFIED 2026-06-27, numbers + gates grilled 2026-07-04] Rune customization model** — the **capacity-board** won: blank element-agnostic rune (until *tempered* by its first carving); inscribe transmutation carvings; **size = two knobs** (circle cap 1/2/3 + capacity 1/3/6, pseudo-locked); channeling = temper + weight floors + trained leeway with strain (see Channeling above). *Still open (tuning, not shape):* multi-element scaling (**sum** of auras now — vs primary-only); size fixed-at-mining vs upgradable; strain/materia-offset numbers.
-2. **[OPEN] Affinity expansion** — fixed at birth, or story/Stone-gated ways to gain an element? (The old "place aura points to start a new element" is stale; needs a non-leveling answer.) *Note REVERSED 2026-07-04:* 0 aura now channels **nothing** (the Rebecca rule); "uses a rune poorly without affinity" is realized instead by **brute force under strain**, which requires *some* trained aura in the rune's temper. Canon flavor: aura is born, **depth of wielding is trained**.
+2. **[RESOLVED 2026-07-05] Affinity expansion** — **genetic and immutable**: affinities are never gained or changed; existing ones are *grown* (scarce, event-sized points — see the Aura data model above). The old "place aura points to start a new element" is dead. *Note REVERSED 2026-07-04:* 0 aura channels **nothing** (the Rebecca rule); "uses a rune poorly without affinity" is realized instead by **brute force under strain**, which requires *some* trained aura in the rune's temper. Canon flavor: aura is born, **depth of wielding is trained**.
 3. **[REFRAMED 2026-06-27, floors resolved 2026-07-04] Aura is a stat, not a spent resource** — earlier framing had a `canCast` *decrement*; the ratified model makes aura a **persistent per-element value** that both **scales** a transmutation (Σ over its elements) and **gates channeling** (floors = sigil weight; temper earned; trained leeway for the rest, priced in strain). No per-cast spend — **materia** is the consumable (and it's deferred). Open: sum vs primary scaling.
 4. **[OPEN] Materia** consumption/recharge; ambient infinite vs thinning; dowsing.
 5. **[RESOLVED 2026-06-16] Summons** (automaton/golem/demon/puppet/dragon-taming) → **deferred.** Liked, but too complex for now; revisit post-Milestone-A.
