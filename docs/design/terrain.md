@@ -54,7 +54,7 @@ A deeper model the dev floated: the **atmosphere layer is gaseous materia** (def
 ## Open questions
 
 - How much terrain state is **authored per level** vs **emergent** from play? (Weather sets baselines — elemental-interactions.)
-- Does Cover / blocking pull from a DEF stat, and does that intersect the weapon **block** thread? ([weapons.md](weapons.md))
+- ~~Does Cover / blocking pull from a DEF stat?~~ — **RESOLVED 2026-07-06 (CON mini-grill):** Cover is **flat mitigation, never stat-scaled** (see the state catalog above); blocking ownership dispatched weapon-tied→parts / unit-tied→jobs / armor-tied→gear content ([weapons.md](weapons.md), [grill-queue.md](grill-queue.md) item 14).
 - Serialization shape for live tile state in `ScenarioData.tile_data`.
 
 ## Sources & cross-refs

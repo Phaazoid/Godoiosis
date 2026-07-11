@@ -8,7 +8,7 @@
 
 ## Size 1 — cogs & fittings (space 1: anyone can use these)
 
-1. **Galvanized Cogs** [∀] — standard attack gains the SHOCK tag. *The element-infusion line:* **Cinder Coils** (FIRE) · **Frosted Manifold** (ICE/WATER) · **Grit Hopper** (EARTH) · **Bellows Vent** (WIND) — one small mod per element; the bread-and-butter combinatrix enabler.
+1. **Galvanized Cogs** [∀] — standard attack gains the SHOCK tag. *The element-infusion line:* **Cinder Coils** (FIRE) · **Frosted Manifold** (ICE/WATER) · **Grit Hopper** (EARTH) · **Bellows Vent** (AIR) — one small mod per element; the bread-and-butter combinatrix enabler.
 2. **Honed Tooth Rail** [CS] — +1 power on the standard attack.
 3. **Counterweighted Haft** [∀ melee] — scaling blend shifts ~10% toward DEX (the canon scaling-nudge, itemized). Sibling: **Leaded Pommel** (toward STR).
 4. **Rifled Choke** [CB] — +1 max range.

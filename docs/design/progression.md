@@ -48,8 +48,8 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 
 ## Open questions
 
-- Proficiency "doing the thing" trigger + no-opportunity case; momentum vs flat goals.
-- Body-part granularity and which stat each part feeds.
+- Proficiency "doing the thing" trigger + no-opportunity case. *(~~Momentum vs flat goals~~ — momentum RATIFIED at the 2026-07-06 jobs grill: pause-never-reset, the rate is the only thing switching costs — [jobs.md](jobs.md).)*
+- ~~Body-part granularity and which stat each part feeds~~ — **RESOLVED 2026-07-04/05: the limb-slot model** (arms→STR, legs→DEX, four slots — [will-and-death.md](will-and-death.md)).
 - Roguelike power-normalization for imported units.
 - See [will-and-death.md](will-and-death.md) for the Will / limb-loss forks.
 
@@ -58,7 +58,7 @@ Resolves the wiki's open question *"Alchemists == Mechanists??"* — not two cla
 Noted from `Scratchpad` during the #32 triage; not yet integrated decisions:
 
 - **Randomness in *upgrades* is allowed; randomness in *combat* is not.** Law #1 governs the battlefield — but offering a **random subset of choices** when a proficiency/weapon advances (à la *Mewgenics*) is fine, and even encourages experimentation. The meta-layer may roll dice; the turn never does.
-- **Optional job/class-lite layer.** Classless-first stays the default, but an adopted "job" (spend X resource → role Z) could grant a flat stat change / stat caps (a tank caps movement) plus a trainable ability pool, swappable if you re-qualify. *"Even in a classless society, people have jobs."*
+- **Optional job/class-lite layer.** ~~Captured idea~~ — **RATIFIED 2026-07-06 as the full jobs system, own doc: [jobs.md](jobs.md)** (certify-once — no re-qualify — stat nudges + ceilings, trainable pools). Kept here as the seed record. *"Even in a classless society, people have jobs."*
 - **Double-attacks as a weapon property, not a stat rule.** Rather than FE's speed-derived doubling, make multi-hit a property of specific weapons, **gated** by stats (better stats → more uses) — keeps growth horizontal.
 - **Fixed stats shouldn't force weapon pairings.** A consequence of the fixed-stat stance: since weapons scale off a stat, optimal play risks **locking each character to one weapon type**. Candidate outs (detailed in [weapons.md](weapons.md)): weapon **mods/variants that change the scaling stat**, or **sub-varieties** of each family with differing set scalings — so customization stays meaningful and no single weapon is always best for a statline.
 

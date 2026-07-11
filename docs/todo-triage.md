@@ -64,3 +64,13 @@ Legitimate, achievable now, nothing forcing the timing.
 ---
 
 *Triaged by Claude (Opus 4.8), 2026-06-18.*
+
+## Addendum — status check (2026-07-07 drift sweep)
+
+This file is a dated snapshot; the routing targets have since moved:
+
+- **#26 (menu → Control rebuild) SHIPPED + CLOSED 2026-06-30** (with #47 cell-targeting). The three items routed to it — the `IN_MENU` cursor jank (`game.gd:460`), explicit menu ordering (`:368`), and the cancel-split idea (`:404`) — should be **re-verified against the shipped Control-based menu** before any work: the rebuild may have mooted them. The jank item's own caveat ("confirm it still repros") now applies doubly.
+- **#22 / #43 / #44** remain open; their routed items stand.
+- The bin-1 "delete the comment" items remain the dev's to sweep when passing through `game.gd`.
+
+*— Claude (Fable 5), 2026-07-07.*

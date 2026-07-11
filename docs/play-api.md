@@ -166,7 +166,8 @@ visual calls. Saved scenarios under `res://Scenarios/` become playtest fixtures.
 |---|---|---|---|
 | **M1** | `RulesService` extraction from `game.gd` | ✅ done (committed) | Lives in `Classes/board/`; `game.gd` delegates via wrappers; advances #22. |
 | **M2** | `PlaySession` + view renderer + headless scenario loader | ✅ done 2026-06-20 | `play/{play_session,board_view,board_builder,play_host}.gd`; 3-char `[actor][terrain][overlay]` view; loads `.tres` scenarios (real Castle Assault verified). |
-| **M3** | File-bridge interactive loop | ✅ done 2026-06-20 | `play/play_bridge.gd`: polls `playrun/command.json`, writes `playrun/state.txt` with a monotonic `id` handshake. Cmds: new/load/overview/focus/move/attack/cancel/preview/execute/endturn/quit. |
+| **M3** | File-bridge interactive loop | ✅ done 2026-06-20 | `play/play_bridge.gd`: polls `playrun/command.json`, writes `playrun/state.txt` with a monotonic `id` handshake. Cmds: new/load/overview/focus/move/attack/cancel/preview/execute/endturn/quit (+ rescue/join/leave/disband). |
+| **frames** | Frame persistence (audit trail) | ✅ done 2026-07-08 | `play/frame_log.gd`: every state write also lands in `playrun/frames/run-<stamp>/NNNN-<cmd>.txt` — a playtest is a replayable frame sequence. Tests: `tests/play/test_frame_log.gd`; smoke-verified through the live bridge. |
 | **M4** | `LiveBridge` node in the real game | ⬜ next / optional | Host the same bridge inside the running game so a human can watch. |
 | **tests** | `tests/play/` + `tests/rules/` | ✅ green | preview == execute (Law #2); no mutation outside `execute()`; scenario round-trip. Full suite 60+/60+, 0 orphans. |
 

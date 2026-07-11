@@ -11,4 +11,6 @@ Until the academy's affinity test, Isaac believed he had no affinity at all: his
 
 > 🔴 **Open question:** who first recognizes the significance of Isaac's ability? His own scene implies the academy staff (→ Ouroboros's informant); [Torv](torv.md) is written to notice early but stay silent; [Sophia](sophia.md) is written to be the one who makes the alkahest connection. → [Q3](../appendix/open-questions.md#q3-who-first-identifies-isaacs-alkahest)
 
+> 🔴 **Open question (2026-07-08):** the proposed Rebecca-reveal beat ([Q9](../appendix/open-questions.md#q9-the-rebecca-reveal-proposed-beat-2026-07-08)) exposes a seam — if Isaac is maimed in story **before training any element**, the aura limb tax (−1, highest pool first) would take his one hidden alkahest point and zero his entire kit. Needs a mechanics ruling (untaxable alkahest? grown-points-only tax? story shielding?).
+
 **If Isaac had the Philosopher's Stone:** he would try to **bring his parents back to life.**

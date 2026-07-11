@@ -95,7 +95,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 ## Open forks
 
-- ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV deferred to the CON grill. (The ghost `SPD` in scenario `.tres` + fixtures — still retire it.)
+- ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV resolved at the CON mini-grill (coarse thresholds). (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.)
 - **STR ↔ inventory weight / carry limits.**
 - **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
 - **Squad range** tuning (now decoupled from LDR; static default — see [squad-system.md](squad-system.md)).

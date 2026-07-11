@@ -52,7 +52,7 @@ Placed above where obvious; still orphaned or contestable:
 - **Rescue-chain verbs** (carry a downed ally *and* hand off to another carrier in one pass) — Sawbones/Quartermaster pairing; a squad-verb ("stronger with both in the squad").
 - **Facing-setter** (an ability that lets a unit *end* its move facing any direction as a locked plan choice, feeding backstrike play) — Skirmisher or Duelist.
 - **Weight-shifter** (drop carried inventory as a free action to duck under a shove threshold / swim) — Quartermaster sub or a Movement perk anywhere.
-- **Elemental immunities** — **NOT jobs.** Status/element resistance routes through gear/runes (stats.md's CON cut). Jobs get *exploitation* (Opportunist), never immunity.
+- **Elemental immunities** — **NOT jobs.** Status/element resistance routes through gear/runes — a rider that survives CON's 2026-07-06 adoption (CON scales defensive gear, never status resistance; [stats.md](stats.md)). Jobs get *exploitation* (Opportunist), never immunity.
 - **Overwatch, dual-wield, terrain-grinding, alt-fire anything** — **NOT jobs.** Weapon-side, parts system ([weapons.md](weapons.md)).
 
 ## Watch-list & fences (carry into the roster pass)

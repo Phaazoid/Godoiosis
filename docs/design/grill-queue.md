@@ -4,7 +4,7 @@
 
 ## Next up — meaty sessions
 
-*(empty — JOBS, CON+defensive-gear, and weapon-parts all landed 2026-07-05→06; see Done)*
+1. **Co-dev ratification session (2026-07-11)** — verdict pass over the 2026-07-04→06 wave before the v2 build-out starts. Agenda + session prompt: [co-dev-agenda-2026-07-11.md](co-dev-agenda-2026-07-11.md).
 
 ## Quick hits — single-decision scale
 
@@ -19,14 +19,16 @@
 12. **Affinity expansion** — born-fixed vs story/Stone-gated growth ("grown, not created"). Source: [alchemy-kit.md](alchemy-kit.md) fork 2.
 13. **LDR budget + familiarity** — the 2026-06-20 squad-capacity redesign's actual numbers and familiarity-cost design (touches invariants I5/I6/V3). Source: [squad-system.md](squad-system.md) banner.
 14. ~~**Weapon triangle + blocking**~~ — **CLOSED 2026-07-06** with the CON mini-grill: triangle CUT (advantages emerge from gameplay/elements); blocking ownership dispatched (weapon-tied → parts, unit-tied → jobs, armor-tied → gear content); block *mechanics* are now content design, not a grill.
+15. **Manual rune carving (player-drawn)** — far future by declaration; the player performs the carving by hand instead of menu-picking — an input method atop the same doctrine rulebook, deterministic recognition (Law #1). Prereqs: doctrine code (#30 lane / prompt 11) + the carving-site UX. Source: [transmutation-model-proposal.md](transmutation-model-proposal.md) *Far future* + [#52](https://github.com/Phaazoid/Godoiosis/issues/52). *(Repurposed 2026-07-08 from "player-built transmutations" — that capture predated the 2026-07-04 grill; the sigil/flourish model already delivers it.)*
 
 ## Drift fixes — no decisions needed (agent-queue-able)
 
-- squad-system.md "Known gaps" still says death handling is undesigned (the #33 lifecycle build superseded it).
-- **WIND vs AIR** — one word must win before content authoring multiplies it.
-- Ghost `SPD` retirement in old scenario `.tres` + test fixtures.
-- Temperament needs an owner doc when picked up (currently scattered across three).
-- NB: the scratchpad Inbox holds unswept ideas (player-built transmutations; hover-highlight action targets) — sweep separately, they're captures, not grills.
+- ~~squad-system.md "Known gaps" death handling~~ — **SWEPT 2026-07-07** (now points at the #33 lifecycle build; surviving squad-side opens named).
+- ~~**WIND vs AIR**~~ — **RESOLVED 2026-07-07 (dev ruling): AIR** is the element/sigil word (primaries = Earth/Air/Fire/Water + Aether/Alkahest), matching `Elemental.Element`; "wind" is free for attack/flavor names (the Wind Blast reaction keeps it). Docs swept same day (idea bank, level concepts, mod bank).
+- ~~Ghost `SPD` retirement~~ — **DONE 2026-07-07**: the one live ghost was a `tests/util/test_devwidgets.gd` fixture string (swept to DEX); scenario `.tres`/`.tscn` grep-verified **already clean** — the audit's `.tres` claim was stale (its second overclaim, after B3).
+- Temperament needs an owner doc when picked up (currently scattered across three). *(Still true — rides the recovery grill, parked item 8.)*
+- ~~NB: the scratchpad Inbox holds unswept ideas~~ — **SWEPT 2026-07-08**: player-built transmutations was outdated (pre-doctrine-grill; sigil/flourish model already delivers it) — #52 repurposed to **manual rune carving** (parked item 15); hover-highlight action targets → #44; the Rebecca-reveal beat → story open-questions Q9.
+- *2026-07-07 sweep also caught:* stale "CON cut" references (will-and-death rider, job-ideas fence — both now note the adoption), progression.md's answered open questions (limb granularity → limb-slot model; momentum ratified), terrain.md's answered Cover/DEF question, level-concepts' + story mission-flow's weapon-triangle mentions (annotated cut), and a todo-triage addendum (#26 shipped — recheck its routed items).
 
 ## Done
 

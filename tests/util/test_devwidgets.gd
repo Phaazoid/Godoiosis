@@ -9,11 +9,11 @@
 extends GdUnitTestSuite
 
 func test_parses_contiguous_zero_based_hint() -> void:
-	var entries := DevWidgets.parse_enum_hint("MHP,STR,LDR,WIL,SPD")
+	var entries := DevWidgets.parse_enum_hint("MHP,STR,LDR,WIL,DEX")
 	assert_int(entries.size()).is_equal(5)
 	assert_str(entries[0]["name"]).is_equal("MHP")
 	assert_int(entries[0]["value"]).is_equal(0)
-	assert_str(entries[4]["name"]).is_equal("SPD")
+	assert_str(entries[4]["name"]).is_equal("DEX")
 	assert_int(entries[4]["value"]).is_equal(4)
 
 func test_parses_explicit_values_hint() -> void:

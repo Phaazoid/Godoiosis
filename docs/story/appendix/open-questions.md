@@ -87,7 +87,7 @@ Each entry states the **conflict or gap**, lays out the **competing versions sid
 | Marco joins | at the kidnapping level | at **The Border** level |
 | Weapon triangle taught | level 3 (hold the base) | level 3 (Torv's HQ) |
 
-They broadly tell the same story; the divergence is **sequencing and roster timing**. Reconcile during level design. (The `Chapter 1` doc's fully-scripted academy opening is the reference text regardless.)
+They broadly tell the same story; the divergence is **sequencing and roster timing**. Reconcile during level design. (The `Chapter 1` doc's fully-scripted academy opening is the reference text regardless.) **NB (2026-07-07):** the "weapon triangle taught" row is moot in *subject* — the triangle was **cut from the design 2026-07-06** ([../../design/weapons.md](../../design/weapons.md)); whichever level-3 wins still needs a teaching beat, just about something else.
 
 ---
 
@@ -121,3 +121,19 @@ Tracked so they aren't re-litigated:
 - **The diplomat's reveal timing.** He's an Ouroboros plant who fakes a heroic death in Part 2; when (if ever) the *player* learns this vs. when the *party* does is undecided — bait potential later. Ties into [Q1](#q1-ouroboros-the-acolytes-and-the-cartel).
 - **Council of Five ↔ Ouroboros.** Open whether one or two of Paracelsus's ruling Five are secretly Ouroboros (`Ouroboros Agents`, `Unorganized Threads`). Left deliberately ambiguous for now.
 - **"Cargo is rubbish" beat.** Several docs toy with Cid discovering the airship's "precious cargo" is worthless as a tell that the mission is a trap — keep or cut.
+
+---
+
+## Q9: The Rebecca Reveal (proposed beat, 2026-07-08)
+
+**The proposal (dev, via scratchpad):** flip the academy opening's test order so the affinity test *makes* Rebecca's tragedy instead of just reporting it:
+
+1. **Isaac tests first — and shows every affinity.** While the staff are still confirming the impossible result, and **before Rebecca can test**, the attack on the camp hits.
+2. In the raid she loses her arm (canon), and **the maim's aura tax** (−1 point, highest pool first — [alchemy-kit.md](../../design/alchemy-kit.md) aura model) **zeroes her out** — because Rebecca, Isaac's sister by blood, actually carries **a single hidden alkahest point** just like him. Nobody ever knew: alkahest presents as affinity-for-everything, and she never got her test.
+3. The world's answer — and hers — becomes "no affinity," and it's now *mechanically true* (the transmutation doctrine's **Rebecca rule**, 0 aura = nothing, already carries her name). The real story: she was one point from being her brother's mirror.
+
+**Why it's attractive:** welds her backstory to the aura/limb-tax mechanics (her loss is systemic, not narrated); deepens the Stone wish ("gain an affinity" — regrowth restores taxed points, so the wish has a mechanical door); plants a late reveal that recolors her entire arc.
+
+**The flagged problem (dev):** the same mechanics point back at Isaac — if the player takes him down the **maim route in story before he trains any element**, his highest (only) pool is the hidden alkahest point; the −1 tax would zero the protagonist's whole kit (universal breadth rides alkahest — audit A6). Wants a rule before the beat is canon: is the alkahest point untaxable? Is pre-training Isaac shielded from maim by story structure? Or does the tax take *grown* points only, never born ones — in which case Rebecca's zero-out needs restating (her point born, or the rule asymmetric). **Story call for the co-dev; the mechanics ruling lands in [alchemy-kit.md](../../design/alchemy-kit.md).**
+
+Cross-refs: [rebecca.md](../characters/rebecca.md) · [isaac.md](../characters/isaac.md) · design/transmutation-model-proposal.md (the Rebecca rule).

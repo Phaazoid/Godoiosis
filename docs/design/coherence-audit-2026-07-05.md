@@ -92,10 +92,10 @@
 
 ## B — Doc drift (stale statements; sync fixes, not crossroads)
 
-1. **squad-system.md** "Known gaps: death handling undesigned / a unit hitting 0 HP just frees itself" — stale since the #33 lifecycle build (downing, post-pass squad ejection, countdown, rescue all exist). Refresh the gaps list.
+1. ~~**squad-system.md** "Known gaps: death handling undesigned"~~ — **FIXED 2026-07-07** (drift sweep): the gaps list now points at the built lifecycle; the surviving open bits (leader-down feel, defend-the-body tactics) are named as such.
 2. ~~**progression.md** limbs paragraph~~ — **FIXED 2026-07-05** with the A2/A4 resolutions (limb-slot model + arms→STR/legs→DEX + prosthetics-exceed).
-3. **weapons.md** scaling-stat drift note — **CORRECTED + FIXED 2026-07-05:** the audit's original claim here was wrong — `Stats.Stat` **already has DEX + PER** (verified in `Classes/core/Stats.gd`; the docs were behind the code, not vice versa). weapons.md's note updated. Still real: single-stat vs *blend* scaling is open; author DEX/PER-scaled content; retire the ghost `SPD` in old fixtures/`.tres`.
-4. **Vocabulary: WIND vs AIR.** The elemental idea bank says WIND; alchemy/transmutation sigils say Air. One word should win before content authoring multiplies it.
+3. **weapons.md** scaling-stat drift note — **CORRECTED + FIXED 2026-07-05:** the audit's original claim here was wrong — `Stats.Stat` **already has DEX + PER** (verified in `Classes/core/Stats.gd`; the docs were behind the code, not vice versa). weapons.md's note updated. Still real: single-stat vs *blend* scaling is open; author DEX/PER-scaled content. *(Ghost `SPD`: **retired 2026-07-07** — the one live ghost was a `tests/util` fixture string, swept; scenario `.tres` were verified clean, so this audit's `.tres` half was itself stale — the second B-item to overclaim, after B3's DEX/PER miss.)*
+4. ~~**Vocabulary: WIND vs AIR.**~~ — **RESOLVED 2026-07-07 (dev ruling): AIR wins**, matching `Elemental.Element` and the primary quartet Earth/Air/Fire/Water (+Aether/Alkahest). "Wind" survives only in attack/flavor names (e.g. the Wind Blast reaction). Idea bank + level concepts swept same day.
 5. **Temperament** is converging from three directions with no owner: humours-as-temperament ([elemental-interactions.md](elemental-interactions.md)), Will-generation-by-temperament (will-and-death captured idea), element-humour flavor (alchemy-kit). When it's picked up, give it one home doc.
 6. **alchemy-kit.md** "Isaac: alkahest = all" stack-table cell — cross-reference the A6 touch-up when made.
 

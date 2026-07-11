@@ -2,7 +2,7 @@
 
 **Status: BRAINSTORM, now being curated (v2 — 2026-06-16).** Content pool for the combinatrix: elements, states, what states *do*, reactions, and the flavor layers around them. The *architecture* that executes all of this is locked in [elemental-system.md](elemental-system.md) — every entry here is just data that plugs into the resolver as an `ElementalReaction` or a `State` effect. If an idea fights an E-invariant there, the invariant wins.
 
-**Ground rules:** everything deterministic (Law #1 — no "chance to"; "20%" becomes a flat/scaled number). Everything should reward **ordering** and **alchemist + mechanist squad synergy** (combos replace crits). Lean hard into the **old-alchemy + steampunk** identity: *in this world the discredited science is the true physics.*
+**Ground rules:** everything deterministic (Law #1 — no "chance to"; "20%" becomes a flat/scaled number). Everything should reward **ordering** and **alchemist + mechanist squad synergy** (combos replace crits). Lean hard into the **old-alchemy + steampunk** identity: *in this world the discredited science is the true physics.* **Vocabulary (dev ruling 2026-07-07): the element/sigil is AIR, never WIND** — matches `Elemental.Element` and the primary quartet Earth/Air/Fire/Water (+Aether/Alkahest); "wind" is free for *attack/flavor names* (e.g. the Wind Blast reaction below).
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
@@ -16,7 +16,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 2. **The lethal/ultimate combos are boss-side and telegraphed.** Players don't one-shot bosses; bosses threaten *players*. Law #2 means any execute-tier threat is *seen assembling* and can be disrupted.
 3. **Counter-denial is powerful → it's gated.** Turning off an enemy's counter before an alpha strike is huge (counters are core — see [squad-system.md](squad-system.md) C1–C7). It should take real setup, never a cheap single hit.
 4. **Repositioning the enemy is a first-class payoff.** Positioning is the heart of the tactics; shoving, pulling, launching, and yanking units out of formation are *wins*, not side effects.
-5. **Prefer strong-but-survivable over instant-death.** A devastating, *counterable* state beats a delete button. Every strong line wants a visible counter (GROUNDED vs shock, WIND/AETHER vs vapor, cleanse vs debuff).
+5. **Prefer strong-but-survivable over instant-death.** A devastating, *counterable* state beats a delete button. Every strong line wants a visible counter (GROUNDED vs shock, AIR/AETHER vs vapor, cleanse vs debuff).
 
 ---
 
@@ -28,7 +28,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 - **Motion & repositioning**: magnetism hauling armor-wearers, gusts blasting units back, **Telesma** (renamed force) for kinetic shoves. Positioning payoff.
 - **Vision / command-range denial**: smokescreen that cuts a leader's LDR range and shreds squad cohesion.
 - **Counter-denial (gated)**: STAGGERED (big SOUND), FROZEN, or shocking conductive-armor → can't counter.
-- **AIRBORNE** — and it's applied by *weapons* too (the kinetic mace), not just elements. Combos with WIND/EARTH.
+- **AIRBORNE** — and it's applied by *weapons* too (the kinetic mace), not just elements. Combos with AIR/EARTH.
 - **Aether** as a versatile medium: a *status-cleaner* (a prestidigitation cantrip) **and** action-at-a-distance combo carrier.
 - **Azoth** & **Galvanic** revive — *pick up a downed unit at a heavy Will cost* (alchemic vs mechanist flavors).
 - **Coagula** (lock a state on) — love the concept/name; the element-tie is open (see Rework).
@@ -47,7 +47,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 - **VRIL → renamed.** Great concept (alchemic synthesis of force), bad name (co-opted by occult-Nazi mythology). Working rename: **Telesma**; alternatives on the naming bench. It also **absorbs GRAVITY's** repositioning role.
 - **Alkahest "melt the prosthetic" → cut.** Violates Axiom 1. Alkahest survives only as an *environmental* solvent (dissolve walls/cover/barrels/sealed doors) and a *temporary* state-strip — and even that leans boss/rare. No permanent gear loss.
 - **AMALGAMATED → temporary.** A battle-scoped *malfunction* (a metal limb fouls for the fight), never destruction. Explicitly non-permanent.
-- **SUBLIMED → de-lethalized.** Not "vaporize a person to death." Now a control/vulnerability state (destabilized; can't counter; WIND/AETHER hit it hard and reposition it) — survivable, with the counter you liked.
+- **SUBLIMED → de-lethalized.** Not "vaporize a person to death." Now a control/vulnerability state (destabilized; can't counter; AIR/AETHER hit it hard and reposition it) — survivable, with the counter you liked.
 - **Magnum Opus → boss-side.** No player boss-one-shots (Axiom 2). The transmutation finisher becomes the dread the **Council of Paracelsus** brings *to* the player.
 - **Galvanic "reanimate the dead / puppet a corpse" → ⚗⚗ far-future.** Too many questions (which deaths? enemies?), technically gnarly. Keep only the downed-pickup revive.
 - **POISON + ACID → merged into VITRIOL.** One corrosive/toxic alchemical element; it sets CORRODED (armor/aura/flesh stripped + lingering decay).
@@ -64,7 +64,7 @@ Distilled from playtesting-the-imagination. New ideas get checked against these.
 | ★ WATER | soak, douse, flood, conduct | WET / CONDUCTIVE |
 | ★ SHOCK | electrocute, chain, fry machines | SHOCKED; chains on CONDUCTIVE |
 | ★ ICE | freeze, chill, embrittle | CHILLED → FROZEN |
-| ★ WIND | push, disperse, fan flames | AIRBORNE; clears atmospheres |
+| ★ AIR | push, disperse, fan flames | AIRBORNE; clears atmospheres |
 | ★ EARTH | crush, wall, root, quake | ROOTED; shatters BRITTLE |
 
 ### Alchemical
@@ -108,7 +108,7 @@ Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT �
 | ★ CHILLED | P,i | −move; a 2nd cold hit → FROZEN |
 | ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN* |
 | ★ SHOCKED | S/P,i | +next SHOCK; relays chains while adjacent |
-| ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); WIND/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
+| ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); AIR/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
 | BRITTLE | P,i | +EARTH/SOUND/impact; can shatter (esp. vs FROZEN) |
 | CORRODED | P,e🔗 | armor/aura/flesh stripped — +all damage + lingering decay. *Set by VITRIOL.* Universal amplifier — watch power |
 | BLEEDING | P,e🔗 | loses HP, extra if it moved (punishes repositioning) |
@@ -120,7 +120,7 @@ Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT �
 | EMPOWERED | P,i | **friendly** — next attack +X (friendly-combo payoff) |
 | MARKED | S,i | next hit on it (by anyone) +X — focus-fire setup |
 | AMALGAMATED | P,i | *temporary* metal malfunction — a fouled limb for the fight (**never destroyed**) |
-| SUBLIMED | P,i | destabilized to vapor — can't counter; WIND/AETHER hit hard & disperse/reposition it. *Survivable, not lethal* |
+| SUBLIMED | P,i | destabilized to vapor — can't counter; AIR/AETHER hit hard & disperse/reposition it. *Survivable, not lethal* |
 | COAGULATED | P,i | its states are **locked on** (can't be removed/consumed); body fixed in place |
 | REVEALED / DRY | P | anti-smoke (can't hide) / anti-WET (blocks one soak) |
 | 🤔 SCALDED · CALCINED · PUTREFIED · MESMERIZED | — | steam-burn / burnt-brittle-dry / rotting DoT / hypnotized (acts last, no counter) |
@@ -168,10 +168,10 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 | BURNING | Quench | −dmg, BURNING → WET |
 | CONDUCTIVE | Insulate | remove CONDUCTIVE |
 
-### WIND
+### AIR
 | × state | reaction | effect |
 |---|---|---|
-| *(any unit)* | Blast | **shove the unit back** — repositioning (Axiom 4) |
+| *(any unit)* | Wind Blast | **shove the unit back** — repositioning (Axiom 4). *("Wind" survives here as an attack name — the sanctioned use.)* |
 | AIRBORNE | Gale | launch further / fling into a hazard 🔗 |
 | BURNING | Backdraft | spread BURNING to adjacent, +dmg 🔗 |
 | SMOKED/STEAM/vapor | Disperse | clear the atmosphere |
@@ -210,7 +210,7 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 
 Concise riffs on the ✅ items; they lean on states/reactions above.
 
-- **Motion & repositioning.** WIND Blast (shove), MAGNETO Haul (drag armor — the heavier/more-metal, the better it grabs), TELESMA Concussion (scatter *or* gather a squad), EARTH Slam, AIRBORNE launches. Pull a scattered enemy line into one tile, then one AoE combo; or fling their leader out of LDR range to fracture the squad. Positioning *is* the damage.
+- **Motion & repositioning.** Wind Blast (the AIR shove), MAGNETO Haul (drag armor — the heavier/more-metal, the better it grabs), TELESMA Concussion (scatter *or* gather a squad), EARTH Slam, AIRBORNE launches. Pull a scattered enemy line into one tile, then one AoE combo; or fling their leader out of LDR range to fracture the squad. Positioning *is* the damage.
 - **Vision & command denial.** Smoke/fog on the enemy **leader** collapses their LDR range — their squad can't stay tethered and scatters into solo units (cohesion attack, straight at [squad-system.md](squad-system.md)). The non-lethal way to break a squad.
 - **Counter-denial (gated).** STAGGERED (a big enough SOUND hit), FROZEN, or Overload (SHOCK into conductive armor) → the target can't counter. Then the squad alpha-strikes freely. Strong → always behind a setup beat, never one cheap hit (Axiom 3).
 - **Transmutation (core alchemist verb).** Alchemists convert tile/unit states as a *baseline* ability: WET→ICE (instant bridge / freeze a swimmer), FIRE→STEAM, STONE→SAND, mud↔dust. Battlefield reshaping, not a wild swing.
@@ -226,13 +226,13 @@ Concise riffs on the ✅ items; they lean on states/reactions above.
 - **Soak → Oil → Spark:** flood WET tiles, spread OILED on the water, a *tiny* SHOCK ignites the whole conductive slick. Two alchemists + one cheap trigger = area denial.
 - **Stagger → Alpha:** SOUND staggers (no counter) → the squad unloads safely. Counter-denial as combo enabler.
 - **Gather → Delete:** TELESMA Concussion pulls a scattered squad into one tile → one AoE combo lands on the whole cluster (Axiom 4 feeding the crescendo).
-- **Cascade:** a reaction's `add_states` feeds the next reaction in the same chain (FIRE→BURNING-cloud, then WIND→Backdraft spreads it). Authored cascades = depth.
+- **Cascade:** a reaction's `add_states` feeds the next reaction in the same chain (FIRE→BURNING-cloud, then AIR→Backdraft spreads it). Authored cascades = depth.
 
 ---
 
 ## Solo (non-combinatrix) effects ◆
 
-Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · WIND → 1-tile shove on hit.
+Always-on modifiers, no second state needed: SMOKE/STEAM → −command & −attack range · FIRE → +vs unarmored · SHOCK → +vs metal/prosthesis (mechanist tax) · ICE/WATER → −move · AIR → 1-tile shove on hit.
 
 ## Terrain & terrain-as-target ("attack the map") 🔗
 
@@ -289,7 +289,7 @@ Weather = a **map-wide atmosphere layer**, authored per location (sometimes dyna
 | ★ Aetheric Storm / Aurora | boosts aura/alchemy; **AETHER Conduction is free** | combos chain wildly across the field | the high-magic climax map; favors alchemists |
 | Miasma / Vitriolic Smog | toxic air | VITRIOL DoT to the unsheltered + −vision | cursed ground / **industrial pollution** (steampunk!) |
 | Doldrums / Dead Air | no wind | atmospheres never disperse — gas/smoke **lingers & spreads** | gas-combo map |
-| Tempest / High Winds | constant WIND | shoves units, disperses all atmospheres | anti-gas; positioning chaos |
+| Tempest / High Winds | constant AIR | shoves units, disperses all atmospheres | anti-gas; positioning chaos |
 
 **Integration hooks:**
 - **Asymmetry as identity:** rain favors the mechanist's shock; aetheric storms favor the alchemist; heat punishes boilers. A location can tilt the alchemist↔mechanist balance.

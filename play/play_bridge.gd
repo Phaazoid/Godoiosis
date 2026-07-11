@@ -4,7 +4,9 @@ extends SceneTree
 # through the M2 PlaySession, and writes the rendered text view back to playrun/state.txt
 # with a monotonic `id` handshake. The driver writes a command, then reads state.txt until
 # its `id` comes back. The SAME bridge can later be hosted by the live game (M4) so a human
-# can watch. Run:  <godot console exe> --headless --path . -s res://play/play_bridge.gd
+# can watch. Every state write is also persisted to playrun/frames/run-<stamp>/ (numbered,
+# one file per frame) so a playtest is auditable after the fact.
+# Run:  <godot console exe> --headless --path . -s res://play/play_bridge.gd
 #
 # Protocol (command.json):  {"id": <int>, "cmd": "<name>", "args": { ... }}
 #   new                          - build a small programmatic board
@@ -24,23 +26,27 @@ extends SceneTree
 const BoardBuilder := preload("res://play/board_builder.gd")
 const PlaySession := preload("res://play/play_session.gd")
 const BoardView := preload("res://play/board_view.gd")
+const FrameLog := preload("res://play/frame_log.gd")
 
 const RUN_DIR := "res://playrun"
 const CMD := "res://playrun/command.json"
 const STATE := "res://playrun/state.txt"
+const FRAMES_DIR := "res://playrun/frames"
 
 var _session
 var _board: Dictionary = {}
 var _last_id := 0
 var _quitting := false
+var _frames   # FrameLog; every state write also lands as a numbered frame
 
 func _initialize() -> void:
 	Engine.max_fps = 30   # poll ~30x/s without pegging a core
 	DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(RUN_DIR))
 	if FileAccess.file_exists(CMD):
 		DirAccess.remove_absolute(ProjectSettings.globalize_path(CMD))   # don't replay a stale command
+	_frames = FrameLog.new(FRAMES_DIR)
 	_write_state(0, true, "ready", "bridge ready - send {\"id\":1,\"cmd\":\"new\"} or {\"id\":1,\"cmd\":\"load\",\"args\":{\"path\":\"res://Scenarios/<name>.tres\"}}")
-	print("[bridge] ready; polling ", CMD)
+	print("[bridge] ready; polling ", CMD, "; frames -> ", _frames.run_dir)
 	_poll_loop()
 
 func _poll_loop() -> void:
@@ -162,6 +168,8 @@ func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
 		return
 	f.store_string("@@ id=%d ok=%d cmd=%s @@\n\n%s\n" % [id, (1 if ok else 0), cmd, text])
 	f.close()
+	if _frames != null:
+		_frames.record(id, ok, cmd, text)
 
 # ---- helpers ----
 

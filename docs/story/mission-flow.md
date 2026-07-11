@@ -29,6 +29,8 @@ Legend: **[S]** = story/cutscene · **[L#]** = playable level · roster in brack
 | **Boss** | [L] | Dragon-lab wreckage | — | **Dragon** | — |
 
 > The older "level list" draft labels these areas differently — **L1** Academy, **L2** *Road to the Border* (ambush by highwaymen avenging the betrayed mercs; teaches luring/ambush + enemy-threat preview + double-team/guard), **L3** *Torv's HQ* (introduces Torv/Collette/Ross + the full weapon triangle: **chainsword > drill, springspear > chainsword, drill > springspear**, plus elemental advantage), **L4** *The Border* (introduces Rebecca + Marco + prosthetics + multibattles/formations). Reconcile during level design.
+>
+> **Design-status note (2026-07-07):** the **weapon triangle was CUT from the design 2026-07-06** ([../design/weapons.md](../design/weapons.md)) — both drafts' level-3 "teach the triangle" beat needs a replacement subject at level design (candidates: weapon-family identities/signature mechanics, range bands, springspear reach play). The wiki text above is kept as the faithful story record.
 
 ## Parts 2–4
 

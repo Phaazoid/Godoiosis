@@ -36,19 +36,7 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
--While pondering on the design for the dev tools for runes/transmutation reactions vs weapons, I initially did not want transmuation reactions to be editable, as opposed to weapons.  My reasoning was this - while players will be able to customize weapons over the course of the game, and runes, with transmutation reactions, the transmutation reactions themselves will be from a fixed set that will not be changeable.  But after thinking a bit, I thought, why not?  Wouldn't it be really cool if players could build their own transmutations?  If we can boil them down to how they effect each element, combination, etc in a deterministic way, it'd be a neat thing to customize.  They are already gated by size, so its easy to balance, too.  This is definitley a further off thing, but I want it as its own PR - transmutation creation system.  
-
-Axis of balance for runes include
-Range, base power, elements used, how much of which elements used (2 wind 1 fire scales twice as much off of wind than fire), map/player/both hit, elemental effects (from creating cover to blowing enemies to burning the surrounding area)
-
-
--Potential targets for actions (attack, rescue) get highlighted on the map when the menu option for the action is hovered
-
-
-OH oh oh just hit a story beat in my head that this all ties together with very nicely - In the plot, Rebecca, Isaac's sister, tests at the military academy with him before the attack, and has no affinity.  As someone who always really wanted to do alchemy this is a huge blow to her.  In the ensuing attack, she is disarmed.  HOWEVER What if we flipped the order of events around a bit.  Isaac is tested first.  He has every affinity?!  While confirming, before Rebecca can even test, the attack on the camp happens.  The disarming happens.  Rebecca therefore, would lose 1 affinity point.  However.  Rebecca is Isaac's sister.  If we're going by genetics, she should have a point in alkahest, just like him.  If she lost one point... She would zero out.  She actually also has an alkahest affinity, but nobody knows, since alkahest presents as having an affinity for everything.  
-
-The only issue with this is - what if the player decides to take isaac down the maim route in story, before training in any element?  
-
+*(empty — swept 2026-07-08)*
 
 ## 🗂 Dispersed (log)
 
@@ -65,3 +53,6 @@ The only issue with this is - what if the player decides to take isaac down the 
 - Real HP/Will bars (and later LDR) instead of text readouts → #44 (2026-06-26)
 - CON as a 4th, defensive scaling stat (scales gear/weapon defensive bonuses) → stats.md "Cut: CON" reconsideration — **REOPENS a decided cut**, needs a stats-session/co-dev decision (2026-06-26)
 - Action queue needs an outer scrollbox — the *list of action-type sections* can overflow, not just each section → #49 Action Queue UX (2026-06-26)
+- Player-built transmutations (creation system) + the rune balance axes → **outdated on arrival** (dev: written pre-2026-07-04-grill; the sigil/flourish model already delivers it) — capture withdrawn; issue #52 **repurposed** → manual rune carving (players draw the carving themselves, dev + co-dev long-wanted) → transmutation-model-proposal.md (Far future) + grill-queue.md Parked 15 (2026-07-08)
+- Hover an action-menu option → highlight its potential targets on the map → #44 comment (board-legibility umbrella) (2026-07-08)
+- Rebecca reveal: flip the academy test order — hidden alkahest point zeroed by the raid's limb tax; the Isaac pre-training-maim seam flagged → story open-questions.md **Q9** + 🔴 flags in rebecca.md / isaac.md (2026-07-08)
