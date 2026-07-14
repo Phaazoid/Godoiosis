@@ -1,6 +1,6 @@
 # Co-dev ratification session — 2026-07-11 agenda
 
-**Status: SESSION AGENDA (written 2026-07-07).** The 2026-07-04→06 grill wave produced sweeping canon — jobs, CON, weapon parts, transmutation doctrine, the coherence-audit resolutions — with one dev in the room. The coding build-out ([session-prompts v2](../session-prompts/README.md), prompts 6→13) starts after this session. **Goal: a verdict per stop — ratify / adjust / veto — before code lands on top.** This doc is the agenda *and* the session prompt: point the 2026-07-11 Claude session at this file and work top to bottom.
+**Status: SESSION COMPLETE 2026-07-14 — all six stops verdicted (records inline; stops 1–3 + 5 + the triangle question landed 2026-07-11, the remainder 2026-07-14). The v2 build spine is cleared to build. Bonus stop: not decided — see Session log.** *(Original agenda written 2026-07-07, kept below as the record.)* The 2026-07-04→06 grill wave produced sweeping canon — jobs, CON, weapon parts, transmutation doctrine, the coherence-audit resolutions — with one dev in the room. The coding build-out ([session-prompts v2](../session-prompts/README.md), prompts 6→13) starts after this session. **Goal: a verdict per stop — ratify / adjust / veto — before code lands on top.** This doc is the agenda *and* the session prompt: point the 2026-07-11 Claude session at this file and work top to bottom.
 
 ## Ground rules (read aloud, then start)
 
@@ -16,7 +16,9 @@
 
 ## Stop 1 — CON adopted + the band doctrine  *(gates prompt 6 — the first thing built)*
 
-**Verdict:** [ ] ratify [ ] adjust [ ] veto
+**Verdict:** [ ] ratify [x] **adjust** [ ] veto
+
+> **Verdict record (2026-07-11): ADJUST.** CON co-signed; the band doctrine ratified *with doctrine added* — non-linear rewards are good, the difficulty curve **should** be jagged (struggle → powerup → easy → advance → struggle again); too much calibration is boring. **Min-1 chip CUT:** 0-damage hits are fine and are skill expression — bait a one-use defensive passive with a weak unit's 0-damage hit, then swing the real hitter; with stat spreads this flat, players won't get out-statted into can't-scratch land anyway. Swept to [stats.md](stats.md) (CON riders + band doctrine) and prompts 6/12.
 
 You were in the 2026-06-20 session that **cut** CON; the 2026-07-06 mini-grill reversed that — this stop exists because reversing your session's call without you deserves an explicit co-sign.
 
@@ -37,7 +39,9 @@ You were in the 2026-06-20 session that **cut** CON; the 2026-07-06 mini-grill r
 
 ## Stop 2 — MOV = main-job base + DEX band  *(gates prompt 7)*
 
-**Verdict:** [ ] ratify [ ] adjust [ ] veto
+**Verdict:** [x] **ratify** [ ] adjust [ ] veto
+
+> **Verdict record (2026-07-11): RATIFY** — no adjustments; discussed alongside Stop 1 (band examples were the natural lead-in to MOV).
 
 **Decided ([jobs.md](jobs.md) → MOV, closes audit A4):**
 - **No innate per-unit MOV ever enters the statline.** Main job sets the base (jobless default 4); a coarse DEX band nudges ±1.
@@ -54,7 +58,9 @@ You were in the 2026-06-20 session that **cut** CON; the 2026-07-06 mini-grill r
 
 ## Stop 3 — JOBS  *(gates prompts 9, 12, 13 — the biggest system; budget half the session)*
 
-**Verdict:** [ ] ratify [ ] adjust [ ] veto  *(sub-verdicts inline)*
+**Verdict:** [ ] ratify [x] **adjust** [ ] veto  *(sub-verdicts inline)*
+
+> **Verdict record (2026-07-11): ADJUST — build to test.** The system survives, reframed as a hypothesis: *jobs as a system to tie together and test units having abilities and slight stat variations.* Playtest decides what feels good and whether jobs are even the right vehicle (skills/slight stat differences could ship other ways). Pushback on the down-the-road material — how to unlock, progression, easter-egg hidden jobs — not disliked, **premature**: no elaborating acquisition content until the framework earns its keep. Swept to [jobs.md](jobs.md) status + Qualification rider.
 
 **Decided ([jobs.md](jobs.md), whole doc):** the linked trio — **job = noun** (persistent qualification: stat profile + ability pool + posture), **training goal = verb** (a job's pool is a menu for the existing anti-grind learning machinery), **between-battle task = deferred third system** (locked interface: jobs multiply task efficacy, nothing more).
 
@@ -73,7 +79,9 @@ Take the load-bearing calls one at a time:
 
 ## Stop 4 — Weapon parts + the triangle cut  *(gates prompt 10)*
 
-**Verdict:** [ ] ratify [ ] adjust [ ] veto
+**Verdict:** [x] **ratify** [ ] adjust [ ] veto
+
+> **Verdict record: RATIFY** — question 1 settled early 2026-07-11 (**triangle cut co-signed, full agreement** — a tool to lean on later if a gap naturally arises, never shoehorned in at any stage → [weapons.md](weapons.md)); the rest of the stop (proficiency-in-order, prototypes, the parts model) ratified 2026-07-14 with no adjustments raised.
 
 **Decided ([weapons.md](weapons.md) → Ratified model):**
 - Every standard weapon: **three mod spaces, capacity 1/2/3, simple→complex**; modules sized 1–3, a space holds any mix ≤ capacity (several smalls *or* one keystone; RE4-fitting UX). The 5th-tier power spike *is* the keystone class.
@@ -93,7 +101,9 @@ Take the load-bearing calls one at a time:
 
 ## Stop 5 — Transmutation doctrine  *(gates prompt 11 — the #30 lane)*
 
-**Verdict:** [ ] ratify [ ] adjust [ ] veto
+**Verdict:** [x] **ratify** [ ] adjust [ ] veto
+
+> **Verdict record (2026-07-11): RATIFY, with a content-priority rider.** Everything is fine for testing for now. The rider: **effects-first, tools-first** — focus on thinking of effects we actually want in game and giving them to units as tools, *before* trying to lock down every combination. Swept to [transmutation-model-proposal.md](transmutation-model-proposal.md) status (+ cross-stamped on [elemental-interactions.md](elemental-interactions.md) and parked grill 11, the future content pass most at risk of matrix-completion mode).
 
 **Decided ([transmutation-model-proposal.md](transmutation-model-proposal.md) → Grill resolutions, 2026-07-04):**
 - **Two-knob rune sizes:** cap 1/2/3 · capacity 1/3/6 (note the deliberate rhyme with weapon spaces — the systems mirror).
@@ -110,7 +120,9 @@ Take the load-bearing calls one at a time:
 
 ## Stop 6 — Audit rapid round (A1–A8)  *(one batch verdict; pull any single item out if it snags)*
 
-**Verdict:** [ ] ratify all [ ] pulled items: ______
+**Verdict:** [x] **ratify all** [ ] pulled items: ______
+
+> **Verdict record (2026-07-14): RATIFY ALL.** A2–A8 fully agreed with. **A1 — the BREAK doctrine — adopted as try-it-and-see:** full agreement to build it as written; whether it *stays* is a playtest question, not a paper one (rider → [resolution-pipeline.md](resolution-pipeline.md)).
 
 Eight coherence-audit findings, all resolved 2026-07-05. Two deserve a slow beat; the rest are one-liners:
 
@@ -137,7 +149,7 @@ Eight coherence-audit findings, all resolved 2026-07-05. Two deserve a slow beat
 
 *Tangents land here with a name attached; each gets 30 seconds at session end: park in [grill-queue.md](grill-queue.md), spawn an issue, or drop.*
 
--
+- ~~Jobs - Skill?  Behaviors?  Tendencies?~~ — **dropped, resolved in-session:** purely a naming question ("skills" vs other words), and it dissolved once the Action/Reaction/Passive/Movement taxonomy was on the table. Naming register rides the deferred roster/naming pass anyway.
 -
 -
 
@@ -151,3 +163,8 @@ Eight coherence-audit findings, all resolved 2026-07-05. Two deserve a slow beat
 ## What ratification unlocks
 
 The [v2 build spine](../session-prompts/README.md): 6 (CON+bands) → 7 (limb slots + effective stats + MOV) → 8 (AI Crisis) → 9 (jobs data model) → 10 (weapon parts) → 11 (transmutation doctrine) → 12 (ability chassis) → 13 (training goals). Verdicts today get swept into the canon docs same-day; vetoes pull their prompt out of the spine until re-grilled.
+
+## Session log
+
+- **Stops 1–3 done 2026-07-11** (verdict records inline above; raw co-dev notes folded in). Sweep landed same day: [stats.md](stats.md) (min-1 chip reversed → 0-damage doctrine; band doctrine + jagged-curve rider), [jobs.md](jobs.md) (build-to-test status + acquisition-content rider), prompts 6/12 + README ([session-prompts](../session-prompts/README.md)), [grill-queue.md](grill-queue.md). Stop 4's triangle question was struck early same day (co-signed → [weapons.md](weapons.md)). **Stop 5 done same day: RATIFY** — fine for testing as-is; rider = **effects-first/tools-first** (wanted effects as unit tools before locking down combinations → [transmutation-model-proposal.md](transmutation-model-proposal.md) status, cross-stamped on the elemental docs + parked grill 11). Remaining: Stop 4 verdict (questions 2–3), Stop 6, bonus. Parking lot cleared (naming question dissolved in-session).
+- **SESSION COMPLETE 2026-07-14.** Stop 4 ratified (questions 2–3, no adjustments) and Stop 6 ratified all — A2–A8 full agreement, **A1 BREAK doctrine adopted try-it-and-see** (playtest decides permanence → [resolution-pipeline.md](resolution-pipeline.md) rider). Final tally: 1 ADJUST · 2 RATIFY · 3 ADJUST · 4 RATIFY · 5 RATIFY · 6 RATIFY-ALL — **zero vetoes; the v2 build spine (prompts 6→13) is fully unblocked.** Grill-queue entry moved to Done. **Bonus stop (story canon conflicts): not decided** — spend-a-session vs drop is still an open ten-second call; parked grill 10 stands either way.

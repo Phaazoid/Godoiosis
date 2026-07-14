@@ -1,4 +1,4 @@
-# 6 — CON + stat bands + min-1 chip
+# 6 — CON + stat bands + damage floor
 
 **Size M · gameplay code (user types) · run before 7 (the bands feed the effective-stat spine).** Source: [stats.md](../design/stats.md) → "CON — ADOPTED 2026-07-06" + "The band doctrine".
 
@@ -13,7 +13,7 @@ All doc numbers are PLACEHOLDERS: implement each as a named constant, terse "# p
 
 2. MISSING-KEY FALLBACK. Existing UnitData .tres base_stats dictionaries have no CON key, and get_base_stat currently returns 0 for a missing stat — which would zero every existing unit's CON. Fix the seam: a missing key falls back to STAT_DEFAULTS[stat] (robust for every future append), and flag to the user the option of also migrating the unit .tres files to carry CON explicitly (their call; show diffs if so). Add a test proving a stat absent from the dict reads its default.
 
-3. MIN-1 CHIP RULE. No hit ever deals 0 damage (stats.md CON riders). Apply max(1, dmg) at the damage-computation seam — find the ONE place damage is computed (PlanResolver's predicted number and the executed number must come from the same calculation or Law #2 breaks; verify counters share it). Add a test: an attack that would compute 0 or negative deals exactly 1, and the queue preview shows 1.
+3. DAMAGE FLOOR AT ZERO. Damage clamps at 0, never negative — and 0 is a LEGAL outcome (stats.md CON riders; the min-1 chip rule was REVERSED 2026-07-11: 0-damage bait-outs are intended skill expression). Apply max(0, dmg) at the damage-computation seam — find the ONE place damage is computed (PlanResolver's predicted number and the executed number must come from the same calculation or Law #2 breaks; verify counters share it). A 0-damage hit is still a HIT — do not early-out on dmg == 0 anywhere in the resolution path (future one-use defensives/on-hit reactions must still consume/trigger). Add a test: an attack that would compute negative deals exactly 0, and the queue preview honestly shows 0.
 
 4. THE BANDS as pure static helpers in Stats.gd (they must be readable from anywhere and trivially testable):
    - dex_mov_band(dex): 0–3 -> -1, 4–7 -> 0, 8+ -> +1 (constants; consumed in prompt 7, just land the function now).
@@ -29,5 +29,5 @@ All doc numbers are PLACEHOLDERS: implement each as a named constant, terse "# p
 
 Do NOT touch: MOV derivation (prompt 7 owns it), limb slots, jobs, the STR->carry band (parked — stats.md "Open forks").
 
-Done when: CON exists end-to-end (enum, defaults, fallback, editor), min-1 chip provably holds in preview AND execution, get_max_hp()/effective-LDR consume their bands, the Weight + DEF×CON seams exist with fixture-level tests, suite green, CLAUDE.md stat-registry line updated if wording went stale, committed.
+Done when: CON exists end-to-end (enum, defaults, fallback, editor), the 0-damage floor provably holds in preview AND execution (0 legal, negatives clamp), get_max_hp()/effective-LDR consume their bands, the Weight + DEF×CON seams exist with fixture-level tests, suite green, CLAUDE.md stat-registry line updated if wording went stale, committed.
 ```

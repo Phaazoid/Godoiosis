@@ -1,6 +1,6 @@
 # Jobs — The Elective Role Layer
 
-**Status: RATIFIED DIRECTION (2026-07-06 grill, dev + Claude Fable 5). Numbers are placeholders; content passes deferred.** "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Owns the MOV derivation deferred by audit A4. Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
+**Status: RATIFIED DIRECTION (2026-07-06 grill, dev + Claude Fable 5); co-dev pass 2026-07-11 — verdict: BUILD TO TEST.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* Playtest answers what about it feels good and whether jobs are even the right vehicle (abilities/stat variation could technically ship other ways) — the framework must earn its keep before any investment in acquisition/progression content: unlock-hunt designs, hidden/easter-egg jobs, certification-economy elaboration are all explicitly down-the-road (not disliked — premature). **Numbers are placeholders; content passes deferred.** "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Owns the MOV derivation deferred by audit A4. Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
 ## The linked trio (scope)
 
@@ -23,6 +23,8 @@
 - **Unlocks are discovery content, varied and not too hard to get:** unique Bounty Board missions, between-mission shop finds, **in-battle feats** (deterministic triggers; meta-layer reward, Law-#1-clean), mentors/facilities/manuals. Access-flavored more than scrap-priced (don't compete with parts/prosthetics for the wallet).
 - **No stat prerequisites, ever** — stats are fixed, so a stat gate is a permanent lockout; jobs are the compensation lever for ungrowable stats, not gated by them. **Unique story jobs are the one sanctioned gate** (also the cover for Isaac's alkahest without tipping the player).
 - **Temperament biases rate, never access** (interface locked; specifics ride the parked temperament/recovery work).
+
+*2026-07-11 co-dev rider:* the unlock/discovery designs above are **direction, not near-term work** — don't elaborate them (which bounties, which easter eggs, price curves) until the core framework survives playtest. The build spine already matches: prompt 9 lands certify-once as a dev-editor button; costs and discovery content stay unbuilt.
 
 ## Stats & caps
 

@@ -43,13 +43,6 @@ Is sufficiently advanced technology just as dangerous to society as a Stone? A S
 
 ## Humorism — a character-design tool *(not plot)*
 
-⚪ A practical aid, not canon. The four classical elements map to the four **humors**, which map to four temperaments — handy for giving pre-specialized alchemist units instant character:
+⚪ A practical aid, not canon. Each classical element carries a **humor** — a bodily fluid whose excess is a temperament — handy for giving pre-specialized alchemist units instant character. Extended 2026-07-13 to cover all five elements: the classical four plus **ichoric** (Aether · *ichor*, the god-blood — an excess of life). A sixth **alkahestic** humor (an excess of the *unformed*) was sketched and **shelved** the same day: the hidden element never displays in game, so no system hangs off it.
 
-| Element | Humor | Temperament |
-|---|---|---|
-| Fire | yellow bile | **choleric** — irritable, quick to anger |
-| Water | phlegm | **phlegmatic** — calm, unemotional even in danger |
-| Earth | black bile | **melancholic** — sad, gives up easily |
-| Air | blood | **sanguine** — happy, joking, confident in danger |
-
-A nod worth using if we want four elemental archetypes. (Compare the existing cast — e.g. Ali/fire reads choleric, Marco/water reads phlegmatic — though the cast wasn't built strictly to this scheme.)
+**The working table lives with the roster → [characters/README.md § Humors](characters/README.md#humors).**

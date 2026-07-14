@@ -4,7 +4,7 @@ Copy-paste prompts for fresh Claude sessions, each **actionable cold**: a new se
 
 **v1 (prompts 1–4) is DONE** — test harness, elemental v1, Will/downed lifecycle, GitHub migration all landed. The files stay as history.
 
-**v2 is the coding build-out of the 2026-07-04→06 grill decisions** (jobs · CON+bands · weapon parts · limb-slot maims · AI Crisis stances · transmutation doctrine · audit A1–A8). All design is **canon in `docs/design/`** — these sessions *implement*, they do not redesign. Tracked context: [grill-queue.md](../design/grill-queue.md) → Done.
+**v2 is the coding build-out of the 2026-07-04→06 grill decisions** (jobs · CON+bands · weapon parts · limb-slot maims · AI Crisis stances · transmutation doctrine · audit A1–A8). All design is **canon in `docs/design/`** — these sessions *implement*, they do not redesign. **Co-dev ratification COMPLETE 2026-07-14, zero vetoes — the spine is cleared to build** (verdict records: [co-dev-agenda-2026-07-11.md](../design/co-dev-agenda-2026-07-11.md); note the 2026-07-11 amendments already swept into prompts 6/12: 0-damage floor replaced min-1 chip). Tracked context: [grill-queue.md](../design/grill-queue.md) → Done.
 
 ## Ground rules for the driving model (Sonnet-ready)
 
@@ -21,7 +21,7 @@ Every prompt embeds these, but they bear stating once:
 
 ```
 5 drift sweep ──────────────┐ (independent, mostly Claude-direct)
-6 CON + bands + min-1 chip ─┴─→ 7 limb slots + effective-stat spine + MOV
+6 CON + bands + dmg floor ──┴─→ 7 limb slots + effective-stat spine + MOV
                                    │
         ┌──────────────────────────┼───────────────────────┐
         8 AI Crisis stances        9 jobs data model        11 transmutation doctrine (#30)
@@ -33,17 +33,19 @@ Every prompt embeds these, but they bear stating once:
 **Default serial order (single typist): ~~5~~ (done) → 6 → 7 → 8 → 9 → 10 → 11 → 12 → 13.**
 Legal swap: 11 may jump ahead of 9 any time after 7 — it advances [#30](https://github.com/Phaazoid/Godoiosis/issues/30), the open P1 issue. 8 is a small palate-cleanser; slot it wherever a short session fits.
 
-| # | Prompt | Size | Builds |
-|---|--------|------|--------|
-| 5 | ~~[drift sweep](5-drift-sweep.md)~~ | ✅ DONE 2026-07-07 | Executed by Fable 5 in-session: AIR ruled canonical (wind = attack names only), SPD ghost swept (fixture; `.tres` were already clean), stale claims fixed across 12 docs — see [grill-queue.md](../design/grill-queue.md) Drift fixes |
-| 6 | [CON + stat bands](6-con-and-stat-bands.md) | M | CON stat, min-1 chip, CON→MHP & PER→LDR bands, Weight readout, DEF×CON seam |
-| 7 | [limb slots + effective stats](7-limb-slots-and-effective-stats.md) | L | the effective-stat pipeline, 4-slot limb model, maim rotation, verb locks, MOV derivation, aura limb tax |
-| 8 | [AI Crisis stances + preview](8-ai-crisis-and-preview.md) | S | per-archetype Crisis stances, CRISIS lethality preview, AI deprioritizes downed |
-| 9 | [jobs data model](9-jobs-data-model.md) | L | JobData/JobCatalog, certification + slots, ceilings, job MOV base, dev-editor + enemy jobs |
-| 10 | [weapon parts](10-weapon-parts.md) | L | WeaponModData, 3-space fitting, proficiency stub, prototypes, module Weight |
-| 11 | [transmutation doctrine catch-up](11-transmutation-doctrine.md) | L | affinity set, two-knob rune sizes, temper/leeway/strain, fizzle preview (A7) — the #30 lane |
-| 12 | [ability chassis](12-ability-chassis.md) | L | taxonomy, live-kit computation, seed abilities, reactions-as-policies |
-| 13 | [training goals](13-training-goals.md) | M | the anti-grind learning machinery growing proficiency + job abilities |
+| # | Prompt | Size | Issue | Builds |
+|---|--------|------|-------|--------|
+| 5 | ~~[drift sweep](5-drift-sweep.md)~~ | ✅ DONE 2026-07-07 | — | Executed by Fable 5 in-session: AIR ruled canonical (wind = attack names only), SPD ghost swept (fixture; `.tres` were already clean), stale claims fixed across 12 docs — see [grill-queue.md](../design/grill-queue.md) Drift fixes |
+| 6 | [CON + stat bands](6-con-and-stat-bands.md) | M | [#55](https://github.com/Phaazoid/Godoiosis/issues/55) | CON stat, 0-damage floor, CON→MHP & PER→LDR bands, Weight readout, DEF×CON seam |
+| 7 | [limb slots + effective stats](7-limb-slots-and-effective-stats.md) | L | [#56](https://github.com/Phaazoid/Godoiosis/issues/56) | the effective-stat pipeline, 4-slot limb model, maim rotation, verb locks, MOV derivation, aura limb tax |
+| 8 | [AI Crisis stances + preview](8-ai-crisis-and-preview.md) | S | [#57](https://github.com/Phaazoid/Godoiosis/issues/57) | per-archetype Crisis stances, CRISIS lethality preview, AI deprioritizes downed |
+| 9 | [jobs data model](9-jobs-data-model.md) | L | [#58](https://github.com/Phaazoid/Godoiosis/issues/58) | JobData/JobCatalog, certification + slots, ceilings, job MOV base, dev-editor + enemy jobs |
+| 10 | [weapon parts](10-weapon-parts.md) | L | [#59](https://github.com/Phaazoid/Godoiosis/issues/59) | WeaponModData, 3-space fitting, proficiency stub, prototypes, module Weight |
+| 11 | [transmutation doctrine catch-up](11-transmutation-doctrine.md) | L | [#60](https://github.com/Phaazoid/Godoiosis/issues/60) | affinity set, two-knob rune sizes, temper/leeway/strain, fizzle preview (A7) — the #30 lane |
+| 12 | [ability chassis](12-ability-chassis.md) | L | [#61](https://github.com/Phaazoid/Godoiosis/issues/61) | taxonomy, live-kit computation, seed abilities, reactions-as-policies |
+| 13 | [training goals](13-training-goals.md) | M | [#62](https://github.com/Phaazoid/Godoiosis/issues/62) | the anti-grind learning machinery growing proficiency + job abilities |
+
+Each spine issue carries native **blocked-by** edges mirroring the dependency diagram above (wired 2026-07-14); close each as its session commits.
 
 ## What is deliberately NOT here
 

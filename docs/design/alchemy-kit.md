@@ -44,7 +44,7 @@ Five layers — three *identity/growth*, two *loadout/fuel*:
 Five: **Fire, Water, Earth, Air, Aether.** Oppositions Fire↔Water, Earth↔Air. Aether = life / spirit / the heavens. Hidden sixth: **Alkahest** — the base element all others derive from; chaos/taboo; the heritable-affinity root (Isaac).
 *Flavor hook:* the four classical elements map to the medical humors → choleric / phlegmatic / melancholic / sanguine — a ready-made way to characterize pre-built alchemist units.
 
-## Aura — the data model **[RATIFIED 2026-07-05, audit A3]**
+## Aura — the data model **[RATIFIED 2026-07-05, audit A3; co-dev co-signed 2026-07-14 — full agreement, Stop 6]**
 
 Two fields, both on the persistent store (`UnitInstance`, per the #8 seam):
 

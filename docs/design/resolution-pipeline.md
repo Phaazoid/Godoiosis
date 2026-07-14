@@ -66,6 +66,8 @@ Numbered for test coverage, like the squad spec's I/C and elemental's E. Violati
 
 *"No plan survives contact with the enemy. How we handle the aftermath is what's important."* — the dev, ratifying this.
 
+> **Co-dev verdict (2026-07-14 ratification pass, Stop 6): adopted TRY-IT-AND-SEE.** Build it as written; whether it stays is decided at the table, not on paper. The one A1–A8 resolution ratified on trust rather than full conviction — flag playtest reactions to BREAKs (frequency, legibility, the fizzle-no-refund sting) back to this doc.
+
 - **Known breaks are previewed.** With full information the resolver predicts the cascade at plan time (attack triggers a reaction → leader shoved → squad dissolves → three later orders orphan) and the queue shows a **BREAK marker** + fizzle annotations at the point of collapse. Planning your own ruin is legal — no hand-holding; doing it *unknowingly* is not (Law #2).
 - **Fog breaks are the sanctioned surprise.** The resolver resolves against **player-visible** state; a hidden counter-er (the fire counter on the frozen river) diverges at execution. Epistemically honest — fog reads as fog, and PER is the counterplay. NB: once hidden information exists, the resolver must distinguish *planner-visible* state (what the hypothetical threads) from *true* state (what the executor compares against). Build the seam that way from the start.
 - **Choice-points** (player-unit Crisis today; guard/reaction abilities and mid-battle re-flourishing later) are marked in the plan with an assumed branch; realizing the other branch = BREAK. **Enemy Crisis never BREAKs** — archetype stances + the full-Will gate are deterministic, so the resolver predicts it exactly ([will-and-death.md](will-and-death.md)).
