@@ -36,9 +36,10 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-*(empty — swept 2026-07-08)*
-
 ## 🗂 Dispersed (log)
+
+- Double-barreled gun: every other shot a different effect (per-barrel mods or authored cycle) → weapon-mod-ideas.md #31 "Duplex Breech" [CB] keystone sketch (2026-07-14)
+- Far-future data-driven balance metrics (beta telemetry: collect/analyze what's strong/weak) → issue #53 (P2-someday, the #52 far-future pattern; Play API #46 named as the natural substrate) (2026-07-14)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)
 - Range-dependent damage / sweet-spot patterns (carbine harder at range, shotgun up close, Springspear AoE center tile) → weapons.md (Captured ideas); relates to issue #25 (2026-06-17)
