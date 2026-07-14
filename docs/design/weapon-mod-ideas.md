@@ -44,6 +44,7 @@
 28. **Volatile Core** [∀] — big power spike; drawback: the wielder's tile gains FIRE on use (previewed, positioning tax).
 29. **Aegis Suite** [∀] — guard stance alt-action: forgo attacking to block for adjacent allies this pass (weapon-tied squad blocking).
 30. **Rune Socket** [∀] — the weapon carries a size-1 rune; attacks channel it if the wielder has the aura. ⚠ **Fence-crosser:** bridges into alchemy's monopoly — grill before authoring (it's the mechanist-alchemist bridge as an item, which is exactly why it's tempting *and* dangerous).
+31. **Duplex Breech** [CB] — double-barrel conversion: shots **alternate barrels deterministically** (odd/even shot counter — Law #1 clean), and each barrel carries its own effect — either each takes its own size-1 infusion/mod ("modified separately": two effect channels in one weapon) or two authored effects that simply cycle. Law #2: the queue previews *which barrel* every planned shot fires. Prototype cousin: a named double-barreled gun with two pre-authored alternating effects. *(Scratchpad capture 2026-07-14; keystone placement is a sketch.)*
 
 ## Prototypes (named prebuilts — unique effect, one size-1 space)
 
