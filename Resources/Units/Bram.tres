@@ -16,7 +16,8 @@ base_stats = Dictionary[int, int]({
 2: 7,
 3: 4,
 4: 12,
-5: 4
+5: 4,
+6: 5
 })
 innate_abilities = Array[String](["Rushdown"])
 map_sprite = ExtResource("2_nyms1")

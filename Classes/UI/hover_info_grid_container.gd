@@ -55,7 +55,7 @@ func _refresh_hp():
 	if unit == null:
 		return
 	hp_label.text = "%d/%d  WIL %d/%d" % [
-		unit.get_current_hp(), unit.get_base_stat(Stats.Stat.MHP),
+		unit.get_current_hp(), unit.get_max_hp(),
 		unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
 
 # Element states first (this CLEARS the row), then lifecycle/maim status icons appended after.

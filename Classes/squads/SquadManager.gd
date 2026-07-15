@@ -77,7 +77,7 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	
 	var newLeader: Unit = squad.members[0]
 	for member in squad.members.duplicate():
-		if member.get_base_stat(Stats.Stat.LDR) > newLeader.get_base_stat(Stats.Stat.LDR):
+		if member.get_effective_ldr() > newLeader.get_effective_ldr():
 			newLeader = member
 	squad.leader = newLeader 
 

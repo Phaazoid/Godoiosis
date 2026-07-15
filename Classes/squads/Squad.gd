@@ -42,7 +42,7 @@ func has_any_queued_actions() -> bool:
 	return true
 		
 func get_max_range() -> int:
-	return leader.get_base_stat(Stats.Stat.LDR) #This is a placeholder value for now
+	return leader.get_effective_ldr() #This is a placeholder value for now
 
 func get_ldr_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
 	return GridUtils.cells_within_manhattan_range(cell, get_max_range())

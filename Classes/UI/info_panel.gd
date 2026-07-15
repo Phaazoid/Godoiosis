@@ -60,7 +60,7 @@ func _refresh():
 func _refresh_hp():
 	if unit == null:
 		return
-	var text := str(unit.get_current_hp(), "/", unit.get_base_stat(Stats.Stat.MHP))
+	var text := str(unit.get_current_hp(), "/", unit.get_max_hp())
 	text += "  WIL %d/%d" % [unit.unit_instance.get_current_will(), unit.unit_instance.get_max_will()]
 	if unit.unit_instance.is_maimed():
 		text += " [MAIMED]"

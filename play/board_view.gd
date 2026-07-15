@@ -160,7 +160,7 @@ static func _unit_line(session, unit: Unit) -> String:
 	var state := "  [DOWNED]" if unit.is_downed() else ""
 	return "%s %s  %s  hp%d/%d  %s  %s%s" % [
 		session.handle_for(unit), unit.get_unit_name(), fac,
-		unit.get_current_hp(), unit.get_base_stat(Stats.Stat.MHP),
+		unit.get_current_hp(), unit.get_max_hp(),
 		squad_tag, wep, state,
 	]
 

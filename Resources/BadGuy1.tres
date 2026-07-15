@@ -11,7 +11,8 @@ base_stats = Dictionary[int, int]({
 0: 20,
 1: 5,
 2: 5,
-3: 4
+3: 4,
+6: 5
 })
 faction = 1
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

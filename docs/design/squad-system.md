@@ -3,6 +3,8 @@
 **Status: SETTLED — with one deliberate redesign pending (2026-06-20): LDR's meaning.** Changes to anything below should be deliberate design decisions, not implementation drift. (Drafted 2026-06-12 by Claude from the implemented system; pending user sign-off.)
 
 > **Design update — 2026-06-20 ([stats.md](stats.md)).** LDR is being repurposed from *squad range* to a **squad-capacity budget**: squad **size** = budget − per-member costs, and costs drop with **relationship/familiarity** (which also grows combat synergy). **Squad range is decoupled from LDR** → a **static default**, to be tuned in playtest. The invariants below still describe the *current code* (LDR-as-Manhattan-range); the flagged ones — **I5, I6, V3** — change when this lands. This is the deliberate decision the SETTLED status invites, not drift.
+>
+> **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan. Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is join-time only (existing scenario squads grandfathered, warn on overfull load); leader-death overflow detaches newest-members-first (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Build: [#63](https://github.com/Phaazoid/Godoiosis/issues/63).
 
 ## Purpose
 
@@ -72,7 +74,7 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_
 
 ## Known gaps / future work
 
-- **LDR redesign (2026-06-20) not yet in code:** squad **size**-by-budget and per-member familiarity costs are undesigned in code; squad **range** still reads LDR (the `Squad.gd` range getter returns the leader's LDR as a placeholder) and should become a static default. Combat synergy + cost-reduction ride on familiarity, not LDR. See the banner + [stats.md](stats.md); touches I5/I6 and V3.
+- **LDR redesign (2026-06-20) — numbers RATIFIED 2026-07-14, build queued as [#63](https://github.com/Phaazoid/Godoiosis/issues/63):** `MEMBER_LDR_COST = 2` capacity budget + static `SQUAD_RANGE = 3` (see banner). Until #63 lands, squad **range** still reads the leader's *effective* LDR (the `Squad.gd` getter, rerouted through the PER band in #55) and **size** is unenforced. Per-member familiarity costs remain the future discount lever; combat synergy + cost-reduction ride on familiarity, not LDR. Touches I5/I6 and V3.
 - AoE victim lists don't re-resolve when moves are re-planned after the volley is queued (fix belongs in `validate_squad_plan`).
 - ~~Death handling undesigned~~ — **superseded by the #33 lifecycle build (2026-06-21→25):** a would-be-fatal hit now downs (`Unit.LifecycleState`), squad ejection defers to after the resolution pass (`game._downed_pending`), counters skip mid-pass-downed actors, and rescue/countdown govern the aftermath — see [will-and-death.md](will-and-death.md) *Implementation status*. Still open squad-side: leader-down feel (leadership reassigns via I5) and squad tactics *around* downed allies (defend-the-body play).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.

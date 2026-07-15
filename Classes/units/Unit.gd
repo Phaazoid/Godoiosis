@@ -23,8 +23,8 @@ const BASE_SPRITE_INDEX = 4
 # returns must restart each mission — so it lives here on the transient Unit, not on UnitInstance. ---
 const RALLY_BASE := 6       # Will restored by the first rally this battle
 const RALLY_FALLOFF := 2    # each further rally restores this much less; below 1 it's not offered
-var rally_count: int = 0
 
+var rally_count: int = 0
 var unit_instance: UnitInstance
 var inventory : Array[Item] = []
 var squad: Squad
@@ -32,6 +32,8 @@ var pending_grid : TileMapLayer
 var pending_cell : Vector2i
 var active_transmutation: TransmutationData = null   # the carving picked to fire this aim (#30 C); null = auto
 var equipped_weapon: EquippableData = null
+var worn_armor: ArmorData = null   # DEF seam (#55): fixture-level until the armor content pass
+
 # Battle-scoped elemental states (boolean — you have it or you don't). These live on
 # the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
 # owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
@@ -157,6 +159,18 @@ func get_modifier(stat: Stats.Stat) -> int:
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
+
+func get_max_hp() -> int:
+	return unit_instance.get_max_hp()
+
+func get_effective_ldr() -> int:
+	return unit_instance.get_effective_ldr()
+
+func get_effective_def() -> int:
+	# DEF is gear-only (stats.md); the CON math lives with the stat doctrine in Stats.
+	if worn_armor == null:
+		return 0
+	return Stats.armor_def(worn_armor.def_power, get_effective_stat(Stats.Stat.CON))
 
 func has_element_state(state: Elemental.State) -> bool:
 	return element_states.has(state)

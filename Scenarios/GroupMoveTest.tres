@@ -41,7 +41,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("5_pgmay")
 move_sprite = ExtResource("6_8ywn6")
@@ -70,7 +71,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("5_pgmay")
 move_sprite = ExtResource("6_8ywn6")
@@ -108,7 +110,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 faction = 1
 map_sprite = ExtResource("12_qf4p6")
@@ -147,7 +150,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 faction = 1
 map_sprite = ExtResource("12_qf4p6")
@@ -177,7 +181,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("15_4cw2g")
 move_sprite = ExtResource("16_fgyut")
@@ -207,7 +212,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("15_4cw2g")
 move_sprite = ExtResource("16_fgyut")
@@ -244,7 +250,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 faction = 1
 map_sprite = ExtResource("20_qx6i0")
@@ -282,7 +289,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 faction = 1
 map_sprite = ExtResource("20_qx6i0")
@@ -321,7 +329,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("23_tu40k")
 move_sprite = ExtResource("24_38fv6")
@@ -358,7 +367,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("23_tu40k")
 move_sprite = ExtResource("24_38fv6")
@@ -396,7 +406,8 @@ base_stats = Dictionary[int, int]({
 2: 5,
 3: 5,
 4: 5,
-5: 5
+5: 5,
+6: 5
 })
 map_sprite = ExtResource("23_tu40k")
 move_sprite = ExtResource("24_38fv6")

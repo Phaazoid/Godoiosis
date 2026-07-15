@@ -43,17 +43,22 @@ func initialize():
 		push_error("UnitInstance has no UnitData assigned.")
 		return
 	#base current stats off of the data without editing the values in UnitData that we're pulling from
-	stats = data.base_stats.duplicate(true) 
+	stats = data.base_stats.duplicate(true)
+	for stat in Stats.STAT_DEFAULTS:
+		if not stats.has(stat):
+			stats[stat] = Stats.STAT_DEFAULTS[stat]
 	aura = data.base_aura.duplicate(true)
 	#reset battle stats
 	_refresh_derived_stats()
-	current_hp = get_base_stat(Stats.Stat.MHP)
+	current_hp = get_max_hp()
 	current_will = get_max_will()
 
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
-	return 0
+	# Missing key = a stat appended after this unit's data was authored -> its default,
+	# never 0. Robust for every future enum append.
+	return Stats.STAT_DEFAULTS.get(stat_name, 0)
 
 func _refresh_derived_stats():
 	#Placeholder for - 
@@ -66,10 +71,19 @@ func _refresh_derived_stats():
 
 func get_current_hp() -> int:
 	return current_hp
-	
+
+func get_max_hp() -> int:
+	# The one max-HP truth: MHP base + CON band (stats.md band doctrine).
+	# Reads BASE stats for now; prompt 7 reroutes bands through effective stats.
+	return get_base_stat(Stats.Stat.MHP) + Stats.con_mhp_band(get_base_stat(Stats.Stat.CON))
+
+func get_effective_ldr() -> int:
+	# Effective squad capacity: LDR base + PER band. Same base-for-now caveat.
+	return get_base_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_base_stat(Stats.Stat.PER))
+
 func set_current_hp(value: int):
-	current_hp = clamp(value, 0, get_base_stat(Stats.Stat.MHP))
-	emit_signal("hp_changed", current_hp, get_base_stat(Stats.Stat.MHP))
+	current_hp = clamp(value, 0, get_max_hp())
+	emit_signal("hp_changed", current_hp, get_max_hp())
 
 	if current_hp <= 0:
 		emit_signal("died")
@@ -88,6 +102,15 @@ func get_max_will() -> int:
 
 func get_current_will() -> int:
 	return current_will
+
+func get_weight() -> int:
+	# Derived, never authored (stats.md): body + gear + modules + carried.
+	# Only the CON body term exists yet — prompts 7/10 fill the rest.
+	var body := get_base_stat(Stats.Stat.CON)
+	var gear := 0
+	var modules := 0
+	var carried := 0
+	return body + gear + modules + carried
 
 func set_current_will(value: int):
 	current_will = clamp(value, 0, get_max_will())
