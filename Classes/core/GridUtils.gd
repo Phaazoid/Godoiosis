@@ -62,7 +62,7 @@ static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Text
 	
 static func validate_member_distance(unit: Unit) -> bool:
 	var dist = manhattan_distance(unit.movement.cell, unit.squad.leader.movement.cell)
-	if dist > unit.squad.get_max_range():
+	if dist > unit.squad.get_max_squad_range():
 		return false
 	else:
 		return true

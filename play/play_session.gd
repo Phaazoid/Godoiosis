@@ -224,7 +224,7 @@ func join(member_handle: String, leader_handle: String) -> Dictionary:
 		return gate
 	if member.has_any_actions():
 		return {"ok": false, "error": "%s has queued orders — cancel them before squadding up" % member_handle}
-	var reach := leader.squad.get_max_range()
+	var reach := leader.squad.get_max_squad_range()
 	if GridUtils.manhattan_distance(member.movement.cell, leader.movement.cell) > reach:
 		return {"ok": false, "error": "%s is outside %s's leader range (%d)" % [member_handle, leader_handle, reach]}
 	squad_manager.join_squad(member, leader.squad)

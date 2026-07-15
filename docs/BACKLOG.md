@@ -40,7 +40,7 @@ What migrated (2026-06-16): the old **Foundation, Bugs/Debt, Features, open Desi
 
 **2026-06-12 → 06-13:**
 - **Death mechanical floor** — `Unit.unit_died` fan-out → `SquadManager` / `OverlayManager` `handle_unit_death`; `is_instance_valid(squad)` guard in `execute_orders`; silent action-strip on death (no orphaned squad badges / ghost icons); fixed `refresh_unit_icons` `is_instance_id_valid` misuse. (Death/Will *design* — downed states — still open; see the Will/death design issue.)
-- **Squad-tether range fix** — `compute_move_range` now clamps members to the leader's LDR range (`get_max_range` from `get_projected_destination`), consistent with `validate_squad_plan`.
+- **Squad-tether range fix** — `compute_move_range` now clamps members to the leader's squad range (`get_max_squad_range` — static `SQUAD_RANGE` since #63; was LDR-derived when this landed), consistent with `validate_squad_plan`.
 - **`movement_cost` default → 1** for tiles lacking `move_cost` custom data (was 0 = free movement).
 - **Occupancy/leader-range validation fix** — invalid moves no longer let another unit move onto the occupied cell (`_unit_has_valid_move_away_from`, leader-range pass reordered before occupancy).
 - **Milestone P core:** scenario save/load + F2 reset (P1/P2); in-game unit editor (P3); tile brush (P4).

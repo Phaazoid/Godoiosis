@@ -63,7 +63,9 @@ func join_squad(unit: Unit, target_squad: Squad):
 
 	_detach_from_current_squad(unit)
 	target_squad._add_member(unit)
-		
+	if target_squad.members.size() > target_squad.max_size():
+		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
+
 func leave_squad(unit: Unit):
 	_detach_from_current_squad(unit)
 	create_squad(unit)
@@ -84,6 +86,19 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	for member in squad.members.duplicate():
 		if not GridUtils.validate_member_distance(member):
 			leave_squad(member)
+
+	# Capacity overflow (#63): the new leader may command less than the old one.
+	# Detach newest-first (join order = member order) until the squad fits — deterministic,
+	# mirrors the out-of-range detach above; the leader is never the one detached.
+	while squad.members.size() > squad.max_size():
+		var newest: Unit = null
+		for i in range(squad.members.size() - 1, -1, -1):
+			if squad.members[i] != squad.leader:
+				newest = squad.members[i]
+				break
+		if newest == null:
+			break
+		leave_squad(newest)
 
 func validate_squad_plan(squad: Squad) -> bool:
 	return _validate_action_list(squad, squad.action_queue)
@@ -130,7 +145,7 @@ func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> boo
 	var current_member_locations = {} #{Vector2i : Unit}
 	
 	var projected_leader_cell := _get_projected_cell_for_unit(squad.leader, actions)
-	var leader_range := squad.get_ldr_range_from_cell(projected_leader_cell)
+	var leader_range := squad.get_squad_range_from_cell(projected_leader_cell)
 	for action in actions:
 		action.clear_validation_messages()
 		
@@ -539,13 +554,13 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 
 func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
 	var dist = GridUtils.manhattan_distance(joining_unit.movement.cell, squad.leader.movement.cell)
-	if dist <= squad.get_max_range() and squad.leader.get_faction() == joining_unit.get_faction() and not joining_unit.has_squad() and not squad.get_members().has(joining_unit) and not joining_unit.squad.has_acted and squad.action_queue.is_empty() and not squad.has_acted and not joining_unit.has_any_actions():
+	if dist <= squad.get_max_squad_range() and squad.members.size() < squad.max_size() and squad.leader.get_faction() == joining_unit.get_faction() and not joining_unit.has_squad() and not squad.get_members().has(joining_unit) and not joining_unit.squad.has_acted and squad.action_queue.is_empty() and not squad.has_acted and not joining_unit.has_any_actions():
 		return true
 	return false
 
 func can_join_squad(unit: Unit, squad: Squad) -> bool:
 	var dist = GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell)
-	if dist <= squad.get_max_range() and squad.leader.get_faction() == unit.get_faction() and not squad.get_members().has(unit) and squad.leader.has_squad() and not squad.has_acted and not unit.squad.has_acted:
+	if dist <= squad.get_max_squad_range() and squad.members.size() < squad.max_size() and squad.leader.get_faction() == unit.get_faction() and not squad.get_members().has(unit) and squad.leader.has_squad() and not squad.has_acted and not unit.squad.has_acted:
 		return true
 	return false
 
@@ -577,7 +592,7 @@ func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCon
 
 	# Cohesion leash from the leader's new cell (path-far cells split the squad around walls).
 	var leader_field := _path_hops(leader_destination, board)
-	var leash: int = squad.get_max_range() * 2
+	var leash: int = squad.get_max_squad_range() * 2
 
 	var taken := { leader_destination: true }
 
@@ -602,7 +617,7 @@ func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCon
 			if allowed_cells != null and not allowed_cells.has(cell):
 				continue
 			candidates[cell] = reach.reachable[cell]
-		if not taken.has(here) and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_range() and leader_field.get(here, 999999) <= leash:
+		if not taken.has(here) and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_squad_range() and leader_field.get(here, 999999) <= leash:
 			if allowed_cells == null or allowed_cells.has(here):
 				candidates[here] = 0
 

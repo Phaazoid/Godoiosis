@@ -79,7 +79,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 	for cell in cost_so_far.keys():
 		var other_unit := board.unit_at_cell(cell)
 
-		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_range():
+		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_squad_range():
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 

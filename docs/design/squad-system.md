@@ -1,10 +1,10 @@
 # Squad System — Locked Specification
 
-**Status: SETTLED — with one deliberate redesign pending (2026-06-20): LDR's meaning.** Changes to anything below should be deliberate design decisions, not implementation drift. (Drafted 2026-06-12 by Claude from the implemented system; pending user sign-off.)
+**Status: SETTLED.** The 2026-06-20 LDR redesign is now BUILT (2026-07-14, [#63](https://github.com/Phaazoid/Godoiosis/issues/63)) — see banner. Changes to anything below should be deliberate design decisions, not implementation drift. (Drafted 2026-06-12 by Claude from the implemented system; pending user sign-off.)
 
-> **Design update — 2026-06-20 ([stats.md](stats.md)).** LDR is being repurposed from *squad range* to a **squad-capacity budget**: squad **size** = budget − per-member costs, and costs drop with **relationship/familiarity** (which also grows combat synergy). **Squad range is decoupled from LDR** → a **static default**, to be tuned in playtest. The invariants below still describe the *current code* (LDR-as-Manhattan-range); the flagged ones — **I5, I6, V3** — change when this lands. This is the deliberate decision the SETTLED status invites, not drift.
+> **Design update — 2026-06-20 ([stats.md](stats.md)), BUILT 2026-07-14 ([#63](https://github.com/Phaazoid/Godoiosis/issues/63)).** LDR was repurposed from *squad range* to a **squad-capacity budget**: squad **size** = budget − per-member costs, and costs drop with **relationship/familiarity** (which also grows combat synergy, not yet built). **Squad range is decoupled from LDR** → a **static default**. The invariants below are updated in place (no longer flagged) — **I5, I6, V3** now describe the shipped code.
 >
-> **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan. Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is join-time only (existing scenario squads grandfathered, warn on overfull load); leader-death overflow detaches newest-members-first (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Build: [#63](https://github.com/Phaazoid/Godoiosis/issues/63).
+> **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan (`Squad.gd` — `get_max_squad_range()`, `max_size()`). Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is **join-time only**, in the `can_squad_up`/`can_join_squad` predicates — direct `join_squad` (scenario load) stays permissive and `push_warning`s on an overfull squad rather than ejecting anyone. Leader-death overflow (`check_reassign_leader`) detaches newest-members-first when the successor's capacity is smaller (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Tests: `tests/squad/test_squad_shape.gd` (8 cases). **Still open: in-game feel-test of the two constants** (dev, in progress) — expect `SQUAD_RANGE`/`MEMBER_LDR_COST` to move if play says so; both are one-line changes.
 
 ## Purpose
 
@@ -24,8 +24,8 @@ Numbered for test coverage. Violating any of these is a bug, full stop.
 - **I2.** Only `SquadManager` creates or destroys squads. All member removal funnels through `Squad._erase_member()` — the sole caller of `members.erase()` (mirrors the sole adder `_add_member`). Its callers: `_detach_from_current_squad()` (single-unit — join/leave/death) and `disband_squad()` (bulk teardown). (Chokepoint added 2026-06-21, [#23](https://github.com/Phaazoid/Godoiosis/issues/23).)
 - **I3.** Every live squad appears in `SquadManager.squads`; destroyed squads are removed from it and freed. No "ghost squads" holding units.
 - **I4.** `Unit.has_squad()` answers "does this unit have squadmates" (`members.size() > 1`) — not "does a squad object exist" (that's always true, per I1).
-- **I5.** The leader is always a member of their own squad. When the leader leaves/dies, leadership reassigns to the member with the highest LDR stat (first-in-member-order breaks ties). **[→ 2026-06-20: LDR now = squad-capacity budget; "highest LDR leads" still holds (biggest capacity commands) — see banner.]**
-- **I6.** Members must stand within the leader's LDR range (Manhattan). After leader reassignment, out-of-range members are detached into solo squads (`check_reassign_leader`). **[→ 2026-06-20: range becomes a static default, not LDR-derived — see banner.]**
+- **I5.** The leader is always a member of their own squad. When the leader leaves/dies, leadership reassigns to the member with the highest **effective** LDR (base + PER band; first-in-member-order breaks ties) — "biggest capacity commands" (banner). If the new leader's capacity is smaller than the outgoing membership, the newest-joined members beyond capacity are detached into solo squads (same pass, `check_reassign_leader`).
+- **I6.** Members must stand within the squad's **static range** (`Squad.SQUAD_RANGE`, Manhattan — decoupled from LDR, banner). After leader reassignment, out-of-range members are detached into solo squads (`check_reassign_leader`).
 - **I7.** Spawning a unit creates its solo squad (`spawn_unit` → `create_squad`).
 
 ## Action queue rules
@@ -41,7 +41,7 @@ Run on every queue change; actions carry `is_valid` + error strings rather than 
 
 - **V1.** Two units may not plan moves to the same destination.
 - **V2.** A move may not target a cell occupied by a squadmate who isn't moving away.
-- **V3.** Non-leader moves must land inside the leader's *projected* LDR range (the leader's own planned destination counts, not their current cell). **[→ 2026-06-20: range becomes a static default, not LDR-derived — see banner.]**
+- **V3.** Non-leader moves must land inside the squad's *static* range of the leader's **projected** cell (the leader's own planned destination counts, not their current cell — range itself no longer derives from LDR, banner).
 
 ## Counter-attack rules
 
@@ -74,7 +74,8 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_
 
 ## Known gaps / future work
 
-- **LDR redesign (2026-06-20) — numbers RATIFIED 2026-07-14, build queued as [#63](https://github.com/Phaazoid/Godoiosis/issues/63):** `MEMBER_LDR_COST = 2` capacity budget + static `SQUAD_RANGE = 3` (see banner). Until #63 lands, squad **range** still reads the leader's *effective* LDR (the `Squad.gd` getter, rerouted through the PER band in #55) and **size** is unenforced. Per-member familiarity costs remain the future discount lever; combat synergy + cost-reduction ride on familiarity, not LDR. Touches I5/I6 and V3.
+- ~~LDR redesign~~ — **BUILT 2026-07-14 ([#63](https://github.com/Phaazoid/Godoiosis/issues/63)):** `MEMBER_LDR_COST = 2` capacity budget + static `SQUAD_RANGE = 3` (see banner; I5/I6/V3 updated in place). **Still open:** per-member familiarity costs (the future discount lever — combat synergy + cost-reduction ride on familiarity, not LDR, once built) and the in-game feel-test of the two constants.
+- **UI gap ([#44](https://github.com/Phaazoid/Godoiosis/issues/44)):** current/max squad size (`Squad.max_size()`) isn't shown anywhere yet — the capacity cap is invisible until a join silently refuses. Queued for the hover panel + inspect popup.
 - AoE victim lists don't re-resolve when moves are re-planned after the volley is queued (fix belongs in `validate_squad_plan`).
 - ~~Death handling undesigned~~ — **superseded by the #33 lifecycle build (2026-06-21→25):** a would-be-fatal hit now downs (`Unit.LifecycleState`), squad ejection defers to after the resolution pass (`game._downed_pending`), counters skip mid-pass-downed actors, and rescue/countdown govern the aftermath — see [will-and-death.md](will-and-death.md) *Implementation status*. Still open squad-side: leader-down feel (leadership reassigns via I5) and squad tactics *around* downed allies (defend-the-body play).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.

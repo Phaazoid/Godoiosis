@@ -98,7 +98,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 - ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV resolved at the CON mini-grill (coarse thresholds). (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.)
 - **STR ↔ inventory weight / carry limits.**
 - **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
-- ~~**Squad range** tuning~~ — **numbers RATIFIED 2026-07-14** (`SQUAD_RANGE = 3` static + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; build = [#63](https://github.com/Phaazoid/Godoiosis/issues/63)).
+- ~~**Squad range** tuning~~ — **BUILT 2026-07-14** (`SQUAD_RANGE = 3` static + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; [#63](https://github.com/Phaazoid/Godoiosis/issues/63), feel-test in progress).
 - ~~**Jobs**~~ — **RATIFIED 2026-07-06, own doc: [jobs.md](jobs.md)** (LDR/WIL take the big job influence; input stats ±1–2; ceilings-not-prereqs clamping *effective* stats; MOV ownership).
 
 Cross-refs: [progression.md](progression.md), [squad-system.md](squad-system.md), [will-and-death.md](will-and-death.md), [weapons.md](weapons.md), [philosophy.md](philosophy.md), `../../CLAUDE.md` (laws). Code: `Classes/core/Stats.gd`.

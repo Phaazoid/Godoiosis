@@ -880,7 +880,7 @@ func _on_squad_became_active(squad: Squad, action: BaseAction):
 
 
 func draw_squad_leader_range(squad: Squad, cell: Vector2i):		
-	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, squad.get_ldr_range_from_cell(cell), OVERLAY_DEFAULT_ATLAS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, squad.get_squad_range_from_cell(cell), OVERLAY_DEFAULT_ATLAS)
 
 func _on_squad_has_no_actions(squad: Squad):
 	overlay_manager.clear_squad_range()
@@ -965,7 +965,7 @@ func draw_joinable_squads(joining_unit: Unit):
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if squad_manager.can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_effective_ldr()):
+			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.squad.get_max_squad_range()):
 				if get_unit_at_cell(cell) == null:
 					cells.append(cell)
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
@@ -984,7 +984,7 @@ func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
 func draw_create_squad(unit: Unit):
 	overlay.clear()
 	var cells: Array[Vector2i] = []
-	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.get_effective_ldr()):
+	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.squad.get_max_squad_range()):
 		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)

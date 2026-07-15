@@ -3,6 +3,8 @@ class_name Squad
 
 
 const NO_HOME := Vector2i(-999999, -999999)
+const SQUAD_RANGE := 3        # playtest-tunable: static cohesion radius (Manhattan), decoupled from LDR (#63)
+const MEMBER_LDR_COST := 2    # playtest-tunable: effective-LDR budget per member beyond the leader; familiarity discounts later
 
 var leader: Unit
 var members: Array[Unit] = []
@@ -41,11 +43,15 @@ func has_any_queued_actions() -> bool:
 		return false
 	return true
 		
-func get_max_range() -> int:
-	return leader.get_effective_ldr() #This is a placeholder value for now
+func get_max_squad_range() -> int:
+	return SQUAD_RANGE
 
-func get_ldr_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
-	return GridUtils.cells_within_manhattan_range(cell, get_max_range())
+func max_size() -> int:
+	# Capacity budget (squad-system.md, ratified 2026-07-14): leader + floor(eLDR / cost).
+	return 1 + maxi(0, leader.get_effective_ldr() / MEMBER_LDR_COST)
+
+func get_squad_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
+	return GridUtils.cells_within_manhattan_range(cell, get_max_squad_range())
 	
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
