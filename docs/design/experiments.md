@@ -4,18 +4,22 @@ A lightweight way to build a proposed feature behind a toggle, *feel* it in play
 it on/off without committing to it. Lets us carry several "maybe" systems in the codebase
 at once and decide by playing, not arguing.
 
+**Canon checked through #67 (2026-07-16).**
+
 ## Shape
 
 One registry, read statically anywhere, toggled from a dev tab. **No autoload** — GDScript
 `static var` provides the global mutable state, mirroring how `Stats` / `Elemental` are
 class-level statics.
 
-| Piece | File | Owner |
-|---|---|---|
-| Registry: `enum Flag`, `DEFS` metadata, `is_on()` + state | `Classes/dev/Experiments.gd` | infra |
-| Dev tab: a live toggle per flag | `Classes/dev/ExperimentsTool.gd` + `Scenes/DevOverlay.tscn` | UI |
-| Persistence | `user://experiments.cfg` (keyed by flag name) | infra |
-| Guards | `tests/experiments/test_experiments.gd` | infra |
+| Piece | File | Owner | Status |
+|---|---|---|---|
+| Registry: `enum Flag`, `DEFS` metadata, `is_on()` + state | `Classes/dev/Experiments.gd` | infra | **built** |
+| Dev tab: a live toggle per flag | `Classes/dev/ExperimentsTool.gd` + `Scenes/DevOverlay.tscn` | UI | **not built** — no such file, no tab wired into `DevOverlay.tscn` |
+| Persistence | `user://experiments.cfg` (keyed by flag name) | infra | **built** |
+| Guards | `tests/experiments/test_experiments.gd` | infra | **built** |
+
+**Found stale 2026-07-16:** this doc previously read as describing a complete, working harness. Only the registry + persistence + test guard exist — there is currently no in-game way to toggle a flag; use `Experiments.set_on(flag, value)` from code, or hand-edit the `.cfg`, until the dev tab is built.
 
 ## Add an experiment
 
@@ -30,8 +34,10 @@ class-level statics.
        # current behaviour
    ```
 
-The dev tab picks up the new flag automatically (it iterates the registry). Toggle state
-persists across launches and survives F2 reset.
+**No dev tab exists yet** to pick this up automatically (see the Status column above) — for
+now, toggle via `Experiments.set_on(Experiments.Flag.MY_FEATURE, true)` from code, or hand-edit
+`user://experiments.cfg`. Toggle state persists across launches and survives F2 reset either way;
+once a dev tab is built, it would iterate the registry and need no per-flag wiring.
 
 ## Reading a flag — the determinism contract
 

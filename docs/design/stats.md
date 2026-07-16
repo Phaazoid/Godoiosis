@@ -2,6 +2,8 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
+**Canon checked through #67 (2026-07-16).**
+
 ## Core stance
 
 - **Stats are fixed identity, not a growth axis.** A unit *is* its statline — its role and feel. The "becoming a better warrior" arc lives in horizontal systems (proficiency, runes, gear, relationships) + player mastery, never in climbing numbers. Honors *go wide, not tall* (philosophy Axiom 5).
@@ -98,7 +100,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 - ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV resolved at the CON mini-grill (coarse thresholds). (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.)
 - **STR ↔ inventory weight / carry limits.**
 - **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
-- ~~**Squad range** tuning~~ — **BUILT 2026-07-14** (`SQUAD_RANGE = 3` static + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; [#63](https://github.com/Phaazoid/Godoiosis/issues/63), feel-test in progress).
+- ~~**Squad range** tuning~~ — **BUILT 2026-07-14, feel-tested + CLOSED 2026-07-16** (`SQUAD_RANGE = 3` static + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; [#63](https://github.com/Phaazoid/Godoiosis/issues/63)).
 - ~~**Jobs**~~ — **RATIFIED 2026-07-06, own doc: [jobs.md](jobs.md)** (LDR/WIL take the big job influence; input stats ±1–2; ceilings-not-prereqs clamping *effective* stats; MOV ownership).
 
 Cross-refs: [progression.md](progression.md), [squad-system.md](squad-system.md), [will-and-death.md](will-and-death.md), [weapons.md](weapons.md), [philosophy.md](philosophy.md), `../../CLAUDE.md` (laws). Code: `Classes/core/Stats.gd`.

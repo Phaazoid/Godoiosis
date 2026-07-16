@@ -1,8 +1,10 @@
 # Resolution Pipeline — the one place consequences are derived
 
-**Status: LOCKED CONTRACT (keystone) — ratified 2026-06-18 (#5); v1 IMPLEMENTED 2026-06-19 (#28) — base + elemental stages live in `Classes/actions/PlanResolver.gd` (with `ResolvedPlan`/`ResolvedOutcome`), proven by `tests/elemental/` (E1–E8). The Will stage is the next addition behind elemental. AMENDED 2026-07-05: R9 added (the BREAK doctrine — plans are predictions; execution re-enters the resolver at divergence), a deliberate co-dev amendment out of the coherence audit's A1.** A foundational decision agreed **before the elemental build (Phase 2) hardens**, because Phase 2 is where this pipeline is first built.
+**Status: LOCKED CONTRACT (keystone) — ratified 2026-06-18 (#5); v1 IMPLEMENTED 2026-06-19 (#28) — base + elemental stages live in `Classes/actions/PlanResolver.gd` (with `ResolvedPlan`/`ResolvedOutcome`), proven by `tests/elemental/` (E1–E8). AMENDED 2026-07-05: R9 added (the BREAK doctrine — plans are predictions; execution re-enters the resolver at divergence), a deliberate co-dev amendment out of the coherence audit's A1. The Will stage this doc specified is now built too: the lifecycle scaffold + Will resource (2026-06-21→25, #33), the limb-slot/MOV rewrite (#56), and AI Crisis stances + the CRISIS lethality preview (#57) — all 2026-07-15. This contract's job is done; it now documents *why* the shipped shape is correct, not a pending build.** A foundational decision agreed **before the elemental build (Phase 2) hardens**, because Phase 2 is where this pipeline is first built.
 
 > **Locked 2026-06-18 (#5):** R1–R8 ratified, plus three clarifications folded in for Will's sake — **R4** threads HP (+ a Will slot), not element-states-only; **R7** counter *derivation* reads the threaded hypothetical (liveness-ready); **R8** the `ResolvedOutcome` is the single source of truth for damage (`AttackAction` stops computing it). Deferred (not locked): volley / simultaneous-hit ordering within one AoE — revisit when tile states or multi-hit-same-target arrive. This doc sits *above* the counter rules in [squad-system.md](squad-system.md) and the [elemental](elemental-system.md) / [will-and-death](will-and-death.md) designs: it defines the single seam all three plug into. The **contract (R1–R8)** is what's being locked; class names are illustrative.
+
+**Canon checked through #67 (2026-07-16).**
 
 ## Why this doc exists
 
@@ -11,8 +13,8 @@ Three systems are the **same operation** wearing different hats:
 | system | status | derives… |
 |---|---|---|
 | **Counter-attacks** | built (`SquadManager.calculate_counterattacks_for_squad`) | who counters whom, from the plan |
-| **Elemental reactions** | Phase 2 ([elemental-system.md](elemental-system.md), E1–E8) | reacted damage + state changes, from the plan |
-| **Will / death outcomes** | Phase 3 ([will-and-death.md](will-and-death.md)) | downed / maim / overkill, from the plan |
+| **Elemental reactions** | built, Phase 2 ([elemental-system.md](elemental-system.md), E1–E8) | reacted damage + state changes, from the plan |
+| **Will / death outcomes** | built, Phase 3 (#33, #56, #57 — [will-and-death.md](will-and-death.md)) | downed / maim / overkill / Crisis, from the plan |
 
 All three: a consequence **derived from the ordered plan at queue time → surfaced in the preview → replayed at execution.** Counters already work exactly this way; the other two are specified to. They are not merely *similar* — they are **coupled and ordered** (see "The forced ordering"). If each is built as a private subsystem, you get the plan walked three times, three preview paths that drift apart, and elemental-damage and Will-lethality that disagree about ordering. **One pipeline prevents all of that.** Decide its shape now; Phase 2 builds it, Phase 3 slots into it.
 
@@ -86,7 +88,7 @@ A dedicated resolver invoked by `SquadManager` (already the derived-action home 
 ## Migration is incremental — you do *not* build all stages at once
 
 1. **Phase 2 (elemental v1)** introduces the pipeline with only **base-damage + elemental** stages, plus the `ResolvedPlan` / `ResolvedOutcome` types and the single preview model (R8). The threaded hypothetical carries **HP + a Will slot** from the start (R4), and the counter stage reads it with an **always-true liveness flag** (R7) — both so Phase 3 adds the Will stage without re-threading or re-deriving counters. Counters keep working as they do; just make sure they flow through the same resolved result (R3). *The deliverable is the general seam, not a private elemental box.*
-2. **Phase 3 (Will/death)** adds the **Will stage** reading the resolved damage (R7). No re-architecture — it slots in behind elemental.
+2. **Phase 3 (Will/death) — DONE.** Added the **Will stage** reading the resolved damage (R7), no re-architecture needed — it slotted in behind elemental exactly as planned, across #33 (scaffold + Will resource), #56 (limb-slot/MOV), and #57 (Crisis stance + lethality preview).
 3. **Counters** already fit (they're attacks); the work is ensuring they **re-enter** the stages so E7 holds.
 
 Building Phase 2 against this contract costs almost nothing extra now and saves rebuilding the resolver/preview in Phase 3.

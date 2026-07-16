@@ -2,7 +2,9 @@
 
 **Status: CATALOG (workshop).** Distilled 2026-06-17 (issue #32) from `Systems Mechanics/Terrain Modification` and the terrain/weather threads in [elemental-interactions.md](elemental-interactions.md), reconciled with the implemented tile model. Per the dev: terrain and elemental are **two docs that reference each other heavily** — this one catalogs **what tiles can be and do** (not all of it elemental); the elemental docs own the *reaction* rules. AP-cost and "Avo" numbers from the wiki are stripped (Law #1 / no action points / no dodge).
 
-> **Build status — #50 slice 1 (2026-06-28, headless).** The dynamic per-cell state store now exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState.BURNING` as the first state and a `Terrain.Kind` enum mapping the authored `terrain_type` strings. It's fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). Proven in `tests/terrain/test_cell_effects.gd`. Still LEFT: live execution apply + the preview overlay (slice 2, landed together for Law #2), `water + ice` state×state reactions (slice 3), and the `ScenarioData.tile_data` round-trip.
+> **Build status — #50 DONE + CLOSED (2026-06-28 → 06-30, three sessions).** The dynamic per-cell state store exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState {BURNING, FROZEN}` and a `Terrain.Kind` enum mapping the authored `terrain_type` strings (GRASS/MUD/ROCK/TREE/WATER). Fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). **All three planned slices shipped:** slice 1 (headless plumbing), slice 2 (live execution + queue preview), slice 3 (`ICE × water → FROZEN`, `FIRE × FROZEN → water`, both authored `.tres` reactions). Also shipped beyond the original scope: AoE-footprint deposit (every affected cell, not just the aim cell), counters depositing too, persistence (`ScenarioData.terrain_states` — see below), burnout/melt after 3 turn cycles (`STATE_DURATIONS`/`tick_states`), and burning-tile damage on end-of-phase (routed through `take_damage`, so downs/Crisis apply correctly). Proven in `tests/terrain/{test_cell_effects, test_terrain_persistence, test_burnout, test_ice}.gd`. **Deferred by design, not gaps:** burning spread + a varied elemental-effect roster beyond fire/ice (separate future PR); the plan-time ghost preview stays fire-only (`OverlayManager.show_terrain_preview` hardcodes BURNING — the live post-execution overlay already renders every mapped state).
+
+**Canon checked through #67 (2026-07-16).**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -12,7 +14,7 @@ The board is a `TileMapLayer` (`Grid`). Tiles already carry **custom data** the 
 - `move_cost: int` — terrain weight added in `movement_cost`.
 - a per-cell **terrain icon** (`GridUtils.get_terrain_icon_at_cell`), surfaced in the action queue.
 
-Everything below layers **on top of** that base tile: dynamic, per-cell **state** that units, runes, and weapons apply and read. State must round-trip through scenario save/load (`ScenarioData.tile_data`).
+Everything below layers **on top of** that base tile: dynamic, per-cell **state** that units, runes, and weapons apply and read. State round-trips through scenario save/load via **`ScenarioData.terrain_states`** — a dedicated field added by #50; `tile_data` itself stays the static tilemap and never carried dynamic state.
 
 ## Modification layers ([WORKSHOP] — from the wiki, de-RNG'd)
 
@@ -55,8 +57,8 @@ A deeper model the dev floated: the **atmosphere layer is gaseous materia** (def
 
 - How much terrain state is **authored per level** vs **emergent** from play? (Weather sets baselines — elemental-interactions.)
 - ~~Does Cover / blocking pull from a DEF stat?~~ — **RESOLVED 2026-07-06 (CON mini-grill):** Cover is **flat mitigation, never stat-scaled** (see the state catalog above); blocking ownership dispatched weapon-tied→parts / unit-tied→jobs / armor-tied→gear content ([weapons.md](weapons.md), [grill-queue.md](grill-queue.md) item 14).
-- Serialization shape for live tile state in `ScenarioData.tile_data`.
+- ~~Serialization shape for live tile state~~ — **RESOLVED (#50):** `ScenarioData.terrain_states`, a dedicated field separate from the static `tile_data`.
 
 ## Sources & cross-refs
 
-Wiki: `Systems Mechanics/Terrain Modification`, scratchpad atmosphere notes. Code: `Grid` custom data (`walkable`, `move_cost`), `movement_cost`, `GridUtils`, `ScenarioData.tile_data`. See [elemental-system.md](elemental-system.md), [elemental-interactions.md](elemental-interactions.md), [weapons.md](weapons.md).
+Wiki: `Systems Mechanics/Terrain Modification`, scratchpad atmosphere notes. Code: `Grid` custom data (`walkable`, `move_cost`), `movement_cost`, `GridUtils`, `TerrainStateManager`, `ScenarioData.tile_data` (static tilemap) + `.terrain_states` (dynamic state, #50). See [elemental-system.md](elemental-system.md), [elemental-interactions.md](elemental-interactions.md), [weapons.md](weapons.md).

@@ -7,6 +7,8 @@
 > **Co-dev RATIFIED 2026-07-11 (agenda Stop 5), with a content-priority rider:** everything here is fine for testing as-is. Going forward, **effects-first, tools-first** — think of the effects we actually *want* in game and give them to units as tools (runes/flourishes a unit actually wields) *before* trying to lock down every combination in the table. The discovery table fills in behind wanted effects, not ahead of them. (Rider also stamped on [elemental-interactions.md](elemental-interactions.md) — the shared combo content pool — and parked grill 11.)
 >
 > **Wording note (immersion):** in-game language stays inside the fantasy — *channeling, transmutation, carving, marks* — never "chemistry," even though the designers know exactly what it is.
+>
+> **Canon checked through #67 (2026-07-16).**
 
 ## The fantasy this system serves
 

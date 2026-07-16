@@ -7,6 +7,8 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
+**Canon checked through #67 (2026-07-16).**
+
 ## Principles
 
 1. **The queue never lies (Law #2), and now it must also be legible.** Every row previews exactly
@@ -42,21 +44,25 @@ plus the running order of the queue-UX checklist. Update it as items land.
    homework. (Board-side #44 scope; pairs with the codex's "public geometry, private lexicon"
    policy in [transmutation-model-proposal.md](transmutation-model-proposal.md).)
 
-## #49 Action Queue UX — checklist & order
+## #49 Action Queue UX — CLOSED, all items shipped
 
-Running order (cheapest / highest-clarity-per-effort first):
+**Found stale during the 2026-07-16 design-doc sweep:** this checklist read as an active running
+order with only item 2 checked off, but issue #49 is closed and every item is built — verified
+directly against `Classes/ui/SquadActionQueueControl.gd` / `ActionQueueRow.gd` /
+`AttackAction.gd`. Kept as a build-record (the principles above stay live guidelines):
 
-1. **More info per row — damage + target HP before -> after.** *(starting here)*
-   `ResolvedOutcome.target_hp_after` is already threaded; `before = after + damage` (attacks only
-   change HP, so the identity holds). Lives in `AttackAction.get_outcome_summary()`.
-2. **Counters render after all attacks.** **DONE** — `SquadManager.get_display_entries_for_squad`
+1. **More info per row — damage + target HP before -> after.** — **DONE.**
+   `AttackAction.get_outcome_summary()` renders `-N (before->after)`, with a dedicated honest form
+   for CRISIS rows (extended alongside #57).
+2. **Counters render after all attacks.** — **DONE** — `SquadManager.get_display_entries_for_squad`
    builds COUNTER as its own section, last, with skipped counters hidden.
-3. **Group a volley into one expandable row.** Members share the `volley` array, so the set is
-   identifiable. Collapse N derived rows to one summary row that expands on click.
-4. **Outer scrollbox for the whole queue.** Each section already scrolls internally
-   (`SECTION_MAX_HEIGHT`); the *list of sections* now needs its own scroll too.
-5. **Click-drag to reorder attacks.** Combo order matters (elemental). Stays a deterministic,
-   planned reorder — Law #2 intact.
+3. **Group a volley into one expandable row.** — **DONE** —
+   `SquadActionQueueControl._collect_volley_group` / `_add_volley_group`, per-actor expand/collapse
+   state (`_expanded_actors`), `ActionQueueRow.setup_volley_summary`.
+4. **Outer scrollbox for the whole queue.** — **DONE** — `_section_scrolls: Array[ScrollContainer]`,
+   one per section plus the outer list.
+5. **Click-drag to reorder attacks.** — **DONE** — full drag machinery (`_drag_row` / `_drag_section`,
+   `reorder_attacks_requested` signal) in `SquadActionQueueControl`.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

@@ -4,6 +4,8 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
 
+**Canon checked through #67 (2026-07-16).**
+
 ---
 
 ## Size 1 — cogs & fittings (space 1: anyone can use these)

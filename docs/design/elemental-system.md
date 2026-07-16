@@ -4,13 +4,15 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
+**Canon checked through #67 (2026-07-16).**
+
 ## What it is
 
 Attacks carry one or more **elements**. Units (and, later, tiles) hold **states**. When an incoming element meets an existing state, they may **react** — bonus damage, a status flips, a tile ignites. Chaining compatible hits (wet *then* shock) is the deterministic replacement for critical hits: the crit is something you *engineer through ordering*, not something you roll. Reactions **stack** — multiple can fire on one hit — so combos run deep on purpose. Squad-vs-squad is where this pays off: an alchemist sets the state, a mechanist cashes it in.
 
 ## Enums, not strings (project rule)
 
-Fixed game vocabularies are **enums**, never strings — `Element` and `State` are enums from day one. The existing `WeaponData.elemental_damage_type: String` stub migrates to `Element`. (Separate migration, flagged in Open forks: `WeaponData.weapon_type: String` → enum — sound, but only if the enum becomes the single source `WeaponCatalog` derives from, and we **append-only**, since enums serialize as ints and reordering corrupts saved variant `.tres`.)
+Fixed game vocabularies are **enums**, never strings — `Element` and `State` are enums from day one. **Both migrations below are done — closed as [#7](https://github.com/Phaazoid/Godoiosis/issues/7):** `WeaponData.elemental_damage_type` is `Elemental.Element`, and `WeaponData.weapon_type` is its own `WeaponType` enum (append-only, `WeaponCatalog` derives from it — see [weapons.md](weapons.md)).
 
 ## Vocabulary (the model)
 
@@ -102,7 +104,7 @@ Real, wanted, out of the first slice. Recorded so the wiki synthesis isn't lost.
 
 Now narrow. Most session-1 forks were resolved (see ratified model above: states on `Unit`, all-stack reactions, friendly combos, counters fish, multi-element supported). Genuinely still open:
 
-1. **`weapon_type: String` → enum migration.** Endorsed in principle (project enum rule), but it was a *deliberate* string to avoid duplicating `WeaponCatalog.TYPES`. Do it only as: enum = single source the catalog derives from, **append-only** (enum reorder corrupts saved variant `.tres`). Schedule as its own refactor; doesn't block elemental work.
+1. ~~**`weapon_type: String` → enum migration.**~~ — **DONE, closed as [#7](https://github.com/Phaazoid/Godoiosis/issues/7).** `WeaponType` is its own enum, `WeaponCatalog` derives from it, append-only.
 2. **E8 add/remove conflict rule** (remove-wins lean) — confirm once real reactions exist that actually collide.
 3. **The element / state / reaction rosters** — wholly authored content, deliberately empty here. Brainstormed in [elemental-interactions.md](elemental-interactions.md); narrow from that.
 4. **What each control-state *does*** — same: drafted in [elemental-interactions.md](elemental-interactions.md), settle as Will/abilities + the action economy firm up ("lose a turn" intersects them).

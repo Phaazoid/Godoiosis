@@ -8,6 +8,8 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
+**Canon checked through #67 (2026-07-16).**
+
 ---
 
 ## Design axioms (the guardrails ideas must respect)

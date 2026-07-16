@@ -6,6 +6,8 @@
 
 **Format:** *Name (posture · lean)* — fantasy. Starter = day-one ability; Main = main-tier; Sub = sub-tier; ceilings/MOV where they define the job. Taxonomy tags: [A]ction [R]eaction [P]assive [M]ovement.
 
+**Canon checked through #67 (2026-07-16).**
+
 ---
 
 ## A. World-grown jobs (fiction-first)

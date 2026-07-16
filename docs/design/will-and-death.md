@@ -1,8 +1,10 @@
 # Will & Death — "The Art of Not Dying"
 
-> **⚠️ PROVISIONAL (redesigned 2026-06-24, solo grill-me session). NOT playtested.** Everything below the [Implementation status](#implementation-status) section came out of design conversation and is expected to shift in playtest. The numbers (`N`, max Will, Crisis gate, Rally cap, surge) are placeholders, **pseudo-locked as built**. Tracked in [#33](https://github.com/Phaazoid/Godoiosis/issues/33).
+> **⚠️ PROVISIONAL (redesigned 2026-06-24, solo grill-me session). NOT playtested.** Everything below the [Implementation status](#implementation-status) section came out of design conversation and is expected to shift in playtest. The numbers (`N`, max Will, Crisis gate, Rally cap, surge) are placeholders, **pseudo-locked as built**. Originally tracked in [#33](https://github.com/Phaazoid/Godoiosis/issues/33) (closed — the initial lifecycle scaffold + Will resource shipped there); the limb-slot/MOV and AI Crisis follow-through this doc also describes shipped as [#56](https://github.com/Phaazoid/Godoiosis/issues/56)/[#57](https://github.com/Phaazoid/Godoiosis/issues/57) (both closed).
 >
-> **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15)** — see Implementation status below. Transmutation strain and AI Crisis policy remain design-only.
+> **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15), and AI Crisis stances + the CRISIS lethality preview are now BUILT too (#57, 2026-07-15)** — see Implementation status below. Transmutation strain remains the one design-only piece of this grill's output.
+>
+> **Canon checked through #67 (2026-07-16).**
 
 Design direction first agreed 2026-06-15; **reframed 2026-06-24**. Builds on the implemented death floor (`Unit.unit_died` fan-out). Supersedes the wiki's random-dismemberment framing (Law #1) **and this doc's own pre-2026-06-24 "Will gates life" ladder** (see below).
 
@@ -32,7 +34,7 @@ Why this is better: it removes the harsh "low Will → you just die" cliff (nobo
 
 **Stub / not built:**
 - **Prosthetic content** (real parts, stats, integrated-weapon face — prompt 10; the slot model + detach-on-maim seam exist, `LimbFitting.prosthetic_item` routing to inventory is a `TODO(10)` stub) — see [weapons.md](weapons.md) → Prosthetic family.
-- **Between-battle recovery**; **counter-gating** on the two-handed verb lock (deferred to the two-handed weapon content pass — no weapon carries the flag yet); the **Balanced archetype** (separate #29 leftover, untouched by #57).
+- **Between-battle recovery**; **counter-gating** on the two-handed verb lock (deferred to the two-handed weapon content pass — no weapon carries the flag yet; now tracked as [#67](https://github.com/Phaazoid/Godoiosis/issues/67)); the **Balanced archetype** (separate #29 leftover, untouched by #57 — #29 itself is closed, so this has no open tracking issue right now).
 - The **which-limb rotation is a placeholder the dev flagged as VERY subject to change** (2026-07-15) — see below.
 
 ## The resource
@@ -115,6 +117,6 @@ Brute-force channeling ([transmutation-model-proposal.md](transmutation-model-pr
 4. **Limb-loss scope** — **the maim rung only** (Crisis *kills*, it doesn't maim). *Provisional.*
 5. ~~**Naming**~~ — **Will** (kept; it reads *better* under the limb-buffer framing — you spend it to stay whole, and out of it the body pays).
 
-**Open / tuning knobs (placeholders; current values in parens — all pseudo-locked as built, playtest-tunable):** the flat down-cost `N` (**5**); max-Will magnitude (**= WIL stat, capped at 20**); the Rally base + falloff (**6, −2, floor at <1**); the Crisis Will gate (**full Will as built**) and surge (**+5 scaling stat, one turn, back at 5 HP**). *Resolved 2026-07-04:* which-limb = fixed rotation placeholder, natural limbs first, prosthetics recoverable (see the limb-slot model); AI Crisis = archetype stances. *Design debt from the grill:* crisis-aware lethality preview (Law #2); `maimed_part` single value → set of flags; the limb-slot STR/MOV derivation itself.
+**Open / tuning knobs (placeholders; current values in parens — all pseudo-locked as built, playtest-tunable):** the flat down-cost `N` (**5**); max-Will magnitude (**= WIL stat, capped at 20**); the Rally base + falloff (**6, −2, floor at <1**); the Crisis Will gate (**full Will as built**) and surge (**+5 scaling stat, one turn, back at 5 HP**). *Resolved 2026-07-04:* which-limb = fixed rotation placeholder, natural limbs first, prosthetics recoverable (see the limb-slot model); AI Crisis = archetype stances. *Design debt from the grill — all closed now:* ~~crisis-aware lethality preview (Law #2)~~ BUILT #57; ~~`maimed_part` single value → set of flags~~ superseded outright by the #56 limb-slot model (four independent slots, not a bitmask); ~~the limb-slot STR/MOV derivation itself~~ BUILT #56.
 
 Cross-refs: [stats.md](stats.md), [progression.md](progression.md) (prosthetics / aura / regrowth), [squad-system.md](squad-system.md), [resolution-pipeline.md](resolution-pipeline.md) (the Will stage, R7), `../../CLAUDE.md` (Laws #1/#2).

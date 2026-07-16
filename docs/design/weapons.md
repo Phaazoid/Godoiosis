@@ -2,15 +2,17 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
+**Canon checked through #67 (2026-07-16).**
+
 ## The architecture (implemented — [LOCKED shape])
 
 A weapon is **policy + geometry**, split the same way as the rest of combat (see `../../CLAUDE.md`):
 
 - **`WeaponData` = policy** — `power`, `scaling_stat`, `can_counter`, `hits_allies`, `weapon_type`, `elemental_damage_type`, plus a reference to an `attack_pattern`.
 - **`AttackPattern` = geometry** — pure cell math (selectable vs affected cells). Terrain/LoS filtering belongs at the resolution layer, not the pattern (planned flag: `arcs_over_obstacles`).
-- Weapons are **content authored as `.tres`**: base types in `WeaponCatalog.TYPES`, customized variants written by the in-game Weapon Editor to `Resources/WeaponVariants/`. **Implemented base types so far: Chainsword, Springspear, FireRune** — the families below are the design target, not all built yet.
+- Weapons are **content authored as `.tres`**: base types in `WeaponCatalog.TYPES`, customized variants written by the in-game **Item Editor** (renamed from "Weapon Editor" — [#51](https://github.com/Phaazoid/Godoiosis/issues/51)) to `Resources/WeaponVariants/`. **Implemented base types so far: Chainsword, Springspear** — the families below are the design target, not all built yet. (A `FireRune.tres` also sits in `WeaponVariants/`, but it's a legacy example fixture, not a third base type — see [alchemy-kit.md](alchemy-kit.md)'s own disclaimer; the real rune content lives in `Resources/RuneVariants/`.)
 
-> **Enum debt (#7):** `weapon_type` and `elemental_damage_type` are currently `String`s. They're fixed vocabularies → migrate to enums/registries (append-only once persisted in saved `.tres`). The family list below is the canonical `weapon_type` vocabulary.
+> **Enum debt — CLOSED ([#7](https://github.com/Phaazoid/Godoiosis/issues/7)):** `weapon_type` is now `WeaponData.WeaponType` (`NONE / CHAINSWORD / DRILL / SPRINGSPEAR / CARBINE / KINETIC_MACE / CHEMICAL_SPITTER / PROSTHETIC` — matches the seven families below exactly) and `elemental_damage_type` is now `Elemental.Element`. Both migrated off `String`. The family list below is the canonical `weapon_type` vocabulary.
 
 ## Cross-cutting principles ([WORKSHOP])
 
@@ -28,7 +30,7 @@ The dev's long-held frame, stated aloud 2026-07-06 (it predates most of these do
 - **Mods cost authored resources** (the scrap/materia curve, [progression.md](progression.md)) — customization is an economy decision.
 - **Modified weapons are harder to wield.** Higher **weapon proficiency** is required to handle heavily-modified weapons, or to access their deeper attacks — proficiency is the *license*, parts are the *hardware*. (Rides the same tier-unlock lane that already carries Revved.)
 - **Weapons are multi-attack** — like runes carrying multiple transcribed arrays, a weapon can offer several attacks chosen at order time. E.g. Springspear: plain stab (single tile) *or* burst the spear outward — a stronger 2-tile-forward AoE that then **costs a main action to rewind** before it can fire again. Wind-up/recovery economies are the deterministic "big hit" replacement (the charge system above).
-- **Weapon-side abilities live HERE, not in jobs (dev-decided 2026-07-06).** The family of "abilities" that are really weapon behaviors — **Revved**, Drill's **Burrow**, weapon-tied defensive/block abilities, a PER-flavored overwatch on a sniper-type carbine — belong to this system. The **jobs layer** owns unit-side abilities ([grill-queue.md](grill-queue.md)); armor/non-weapon items may carry abilities too (unformalized — rides the CON + defensive-gear grill).
+- **Weapon-side abilities live HERE, not in jobs (dev-decided 2026-07-06).** The family of "abilities" that are really weapon behaviors — **Revved**, Drill's **Burrow**, weapon-tied defensive/block abilities, a PER-flavored overwatch on a sniper-type carbine — belong to this system. The **jobs layer** owns unit-side abilities ([grill-queue.md](grill-queue.md)); armor/non-weapon items may carry abilities too — still **unformalized**: the CON + defensive-gear grill already happened (2026-07-06, built as [#55](https://github.com/Phaazoid/Godoiosis/issues/55)) but only settled DEF *scaling*, not an armor-side ability question.
 
 Umbrella over existing threads: the 5th-tier spike (above), the `WeaponVariants` authoring pipeline, mutable-scaling mods (Captured ideas), per-cell damage bands (#25).
 
@@ -66,7 +68,7 @@ Each family = a fantasy + a role + a **signature class mechanic** (the wiki's pe
 ## Locked vs open
 
 - **Locked-ish:** the policy/pattern architecture; the seven family identities + their signature-mechanic *fantasy*; no-accuracy/no-crit.
-- **Open (long-horizon):** all numbers; the scaling-stat blend (Spd/Skill vs the current enum); blocking *mechanics* (ownership dispatched 2026-07-06; triangle cut); the parts system's specifics (own grill queued); upgrade trees (economy); which families get built past the current three.
+- **Open (long-horizon):** all numbers; the scaling-stat blend (Spd/Skill vs the current enum); blocking *mechanics* (ownership dispatched 2026-07-06; triangle cut); the parts system's *implementation* (design ratified 2026-07-06, co-dev ratified 2026-07-14 — see above; build itself is [#59](https://github.com/Phaazoid/Godoiosis/issues/59), still open); upgrade trees (economy); which families get built past the current two (Chainsword, Springspear).
 
 ## Captured ideas — scratchpad (2026-06-17)
 

@@ -4,6 +4,8 @@
 
 > **Pacing principle (dev, 2026-07-04): showcase ≠ introduction.** Late levels may be the *showcase* for a system (Will, taming, weather…), but they must not be its *first appearance* — otherwise half the game passes without the toolbox. Introduce each mechanic early in an ordinary level, test it in a mixed level, then let the set piece be the graduation exam. (Teach → test → twist.)
 
+**Canon checked through #67 (2026-07-16).**
+
 ## The concepts (campaign order)
 
 | # | Working name | Story beat | The hook | Systems showcased |

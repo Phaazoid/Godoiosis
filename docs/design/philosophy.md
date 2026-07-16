@@ -2,6 +2,8 @@
 
 **Status: NORTH STAR (short, stable).** Distilled 2026-06-17 (issue #32) from `Game Mechanics/Gameplay Philosophies`, `Intended Player Behavior/*`, and `Home`. These are the *why* behind the non-negotiable **Laws** in `../../CLAUDE.md`; when a design choice is unclear, it should serve these.
 
+**Canon checked through #67 (2026-07-16).**
+
 ## The pitch (one line)
 
 A turn-based tactical RPG of **steampunk mechanisms and alchemic runes** — in the Fire Emblem / FFT / XCOM / Advance Wars lineage, set apart by **squad combat** and a deterministic **elemental combinatrix**.

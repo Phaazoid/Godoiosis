@@ -2,6 +2,8 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill, dev + Claude Fable 5); co-dev pass 2026-07-11 — verdict: BUILD TO TEST.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* Playtest answers what about it feels good and whether jobs are even the right vehicle (abilities/stat variation could technically ship other ways) — the framework must earn its keep before any investment in acquisition/progression content: unlock-hunt designs, hidden/easter-egg jobs, certification-economy elaboration are all explicitly down-the-road (not disliked — premature). **Numbers are placeholders; content passes deferred.** "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Owns the MOV derivation deferred by audit A4. Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
+**Canon checked through #67 (2026-07-16).**
+
 ## The linked trio (scope)
 
 - **Job = a noun.** A persistent qualification on `UnitInstance`: stat profile + ability pool + squad posture. Heavy, campaign-scale.
