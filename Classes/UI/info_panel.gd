@@ -66,6 +66,10 @@ func _refresh_hp():
 		text += " [MAIMED]"
 	if unit.in_crisis:
 		text += " [CRISIS]"
+	if not unit.unit_instance.can_afford_down():
+		var at_risk := unit.unit_instance.next_maim_slot()
+		if at_risk != -1:
+			text += "  NEXT AT RISK: %s" % UnitInstance.LimbSlot.keys()[at_risk]
 	hp_label.text = text
 
 func _on_hp_changed(_current, _max):

@@ -1,7 +1,8 @@
 # AITactics (#29): the shared board queries the archetypes compose with. Runs on the real
 # managers + TestTiles terrain via the Play API's headless board_builder (proven pattern).
 # Fixture weapons are pattern-less -> CombatComponent reach falls back to Manhattan range 1,
-# so attack geometry is trivial: distance <= 1 can hit. Units default to move_range 5.
+# so attack geometry is trivial: distance <= 1 can hit. Units default to MOV 4 (#56: MOV is
+# now a derived readout — JOBLESS_MOV_BASE 4 + dex_mov_band(5)=0 for the default statline).
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -125,8 +126,8 @@ func test_best_attack_destination_closes_distance_when_out_of_reach() -> void:
 	var leader: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 	var enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(11, 0))
 
-	# No reachable cell can hit (11,0) with move_range 5 -> rush the closest reachable cell.
-	assert_that(AITactics.best_attack_destination(leader, enemy, _context(board))).is_equal(Vector2i(5, 0))
+	# No reachable cell can hit (11,0) with MOV 4 -> rush the closest reachable cell.
+	assert_that(AITactics.best_attack_destination(leader, enemy, _context(board))).is_equal(Vector2i(4, 0))
 
 
 func test_best_attack_destination_respects_allowed() -> void:
@@ -145,7 +146,8 @@ func test_closest_reachable_cell_to_approaches_goal() -> void:
 	var board: Dictionary = _build_board(Rect2i(0, 0, 12, 1))
 	var unit: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 
-	assert_that(AITactics.closest_reachable_cell_to(unit, Vector2i(11, 0), _context(board))).is_equal(Vector2i(5, 0))
+	# MOV 4 (default DEX 5, #56) -> farthest reachable cell in a straight corridor is (4,0).
+	assert_that(AITactics.closest_reachable_cell_to(unit, Vector2i(11, 0), _context(board))).is_equal(Vector2i(4, 0))
 
 
 func test_closest_reachable_cell_to_respects_allowed() -> void:

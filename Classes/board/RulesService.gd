@@ -31,8 +31,7 @@ static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> in
 
 static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null) -> Dictionary:
 	var start := unit.movement.cell
-	var max_cost := unit.movement.move_range
-
+	var max_cost := unit.get_mov()
 	var frontier := []
 	var cost_so_far := {}
 	var came_from := {}

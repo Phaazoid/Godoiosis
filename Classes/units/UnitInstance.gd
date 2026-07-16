@@ -33,10 +33,26 @@ const DOWN_WILL_COST := 5           # flat cost paid per down (placeholder). Can
 const MAX_WILL := 20                # ceiling for the WIL-stat-derived Will pool (a cap, not a flat value).
 var current_will: int = 0
 
-# Which limb a maim takes. Default ARM for now; the deterministic choice (stat-derived, Law #1)
-# is an open design knob. NONE = not maimed. Persists (limb loss survives missions).
-enum MaimedPart { NONE, ARM_LEFT, ARM_RIGHT, LEG_LEFT, LEG_RIGHT }
-var maimed_part: MaimedPart = MaimedPart.NONE
+const JOBLESS_MOV_BASE := 4       # playtest-tunable; prompt 9 swaps in the main job's base
+const WEIGHT_MOV_THRESHOLD := 8   # playtest-tunable: at/above this Weight, one coarse step off
+const WEIGHT_MOV_PENALTY := 1     # a step, never per-point (jobs.md — plate isn't double-punished)
+
+# --- Limb slots (will-and-death.md, the limb-slot model — #56) ---
+# Limbs are equipment slots: NATURAL = the unit's own limb (reads innate STR/DEX),
+# EMPTY = maimed, PROSTHETIC = fitted gear with its own built-in stat (content: prompt 10).
+enum LimbSlot { ARM_L, ARM_R, LEG_L, LEG_R }
+enum LimbState { NATURAL, EMPTY, PROSTHETIC }
+
+# Maim order: weapon arm -> off leg -> off arm -> weapon leg; natural limbs first,
+# prosthetics only when no natural limb remains (they detach as recoverable gear).
+const MAIM_ROTATION: Array[LimbSlot] = [LimbSlot.ARM_R, LimbSlot.LEG_L, LimbSlot.ARM_L, LimbSlot.LEG_R]
+
+class LimbFitting:
+	var state: LimbState = LimbState.NATURAL
+	var prosthetic_stat: int = 0          # meaningful only when PROSTHETIC (prompt 10 authors real parts)
+	var prosthetic_item: Resource = null  # the detachable gear entry; null until prompt 10
+
+var limbs: Dictionary[LimbSlot, LimbFitting] = {}
 
 func initialize():
 	if data == null:
@@ -47,9 +63,11 @@ func initialize():
 	for stat in Stats.STAT_DEFAULTS:
 		if not stats.has(stat):
 			stats[stat] = Stats.STAT_DEFAULTS[stat]
+	limbs = {}
+	for slot in LimbSlot.values():
+		limbs[slot] = LimbFitting.new()
 	aura = data.base_aura.duplicate(true)
 	#reset battle stats
-	_refresh_derived_stats()
 	current_hp = get_max_hp()
 	current_will = get_max_will()
 
@@ -60,26 +78,29 @@ func get_base_stat(stat_name: Stats.Stat) -> int:
 	# never 0. Robust for every future enum append.
 	return Stats.STAT_DEFAULTS.get(stat_name, 0)
 
-func _refresh_derived_stats():
-	#Placeholder for - 
-	#item bonuses
-	#job modifiers
-	#debuffs
-	#passives
-	#literally anything that can change stats
-	pass
-
 func get_current_hp() -> int:
 	return current_hp
 
 func get_max_hp() -> int:
-	# The one max-HP truth: MHP base + CON band (stats.md band doctrine).
-	# Reads BASE stats for now; prompt 7 reroutes bands through effective stats.
-	return get_base_stat(Stats.Stat.MHP) + Stats.con_mhp_band(get_base_stat(Stats.Stat.CON))
+	# The one max-HP truth: MHP base + CON band — EFFECTIVE CON as of #56 (gear can shift it).
+	return get_base_stat(Stats.Stat.MHP) + Stats.con_mhp_band(get_effective_stat(Stats.Stat.CON))
 
 func get_effective_ldr() -> int:
-	# Effective squad capacity: LDR base + PER band. Same base-for-now caveat.
-	return get_base_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_base_stat(Stats.Stat.PER))
+	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
+
+func get_mov() -> int:
+	# MOV is a READOUT (jobs.md, audit A4): job base + DEX band, minus the heavy-load step,
+	# then the leg throttle LAST (dev ruling 2026-07-14): one empty leg halves (round up),
+	# two empty legs pin MOV to 1 flat — categorical, overrides everything.
+	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
+	if get_weight() >= WEIGHT_MOV_THRESHOLD:
+		mov -= WEIGHT_MOV_PENALTY
+	match empty_leg_count():
+		2:
+			return 1
+		1:
+			mov = ceili(mov / 2.0)
+	return maxi(1, mov)
 
 func set_current_hp(value: int):
 	current_hp = clamp(value, 0, get_max_hp())
@@ -121,18 +142,88 @@ func can_afford_down() -> bool:
 	return current_will >= DOWN_WILL_COST
 
 func spend_will_for_down() -> bool:
-	# Pay the flat down cost at down-time. Returns true if the unit was MAIMED (couldn't pay):
-	# Will floors at 0 and a limb is lost. False = a clean down. The limb EFFECT is deferred
-	# (docs/design/progression.md); today it's recorded + surfaced in UI/preview only.
+	# Pay the flat down cost. Can't pay -> Will floors at 0 and the rotation takes a limb;
+	# a maimed prosthetic detaches to recoverable gear. Fully maimed = still just a down —
+	# "Will never kills" is absolute, multi-maim never escalates.
 	if can_afford_down():
 		set_current_will(current_will - DOWN_WILL_COST)
 		return false
 	set_current_will(0)
-	maimed_part = MaimedPart.ARM_RIGHT   # default limb. TODO: derive deterministically (stat diff?), no RNG (Law #1).
+	var slot := next_maim_slot()
+	if slot == -1:
+		return false                      # nothing left to take; the down stands, nothing escalates
+	var fitting: LimbFitting = limbs[slot]
+	if fitting.state == LimbState.PROSTHETIC and fitting.prosthetic_item != null:
+		pass                              # TODO(10): route the detached prosthetic to inventory (recoverable)
+	fitting.state = LimbState.EMPTY
+	fitting.prosthetic_stat = 0
+	fitting.prosthetic_item = null
+	_apply_maim_aura_tax()
 	return true
 
-func is_maimed() -> bool:
-	return maimed_part != MaimedPart.NONE
-	
+func _apply_maim_aura_tax() -> void:
+	# Audit A3: each lost limb costs -1 off the HIGHEST aura pool. Ties -> element enum
+	# order for now; TODO(11): primary affinity breaks ties once the affinity set exists.
+	# One-way: regrowth restores it, and regrowth is between-battle territory (not built).
+	var best := Elemental.Element.NONE
+	var best_val := 0
+	for element in Elemental.SIGIL_ELEMENTS:
+		var v: int = aura.get(element, 0)
+		if v > best_val:
+			best_val = v
+			best = element
+	if best != Elemental.Element.NONE:
+		aura[best] = best_val - 1
+
 func get_element_aura(element: Elemental.Element) -> int:
 	return aura.get(element, 0)
+
+func limb_stat(slot: LimbSlot) -> int:
+	# What this slot contributes: arms carry STR, legs carry DEX; empty = 0.
+	var fitting: LimbFitting = limbs[slot]
+	match fitting.state:
+		LimbState.EMPTY:
+			return 0
+		LimbState.PROSTHETIC:
+			return fitting.prosthetic_stat
+		_:
+			var natural := Stats.Stat.STR if slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R else Stats.Stat.DEX
+			return get_base_stat(natural)
+
+func next_maim_slot() -> int:
+	# The deterministic "next at risk" (Law #1 — previewable). -1 = fully maimed.
+	for slot in MAIM_ROTATION:
+		if limbs[slot].state == LimbState.NATURAL:
+			return slot
+	for slot in MAIM_ROTATION:
+		if limbs[slot].state == LimbState.PROSTHETIC:
+			return slot
+	return -1
+
+func is_maimed() -> bool:
+	# Maimed = an EMPTY slot. A prosthetic-fitted unit is repaired, not maimed.
+	for slot in limbs:
+		if limbs[slot].state == LimbState.EMPTY:
+			return true
+	return false
+
+func has_missing_arm() -> bool:
+	return limbs[LimbSlot.ARM_L].state == LimbState.EMPTY or limbs[LimbSlot.ARM_R].state == LimbState.EMPTY
+
+func empty_leg_count() -> int:
+	return int(limbs[LimbSlot.LEG_L].state == LimbState.EMPTY) + int(limbs[LimbSlot.LEG_R].state == LimbState.EMPTY)
+	
+func get_limb_effective_base(stat: Stats.Stat) -> int:
+	# Limb substitution: effective STR = mean of arm slots, effective DEX = mean of leg
+	# slots, both ROUNDED UP. Everything else passes through untouched.
+	match stat:
+		Stats.Stat.STR:
+			return ceili((limb_stat(LimbSlot.ARM_L) + limb_stat(LimbSlot.ARM_R)) / 2.0)
+		Stats.Stat.DEX:
+			return ceili((limb_stat(LimbSlot.LEG_L) + limb_stat(LimbSlot.LEG_R)) / 2.0)
+		_:
+			return get_base_stat(stat)
+
+func get_effective_stat(stat: Stats.Stat) -> int:
+	# base -> limb substitution -> modifiers. Job ceilings clamp HERE when prompt 9 lands.
+	return get_limb_effective_base(stat) + stat_modifiers.get(stat, 0)

@@ -152,13 +152,16 @@ func get_base_stat(stat: Stats.Stat) -> int:
 	return unit_instance.get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	return get_base_stat(stat) + get_modifier(stat)
+	return unit_instance.get_effective_stat(stat)
 
 func get_modifier(stat: Stats.Stat) -> int:
 	return unit_instance.stat_modifiers.get(stat, 0)
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
+
+func get_mov() -> int:
+	return unit_instance.get_mov()
 
 func get_max_hp() -> int:
 	return unit_instance.get_max_hp()
@@ -358,6 +361,16 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	equipped_weapon = weapon
 	return true
 
+func can_wield_equipped() -> bool:
+	# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected.
+	var weapon := get_equipped_weapon() as WeaponData
+	if weapon == null or not weapon.two_handed:
+		return true
+	return not unit_instance.has_missing_arm()
+
+func can_rescue_carry() -> bool:
+	return not unit_instance.has_missing_arm()
+
 func equip_weapon_from_inventory(index: int) -> bool:
 	if index < 0 or index >= inventory.size():
 		return false
@@ -415,7 +428,6 @@ func enter_crisis():
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
-	unit_instance.maimed_part = UnitInstance.MaimedPart.NONE  # Crisis kills, never maims (had full Will anyway)
 	unit_instance.set_current_hp(CRISIS_REVIVE_HP)
 	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
 	crisis_surge_pending = true

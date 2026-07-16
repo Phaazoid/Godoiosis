@@ -32,13 +32,14 @@
 - **Jobs impose stat *ceilings*, not floors** — the tank gets +MHP but a hard DEX cap. Caps fill the fantasy and push gear choices (the cap eats plate's −DEX).
 - **Caps clamp the *effective* stat** (after gear and prosthetics). A cap can neuter a prosthetic's built-in stat — caps rule anyway (jobs are free to leave), but require **preview-at-decision**: job-adoption UI shows what gets clamped (same doctrine as the aura-tax preview at prosthetic fitting). *(The tank example is stat-agnostic pending the CON + defensive-gear grill.)*
 
-## MOV (closes audit A4)
+## MOV (closes audit A4, BUILT 2026-07-15 — #56, `UnitInstance.get_mov()`)
 
 **MOV = main-job base + DEX band modifier.**
 
 - Job sets the base: jobless default **4**; scout-types 5–6, tank-types 3 *(placeholders)*.
-- DEX band: **0–3 → −1 · 4–7 → ±0 · 8+ → +1** *(placeholders)*. Threads the limb model (maimed leg → lower DEX → slower), leg prosthetics, and gear DEX penalties through one readable formula.
+- DEX band *(retuned 2026-07-15 — dev call: the first jump should be cheap, the second earned)*: **0–3 → −1 · 4–5 → ±0 · 6–8 → +1 · 9+ → +2**. Default DEX (5) TOPS its rung, so one point of investment buys +1 MOV; four points buy +2 (jobless: MOV 6 — hard but doable). Decoupled from the shared 4–7 mid-rung the CON/PER bands use. Threads the limb model (maimed leg → lower DEX → slower), leg prosthetics, and gear DEX penalties through one readable formula.
 - No innate per-unit MOV number ever enters the statline. **Weight × MOV resolved 2026-07-06 (CON mini-grill): yes, at coarse thresholds only** — a heavy-load penalty step, not per-point, so plate isn't double-punished. Weight's body term = CON ([stats.md](stats.md)).
+- **Leg-state throttle (dev ruling 2026-07-14, applied LAST — after base, band, and weight):** exactly one EMPTY leg slot → final MOV **halved** (rounded up — one leg always beats none; playtest-tunable), stacking deliberately with the DEX-averaging drop; both leg slots EMPTY → **MOV = 1 flat**, hard override of everything. Prosthetic-filled slots count as functional legs. Rationale: the DEX band is ±1-coarse; leglessness is categorical, not scalar ([will-and-death.md](will-and-death.md) limb-slot model).
 
 ## The ability chassis
 

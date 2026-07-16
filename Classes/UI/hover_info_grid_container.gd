@@ -72,7 +72,7 @@ func _refresh_status_icons():
 		_add_status_icon(CRISIS_ICON)
 
 func _maim_icon() -> Texture2D:
-	if unit.unit_instance.maimed_part == UnitInstance.MaimedPart.LEG_LEFT or unit.unit_instance.maimed_part == UnitInstance.MaimedPart.LEG_RIGHT:
+	if unit.unit_instance.empty_leg_count() > 0:
 		return SEVERED_LEG
 	return SEVERED_ARM
 

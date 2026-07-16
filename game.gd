@@ -668,10 +668,10 @@ func populate_action_menu(unit: Unit) -> Array:
 		and not squad_manager.is_another_squad_active(unit.squad):
 		options.append(GAME_MENU_GROUP_MOVE)
 
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon():
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon() and unit.can_wield_equipped():
 		options.append(GAME_MENU_ATTACK)
 
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and not get_adjacent_downed_allies(unit).is_empty():
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and not get_adjacent_downed_allies(unit).is_empty() and unit.can_rescue_carry():
 		options.append(GAME_MENU_RESCUE)
 
 	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.can_rally():

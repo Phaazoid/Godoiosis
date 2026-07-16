@@ -3,7 +3,6 @@ class_name MovementComponent
 
 @export var cell: Vector2i
 @export var move_speed := 120 #pixels per second
-@export var move_range: int = 5
 
 signal movement_finished
 

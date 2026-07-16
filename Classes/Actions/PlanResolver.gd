@@ -90,7 +90,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
 	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below.
-	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage, target_hypo.in_crisis, target_hypo.start_hp)
+	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage, target_hypo.in_crisis, target_hypo.start_hp, target_hypo.can_maim)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
@@ -153,10 +153,11 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.lifecycle = unit.lifecycle_state
 		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
+		h.can_maim = unit.unit_instance.next_maim_slot() != -1
 		hypo[unit] = h
 	return hypo[unit]
 
-static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int, in_crisis: bool, start_hp: int) -> ResolvedOutcome.Lethality:
+static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int, in_crisis: bool, start_hp: int, can_maim: bool) -> ResolvedOutcome.Lethality:
 	# Mirror of Unit.take_damage + _go_downed (Law #2 — preview must equal execution):
 	#   already DEAD        -> no-op (NONE)
 	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
@@ -184,7 +185,7 @@ static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, w
 	if damage - hp_before > Unit.OVERKILL_CEILING:
 		return ResolvedOutcome.Lethality.KILLED
 	if will_before < UnitInstance.DOWN_WILL_COST:
-		return ResolvedOutcome.Lethality.MAIMED
+		return ResolvedOutcome.Lethality.MAIMED if can_maim else ResolvedOutcome.Lethality.DOWNED
 	return ResolvedOutcome.Lethality.DOWNED
 
 # Per-unit threaded hypothetical (R4). Will-ready: HP is threaded now; `will` is the
@@ -197,7 +198,8 @@ class _Hypo:
 	var will: int = 0   # threaded so a multi-hit pass previews maim correctly (Law #2)
 	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
 	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this
-
+	var can_maim: bool = true   # false = fully maimed at pass start; a down can't cost a limb
+	
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->

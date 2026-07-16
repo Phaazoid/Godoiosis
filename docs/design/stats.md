@@ -41,7 +41,7 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 |---|---|
 | **Base statline** (innate, authored, echoes the portrait) | HP · STR · DEX · PER · CON · LDR · WIL |
 | **Derived** (computed, never authored) | Weight (**body term = CON** + prosthetics + inventory) · DEF (gear only) |
-| **Effective** | base ± gear modifiers (`get_effective_stat`) |
+| **Effective** | base → limb-slot substitution (STR/DEX only, BUILT #56) → ± gear modifiers (`get_effective_stat`) |
 | **Channel** (off-enum, per-element) | AURA ×5 (+ the hidden Alkahest — never displayed; Isaac reads as aura in all) |
 | **Cut** | *(none — CON adopted 2026-07-06, see below)* |
 | **Parked** | STR↔carry-limits (the band doctrine's open slot) |
@@ -91,7 +91,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 - **DEF is gear-only**, never authored on the unit.
 - **Gear carries stat-cost tradeoffs** — plate gives DEF but −DEX/−PER, so equipping is a genuine decision, not a strict upgrade (no full plate on a DEX-rapier fencer).
-- **Effective stat = base ± gear.** The code already splits `get_effective_stat` from `get_base_stat`.
+- **Effective stat = base → limb substitution → gear.** The code splits `get_effective_stat` from `get_base_stat`; the limb-slot layer (STR/DEX only) landed in #56 (2026-07-15) — a job-ceiling clamp is the next layer, marked seam, prompt 9.
 
 ## Open forks
 

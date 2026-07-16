@@ -280,6 +280,11 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	# already hides the option; this backstops every caller, including AI.
 	if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and action.actor.has_main_action_queued():
 		return false
+	# Verb locks (will-and-death.md limb model): the menu hides these; this backstops every caller.
+	if action.action_type == BaseAction.ActionType.ATTACK and action.actor != null and not action.actor.can_wield_equipped():
+		return false
+	if action.action_type == BaseAction.ActionType.RESCUE and action.actor != null and not action.actor.can_rescue_carry():
+		return false
 
 	if active_squad != null and active_squad != squad:
 		return false

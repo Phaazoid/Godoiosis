@@ -4,12 +4,15 @@
 extends GdUnitTestSuite
 
 func test_dex_mov_band_rungs() -> void:
+	# Retuned 2026-07-15 (jobs.md): default (5) TOPS its rung — one DEX point buys +1, four buy +2.
 	assert_int(Stats.dex_mov_band(0)).is_equal(-1)
 	assert_int(Stats.dex_mov_band(3)).is_equal(-1)   # top of low rung
 	assert_int(Stats.dex_mov_band(4)).is_equal(0)    # bottom of mid rung
-	assert_int(Stats.dex_mov_band(7)).is_equal(0)    # top of mid rung
-	assert_int(Stats.dex_mov_band(8)).is_equal(1)    # bottom of high rung
-	assert_int(Stats.dex_mov_band(12)).is_equal(1)
+	assert_int(Stats.dex_mov_band(5)).is_equal(0)    # the default — last point of the free rung
+	assert_int(Stats.dex_mov_band(6)).is_equal(1)    # one point of investment jumps a rung
+	assert_int(Stats.dex_mov_band(8)).is_equal(1)
+	assert_int(Stats.dex_mov_band(9)).is_equal(2)    # four points above default: hard but doable
+	assert_int(Stats.dex_mov_band(12)).is_equal(2)
 
 func test_con_mhp_band_rungs() -> void:
 	assert_int(Stats.con_mhp_band(0)).is_equal(-2)

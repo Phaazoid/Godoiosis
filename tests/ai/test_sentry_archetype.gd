@@ -115,7 +115,7 @@ func test_returns_to_post_when_zone_clears() -> void:
 
 	SentryArchetype.take_squad_turn(squad, _context(board, zones), board.squad_manager)
 
-	# No intruder, no attacking -- one move, straight back to the post (3 cells, within reach 5).
+	# No intruder, no attacking -- one move, straight back to the post (3 cells, within MOV 4).
 	assert_array(_attack_aims(squad)).is_empty()
 	assert_array(_move_destinations(squad)).contains_exactly([Vector2i(0, 1)])
 

@@ -24,17 +24,23 @@ const CON_DEF_FACTOR := 0.2   # playtest-tunable: CON 5 wears armor at its print
 const BAND_LOW_MAX := 3    # 0-3 = low rung  # playtest-tunable
 const BAND_MID_MAX := 7    # 4-7 = mid rung (all defaults land here); 8+ = high
 
+# DEX->MOV rungs (retuned 2026-07-15, jobs.md): default DEX (5) TOPS its rung — one point
+# of investment buys the first MOV jump, four buy the second. # playtest-tunable
+const DEX_MOV_MID_MAX := 5    # 4-5 = +0
+const DEX_MOV_HIGH_MAX := 8   # 6-8 = +1; 9+ = +2
+
 static func armor_def(def_power: int, con: int) -> int:
 	# DEF x CON (stats.md): a multiplier with NO base — zero armor or zero CON -> zero DEF.
 	return int(round(def_power * con * CON_DEF_FACTOR))
 
 static func dex_mov_band(dex: int) -> int:
-	# Consumed by MOV derivation in prompt 7 — landed now so the bands ship together.
 	if dex <= BAND_LOW_MAX:
 		return -1
-	if dex <= BAND_MID_MAX:
+	if dex <= DEX_MOV_MID_MAX:
 		return 0
-	return 1
+	if dex <= DEX_MOV_HIGH_MAX:
+		return 1
+	return 2
 
 static func con_mhp_band(con: int) -> int:
 	# Extremes 4 MHP apart end to end (stats.md: <=4-5).  # playtest-tunable

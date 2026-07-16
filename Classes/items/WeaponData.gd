@@ -24,6 +24,7 @@ enum WeaponType {
 @export var can_counter := true
 @export var hits_allies := false
 @export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE
+@export var two_handed := false   # verb lock: a missing arm can't wield this (will-and-death.md)
 
 # Which side of the world this weapon's attack affects (#50). Default UNIT = behaves as today;
 # a terrain weapon opts into MAP/BOTH. APPEND-ONLY (serializes as an int).
