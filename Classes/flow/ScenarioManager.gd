@@ -1,6 +1,9 @@
 extends Node
 class_name ScenarioManager
 
+# Owns scenario save/load and the board-reset flow (dev_reset_scenario): serializes every
+# live unit into a ScenarioUnitEntry/ScenarioData, and rebuilds the board from a saved one.
+
 const SCENARIO_DIR := "res://Scenarios/"
 
 @onready var game = get_parent()
@@ -54,6 +57,11 @@ func save_scenario(scenario_name: String):
 		if unit.has_equipped_weapon():
 			entry.equipped_weapon = unit.get_equipped_weapon().duplicate(true)
 
+		entry.certified_jobs = unit.unit_instance.certified_jobs.duplicate()
+		entry.main_job = unit.unit_instance.main_job
+		entry.sub_jobs = unit.unit_instance.sub_jobs.duplicate()
+		entry.unlocked_sub_slots = unit.unit_instance.unlocked_sub_slots
+
 		scenario.unit_entries.append(entry)
 
 	DirAccess.make_dir_recursive_absolute(SCENARIO_DIR)
@@ -90,6 +98,11 @@ func load_scenario(path: String):
 		if entry.equipped_weapon != null:
 			unit.add_item(entry.equipped_weapon.duplicate(true))
 		# (already null-safe: a dropped weapon simply leaves the unit unarmed)
+
+		unit.unit_instance.certified_jobs = entry.certified_jobs.duplicate()
+		unit.unit_instance.main_job = entry.main_job
+		unit.unit_instance.sub_jobs = entry.sub_jobs.duplicate()
+		unit.unit_instance.unlocked_sub_slots = entry.unlocked_sub_slots
 
 		if entry.squad_id == -1:
 			continue
@@ -138,6 +151,7 @@ func _unhandled_input(event):
 
 func _clear_board():
 	game.dev_overlay.unit_editor.edit_unit(null)
+	game.unit_info_panel.clear()
 	squad_manager.clear_all_squads()
 	game.clear_selection()
 	game.refresh_action_queue(null)

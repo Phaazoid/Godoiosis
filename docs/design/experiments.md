@@ -4,7 +4,7 @@ A lightweight way to build a proposed feature behind a toggle, *feel* it in play
 it on/off without committing to it. Lets us carry several "maybe" systems in the codebase
 at once and decide by playing, not arguing.
 
-**Canon checked through #67 (2026-07-16).**
+**Canon checked through #68 (2026-07-16).**
 
 ## Shape
 

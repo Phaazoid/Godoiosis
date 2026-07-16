@@ -4,7 +4,7 @@
 
 > **Build status — #50 DONE + CLOSED (2026-06-28 → 06-30, three sessions).** The dynamic per-cell state store exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState {BURNING, FROZEN}` and a `Terrain.Kind` enum mapping the authored `terrain_type` strings (GRASS/MUD/ROCK/TREE/WATER). Fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). **All three planned slices shipped:** slice 1 (headless plumbing), slice 2 (live execution + queue preview), slice 3 (`ICE × water → FROZEN`, `FIRE × FROZEN → water`, both authored `.tres` reactions). Also shipped beyond the original scope: AoE-footprint deposit (every affected cell, not just the aim cell), counters depositing too, persistence (`ScenarioData.terrain_states` — see below), burnout/melt after 3 turn cycles (`STATE_DURATIONS`/`tick_states`), and burning-tile damage on end-of-phase (routed through `take_damage`, so downs/Crisis apply correctly). Proven in `tests/terrain/{test_cell_effects, test_terrain_persistence, test_burnout, test_ice}.gd`. **Deferred by design, not gaps:** burning spread + a varied elemental-effect roster beyond fire/ice (separate future PR); the plan-time ghost preview stays fire-only (`OverlayManager.show_terrain_preview` hardcodes BURNING — the live post-execution overlay already renders every mapped state).
 
-**Canon checked through #67 (2026-07-16).**
+**Canon checked through #68 (2026-07-16).**
 
 ## The tile model (implemented — [LOCKED shape])
 

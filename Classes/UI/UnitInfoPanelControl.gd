@@ -1,6 +1,10 @@
 extends Control
 class_name UnitInfoPanelControl
 
+# Controller for the click-to-inspect popup (UnitInfoPanel.tscn): owns show/hide and which
+# unit is currently open, and fans set_unit/clear out to its child panels (stats/portrait/
+# inventory/squad/states) so they all tear down signal connections together.
+
 const TOP_LEFT_POS = Vector2i(8, 8)
 const BOTTOM_LEFT_POS = Vector2i(8, 475)
 
@@ -42,6 +46,8 @@ func set_unit(unit: Unit, can_act := false):
 func clear():
 	current_unit = null
 	visible = false
+	status_hbox.set_unit(null)
+	status_bar.set_unit(null)
 
 func is_showing() -> bool:
 	return visible and current_unit != null

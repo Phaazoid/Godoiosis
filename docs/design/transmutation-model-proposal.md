@@ -8,7 +8,7 @@
 >
 > **Wording note (immersion):** in-game language stays inside the fantasy — *channeling, transmutation, carving, marks* — never "chemistry," even though the designers know exactly what it is.
 >
-> **Canon checked through #67 (2026-07-16).**
+> **Canon checked through #68 (2026-07-16).**
 
 ## The fantasy this system serves
 

@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open questions flagged).** Decided 2026-06-15 with the developer; a couple of forks pending a co-dev chat. Not settled like the squad spec, but the core stance (no leveling, fixed stats) is firm. Supersedes the wiki's `Stats Overview.docx` leveling section (random stat-on-level-up — dead under Law #1).
 
-**Canon checked through #67 (2026-07-16).**
+**Canon checked through #68 (2026-07-16).**
 
 ## Core stance
 

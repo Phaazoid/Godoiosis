@@ -1,5 +1,9 @@
 extends Panel
 
+# The "StatsPanel" node inside UnitInfoPanel.tscn — the detailed inspect-on-click popup, as
+# opposed to the compact hover panel (hover_info_grid_container.gd). Layout is due a full
+# redesign (#68); for now new fields just get appended into hp_label's text.
+
 @onready var name_label: Label = $StatsMargin/StatsVBox/HeaderHBox/NameLabel
 @onready var hp_label: Label = $StatsMargin/StatsVBox/HPLabel
 var unit: Unit
@@ -70,7 +74,24 @@ func _refresh_hp():
 		var at_risk := unit.unit_instance.next_maim_slot()
 		if at_risk != -1:
 			text += "  NEXT AT RISK: %s" % UnitInstance.LimbSlot.keys()[at_risk]
+	text += "\nJOB: %s" % _job_label_text()
+	var abilities := _known_ability_names()
+	if not abilities.is_empty():
+		text += "\nKNOWN: %s" % ", ".join(abilities)
 	hp_label.text = text
+
+func _job_label_text() -> String:
+	# Always-reveal placeholder (jobs.md: real PER-gated reveal UX is a deferred content pass).
+	var job := JobCatalog.get_job(unit.unit_instance.main_job)
+	return job.display_name if job != null else "Jobless"
+
+func _known_ability_names() -> Array[String]:
+	# Only starters resolve to a name yet — ability_pool is intentionally empty until prompt 12.
+	var names: Array[String] = []
+	for job in JobCatalog.get_jobs().values():
+		if job.starter_ability != null and unit.unit_instance.known_abilities.has(job.starter_ability.id):
+			names.append(job.starter_ability.display_name)
+	return names
 
 func _on_hp_changed(_current, _max):
 	_refresh_hp()

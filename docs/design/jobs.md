@@ -2,11 +2,13 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill, dev + Claude Fable 5); co-dev pass 2026-07-11 — verdict: BUILD TO TEST.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* Playtest answers what about it feels good and whether jobs are even the right vehicle (abilities/stat variation could technically ship other ways) — the framework must earn its keep before any investment in acquisition/progression content: unlock-hunt designs, hidden/easter-egg jobs, certification-economy elaboration are all explicitly down-the-road (not disliked — premature). **Numbers are placeholders; content passes deferred.** "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Owns the MOV derivation deferred by audit A4. Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
-**Canon checked through #67 (2026-07-16).**
+**Canon checked through #68 (2026-07-16).**
+
+**#58 BUILT 2026-07-16** (data model, certification, ceilings, MOV base, dev editor, enemy parity) — `JobData`/`AbilityData`/`JobCatalog` + unit job state are all live in code; see the *Data model* section for what's real vs. still content-empty. Two doctrine items got a deliberate placeholder instead of full enforcement (dev call, tracked here so they don't read as done): the between-missions-only swap restriction isn't gated in code yet — no mission-boundary concept exists, so `UnitInstance.set_main_job`/`set_sub_job` are currently unrestricted (`TODO(campaign layer)`); and the PER-gated enemy-job reveal is an always-reveal placeholder (`info_panel.gd`) rather than a real threshold check, since the inspector has no "who's doing the looking" concept to compare a PER value against yet. A parallel UI-debt issue, [#68](https://github.com/Phaazoid/Godoiosis/issues/68), tracks the inspect-panel redesign this build's new fields outgrew.
 
 ## The linked trio (scope)
 
-- **Job = a noun.** A persistent qualification on `UnitInstance`: stat profile + ability pool + squad posture. Heavy, campaign-scale.
+- **Job = a noun.** A persistent qualification on `UnitInstance`: stat profile + ability pool (posture falls out of the pool's abilities, not a separate stored field — see *Squad posture*). Heavy, campaign-scale.
 - **Training goal = the verb, unchanged.** A job's ability pool is a **menu of training goals** — abilities are learned through the existing capped anti-grind machinery (each ability defines its own "reps"; momentum, bench trickle, per-mission caps all inherited). One learning system for jobs, weapon proficiency, and aura.
 - **Between-battle task = a third system, deferred** (recovery grill). Locked interface: jobs **multiply task efficacy** (a Medic-jobbed unit is better at the recovery task), nothing more.
 
@@ -15,7 +17,7 @@
 - **1 main + up to 2 sub slots.** Sub slots unlock **campaign-wide at authored beats** (pacing dial; fair to late recruits; never per-unit purchases — G2).
 - Per-job pools split into **main-tier** abilities (stronger / qualitatively different; live only with the job in the main slot) and **sub-tier** (weaker, diversifying; live from a sub slot). Roughly 3–4 live from main, 1–2 per sub.
 - **Stat profile, caps, MOV, and posture ride the main job ONLY** (authored exceptions allowed if a job concept earns one). Subs grant abilities only — no stat stacking; a unit *reads as* its main job.
-- **Swapping is free, between missions only, never mid-mission** (legibility: mid-battle job identity is fixed).
+- **Swapping is free, between missions only, never mid-mission** (legibility: mid-battle job identity is fixed). **Not yet enforced in code** (dev call, 2026-07-16): no mission-boundary concept exists yet, so the swap setters are currently unrestricted.
 - **Pause, never reset.** Accrued ability progress persists across swaps (momentum doctrine); the momentum *rate* is the only thing switching costs. Unslotted jobs' learned abilities go **dormant, never lost** — the sub slot is the carry mechanism (no separate "carry one ability" rule).
 - **Jobless is fully playable** — the classless-first floor (protects the roguelike stock-unit floor). Story units may arrive pre-jobbed (like plot-seeded familiarity).
 
@@ -34,7 +36,7 @@
 - **Jobs impose stat *ceilings*, not floors** — the tank gets +MHP but a hard DEX cap. Caps fill the fantasy and push gear choices (the cap eats plate's −DEX).
 - **Caps clamp the *effective* stat** (after gear and prosthetics). A cap can neuter a prosthetic's built-in stat — caps rule anyway (jobs are free to leave), but require **preview-at-decision**: job-adoption UI shows what gets clamped (same doctrine as the aura-tax preview at prosthetic fitting). *(The tank example is stat-agnostic pending the CON + defensive-gear grill.)*
 
-## MOV (closes audit A4, BUILT 2026-07-15 — #56, `UnitInstance.get_mov()`)
+## MOV (closes audit A4 — DEX-band/weight/leg-throttle BUILT 2026-07-15 #56; job-base wiring completed 2026-07-16 #58, `UnitInstance.get_mov()`)
 
 **MOV = main-job base + DEX band modifier.**
 
@@ -53,7 +55,7 @@
 
 ## Squad posture
 
-The **leader / team / loner spectrum** — not every job reshapes a squad:
+The **leader / team / loner spectrum** — not every job reshapes a squad. **Emergent, not authored (dev call, 2026-07-16, during #58):** posture isn't a stored classification on `JobData` — it falls out of which abilities a job's pool actually contains (a pool full of leader-boosting abilities *reads as* a leader job; nothing tags it as one). A planned `Posture` enum field was dropped from the build for this reason.
 
 - **Leader jobs** boost squad leaders (doctrine influence; the incentive track for would-be leaders — the "slightly better leader" stats.md fork lands here). **Posture effects self-gate:** leader abilities are live only while actually leading a squad.
 - **Team jobs** boost play as a member — composition bonuses, job-gated squad verbs ("our squad is stronger with an X in it"; dual-cast is a candidate consumer), taunt/bodyguard reactions (the C3 counter-target *override* mechanism — the base default policy stays a feel-test placeholder).
@@ -63,9 +65,13 @@ The **leader / team / loner spectrum** — not every job reshapes a squad:
 
 **Same system.** An enemy's job telegraphs its **kit**; its AI archetype telegraphs its **behavior** — two orthogonal legibility axes. **PER reveals enemy job detail** (new honest teeth for PER; reveal UX = content pass).
 
+**BUILT 2026-07-16 (#58):** enemies use the identical `JobData`/`UnitInstance` path with zero special-casing, and job assignment rides `ScenarioUnitEntry` so it survives scenario save/load. The PER gate itself is still a placeholder — `info_panel.gd` always reveals the job line rather than checking a threshold, since there's no "who's inspecting" concept yet to compare a PER value against.
+
 ## Data model
 
 `JobData` / `AbilityData` as `.tres` content + a **`JobCatalog`** registry (content list → domain-named registry rule; too data-rich for an enum). Unit job state (certifications, slot assignment, per-ability training progress) lives on **`UnitInstance`** — survives missions (persistence seam, #8). Ability *taxonomy* (Action/Reaction/Passive/Movement) is an enum (fixed vocabulary, append-only).
+
+**BUILT 2026-07-16 (#58).** `JobCatalog` keys by `id`, not display name — ids must survive the roster/naming pass below without churning `certified_jobs`/`main_job`. `AbilityData` exists only as identity/taxonomy so far, no effects payload (prompt 12). Two placeholder jobs are authored (`Resources/Jobs/Scout.tres` id `scout`, `Tank.tres` id `tank`) with only `id`/`display_name` set — nudges, ceilings, and `mov_base` all still sit at script defaults pending a numbers pass.
 
 ## Deferred / content passes
 

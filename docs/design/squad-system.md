@@ -6,7 +6,7 @@
 >
 > **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan (`Squad.gd` — `get_max_squad_range()`, `max_size()`). Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is **join-time only**, in the `can_squad_up`/`can_join_squad` predicates — direct `join_squad` (scenario load) stays permissive and `push_warning`s on an overfull squad rather than ejecting anyone. Leader-death overflow (`check_reassign_leader`) detaches newest-members-first when the successor's capacity is smaller (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Tests: `tests/squad/test_squad_shape.gd` (8 cases). **Feel-tested + issue closed 2026-07-16** — both constants read fine in play; `SQUAD_RANGE`/`MEMBER_LDR_COST` remain one-line changes if later play says otherwise.
 
-**Canon checked through #67 (2026-07-16).**
+**Canon checked through #68 (2026-07-16).**
 
 ## Purpose
 

@@ -43,6 +43,14 @@ const WEIGHT_MOV_PENALTY := 1     # a step, never per-point (jobs.md — plate i
 enum LimbSlot { ARM_L, ARM_R, LEG_L, LEG_R }
 enum LimbState { NATURAL, EMPTY, PROSTHETIC }
 
+# --- Jobs (docs/design/jobs.md, #58) ---
+var certified_jobs: Dictionary[String, bool] = {}   # a set: job id -> true, certify-once
+var main_job: String = ""                            # "" = jobless
+var sub_jobs: Array[String] = []                      # subs, size <= unlocked_sub_slots
+var unlocked_sub_slots: int = 0                        # dev-settable stub until the campaign layer exists
+var ability_progress: Dictionary[String, int] = {}     # empty scaffold; prompt 13 fills it
+var known_abilities: Dictionary[String, bool] = {}     # granted starters; inert until prompt 12
+
 # Maim order: weapon arm -> off leg -> off arm -> weapon leg; natural limbs first,
 # prosthetics only when no natural limb remains (they detach as recoverable gear).
 const MAIM_ROTATION: Array[LimbSlot] = [LimbSlot.ARM_R, LimbSlot.LEG_L, LimbSlot.ARM_L, LimbSlot.LEG_R]
@@ -71,6 +79,45 @@ func initialize():
 	current_hp = get_max_hp()
 	current_will = get_max_will()
 
+func _main_job() -> JobData:
+	return JobCatalog.get_job(main_job) if main_job != "" else null
+
+func certify(job_id: String, force: bool = false) -> bool:
+	if certified_jobs.has(job_id):
+		return true
+	var job := JobCatalog.get_job(job_id)
+	if job == null:
+		return false
+	if job.is_locked and not force:
+		return false
+	certified_jobs[job_id] = true
+	if job.starter_ability != null:
+		known_abilities[job.starter_ability.id] = true
+	return true
+
+func set_main_job(job_id: String) -> bool:
+	# TODO(campaign layer): jobs.md wants this free-but-between-missions-only; no mission
+	# boundary exists yet in code, so it's unrestricted for now (dev call, 2026-07-16).
+	if job_id != "" and not certified_jobs.has(job_id):
+		return false
+	if job_id != "" and sub_jobs.has(job_id):
+		return false
+	main_job = job_id
+	return true
+
+func set_sub_job(index: int, job_id: String) -> bool:
+	if index < 0 or index >= 2 or index >= unlocked_sub_slots:
+		return false
+	if job_id != "" and (not certified_jobs.has(job_id) or job_id == main_job):
+		return false
+	while sub_jobs.size() <= index:
+		sub_jobs.append("")
+	sub_jobs[index] = job_id
+	return true
+
+func set_unlocked_sub_slots(n: int) -> void:
+	unlocked_sub_slots = clampi(n, 0, 2)
+
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
@@ -90,9 +137,10 @@ func get_effective_ldr() -> int:
 
 func get_mov() -> int:
 	# MOV is a READOUT (jobs.md, audit A4): job base + DEX band, minus the heavy-load step,
-	# then the leg throttle LAST (dev ruling 2026-07-14): one empty leg halves (round up),
-	# two empty legs pin MOV to 1 flat — categorical, overrides everything.
-	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
+	# then the leg throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat.
+	var job := _main_job()
+	var base := job.mov_base if job != null else JOBLESS_MOV_BASE
+	var mov := base + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
 	if get_weight() >= WEIGHT_MOV_THRESHOLD:
 		mov -= WEIGHT_MOV_PENALTY
 	match empty_leg_count():
@@ -225,5 +273,18 @@ func get_limb_effective_base(stat: Stats.Stat) -> int:
 			return get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	# base -> limb substitution -> modifiers. Job ceilings clamp HERE when prompt 9 lands.
-	return get_limb_effective_base(stat) + stat_modifiers.get(stat, 0)
+	var value := get_stat_before_ceiling(stat)
+	var job := _main_job()
+	if job != null and job.stat_ceilings.has(stat):
+		value = mini(value, job.stat_ceilings[stat])
+	return value
+
+func get_stat_before_ceiling(stat: Stats.Stat) -> int:
+	# Pipeline up to (not including) the ceiling clamp — exposed so the dev editor's
+	# preview-at-decision can show what a job WOULD clamp without duplicating this logic.
+	var value := get_limb_effective_base(stat)
+	var job := _main_job()
+	if job != null:
+		value += job.stat_nudges.get(stat, 0)
+	value += stat_modifiers.get(stat, 0)
+	return value
