@@ -12,11 +12,13 @@ var popups: Array[String] = []
 var reaction_icons: Array[Texture2D] = []        # icons of reactions that FIRED this hit — drawn behind the target in the queue
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 
+
+
 # Predicted lifecycle result for this hit's TARGET (R8's "lifecycle result"). Mirrors
 # Unit.take_damage + _go_downed so the queue previews down/maim/kill (Law #2). MAIMED is a
 # DOWN the target can't pay for in Will (will-and-death.md 2026-06-24) — same lifecycle as
 # DOWNED, flagged separately so the preview can say so.
-enum Lethality { NONE, DOWNED, KILLED, MAIMED }
+enum Lethality { NONE, DOWNED, KILLED, MAIMED, CRISIS }
 var lethality: Lethality = Lethality.NONE
 
 var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview

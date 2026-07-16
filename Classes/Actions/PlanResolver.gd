@@ -90,17 +90,22 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
 	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below.
-	outcome.lethality = _predict_lethality(target_hypo.lifecycle, target_hypo.hp, target_hypo.will, outcome.damage, target_hypo.in_crisis, target_hypo.start_hp, target_hypo.can_maim)
+	outcome.lethality = _predict_lethality(target_hypo, outcome.damage)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
 	elif outcome.lethality == ResolvedOutcome.Lethality.MAIMED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED   # a maim IS a down — same lifecycle
 		target_hypo.will = 0
+	elif outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
+		target_hypo.in_crisis = true                          # the gambit: no safety net from here on
+		target_hypo.will = 0
 	elif outcome.lethality == ResolvedOutcome.Lethality.KILLED:
 		target_hypo.lifecycle = Unit.LifecycleState.DEAD
 
 	target_hypo.hp -= outcome.damage
+	if outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
+		target_hypo.hp = Unit.CRISIS_REVIVE_HP                # stood back up mid-pass (enter_crisis)
 	outcome.target_hp_after = target_hypo.hp
 
 	action.resolved = outcome
@@ -154,38 +159,42 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
 		h.can_maim = unit.unit_instance.next_maim_slot() != -1
+		h.crisis_stance_accepts = unit.get_faction() != Team.Faction.PLAYER and AIArchetype.accepts_crisis(unit.squad.archetype)
 		hypo[unit] = h
 	return hypo[unit]
 
-static func _predict_lethality(lifecycle: Unit.LifecycleState, hp_before: int, will_before: int, damage: int, in_crisis: bool, start_hp: int, can_maim: bool) -> ResolvedOutcome.Lethality:
-	# Mirror of Unit.take_damage + _go_downed (Law #2 — preview must equal execution):
+static func _predict_lethality(h: _Hypo, damage: int) -> ResolvedOutcome.Lethality:
+	# Mirror of Unit.take_damage + _go_downed + the Crisis offer (Law #2 — preview must equal
+	# execution). Takes the threaded hypo whole — eight loose params was a call-site hazard.
 	#   already DEAD        -> no-op (NONE)
 	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
 	#   damage < hp         -> survivable (NONE)
 	#   overkill > ceiling  -> KILLED
-	#   otherwise           -> a down; MAIMED if Will can't pay the flat cost, else DOWNED
+	#   would-be-down       -> CRISIS if full-Will + stance accepts (deterministic, R9),
+	#                          else MAIMED if Will can't pay and a limb remains, else DOWNED
 	#
-	# Crisis is special (dev call 2026-06-26): it never downs/maims (a would-be-down is death),
-	# and EVERY independently-lethal hit stays flagged KILLED even after the unit "dies" earlier
-	# in the pass — the player must see that dodging one fatal counter won't save them; the others
-	# kill too. "Independently lethal" = the hit alone would fell the unit at its pass-start HP.
-	# (Execution still only kills once; the extra skulls telegraph stakes, not damage.)
-	if in_crisis:
-		if lifecycle == Unit.LifecycleState.DEAD:
-			return ResolvedOutcome.Lethality.KILLED if damage >= start_hp else ResolvedOutcome.Lethality.NONE
-		if damage >= hp_before:
+	# Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down
+	# is death), and EVERY independently-lethal hit stays flagged KILLED even after the unit
+	# "dies" earlier in the pass — the player must see that dodging one fatal counter won't
+	# save them. "Independently lethal" = the hit alone would fell the unit at pass-start HP.
+	if h.in_crisis:
+		if h.lifecycle == Unit.LifecycleState.DEAD:
+			return ResolvedOutcome.Lethality.KILLED if damage >= h.start_hp else ResolvedOutcome.Lethality.NONE
+		if damage >= h.hp:
 			return ResolvedOutcome.Lethality.KILLED
 		return ResolvedOutcome.Lethality.NONE
-	if lifecycle == Unit.LifecycleState.DEAD:
+	if h.lifecycle == Unit.LifecycleState.DEAD:
 		return ResolvedOutcome.Lethality.NONE
-	if lifecycle == Unit.LifecycleState.DOWNED:
+	if h.lifecycle == Unit.LifecycleState.DOWNED:
 		return ResolvedOutcome.Lethality.KILLED
-	if damage < hp_before:
+	if damage < h.hp:
 		return ResolvedOutcome.Lethality.NONE
-	if damage - hp_before > Unit.OVERKILL_CEILING:
+	if damage - h.hp > Unit.OVERKILL_CEILING:
 		return ResolvedOutcome.Lethality.KILLED
-	if will_before < UnitInstance.DOWN_WILL_COST:
-		return ResolvedOutcome.Lethality.MAIMED if can_maim else ResolvedOutcome.Lethality.DOWNED
+	if h.will >= Unit.CRISIS_WILL_GATE and h.crisis_stance_accepts:
+		return ResolvedOutcome.Lethality.CRISIS   # stands back up surged — stances are deterministic
+	if h.will < UnitInstance.DOWN_WILL_COST:
+		return ResolvedOutcome.Lethality.MAIMED if h.can_maim else ResolvedOutcome.Lethality.DOWNED
 	return ResolvedOutcome.Lethality.DOWNED
 
 # Per-unit threaded hypothetical (R4). Will-ready: HP is threaded now; `will` is the
@@ -199,6 +208,7 @@ class _Hypo:
 	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
 	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this
 	var can_maim: bool = true   # false = fully maimed at pass start; a down can't cost a limb
+	var crisis_stance_accepts: bool = false   # non-player + stance ALWAYS -> a would-be-down previews CRISIS
 	
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already

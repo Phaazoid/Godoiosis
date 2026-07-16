@@ -413,11 +413,10 @@ func rally() -> void:
 	rally_count += 1
 	
 func is_crisis_eligible() -> bool:
-	# Crisis is gated by a FULL Will pool (will-and-death.md). Provisional: PLAYER-only (the live
-	# offer is a player decision; enemy AI would use its own path), and the gate is MAX_WILL (20),
-	# an identity gate so only high-WIL units ever qualify.
-	return get_faction() == Team.Faction.PLAYER \
-		and not in_crisis \
+	# Crisis gates on a FULL Will pool (will-and-death.md) — an identity gate, faction-agnostic
+	# since #57. Eligibility is universal; the DECISION differs by controller (live prompt vs
+	# archetype stance — see game._offer_crisis).
+	return not in_crisis \
 		and unit_instance.get_current_will() >= CRISIS_WILL_GATE
 
 func enter_crisis():

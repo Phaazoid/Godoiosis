@@ -858,13 +858,11 @@ func _process_downed_pending() -> void:
 	refresh_action_queue(squad_manager.active_squad)
 
 func _offer_crisis(unit: Unit) -> bool:
-	# An AI-controlled faction decides its own Crisis -- no player-facing prompt, always yes
-	# (deterministic; a smarter AI crisis policy is a later pass). Tracks the dev AI toggle,
-	# so hotseat-controlled factions still prompt.
-	if ai_controller.is_ai_faction(unit.get_faction()):
-		return true
-	# Live center-screen interrupt, awaited from the post-pass settle so combat is effectively
-	# frozen while the player chooses (will-and-death.md Crisis interrupt).
+	# Non-player factions decide by archetype stance — deterministic, so the player's queue
+	# previewed this exact outcome (Law #2; R9: enemy Crisis is never a BREAK). The PLAYER
+	# faction keeps the live prompt, except when AI-driven (dev toggle) — nothing to block on.
+	if unit.get_faction() != Team.Faction.PLAYER or ai_controller.is_ai_faction(unit.get_faction()):
+		return AIArchetype.accepts_crisis(unit.squad.archetype)
 	return await CrisisPrompt.show_prompt($UILayer, unit.get_unit_name())
 
 func _on_squad_became_active(squad: Squad, action: BaseAction):

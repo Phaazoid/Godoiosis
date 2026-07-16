@@ -1,14 +1,22 @@
 extends Object
 class_name AITactics
 
-# Shared building blocks archetypes compose with -- board queries and order-queueing that
-# aren't specific to any one archetype's decision logic.
 # `within`: optional Dictionary set of cells -- only enemies standing in it count.
+# Downed enemies are DEPRIORITIZED, not protected (#57, fork 3): any active enemy wins;
+# a downed one is targeted only when nothing active matches (finishing off is legal).
 static func nearest_enemy(from_unit: Unit, board: BoardContext, within = null) -> Unit:
+	var target := _nearest_enemy_matching(from_unit, board, within, false)
+	if target == null:
+		target = _nearest_enemy_matching(from_unit, board, within, true)
+	return target
+
+static func _nearest_enemy_matching(from_unit: Unit, board: BoardContext, within, downed: bool) -> Unit:
 	var nearest: Unit = null
 	var best := -1
 	for unit in board.units:
-		if not is_instance_valid(unit) or not unit.is_active():
+		if not is_instance_valid(unit):
+			continue
+		if (unit.is_downed() if downed else unit.is_active()) == false:
 			continue
 		if not Team.is_enemy(from_unit.get_faction(), unit.get_faction()):
 			continue
@@ -44,10 +52,18 @@ static func attack_if_possible(unit: Unit, board: BoardContext, squad_manager: S
 	return squad_manager.queue_action(unit.squad, attack)
 
 static func _nearest_reachable_enemy(unit: Unit, board: BoardContext, origin: Vector2i, reach: Array[Vector2i]) -> Unit:
+	var target := _nearest_reachable_matching(unit, board, origin, reach, false)
+	if target == null:
+		target = _nearest_reachable_matching(unit, board, origin, reach, true)
+	return target
+
+static func _nearest_reachable_matching(unit: Unit, board: BoardContext, origin: Vector2i, reach: Array[Vector2i], downed: bool) -> Unit:
 	var nearest: Unit = null
 	var best := -1
 	for other in board.units:
-		if not is_instance_valid(other) or not other.is_active():
+		if not is_instance_valid(other):
+			continue
+		if (other.is_downed() if downed else other.is_active()) == false:
 			continue
 		if not Team.is_enemy(unit.get_faction(), other.get_faction()):
 			continue
