@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://qm4wjlfxedbr"]
+
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_cyj6s"]
+[ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_ujirt"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_62ack"]
+
+[sub_resource type="Resource" id="Resource_0xm14"]
+script = ExtResource("1_cyj6s")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("3_62ack")
+power = 3
+attack_pattern = SubResource("Resource_0xm14")
+weapon_type = 1
+scaling_blend = Dictionary[int, int]({
+1: 60,
+4: 40
+})
+item_name = "Chainsword"
+icon = ExtResource("2_ujirt")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

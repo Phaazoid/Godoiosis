@@ -91,7 +91,7 @@ func _add_inventory_section(unit: Unit):
 		var sel := 0
 		if current_item != null:
 			for k in range(weapon_keys.size()):
-				if weapons[weapon_keys[k]].item_name == current_item.item_name:
+				if _entry_matches(weapons[weapon_keys[k]], current_item):
 					sel = k + 1
 					break
 		picker.select(sel)
@@ -107,7 +107,15 @@ func _add_inventory_section(unit: Unit):
 		row.add_child(equip_btn)
 
 		unit_editor_container.add_child(row)
-		
+
+func _entry_matches(entry, item) -> bool:
+	# A template entry matches an instance built on it; saved instances / runes match by name.
+	if entry is WeaponData and item is WeaponInstance:
+		return item.template == entry
+	if item is Item and entry is Item:
+		return entry.item_name == item.item_name and item.item_name != ""
+	return false
+
 func _add_jobs_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Jobs")
 
@@ -210,9 +218,9 @@ func _on_slot_picked(unit: Unit, index: int, opt_index: int):
 		var items := _equippable_catalog()
 		_set_slot(unit, index, items[items.keys()[opt_index - 1]])
 
-func _set_slot(unit: Unit, index: int, weapon: EquippableData):
+func _set_slot(unit: Unit, index: int, entry: Resource):
 	var was_equipped = (unit.inventory[index] != null and unit.inventory[index] == unit.get_equipped_weapon())
-	unit.inventory[index] = weapon.duplicate(true) if weapon != null else null
+	unit.inventory[index] = WeaponCatalog.instantiate_entry(entry) if entry != null else null
 	if was_equipped:
 		unit.unequip_weapon()
 	if unit.inventory[index] is EquippableData and unit.get_equipped_weapon() == null:

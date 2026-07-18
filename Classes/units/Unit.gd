@@ -138,9 +138,11 @@ func get_unit_name() -> String:
 
 func remove_item(index: int):
 	if index >= 0 and index < inventory.size():
-		if inventory[index] == equipped_weapon:
+		var item := inventory[index]
+		if unit_instance.is_installed_prosthetic(_template_of(item)):
+			return
+		if item == equipped_weapon:
 			equipped_weapon = null
-
 		inventory[index] = null
 		
 func _on_instance_died():
@@ -161,7 +163,14 @@ func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov()
+	return unit_instance.get_mov(_gear_weight())
+
+func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
+	return unit_instance.get_proficiency(family)
+
+func _gear_weight() -> int:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon.get_effective_weight() if weapon != null else 0
 
 func get_max_hp() -> int:
 	return unit_instance.get_max_hp()
@@ -186,6 +195,10 @@ func add_element_state(state: Elemental.State) -> void:
 
 func remove_element_state(state: Elemental.State) -> void:
 	element_states.erase(state)
+
+func _template_of(item: EquippableData) -> WeaponData:
+	var weapon := item as WeaponInstance
+	return weapon.template if weapon != null else null
 
 func get_all_stats() -> Dictionary:
 	var result := {}
@@ -363,8 +376,8 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 
 func can_wield_equipped() -> bool:
 	# Verb lock: any missing arm locks two-handed patterns. One-handed kit is unaffected.
-	var weapon := get_equipped_weapon() as WeaponData
-	if weapon == null or not weapon.two_handed:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon == null or weapon.template == null or not weapon.template.two_handed:
 		return true
 	return not unit_instance.has_missing_arm()
 
@@ -475,8 +488,8 @@ func attack_source_can_counter() -> bool:
 	var fired := get_fired_transmutation()
 	if fired != null:
 		return fired.can_counter
-	var weapon := get_equipped_weapon() as WeaponData
-	return weapon != null and weapon.can_counter
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon != null and weapon.template != null and weapon.template.can_counter
 	
 	# Does this unit's CURRENT attack source splash allies (friendly fire)? Carving (rune) else weapon
 # -- the AoE mirror of attack_source_can_counter. A unit with no source never friendly-fires. #30.
@@ -484,5 +497,5 @@ func attack_source_hits_allies() -> bool:
 	var fired := get_fired_transmutation()
 	if fired != null:
 		return fired.hits_allies
-	var weapon := get_equipped_weapon() as WeaponData
-	return weapon != null and weapon.hits_allies
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon != null and weapon.template != null and weapon.template.hits_allies

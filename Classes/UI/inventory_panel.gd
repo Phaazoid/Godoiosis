@@ -98,7 +98,7 @@ func _show_action_popup(index: int):
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
 
-	if item is WeaponData:
+	if item is WeaponInstance:
 		var equip_btn := Button.new()
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
@@ -108,11 +108,12 @@ func _show_action_popup(index: int):
 			equip_btn.pressed.connect(_do_equip.bind(index))
 		vbox.add_child(equip_btn)
 
-	var toss_btn := Button.new()
-	toss_btn.text = "Toss"
-	toss_btn.pressed.connect(_do_toss.bind(index))
-	vbox.add_child(toss_btn)
-
+	if not (item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template)):
+		var toss_btn := Button.new()
+		toss_btn.text = "Toss"
+		toss_btn.pressed.connect(_do_toss.bind(index))
+		vbox.add_child(toss_btn)
+		
 	add_child(popup)
 	var slot = slots_container.get_child(index)
 	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
@@ -156,17 +157,24 @@ func _refresh():
 			icon.texture = item.icon
 
 			var display_name = item.item_name
+			if item is WeaponInstance:
+				display_name = item.shown_name()
+				if icon.texture == null and item.template != null:
+					icon.texture = item.template.icon
+
 			if item == unit.get_equipped_weapon():
 				display_name += "  (E)"
 				name_label.modulate = COLOR_EQUIPPED
 			else:
 				name_label.modulate = Color(1, 1, 1, 1)
+			if item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template):
+				display_name += "  [installed]"
 
-			# Append elemental damage type for weapons that have one.
-			if item is WeaponData:
-				var elem := (item as WeaponData).elemental_damage_type
-				if elem != Elemental.Element.NONE:
-					display_name += "  [%s]" % Elemental.Element.keys()[elem].capitalize()
+			# Append elemental damage — the computed view, so mod-added elements show too.
+			if item is WeaponInstance and unit != null:
+				var elems: Array[Elemental.Element] = item.get_elements(unit)
+				if not elems.is_empty():
+					display_name += "  [%s]" % Elemental.Element.keys()[elems[0]].capitalize()
 
 			name_label.text = display_name
 		else:

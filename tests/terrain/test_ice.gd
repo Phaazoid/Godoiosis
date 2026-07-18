@@ -19,9 +19,9 @@ class _IceBoard extends BoardContext:
 
 func _map_attacker(element: Elemental.Element) -> Unit:
 	var u: Unit = H.spawn_unit(self, PLAYER, Vector2i(0, 0))
-	var weapon := u.get_equipped_weapon() as WeaponData
-	weapon.elemental_damage_type = element
-	weapon.targets = EquippableData.TargetMode.MAP
+	var weapon := u.get_equipped_weapon() as WeaponInstance
+	weapon.template.elemental_damage_type = element
+	weapon.template.targets = EquippableData.TargetMode.MAP
 	return u
 
 func _ice_freezes_water() -> TerrainReaction:

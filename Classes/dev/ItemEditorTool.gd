@@ -33,7 +33,7 @@ func _base_catalog() -> Dictionary:
 func _refresh_variant_list():
 	load_dropdown.clear()
 	_variants = {}
-	var weapons := WeaponCatalog.get_variants()
+	var weapons := WeaponCatalog.get_saved()
 	for v in weapons:
 		_variants[v] = weapons[v]
 	var runes := RuneCatalog.get_variants()
@@ -45,7 +45,8 @@ func _refresh_variant_list():
 func _rebase_on_type(index: int):
 	var bases := _base_catalog()
 	var key = bases.keys()[index]
-	current_item = bases[key].duplicate(true)
+	var base = bases[key]
+	current_item = WeaponInstance.make(base) if base is WeaponData else base.duplicate(true)
 	populate()
 
 func _on_type_selected(index: int):
@@ -54,7 +55,7 @@ func _on_type_selected(index: int):
 func _load_selected(index: int):
 	if index < 0:
 		return
-	current_item = _variants[_variants.keys()[index]].duplicate(true)
+	current_item = _variants[_variants.keys()[index]].copy_equippable()
 	name_input.text = current_item.item_name
 	populate()
 
@@ -70,7 +71,7 @@ func _on_save_pressed():
 		push_warning("Item needs a name to save")
 		return
 	current_item.item_name = item_name
-	var dir := RuneCatalog.VARIANT_DIR if current_item is RuneData else WeaponCatalog.VARIANT_DIR
+	var dir := RuneCatalog.VARIANT_DIR if current_item is RuneData else WeaponCatalog.SAVED_DIR
 	DirAccess.make_dir_recursive_absolute(dir)
 	var err := ResourceSaver.save(current_item, dir + item_name + ".tres")
 	if err != OK:
@@ -86,6 +87,8 @@ func populate():
 		return
 	if current_item is RuneData:
 		_populate_rune_editor(current_item)
+	elif current_item is WeaponInstance:
+		_populate_weapon_editor(current_item)
 	else:
 		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "item_name"])
 
@@ -139,3 +142,61 @@ func _populate_rune_editor(rune: RuneData):
 
 func _carving_label(carving: TransmutationData) -> String:
 	return carving.display_name if carving.display_name != "" else "carving"
+
+# A weapon's per-item state is just its fitted mods (item 6/7, weapons.md). The template
+# is shown read-only, never as a nested editable form — that's what the old reflection
+# path got wrong: it silently let you mutate the shared family .tres through any one
+# item's editor. Mirrors _populate_rune_editor's capacity-bounded fit/remove shape.
+func _populate_weapon_editor(weapon: WeaponInstance) -> void:
+	var template := weapon.template
+	if template == null:
+		DevWidgets.add_label(editor_container, "(no template)")
+		return
+	DevWidgets.add_label(editor_container, "Family: %s" % (template.item_name if template.item_name != "" else WeaponData.WeaponType.keys()[template.weapon_type]))
+	DevWidgets.add_label(editor_container, "Weight: %d" % weapon.get_effective_weight())
+
+	var mods := WeaponModCatalog.get_mods()
+	for i in range(weapon.space_count()):
+		_populate_mod_space(weapon, i, mods)
+
+func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -> void:
+	var capacity: int = weapon.template.space_capacities()[index]
+	DevWidgets.add_label(editor_container, "Space %d: %d / %d used" % [index + 1, weapon.used_capacity(index), capacity])
+
+	var fitted := weapon.space(index)
+	for i in range(fitted.size()):
+		var mod := fitted[i]
+		var idx := i
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "%s (size %d)" % [mod.display_name if mod.display_name != "" else mod.id, mod.size]
+		label.custom_minimum_size = Vector2(160, 0)
+		row.add_child(label)
+		var remove := Button.new()
+		remove.text = "Remove"
+		remove.pressed.connect(func():
+			fitted.remove_at(idx)
+			populate()
+		)
+		row.add_child(remove)
+		editor_container.add_child(row)
+
+	if mods.is_empty():
+		DevWidgets.add_label(editor_container, "(no mods in Resources/WeaponMods/)")
+		return
+	var add_row := HBoxContainer.new()
+	var picker := OptionButton.new()
+	for k in mods:
+		picker.add_item(k)
+	add_row.add_child(picker)
+	var add_btn := Button.new()
+	add_btn.text = "Fit"
+	add_btn.pressed.connect(func():
+		var key = mods.keys()[picker.selected]
+		if weapon.fit(index, mods[key]):   # a direct ref, not a duplicate — WeaponModCatalog's header comment already documents mods as live-shared, same model as templates
+			populate()
+		else:
+			push_warning("Not enough capacity in space %d to fit %s" % [index + 1, key])
+	)
+	add_row.add_child(add_btn)
+	editor_container.add_child(add_row)

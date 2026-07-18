@@ -15,7 +15,7 @@ static func base_runes() -> Dictionary:
 		bases["Rune - %s" % RuneData.Size.keys()[size].capitalize()] = rune
 	return bases
 
-# Saved authored runes, scanned from disk (mirrors WeaponCatalog.get_variants).
+# Saved authored runes, scanned from disk (mirrors WeaponCatalog.get_saved).
 static func get_variants() -> Dictionary:
 	var variants := {}
 	if not DirAccess.dir_exists_absolute(VARIANT_DIR):

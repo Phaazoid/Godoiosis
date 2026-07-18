@@ -55,7 +55,7 @@ func save_scenario(scenario_name: String):
 			entry.squad_zone = unit.squad.zone_name
 
 		if unit.has_equipped_weapon():
-			entry.equipped_weapon = unit.get_equipped_weapon().duplicate(true)
+			entry.equipped_weapon = unit.get_equipped_weapon().copy_equippable()
 
 		entry.certified_jobs = unit.unit_instance.certified_jobs.duplicate()
 		entry.main_job = unit.unit_instance.main_job
@@ -96,7 +96,7 @@ func load_scenario(path: String):
 			continue
 
 		if entry.equipped_weapon != null:
-			unit.add_item(entry.equipped_weapon.duplicate(true))
+			unit.add_item(entry.equipped_weapon.copy_equippable())
 		# (already null-safe: a dropped weapon simply leaves the unit unarmed)
 
 		unit.unit_instance.certified_jobs = entry.certified_jobs.duplicate()

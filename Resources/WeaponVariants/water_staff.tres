@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
-
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_64qyt"]
-
-[resource]
-script = ExtResource("1_64qyt")
-power = 4
-elemental_damage_type = 2
-item_name = "Water Staff"

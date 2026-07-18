@@ -69,5 +69,5 @@ func _active_pattern(unit: Unit) -> AttackPattern:
 	var fired := unit.get_fired_transmutation()
 	if fired != null:
 		return fired.attack_pattern
-	var weapon := unit.get_equipped_weapon() as WeaponData
-	return weapon.attack_pattern if weapon != null else null
+	var weapon := unit.get_equipped_weapon() as WeaponInstance
+	return weapon.template.attack_pattern if weapon != null and weapon.template != null else null

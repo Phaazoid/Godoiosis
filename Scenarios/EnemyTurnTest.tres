@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="7_ldalt"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="8_omdak"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="9_nngxg"]
+[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_9_nngxg"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="10_m4yol"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="11_asq74"]
 
@@ -47,6 +48,10 @@ icon = ExtResource("8_omdak")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_yo78a_inst"]
+script = ExtResource("wi_9_nngxg")
+template = SubResource("Resource_yo78a")
 [sub_resource type="Resource" id="Resource_3g7no"]
 script = ExtResource("6_hvxev")
 display_name = "BadGuy1"
@@ -67,7 +72,7 @@ metadata/_custom_type_script = "uid://cvvknuw621ar2"
 script = ExtResource("2_i2qrk")
 unit_data = SubResource("Resource_3g7no")
 cell = Vector2i(4, 4)
-equipped_weapon = SubResource("Resource_yo78a")
+equipped_weapon = SubResource("Resource_yo78a_inst")
 squad_id = 1
 is_leader = true
 

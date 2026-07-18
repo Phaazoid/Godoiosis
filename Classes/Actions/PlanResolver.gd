@@ -118,7 +118,7 @@ static func _source_base_damage(action: AttackAction) -> int:
 	var attacker := action.actor
 	if action.transmutation != null:
 		return action.transmutation.base_damage(attacker)
-	var weapon := attacker.get_equipped_weapon() as WeaponData
+	var weapon := attacker.get_equipped_weapon() as WeaponInstance
 	if weapon != null:
 		return weapon.base_damage(attacker)
 	return attacker.get_effective_stat(Stats.Stat.STR)
@@ -126,16 +126,16 @@ static func _source_base_damage(action: AttackAction) -> int:
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
 	if action.transmutation != null:
 		return action.transmutation.get_elements()
-	var weapon := action.actor.get_equipped_weapon() as WeaponData
+	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	if weapon != null:
-		return weapon.get_elements()
+		return weapon.get_elements(action.actor)
 	var none: Array[Elemental.Element] = []
 	return none
 
 static func _source_hits_map(action: AttackAction) -> bool:
 	if action.transmutation != null:
 		return action.transmutation.hits_map()
-	var weapon := action.actor.get_equipped_weapon() as WeaponData
+	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	return weapon != null and weapon.hits_map()
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:

@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_fsgj4"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_al3rt"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_ss267"]
+[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_3_ss267"]
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="4_nmamx"]
 [ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="5_pgmay"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="6_8ywn6"]
@@ -31,6 +32,10 @@ power = 4
 elemental_damage_type = 3
 item_name = "Shock Rod"
 
+
+[sub_resource type="Resource" id="Resource_j5i3j_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_j5i3j")
 [sub_resource type="Resource" id="Resource_lpth7"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier3"
@@ -52,7 +57,7 @@ downed_sprite = ExtResource("4_nmamx")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_lpth7")
 cell = Vector2i(-4, 1)
-equipped_weapon = SubResource("Resource_j5i3j")
+equipped_weapon = SubResource("Resource_j5i3j_inst")
 squad_id = 0
 
 [sub_resource type="Resource" id="Resource_3f5s2"]
@@ -61,6 +66,10 @@ power = 4
 elemental_damage_type = 3
 item_name = "Shock Rod"
 
+
+[sub_resource type="Resource" id="Resource_3f5s2_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_3f5s2")
 [sub_resource type="Resource" id="Resource_n6i6m"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier4"
@@ -82,7 +91,7 @@ downed_sprite = ExtResource("4_nmamx")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_n6i6m")
 cell = Vector2i(-4, 3)
-equipped_weapon = SubResource("Resource_3f5s2")
+equipped_weapon = SubResource("Resource_3f5s2_inst")
 squad_id = 1
 
 [sub_resource type="Resource" id="Resource_h10id"]
@@ -92,7 +101,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 [sub_resource type="Resource" id="Resource_6osgg"]
 script = ExtResource("3_ss267")
 power = 5
-scaling_stat = 3
+scaling_blend = Dictionary[int, int]({3: 100})
 attack_pattern = SubResource("Resource_h10id")
 hits_allies = true
 elemental_damage_type = 1
@@ -100,6 +109,10 @@ icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_6osgg_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_6osgg")
 [sub_resource type="Resource" id="Resource_itij0"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier5"
@@ -122,7 +135,7 @@ downed_sprite = ExtResource("11_765il")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_itij0")
 cell = Vector2i(0, 1)
-equipped_weapon = SubResource("Resource_6osgg")
+equipped_weapon = SubResource("Resource_6osgg_inst")
 squad_id = 2
 
 [sub_resource type="Resource" id="Resource_tfpe3"]
@@ -132,7 +145,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 [sub_resource type="Resource" id="Resource_b7r45"]
 script = ExtResource("3_ss267")
 power = 5
-scaling_stat = 3
+scaling_blend = Dictionary[int, int]({3: 100})
 attack_pattern = SubResource("Resource_tfpe3")
 hits_allies = true
 elemental_damage_type = 1
@@ -140,6 +153,10 @@ icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_b7r45_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_b7r45")
 [sub_resource type="Resource" id="Resource_icw1w"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier6"
@@ -162,7 +179,7 @@ downed_sprite = ExtResource("11_765il")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_icw1w")
 cell = Vector2i(0, 3)
-equipped_weapon = SubResource("Resource_b7r45")
+equipped_weapon = SubResource("Resource_b7r45_inst")
 squad_id = 3
 
 [sub_resource type="Resource" id="Resource_rskt5"]
@@ -171,6 +188,10 @@ power = 4
 elemental_damage_type = 2
 item_name = "Water Staff"
 
+
+[sub_resource type="Resource" id="Resource_rskt5_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_rskt5")
 [sub_resource type="Resource" id="Resource_7alli"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier1"
@@ -192,7 +213,7 @@ downed_sprite = ExtResource("14_vumw4")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_7alli")
 cell = Vector2i(-3, 1)
-equipped_weapon = SubResource("Resource_rskt5")
+equipped_weapon = SubResource("Resource_rskt5_inst")
 squad_id = 0
 is_leader = true
 
@@ -202,6 +223,10 @@ power = 4
 elemental_damage_type = 2
 item_name = "Water Staff"
 
+
+[sub_resource type="Resource" id="Resource_yb65v_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_yb65v")
 [sub_resource type="Resource" id="Resource_c11xf"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier2"
@@ -223,7 +248,7 @@ downed_sprite = ExtResource("14_vumw4")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_c11xf")
 cell = Vector2i(-3, 3)
-equipped_weapon = SubResource("Resource_yb65v")
+equipped_weapon = SubResource("Resource_yb65v_inst")
 squad_id = 1
 is_leader = true
 
@@ -240,6 +265,10 @@ icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_a2ak8_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_a2ak8")
 [sub_resource type="Resource" id="Resource_4ks7v"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier7"
@@ -262,7 +291,7 @@ downed_sprite = ExtResource("19_l83s2")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_4ks7v")
 cell = Vector2i(1, 1)
-equipped_weapon = SubResource("Resource_a2ak8")
+equipped_weapon = SubResource("Resource_a2ak8_inst")
 squad_id = 2
 is_leader = true
 
@@ -279,6 +308,10 @@ icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_w0pi4_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_w0pi4")
 [sub_resource type="Resource" id="Resource_ns22o"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier8"
@@ -301,7 +334,7 @@ downed_sprite = ExtResource("19_l83s2")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_ns22o")
 cell = Vector2i(1, 3)
-equipped_weapon = SubResource("Resource_w0pi4")
+equipped_weapon = SubResource("Resource_w0pi4_inst")
 squad_id = 3
 is_leader = true
 
@@ -319,6 +352,10 @@ icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_5verf_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_5verf")
 [sub_resource type="Resource" id="Resource_k0w0n"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier9"
@@ -340,7 +377,7 @@ downed_sprite = ExtResource("22_eaw34")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_k0w0n")
 cell = Vector2i(3, 5)
-equipped_weapon = SubResource("Resource_5verf")
+equipped_weapon = SubResource("Resource_5verf_inst")
 squad_id = 4
 
 [sub_resource type="Resource" id="Resource_ema0g"]
@@ -357,6 +394,10 @@ icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_sda2p_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_sda2p")
 [sub_resource type="Resource" id="Resource_owo5n"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier10"
@@ -378,7 +419,7 @@ downed_sprite = ExtResource("22_eaw34")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_owo5n")
 cell = Vector2i(5, 3)
-equipped_weapon = SubResource("Resource_sda2p")
+equipped_weapon = SubResource("Resource_sda2p_inst")
 squad_id = 4
 is_leader = true
 
@@ -396,6 +437,10 @@ icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_8gmk8_inst"]
+script = ExtResource("wi_3_ss267")
+template = SubResource("Resource_8gmk8")
 [sub_resource type="Resource" id="Resource_wi3fl"]
 script = ExtResource("8_loi8m")
 display_name = "Soldier11"
@@ -417,7 +462,7 @@ downed_sprite = ExtResource("22_eaw34")
 script = ExtResource("2_al3rt")
 unit_data = SubResource("Resource_wi3fl")
 cell = Vector2i(5, 0)
-equipped_weapon = SubResource("Resource_8gmk8")
+equipped_weapon = SubResource("Resource_8gmk8_inst")
 squad_id = 4
 
 [resource]

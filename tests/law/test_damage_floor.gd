@@ -26,7 +26,7 @@ func _drain_reaction(bonus: int, adds_wet: bool = false) -> ElementalReaction:
 
 func _fire_attack(attacker: Unit, target: Unit) -> AttackAction:
 	var weapon := H.make_weapon(6)
-	weapon.elemental_damage_type = Elemental.Element.FIRE
+	weapon.template.elemental_damage_type = Elemental.Element.FIRE
 	attacker.equipped_weapon = weapon
 	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 

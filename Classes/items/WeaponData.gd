@@ -1,10 +1,10 @@
 class_name WeaponData
-extends EquippableData
+extends Item
 
-# A weapon is an equippable with a BUILT-IN attack: it scales off a stat and carries its own
-# pattern / element / policy. These fields used to live on EquippableData; they moved DOWN here
-# so a RuneData (a bare container) no longer inherits an attack it doesn't have. .tres serialize
-# @exports by NAME, so existing weapon resources are unaffected by the move.
+# A weapon TEMPLATE — the shared design of a family base (ChainSword.tres) or a named
+# prototype (TheJaw.tres). NOT equippable: units carry a WeaponInstance, which points here
+# and layers its own fitted mods on top. Every instance reads this resource live — editing
+# a template updates every weapon built on it (direct-ref flavor of the jobs pattern).
 
 # Weapon families — canonical weapon_type vocabulary (docs/design/weapons.md).
 # APPEND-ONLY (serialized as ints). NONE = 0 is the unset default.
@@ -19,32 +19,40 @@ enum WeaponType {
 	PROSTHETIC,
 }
 
+@export var built_in_stat: int = 0
+# PROSTHETIC only: the STR/DEX this limb contributes when installed (will-and-death.md
+# limb-slot model). Deliberately separate from scaling_blend/power — this is what the
+# limb itself reads for stat substitution, not the weapon's own damage math.
+
+enum LimbKind { ARM, LEG }
+
+@export var limb_kind: LimbKind = LimbKind.ARM
+# PROSTHETIC only: which limb this template installs into. UnitInstance.install_prosthetic
+# validates against it — no dual-purpose prosthetics, every one is exactly ARM or LEG.
+
+# Three mod spaces, capacities 1/2/3; a prototype trades them for a single size-1 space
+# (weapons.md "the archetype clause made content").
+const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
+
 @export var power: int = 0
 @export var attack_pattern: AttackPattern
 @export var can_counter := true
 @export var hits_allies := false
 @export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE
 @export var two_handed := false   # verb lock: a missing arm can't wield this (will-and-death.md)
-
-# Which side of the world this weapon's attack affects (#50). Default UNIT = behaves as today;
-# a terrain weapon opts into MAP/BOTH. APPEND-ONLY (serializes as an int).
 @export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
-
-@export var scaling_stat: Stats.Stat = Stats.Stat.STR
 @export var weapon_type: WeaponType = WeaponType.NONE
+@export var is_prototype := false
+
+# Percentage weights across STR/DEX/PER/CON; missing key = 0%, should sum to 100 (not
+# hard-enforced). The family's identity — instances never carry their own copy.
+@export var scaling_blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}
+@export var base_weight: int = 0   # playtest-tunable
+
+func space_capacities() -> Array[int]:
+	if is_prototype:
+		return [1]
+	return SPACE_CAPACITIES
 
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
-
-# A weapon scales off a flat stat (power + the scaling stat). The resolver calls this on the
-# unified attack source (E1 base-damage stage).
-func base_damage(wielder: Unit) -> int:
-	return power + wielder.get_effective_stat(scaling_stat)
-
-# One element today, returned as a list so the resolver reads weapons and transmutations the
-# same way (a transmutation carries a set). #30.
-func get_elements() -> Array[Elemental.Element]:
-	var result: Array[Elemental.Element] = []
-	if elemental_damage_type != Elemental.Element.NONE:
-		result.append(elemental_damage_type)
-	return result

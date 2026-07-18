@@ -1012,8 +1012,9 @@ func spawn_test_units():
 		spawn_unit(test_data_goody, cell)
 		
 	var test_enemy : Unit = spawn_unit(test_data_baddy, Vector2i(4,4))
-	var test_item : Item = preload("res://Resources/ChainSword.tres")
-	test_enemy.add_item(test_item.duplicate(true))
+	var test_item : WeaponData = preload("res://Resources/Weapons/MainVarieties/ChainSword.tres")
+	test_enemy.add_item(WeaponInstance.make(test_item))
+
 
 	var generic_stats := Stats.STAT_DEFAULTS.duplicate()
 	

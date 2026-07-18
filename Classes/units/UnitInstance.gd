@@ -37,6 +37,11 @@ const JOBLESS_MOV_BASE := 4       # playtest-tunable; prompt 9 swaps in the main
 const WEIGHT_MOV_THRESHOLD := 8   # playtest-tunable: at/above this Weight, one coarse step off
 const WEIGHT_MOV_PENALTY := 1     # a step, never per-point (jobs.md — plate isn't double-punished)
 
+# --- Weapon proficiency (docs/design/weapons.md, #59) ---
+const DEFAULT_PROFICIENCY := 3   # == WeaponData.SPACE_CAPACITIES.size() — all spaces active by
+								  # default, so existing scenarios/weapons behave unchanged
+var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
+
 # --- Limb slots (will-and-death.md, the limb-slot model — #56) ---
 # Limbs are equipment slots: NATURAL = the unit's own limb (reads innate STR/DEX),
 # EMPTY = maimed, PROSTHETIC = fitted gear with its own built-in stat (content: prompt 10).
@@ -57,8 +62,8 @@ const MAIM_ROTATION: Array[LimbSlot] = [LimbSlot.ARM_R, LimbSlot.LEG_L, LimbSlot
 
 class LimbFitting:
 	var state: LimbState = LimbState.NATURAL
-	var prosthetic_stat: int = 0          # meaningful only when PROSTHETIC (prompt 10 authors real parts)
-	var prosthetic_item: Resource = null  # the detachable gear entry; null until prompt 10
+	var prosthetic_stat: int = 0             # meaningful only when PROSTHETIC and there's no real item (dev/test placeholder fittings)
+	var prosthetic_item: WeaponData = null   # the integrated-weapon template, when this prosthetic is also a weapon
 
 var limbs: Dictionary[LimbSlot, LimbFitting] = {}
 
@@ -118,6 +123,12 @@ func set_sub_job(index: int, job_id: String) -> bool:
 func set_unlocked_sub_slots(n: int) -> void:
 	unlocked_sub_slots = clampi(n, 0, 2)
 
+func get_proficiency(family: WeaponData.WeaponType) -> int:
+	return weapon_proficiency.get(family, DEFAULT_PROFICIENCY)
+
+func set_proficiency(family: WeaponData.WeaponType, value: int) -> void:
+	weapon_proficiency[family] = clampi(value, 0, 3)
+
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
@@ -135,13 +146,23 @@ func get_max_hp() -> int:
 func get_effective_ldr() -> int:
 	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
 
-func get_mov() -> int:
+func get_weight(gear: int = 0) -> int:
+	# Derived, never authored (stats.md): body + gear + modules + carried.
+	# gear = the wielder's equipped weapon's effective weight — Unit passes it in, since
+	# UnitInstance has no visibility into equipped_weapon (the other side of the persistence
+	# seam, #59). Only the CON body term + gear exist yet — modules/carried are still 0.
+	var body := get_base_stat(Stats.Stat.CON)
+	var modules := 0
+	var carried := 0
+	return body + gear + modules + carried
+
+func get_mov(gear: int = 0) -> int:
 	# MOV is a READOUT (jobs.md, audit A4): job base + DEX band, minus the heavy-load step,
 	# then the leg throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat.
 	var job := _main_job()
 	var base := job.mov_base if job != null else JOBLESS_MOV_BASE
 	var mov := base + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
-	if get_weight() >= WEIGHT_MOV_THRESHOLD:
+	if get_weight(gear) >= WEIGHT_MOV_THRESHOLD:
 		mov -= WEIGHT_MOV_PENALTY
 	match empty_leg_count():
 		2:
@@ -171,15 +192,6 @@ func get_max_will() -> int:
 
 func get_current_will() -> int:
 	return current_will
-
-func get_weight() -> int:
-	# Derived, never authored (stats.md): body + gear + modules + carried.
-	# Only the CON body term exists yet — prompts 7/10 fill the rest.
-	var body := get_base_stat(Stats.Stat.CON)
-	var gear := 0
-	var modules := 0
-	var carried := 0
-	return body + gear + modules + carried
 
 func set_current_will(value: int):
 	current_will = clamp(value, 0, get_max_will())
@@ -233,10 +245,36 @@ func limb_stat(slot: LimbSlot) -> int:
 		LimbState.EMPTY:
 			return 0
 		LimbState.PROSTHETIC:
-			return fitting.prosthetic_stat
+			return fitting.prosthetic_item.built_in_stat if fitting.prosthetic_item != null else fitting.prosthetic_stat
 		_:
 			var natural := Stats.Stat.STR if slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R else Stats.Stat.DEX
 			return get_base_stat(natural)
+
+func install_prosthetic(slot: LimbSlot, item: WeaponData) -> bool:
+	# Fits a real, content-authored prosthetic (weapons.md item 6). Its built_in_stat feeds
+	# limb_stat() LIVE off the template — no snapshot, so editing the .tres later propagates
+	# to every unit with it installed, same as scaling_blend does for ordinary weapons.
+	if item == null:
+		return false
+	var is_arm_slot := slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R
+	var wanted := WeaponData.LimbKind.ARM if is_arm_slot else WeaponData.LimbKind.LEG
+	if item.limb_kind != wanted:
+		return false
+	var fitting: LimbFitting = limbs[slot]
+	fitting.state = LimbState.PROSTHETIC
+	fitting.prosthetic_item = item
+	return true
+
+func is_installed_prosthetic(template: WeaponData) -> bool:
+	# An installed prosthetic weapon can't be swapped out (Unit.gd guards) — it's a limb,
+	# not held gear. "Uninstalling" is a between-mission action, not built yet.
+	if template == null:
+		return false
+	for slot in limbs:
+		var fitting: LimbFitting = limbs[slot]
+		if fitting.state == LimbState.PROSTHETIC and fitting.prosthetic_item == template:
+			return true
+	return false
 
 func next_maim_slot() -> int:
 	# The deterministic "next at risk" (Law #1 — previewable). -1 = fully maimed.

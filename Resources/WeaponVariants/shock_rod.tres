@@ -1,9 +1,0 @@
-[gd_resource type="Resource" script_class="WeaponData" format=3]
-
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_c6iwo"]
-
-[resource]
-script = ExtResource("1_c6iwo")
-power = 4
-elemental_damage_type = 3
-item_name = "Shock Rod"

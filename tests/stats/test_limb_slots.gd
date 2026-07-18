@@ -122,3 +122,72 @@ func test_maim_preview_matches_execution_pick() -> void:
 	assert_int(promised).is_equal(UnitInstance.LimbSlot.LEG_L)
 	inst.spend_will_for_down()
 	assert_that(inst.limbs[promised].state).is_equal(UnitInstance.LimbState.EMPTY)
+
+# --- Installed prosthetic weapons (#59 item 6, weapons.md Prosthetic family) ---
+
+func _prosthetic_template(built_in_stat: int, limb_kind: WeaponData.LimbKind = WeaponData.LimbKind.ARM) -> WeaponData:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.PROSTHETIC
+	template.built_in_stat = built_in_stat
+	template.limb_kind = limb_kind
+	return template
+
+func test_installed_prosthetic_reads_built_in_stat_from_template() -> void:
+	# Parity with the bare-placeholder case above, but via a real content template:
+	# 9-stat arm + natural 7 -> ceil(8), same formula, template-sourced this time.
+	var inst := _make_instance({Stats.Stat.STR: 7})
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_template(9))).is_true()
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)
+
+func test_installed_prosthetics_on_both_arms_average_their_templates() -> void:
+	var inst := _make_instance({Stats.Stat.STR: 0})
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_L, _prosthetic_template(6))
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_template(11))
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(9)   # ceil(8.5)
+
+func test_installed_prosthetic_stat_reads_live_off_the_template() -> void:
+	# The whole point of a direct resource ref (mirrors scaling_blend): editing the
+	# template after install propagates with zero re-fitting, same as any weapon.
+	var inst := _make_instance({Stats.Stat.STR: 7})
+	var template := _prosthetic_template(5)
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, template)
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(6)   # ceil(6)
+	template.built_in_stat = 9
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)   # ceil(8) — no re-install needed
+
+func test_is_installed_prosthetic_matches_only_the_fitted_template() -> void:
+	var inst := _make_instance({})
+	var fitted := _prosthetic_template(5)
+	var other := _prosthetic_template(5)
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, fitted)
+	assert_bool(inst.is_installed_prosthetic(fitted)).is_true()
+	assert_bool(inst.is_installed_prosthetic(other)).is_false()
+	assert_bool(inst.is_installed_prosthetic(null)).is_false()
+
+func test_bare_placeholder_prosthetic_is_not_an_installed_weapon() -> void:
+	# The dev/test shortcut (_fit_prosthetic: a raw stat, no real item) stays legal —
+	# it just never counts as an "installed weapon" since there's no template to match.
+	var inst := _make_instance({Stats.Stat.STR: 7})
+	_fit_prosthetic(inst, UnitInstance.LimbSlot.ARM_R, 9)
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)
+	assert_bool(inst.is_installed_prosthetic(_prosthetic_template(9))).is_false()
+
+func test_install_prosthetic_refuses_an_arm_kind_template_on_a_leg_slot() -> void:
+	var inst := _make_instance({Stats.Stat.DEX: 6})
+	var arm_template := _prosthetic_template(9, WeaponData.LimbKind.ARM)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_L, arm_template)).is_false()
+	assert_that(inst.limbs[UnitInstance.LimbSlot.LEG_L].state).is_equal(UnitInstance.LimbState.NATURAL)
+	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(6)   # unaffected — the refused fit never applied
+
+func test_install_prosthetic_refuses_a_leg_kind_template_on_an_arm_slot() -> void:
+	var inst := _make_instance({Stats.Stat.STR: 6})
+	var leg_template := _prosthetic_template(9, WeaponData.LimbKind.LEG)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, leg_template)).is_false()
+	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.NATURAL)
+
+func test_install_prosthetic_succeeds_with_a_matching_leg_kind_template() -> void:
+	# Symmetry check: legs get the same live-template treatment as arms, gated on LEG kind.
+	var inst := _make_instance({Stats.Stat.DEX: 7})
+	var leg_template := _prosthetic_template(9, WeaponData.LimbKind.LEG)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_R, leg_template)).is_true()
+	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(8)   # ceil((7+9)/2)

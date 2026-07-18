@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="7_3ieh3"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="8_hmg5l"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="9_egxjn"]
+[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_9_egxjn"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="10_va7vr"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="11_6bpjd"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="12_e4dmj"]
@@ -48,6 +49,10 @@ icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_rgd8f_inst"]
+script = ExtResource("wi_9_egxjn")
+template = SubResource("Resource_rgd8f")
 [sub_resource type="Resource" id="Resource_crpss"]
 script = ExtResource("6_506fj")
 display_name = "BadGuy1"
@@ -68,7 +73,7 @@ metadata/_custom_type_script = "uid://cvvknuw621ar2"
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_crpss")
 cell = Vector2i(4, 4)
-equipped_weapon = SubResource("Resource_rgd8f")
+equipped_weapon = SubResource("Resource_rgd8f_inst")
 squad_id = 1
 is_leader = true
 
@@ -148,6 +153,10 @@ icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_to1je_inst"]
+script = ExtResource("wi_9_egxjn")
+template = SubResource("Resource_to1je")
 [sub_resource type="Resource" id="Resource_jcyyb"]
 script = ExtResource("6_506fj")
 display_name = "Soldier1"
@@ -166,7 +175,7 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_jcyyb")
 cell = Vector2i(-5, 5)
-equipped_weapon = SubResource("Resource_to1je")
+equipped_weapon = SubResource("Resource_to1je_inst")
 squad_id = 4
 
 [sub_resource type="Resource" id="Resource_jpc4i"]
@@ -182,6 +191,10 @@ icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_xl846_inst"]
+script = ExtResource("wi_9_egxjn")
+template = SubResource("Resource_xl846")
 [sub_resource type="Resource" id="Resource_pg8n1"]
 script = ExtResource("6_506fj")
 display_name = "Soldier2"
@@ -200,7 +213,7 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_pg8n1")
 cell = Vector2i(-4, 6)
-equipped_weapon = SubResource("Resource_xl846")
+equipped_weapon = SubResource("Resource_xl846_inst")
 squad_id = 4
 
 [sub_resource type="Resource" id="Resource_yh5u4"]
@@ -216,6 +229,10 @@ icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_50555_inst"]
+script = ExtResource("wi_9_egxjn")
+template = SubResource("Resource_50555")
 [sub_resource type="Resource" id="Resource_fmrml"]
 script = ExtResource("6_506fj")
 display_name = "Soldier3"
@@ -234,7 +251,7 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_fmrml")
 cell = Vector2i(-3, 5)
-equipped_weapon = SubResource("Resource_50555")
+equipped_weapon = SubResource("Resource_50555_inst")
 squad_id = 4
 is_leader = true
 
@@ -251,6 +268,10 @@ icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
+
+[sub_resource type="Resource" id="Resource_76xgq_inst"]
+script = ExtResource("wi_9_egxjn")
+template = SubResource("Resource_76xgq")
 [sub_resource type="Resource" id="Resource_6ivc3"]
 script = ExtResource("6_506fj")
 display_name = "Soldier4"
@@ -270,7 +291,7 @@ move_sprite = ExtResource("13_x0ps1")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_6ivc3")
 cell = Vector2i(-4, 5)
-equipped_weapon = SubResource("Resource_76xgq")
+equipped_weapon = SubResource("Resource_76xgq_inst")
 squad_id = 5
 is_leader = true
 

@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://fx3dcqyslgbe"]
+
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_r4sgd"]
+[ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_x53eu"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_5mube"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/items/WeaponModData.gd" id="4_7nrnv"]
+
+[sub_resource type="Resource" id="Resource_53yhi"]
+script = ExtResource("1_r4sgd")
+metadata/_custom_type_script = "uid://bbbfksnb0tted"
+
+[resource]
+script = ExtResource("3_5mube")
+power = 3
+attack_pattern = SubResource("Resource_53yhi")
+hits_allies = true
+weapon_type = 3
+scaling_blend = Dictionary[int, int]({
+1: 70,
+4: 30
+})
+item_name = "Springspear"
+icon = ExtResource("2_x53eu")
+description = "I think that enemy got... the point"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

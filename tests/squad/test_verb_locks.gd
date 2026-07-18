@@ -18,7 +18,7 @@ func _lose_arm(unit: Unit) -> void:
 
 func _give_two_handed(unit: Unit) -> void:
 	var weapon := H.make_weapon(3)
-	weapon.two_handed = true
+	weapon.template.two_handed = true
 	unit.equipped_weapon = weapon
 
 func test_two_handed_lock_needs_both_arms() -> void:

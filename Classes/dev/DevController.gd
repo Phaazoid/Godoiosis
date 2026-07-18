@@ -56,11 +56,11 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 	copy.unit_instance.set_current_hp(source.get_current_hp())
 	for i in range(source.inventory.size()):
 		var item: Item = source.inventory[i]
-		copy.inventory[i] = item.duplicate(true) if item != null else null
+		copy.inventory[i] = item.copy_equippable() if item is EquippableData else (item.duplicate(true) if item != null else null)
 	var equipped := source.get_equipped_weapon()
 	if equipped != null:
 		var idx := source.inventory.find(equipped)
-		if idx != -1 and copy.inventory[idx] is WeaponData:
+		if idx != -1 and copy.inventory[idx] is EquippableData:
 			copy.set_equipped_weapon(copy.inventory[idx])
 	return copy
 

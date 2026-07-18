@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #72 (2026-07-17).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -78,7 +78,7 @@ Mechanically: each rune has a **capacity budget**; each carving has a **cost** (
 
 Full model + rationale: [transmutation-model-proposal.md](transmutation-model-proposal.md) → *Temper & channeling*.
 
-Engine analogy: `RuneData` ≈ a customized resource instance (like a saved `WeaponData` variant) that **holds an array of `TransmutationData`**; the future carving/etching UI ≈ the existing **weapon authoring tool**; each carving ≈ `TransmutationData` = `AttackPattern`(geometry) + element set + power, aura-scaled.
+Engine analogy: `RuneData` ≈ a customized resource instance (like a saved, named `WeaponInstance` — weapons.md's template/instance split, #59) that **holds an array of `TransmutationData`**; the future carving/etching UI ≈ the existing **weapon authoring tool**; each carving ≈ `TransmutationData` = `AttackPattern`(geometry) + element set + power, aura-scaled.
 
 **Within the rune model (updated 2026-07-04):** capacity/cost numbers **pseudo-locked** — two knobs: circle cap 1/2/3 (max sigils per carving) + capacity 1/3/6 (Σ sigils per rune), playtest-tunable; aura *floors* **resolved** (= sigil weight; temper never brute-forced — see Channeling above); carving *knowledge* **resolved** (discovery/codex + scroll hints + recruit knowledge-merge; mark availability is progression content — transmutation doc, grill resolutions #2–3); element-locked inscription **resolved** (the temper rule). *Still open:* multi-element damage scaling (**sum of auras** for now — vs primary-only); whether size is fixed at mining or upgradable. Materia (the etching medium + cast fuel) is **deferred** — see below.
 
