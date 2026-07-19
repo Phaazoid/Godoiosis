@@ -16,10 +16,9 @@ enum TileState {
 	FROZEN
 }
 
-# Static authored tile content. DERIVED at runtime from the tileset's "terrain_type"
-# custom-data string (Resources/TestTiles.tres: grass/mud/rock/tree) — NOT serialized as an
-# int, so this maps the legacy strings at one boundary instead of migrating the .tres. The
-# string->enum migration of terrain_type itself is parked (same shape as the weapon_type one).
+# Static authored tile content, read straight off the tileset's "terrain_type" int
+# custom-data layer (Resources/TestTiles.tres). Serialized in the .tres: APPEND-ONLY.
+# NONE = 0 = unset default (decorative tiles carry no kind).
 enum Kind {
 	NONE,
 	GRASS,
@@ -28,14 +27,3 @@ enum Kind {
 	TREE,
 	WATER
 }
-
-const _KIND_BY_NAME := {
-	"grass": Kind.GRASS,
-	"mud": Kind.MUD,
-	"rock": Kind.ROCK,
-	"tree": Kind.TREE,
-	"water": Kind.WATER,
-}
-
-static func kind_from_string(terrain_type: String) -> Kind:
-	return _KIND_BY_NAME.get(terrain_type, Kind.NONE)

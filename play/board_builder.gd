@@ -8,7 +8,7 @@ extends RefCounted
 
 const TILESET_PATH := "res://Resources/TestTiles.tres"
 const GRASS_SOURCE := 0
-const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true, move_cost=1, terrain_type="grass" in TestTiles.tres
+const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true, move_cost=1, terrain_type=GRASS in TestTiles.tres
 
 # OverlayManager's @onready child overlays — supplied as bare Node2Ds so its _ready
 # (which only sets each one's modulate/visibility) runs without error.
@@ -111,7 +111,9 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	for unit in spawned:
 		var entry: ScenarioUnitEntry = entry_by_unit[unit]
 		if entry.equipped_weapon != null:
-			unit.add_item(entry.equipped_weapon.duplicate(true))
+			# copy_equippable, never duplicate(true) — a WeaponInstance must keep its template
+			# shared (#59); mirrors ScenarioManager.load_scenario.
+			unit.add_item(entry.equipped_weapon.copy_equippable())
 
 	for squad_id in members.keys():
 		var leader: Unit = leaders.get(squad_id)

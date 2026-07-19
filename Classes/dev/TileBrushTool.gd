@@ -1,6 +1,10 @@
 extends VBoxContainer
 class_name TileBrushTool
 
+# Dev-overlay tab for authoring the board: paints terrain tiles (left-drag, right-erase),
+# resizes the map, and paints named AI zones (Sentry regions). Terrain choices are scanned
+# from the tileset itself, never hardcoded.
+
 const SOURCE_ID := 0
 
 var brush_active := false
@@ -11,11 +15,10 @@ var paint_mode := PaintMode.TERRAIN
 var _zone_name := ""
 var _zone_name_row: HBoxContainer
 
-# Parallel to the dropdown: a terrain_type label + the atlas coords that paints it. Built by
-# scanning the board tileset for tiles carrying a "terrain_type" custom-data value, so any
-# terrain tile authored in the TileSet (grass/mud/rock/tree/water/...) shows up automatically,
-# with no hardcoded coords to drift out of sync. (#50 dev tooling.)
-var _tile_labels: Array[String] = []
+# Parallel to the dropdown: the atlas coords each entry paints. Built by scanning the
+# board tileset for tiles carrying a terrain_type kind, so any terrain tile authored in
+# the TileSet (grass/mud/rock/tree/water/...) shows up automatically, with no hardcoded
+# coords to drift out of sync. (#50 dev tooling.)
 var _tile_coords: Array[Vector2i] = []
 
 var _width_spin: SpinBox
@@ -34,26 +37,26 @@ func init(game_ref) -> void:
 
 func _populate_tile_dropdown() -> void:
 	tile_dropdown.clear()
-	_tile_labels.clear()
 	_tile_coords.clear()
 	if game == null or game.grid == null or game.grid.tile_set == null:
 		return
 	var source := game.grid.tile_set.get_source(SOURCE_ID) as TileSetAtlasSource
 	if source == null:
 		return
-	var seen := {}
+	var seen: Dictionary[Terrain.Kind, bool] = {}
 	for i in source.get_tiles_count():
 		var coords := source.get_tile_id(i)
 		var data := source.get_tile_data(coords, 0)
 		if data == null or not data.has_custom_data("terrain_type"):
 			continue
-		var ttype := str(data.get_custom_data("terrain_type"))
-		if ttype == "" or seen.has(ttype):
+		var raw: int = data.get_custom_data("terrain_type")
+		var kind := raw as Terrain.Kind
+		if kind == Terrain.Kind.NONE or seen.has(kind):
 			continue
-		seen[ttype] = true
-		_tile_labels.append(ttype)
+		seen[kind] = true
 		_tile_coords.append(coords)
-		tile_dropdown.add_item(ttype.capitalize())
+		var kind_name: String = Terrain.Kind.keys()[kind]
+		tile_dropdown.add_item(kind_name.capitalize())
 	if not _tile_coords.is_empty():
 		selected_tile = _tile_coords[0]
 

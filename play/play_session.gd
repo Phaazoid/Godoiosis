@@ -103,10 +103,9 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	var cost := 0
 	if data.has_custom_data("move_cost"):
 		cost = int(data.get_custom_data("move_cost"))
-	var ttype := "?"
-	if data.has_custom_data("terrain_type"):
-		ttype = str(data.get_custom_data("terrain_type"))
-	return {"exists": true, "walkable": walkable, "cost": cost, "type": ttype}
+	var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
+	var kind_name: String = Terrain.Kind.keys()[kind]
+	return {"exists": true, "walkable": walkable, "cost": cost, "type": kind_name.to_lower()}
 
 # ---- commands (mutating) — all flow through the real SquadManager (Law #3) ----
 

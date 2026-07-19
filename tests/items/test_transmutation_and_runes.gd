@@ -10,7 +10,7 @@ extends GdUnitTestSuite
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 # An alchemist with an explicit per-element aura map (most fields default to 0).
-func _alchemist(auras: Dictionary) -> Unit:
+func _alchemist(auras: Dictionary[Elemental.Element, int]) -> Unit:
 	var u: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	u.unit_instance.aura = auras
 	return u

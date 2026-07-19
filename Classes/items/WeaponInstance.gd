@@ -8,6 +8,10 @@ extends EquippableData
 # Create via make(), copy via copy_equippable().
 
 @export var template: WeaponData
+@export var limb_kind: WeaponData.LimbKind = WeaponData.LimbKind.ARM
+# PROSTHETIC only: which limb THIS instance installs into (moved off WeaponData
+# 2026-07-19) — two instances built on the same shared template need independent
+# arm/leg identity, so the template can't be the source of truth for it.
 @export var space_1: Array[WeaponModData] = []
 @export var space_2: Array[WeaponModData] = []
 @export var space_3: Array[WeaponModData] = []
@@ -25,11 +29,11 @@ func copy_equippable() -> EquippableData:
 	w.item_name = item_name
 	w.icon = icon
 	w.description = description
+	w.limb_kind = limb_kind
 	w.space_1 = space_1.duplicate()
 	w.space_2 = space_2.duplicate()
 	w.space_3 = space_3.duplicate()
 	return w
-
 func shown_name() -> String:
 	if item_name != "":
 		return item_name

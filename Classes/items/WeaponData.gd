@@ -27,10 +27,10 @@ enum WeaponType {
 # limb itself reads for stat substitution, not the weapon's own damage math.
 
 enum LimbKind { ARM, LEG }
-
-@export var limb_kind: LimbKind = LimbKind.ARM
-# PROSTHETIC only: which limb this template installs into. UnitInstance.install_prosthetic
-# validates against it — no dual-purpose prosthetics, every one is exactly ARM or LEG.
+# PROSTHETIC only: which limb a prosthetic installs into. The FIELD lives on
+# WeaponInstance, not here (moved 2026-07-19) — different prosthetic instances of the
+# same family need independent arm/leg identity, so a shared template field can't be
+# the source of truth for it. This enum stays here as the shared vocabulary.
 
 # Three mod spaces, capacities 1/2/3; a prototype trades them for a single size-1 space
 # (weapons.md "the archetype clause made content").

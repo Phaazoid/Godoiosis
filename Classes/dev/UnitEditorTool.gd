@@ -39,6 +39,10 @@ func populate_unit_editor(unit):
 
 	_add_inventory_section(unit)
 	_add_jobs_section(unit)
+	_add_inventory_section(unit)
+	_add_jobs_section(unit)
+	_add_limbs_section(unit)
+
 
 	var delete_button := Button.new()
 	delete_button.text = "Delete Unit"
@@ -210,6 +214,29 @@ func _add_ceiling_preview(unit: Unit):
 		var pre := inst.get_stat_before_ceiling(stat)
 		if pre > cap:
 			DevWidgets.add_label(unit_editor_container, "CLAMPED: %s %d -> %d" % [Stats.Stat.keys()[stat], pre, cap])
+
+func _add_limbs_section(unit: Unit):
+	DevWidgets.add_label(unit_editor_container, "Limbs")
+
+	var inst := unit.unit_instance
+	var slot_names := UnitInstance.LimbSlot.keys()
+	var state_names := UnitInstance.LimbState.keys()
+
+	for slot in UnitInstance.LimbSlot.values():
+		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
+		DevWidgets.add_option(unit_editor_container, slot_names[slot], state_names, state_names[fitting.state],
+			func(s): _on_limb_state_picked(unit, slot, s))
+
+	DevWidgets.add_label(unit_editor_container, "MOV: %d" % inst.get_mov())
+	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d" % [
+		inst.get_effective_stat(Stats.Stat.STR), inst.get_effective_stat(Stats.Stat.DEX)])
+
+func _on_limb_state_picked(unit: Unit, slot: int, state_name: String):
+	var fitting: UnitInstance.LimbFitting = unit.unit_instance.limbs[slot]
+	fitting.state = UnitInstance.LimbState[state_name]
+	fitting.prosthetic_stat = 0
+	fitting.prosthetic_item = null
+	populate_unit_editor(unit)
 
 func _on_slot_picked(unit: Unit, index: int, opt_index: int):
 	if opt_index == 0:

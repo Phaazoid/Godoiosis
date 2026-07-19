@@ -18,14 +18,15 @@ func _prosthetic_weapon(built_in_stat: int = 5) -> WeaponInstance:
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.PROSTHETIC
 	template.built_in_stat = built_in_stat
-	template.limb_kind = WeaponData.LimbKind.ARM   # every test here installs onto ARM_R
-	return WeaponInstance.make(template)
+	var instance := WeaponInstance.make(template)
+	instance.limb_kind = WeaponData.LimbKind.ARM   # every test here installs onto ARM_R
+	return instance
 
 func test_installed_prosthetic_can_be_unequipped_and_a_different_weapon_equipped() -> void:
 	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
 	var prosthetic := _prosthetic_weapon()
 	unit.add_item(prosthetic)                                              # slot 0, auto-equips
-	assert_bool(unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic.template)).is_true()
+	assert_bool(unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic)).is_true()
 	assert_object(unit.get_equipped_weapon()).is_same(prosthetic)
 
 	unit.unequip_weapon()
@@ -40,7 +41,7 @@ func test_installed_prosthetic_can_be_re_equipped_after_being_swapped_out() -> v
 	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
 	var prosthetic := _prosthetic_weapon()
 	unit.add_item(prosthetic)
-	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic.template)
+	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic)
 	unit.unequip_weapon()
 
 	assert_bool(unit.equip_weapon_from_inventory(0)).is_true()
@@ -50,7 +51,7 @@ func test_installed_prosthetic_cannot_be_tossed_while_equipped() -> void:
 	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
 	var prosthetic := _prosthetic_weapon()
 	unit.add_item(prosthetic)
-	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic.template)
+	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic)
 
 	unit.remove_item(0)
 	assert_object(unit.inventory[0]).is_same(prosthetic)
@@ -62,7 +63,7 @@ func test_installed_prosthetic_cannot_be_tossed_while_unequipped() -> void:
 	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
 	var prosthetic := _prosthetic_weapon()
 	unit.add_item(prosthetic)
-	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic.template)
+	unit.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, prosthetic)
 	unit.unequip_weapon()
 
 	unit.remove_item(0)

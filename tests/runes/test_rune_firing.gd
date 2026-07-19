@@ -27,7 +27,7 @@ class _StubBoard extends BoardContext:
 	func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 		return kinds.get(cell, Terrain.Kind.NONE)
 
-func _alchemist(aura: Dictionary) -> Unit:
+func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 	var u: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	u.unit_instance.aura = aura
 	return u

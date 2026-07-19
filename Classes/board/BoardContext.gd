@@ -38,8 +38,8 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 		return null
 	return squad_manager.get_projected_unit_from_cell(cell)
 	
-# The rules' single read-point for a cell's static kind (#50): maps the tileset's authored
-# "terrain_type" string to a Terrain.Kind. A method (not an inline grid read in the resolver)
-# so tests can stub it — the headless fixture grid has no TileSet to paint.
+# The rules' single read-point for a cell's static kind (#50): reads the tileset's
+# "terrain_type" int layer as a Terrain.Kind. A method (not an inline grid read in the
+# resolver) so tests can stub it — the headless fixture grid has no TileSet to paint.
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
-	return Terrain.kind_from_string(GridUtils.get_terrain_type_at_cell(grid, cell))
+	return GridUtils.get_terrain_kind_at_cell(grid, cell)

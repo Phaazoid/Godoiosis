@@ -156,9 +156,17 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 	DevWidgets.add_label(editor_container, "Family: %s" % (template.item_name if template.item_name != "" else WeaponData.WeaponType.keys()[template.weapon_type]))
 	DevWidgets.add_label(editor_container, "Weight: %d" % weapon.get_effective_weight())
 
+	if template.weapon_type == WeaponData.WeaponType.PROSTHETIC:
+		DevWidgets.add_option(editor_container, "Limb Kind", WeaponData.LimbKind.keys(), WeaponData.LimbKind.keys()[weapon.limb_kind],
+			func(s): _on_limb_kind_picked(weapon, s))
+
 	var mods := WeaponModCatalog.get_mods()
 	for i in range(weapon.space_count()):
 		_populate_mod_space(weapon, i, mods)
+
+func _on_limb_kind_picked(weapon: WeaponInstance, kind_name: String) -> void:
+	weapon.limb_kind = WeaponData.LimbKind[kind_name]
+	populate()
 
 func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -> void:
 	var capacity: int = weapon.template.space_capacities()[index]

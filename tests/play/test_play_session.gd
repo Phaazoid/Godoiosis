@@ -127,6 +127,8 @@ func test_apply_scenario_restores_units_terrain_and_turn() -> void:
 	assert_bool(u.movement.cell == Vector2i(2, 3)).is_true()
 	var sess = PlaySession.new(dst)
 	assert_bool(sess.terrain_at(Vector2i(2, 3)).exists).is_true()
+	# Locks the #71 int migration end-to-end: tileset int layer -> Terrain.Kind -> display name.
+	assert_str(sess.terrain_at(Vector2i(2, 3)).type).is_equal("grass")
 	assert_int(sess.active_faction()).is_equal(ENEMY)
 
 # #33 rescue loop: a unit picks up an ADJACENT DOWNED ally (a main action). After execute the

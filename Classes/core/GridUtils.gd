@@ -1,14 +1,19 @@
 extends Object
 class_name GridUtils
 
-const TERRAIN_ICONS := {
-	"grass" : preload("res://Art/Icons/TerrainIcons/grass.png"),
-	"rock" : preload("res://Art/Icons/TerrainIcons/rock.png"),
-	"mud" : preload("res://Art/Icons/TerrainIcons/mud.png"),
-	"error" : preload("res://Art/Icons/ArrowIcons/ERROR.png"),
-	"tree" : preload("res://Art/Icons/TerrainIcons/tree.png"),
-	"water" : preload("res://Art/Icons/TerrainIcons/water.png")
+# Stateless grid math + tile-data reads shared by every layer (movement, targeting,
+# overlays, dev tools): Manhattan/blended ranges, cardinal facings, and the tileset's
+# terrain_type custom-data -> Terrain.Kind / icon lookups.
+
+const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
+	Terrain.Kind.GRASS: preload("res://Art/Icons/TerrainIcons/grass.png"),
+	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/rock.png"),
+	Terrain.Kind.MUD: preload("res://Art/Icons/TerrainIcons/mud.png"),
+	Terrain.Kind.TREE: preload("res://Art/Icons/TerrainIcons/tree.png"),
+	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/water.png")
 }
+
+const ERROR_ICON: Texture2D = preload("res://Art/Icons/ArrowIcons/ERROR.png")
 
 
 static func manhattan_distance(a: Vector2i, b: Vector2i) -> int:
@@ -41,24 +46,18 @@ static func cardinal_direction_i_between(from_cell: Vector2i, to_cell: Vector2i)
 	var dir := cardinal_direction_between(from_cell, to_cell)
 	return Vector2i(int(dir.x), int(dir.y))
 
-static func get_terrain_type_at_cell(grid: TileMapLayer, cell:Vector2i) -> String:
+static func get_terrain_kind_at_cell(grid: TileMapLayer, cell: Vector2i) -> Terrain.Kind:
 	var data := grid.get_cell_tile_data(cell)
-	
-	if data == null:
-		return "error"
-		
-	if data.has_custom_data("terrain_type"):
-		return str(data.get_custom_data("terrain_type"))
-		
-	return "error"
-	
+	if data == null or not data.has_custom_data("terrain_type"):
+		return Terrain.Kind.NONE
+	var raw: int = data.get_custom_data("terrain_type")
+	return raw as Terrain.Kind
+
 static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Texture2D:
-	var terrain_type := get_terrain_type_at_cell(grid, cell)
-	
-	if TERRAIN_ICONS.has(terrain_type):
-		return TERRAIN_ICONS[terrain_type]
-		
-	return TERRAIN_ICONS["error"]
+	var kind := get_terrain_kind_at_cell(grid, cell)
+	if TERRAIN_ICONS.has(kind):
+		return TERRAIN_ICONS[kind]
+	return ERROR_ICON
 	
 static func validate_member_distance(unit: Unit) -> bool:
 	var dist = manhattan_distance(unit.movement.cell, unit.squad.leader.movement.cell)

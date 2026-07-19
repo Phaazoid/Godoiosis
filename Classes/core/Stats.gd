@@ -1,8 +1,12 @@
 extends Object
 class_name Stats
 
+# Canonical stat vocabulary + derived-stat math used across units/weapons/jobs: the Stat
+# enum, its defaults, and the "stat-shadow" band doctrine (coarse DEX/CON/PER rungs
+# feeding MOV/MHP/LDR) plus armor_def — pure statics per docs/design/stats.md.
+
 # The canonical stat vocabulary. APPEND-ONLY: these serialize as ints in saved .tres
-# (UnitData.base_stats /  WeaponData.scaling_stat). Reordering or deleting
+# (UnitData.base_stats / WeaponData.scaling_blend keys). Reordering or deleting
 # a value silently corrupts existing resources — always add new stats at the END.
 # Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/WIL/LDR.
 enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON }

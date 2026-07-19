@@ -1,5 +1,5 @@
 # Pure-logic guard for the dev-tools reflection editor's enum-hint parsing
-# (Classes/Util/DevWidgets.parse_enum_hint). When scaling_stat / weapon_type /
+# (Classes/dev/DevWidgets.parse_enum_hint). When scaling_stat (since retired, #59) / weapon_type /
 # elemental_damage_type became int-backed enums (#7, #28), the editor rendered them
 # as number spinners instead of name dropdowns; the fix routes int+PROPERTY_HINT_ENUM
 # props through an OptionButton built from this parse. Covers BOTH forms Godot emits:

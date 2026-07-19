@@ -124,44 +124,49 @@ func test_maim_preview_matches_execution_pick() -> void:
 	assert_that(inst.limbs[promised].state).is_equal(UnitInstance.LimbState.EMPTY)
 
 # --- Installed prosthetic weapons (#59 item 6, weapons.md Prosthetic family) ---
+# limb_kind moved from WeaponData (template) to WeaponInstance (2026-07-19): different
+# prosthetic INSTANCES of the same family need independent arm/leg identity (an arm and
+# a leg built on the same shared template, installed at once), so it can't be a
+# template-shared field the way built_in_stat still is.
 
-func _prosthetic_template(built_in_stat: int, limb_kind: WeaponData.LimbKind = WeaponData.LimbKind.ARM) -> WeaponData:
+func _prosthetic_weapon(built_in_stat: int, limb_kind: WeaponData.LimbKind = WeaponData.LimbKind.ARM) -> WeaponInstance:
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.PROSTHETIC
 	template.built_in_stat = built_in_stat
-	template.limb_kind = limb_kind
-	return template
+	var instance := WeaponInstance.make(template)
+	instance.limb_kind = limb_kind
+	return instance
 
 func test_installed_prosthetic_reads_built_in_stat_from_template() -> void:
 	# Parity with the bare-placeholder case above, but via a real content template:
 	# 9-stat arm + natural 7 -> ceil(8), same formula, template-sourced this time.
 	var inst := _make_instance({Stats.Stat.STR: 7})
-	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_template(9))).is_true()
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_weapon(9))).is_true()
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)
 
 func test_installed_prosthetics_on_both_arms_average_their_templates() -> void:
 	var inst := _make_instance({Stats.Stat.STR: 0})
-	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_L, _prosthetic_template(6))
-	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_template(11))
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_L, _prosthetic_weapon(6))
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, _prosthetic_weapon(11))
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(9)   # ceil(8.5)
 
 func test_installed_prosthetic_stat_reads_live_off_the_template() -> void:
 	# The whole point of a direct resource ref (mirrors scaling_blend): editing the
 	# template after install propagates with zero re-fitting, same as any weapon.
 	var inst := _make_instance({Stats.Stat.STR: 7})
-	var template := _prosthetic_template(5)
-	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, template)
+	var weapon := _prosthetic_weapon(5)
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, weapon)
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(6)   # ceil(6)
-	template.built_in_stat = 9
+	weapon.template.built_in_stat = 9
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)   # ceil(8) — no re-install needed
 
 func test_is_installed_prosthetic_matches_only_the_fitted_template() -> void:
 	var inst := _make_instance({})
-	var fitted := _prosthetic_template(5)
-	var other := _prosthetic_template(5)
+	var fitted := _prosthetic_weapon(5)
+	var other := _prosthetic_weapon(5)
 	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, fitted)
-	assert_bool(inst.is_installed_prosthetic(fitted)).is_true()
-	assert_bool(inst.is_installed_prosthetic(other)).is_false()
+	assert_bool(inst.is_installed_prosthetic(fitted.template)).is_true()
+	assert_bool(inst.is_installed_prosthetic(other.template)).is_false()
 	assert_bool(inst.is_installed_prosthetic(null)).is_false()
 
 func test_bare_placeholder_prosthetic_is_not_an_installed_weapon() -> void:
@@ -170,24 +175,41 @@ func test_bare_placeholder_prosthetic_is_not_an_installed_weapon() -> void:
 	var inst := _make_instance({Stats.Stat.STR: 7})
 	_fit_prosthetic(inst, UnitInstance.LimbSlot.ARM_R, 9)
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)
-	assert_bool(inst.is_installed_prosthetic(_prosthetic_template(9))).is_false()
+	assert_bool(inst.is_installed_prosthetic(_prosthetic_weapon(9).template)).is_false()
 
-func test_install_prosthetic_refuses_an_arm_kind_template_on_a_leg_slot() -> void:
+func test_install_prosthetic_refuses_an_arm_kind_instance_on_a_leg_slot() -> void:
 	var inst := _make_instance({Stats.Stat.DEX: 6})
-	var arm_template := _prosthetic_template(9, WeaponData.LimbKind.ARM)
-	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_L, arm_template)).is_false()
+	var arm_weapon := _prosthetic_weapon(9, WeaponData.LimbKind.ARM)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_L, arm_weapon)).is_false()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.LEG_L].state).is_equal(UnitInstance.LimbState.NATURAL)
 	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(6)   # unaffected — the refused fit never applied
 
-func test_install_prosthetic_refuses_a_leg_kind_template_on_an_arm_slot() -> void:
+func test_install_prosthetic_refuses_a_leg_kind_instance_on_an_arm_slot() -> void:
 	var inst := _make_instance({Stats.Stat.STR: 6})
-	var leg_template := _prosthetic_template(9, WeaponData.LimbKind.LEG)
-	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, leg_template)).is_false()
+	var leg_weapon := _prosthetic_weapon(9, WeaponData.LimbKind.LEG)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, leg_weapon)).is_false()
 	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.NATURAL)
 
-func test_install_prosthetic_succeeds_with_a_matching_leg_kind_template() -> void:
+func test_install_prosthetic_succeeds_with_a_matching_leg_kind_instance() -> void:
 	# Symmetry check: legs get the same live-template treatment as arms, gated on LEG kind.
 	var inst := _make_instance({Stats.Stat.DEX: 7})
-	var leg_template := _prosthetic_template(9, WeaponData.LimbKind.LEG)
-	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_R, leg_template)).is_true()
+	var leg_weapon := _prosthetic_weapon(9, WeaponData.LimbKind.LEG)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_R, leg_weapon)).is_true()
 	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(8)   # ceil((7+9)/2)
+
+func test_same_family_template_can_back_an_arm_instance_and_a_leg_instance_at_once() -> void:
+	# The whole point of the move: two prosthetics sharing ONE template can independently
+	# be an arm and a leg installed at the same time — impossible when limb_kind lived on
+	# the template, since that would force every instance of the family to agree.
+	var inst := _make_instance({Stats.Stat.STR: 7, Stats.Stat.DEX: 5})
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.PROSTHETIC
+	template.built_in_stat = 9
+	var arm := WeaponInstance.make(template)
+	arm.limb_kind = WeaponData.LimbKind.ARM
+	var leg := WeaponInstance.make(template)
+	leg.limb_kind = WeaponData.LimbKind.LEG
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, arm)).is_true()
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_L, leg)).is_true()
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)   # ceil((7+9)/2)
+	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(7)   # ceil((5+9)/2)

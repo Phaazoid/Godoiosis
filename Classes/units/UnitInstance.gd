@@ -11,14 +11,14 @@ signal hp_changed(current, max)
 signal will_changed(current, max)
 
 #Permanent stat storage (base + growth gains, other permanent additions)
-var stats: Dictionary = {}
+var stats: Dictionary[Stats.Stat, int] = {}
 
 #all buffs and debuffs from everything. Terrain, items, enemy attacks, etc. 
-var stat_modifiers: Dictionary = {}
+var stat_modifiers: Dictionary[Stats.Stat, int] = {}
 
 # Per-element aura — persistent damage scaling for runes (docs/design/alchemy-kit.md).
 # Mirrors `stats`: seeded from UnitData.base_aura, grows over a unit's life.
-var aura: Dictionary = {}
+var aura: Dictionary[Elemental.Element, int] = {}
 
 #Battle stats
 var current_hp: int = 0
@@ -250,11 +250,13 @@ func limb_stat(slot: LimbSlot) -> int:
 			var natural := Stats.Stat.STR if slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R else Stats.Stat.DEX
 			return get_base_stat(natural)
 
-func install_prosthetic(slot: LimbSlot, item: WeaponData) -> bool:
+func install_prosthetic(slot: LimbSlot, item: WeaponInstance) -> bool:
 	# Fits a real, content-authored prosthetic (weapons.md item 6). Its built_in_stat feeds
 	# limb_stat() LIVE off the template — no snapshot, so editing the .tres later propagates
 	# to every unit with it installed, same as scaling_blend does for ordinary weapons.
-	if item == null:
+	# limb_kind gates on the INSTANCE (2026-07-19), not the template — two instances of the
+	# same family need independent arm/leg identity.
+	if item == null or item.template == null:
 		return false
 	var is_arm_slot := slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R
 	var wanted := WeaponData.LimbKind.ARM if is_arm_slot else WeaponData.LimbKind.LEG
@@ -262,7 +264,7 @@ func install_prosthetic(slot: LimbSlot, item: WeaponData) -> bool:
 		return false
 	var fitting: LimbFitting = limbs[slot]
 	fitting.state = LimbState.PROSTHETIC
-	fitting.prosthetic_item = item
+	fitting.prosthetic_item = item.template
 	return true
 
 func is_installed_prosthetic(template: WeaponData) -> bool:
