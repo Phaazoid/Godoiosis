@@ -1,5 +1,11 @@
 extends Node2D
 
+# Input/game-state coordinator — the root node of the game scene (game.tscn), instanced inside
+# the GameView SubViewport (CLAUDE.md "Sharp edges"). Owns the GameState machine (idle vs the
+# various *_TARGETING modes) and routes clicks/hover into the right mode handler; the seam most
+# cross-system wiring (dev overlay, squad manager, turn manager) hangs off of. Known-overweight —
+# prefer moving domain logic out into the owning system when touching it, not adding here.
+
 @onready var grid : TileMapLayer = $Grid
 @onready var overlay: TileMapLayer = $Overlay
 @onready var units_root: Node2D = $Units
@@ -196,43 +202,42 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 		GAME_MENU_GROUP_MOVE:
 			enter_group_move_mode(unit)
 
-# Attack entry (#30 C): a rune with several channelable carvings opens a pick menu first; a
-# single carving auto-selects it; a weapon fires no transmutation. Reset first so a stale pick
-# never leaks into a new aim.
+# Attack entry (#30 C, generalized #72): a rune with several channelable carvings, or a weapon
+# with several stock attacks, opens a pick menu first; a single choice auto-selects. Reset first
+# so a stale pick never leaks into a new aim.
 func _begin_attack(unit: Unit) -> void:
-	unit.active_transmutation = null
-	var rune := unit.get_equipped_weapon() as RuneData
-	if rune != null:
-		var fireable := rune.channelable(unit)
-		if fireable.size() > 1:
-			show_transmutation_menu(get_viewport().get_mouse_position(), fireable, unit)
-			return
-		if not fireable.is_empty():
-			unit.active_transmutation = fireable[0]
+	unit.active_attack = null
+	var choices := unit.get_selectable_attacks()
+	if choices.size() > 1:
+		show_attack_menu(get_viewport().get_mouse_position(), choices, unit)
+		return
+	if not choices.is_empty():
+		unit.active_attack = choices[0]
 	enter_attack_mode(unit)
 
-func show_transmutation_menu(pos: Vector2i, transmutations: Array[TransmutationData], unit: Unit) -> void:
+func show_attack_menu(pos: Vector2i, attacks: Array[AttackData], unit: Unit) -> void:
 	var controller := ActionMenuController.new()
 	add_child(controller)
 	controller.setup(unit)
 
 	# Synthetic items: index -> {name}, so the Control-based ActionMenuController (#26) renders the
-	# carving list without a bespoke menu class.
+	# attack list without a bespoke menu class. Works for either kind since display_name lives on
+	# the shared AttackData base (#72).
 	var items := []
 	var data := {}
-	for i in range(transmutations.size()):
+	for i in range(attacks.size()):
 		items.append(i)
-		data[i] = { "name": transmutations[i].display_name }
+		data[i] = { "name": attacks[i].display_name }
 
-	controller.action_selected.connect(func(idx, picking_unit): _on_transmutation_picked(picking_unit, transmutations[idx]))
+	controller.action_selected.connect(func(idx, picking_unit): _on_attack_picked(picking_unit, attacks[idx]))
 	controller.cancelled.connect(clear_selection_controller)
 	controller.cancelled.connect(_on_action_menu_cancelled)
 
 	controller.populate(items, data)
 	controller.setpos(pos)
 
-func _on_transmutation_picked(unit: Unit, transmutation: TransmutationData) -> void:
-	unit.active_transmutation = transmutation
+func _on_attack_picked(unit: Unit, attack: AttackData) -> void:
+	unit.active_attack = attack
 	enter_attack_mode(unit)
 
 func end_turn():
@@ -618,7 +623,7 @@ func _unhandled_input(event):
 							# is there — victims (and later terrain effects, #50) are derived at resolve
 							# time (#15). Store the AIM only (actor + aimed cell); null target = derived later.
 							var attack := AttackAction.create(lastUnit, origin, null, clickedCell)
-							attack.transmutation = lastUnit.get_fired_transmutation()
+							attack.fired_attack = lastUnit.get_fired_attack()
 							squad_manager.queue_action(lastUnit.squad, attack)
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 				GameState.RESCUE_TARGETING:

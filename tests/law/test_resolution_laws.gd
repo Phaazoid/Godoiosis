@@ -53,7 +53,7 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)
-	var previewed := attack.resolved.damage   # weapon.power(6) + effective STR(4), via the resolver
+	var previewed := attack.resolved.damage   # main-attack power(6) + effective STR(4), via the resolver
 
 	target.combat.apply_damage(previewed)      # the execution seam
 

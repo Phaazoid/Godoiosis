@@ -74,6 +74,13 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 		result.append_array(space(i))
 	return result
 
+# Stock attacks this wielder can choose from — the template's list today. Mod-granted /
+# mod-replaced attacks compose here when #74 lands (why wielder is already in the signature).
+func available_attacks(_wielder: Unit) -> Array[WeaponAttackData]:
+	if template == null:
+		return []
+	return template.attacks()
+
 # ALL fitted modules count, active or not — mass is physical, not capability-gated.
 func get_effective_weight() -> int:
 	if template == null:
@@ -98,25 +105,32 @@ func scaling_contribution(wielder: Unit, mods: Array[WeaponModData]) -> int:
 		return 0
 	return int(round(float(weighted_sum) / total_weight))
 
-func base_damage(wielder: Unit) -> int:
+# attack = null means the MAIN attack — counters, AI, and single-attack weapons all want
+# the default, so most call sites never pass one. Slice 2 threads the player's pick.
+func base_damage(wielder: Unit, attack: WeaponAttackData = null) -> int:
 	if template == null:
 		return 0
+	var atk := attack if attack != null else template.main_attack
 	var mods := active_modules(wielder)
-	var eff_power := template.power
+	var eff_power := atk.power if atk != null else 0
 	for mod in mods:
 		eff_power += mod.power_delta
 	return eff_power + scaling_contribution(wielder, mods)
 
-func get_elements(wielder: Unit) -> Array[Elemental.Element]:
+func get_elements(wielder: Unit, attack: WeaponAttackData = null) -> Array[Elemental.Element]:
 	var result: Array[Elemental.Element] = []
 	if template == null:
 		return result
-	if template.elemental_damage_type != Elemental.Element.NONE:
-		result.append(template.elemental_damage_type)
+	var atk := attack if attack != null else template.main_attack
+	if atk != null and atk.elemental_damage_type != Elemental.Element.NONE:
+		result.append(atk.elemental_damage_type)
 	for mod in active_modules(wielder):
 		if mod.added_element != Elemental.Element.NONE and not result.has(mod.added_element):
 			result.append(mod.added_element)
 	return result
 
-func hits_map() -> bool:
-	return template != null and template.hits_map()
+func hits_map(attack: WeaponAttackData = null) -> bool:
+	if template == null:
+		return false
+	var atk := attack if attack != null else template.main_attack
+	return atk != null and atk.hits_map()

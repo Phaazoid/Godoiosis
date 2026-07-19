@@ -7,8 +7,9 @@ class_name ItemEditorTool
 @onready var name_input: LineEdit = %ItemNameInput
 
 # Authors either a WeaponData or a RuneData (the equip slot takes both). The type dropdown
-# lists weapon bases + rune sizes; the field area renders the weapon reflectively or a
-# bespoke rune inscribe-list. Carvings are authored in the Attack Editor tab.
+# lists weapon bases + prototypes + rune sizes; the field area renders the weapon reflectively
+# or a bespoke rune inscribe-list. Carvings are authored in the Attack Editor tab.
+
 var current_item: EquippableData = null
 var _variants := {}
 
@@ -22,7 +23,7 @@ func _ready():
 # Weapon TYPES + a blank rune per size — the things "New"/the type dropdown can start from.
 func _base_catalog() -> Dictionary:
 	var bases := {}
-	var weapons := WeaponCatalog.TYPES
+	var weapons := WeaponCatalog.get_templates()
 	for k in weapons:
 		bases[k] = weapons[k]
 	var runes := RuneCatalog.base_runes()

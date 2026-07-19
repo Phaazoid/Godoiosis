@@ -184,5 +184,6 @@ func _mk(name: String, faction: Team.Faction) -> UnitData:
 
 func _arm(unit: Unit, power: int) -> void:
 	var template := WeaponData.new()
-	template.power = power   # scaling_blend defaults to pure STR — nothing else to set
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
 	unit.add_item(WeaponInstance.make(template))

@@ -1,6 +1,13 @@
 extends Node2D
 class_name SquadManager
 
+# The only owner of squad lifecycle (create/destroy/join/leave — member removal funnels through
+# Squad._erase_member(), the sole `members.erase` caller) and the queue/plan-resolution entry
+# point: queue_action validates + stores player orders, resolve_plan expands the queue into a
+# fresh ResolvedPlan each pass (attacks -> derived counters), and calculate_counterattacks_for_
+# squad is where counter-attack existence gets derived, never stored. See docs/design/
+# squad-system.md and docs/design/resolution-pipeline.md.
+
 var squads: Array[Squad] = []
 var active_squad: Squad = null
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
@@ -435,10 +442,10 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			# (target stays null = no unit hit). It plays out and is where terrain effects will
 			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
 			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
-			cell_attack.transmutation = aim.transmutation
+			cell_attack.fired_attack = aim.fired_attack
 			plan.attacks.append(cell_attack)
 		else:
-			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.transmutation):
+			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack):
 				plan.attacks.append(atk)
 	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
 	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the

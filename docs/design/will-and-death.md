@@ -4,7 +4,7 @@
 >
 > **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15), and AI Crisis stances + the CRISIS lethality preview are now BUILT too (#57, 2026-07-15)** — see Implementation status below. Transmutation strain remains the one design-only piece of this grill's output.
 >
-> **Canon checked through #72 (2026-07-17).**
+> **Canon checked through #74 (2026-07-19).**
 
 Design direction first agreed 2026-06-15; **reframed 2026-06-24**. Builds on the implemented death floor (`Unit.unit_died` fan-out). Supersedes the wiki's random-dismemberment framing (Law #1) **and this doc's own pre-2026-06-24 "Will gates life" ladder** (see below).
 

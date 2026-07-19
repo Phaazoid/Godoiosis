@@ -1,28 +1,22 @@
 class_name TransmutationData
-extends Resource
+extends AttackData
 
 # An inscribed alchemy circle carved onto a rune — the thing that actually fires.
 # Anatomy (docs/design/transmutation-model-proposal.md, provisional pending co-dev):
 #   sigils     — the elemental core; REPEATS = WEIGHT ("2 Fire, 1 Earth" = [FIRE,FIRE,EARTH]).
 #                Sigils cost rune capacity, scale power off aura, grant flourish slots,
 #                and set identity. Base elements only (Elemental.SIGIL_ELEMENTS).
-#   flourishes — shaping marks; no capacity cost, limited by slots. Reshape, never add.
-# Aura-scaled: a flat parallel to weapon stat-scaling, summed over sigils (weighted).
-# NOT equippable itself — it lives in a RuneData's `inscriptions`.
+# flourishes — shaping marks; no capacity cost, limited by slots. Reshape, never add.
+# Aura-scaled: a flat parallel to weapon stat-scaling, (identity/geometry/flags live on AttackData since #72) 
+# summed over sigils (weighted). # NOT equippable itself — it lives in a RuneData's `inscriptions`.
 
 const AURA_FLOOR := 1   # min aura per distinct element needed to channel (before leeway)
 
-@export var display_name: String = ""
 @export var sigils: Array[Elemental.Element] = []   # repeats = weight
 @export var flourishes: Array[Flourish.Type] = []
-@export var power: int = 0
-@export var attack_pattern: AttackPattern
-@export var can_counter := true
-@export var hits_allies := false
 @export var carving_cost: int = 0   # capacity it eats on a rune; 0 = derive from sigil count
 @export var popup: String = ""
 @export var icon: Texture2D
-@export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
 # materia: DEFERRED — some carvings will require fuel; not modeled yet.
 # flourish magnitudes (Spread/Focus reshaping): DEFERRED until numbers firm up.
 
@@ -104,6 +98,3 @@ func _resolved_element(e: Elemental.Element) -> Elemental.Element:
 		if derived != Elemental.Element.NONE:
 			return derived
 	return e
-
-func hits_map() -> bool:
-	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH

@@ -30,7 +30,7 @@ var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
 var pending_cell : Vector2i
-var active_transmutation: TransmutationData = null   # the carving picked to fire this aim (#30 C); null = auto
+var active_attack: AttackData = null   # the specific attack picked to fire this aim — a carving or a weapon attack (#30 C, generalized #72); null = auto
 var equipped_weapon: EquippableData = null
 var worn_armor: ArmorData = null   # DEF seam (#55): fixture-level until the armor content pass
 
@@ -469,33 +469,60 @@ func get_element_aura(element: Elemental.Element) -> int:
 		return 0
 	return unit_instance.get_element_aura(element)
 
-# The carving this unit would fire right now: a rune auto-picks its first channelable carving
-# (slice C lets the player choose); a weapon-wielder fires none (null = use the weapon). #30 B2.
-func get_fired_transmutation() -> TransmutationData:
-	if active_transmutation != null:
-		return active_transmutation
+# The attack this unit would fire right now: a rune auto-picks its first channelable carving; a
+# weapon defaults to its main attack. active_attack (the player's live pick) always wins when set
+# — reset at the start of _begin_attack, so it's fresh for the unit's OWN declared aim. #30 B2/#72.
+func get_fired_attack() -> AttackData:
+	if active_attack != null:
+		return active_attack
 	var rune := get_equipped_weapon() as RuneData
 	if rune != null:
 		var fireable := rune.channelable(self)
 		if not fireable.is_empty():
 			return fireable[0]
+		return null
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null and weapon.template != null:
+		return weapon.template.main_attack
 	return null
-	
-# Does this unit's CURRENT attack source permit a counter? A rune-wielder counters by firing a
-# channelable carving (TransmutationData.can_counter); a weapon-wielder uses the weapon's flag; a
-# unit with no source -- unarmed, or a rune with nothing channelable ("just a rock") -- can't. #30.
+
+# The full menu of attacks this unit could choose to fire — for the pick-menu at attack entry.
+# A rune offers its channelable carvings; a weapon offers its stock attacks (main + extras, #72).
+func get_selectable_attacks() -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	var rune := get_equipped_weapon() as RuneData
+	if rune != null:
+		for t in rune.channelable(self):
+			result.append(t)
+		return result
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null:
+		for a in weapon.available_attacks(self):
+			result.append(a)
+	return result
+
+# What a COUNTER fires — deliberately separate from get_fired_attack(): a rune counters with
+# whatever it would currently fire (unchanged #30 quirk), but a weapon ALWAYS counters with its
+# main attack, ignoring any live active_attack selection (#72 ruling; overwatch-style alt-attack
+# countering is out of scope, #73).
+func get_counter_attack() -> AttackData:
+	var rune := get_equipped_weapon() as RuneData
+	if rune != null:
+		return get_fired_attack()
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null and weapon.template != null:
+		return weapon.template.main_attack
+	return null
+
+# Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
+# never the live selection — see that method's header for why.
 func attack_source_can_counter() -> bool:
-	var fired := get_fired_transmutation()
-	if fired != null:
-		return fired.can_counter
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.template != null and weapon.template.can_counter
-	
-	# Does this unit's CURRENT attack source splash allies (friendly fire)? Carving (rune) else weapon
-# -- the AoE mirror of attack_source_can_counter. A unit with no source never friendly-fires. #30.
+	var atk := get_counter_attack()
+	return atk != null and atk.can_counter
+
+# Does this unit's CURRENT attack source splash allies (friendly fire)? Reads whatever this unit
+# would fire right now (get_fired_attack) -- the AoE mirror of attack_source_can_counter, but
+# NOT counter-locked to main: the ally-splash check reflects the live aim. #30/#72.
 func attack_source_hits_allies() -> bool:
-	var fired := get_fired_transmutation()
-	if fired != null:
-		return fired.hits_allies
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.template != null and weapon.template.hits_allies
+	var atk := get_fired_attack()
+	return atk != null and atk.hits_allies

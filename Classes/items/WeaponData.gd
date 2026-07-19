@@ -5,6 +5,8 @@ extends Item
 # prototype (TheJaw.tres). NOT equippable: units carry a WeaponInstance, which points here
 # and layers its own fitted mods on top. Every instance reads this resource live — editing
 # a template updates every weapon built on it (direct-ref flavor of the jobs pattern).
+# Since #72 the attack itself lives PER-ATTACK (WeaponAttackData carries power/pattern/
+# flags); the family keeps physique (weight, spaces, two_handed) and its scaling identity.
 
 # Weapon families — canonical weapon_type vocabulary (docs/design/weapons.md).
 # APPEND-ONLY (serialized as ints). NONE = 0 is the unset default.
@@ -34,13 +36,16 @@ enum LimbKind { ARM, LEG }
 # (weapons.md "the archetype clause made content").
 const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
 
-@export var power: int = 0
-@export var attack_pattern: AttackPattern
-@export var can_counter := true
-@export var hits_allies := false
-@export var elemental_damage_type: Elemental.Element = Elemental.Element.NONE
+@export var main_attack: WeaponAttackData
+# The family's standard attack — the one REQUIRED attack, what counters and default aim
+# use. Curated content: one .tres per family in WeaponAttackCatalog.MAIN_DIR, edited via
+# the Family Mains panel — editing it changes every weapon of this family everywhere.
+
+@export var extra_attacks: Array[WeaponAttackData] = []
+# Additional stock attacks (e.g. Springspear's Spring, #73). No count cap — mod spaces do
+# the gating work. Mod-granted attacks are #74's job and never land here.
+
 @export var two_handed := false   # verb lock: a missing arm can't wield this (will-and-death.md)
-@export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
 @export var weapon_type: WeaponType = WeaponType.NONE
 @export var is_prototype := false
 
@@ -54,5 +59,10 @@ func space_capacities() -> Array[int]:
 		return [1]
 	return SPACE_CAPACITIES
 
-func hits_map() -> bool:
-	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
+# Every stock attack, main first — the canonical order for menus and default picks.
+func attacks() -> Array[WeaponAttackData]:
+	var result: Array[WeaponAttackData] = []
+	if main_attack != null:
+		result.append(main_attack)
+	result.append_array(extra_attacks)
+	return result

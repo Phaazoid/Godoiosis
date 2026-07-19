@@ -1,7 +1,11 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://bv7tui68o7xfr"]
 
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_6y7d4"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Drill.tres" id="2_main"]
 
 [resource]
 script = ExtResource("1_6y7d4")
+main_attack = ExtResource("2_main")
+weapon_type = 2
+item_name = "Drill"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

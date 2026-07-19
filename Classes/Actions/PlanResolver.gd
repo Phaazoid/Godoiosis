@@ -110,33 +110,35 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	action.resolved = outcome
 
-# The attack's source surface: a fired transmutation (rune) if the order carries one, else the
-# attacker's equipped weapon. A rune casts to null here -> it contributes nothing in melee (its
-# attack rides on the transmutation instead). Both real sources expose base_damage(wielder) /
-# get_elements() / hits_map(), so the resolver reads them uniformly and stays fully typed. #30.
+# The attack's source surface: the order's stamped fired_attack (a carving OR a specific weapon
+# attack) if it carries one, else the attacker's equipped weapon's default (main). A rune casts
+# to null here -> it contributes nothing in melee (its attack rides on fired_attack instead).
+# WeaponInstance.base_damage/get_elements/hits_map all accept an optional attack override that
+# defaults to main when null — passing a non-WeaponAttackData (or nothing) is exactly that
+# default, so a counter (which never stamps a WeaponAttackData) resolves off main for free. #30/#72.
 static func _source_base_damage(action: AttackAction) -> int:
 	var attacker := action.actor
-	if action.transmutation != null:
-		return action.transmutation.base_damage(attacker)
+	if action.fired_attack is TransmutationData:
+		return (action.fired_attack as TransmutationData).base_damage(attacker)
 	var weapon := attacker.get_equipped_weapon() as WeaponInstance
 	if weapon != null:
-		return weapon.base_damage(attacker)
+		return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
-	if action.transmutation != null:
-		return action.transmutation.get_elements()
+	if action.fired_attack is TransmutationData:
+		return (action.fired_attack as TransmutationData).get_elements()
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	if weapon != null:
-		return weapon.get_elements(action.actor)
+		return weapon.get_elements(action.actor, action.fired_attack as WeaponAttackData)
 	var none: Array[Elemental.Element] = []
 	return none
 
 static func _source_hits_map(action: AttackAction) -> bool:
-	if action.transmutation != null:
-		return action.transmutation.hits_map()
+	if action.fired_attack is TransmutationData:
+		return action.fired_attack.hits_map()   # hits_map() lives on the shared AttackData base — no cast needed
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.hits_map()
+	return weapon != null and weapon.hits_map(action.fired_attack as WeaponAttackData)
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded

@@ -5,17 +5,20 @@ class_name WeaponCatalog
 # Templates are the shared designs; a saved instance is "template + mods + a custom name"
 # (the keep-a-named-weapon feature) and stays in sync with its template via direct ref.
 
-# Family base templates — hardcoded, edited via the .tres in the inspector.
-const TYPES := {
-	"Chainsword": preload("res://Resources/Weapons/MainVarieties/ChainSword.tres"),
-	"Springspear": preload("res://Resources/Weapons/MainVarieties/Springspear.tres")
-	}
+# Family base templates — scanned from disk (dev-authored .tres, one per family). #72: this
+# used to be a hardcoded const dict; the five #59-era shell families (Drill/Carbine/Kinetic
+# Mace/Chemical Spitter/Prosthetic) were invisible to it purely because it never scanned
+# their folder the way get_prototypes()/get_saved() already scan theirs.
+const MAIN_VARIETIES_DIR := "res://Resources/Weapons/MainVarieties/"
 
 # Named prebuilt prototype templates (weapons.md "the archetype clause made content").
 const PROTOTYPE_DIR := "res://Resources/Weapons/Prototypes/"
 
 # Saved fitted WeaponInstances — written by the fitting tool, scanned at runtime.
 const SAVED_DIR := "res://Resources/Weapons/WeaponVariants/"
+
+static func get_family_bases() -> Dictionary:
+	return _scan(MAIN_VARIETIES_DIR, WeaponData)
 
 static func get_prototypes() -> Dictionary:
 	return _scan(PROTOTYPE_DIR, WeaponData)
@@ -37,9 +40,7 @@ static func _scan(dir: String, type) -> Dictionary:
 
 # All templates a new weapon can start from — for the fitting tool.
 static func get_templates() -> Dictionary:
-	var templates := {}
-	for t in TYPES:
-		templates[t] = TYPES[t]
+	var templates := get_family_bases()
 	var prototypes := get_prototypes()
 	for p in prototypes:
 		templates[p] = prototypes[p]

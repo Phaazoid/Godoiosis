@@ -4,59 +4,133 @@ class_name AttackEditorTool
 @onready var editor_container := %AttackEditorVbox
 @onready var load_dropdown: OptionButton = %CarvingLoadDropdown
 @onready var name_input: LineEdit = %CarvingNameInput
+@onready var new_button: Button = %NewButton
 
-# Authors TransmutationData carvings in-game (previously inspector-only). Sigils are edited
-# as per-element weights (base elements only, by construction); flourish carving is gated by
-# can_add_flourish — the editor can't author an illegal circle.
-var current : TransmutationData = null
-var _carvings := {}
+# Authors TransmutationData carvings, WeaponAttackData weapon attacks, AND edits an established
+# family's/prototype's MAIN attack in place — three modes, one form (#30 / #72; folded from a
+# separate Family Mains tab into a third toggle, dev call 2026-07-19). The first two modes author
+# POOL content (new/load-a-copy/name/save); FAMILY_MAINS is fundamentally different — its dropdown
+# lists FAMILIES (not saved attacks), selecting one loads that family's main_attack LIVE (never
+# duplicated, since edits must stay shared/in-place), there's no "new" (a main is always tied to
+# an existing family, never created from scratch), and Save overwrites the attack's OWN
+# resource_path instead of a chosen pool filename. attack_pattern gets a class-picker + its own
+# params for free in every mode via DevWidgets.build_resource_editor's existing recursion into
+# nested Resource fields — no bespoke pattern UI needed anywhere.
+enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY_MAINS }
+
+var _mode := Mode.TRANSMUTATION
+var current: AttackData = null
+var current_template: WeaponData = null   # FAMILY_MAINS only: which family "current" belongs to
+var _items := {}
 
 func _ready():
-	_refresh_carving_list()
+	_refresh_list()
 	_on_new_pressed()
 
-func _refresh_carving_list():
+func _on_transmutation_mode_selected():
+	_mode = Mode.TRANSMUTATION
+	new_button.disabled = false
+	_refresh_list()
+	_on_new_pressed()
+
+func _on_weapon_attack_mode_selected():
+	_mode = Mode.WEAPON_ATTACK
+	new_button.disabled = false
+	_refresh_list()
+	_on_new_pressed()
+
+func _on_family_mains_mode_selected():
+	_mode = Mode.FAMILY_MAINS
+	new_button.disabled = true   # no "new" concept — a main is always tied to an existing family
+	_refresh_list()
+	if _items.is_empty():
+		current_template = null
+		current = null
+		name_input.text = ""
+		populate()
+	else:
+		_load_selected(0)
+
+func _refresh_list():
 	load_dropdown.clear()
-	_carvings = TransmutationCatalog.get_all()
-	for k in _carvings:
+	match _mode:
+		Mode.TRANSMUTATION:
+			_items = TransmutationCatalog.get_all()
+		Mode.WEAPON_ATTACK:
+			_items = WeaponAttackCatalog.get_library()
+		Mode.FAMILY_MAINS:
+			_items = WeaponCatalog.get_templates()
+	for k in _items:
 		load_dropdown.add_item(k)
 
 func _load_selected(index: int):
 	if index < 0:
 		return
-	current = _carvings[_carvings.keys()[index]].duplicate(true)
-	name_input.text = current.display_name
+	var picked = _items[_items.keys()[index]]
+	if _mode == Mode.FAMILY_MAINS:
+		current_template = picked
+		current = current_template.main_attack if current_template != null else null
+	else:
+		current_template = null
+		current = picked.duplicate(true)
+	name_input.text = current.display_name if current != null else ""
 	populate()
 
 func _on_new_pressed():
-	current = TransmutationData.new()
+	if _mode == Mode.FAMILY_MAINS:
+		return
+	current_template = null
+	current = TransmutationData.new() if _mode == Mode.TRANSMUTATION else WeaponAttackData.new()
 	name_input.text = ""
 	populate()
 
 func _on_save_pressed():
 	if current == null:
 		return
-	var carving_name := name_input.text.strip_edges()
-	if carving_name == "":
-		push_warning("Carving needs a name to save")
+	if _mode == Mode.FAMILY_MAINS:
+		var live_name := name_input.text.strip_edges()
+		if live_name != "":
+			current.display_name = live_name
+		if current.resource_path == "":
+			push_warning("This family's main attack has no saved path yet — author it in Weapon Attack mode first")
+			return
+		var save_err := ResourceSaver.save(current, current.resource_path)
+		if save_err != OK:
+			push_error("Failed to save (error %s)" % save_err)
 		return
-	current.display_name = carving_name
-	DirAccess.make_dir_recursive_absolute(TransmutationCatalog.CARVING_DIR)
-	var err := ResourceSaver.save(current, TransmutationCatalog.CARVING_DIR + carving_name + ".tres")
+	var chosen_name := name_input.text.strip_edges()
+	if chosen_name == "":
+		push_warning("Needs a name to save")
+		return
+	current.display_name = chosen_name
+	var dir := TransmutationCatalog.CARVING_DIR if _mode == Mode.TRANSMUTATION else WeaponAttackCatalog.LIBRARY_DIR
+	DirAccess.make_dir_recursive_absolute(dir)
+	var err := ResourceSaver.save(current, dir + chosen_name + ".tres")
 	if err != OK:
-		push_error("Failed to save carving (error %s)" % err)
+		push_error("Failed to save (error %s)" % err)
 		return
-	_refresh_carving_list()
+	_refresh_list()
 
 func populate():
 	for child in editor_container.get_children():
 		editor_container.remove_child(child)
 		child.queue_free()
 	if current == null:
+		if _mode == Mode.FAMILY_MAINS:
+			DevWidgets.add_label(editor_container, "(no main attack)")
 		return
-	_populate_sigils(current)
-	_populate_flourishes(current)
-	DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name", "sigils", "flourishes"])
+	match _mode:
+		Mode.TRANSMUTATION:
+			var carving := current as TransmutationData
+			_populate_sigils(carving)
+			_populate_flourishes(carving)
+			DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name", "sigils", "flourishes"])
+		Mode.WEAPON_ATTACK:
+			DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name"])
+		Mode.FAMILY_MAINS:
+			var family_label := current_template.item_name if current_template != null and current_template.item_name != "" else "?"
+			DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
+			DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name"])
 
 # Sigils as per-element weights ("2 Fire, 1 Earth"). Weight changes append/remove
 # occurrences instead of rebuilding, so first-inscribed tie-break order survives edits.

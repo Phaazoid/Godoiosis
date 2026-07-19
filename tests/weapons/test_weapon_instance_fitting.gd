@@ -9,11 +9,12 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 
 func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}, base_weight: int = 0, is_prototype: bool = false, elemental: Elemental.Element = Elemental.Element.NONE) -> WeaponData:
 	var t := WeaponData.new()
-	t.power = power
+	t.main_attack = WeaponAttackData.new()
+	t.main_attack.power = power
+	t.main_attack.elemental_damage_type = elemental
 	t.scaling_blend = blend
 	t.base_weight = base_weight
 	t.is_prototype = is_prototype
-	t.elemental_damage_type = elemental
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	return t
 
@@ -135,9 +136,9 @@ func test_inactive_mod_scaling_nudge_is_ignored() -> void:
 	_set_proficiency(wielder, 1)
 	assert_int(w.base_damage(wielder)).is_equal(7)   # pure STR — the DEX nudge never entered the blend
 
-# --- Elements: template + active mods, deduped ---
+# --- Elements: main attack + active mods, deduped ---
 
-func test_get_elements_includes_template_element() -> void:
+func test_get_elements_includes_main_attack_element() -> void:
 	var w := WeaponInstance.make(_template(0, {}, 0, false, Elemental.Element.FIRE))
 	var wielder := _wielder()
 	assert_array(w.get_elements(wielder)).contains_exactly([Elemental.Element.FIRE])

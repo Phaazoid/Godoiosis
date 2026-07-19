@@ -1,6 +1,11 @@
 extends Node
 class_name CombatComponent
 
+# Attached to Unit as a child component ($CombatComponent). Owns weapon-aware attack reach —
+# get_attack_cells_from/get_all_attack_cells_from/get_affected_cells_from/is_directional_attack
+# all centralize through _active_pattern, which reads Unit.get_fired_attack() (#30/#72) so reach
+# always matches whatever the unit would actually fire. Also the basic can_attack/apply_damage.
+
 @export var can_counter: bool = true
 
 #if this breaks because this instance is initialized before _ready() finishes setting up unit_instance, move initialization to _enter_tree()
@@ -61,13 +66,11 @@ func is_directional_attack() -> bool:
 		return false
 	return pattern.is_directional()
 
-# Reach pattern = the carving a rune would fire, else the equipped weapon's pattern. Centralizes
-# the rune-vs-weapon choice so every reach query and the targeting overlay agree. #30 slice B2.
+# Reach pattern = whatever this unit would currently fire (carving or weapon attack) — Unit.
+# get_fired_attack() centralizes the rune-vs-weapon choice, so every reach query and the
+# targeting overlay agree. #30 slice B2, generalized #72.
 func _active_pattern(unit: Unit) -> AttackPattern:
 	if unit == null:
 		return null
-	var fired := unit.get_fired_transmutation()
-	if fired != null:
-		return fired.attack_pattern
-	var weapon := unit.get_equipped_weapon() as WeaponInstance
-	return weapon.template.attack_pattern if weapon != null and weapon.template != null else null
+	var fired := unit.get_fired_attack()
+	return fired.attack_pattern if fired != null else null

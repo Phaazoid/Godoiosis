@@ -1,7 +1,11 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://d0sf3gb33rpfy"]
 
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_iwbgy"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Chemical_Spitter.tres" id="2_main"]
 
 [resource]
 script = ExtResource("1_iwbgy")
+main_attack = ExtResource("2_main")
+weapon_type = 6
+item_name = "Chemical Spitter"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

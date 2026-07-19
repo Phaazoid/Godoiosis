@@ -1,7 +1,11 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cx75h4chpy74e"]
 
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_ddkrj"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Prosthetic.tres" id="2_main"]
 
 [resource]
 script = ExtResource("1_ddkrj")
+main_attack = ExtResource("2_main")
+weapon_type = 7
+item_name = "Prosthetic"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

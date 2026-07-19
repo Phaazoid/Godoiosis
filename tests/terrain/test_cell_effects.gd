@@ -24,8 +24,8 @@ class _StubBoard extends BoardContext:
 func _fire_attacker(mode: EquippableData.TargetMode) -> Unit:
 	var u: Unit = H.spawn_unit(self, PLAYER, Vector2i(0, 0))
 	var weapon := u.get_equipped_weapon() as WeaponInstance
-	weapon.template.elemental_damage_type = Elemental.Element.FIRE
-	weapon.template.targets = mode
+	weapon.template.main_attack.elemental_damage_type = Elemental.Element.FIRE
+	weapon.template.main_attack.targets = mode
 	return u
 
 # A FIRE attacker with a ForwardLine[length] pattern -> a multi-cell blast footprint, so the
@@ -34,7 +34,7 @@ func _fire_line_attacker(mode: EquippableData.TargetMode, length: int) -> Unit:
 	var u: Unit = _fire_attacker(mode)
 	var line := ForwardLinePattern.new()
 	line.length = length
-	(u.get_equipped_weapon() as WeaponInstance).template.attack_pattern = line
+	(u.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = line
 	return u
 
 func _fire_burns_tree() -> TerrainReaction:

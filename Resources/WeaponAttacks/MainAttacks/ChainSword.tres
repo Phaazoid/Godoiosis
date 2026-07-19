@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://b6vpj5w5com0o"]
+
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_pat"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="2_wad"]
+
+[sub_resource type="Resource" id="Resource_main"]
+script = ExtResource("1_pat")
+metadata/_custom_type_script = "uid://dsxc14gee2d01"
+
+[resource]
+script = ExtResource("2_wad")
+power = 3
+attack_pattern = SubResource("Resource_main")
+metadata/_custom_type_script = "uid://ddqeee7njjjq2"

@@ -7,7 +7,7 @@
 # spent Will; these tests pin the down/kill math so the Will stage can't silently regress it.
 #
 # Damage is made exact by spawning attackers with STR 0 + a known weapon power
-# (PlanResolver._base_damage = weapon.power + scaling stat), and resolving with an empty
+# (PlanResolver._source_base_damage = main-attack power + scaling), and resolving with an empty
 # reactions list so the elemental stage is a no-op and HP-vs-damage is the only variable.
 extends GdUnitTestSuite
 

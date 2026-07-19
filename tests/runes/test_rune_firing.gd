@@ -1,7 +1,7 @@
 # #30 slice B1: a rune-fired transmutation resolves through PlanResolver. The chosen carving
-# rides on the AttackAction (action.transmutation); the resolver reads it as the attack SOURCE
-# instead of the equipped weapon -- aura-scaled damage, its elements, and (targets MAP/BOTH) a
-# terrain deposit. Proves a rune CAN fire end to end at the resolver layer, before any UI flow.
+# rides on the AttackAction (action.fired_attack, generalized #72); the resolver reads it as the
+# attack SOURCE instead of the equipped weapon -- aura-scaled damage, its elements, and (targets
+# MAP/BOTH) a terrain deposit. Proves a rune CAN fire end to end at the resolver layer, before any UI flow.
 #
 # Units are spawned via spawn_solo (each in its own squad) because the resolver's per-target
 # hypothetical reads target.get_projected_destination(), which walks the squad's action queue.
@@ -51,7 +51,7 @@ func test_transmutation_damage_scales_off_aura() -> void:
 	var attacker: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var atk: AttackAction = AttackAction.create(attacker, attacker.movement.cell, foe, Vector2i(1, 0))
-	atk.transmutation = _fireball(5, EquippableData.TargetMode.UNIT)
+	atk.fired_attack = _fireball(5, EquippableData.TargetMode.UNIT)
 
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -64,7 +64,7 @@ func test_transmutation_damage_scales_off_aura() -> void:
 func test_fire_transmutation_ignites_a_tree() -> void:
 	var attacker: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var atk: AttackAction = AttackAction.create(attacker, attacker.movement.cell, null, TREE_CELL)
-	atk.transmutation = _fireball(5, EquippableData.TargetMode.BOTH)
+	atk.fired_attack = _fireball(5, EquippableData.TargetMode.BOTH)
 
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -99,11 +99,11 @@ func _make_rune(carving: TransmutationData) -> RuneData:
 	return rune
 
 # A rune-wielder auto-selects its first channelable carving as what it would fire.
-func test_get_fired_transmutation_auto_picks_first_channelable() -> void:
+func test_get_fired_attack_auto_picks_first_channelable_carving() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 3 })
 	var fireball: TransmutationData = _fireball(5, EquippableData.TargetMode.BOTH)
 	alch.equipped_weapon = _make_rune(fireball)
-	assert_object(alch.get_fired_transmutation()).is_same(fireball)
+	assert_object(alch.get_fired_attack()).is_same(fireball)
 
 # An aim carrying a carving survives resolve_plan: the derived cell attack keeps it and fires
 # aura-scaled, igniting the tree through the real terrain-reaction catalog (Burning.tres). The
@@ -115,7 +115,7 @@ func test_rune_aim_fires_through_resolve_plan() -> void:
 	_sm.active_squad = alch.squad
 
 	var aim: AttackAction = AttackAction.create(alch, alch.movement.cell, null, TREE_CELL)
-	aim.transmutation = alch.get_fired_transmutation()
+	aim.fired_attack = alch.get_fired_attack()
 	alch.squad._queue_action(aim)
 
 	var units: Array[Unit] = [alch]
@@ -123,7 +123,7 @@ func test_rune_aim_fires_through_resolve_plan() -> void:
 	var plan: ResolvedPlan = _sm.resolve_plan(alch.squad, board)
 
 	assert_int(plan.attacks.size()).is_equal(1)
-	assert_object(plan.attacks[0].transmutation).is_same(fireball)   # propagated to the derived attack
+	assert_object(plan.attacks[0].fired_attack).is_same(fireball)   # propagated to the derived attack
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_added.has(Terrain.TileState.BURNING)).is_true()
 
@@ -145,7 +145,7 @@ func test_rune_wielder_counters_with_its_carving() -> void:
 	var plan: ResolvedPlan = _sm.resolve_plan(attacker.squad, _StubBoard.new(_sm.grid, units, _sm, {}))
 
 	assert_int(plan.counters.size()).is_equal(1)
-	assert_object(plan.counters[0].transmutation).is_same(fireball)   # the counter fires the carving
+	assert_object(plan.counters[0].fired_attack).is_same(fireball)   # the counter fires the carving
 	assert_int(plan.counters[0].resolved.damage).is_equal(9)          # aura-scaled (5 + fire 4), not a punch
 
 # The same carving with can_counter = false: no counter. Proves the gate reads the CARVING's flag

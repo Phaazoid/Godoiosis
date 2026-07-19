@@ -1,6 +1,13 @@
 extends BaseAction
 class_name AttackAction
 
+# A queued (or resolved) attack order — one instance per victim in an AoE volley (see
+# create_volley), all sharing a `volley` array so a re-aim or a downed victim is derived, never
+# stored twice. Carries the aim (origin/target_cell) and the chosen attack to fire (`fired_attack`
+# — a carving or a specific WeaponAttackData, #72); PlanResolver fills in `resolved` each pass
+# (R8) as the sole source of damage truth (Law #2 — the queue previews exactly what plays back).
+# CounterAttackAction extends this for the reactive case.
+
 var target: Unit
 var resolved: ResolvedOutcome      # set by PlanResolver each pass (R8) — source of truth for damage
 var attack_range: Array[Vector2i] = []
@@ -10,7 +17,9 @@ var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
 var volley: Array[AttackAction] = []
-var transmutation: TransmutationData = null   # set when a rune fires a carving (#30); null = weapon attack
+ # the specific attack chosen to fire — a carving (rune) or a WeaponAttackData; null = the weapon's main attack 
+ # (#30, generalized #72)
+var fired_attack: AttackData = null  
 
 var preview_sprites: Array[Node2D] = []
 
@@ -113,12 +122,12 @@ static func create(attacker: Unit, origin: Vector2i, target: Unit, target_cell: 
 	action.init(attacker, origin, target, target_cell)
 	return action
 
-static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], transmutation: TransmutationData = null) -> Array[AttackAction]:
+static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData = null) -> Array[AttackAction]:
 	var volley_actions: Array[AttackAction] = []
 
 	for victim in victims:
 		var attack := AttackAction.create(attacker, origin, victim, aim_cell)
-		attack.transmutation = transmutation
+		attack.fired_attack = fired_attack
 		attack.is_secondary_hit = not volley_actions.is_empty()
 		volley_actions.append(attack)
 

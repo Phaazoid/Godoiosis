@@ -59,12 +59,14 @@ static func make_unit_data(overrides: Dictionary, faction: Team.Faction) -> Unit
 	return data
 
 # A pattern-less weapon: CombatComponent.get_attack_cells_from falls back to
-# Manhattan range 1 when attack_pattern is null. Keeps counter geometry simple.
+# Manhattan range 1 when the main attack's pattern is null. Keeps counter geometry simple.
 # Ad-hoc template, never catalog-registered — exactly how a real template works, just
-# throwaway (mirrors make_unit_data's ad-hoc UnitData).
+# throwaway (mirrors make_unit_data's ad-hoc UnitData). The bare main attack mirrors #72's
+# rule that a weapon always carries at least its main.
 static func make_weapon(power: int = 3) -> WeaponInstance:
 	var template := WeaponData.new()
-	template.power = power
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = power
 	return WeaponInstance.make(template)
 
 # Instance a real Unit, register it for cleanup, add it to the tree (so _ready

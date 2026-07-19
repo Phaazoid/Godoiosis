@@ -172,15 +172,20 @@ static func _weapon_str(e: EquippableData) -> String:
 	if inst == null or inst.template == null:
 		return "(equip)"
 	var w := inst.template
+	var main: WeaponAttackData = w.main_attack
+	var main_power: int = main.power if main != null else 0
+	var main_pattern: AttackPattern = main.attack_pattern if main != null else null
 	# Show the PATTERN, not just the weapon_type enum — two "CHAINSWORD"s can be a wildly
 	# different shape (omnidirectional Manhattan vs a 1-tile directional ForwardWide), which
 	# decides reach AND who can counter. Hiding it once made a correct no-counter look like a bug.
-	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], w.power, _pattern_str(w.attack_pattern)]
-	if w.elemental_damage_type != Elemental.Element.NONE:
-		s += "/" + Elemental.Element.keys()[w.elemental_damage_type]
-	if w.can_counter:
+	var s := "%s pow%d %s" % [WeaponData.WeaponType.keys()[w.weapon_type], main_power, _pattern_str(main_pattern)]
+	if w.extra_attacks.size() > 0:
+		s += " +%datk" % w.extra_attacks.size()   # stock alternates beyond the main (#72)
+	if main != null and main.elemental_damage_type != Elemental.Element.NONE:
+		s += "/" + Elemental.Element.keys()[main.elemental_damage_type]
+	if main != null and main.can_counter:
 		s += "/ctr"
-	if w.hits_allies:
+	if main != null and main.hits_allies:
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
 	return s
 

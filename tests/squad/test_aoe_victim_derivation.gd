@@ -23,7 +23,7 @@ func before_test() -> void:
 # A squadmate who walks INTO the blast after the attack is queued becomes a victim.
 func test_resolve_retargets_when_a_squadmate_moves_into_the_blast() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
-	(attacker.get_equipped_weapon() as WeaponInstance).template.hits_allies = true
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
 	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0), {Stats.Stat.LDR: 3})
 	_sm.join_squad(mate, attacker.squad)
 	_sm.active_squad = attacker.squad
@@ -52,7 +52,7 @@ func test_resolve_retargets_when_a_squadmate_moves_into_the_blast() -> void:
 # A target who walks OUT of the blast after the attack is queued is dropped.
 func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
-	(attacker.get_equipped_weapon() as WeaponInstance).template.hits_allies = true
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
 	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})  # starts IN the blast
 	_sm.join_squad(mate, attacker.squad)
 	_sm.active_squad = attacker.squad

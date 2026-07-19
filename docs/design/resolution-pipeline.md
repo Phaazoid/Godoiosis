@@ -4,7 +4,7 @@
 
 > **Locked 2026-06-18 (#5):** R1–R8 ratified, plus three clarifications folded in for Will's sake — **R4** threads HP (+ a Will slot), not element-states-only; **R7** counter *derivation* reads the threaded hypothetical (liveness-ready); **R8** the `ResolvedOutcome` is the single source of truth for damage (`AttackAction` stops computing it). Deferred (not locked): volley / simultaneous-hit ordering within one AoE — revisit when tile states or multi-hit-same-target arrive. This doc sits *above* the counter rules in [squad-system.md](squad-system.md) and the [elemental](elemental-system.md) / [will-and-death](will-and-death.md) designs: it defines the single seam all three plug into. The **contract (R1–R8)** is what's being locked; class names are illustrative.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #74 (2026-07-19).**
 
 ## Why this doc exists
 
@@ -35,7 +35,7 @@ That's *derive → show → replay*. The pipeline generalizes this one proven mo
 Conceptual stages, applied per attack in queued order while a **hypothetical copy of unit state** is threaded forward:
 
 1. **Position** — already projected today via `Unit.get_projected_destination()` (the leader's planned cell, etc.).
-2. **Base damage** — the math currently inside `AttackAction.create()` (`weapon.power + scaling_stat`, or `STR` unarmed). This **moves into the pipeline** (elemental E1).
+2. **Base damage** — originally the math inside `AttackAction.create()` (`weapon.power + scaling_stat`, or `STR` unarmed); per R8 this moved into the pipeline (elemental E1) and has moved again since — `PlanResolver._source_base_damage` now reads whichever `AttackData` the order stamped (`AttackAction.fired_attack`: a carving, a specific `WeaponAttackData`, or null = the weapon's main), scaled by `scaling_blend` + active mods (#59, #72), or bare `STR` unarmed.
 3. **Elemental** — read the target's hypothetical states, match an `ElementalReaction`, modify damage, write state add/remove. (Phase 2.)
 4. **Will / death** — read the *now-final* damage, pick the rung: downed / maim / overkill-kill / Crisis. (Phase 3.)
 5. **Counters** — counter *existence* is derived from the attack plan as `calculate_counterattacks_for_squad` does today, **but read from the threaded hypothetical** (projected positions + liveness), not live state; each counter is itself an attack and **re-enters stages 2–4** (so a counter can complete a combo — elemental E7 — and can down/kill). A counter-er killed earlier in the pass is not derived (liveness is always-true until Phase 3's Will stage).
