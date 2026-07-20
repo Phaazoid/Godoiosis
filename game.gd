@@ -46,6 +46,7 @@ const GAME_MENU_EXECUTE_ORDERS := 11
 const GAME_MENU_RESCUE := 12
 const GAME_MENU_RALLY := 13
 const GAME_MENU_GROUP_MOVE := 14
+const GAME_MENU_INTIMIDATE := 15
 
 #Can update this as we want things like icons, hover descriptions, etc for each menu item
 const ACTION_DATA = {
@@ -62,6 +63,7 @@ const ACTION_DATA = {
 	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
 	GAME_MENU_RESCUE: {"name": "Rescue"},
 	GAME_MENU_RALLY: {"name": "Rally"},
+	GAME_MENU_INTIMIDATE: {"name": "Intimidate"},
 	GAME_MENU_GROUP_MOVE: {"name": "Group Move"}
 }
 
@@ -81,6 +83,7 @@ const MENU_ORDER := [
 	GAME_MENU_WAIT,
 	GAME_MENU_CANCEL,
 	GAME_MENU_INSPECT,
+	GAME_MENU_INTIMIDATE,
 	GAME_MENU_ENDTURN,
 ]
 
@@ -95,6 +98,7 @@ enum GameState {
 	BETWEEN_TURNS,
 	DEV_MODE,
 	RESCUE_TARGETING,
+	INTIMIDATE_TARGETING,
 	AI_TURN
 }
 
@@ -199,6 +203,8 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 			enter_rescue_mode(unit)
 		GAME_MENU_RALLY:
 			queue_rally(unit)
+		GAME_MENU_INTIMIDATE:
+			enter_intimidate_mode(unit)
 		GAME_MENU_GROUP_MOVE:
 			enter_group_move_mode(unit)
 
@@ -268,6 +274,13 @@ func enter_rescue_mode(unit: Unit):
 		cells.append(ally.movement.cell)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, cells, OVERLAY_TARGET_ATLAS)
 
+func enter_intimidate_mode(unit: Unit):
+	game_state = GameState.INTIMIDATE_TARGETING
+	var cells: Array[Vector2i] = []
+	for enemy in get_adjacent_enemies(unit):
+		cells.append(enemy.movement.cell)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, cells, OVERLAY_TARGET_ATLAS)
+
 func execute_orders(unit):
 	var squad = unit.squad
 	
@@ -287,6 +300,7 @@ func execute_orders(unit):
 	var move_actions := []
 	var rescue_actions := []
 	var rally_actions := []
+	var intimidate_actions := []
 	
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
@@ -296,6 +310,8 @@ func execute_orders(unit):
 			rescue_actions.append(action)
 		elif action.action_type == BaseAction.ActionType.RALLY:
 			rally_actions.append(action)
+		elif action.action_type == BaseAction.ActionType.INTIMIDATE:
+			intimidate_actions.append(action)
 			
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(plan.attacks)
@@ -303,6 +319,7 @@ func execute_orders(unit):
 	await execute_action_sequence(plan.counters)
 	await execute_action_sequence(rescue_actions)
 	await execute_action_sequence(rally_actions)
+	await execute_action_sequence(intimidate_actions)
 
 	_process_downed_pending()
 
@@ -551,6 +568,19 @@ func get_adjacent_downed_allies(unit: Unit) -> Array[Unit]:
 			result.append(other)
 	return result
 
+func get_adjacent_enemies(unit: Unit) -> Array[Unit]:
+	# Adjacent enemies to where this unit will END UP (projected position) — same shape as
+	# get_adjacent_downed_allies just above, swapped to enemy-faction + active-not-downed.
+	var result: Array[Unit] = []
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
+		if cell == origin:
+			continue
+		var other := get_unit_at_cell(cell)
+		if other != null and other != unit and other.is_active() and Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result
+
 func _unhandled_input(event):
 	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
@@ -634,6 +664,14 @@ func _unhandled_input(event):
 						rescue.init(lastUnit, clickedUnit)
 						squad_manager.queue_action(lastUnit.squad, rescue)
 					exit_current_mode()
+				GameState.INTIMIDATE_TARGETING:
+					if lastUnit == null:
+						lastUnit = lastProjectedUnit
+					if lastUnit != null and clickedUnit != null and clickedUnit in get_adjacent_enemies(lastUnit):
+						var intimidate := IntimidateAction.new()
+						intimidate.init(lastUnit, clickedUnit)
+						squad_manager.queue_action(lastUnit.squad, intimidate)
+					exit_current_mode()
 
 			update_selection_overlay()
 		#Right click deselects all
@@ -681,6 +719,9 @@ func populate_action_menu(unit: Unit) -> Array:
 
 	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.can_rally():
 		options.append(GAME_MENU_RALLY)
+		
+	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not get_adjacent_enemies(unit).is_empty():
+		options.append(GAME_MENU_INTIMIDATE)
 
 		#Once Squad is active, squad state cannot change through actions
 	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not squad_manager.any_squad_active():

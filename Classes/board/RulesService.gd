@@ -13,7 +13,13 @@ static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> in
 	var data := board.grid.get_cell_tile_data(cell)
 	if data == null:
 		return OUT_OF_MAP_TILE
-	if board.is_walkable(cell) == false:
+	# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's
+	# impassability for the holder — the same shape as BoardContext.is_walkable's existing
+	# FROZEN bypass, just per-unit instead of per-cell, so it has to live here where `unit`
+	# is actually in scope (is_walkable only takes a cell).
+	var waterwalking := board.terrain_kind_at(cell) == Terrain.Kind.WATER \
+		and unit.unit_instance.has_live_ability(Abilities.Id.WATERWALK)
+	if not waterwalking and board.is_walkable(cell) == false:
 		return CANNOT_WALK_TILE
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE

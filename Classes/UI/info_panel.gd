@@ -75,22 +75,24 @@ func _refresh_hp():
 		if at_risk != -1:
 			text += "  NEXT AT RISK: %s" % UnitInstance.LimbSlot.keys()[at_risk]
 	text += "\nJOB: %s" % _job_label_text()
-	var abilities := _known_ability_names()
+	var abilities := _live_ability_names()
 	if not abilities.is_empty():
-		text += "\nKNOWN: %s" % ", ".join(abilities)
+		text += "\nLIVE: %s" % ", ".join(abilities)
 	hp_label.text = text
 
 func _job_label_text() -> String:
 	# Always-reveal placeholder (jobs.md: real PER-gated reveal UX is a deferred content pass).
-	var job := JobCatalog.get_job(unit.unit_instance.main_job)
-	return job.display_name if job != null else "Jobless"
-
-func _known_ability_names() -> Array[String]:
-	# Only starters resolve to a name yet — ability_pool is intentionally empty until prompt 12.
 	var names: Array[String] = []
-	for job in JobCatalog.get_jobs().values():
-		if job.starter_ability != null and unit.unit_instance.known_abilities.has(job.starter_ability.id):
-			names.append(job.starter_ability.display_name)
+	for job_id in unit.unit_instance.jobs:
+		var job := JobCatalog.get_job(job_id)
+		if job != null:
+			names.append(job.display_name)
+	return ", ".join(names) if not names.is_empty() else "Jobless"
+
+func _live_ability_names() -> Array[String]:
+	var names: Array[String] = []
+	for ability in unit.unit_instance.get_live_abilities():
+		names.append(ability.display_name)
 	return names
 
 func _on_hp_changed(_current, _max):

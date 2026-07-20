@@ -27,10 +27,8 @@ func test_valid_entries_keeps_all_when_none_missing() -> void:
 	assert_int(ScenarioManager.valid_entries(scenario).size()).is_equal(2)
 
 func test_new_entry_defaults_to_jobless() -> void:
-	# Pins the additive-export safety net (#58): an old scenario's entries, which never wrote
-	# these fields, load with exactly these defaults — load_scenario needs no migration.
+	# Pins the additive-export safety net (#58, simplified #61): an old scenario's entries,
+	# which never wrote this field, load with exactly this default — load_scenario needs no
+	# migration.
 	var entry := ScenarioUnitEntry.new()
-	assert_bool(entry.certified_jobs.is_empty()).is_true()
-	assert_str(entry.main_job).is_equal("")
-	assert_bool(entry.sub_jobs.is_empty()).is_true()
-	assert_int(entry.unlocked_sub_slots).is_equal(0)
+	assert_bool(entry.jobs.is_empty()).is_true()

@@ -57,10 +57,7 @@ func save_scenario(scenario_name: String):
 		if unit.has_equipped_weapon():
 			entry.equipped_weapon = unit.get_equipped_weapon().copy_equippable()
 
-		entry.certified_jobs = unit.unit_instance.certified_jobs.duplicate()
-		entry.main_job = unit.unit_instance.main_job
-		entry.sub_jobs = unit.unit_instance.sub_jobs.duplicate()
-		entry.unlocked_sub_slots = unit.unit_instance.unlocked_sub_slots
+		entry.jobs = unit.unit_instance.jobs.duplicate()
 
 		scenario.unit_entries.append(entry)
 
@@ -99,10 +96,7 @@ func load_scenario(path: String):
 			unit.add_item(entry.equipped_weapon.copy_equippable())
 		# (already null-safe: a dropped weapon simply leaves the unit unarmed)
 
-		unit.unit_instance.certified_jobs = entry.certified_jobs.duplicate()
-		unit.unit_instance.main_job = entry.main_job
-		unit.unit_instance.sub_jobs = entry.sub_jobs.duplicate()
-		unit.unit_instance.unlocked_sub_slots = entry.unlocked_sub_slots
+		unit.unit_instance.jobs = entry.jobs.duplicate()
 
 		if entry.squad_id == -1:
 			continue

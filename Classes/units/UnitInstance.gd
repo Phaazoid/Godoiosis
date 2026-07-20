@@ -56,13 +56,8 @@ var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
 enum LimbSlot { ARM_L, ARM_R, LEG_L, LEG_R }
 enum LimbState { NATURAL, EMPTY, PROSTHETIC }
 
-# --- Jobs (docs/design/jobs.md, #58) ---
-var certified_jobs: Dictionary[String, bool] = {}   # a set: job id -> true, certify-once
-var main_job: String = ""                            # "" = jobless
-var sub_jobs: Array[String] = []                      # subs, size <= unlocked_sub_slots
-var unlocked_sub_slots: int = 0                        # dev-settable stub until the campaign layer exists
-var ability_progress: Dictionary[String, int] = {}     # empty scaffold; prompt 13 fills it
-var known_abilities: Dictionary[String, bool] = {}     # granted starters; inert until prompt 12
+# --- Jobs (docs/design/jobs.md, #61) ---
+var jobs: Array[String] = []   # open, uncapped job ids; the unit's entire job state
 
 # Maim order: weapon arm -> off leg -> off arm -> weapon leg; natural limbs first,
 # prosthetics only when no natural limb remains (they detach as recoverable gear).
@@ -99,44 +94,42 @@ func initialize():
 	current_hp = get_max_hp()
 	current_will = get_max_will()
 
-func _main_job() -> JobData:
-	return JobCatalog.get_job(main_job) if main_job != "" else null
-
-func certify(job_id: String, force: bool = false) -> bool:
-	if certified_jobs.has(job_id):
-		return true
-	var job := JobCatalog.get_job(job_id)
-	if job == null:
+func add_job(job_id: String) -> bool:
+	if job_id == "" or jobs.has(job_id) or JobCatalog.get_job(job_id) == null:
 		return false
-	if job.is_locked and not force:
-		return false
-	certified_jobs[job_id] = true
-	if job.starter_ability != null:
-		known_abilities[job.starter_ability.id] = true
+	jobs.append(job_id)
 	return true
 
-func set_main_job(job_id: String) -> bool:
-	# TODO(campaign layer): jobs.md wants this free-but-between-missions-only; no mission
-	# boundary exists yet in code, so it's unrestricted for now (dev call, 2026-07-16).
-	if job_id != "" and not certified_jobs.has(job_id):
-		return false
-	if job_id != "" and sub_jobs.has(job_id):
-		return false
-	main_job = job_id
-	return true
+func remove_job(job_id: String) -> bool:
+	var had := jobs.has(job_id)
+	jobs.erase(job_id)
+	return had
 
-func set_sub_job(index: int, job_id: String) -> bool:
-	if index < 0 or index >= 2 or index >= unlocked_sub_slots:
-		return false
-	if job_id != "" and (not certified_jobs.has(job_id) or job_id == main_job):
-		return false
-	while sub_jobs.size() <= index:
-		sub_jobs.append("")
-	sub_jobs[index] = job_id
-	return true
+func has_job(job_id: String) -> bool:
+	return jobs.has(job_id)
 
-func set_unlocked_sub_slots(n: int) -> void:
-	unlocked_sub_slots = clampi(n, 0, 2)
+func get_live_abilities() -> Array[AbilityData]:
+	# Union of every held job's pool, de-duplicated by ability id (docs/design/jobs.md
+	# "The ability chassis") — no training/unlock layer, holding the job is the whole gate.
+	var seen: Dictionary[Abilities.Id, bool] = {}
+	var live: Array[AbilityData] = []
+	for job_id in jobs:
+		var job := JobCatalog.get_job(job_id)
+		if job == null:
+			continue
+		for ability in job.ability_pool:
+			if ability == null or ability.id == Abilities.Id.NONE:
+				continue   # NONE = unfinished authoring — never live
+			if not seen.has(ability.id):
+				seen[ability.id] = true
+				live.append(ability)
+	return live
+
+func has_live_ability(id: Abilities.Id) -> bool:
+	for ability in get_live_abilities():
+		if ability.id == id:
+			return true
+	return false
 
 func get_proficiency(family: WeaponData.WeaponType) -> int:
 	return weapon_proficiency.get(family, DEFAULT_PROFICIENCY)
@@ -172,11 +165,10 @@ func get_weight(gear: int = 0) -> int:
 	return body + gear + modules + carried
 
 func get_mov(gear: int = 0) -> int:
-	# MOV is a READOUT (jobs.md, audit A4): job base + DEX band, minus the heavy-load step,
-	# then the leg throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat.
-	var job := _main_job()
-	var base := job.mov_base if job != null else JOBLESS_MOV_BASE
-	var mov := base + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
+	# MOV is a READOUT: flat jobless base + DEX band, minus the heavy-load step, then the leg
+	# throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat. Job-driven MOV base
+	# is parked (#61, docs/design/jobs.md "Parked") — audit A4 reopens.
+	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
 	if get_weight(gear) >= WEIGHT_MOV_THRESHOLD:
 		mov -= WEIGHT_MOV_PENALTY
 	match empty_leg_count():
@@ -338,18 +330,12 @@ func get_limb_effective_base(stat: Stats.Stat) -> int:
 			return get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	var value := get_stat_before_ceiling(stat)
-	var job := _main_job()
-	if job != null and job.stat_ceilings.has(stat):
-		value = mini(value, job.stat_ceilings[stat])
-	return value
-
-func get_stat_before_ceiling(stat: Stats.Stat) -> int:
-	# Pipeline up to (not including) the ceiling clamp — exposed so the dev editor's
-	# preview-at-decision can show what a job WOULD clamp without duplicating this logic.
+	# base → limb substitution → summed job nudges (every held job, not just one) → gear.
+	# No ceiling stage (#61 descoped it — docs/design/jobs.md "Parked").
 	var value := get_limb_effective_base(stat)
-	var job := _main_job()
-	if job != null:
-		value += job.stat_nudges.get(stat, 0)
+	for job_id in jobs:
+		var job := JobCatalog.get_job(job_id)
+		if job != null:
+			value += job.stat_nudges.get(stat, 0)
 	value += stat_modifiers.get(stat, 0)
 	return value

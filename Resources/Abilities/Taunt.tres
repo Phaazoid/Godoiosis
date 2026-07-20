@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://cd652oc8ecbt6"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_88lpo"]
+
+[resource]
+script = ExtResource("1_88lpo")
+id = 3
+display_name = "Taunt"
+kind = 1
+description = "Squad counters must target this unit where legal"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

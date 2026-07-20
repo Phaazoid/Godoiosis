@@ -125,94 +125,54 @@ func _add_jobs_section(unit: Unit):
 	var inst := unit.unit_instance
 	var jobs := JobCatalog.get_editable()   # display_name -> JobData
 
-	_add_certify_picker(unit, jobs)
+	for job_id in inst.jobs:
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = _display_name_for(jobs, job_id)
+		row.add_child(label)
 
-	var certified_names := _certified_display_names(jobs, inst)
-	var certified_label := "(none)" if certified_names.is_empty() else ", ".join(certified_names)
-	DevWidgets.add_label(unit_editor_container, "Certified: %s" % certified_label)
+		var remove_button := Button.new()
+		remove_button.text = "Remove"
+		remove_button.pressed.connect(func():
+			inst.remove_job(job_id)
+			populate_unit_editor(unit))
+		row.add_child(remove_button)
 
-	var options := ["(none)"] + certified_names
+		unit_editor_container.add_child(row)
 
-	DevWidgets.add_option(unit_editor_container, "Main Job", options,
-		_display_name_for(jobs, inst.main_job),
-		func(s): _on_main_job_picked(unit, jobs, s))
+	_add_job_picker(unit, jobs)
 
-	for i in range(2):
-		var current_id := inst.sub_jobs[i] if i < inst.sub_jobs.size() else ""
-		DevWidgets.add_option(unit_editor_container, "Sub %d" % (i + 1), options,
-			_display_name_for(jobs, current_id),
-			func(s): _on_sub_job_picked(unit, jobs, i, s))
-
-	DevWidgets.add_spinbox(unit_editor_container, "Unlocked Sub Slots", inst.unlocked_sub_slots,
-		func(v): _on_unlocked_slots_changed(unit, int(v)))
-
-	_add_ceiling_preview(unit)
-
-func _add_certify_picker(unit: Unit, jobs: Dictionary):
+func _add_job_picker(unit: Unit, jobs: Dictionary):
 	var inst := unit.unit_instance
-	var uncertified: Array[String] = []
+	var available: Array[String] = []
 	for display_name in jobs:
-		if not inst.certified_jobs.has(jobs[display_name].id):
-			uncertified.append(display_name)
+		if not inst.has_job(jobs[display_name].id):
+			available.append(display_name)
 
-	if uncertified.is_empty():
-		return   # every catalog job is already certified
+	if available.is_empty():
+		return   # every catalog job is already held
 
 	var row := HBoxContainer.new()
 	var picker := OptionButton.new()
-	for display_name in uncertified:
+	for display_name in available:
 		picker.add_item(display_name)
 	row.add_child(picker)
 
 	var button := Button.new()
-	button.text = "Certify"
+	button.text = "Add"
 	button.pressed.connect(func():
-		var picked: String = uncertified[picker.selected]
-		inst.certify(jobs[picked].id, true)   # dev tool: force past is_locked
+		var picked: String = available[picker.selected]
+		inst.add_job(jobs[picked].id)
 		populate_unit_editor(unit))
 	row.add_child(button)
 
 	unit_editor_container.add_child(row)
 
-func _certified_display_names(jobs: Dictionary, inst: UnitInstance) -> Array[String]:
-	var names: Array[String] = []
-	for display_name in jobs:
-		if inst.certified_jobs.has(jobs[display_name].id):
-			names.append(display_name)
-	return names
-
 func _display_name_for(jobs: Dictionary, id: String) -> String:
-	if id == "":
-		return "(none)"
 	for display_name in jobs:
 		if jobs[display_name].id == id:
 			return display_name
-	return "(none)"
-
-func _on_main_job_picked(unit: Unit, jobs: Dictionary, picked: String):
-	var id = "" if picked == "(none)" else jobs[picked].id
-	unit.unit_instance.set_main_job(id)
-	populate_unit_editor(unit)
-
-func _on_sub_job_picked(unit: Unit, jobs: Dictionary, index: int, picked: String):
-	var id = "" if picked == "(none)" else jobs[picked].id
-	unit.unit_instance.set_sub_job(index, id)
-	populate_unit_editor(unit)
-
-func _on_unlocked_slots_changed(unit: Unit, value: int):
-	unit.unit_instance.set_unlocked_sub_slots(value)
-	populate_unit_editor(unit)
-
-func _add_ceiling_preview(unit: Unit):
-	var inst := unit.unit_instance
-	var job := JobCatalog.get_job(inst.main_job)
-	if job == null:
-		return
-	for stat in job.stat_ceilings:
-		var cap: int = job.stat_ceilings[stat]
-		var pre := inst.get_stat_before_ceiling(stat)
-		if pre > cap:
-			DevWidgets.add_label(unit_editor_container, "CLAMPED: %s %d -> %d" % [Stats.Stat.keys()[stat], pre, cap])
+	return id   # catalog miss (shouldn't happen) — show the raw id rather than hiding it
 
 func _add_limbs_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Limbs")

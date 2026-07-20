@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://o2adimh05qow"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_758mo"]
+
+[resource]
+script = ExtResource("1_758mo")
+id = 2
+display_name = "Intimidation"
+description = "Lowers a target's will"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://p6hymhad5ta8"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_3l6uw"]
+
+[resource]
+script = ExtResource("1_3l6uw")
+id = 4
+display_name = "Waterwalk"
+kind = 3
+description = "Ignore water's impassability"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

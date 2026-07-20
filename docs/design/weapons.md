@@ -2,7 +2,7 @@
 
 **Status: IDENTITIES + PHILOSOPHY (workshop); BALANCE OPEN (won't lock for a long time).** Distilled 2026-06-17 (issue #32) from the wiki (`Economy/Items/Weapons/{Main info, Weapon List, Upgrade System}`, `Code/Headers/Enums`) and reconciled with the implemented `WeaponData` / `WeaponCatalog`. Per the dev: *the outlines are here; specifics — especially balancing numbers — are not locked and won't be for a while.* So this captures **what each weapon family is for** and **the rules weapons obey**, not tuned stats.
 
-**Canon checked through #74 (2026-07-19).**
+**Canon checked through #79 (2026-07-20).**
 
 ## The architecture (implemented — [LOCKED shape])
 
@@ -63,7 +63,7 @@ Each family = a fantasy + a role + a **signature class mechanic** (the wiki's pe
 
 | Family (`weapon_type`) | Identity | Signature mechanic (de-RNG'd) |
 |---|---|---|
-| **Chainsword** | The mechanist's baseline blade — steady melee. | **Revved** *(re-routed 2026-07-05, audit A5)* — a **proficiency-unlocked technique**, earned in a specific chainsword — NOT the stock attack (rides [progression.md](progression.md)'s tier-unlock lane): trade damage/speed to **chew the target's WILL**, pushing them toward the cliff where their next down maims. Dismemberment pressure routed through the existing ladder ([will-and-death.md](will-and-death.md)) — no second maim source; sibling to the planned *Intimidation* Will-drain. |
+| **Chainsword** | The mechanist's baseline blade — steady melee. | **Revved** *(re-routed 2026-07-05, audit A5)* — a **proficiency-unlocked technique**, earned in a specific chainsword — NOT the stock attack (rides [progression.md](progression.md)'s tier-unlock lane): trade damage/speed to **chew the target's WILL**, pushing them toward the cliff where their next down maims. Dismemberment pressure routed through the existing ladder ([will-and-death.md](will-and-death.md)) — no second maim source; sibling to *Intimidation*, the job-side Will-drain ability (**BUILT 2026-07-20, #61**, [jobs.md](jobs.md)). |
 | **Drill** *(aka War Auger)* | Heavy, terrain-shaping bruiser. | **Burrow** — erect defensive or obstructive **terrain modifications** ([terrain.md](terrain.md)); the melee terrain-engineer. |
 | **Springspear** | Reach + the shock-combo enabler. | **Impale / Vault** — spring it into a **ranged** weapon (overworld action); winding back in costs time. The classic combinatrix shock partner. |
 | **Carbine** | Pressure-rifle ranged DPS. | **Headshot** — reframed from "+crit %" to a **charged precision shot** (deterministic). Per-weapon range bands (1–2 / 2–3). |

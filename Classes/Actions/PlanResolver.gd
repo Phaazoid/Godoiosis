@@ -81,6 +81,12 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# final damage (E8): round(base * Pi(mult) + Sum(bonus)), never negative
 	outcome.damage = max(0, int(round(base * mult + bonus)))
 
+	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
+	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
+	# a non-issue since cap >= 0 makes max(0,min(cap,x)) == min(cap,max(0,x)) always.
+	if target.unit_instance.has_live_ability(Abilities.Id.IRON_WILL):
+		outcome.damage = mini(outcome.damage, Abilities.IRON_WILL_DAMAGE_CAP)
+
 	# --- thread the hypothetical forward (R4) ---
 	for s in outcome.states_removed:
 		target_hypo.states.erase(s)

@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3 uid="uid://ceqrjbp6yyh2"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_0yyoq"]
+
+[resource]
+script = ExtResource("1_0yyoq")
+id = 1
+display_name = "Iron Will"
+kind = 2
+description = "Caps incoming damage per hit"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

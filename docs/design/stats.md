@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #79 (2026-07-20).**
 
 ## Core stance
 
@@ -93,7 +93,7 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 - **DEF is gear-only**, never authored on the unit.
 - **Gear carries stat-cost tradeoffs** — plate gives DEF but −DEX/−PER, so equipping is a genuine decision, not a strict upgrade (no full plate on a DEX-rapier fencer).
-- **Effective stat = base → limb substitution → job nudge → gear → job ceiling clamp.** The code splits `get_effective_stat` from `get_base_stat`; the limb-slot layer (STR/DEX only) landed in #56 (2026-07-15), and the job nudge/ceiling layers landed in #58 (2026-07-16, [jobs.md](jobs.md)) — `UnitInstance.get_stat_before_ceiling` exposes the pre-clamp value for the dev editor's preview-at-decision.
+- **Effective stat = base → limb substitution → job nudge → gear.** The code splits `get_effective_stat` from `get_base_stat`; the limb-slot layer (STR/DEX only) landed in #56 (2026-07-15), and the job-nudge layer landed in #58 (2026-07-16, [jobs.md](jobs.md)) — a unit sums `stat_nudges` across every job it holds, not just one. **No ceiling/clamp stage** — #58's job-ceiling clamp (and the `get_stat_before_ceiling` preview it needed) was descoped 2026-07-20 (#61, [jobs.md](jobs.md) *Parked*) along with the rest of the certify/trio machinery.
 
 ## Open forks
 

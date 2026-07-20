@@ -4,7 +4,7 @@
 >
 > **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15), and AI Crisis stances + the CRISIS lethality preview are now BUILT too (#57, 2026-07-15)** — see Implementation status below. **Transmutation strain (#60, 2026-07-20):** the channeling math (`forced_points`/`strain_cost`, gating `can_channel`'s leeway budget) is BUILT; the affordability payment/enforcement half (A7) is deliberately deferred — see [#76](https://github.com/Phaazoid/Godoiosis/issues/76) — so the dev can playtest the access rules without the HP-cost consequence yet.
 >
-> **Canon checked through #77 (2026-07-20).**
+> **Canon checked through #79 (2026-07-20).**
 
 Design direction first agreed 2026-06-15; **reframed 2026-06-24**. Builds on the implemented death floor (`Unit.unit_died` fan-out). Supersedes the wiki's random-dismemberment framing (Law #1) **and this doc's own pre-2026-06-24 "Will gates life" ladder** (see below).
 
@@ -106,7 +106,7 @@ Brute-force channeling ([transmutation-model-proposal.md](transmutation-model-pr
 
 ## Abilities & threats (deferred layer, principles locked)
 
-**Re-homed 2026-07-06:** the unit-side abilities below are now **seed content for job ability pools** ([jobs.md](jobs.md) — the ability chassis: reactions are standing policies, no mid-pass prompts, Crisis stays the game's only one); weapon-side ones stay with the parts system ([weapons.md](weapons.md)). Locked principle stands: **thresholds and caps, never chance.** Captured ideas: **Iron Will** (deterministic damage cap), **Intimidation** (a *plannable* Will-drain aura — the deterministic answer to "the player shouldn't freely trust going-down"), **Revved Chainsword** (weapon-side Will-drain, proficiency-gated — ratified 2026-07-05, [weapons.md](weapons.md)), **exact-lethal boss** (forces reliance on Crisis), **Will as leadership currency** (depends on the squad-pool fork), **Fortitude** (a regenerating pre-HP shield).
+**Re-homed 2026-07-06:** the unit-side abilities below are now **seed content for job ability pools** ([jobs.md](jobs.md) — the ability chassis: reactions are standing policies, no mid-pass prompts, Crisis stays the game's only one); weapon-side ones stay with the parts system ([weapons.md](weapons.md)). Locked principle stands: **thresholds and caps, never chance.** Captured ideas: **Iron Will** (deterministic damage cap — **BUILT 2026-07-20, #61**), **Intimidation** (a *plannable* Will-drain aura — the deterministic answer to "the player shouldn't freely trust going-down" — **BUILT 2026-07-20, #61**), **Revved Chainsword** (weapon-side Will-drain, proficiency-gated — ratified 2026-07-05, [weapons.md](weapons.md)), **exact-lethal boss** (forces reliance on Crisis), **Will as leadership currency** (depends on the squad-pool fork), **Fortitude** (a regenerating pre-HP shield — named follow-up, not built).
 
 ## Forks — status after the 2026-06-24 grill *(all provisional)*
 

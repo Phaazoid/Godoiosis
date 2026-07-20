@@ -1,10 +1,15 @@
 [gd_resource type="Resource" script_class="JobData" format=3 uid="uid://bf4opk3p68wwu"]
 
 [ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_7hirp"]
+[ext_resource type="Resource" uid="uid://o2adimh05qow" path="res://Resources/Abilities/Intimidation.tres" id="2_b1o2b"]
 [ext_resource type="Script" uid="uid://crvojjncxspaf" path="res://Classes/jobs/JobData.gd" id="2_b5krs"]
+[ext_resource type="Resource" uid="uid://ceqrjbp6yyh2" path="res://Resources/Abilities/IronWill.tres" id="3_gskpt"]
+[ext_resource type="Resource" uid="uid://cd652oc8ecbt6" path="res://Resources/Abilities/Taunt.tres" id="4_1snyf"]
+[ext_resource type="Resource" uid="uid://p6hymhad5ta8" path="res://Resources/Abilities/Waterwalk.tres" id="5_levmn"]
 
 [resource]
 script = ExtResource("2_b5krs")
 id = "scout"
 display_name = "Scout"
+ability_pool = Array[ExtResource("1_7hirp")]([ExtResource("2_b1o2b"), ExtResource("3_gskpt"), ExtResource("4_1snyf"), ExtResource("5_levmn")])
 metadata/_custom_type_script = "uid://crvojjncxspaf"

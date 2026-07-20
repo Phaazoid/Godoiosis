@@ -391,7 +391,14 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 	return countering_unit.combat.can_hit_cell_from(counter_cell, target_cell)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) -> Unit:
-	#This is where logic will need to live later, in order to determine who counter attacks who and why.  For now just pulls first member from list. 
+	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a
+	# prompt — counters against the taunter's party must target the taunter WHERE LEGAL.
+	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
+	# falls through to the default policy below rather than suppressing the counter.
+	for member in attacking_party:
+		if member.unit_instance.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member):
+			return member
+	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:
 		if can_counter(countering_unit, member):
 			return member

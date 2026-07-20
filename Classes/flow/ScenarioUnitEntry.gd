@@ -13,7 +13,4 @@ class_name ScenarioUnitEntry
 @export var squad_name := ""
 @export var squad_archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
 @export var squad_zone := ""   # only meaningful on the leader's entry; "" = none
-@export var certified_jobs: Dictionary[String, bool] = {}
-@export var main_job := ""
-@export var sub_jobs: Array[String] = []
-@export var unlocked_sub_slots := 0
+@export var jobs: Array[String] = []
