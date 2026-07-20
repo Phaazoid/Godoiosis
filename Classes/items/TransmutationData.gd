@@ -10,11 +10,8 @@ extends AttackData
 # Aura-scaled: a flat parallel to weapon stat-scaling, (identity/geometry/flags live on AttackData since #72) 
 # summed over sigils (weighted). # NOT equippable itself — it lives in a RuneData's `inscriptions`.
 
-const AURA_FLOOR := 1   # min aura per distinct element needed to channel (before leeway)
-
 @export var sigils: Array[Elemental.Element] = []   # repeats = weight
 @export var flourishes: Array[Flourish.Type] = []
-@export var carving_cost: int = 0   # capacity it eats on a rune; 0 = derive from sigil count
 @export var popup: String = ""
 @export var icon: Texture2D
 # materia: DEFERRED — some carvings will require fuel; not modeled yet.
@@ -31,10 +28,11 @@ func distinct_elements() -> Array[Elemental.Element]:
 			result.append(e)
 	return result
 
-# Capacity a rune spends to hold this carving. Defaults to sigil count; authorable higher
-# for a physically larger carving (a fire WALL costs more than a fireball).
+# Capacity a rune spends to hold this carving — always the raw sigil count (dev ruling, #60:
+# cost is derived from the recipe, never author-set; a carving costs more because it takes
+# more/heavier sigils, not because of a manual override).
 func cost() -> int:
-	return carving_cost if carving_cost > 0 else sigils.size()
+	return sigils.size()
 
 # Aura scaling: power + the wielder's aura summed over sigils — repeats weight it, so
 # 2 Fire scales twice off fire aura. A leeway-covered (0-aura) element adds nothing.
@@ -44,14 +42,37 @@ func base_damage(wielder: Unit) -> int:
 		scaling += wielder.get_element_aura(e)
 	return power + scaling
 
-# Can this wielder channel it? Need AURA_FLOOR in each DISTINCT element; the runestone's
-# `leeway` point(s) cover that many otherwise-deficient elements.
-func can_channel(wielder: Unit, leeway: int = 1) -> bool:
-	var uncovered := 0
+# --- Channeling: temper + trained leeway (transmutation-model-proposal.md, grilled 2026-07-04) ---
+# Floors = WEIGHT: channeling needs real aura >= each element's sigil weight. The rune's
+# temper element is EARNED, never brute-forced. Real aura in the temper element is the leeway
+# budget for every OTHER element's deficit — breadth and depth alike, point for point — and
+# every forced point costs strain: recoil HP, a COST not damage (will-and-death.md).
+
+const STRAIN_BY_FORCED: Array[int] = [0, 1, 3, 6]   # playtest-tunable; superlinear. Index = forced
+													 # points; a legal carving can't force more than 3.
+
+# Brute-forced points: summed aura deficit across NON-temper elements. A temper deficit is
+# not forceable — that's can_channel's hard floor, never a strain purchase.
+func forced_points(wielder: Unit, temper: Elemental.Element) -> int:
+	var forced := 0
 	for e in distinct_elements():
-		if wielder.get_element_aura(e) < AURA_FLOOR:
-			uncovered += 1
-	return uncovered <= leeway
+		if e == temper:
+			continue
+		forced += maxi(0, sigils.count(e) - wielder.get_element_aura(e))
+	return forced
+
+func can_channel(wielder: Unit, temper: Elemental.Element) -> bool:
+	if not wielder.has_any_affinity():
+		return false   # the Rebecca rule: runes are inert rock in her hands
+	if wielder.get_element_aura(temper) < sigils.count(temper):
+		return false   # temper depth is trained, full stop
+	return forced_points(wielder, temper) <= wielder.get_element_aura(temper)
+
+# Recoil HP to channel this carving — 0 when real aura covers everything. Affordability
+# (can the caster pay without hitting 0?) is the menu/resolver's job (A7), not here.
+# Materia seam: carried materia will absorb strain when the materia pass lands.
+func strain_cost(wielder:Unit, temper: Elemental.Element) -> int:
+	return STRAIN_BY_FORCED[mini(forced_points(wielder, temper), STRAIN_BY_FORCED.size() - 1)]
 
 # Sigil count sets how many flourishes fit: 1 -> 1, 2 -> 3, 3 -> 5.
 func flourish_slots() -> int:
@@ -71,6 +92,11 @@ func has_legal_sigils() -> bool:
 		if not Elemental.is_sigil_element(e):
 			return false
 	return true
+
+# Load-time guard: legal elements AND small enough to ever fit on any rune (the largest
+# circle cap, L, is the global ceiling — RuneData owns the actual per-size knobs).
+func is_legal() -> bool:
+	return has_legal_sigils() and sigils.size() <= RuneData.max_circle_cap()
 
 # The highest-weight sigil sets the headline identity ("2 Fire / 1 Earth" burns first).
 func primary_element() -> Elemental.Element:

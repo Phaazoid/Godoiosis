@@ -99,6 +99,14 @@ func _populate_rune_editor(rune: RuneData):
 	var on_size := func(v):
 		rune.size = v
 		populate()
+
+	var temper_label := "(blank — the first carving sets it, permanently)"
+	if rune.temper != Elemental.Element.NONE:
+		temper_label = Elemental.Element.keys()[rune.temper]
+	DevWidgets.add_label(editor_container, "Temper: %s" % temper_label)
+	if not rune.is_legal():
+		DevWidgets.add_label(editor_container, "ILLEGAL: over a knob or breaks the temper rule — won't load from disk")
+
 	DevWidgets.add_enum_option(editor_container, "Size", ",".join(RuneData.Size.keys()), rune.size, on_size)
 	DevWidgets.add_label(editor_container, "Capacity: %d / %d used" % [rune.used_capacity(), rune.capacity()])
 	DevWidgets.add_label(editor_container, "Inscriptions:")
@@ -136,8 +144,8 @@ func _populate_rune_editor(rune: RuneData):
 		if rune.inscribe(carvings[key].duplicate(true)):
 			populate()
 		else:
-			push_warning("Not enough capacity to inscribe %s" % key)
-	)
+			push_warning("Won't fit %s: capacity, circle cap, or temper rule" % key)
+		)
 	add_row.add_child(add_btn)
 	editor_container.add_child(add_row)
 

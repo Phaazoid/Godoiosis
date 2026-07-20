@@ -39,9 +39,8 @@ func populate_unit_editor(unit):
 
 	_add_inventory_section(unit)
 	_add_jobs_section(unit)
-	_add_inventory_section(unit)
-	_add_jobs_section(unit)
 	_add_limbs_section(unit)
+	_add_affinity_section(unit)
 
 
 	var delete_button := Button.new()
@@ -230,6 +229,40 @@ func _add_limbs_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "MOV: %d" % inst.get_mov())
 	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d" % [
 		inst.get_effective_stat(Stats.Stat.STR), inst.get_effective_stat(Stats.Stat.DEX)])
+
+func _add_affinity_section(unit: Unit):
+	DevWidgets.add_label(unit_editor_container, "Affinity")
+
+	var inst := unit.unit_instance
+	for element in Elemental.SIGIL_ELEMENTS:
+		var name = Elemental.Element.keys()[element]
+		DevWidgets.add_checkbox(unit_editor_container, name, inst.has_affinity(element),
+			func(pressed): _on_affinity_toggled(unit, element, pressed))
+
+	DevWidgets.add_checkbox(unit_editor_container, "Alkahest affine (hidden — Isaac only)", inst.is_alkahest_affine,
+		func(pressed): inst.is_alkahest_affine = pressed)
+
+	var primary := inst.primary_affinity()
+	DevWidgets.add_label(unit_editor_container, "Primary: %s" % (Elemental.Element.keys()[primary] if primary != Elemental.Element.NONE else "(none — Rebecca)"))
+
+	DevWidgets.add_label(unit_editor_container, "Aura")
+	for element in Elemental.SIGIL_ELEMENTS:
+		var name = Elemental.Element.keys()[element]
+		if inst.has_affinity(element):
+			DevWidgets.add_spinbox(unit_editor_container, name, inst.get_element_aura(element),
+				func(v): inst.aura[element] = int(v))
+		else:
+			DevWidgets.add_label(unit_editor_container, "%s: — (no affinity)" % name)
+
+func _on_affinity_toggled(unit: Unit, element: Elemental.Element, pressed: bool):
+	var inst := unit.unit_instance
+	if pressed:
+		if not inst.affinity.has(element):
+			inst.affinity.append(element)
+	else:
+		inst.affinity.erase(element)
+		inst.aura.erase(element)   # can't hold aura outside affinity — Rebecca rule guard
+	populate_unit_editor(unit)
 
 func _on_limb_state_picked(unit: Unit, slot: int, state_name: String):
 	var fitting: UnitInstance.LimbFitting = unit.unit_instance.limbs[slot]

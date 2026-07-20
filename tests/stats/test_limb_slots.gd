@@ -8,6 +8,8 @@ func _make_instance(partial_stats: Dictionary[Stats.Stat, int], base_aura: Dicti
 	var data := UnitData.new()
 	data.base_stats = partial_stats
 	data.base_aura = base_aura
+	for element in base_aura:
+		data.base_affinity.append(element)   # aura only seeds within affinity (#60 Rebecca rule)
 	var inst := UnitInstance.new()
 	inst.data = data
 	inst.initialize()

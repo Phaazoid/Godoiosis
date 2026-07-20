@@ -15,7 +15,6 @@ sigils = Array[int]([1])
 power = 5
 attack_pattern = SubResource("Resource_mq7ng")
 hits_allies = true
-carving_cost = 1
 popup = "Fireball!"
 icon = ExtResource("2_bcr2w")
 targets = 2

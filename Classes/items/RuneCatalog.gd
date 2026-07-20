@@ -25,6 +25,9 @@ static func get_variants() -> Dictionary:
 			continue
 		var res = load(VARIANT_DIR + file)
 		if res is RuneData:
+			if not res.is_legal():
+				push_error("%s: illegal under the two-knob rune rules — refused" % file)
+				continue
 			variants[res.item_name if res.item_name != "" else file.get_basename()] = res
 	return variants
 

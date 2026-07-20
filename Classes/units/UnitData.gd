@@ -13,3 +13,5 @@ class_name UnitData
 @export var move_sprite: Texture2D 
 @export var downed_sprite: Texture2D 
 @export var base_aura: Dictionary[Elemental.Element, int]
+@export var base_affinity: Array[Elemental.Element] = []   # genetic; order = rank, [0] = primary
+@export var base_is_alkahest_affine: bool = false          # Isaac's hidden sixth — never a UI bar

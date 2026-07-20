@@ -20,6 +20,14 @@ var stat_modifiers: Dictionary[Stats.Stat, int] = {}
 # Mirrors `stats`: seeded from UnitData.base_aura, grows over a unit's life.
 var aura: Dictionary[Elemental.Element, int] = {}
 
+# Affinity — genetic, immutable, per-element binary set (audit A3, alchemy-kit.md). Its OWN
+# field, NOT derivable from aura >= 1 — the limb tax can zero a pool while the growth right
+# persists. Order = rank; [0] reads as primary for now (the limb-tax tie-break is the only
+# consumer) — kept isolated so a future twin-primary model only touches that one read, not
+# this storage shape. Empty = the Rebecca rule: this unit can never channel anything.
+var affinity: Array[Elemental.Element] = []
+var is_alkahest_affine: bool = false   # Isaac's hidden sixth — never surfaced as a bar in UI
+
 #Battle stats
 var current_hp: int = 0
 #effective str, other things here
@@ -79,7 +87,14 @@ func initialize():
 	limbs = {}
 	for slot in LimbSlot.values():
 		limbs[slot] = LimbFitting.new()
-	aura = data.base_aura.duplicate(true)
+	affinity = data.base_affinity.duplicate()
+	is_alkahest_affine = data.base_is_alkahest_affine
+	aura = {}
+	for element in data.base_aura:
+		if affinity.has(element):
+			aura[element] = data.base_aura[element]
+		elif data.base_aura[element] != 0:
+			push_warning("%s: base_aura has %s outside affinity — dropped" % [data.display_name, Elemental.Element.keys()[element]])
 	#reset battle stats
 	current_hp = get_max_hp()
 	current_will = get_max_will()
@@ -223,7 +238,8 @@ func spend_will_for_down() -> bool:
 
 func _apply_maim_aura_tax() -> void:
 	# Audit A3: each lost limb costs -1 off the HIGHEST aura pool. Ties -> element enum
-	# order for now; TODO(11): primary affinity breaks ties once the affinity set exists.
+	# order (deliberately provisional -- a more interesting deterministic tiebreak, e.g.
+	# primary affinity or a "humors" selector, is parked design work, see #77).
 	# One-way: regrowth restores it, and regrowth is between-battle territory (not built).
 	var best := Elemental.Element.NONE
 	var best_val := 0
@@ -237,6 +253,15 @@ func _apply_maim_aura_tax() -> void:
 
 func get_element_aura(element: Elemental.Element) -> int:
 	return aura.get(element, 0)
+
+func has_affinity(element: Elemental.Element) -> bool:
+	return affinity.has(element)
+
+func has_any_affinity() -> bool:
+	return not affinity.is_empty()
+
+func primary_affinity() -> Elemental.Element:
+	return affinity[0] if not affinity.is_empty() else Elemental.Element.NONE
 
 func limb_stat(slot: LimbSlot) -> int:
 	# What this slot contributes: arms carry STR, legs carry DEX; empty = 0.

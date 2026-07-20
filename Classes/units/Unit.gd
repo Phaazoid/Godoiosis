@@ -469,6 +469,9 @@ func get_element_aura(element: Elemental.Element) -> int:
 		return 0
 	return unit_instance.get_element_aura(element)
 
+func has_any_affinity() -> bool:
+	return unit_instance != null and unit_instance.has_any_affinity()
+
 # The attack this unit would fire right now: a rune auto-picks its first channelable carving; a
 # weapon defaults to its main attack. active_attack (the player's live pick) always wins when set
 # — reset at the start of _begin_attack, so it's fresh for the unit's OWN declared aim. #30 B2/#72.

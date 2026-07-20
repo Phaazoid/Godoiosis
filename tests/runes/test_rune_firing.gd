@@ -30,6 +30,10 @@ class _StubBoard extends BoardContext:
 func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 	var u: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	u.unit_instance.aura = aura
+	var affinity: Array[Elemental.Element] = []
+	for element in aura:
+		affinity.append(element)
+	u.unit_instance.affinity = affinity
 	return u
 
 func _fireball(power: int, mode: EquippableData.TargetMode) -> TransmutationData:
@@ -135,6 +139,7 @@ func test_rune_wielder_counters_with_its_carving() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var alch: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
 	alch.unit_instance.aura = { Elemental.Element.FIRE: 4 }
+	alch.unit_instance.affinity = [Elemental.Element.FIRE]
 	var fireball: TransmutationData = _fireball(5, EquippableData.TargetMode.UNIT)
 	fireball.can_counter = true
 	alch.equipped_weapon = _make_rune(fireball)
@@ -154,6 +159,7 @@ func test_rune_carving_can_counter_false_blocks_the_counter() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var alch: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), { Stats.Stat.MHP: 50 })
 	alch.unit_instance.aura = { Elemental.Element.FIRE: 4 }
+	alch.unit_instance.affinity = [Elemental.Element.FIRE]
 	var fireball: TransmutationData = _fireball(5, EquippableData.TargetMode.UNIT)
 	fireball.can_counter = false
 	alch.equipped_weapon = _make_rune(fireball)

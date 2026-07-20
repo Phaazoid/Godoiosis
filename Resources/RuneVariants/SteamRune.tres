@@ -10,6 +10,7 @@
 script = ExtResource("2_7d53w")
 size = 2
 inscriptions = Array[ExtResource("1_krjn7")]([ExtResource("3_jtvju"), ExtResource("4_ht21o")])
+temper = 1
 item_name = "steam"
 icon = ExtResource("1_biwx1")
 metadata/_custom_type_script = "uid://ckrp1phgirys0"

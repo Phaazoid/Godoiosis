@@ -11,11 +11,10 @@ metadata/_custom_type_script = "uid://cuvfasmongryk"
 [resource]
 script = ExtResource("1_6nsqn")
 display_name = "Splash"
-sigils = Array[int]([2])
+sigils = Array[int]([1, 2])
 power = 2
 attack_pattern = SubResource("Resource_jx6qm")
 hits_allies = true
-carving_cost = 2
 popup = "It wasn't very effective"
 icon = ExtResource("2_emron")
 targets = 2

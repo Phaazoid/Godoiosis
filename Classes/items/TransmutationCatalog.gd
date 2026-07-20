@@ -14,5 +14,8 @@ static func get_all() -> Dictionary:
 			continue
 		var res = load(CARVING_DIR + file)
 		if res is TransmutationData:
+			if not res.is_legal():
+				push_error("%s: illegal carving (bad sigils or over the max circle cap) — refused" % file)
+				continue
 			carvings[res.display_name if res.display_name != "" else file.get_basename()] = res
 	return carvings
