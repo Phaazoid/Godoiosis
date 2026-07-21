@@ -1,6 +1,9 @@
 extends RefCounted
 class_name BaseAction
 
+# Base of every player order: actor + ActionType + validation state + the execute()
+# lifecycle, plus the display hooks (icon/description/textures) the queue panel reads.
+
 var actor: Unit
 var action_type: ActionType
 
@@ -17,11 +20,36 @@ enum ActionType {
 	INTIMIDATE
 }
 
+# The action registry: a new action type is added to the enum + whichever lists apply.
+# Menu gating, execution phases, queue-panel sections, and the Play API all key off
+# these lists instead of keeping their own.
+
+# Main actions are the mutually-exclusive headline orders — a unit gets at most ONE per
+# turn, and it must come after any move. MOVE stays separate.
+const MAIN_ACTION_TYPES: Array[ActionType] = [
+	ActionType.ATTACK,
+	ActionType.RESCUE,
+	ActionType.RALLY,
+	ActionType.INTIMIDATE,
+]
+
+# Execution order of the side-channel tail — stored orders that bypass PlanResolver
+# (resolver-backed attacks/counters run between MOVE and these). execute_orders, the
+# queue panel's sections, and the Play API iterate THIS list.
+const SIDE_CHANNEL_ORDER: Array[ActionType] = [
+	ActionType.RESCUE,
+	ActionType.RALLY,
+	ActionType.INTIMIDATE,
+]
+
 func is_main_action() -> bool:
-	# Main actions are the mutually-exclusive headline orders — a unit gets at most ONE per
-	# turn (attack, rescue, and future contenders share the slot). MOVE stays separate.
-	# Add new main action types here.
-	return action_type == ActionType.ATTACK or action_type == ActionType.RESCUE or action_type == ActionType.RALLY or action_type == ActionType.INTIMIDATE
+	return MAIN_ACTION_TYPES.has(action_type)
+
+# Actor-intrinsic requirement for queueing this action; subclasses override (move ordering,
+# verb locks, ability gates). SquadManager.queue_action is the sole enforcement point
+# (Law #3). Plan-context checks (adjacency, occupancy) belong to plan validation instead.
+func actor_can_perform() -> bool:
+	return true
 
 func get_actor_texture() -> Texture2D:
 	if actor == null or not is_instance_valid(actor):

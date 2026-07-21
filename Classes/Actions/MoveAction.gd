@@ -33,7 +33,12 @@ func init_hold_position(unit: Unit, destination_tile_texture: Texture2D):
 		destination_texture = GENERIC_TILE
 	else:
 		destination_texture = destination_tile_texture
-	
+
+func actor_can_perform() -> bool:
+	# Move-before-main: a unit that locked its main action can't move after it (attacks
+	# resolve from the final position — no attack-then-flee).
+	return not actor.has_main_action_queued()
+
 func execute():
 	begin_execution()
 	clear_preview_sprites()

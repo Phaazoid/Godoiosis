@@ -3,7 +3,8 @@ extends RefCounted
 # Owns the player's turn vocabulary, driving the REAL SquadManager / TurnManager /
 # PlanResolver / RulesService. No side channels (Law #3). Commands return structured
 # Dictionaries; play/board_view.gd renders them. The headless executor applies the
-# resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states) —
+# resolved plan's EFFECTS (move = teleport, attack = apply_damage + element states;
+# side-channel actions run their REAL execute() — it's pure synchronous logic) —
 # i.e. game.gd.execute_orders minus the animation awaits, so preview == execution (Law #2).
 
 var grid: TileMapLayer
@@ -186,6 +187,20 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
 	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
 
+# Rally: self-targeted Will restore (a main action) — the same RallyAction the menu queues.
+func rally(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not unit.can_rally():
+		return {"ok": false, "error": "%s can't rally (Will full, in crisis, or nothing left to restore)" % handle}
+	var action := RallyAction.new()
+	action.init(unit)
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> rally" % handle}
+
 # Downed allies orthogonally adjacent to where the rescuer will END UP (projected cell), same
 # team — mirrors game.get_adjacent_downed_allies ("move next to the body, then rescue").
 func _adjacent_downed_allies(unit: Unit) -> Array[Unit]:
@@ -295,11 +310,23 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 	var counters: Array = []
 	for ctr in plan.counters:
 		counters.append(_describe_attack(ctr))
-	var rescues: Array = []
-	for action in squad.action_queue:
-		if action.action_type == BaseAction.ActionType.RESCUE:
-			rescues.append({"actor": handle_for(action.actor), "target": handle_for((action as RescueAction).target)})
-	return {"moves": moves, "attacks": attacks, "counters": counters, "rescues": rescues}
+	# Side-channel tail generically, in registry order (BaseAction.SIDE_CHANNEL_ORDER) — a
+	# newly registered type appears here with no per-type mirror to maintain.
+	var side_actions: Array = []
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		for action in squad.action_queue:
+			if action.action_type != type:
+				continue
+			var entry := {
+				"actor": handle_for(action.actor),
+				"type": action.get_action_name(),
+				"description": action.get_description(),
+			}
+			var target: Variant = action.get("target")
+			if target is Unit:
+				entry["target"] = handle_for(target)
+			side_actions.append(entry)
+	return {"moves": moves, "attacks": attacks, "counters": counters, "side_actions": side_actions}
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
@@ -342,16 +369,16 @@ func execute() -> Dictionary:
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 
-	# 4) rescues — revive downed allies (mirrors RescueAction.execute minus animation)
-	for action in squad.action_queue.duplicate():
-		if action.action_type == BaseAction.ActionType.RESCUE:
-			var rescue_action := action as RescueAction
-			var downed := rescue_action.target
-			if downed != null and is_instance_valid(downed) and downed.is_downed():
-				downed.revive()
-				if is_instance_valid(downed.squad):
-					squad_manager.set_has_acted(downed.squad, true)   # the rescued unit is spent this turn
-				events.append("%s rescues %s" % [handle_for(rescue_action.actor), handle_for(downed)])
+	# 4) side-channel tail in registry order (BaseAction.SIDE_CHANNEL_ORDER). These executes
+	# are synchronous pure logic (no animation), so the REAL action runs — no per-type headless
+	# mirror to maintain. The event logs the ORDER executed, matching game.gd (an execute whose
+	# target was finished off mid-pass no-ops just as silently there).
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		for action in squad.action_queue.duplicate():
+			if action.action_type != type:
+				continue
+			action.execute()
+			events.append(action.get_description())
 
 	# 5) eject units downed during the pass into solo squads (mirrors game._process_downed_pending)
 	_process_downed_pending()

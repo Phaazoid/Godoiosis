@@ -1,10 +1,13 @@
 extends Node2D
 
 # Input/game-state coordinator — the root node of the game scene (game.tscn), instanced inside
-# the GameView SubViewport (CLAUDE.md "Sharp edges"). Owns the GameState machine (idle vs the
-# various *_TARGETING modes) and routes clicks/hover into the right mode handler; the seam most
-# cross-system wiring (dev overlay, squad manager, turn manager) hangs off of. Known-overweight —
-# prefer moving domain logic out into the owning system when touching it, not adding here.
+# the GameView SubViewport (CLAUDE.md "Sharp edges"). Owns the GameState machine and routes
+# clicks/hover into the right mode handler; PICKING_TARGET is the one generic "pick a
+# highlighted unit" mode (rescue/intimidate/squad-up/join-squad all ride it via
+# enter_target_pick_mode) — ATTACK_TARGETING and the CHOOSING_MOVE/GROUP_MOVE cell-pickers stay
+# their own modes on purpose (see CLAUDE.md's Actions bullet). The seam most cross-system wiring
+# (dev overlay, squad manager, turn manager) hangs off of. Known-overweight — prefer moving
+# domain logic out into the owning system when touching it, not adding here.
 
 @onready var grid : TileMapLayer = $Grid
 @onready var overlay: TileMapLayer = $Overlay
@@ -48,44 +51,25 @@ const GAME_MENU_RALLY := 13
 const GAME_MENU_GROUP_MOVE := 14
 const GAME_MENU_INTIMIDATE := 15
 
-#Can update this as we want things like icons, hover descriptions, etc for each menu item
-const ACTION_DATA = {
+# Menu display data AND print order: declaration order here IS the menu's order (Godot
+# dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
+const ACTION_DATA := {
+	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
 	GAME_MENU_MOVE: {"name": "Move"},
-	GAME_MENU_ATTACK: {"name" : "Attack"},
-	GAME_MENU_CANCEL: {"name": "Cancel Actions"},
-	GAME_MENU_WAIT: {"name": "Wait"},
-	GAME_MENU_ENDTURN: {"name": "End Turn"},
+	GAME_MENU_GROUP_MOVE: {"name": "Group Move"},
+	GAME_MENU_ATTACK: {"name": "Attack"},
+	GAME_MENU_RESCUE: {"name": "Rescue"},
+	GAME_MENU_RALLY: {"name": "Rally"},
+	GAME_MENU_INTIMIDATE: {"name": "Intimidate"},
 	GAME_MENU_SQUADUP: {"name": "Squad Up"},
 	GAME_MENU_JOINSQUAD: {"name": "Join Squad"},
 	GAME_MENU_LEAVESQUAD: {"name": "Leave Squad"},
 	GAME_MENU_DISBAND_SQUAD: {"name": "Disband Squad"},
+	GAME_MENU_WAIT: {"name": "Wait"},
+	GAME_MENU_CANCEL: {"name": "Cancel Actions"},
 	GAME_MENU_INSPECT: {"name": "Inspect"},
-	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
-	GAME_MENU_RESCUE: {"name": "Rescue"},
-	GAME_MENU_RALLY: {"name": "Rally"},
-	GAME_MENU_INTIMIDATE: {"name": "Intimidate"},
-	GAME_MENU_GROUP_MOVE: {"name": "Group Move"}
+	GAME_MENU_ENDTURN: {"name": "End Turn"},
 }
-
-# Single source of truth for the action menu's print order. Any GAME_MENU_* not listed here
-# is dropped from the menu — keep it complete when you add items.
-const MENU_ORDER := [
-	GAME_MENU_EXECUTE_ORDERS,
-	GAME_MENU_MOVE,
-	GAME_MENU_GROUP_MOVE,
-	GAME_MENU_ATTACK,
-	GAME_MENU_RESCUE,
-	GAME_MENU_RALLY,
-	GAME_MENU_SQUADUP,
-	GAME_MENU_JOINSQUAD,
-	GAME_MENU_LEAVESQUAD,
-	GAME_MENU_DISBAND_SQUAD,
-	GAME_MENU_WAIT,
-	GAME_MENU_CANCEL,
-	GAME_MENU_INSPECT,
-	GAME_MENU_INTIMIDATE,
-	GAME_MENU_ENDTURN,
-]
 
 enum GameState {
 	IDLE,
@@ -93,12 +77,9 @@ enum GameState {
 	ATTACK_TARGETING,
 	CHOOSING_MOVE,
 	CHOOSING_GROUP_MOVE,
-	CHOOSING_SQUAD,
-	CREATING_SQUAD,
 	BETWEEN_TURNS,
 	DEV_MODE,
-	RESCUE_TARGETING,
-	INTIMIDATE_TARGETING,
+	PICKING_TARGET,
 	AI_TURN
 }
 
@@ -107,6 +88,8 @@ var last_clicked_cell: Vector2i = Vector2i(-999, -999)
 var last_hovered_cell: Vector2i = Vector2i(-999, -999)
 var _downed_pending: Array[Unit] = []   # units downed mid-execution; ejected after the pass (see _process_downed_pending)
 var _highlighted_queue_units: Array[Unit] = []
+var _target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET
+var _target_pick_callback: Callable            # func(picked: Unit) -> void
 var dev_controller: DevController
 var ai_controller: AIController
 var terrain_states: TerrainStateManager
@@ -200,11 +183,11 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 		GAME_MENU_EXECUTE_ORDERS:
 			execute_orders(unit)
 		GAME_MENU_RESCUE:
-			enter_rescue_mode(unit)
+			enter_target_pick_mode(get_adjacent_downed_allies(unit), func(target: Unit): queue_rescue(unit, target))
 		GAME_MENU_RALLY:
 			queue_rally(unit)
 		GAME_MENU_INTIMIDATE:
-			enter_intimidate_mode(unit)
+			enter_target_pick_mode(get_adjacent_enemies(unit), func(target: Unit): queue_intimidate(unit, target))
 		GAME_MENU_GROUP_MOVE:
 			enter_group_move_mode(unit)
 
@@ -267,19 +250,20 @@ func _apply_burning_tile_damage(faction: Team.Faction) -> void:
 	await _offer_pending_crisis()
 	_process_downed_pending()
 
-func enter_rescue_mode(unit: Unit):
-	game_state = GameState.RESCUE_TARGETING
-	var cells: Array[Vector2i] = []
-	for ally in get_adjacent_downed_allies(unit):
-		cells.append(ally.movement.cell)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, cells, OVERLAY_TARGET_ATLAS)
+# Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
+# overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
+# its own mode — directional aiming doesn't fit this shape.
+func enter_target_pick_mode(candidates: Array[Unit], on_pick: Callable) -> void:
+	game_state = GameState.PICKING_TARGET
+	_target_pick_cells = _unit_cells(candidates)
+	_target_pick_callback = on_pick
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, _target_pick_cells, OVERLAY_TARGET_ATLAS)
 
-func enter_intimidate_mode(unit: Unit):
-	game_state = GameState.INTIMIDATE_TARGETING
+func _unit_cells(units: Array[Unit]) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
-	for enemy in get_adjacent_enemies(unit):
-		cells.append(enemy.movement.cell)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, cells, OVERLAY_TARGET_ATLAS)
+	for unit in units:
+		cells.append(unit.movement.cell)
+	return cells
 
 func execute_orders(unit):
 	var squad = unit.squad
@@ -298,29 +282,24 @@ func execute_orders(unit):
 
 	var plan := squad_manager.resolve_plan(squad, _board())
 	var move_actions := []
-	var rescue_actions := []
-	var rally_actions := []
-	var intimidate_actions := []
-	
+	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
+
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
-		elif action.action_type == BaseAction.ActionType.RESCUE:
-			rescue_actions.append(action)
-		elif action.action_type == BaseAction.ActionType.RALLY:
-			rally_actions.append(action)
-		elif action.action_type == BaseAction.ActionType.INTIMIDATE:
-			intimidate_actions.append(action)
-			
+		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
+			if not side_channel.has(action.action_type):
+				side_channel[action.action_type] = []
+			side_channel[action.action_type].append(action)
+
 	await execute_action_phase_parallel(move_actions)
 	await execute_action_sequence(plan.attacks)
 	_apply_cell_effects(plan.cell_effects)
 	await execute_action_sequence(plan.counters)
-	await execute_action_sequence(rescue_actions)
-	await execute_action_sequence(rally_actions)
-	await execute_action_sequence(intimidate_actions)
-
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		var batch: Array = side_channel.get(type, [])
+		await execute_action_sequence(batch)
 	_process_downed_pending()
 
 	if not is_instance_valid(squad):
@@ -403,21 +382,17 @@ func _on_queue_cancel_requested(display_action: BaseAction):
 	if squad == null:
 		return
 
-	match display_action.action_type:
-		BaseAction.ActionType.MOVE:
-			# Cancelling a move also cancels the unit's main action: an attack/rescue is planned
-			# to resolve from the unit's POST-move position (move-before-main rule), so without the
-			# move it's stale — wrong origin/range, maybe hitting nobody, and nothing re-validates
-			# it. The move+main combo is cancelled as a unit.
-			squad_manager.cancel_move_for_unit(unit)
-			_cancel_stored_main_action(unit, squad)
-		BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE:
-			# Displayed attacks are DERIVED volley members (rebuilt each resolve), not stored
-			# orders. Remove the unit's stored MAIN action (its aim) — that re-derives the
-			# volley AND its counters away on the next refresh.
-			_cancel_stored_main_action(unit, squad)
-		_:
-			pass   # counters etc. are derived — their X is inert
+	if display_action.action_type == BaseAction.ActionType.MOVE:
+		# Cancelling a move also cancels the unit's main action: the main is planned from the
+		# POST-move position (move-before-main rule), so without the move it's stale — wrong
+		# origin/range, and nothing re-validates it. The combo cancels as a unit.
+		squad_manager.cancel_move_for_unit(unit)
+		_cancel_stored_main_action(unit, squad)
+	elif display_action.is_main_action():
+		# Every stored main action cancels the same way — displayed attacks are DERIVED volley
+		# members (rebuilt each resolve), so removing the stored aim re-derives the volley and
+		# its counters away. Derived-only rows (counters) aren't mains; their X stays inert.
+		_cancel_stored_main_action(unit, squad)
 
 	# Any cancel that strips the squad down to only hold-position moves (or nothing real) ends its
 	# activation, exactly like the other cancel paths. Without this the X button left hold-only
@@ -476,9 +451,20 @@ func _on_queue_row_hover_changed(action: BaseAction, hovering: bool) -> void:
 			_highlighted_queue_units.append(target)
 
 func create_squad(unit: Unit):
-	game_state = GameState.CREATING_SQUAD
 	draw_create_squad(unit)
-	#Draw simple range (value from LDR stat), highlight valid units
+	var candidates: Array[Unit] = []
+	for other in _all_units():
+		if squad_manager.can_squad_up(other, unit.squad):
+			candidates.append(other)
+	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(picked, unit.squad))
+
+func join_squad_mode(unit: Unit):
+	draw_joinable_squads(unit)
+	var candidates: Array[Unit] = []
+	for other in _all_units():
+		if squad_manager.can_join_squad(unit, other.squad):
+			candidates.append(other)
+	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(unit, picked.squad))
 	
 func enter_move_mode(unit: Unit):
 	var moverange := compute_move_range(unit)
@@ -511,10 +497,6 @@ func enter_attack_mode(unit: Unit):
 
 func disband_squad(unit: Unit):
 	squad_manager.disband_squad(unit.squad)
-	
-func join_squad_mode(unit: Unit):
-	game_state = GameState.CHOOSING_SQUAD
-	draw_joinable_squads(unit)
 
 func is_walkable(cell: Vector2i) -> bool:
 	var tile_data: TileData =grid.get_cell_tile_data(cell)
@@ -569,15 +551,16 @@ func get_adjacent_downed_allies(unit: Unit) -> Array[Unit]:
 	return result
 
 func get_adjacent_enemies(unit: Unit) -> Array[Unit]:
-	# Adjacent enemies to where this unit will END UP (projected position) — same shape as
-	# get_adjacent_downed_allies just above, swapped to enemy-faction + active-not-downed.
+	# Living (active OR downed) enemies adjacent to where this unit will END UP (projected
+	# position) — same shape as get_adjacent_downed_allies just above. Downed enemies stay
+	# legal intimidate targets on purpose: draining a body's Will can be worth a main action.
 	var result: Array[Unit] = []
 	var origin := unit.get_projected_destination()
 	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
 		if cell == origin:
 			continue
 		var other := get_unit_at_cell(cell)
-		if other != null and other != unit and other.is_active() and Team.is_enemy(unit.get_faction(), other.get_faction()):
+		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
 			result.append(other)
 	return result
 
@@ -608,19 +591,6 @@ func _unhandled_input(event):
 						last_clicked_cell = clickedCell
 						game_state = GameState.TILE_SELECTED
 						show_action_menu(get_viewport().get_mouse_position(), populate_action_menu(target), target)
-				GameState.CHOOSING_SQUAD:
-					if clickedUnit != null:
-						if squad_manager.can_join_squad(lastUnit, clickedUnit.squad):
-							squad_manager.join_squad(lastUnit, clickedUnit.squad)
-					exit_current_mode()
-				GameState.CREATING_SQUAD:
-					if clickedUnit != null and not clickedUnit.has_squad():
-						if squad_manager.can_squad_up(clickedUnit, lastUnit.squad):
-							#If that unit was already in a squad, visually show somehow?
-							squad_manager.join_squad(clickedUnit, lastUnit.squad)
-					exit_current_mode()
-				#GameState.TILE_SELECTED:
-					#"hoo hoo"
 				GameState.CHOOSING_MOVE: 
 					#This is checking if you're clicking on a valid tile
 					var moverange := compute_move_range(lastUnit)
@@ -656,21 +626,9 @@ func _unhandled_input(event):
 							attack.fired_attack = lastUnit.get_fired_attack()
 							squad_manager.queue_action(lastUnit.squad, attack)
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
-				GameState.RESCUE_TARGETING:
-					if lastUnit == null:
-						lastUnit = lastProjectedUnit
-					if lastUnit != null and clickedUnit != null and clickedUnit in get_adjacent_downed_allies(lastUnit):
-						var rescue := RescueAction.new()
-						rescue.init(lastUnit, clickedUnit)
-						squad_manager.queue_action(lastUnit.squad, rescue)
-					exit_current_mode()
-				GameState.INTIMIDATE_TARGETING:
-					if lastUnit == null:
-						lastUnit = lastProjectedUnit
-					if lastUnit != null and clickedUnit != null and clickedUnit in get_adjacent_enemies(lastUnit):
-						var intimidate := IntimidateAction.new()
-						intimidate.init(lastUnit, clickedUnit)
-						squad_manager.queue_action(lastUnit.squad, intimidate)
+				GameState.PICKING_TARGET:
+					if _target_pick_cells.has(clickedCell) and clickedUnit != null:
+						_target_pick_callback.call(clickedUnit)
 					exit_current_mode()
 
 			update_selection_overlay()
@@ -689,8 +647,12 @@ func _unhandled_input(event):
 		else:
 			camera_controller.center_on_position(mouse_world)
  
+# Shared gate for every main-action menu entry: one main action per unit per turn, squad
+# not spent, no other squad mid-activation. Per-action requirements chain onto this.
+func _can_take_main_action(unit: Unit) -> bool:
+	return not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad)
+
 func populate_action_menu(unit: Unit) -> Array:
-	#TODO Order these explicitly instead of just order added to array
 	var options = []
 	
 	if not can_control(unit):
@@ -711,16 +673,16 @@ func populate_action_menu(unit: Unit) -> Array:
 		and not squad_manager.is_another_squad_active(unit.squad):
 		options.append(GAME_MENU_GROUP_MOVE)
 
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.has_equipped_weapon() and unit.can_wield_equipped():
+	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped():
 		options.append(GAME_MENU_ATTACK)
 
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and not get_adjacent_downed_allies(unit).is_empty() and unit.can_rescue_carry():
+	if _can_take_main_action(unit) and not get_adjacent_downed_allies(unit).is_empty() and unit.can_rescue_carry():
 		options.append(GAME_MENU_RESCUE)
 
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.can_rally():
+	if _can_take_main_action(unit) and unit.can_rally():
 		options.append(GAME_MENU_RALLY)
-		
-	if not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not get_adjacent_enemies(unit).is_empty():
+
+	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not get_adjacent_enemies(unit).is_empty():
 		options.append(GAME_MENU_INTIMIDATE)
 
 		#Once Squad is active, squad state cannot change through actions
@@ -745,10 +707,20 @@ func populate_action_menu(unit: Unit) -> Array:
 		options.append(GAME_MENU_CANCEL)
 		
 	var ordered := []
-	for id in MENU_ORDER:
+	for id in ACTION_DATA:
 		if options.has(id):
 			ordered.append(id)
 	return ordered
+
+func queue_rescue(rescuer: Unit, target: Unit) -> void:
+	var rescue := RescueAction.new()
+	rescue.init(rescuer, target)
+	squad_manager.queue_action(rescuer.squad, rescue)
+
+func queue_intimidate(intimidator: Unit, target: Unit) -> void:
+	var intimidate := IntimidateAction.new()
+	intimidate.init(intimidator, target)
+	squad_manager.queue_action(intimidator.squad, intimidate)
 
 func queue_rally(unit: Unit):
 	var rally := RallyAction.new()
@@ -813,6 +785,9 @@ func _tick_crisis_surges(faction: Team.Faction):
 func clear_selection():
 	game_state = GameState.IDLE
 
+	_target_pick_cells = []
+	_target_pick_callback = Callable()   # drop captured refs
+	
 	overlay.clear()
 	overlay_manager.clear_all()
 	overlay_manager.clear_terrain_preview()
@@ -1125,15 +1100,20 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			if squad_manager.active_squad == null:
 				clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
 
-	
 	if game_state == GameState.TILE_SELECTED:
 		cursor_controller.set_state(CursorController.CursorState.TARGET)
 		cursor_controller.set_cursor_pos(last_clicked_cell)
 		
-	if game_state == GameState.CREATING_SQUAD: #TODO - perhaps better targeting on these - green over valid targets, red over invalid, etc
-		cursor_controller.set_cursor_pos(hoveredCell)
-	
-	if game_state == GameState.CHOOSING_SQUAD:
+	if game_state == GameState.PICKING_TARGET:
+		var preview_cells: Array[Vector2i] = []
+		if _target_pick_cells.has(hoveredCell):
+			preview_cells.append(hoveredCell)
+		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
+
+		if preview_cells.is_empty():
+			cursor_controller.set_state(CursorController.CursorState.INVALID)
+		else:
+			cursor_controller.set_state(CursorController.CursorState.VALID)
 		cursor_controller.set_cursor_pos(hoveredCell)
 
 	if game_state == GameState.CHOOSING_GROUP_MOVE:
@@ -1157,21 +1137,6 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			# Point: the hovered cell itself must be in range.
 			if attacker.combat.is_directional_attack() or attacker.combat.can_hit_cell_from(origin, hoveredCell):
 				preview_cells = attacker.combat.get_affected_cells_from(origin, hoveredCell)
-		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
-
-		if preview_cells.is_empty():
-			cursor_controller.set_state(CursorController.CursorState.INVALID)
-		else:
-			cursor_controller.set_state(CursorController.CursorState.VALID)
-		cursor_controller.set_cursor_pos(hoveredCell)
-
-	if game_state == GameState.RESCUE_TARGETING:
-		var rescuer: Unit = get_unit_at_cell(last_clicked_cell)
-		if rescuer == null:
-			rescuer = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
-		var preview_cells: Array[Vector2i] = []
-		if rescuer != null and hoveredUnit != null and hoveredUnit in get_adjacent_downed_allies(rescuer):
-			preview_cells.append(hoveredCell)
 		overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OVERLAY_DEFAULT_ATLAS)
 
 		if preview_cells.is_empty():

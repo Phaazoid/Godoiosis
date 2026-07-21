@@ -98,6 +98,9 @@ func get_target_texture() -> Texture2D:
 
 	return target_texture  #OR UNIT SPRITE IF ATTACKING SOMEONE I GUESS
 
+func actor_can_perform() -> bool:
+	return actor.can_wield_equipped()   # verb lock (will-and-death.md limb model)
+
 func get_description() -> String:
 	return "%s -> %s" % [actor.get_unit_name(), get_target_name()]
 

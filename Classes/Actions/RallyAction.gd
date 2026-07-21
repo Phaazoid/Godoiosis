@@ -13,6 +13,9 @@ func execute() -> void:
 		actor.rally()
 	finish_execution()
 
+func actor_can_perform() -> bool:
+	return actor.can_rally()
+
 func get_description() -> String:
 	return "%s rallies" % actor.get_unit_name()
 

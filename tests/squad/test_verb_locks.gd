@@ -56,6 +56,23 @@ func test_queue_action_refuses_one_armed_rescue() -> void:
 	rescue.init(rescuer, downed)
 	assert_bool(_sm.queue_action(rescuer.squad, rescue)).is_false()
 
+func test_queue_action_refuses_full_will_rally() -> void:
+	# Rally's actor_can_perform gate (action-registry refactor): a unit with nothing to
+	# restore can't burn its main action on a no-op rally. Menu hid this; the backstop
+	# now refuses it for every caller, including AI.
+	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	unit.unit_instance.set_current_will(unit.unit_instance.get_max_will())
+	var rally := RallyAction.new()
+	rally.init(unit)
+	assert_bool(_sm.queue_action(unit.squad, rally)).is_false()
+
+func test_queue_action_accepts_rally_with_will_to_restore() -> void:
+	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	unit.unit_instance.set_current_will(1)
+	var rally := RallyAction.new()
+	rally.init(unit)
+	assert_bool(_sm.queue_action(unit.squad, rally)).is_true()
+
 func test_intact_unit_queues_both_verbs() -> void:
 	# Positive control: the backstop refuses only the locked cases.
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))

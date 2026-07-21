@@ -165,6 +165,41 @@ func test_rescue_rejects_a_healthy_target() -> void:
 	var res: Dictionary = sess.rescue(sess.handle_for(hero), sess.handle_for(ally))
 	assert_bool(res.ok).is_false()
 
+# The side-channel tail is generic (BaseAction.SIDE_CHANNEL_ORDER): a queued Rally shows in
+# the preview's side_actions and actually executes headless — closing the mirror-drift hole
+# where play never learned Rally after it shipped.
+func test_rally_previews_and_executes() -> void:
+	var hero: Unit = _session.unit_by_handle("A")
+	hero.unit_instance.set_current_will(1)
+	var res: Dictionary = _session.rally("A")
+	assert_bool(res.ok).is_true()
+	var prev: Dictionary = _session.preview()
+	assert_bool(prev.ok).is_true()
+	assert_int(prev.plan.side_actions.size()).is_equal(1)
+	assert_str(prev.plan.side_actions[0].type).is_equal("RALLY")
+	var will_before: int = hero.unit_instance.get_current_will()
+	var exe: Dictionary = _session.execute()
+	assert_bool(exe.ok).is_true()
+	assert_int(hero.unit_instance.get_current_will()).is_greater(will_before)
+
+# A queued rescue rides the same generic side_actions list, target handle included.
+func test_rescue_appears_in_side_actions() -> void:
+	var b: Dictionary = BoardBuilder.build(self, "RescueDescribeRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var ally: Unit = BoardBuilder.spawn(b, _data("Ally", PLAYER), Vector2i(1, 0))
+	var sess = PlaySession.new(b)
+	ally.take_damage(ally.get_current_hp())
+	sess._process_downed_pending()
+	var res: Dictionary = sess.rescue(sess.handle_for(hero), sess.handle_for(ally))
+	assert_bool(res.ok).is_true()
+	var prev: Dictionary = sess.preview()
+	assert_bool(prev.ok).is_true()
+	assert_int(prev.plan.side_actions.size()).is_equal(1)
+	assert_str(prev.plan.side_actions[0].type).is_equal("RESCUE")
+	assert_str(prev.plan.side_actions[0].target).is_equal(sess.handle_for(ally))
+
 # Squad management through the same SquadManager the player uses: join, then leave.
 func test_join_and_leave_squad() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "SquadRoot")

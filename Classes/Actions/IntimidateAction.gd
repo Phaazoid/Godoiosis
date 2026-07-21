@@ -23,6 +23,9 @@ func execute() -> void:
 		target.unit_instance.set_current_will(target.unit_instance.get_current_will() - Abilities.INTIMIDATION_WILL_DRAIN)
 	finish_execution()
 
+func actor_can_perform() -> bool:
+	return actor.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION)
+
 func get_description() -> String:
 	if target != null and is_instance_valid(target):
 		return "%s intimidates %s" % [actor.get_unit_name(), target.get_unit_name()]

@@ -18,6 +18,9 @@ func execute() -> void:
 										 # (Future: Will could buy back movement/attack here.)
 	finish_execution()
 
+func actor_can_perform() -> bool:
+	return actor.can_rescue_carry()   # verb lock (will-and-death.md limb model)
+
 func get_description() -> String:
 	if target != null and is_instance_valid(target):
 		return "%s rescues %s" % [actor.get_unit_name(), target.get_unit_name()]

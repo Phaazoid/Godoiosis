@@ -219,6 +219,21 @@ func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> boo
 				rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
 				valid = false
 
+	# Re-validate intimidates the same way: the actor's projected cell must stay adjacent
+	# to a still-living (active or downed) target.
+	for action in actions:
+		if action is IntimidateAction:
+			var intimidate := action as IntimidateAction
+			var victim: Unit = intimidate.target
+			if victim == null or not is_instance_valid(victim) or victim.is_dead():
+				intimidate.add_validation_error("Intimidate target is gone")
+				valid = false
+				continue
+			var intimidator_cell := _get_projected_cell_for_unit(intimidate.actor, actions)
+			if not GridUtils.cells_within_manhattan_range(intimidator_cell, 1).has(victim.movement.cell):
+				intimidate.add_validation_error("No longer adjacent to the intimidate target")
+				valid = false
+
 	return valid
 
 func _unit_has_valid_move_away_from(unit: Unit, cell: Vector2i, actions: Array[BaseAction]) -> bool:
@@ -282,18 +297,10 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	if action.actor != null and not action.actor.is_active():
 		return false
 
-	# Main actions lock out movement: a move must precede the main action, never follow it
-	# (so attacks resolve from the unit's final position — no attack-then-flee). The menu
-	# already hides the option; this backstops every caller, including AI.
-	if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and action.actor.has_main_action_queued():
-		return false
-	# Verb locks (will-and-death.md limb model): the menu hides these; this backstops every caller.
-	if action.action_type == BaseAction.ActionType.ATTACK and action.actor != null and not action.actor.can_wield_equipped():
-		return false
-	if action.action_type == BaseAction.ActionType.RESCUE and action.actor != null and not action.actor.can_rescue_carry():
-		return false
-
-	if active_squad != null and active_squad != squad:
+	# Per-action requirement (BaseAction.actor_can_perform — move ordering, verb locks,
+	# ability gates): each action class declares its own; this chokepoint enforces it for
+	# every caller, including AI. The menu merely hides what this refuses.
+	if action.actor != null and not action.actor_can_perform():
 		return false
 
 	active_squad = squad
@@ -472,16 +479,15 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 	var entries: Array[ActionQueueDisplayEntry] = []
 
 	var move_actions: Array[BaseAction] = []
-	var rescue_actions: Array[BaseAction] = []
-	var rally_actions: Array[BaseAction] = []
+	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
 	for action in squad.action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE:
 			move_actions.append(action)
-		elif action.action_type == BaseAction.ActionType.RESCUE:
-			rescue_actions.append(action)
-		elif action.action_type == BaseAction.ActionType.RALLY:
-			rally_actions.append(action)
-			
+		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
+			if not side_channel.has(action.action_type):
+				side_channel[action.action_type] = []
+			side_channel[action.action_type].append(action)
+
 	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
 	var plan := resolve_plan(squad, board)
 
@@ -497,19 +503,18 @@ func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[A
 		for attack in plan.attacks:
 			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
 
-	if not rescue_actions.is_empty():
+	# Side-channel sections in registry order — the header IS the enum name, so a newly
+	# registered type gets its section for free.
+	for type in BaseAction.SIDE_CHANNEL_ORDER:
+		var batch: Array = side_channel.get(type, [])
+		if batch.is_empty():
+			continue
 		if not entries.is_empty():
 			entries.append(ActionQueueDisplayEntry.divider())
-		entries.append(ActionQueueDisplayEntry.header("RESCUE"))
-		for action in rescue_actions:
+		entries.append(ActionQueueDisplayEntry.header(BaseAction.ActionType.keys()[type]))
+		for action in batch:
 			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
 
-	if not rally_actions.is_empty():
-		if not entries.is_empty():
-			entries.append(ActionQueueDisplayEntry.divider())
-		entries.append(ActionQueueDisplayEntry.header("RALLY"))
-		for action in rally_actions:
-			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
 
 	# Counters last, in their own section — derived, not stored (Law #2). A skipped counter
 	# (the counterer went down/dead this pass) is hidden.

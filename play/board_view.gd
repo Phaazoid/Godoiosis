@@ -69,9 +69,12 @@ static func render_preview(session) -> String:
 			lines.append("    ctr  %s : none (downed/killed before it could strike back)" % c.actor)
 		else:
 			lines.append("    ctr  %s -> %s : %d dmg%s" % [c.actor, c.target, c.dmg, _hp_tag(c)])
-	for r in plan.rescues:
-		lines.append("  RESCUE %s -> %s (revives to 1 hp)" % [r.actor, r.target])
-	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty() and plan.rescues.is_empty():
+	for s in plan.side_actions:
+		if s.has("target"):
+			lines.append("  %-6s %s -> %s" % [s.type, s.actor, s.target])
+		else:
+			lines.append("  %-6s %s" % [s.type, s.actor])
+	if plan.attacks.is_empty() and plan.counters.is_empty() and plan.moves.is_empty() and plan.side_actions.is_empty():
 		lines.append("  (empty plan)")
 	return "\n".join(lines)
 
