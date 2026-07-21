@@ -92,14 +92,26 @@ func _add_inventory_section(unit: Unit):
 		for k in weapon_keys:
 			picker.add_item(k)
 		var sel := 0
+		var matched := false
 		if current_item != null:
 			for k in range(weapon_keys.size()):
 				if _entry_matches(weapons[weapon_keys[k]], current_item):
 					sel = k + 1
+					matched = true
 					break
 		picker.select(sel)
 		picker.item_selected.connect(func(idx): _on_slot_picked(unit, i, idx))
 		row.add_child(picker)
+
+		if current_item != null and not matched:
+			# Held item has no catalog match (e.g. a scenario-authored one-off weapon, #80) --
+			# say so instead of leaving the picker stuck on a misleading "(empty)".
+			var held_name: String = current_item.item_name
+			if current_item is WeaponInstance:
+				held_name = current_item.shown_name()
+			var held_label := Label.new()
+			held_label.text = "holds: %s" % held_name
+			row.add_child(held_label)
 
 		var equip_btn := CheckBox.new()
 		equip_btn.text = "Equip"
@@ -108,6 +120,8 @@ func _add_inventory_section(unit: Unit):
 		equip_btn.button_pressed = (current_item != null and current_item == unit.get_equipped_weapon())
 		equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(unit, i))
 		row.add_child(equip_btn)
+
+		unit_editor_container.add_child(row)
 
 		unit_editor_container.add_child(row)
 

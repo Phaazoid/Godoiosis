@@ -46,14 +46,11 @@ static func get_templates() -> Dictionary:
 		templates[p] = prototypes[p]
 	return templates
 
-# Everything grantable to a unit (templates get wrapped in a fresh instance at grant time;
-# saved instances get copied) — for the spawner / unit editor equip lists.
+# Everything grantable to a unit — only authored, saved instances (mirrors RuneCatalog.
+# get_editable): a bare family template is shared identity, not a real carryable weapon.
+# Craft an instance from a template via the Item Editor first, then it shows up here.
 static func get_editable() -> Dictionary:
-	var editable := get_templates()
-	var saved := get_saved()
-	for s in saved:
-		editable[s] = saved[s]
-	return editable
+	return get_saved()
 
 static func get_spawnable() -> Dictionary:
 	var all := get_editable()

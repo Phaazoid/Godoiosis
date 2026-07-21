@@ -136,8 +136,9 @@ func _on_turn_started(faction: Team.Faction):
 	# A faction with no commandable (active) units has nothing to do — its downed clocks already
 	# ticked above, so pass straight to the next. Guard against an all-downed board, where skipping
 	# would recurse with no faction left to stop on.
-	if not _faction_has_active_units(faction) and _board_has_active_units():
-		turn_manager.end_turn(_present_factions())
+	var board := _board()
+	if not board.faction_has_active_units(faction) and board.has_active_units():
+		turn_manager.end_turn(board.present_factions())
 		return
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
@@ -183,11 +184,11 @@ func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
 		GAME_MENU_EXECUTE_ORDERS:
 			execute_orders(unit)
 		GAME_MENU_RESCUE:
-			enter_target_pick_mode(get_adjacent_downed_allies(unit), func(target: Unit): queue_rescue(unit, target))
+			enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, _board()), func(target: Unit): queue_rescue(unit, target))
 		GAME_MENU_RALLY:
 			queue_rally(unit)
 		GAME_MENU_INTIMIDATE:
-			enter_target_pick_mode(get_adjacent_enemies(unit), func(target: Unit): queue_intimidate(unit, target))
+			enter_target_pick_mode(RulesService.adjacent_enemies(unit, _board()), func(target: Unit): queue_intimidate(unit, target))
 		GAME_MENU_GROUP_MOVE:
 			enter_group_move_mode(unit)
 
@@ -234,7 +235,7 @@ func end_turn():
 	clear_selection()
 	update_selection_overlay()
 	unit_info_panel.clear()
-	turn_manager.end_turn(_present_factions())
+	turn_manager.end_turn(_board().present_factions())
 
 func _on_round_completed() -> void:
 	terrain_states.tick_states()
@@ -498,12 +499,6 @@ func enter_attack_mode(unit: Unit):
 func disband_squad(unit: Unit):
 	squad_manager.disband_squad(unit.squad)
 
-func is_walkable(cell: Vector2i) -> bool:
-	var tile_data: TileData =grid.get_cell_tile_data(cell)
-	if tile_data == null:
-		return false
-	return tile_data.get_custom_data("walkable")
-	
 func get_unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units_root.get_children():
 		if unit.movement.cell == cell:
@@ -535,34 +530,6 @@ func get_clicked_unit(cell: Vector2i) -> Unit:
 	if unit != null and not unit.has_valid_move_queued():
 		return unit
 	return null
-
-func get_adjacent_downed_allies(unit: Unit) -> Array[Unit]:
-	# Downed allies orthogonally adjacent to where this unit will END UP (projected position,
-	# so "move next to the body, then rescue" works). Faction-based, not squad-based — the
-	# downed unit was ejected into its own solo squad, but it's still on your team.
-	var result: Array[Unit] = []
-	var origin := unit.get_projected_destination()
-	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
-		if cell == origin:
-			continue
-		var other := get_unit_at_cell(cell)
-		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
-	return result
-
-func get_adjacent_enemies(unit: Unit) -> Array[Unit]:
-	# Living (active OR downed) enemies adjacent to where this unit will END UP (projected
-	# position) — same shape as get_adjacent_downed_allies just above. Downed enemies stay
-	# legal intimidate targets on purpose: draining a body's Will can be worth a main action.
-	var result: Array[Unit] = []
-	var origin := unit.get_projected_destination()
-	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
-		if cell == origin:
-			continue
-		var other := get_unit_at_cell(cell)
-		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
-	return result
 
 func _unhandled_input(event):
 	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
@@ -675,14 +642,14 @@ func populate_action_menu(unit: Unit) -> Array:
 
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped():
 		options.append(GAME_MENU_ATTACK)
-
-	if _can_take_main_action(unit) and not get_adjacent_downed_allies(unit).is_empty() and unit.can_rescue_carry():
+		
+	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, _board()).is_empty() and unit.can_rescue_carry():
 		options.append(GAME_MENU_RESCUE)
 
 	if _can_take_main_action(unit) and unit.can_rally():
 		options.append(GAME_MENU_RALLY)
 
-	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not get_adjacent_enemies(unit).is_empty():
+	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, _board()).is_empty():
 		options.append(GAME_MENU_INTIMIDATE)
 
 		#Once Squad is active, squad state cannot change through actions
@@ -947,32 +914,6 @@ func _all_units() -> Array[Unit]:
 		result.append(child as Unit)
 	return result
 	
-func _present_factions() -> Array[Team.Faction]:
-	# Distinct factions with at least one living unit (active OR downed). Downed units keep their
-	# faction in the cycle so its downed clocks keep ticking; dead (queue_freed) units are excluded.
-	var seen: Dictionary = {}
-	var result: Array[Team.Faction] = []
-	for unit in _all_units():
-		if unit.is_dead():
-			continue
-		var f := unit.get_faction()
-		if not seen.has(f):
-			seen[f] = true
-			result.append(f)
-	return result
-
-func _faction_has_active_units(faction: Team.Faction) -> bool:
-	for unit in _all_units():
-		if unit.get_faction() == faction and unit.is_active():
-			return true
-	return false
-
-func _board_has_active_units() -> bool:
-	for unit in _all_units():
-		if unit.is_active():
-			return true
-	return false
-
 func _board() -> BoardContext:
 	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager)
 

@@ -8,7 +8,7 @@ var game
 var stat_values: Dictionary[Stats.Stat, int] = {}
 var unit_name
 var faction: Team.Faction
-var selected_weapon: WeaponData = null
+var selected_weapon: WeaponInstance = null
 var sprite_catalog := {}
 var selected_sprite := {}
 var data: UnitData
@@ -118,11 +118,11 @@ func try_spawn_at(cell: Vector2i) -> void:
 		build_unit_data()
 		var unit = game.spawn_unit(data, cell)
 		if unit != null and selected_weapon != null:
-			unit.add_item(selected_weapon.duplicate(true))
+			unit.add_item(WeaponCatalog.instantiate_entry(selected_weapon))
 	else:
 		print(error_message)
 		error_message = ""
-		
+
 func _on_weapon_dropdown_item_selected(index: int):
 	selected_weapon = _spawnable[_spawnable.keys()[index]]
 

@@ -133,3 +133,31 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 			victims.append(unit)
 
 	return victims
+	
+# Downed allies orthogonally adjacent to where `unit` will END UP (projected position, so
+# "move next to the body, then rescue" works). Faction-based, not squad-based — the downed
+# unit was ejected into its own solo squad, but it's still on your team.
+static func adjacent_downed_allies(unit: Unit, board: BoardContext) -> Array[Unit]:
+	var result: Array[Unit] = []
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
+		if cell == origin:
+			continue
+		var other := board.unit_at_cell(cell)
+		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result
+
+# Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
+# adjacent_downed_allies above. Downed enemies stay legal intimidate targets on purpose:
+# draining a body's Will can be worth a main action.
+static func adjacent_enemies(unit: Unit, board: BoardContext) -> Array[Unit]:
+	var result: Array[Unit] = []
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
+		if cell == origin:
+			continue
+		var other := board.unit_at_cell(cell)
+		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result

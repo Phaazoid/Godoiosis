@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
 [ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="4_q8cs3"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="5_5q7c0"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
 [ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_5_5q7c0"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
 [ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
@@ -32,11 +33,14 @@ script = ExtResource("3_mrekx")
 length = 6
 metadata/_custom_type_script = "uid://bbbfksnb0tted"
 
-[sub_resource type="Resource" id="Resource_q8cs3"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_q8cs3"]
+script = ExtResource("atkdata_script_migrated")
 power = 5
 attack_pattern = SubResource("Resource_mrekx")
 hits_allies = true
+[sub_resource type="Resource" id="Resource_q8cs3"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_q8cs3")
 weapon_type = 3
 item_name = "POINT"
 icon = ExtResource("4_q8cs3")
@@ -79,10 +83,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_l6fmy"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_l6fmy"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_juf0b")
+[sub_resource type="Resource" id="Resource_l6fmy"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_l6fmy")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -124,10 +131,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_rblmy"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_rblmy"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_28v45")
+[sub_resource type="Resource" id="Resource_rblmy"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_rblmy")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -169,10 +179,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_4ji6m"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_4ji6m"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_gscw2")
+[sub_resource type="Resource" id="Resource_4ji6m"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_4ji6m")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -211,10 +224,13 @@ squad_id = 0
 [sub_resource type="Resource" id="Resource_5w2v2"]
 script = ExtResource("16_bd7ju")
 
-[sub_resource type="Resource" id="Resource_3peij"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_3peij"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_5w2v2")
+[sub_resource type="Resource" id="Resource_3peij"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_3peij")
 weapon_type = 1
 item_name = "ForwardWide3"
 icon = ExtResource("4_ghe54")
@@ -256,10 +272,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_md83g"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_md83g"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_o6nlq")
+[sub_resource type="Resource" id="Resource_md83g"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_md83g")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -300,10 +319,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_7as0p"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_7as0p"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_3su2r")
+[sub_resource type="Resource" id="Resource_7as0p"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_7as0p")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -342,10 +364,13 @@ squad_id = 1
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_klalk"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_klalk"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_osbp3")
+[sub_resource type="Resource" id="Resource_klalk"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_klalk")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -384,10 +409,13 @@ squad_id = 1
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_f5dmr"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_f5dmr"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_rvwfj")
+[sub_resource type="Resource" id="Resource_f5dmr"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_f5dmr")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -427,10 +455,13 @@ is_leader = true
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_3jx8a"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_3jx8a"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_dkftm")
+[sub_resource type="Resource" id="Resource_3jx8a"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_3jx8a")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -469,10 +500,13 @@ squad_id = 1
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_ej0nd"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_ej0nd"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_0lehi")
+[sub_resource type="Resource" id="Resource_ej0nd"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_ej0nd")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -512,10 +546,13 @@ is_leader = true
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_ik5qu"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_ik5qu"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_kty5u")
+[sub_resource type="Resource" id="Resource_ik5qu"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_ik5qu")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -554,10 +591,13 @@ squad_id = 2
 script = ExtResource("3_ayafk")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_g0pgd"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_g0pgd"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_sj1h7")
+[sub_resource type="Resource" id="Resource_g0pgd"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_g0pgd")
 weapon_type = 1
 item_name = "Stabby"
 icon = ExtResource("4_ghe54")
@@ -598,10 +638,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_obq4n"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_obq4n"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_wh38c")
+[sub_resource type="Resource" id="Resource_obq4n"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_obq4n")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")
@@ -642,10 +685,13 @@ max_range = 3
 min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_4rrsq"]
-script = ExtResource("5_5q7c0")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_4rrsq"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_0v1ws")
+[sub_resource type="Resource" id="Resource_4rrsq"]
+script = ExtResource("5_5q7c0")
+main_attack = SubResource("AtkData_migrated_Resource_4rrsq")
 weapon_type = 1
 item_name = "Bow"
 icon = ExtResource("4_ghe54")

@@ -43,3 +43,31 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 # resolver) so tests can stub it — the headless fixture grid has no TileSet to paint.
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 	return GridUtils.get_terrain_kind_at_cell(grid, cell)
+	
+# Census over this board's units — shared by game.gd and the headless PlaySession so the
+# turn cycle's membership/auto-skip reads have ONE implementation.
+func present_factions() -> Array[Team.Faction]:
+	# Factions with at least one living unit (active OR downed) — downed units keep their
+	# faction in the cycle so its downed clocks keep ticking; dead units are excluded.
+	var seen: Dictionary = {}
+	var result: Array[Team.Faction] = []
+	for unit in units:
+		if not is_instance_valid(unit) or unit.is_dead():
+			continue
+		var f := unit.get_faction()
+		if not seen.has(f):
+			seen[f] = true
+			result.append(f)
+	return result
+
+func faction_has_active_units(faction: Team.Faction) -> bool:
+	for unit in units:
+		if is_instance_valid(unit) and unit.get_faction() == faction and unit.is_active():
+			return true
+	return false
+
+func has_active_units() -> bool:
+	for unit in units:
+		if is_instance_valid(unit) and unit.is_active():
+			return true
+	return false

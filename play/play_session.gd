@@ -179,7 +179,7 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 	var target := unit_by_handle(target_handle)
 	if target == null:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
-	if not _adjacent_downed_allies(rescuer).has(target):
+	if not RulesService.adjacent_downed_allies(rescuer, _board()).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
 	var action := RescueAction.new()
 	action.init(rescuer, target)
@@ -200,20 +200,6 @@ func rally(handle: String) -> Dictionary:
 	if not squad_manager.queue_action(unit.squad, action):
 		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> rally" % handle}
-
-# Downed allies orthogonally adjacent to where the rescuer will END UP (projected cell), same
-# team — mirrors game.get_adjacent_downed_allies ("move next to the body, then rescue").
-func _adjacent_downed_allies(unit: Unit) -> Array[Unit]:
-	var result: Array[Unit] = []
-	var board := _board()
-	var origin := unit.get_projected_destination()
-	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
-		if cell == origin:
-			continue
-		var other := board.unit_at_cell(cell)
-		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
-	return result
 
 # member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
 # "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
@@ -424,37 +410,12 @@ func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 # ---- turn flow ----
 
 func end_turn() -> Dictionary:
-	turn_manager.end_turn(_present_factions())
+	var board := _board()
+	turn_manager.end_turn(board.present_factions())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
 	# downed), guarding against an all-downed board where this would loop with nothing to stop on.
-	while not _faction_has_active_units(turn_manager.active_faction()) and _board_has_active_units():
-		turn_manager.end_turn(_present_factions())
+	while not board.faction_has_active_units(turn_manager.active_faction()) and board.has_active_units():
+		turn_manager.end_turn(board.present_factions())
 	var faction := turn_manager.active_faction()
 	squad_manager.reset_faction_actions(faction)
 	return {"ok": true, "faction": _faction_name(faction)}
-
-# The factions with at least one living unit (active OR downed) on the board — the membership the
-# turn cycle is rebuilt from each hand-off (mirrors game._present_factions; Law #3).
-func _present_factions() -> Array[Team.Faction]:
-	var seen: Dictionary = {}
-	var result: Array[Team.Faction] = []
-	for unit in live_units():
-		if unit.is_dead():
-			continue
-		var f := unit.get_faction()
-		if not seen.has(f):
-			seen[f] = true
-			result.append(f)
-	return result
-
-func _faction_has_active_units(faction: Team.Faction) -> bool:
-	for unit in live_units():
-		if unit.get_faction() == faction and unit.is_active():
-			return true
-	return false
-
-func _board_has_active_units() -> bool:
-	for unit in live_units():
-		if unit.is_active():
-			return true
-	return false

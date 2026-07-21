@@ -9,6 +9,7 @@
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="7_3ieh3"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="8_hmg5l"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="9_egxjn"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
 [ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_9_egxjn"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="10_va7vr"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="11_6bpjd"]
@@ -40,10 +41,13 @@ is_leader = true
 script = ExtResource("7_3ieh3")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_rgd8f"]
-script = ExtResource("9_egxjn")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_rgd8f"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_ktj6r")
+[sub_resource type="Resource" id="Resource_rgd8f"]
+script = ExtResource("9_egxjn")
+main_attack = SubResource("AtkData_migrated_Resource_rgd8f")
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -144,10 +148,13 @@ squad_id = 1
 script = ExtResource("7_3ieh3")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_to1je"]
-script = ExtResource("9_egxjn")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_to1je"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_x0ps1")
+[sub_resource type="Resource" id="Resource_to1je"]
+script = ExtResource("9_egxjn")
+main_attack = SubResource("AtkData_migrated_Resource_to1je")
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -182,10 +189,13 @@ squad_id = 4
 script = ExtResource("7_3ieh3")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_xl846"]
-script = ExtResource("9_egxjn")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_xl846"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_jpc4i")
+[sub_resource type="Resource" id="Resource_xl846"]
+script = ExtResource("9_egxjn")
+main_attack = SubResource("AtkData_migrated_Resource_xl846")
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -220,10 +230,13 @@ squad_id = 4
 script = ExtResource("7_3ieh3")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_50555"]
-script = ExtResource("9_egxjn")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_50555"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_yh5u4")
+[sub_resource type="Resource" id="Resource_50555"]
+script = ExtResource("9_egxjn")
+main_attack = SubResource("AtkData_migrated_Resource_50555")
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -259,10 +272,13 @@ is_leader = true
 script = ExtResource("7_3ieh3")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_76xgq"]
-script = ExtResource("9_egxjn")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_76xgq"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_ixphs")
+[sub_resource type="Resource" id="Resource_76xgq"]
+script = ExtResource("9_egxjn")
+main_attack = SubResource("AtkData_migrated_Resource_76xgq")
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"

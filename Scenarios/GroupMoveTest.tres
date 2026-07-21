@@ -3,6 +3,7 @@
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_fsgj4"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_al3rt"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_ss267"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
 [ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_3_ss267"]
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="4_nmamx"]
 [ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="5_pgmay"]
@@ -26,10 +27,13 @@
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="23_tu40k"]
 [ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="24_38fv6"]
 
-[sub_resource type="Resource" id="Resource_j5i3j"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_j5i3j"]
+script = ExtResource("atkdata_script_migrated")
 power = 4
 elemental_damage_type = 3
+[sub_resource type="Resource" id="Resource_j5i3j"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_j5i3j")
 item_name = "Shock Rod"
 
 
@@ -60,10 +64,13 @@ cell = Vector2i(-4, 1)
 equipped_weapon = SubResource("Resource_j5i3j_inst")
 squad_id = 0
 
-[sub_resource type="Resource" id="Resource_3f5s2"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_3f5s2"]
+script = ExtResource("atkdata_script_migrated")
 power = 4
 elemental_damage_type = 3
+[sub_resource type="Resource" id="Resource_3f5s2"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_3f5s2")
 item_name = "Shock Rod"
 
 
@@ -98,13 +105,16 @@ squad_id = 1
 script = ExtResource("9_igc6i")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_6osgg"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_6osgg"]
+script = ExtResource("atkdata_script_migrated")
 power = 5
-scaling_blend = Dictionary[int, int]({3: 100})
 attack_pattern = SubResource("Resource_h10id")
 hits_allies = true
 elemental_damage_type = 1
+[sub_resource type="Resource" id="Resource_6osgg"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_6osgg")
+scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -142,13 +152,16 @@ squad_id = 2
 script = ExtResource("9_igc6i")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_b7r45"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_b7r45"]
+script = ExtResource("atkdata_script_migrated")
 power = 5
-scaling_blend = Dictionary[int, int]({3: 100})
 attack_pattern = SubResource("Resource_tfpe3")
 hits_allies = true
 elemental_damage_type = 1
+[sub_resource type="Resource" id="Resource_b7r45"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_b7r45")
+scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -182,10 +195,13 @@ cell = Vector2i(0, 3)
 equipped_weapon = SubResource("Resource_b7r45_inst")
 squad_id = 3
 
-[sub_resource type="Resource" id="Resource_rskt5"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_rskt5"]
+script = ExtResource("atkdata_script_migrated")
 power = 4
 elemental_damage_type = 2
+[sub_resource type="Resource" id="Resource_rskt5"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_rskt5")
 item_name = "Water Staff"
 
 
@@ -217,10 +233,13 @@ equipped_weapon = SubResource("Resource_rskt5_inst")
 squad_id = 0
 is_leader = true
 
-[sub_resource type="Resource" id="Resource_yb65v"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_yb65v"]
+script = ExtResource("atkdata_script_migrated")
 power = 4
 elemental_damage_type = 2
+[sub_resource type="Resource" id="Resource_yb65v"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_yb65v")
 item_name = "Water Staff"
 
 
@@ -255,10 +274,13 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_o684d"]
 script = ExtResource("17_4jmrn")
 
-[sub_resource type="Resource" id="Resource_a2ak8"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_a2ak8"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_o684d")
+[sub_resource type="Resource" id="Resource_a2ak8"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_a2ak8")
 weapon_type = 1
 item_name = "ForwardWide3"
 icon = ExtResource("18_v38pn")
@@ -298,10 +320,13 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_5s6kq"]
 script = ExtResource("17_4jmrn")
 
-[sub_resource type="Resource" id="Resource_w0pi4"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_w0pi4"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_5s6kq")
+[sub_resource type="Resource" id="Resource_w0pi4"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_w0pi4")
 weapon_type = 1
 item_name = "ForwardWide3"
 icon = ExtResource("18_v38pn")
@@ -342,10 +367,13 @@ is_leader = true
 script = ExtResource("9_igc6i")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_5verf"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_5verf"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_102aw")
+[sub_resource type="Resource" id="Resource_5verf"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_5verf")
 weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("18_v38pn")
@@ -384,10 +412,13 @@ squad_id = 4
 script = ExtResource("9_igc6i")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_sda2p"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_sda2p"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_ema0g")
+[sub_resource type="Resource" id="Resource_sda2p"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_sda2p")
 weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("18_v38pn")
@@ -427,10 +458,13 @@ is_leader = true
 script = ExtResource("9_igc6i")
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
-[sub_resource type="Resource" id="Resource_8gmk8"]
-script = ExtResource("3_ss267")
+[sub_resource type="Resource" id="AtkData_migrated_Resource_8gmk8"]
+script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_kqiwn")
+[sub_resource type="Resource" id="Resource_8gmk8"]
+script = ExtResource("3_ss267")
+main_attack = SubResource("AtkData_migrated_Resource_8gmk8")
 weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("18_v38pn")

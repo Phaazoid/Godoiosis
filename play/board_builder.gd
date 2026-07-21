@@ -9,6 +9,7 @@ extends RefCounted
 const TILESET_PATH := "res://Resources/TestTiles.tres"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)   # walkable=true, move_cost=1, terrain_type=GRASS in TestTiles.tres
+const WATER_ATLAS := Vector2i(5, 6)   # walkable=false (Waterwalk-only), move_cost=1, terrain_type=WATER in TestTiles.tres
 
 # OverlayManager's @onready child overlays — supplied as bare Node2Ds so its _ready
 # (which only sets each one's modulate/visibility) runs without error.
@@ -62,6 +63,9 @@ static func paint_rect(grid: TileMapLayer, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):
 		for y in range(rect.position.y, rect.end.y):
 			grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+
+static func paint_cell(grid: TileMapLayer, cell: Vector2i, atlas: Vector2i) -> void:
+	grid.set_cell(cell, GRASS_SOURCE, atlas)
 
 # Spawn a unit onto the board in its own solo squad (mirrors game.spawn_unit's contract).
 static func spawn(board: Dictionary, data: UnitData, cell: Vector2i) -> Unit:
