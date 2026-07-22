@@ -73,6 +73,14 @@ func execute():
 		for s in resolved.states_added:
 			target.add_element_state(s)
 
+	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
+	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
+	# Counters always fire main (#72), which never consumes, so this never fires on a counter.
+	if not is_secondary_hit and fired_attack is WeaponAttackData:
+		var weapon := actor.get_equipped_weapon() as WeaponInstance
+		if weapon != null:
+			weapon.consume_readiness_for(fired_attack as WeaponAttackData)
+
 	finish_execution()
 
 func get_action_icon() -> Texture2D:
@@ -99,7 +107,10 @@ func get_target_texture() -> Texture2D:
 	return target_texture  #OR UNIT SPRITE IF ATTACKING SOMEONE I GUESS
 
 func actor_can_perform() -> bool:
-	return actor.can_wield_equipped()   # verb lock (will-and-death.md limb model)
+	# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick
+	# (a sprung Spring, or Stab too if the family locks the whole weapon) can't be queued even
+	# bypassing the menu (Law #3; the menu merely hides/disables what this refuses).
+	return actor.can_wield_equipped() and actor.is_attack_fireable(fired_attack)
 
 func get_description() -> String:
 	return "%s -> %s" % [actor.get_unit_name(), get_target_name()]

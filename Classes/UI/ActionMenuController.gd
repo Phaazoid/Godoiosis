@@ -53,7 +53,11 @@ func populate(items: Array, action_data: Dictionary) -> void:
 		var button := Button.new()
 		button.text = action_data[item].name
 		button.focus_mode = Control.FOCUS_NONE
-		button.pressed.connect(_on_button_pressed.bind(item))
+		if action_data[item].get("disabled", false):
+			button.disabled = true
+			button.tooltip_text = action_data[item].get("tooltip", "")
+		else:
+			button.pressed.connect(_on_button_pressed.bind(item))
 		_button_box.add_child(button)
 
 func setpos(pos: Vector2i) -> void:

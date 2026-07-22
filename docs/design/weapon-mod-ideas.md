@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #82 (2026-07-22).**
 
 ---
 
@@ -36,7 +36,7 @@
 
 ## Size 3 — keystones (space 3 only: the folded "5th-tier spike")
 
-21. **Supercharged Steam Generator** [∀] — unlocks the family's authored **alt-fire mode** (e.g. Springspear **Burst**: stronger 2-tile-forward AoE, then a main-action rewind before it fires again — the canonical wind-up economy).
+21. **Supercharged Steam Generator** [∀] — unlocks the family's authored **alt-fire mode** (e.g. a stronger AoE burst, then a main-action rewind before it fires again — the wind-up economy Springspear's own Stab/Spring/Spring Load now exercises for real, [#73](https://github.com/Phaazoid/Godoiosis/issues/73); `WeaponAttackData.requires_readiness`/`consumes_readiness` already exist, so a mod-granted alt-fire would reuse the same two flags, not invent new plumbing).
 22. **Trench Auger Kit** [DR] — **Burrow**: erect cover/obstruction terrain (the signature mechanic, itemized; consumes the shaped-terrain variety in [terrain.md](terrain.md)).
 23. **Grindlock Governor** [CS] — sustained rev chews destructible terrain/Cover over a turn (the captured idea, itemized).
 24. **Twinned Mechanism** [∀] — **double-attack**: the standard attack hits twice, DEX-gated (the captured "double-attack as weapon property, gated by stats" — finally placed). ⚠ power watch.

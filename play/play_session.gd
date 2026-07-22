@@ -201,6 +201,21 @@ func rally(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> rally" % handle}
 
+# Spring Load: self-targeted weapon rearm (a main action, #73) — the same SpringLoadAction
+# the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon() seam.
+func spring_load(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not unit.can_reload_weapon():
+		return {"ok": false, "error": "%s can't spring-load (weapon already ready, or nothing to reload)" % handle}
+	var action := SpringLoadAction.new()
+	action.init(unit)
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't spring-load now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> spring load" % handle}
+
 # member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
 # "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
 # nothing has committed to acting yet.

@@ -4,10 +4,12 @@
 [ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_x53eu"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_5mube"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Springspear.tres" id="4_main"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Spring.tres" id="5_spring"]
 
 [resource]
 script = ExtResource("3_5mube")
 main_attack = ExtResource("4_main")
+extra_attacks = Array[ExtResource("1_r4sgd")]([ExtResource("5_spring")])
 weapon_type = 3
 scaling_blend = Dictionary[int, int]({
 1: 70,

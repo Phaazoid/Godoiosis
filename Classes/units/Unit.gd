@@ -529,3 +529,26 @@ func attack_source_can_counter() -> bool:
 func attack_source_hits_allies() -> bool:
 	var atk := get_fired_attack()
 	return atk != null and atk.hits_allies
+	
+# Readiness seam (#73) — delegates entirely to the equipped WeaponInstance; Unit carries no
+# readiness state of its own (two weapons in inventory must track independently).
+func is_attack_fireable(attack: AttackData) -> bool:
+	if not (attack is WeaponAttackData):
+		return true
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon == null or weapon.is_attack_fireable(attack as WeaponAttackData)
+
+func has_any_fireable_attack() -> bool:
+	for a in get_selectable_attacks():
+		if is_attack_fireable(a):
+			return true
+	return false
+
+func can_reload_weapon() -> bool:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon != null and weapon.can_reload()
+
+func reload_weapon() -> void:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null:
+		weapon.reload()

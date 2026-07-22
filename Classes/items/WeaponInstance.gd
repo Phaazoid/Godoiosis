@@ -17,9 +17,34 @@ extends EquippableData
 @export var space_3: Array[WeaponModData] = []
 
 static func make(p_template: WeaponData) -> WeaponInstance:
-	var w := WeaponInstance.new()
+	var w := _instance_for(p_template.weapon_type)
 	w.template = p_template
 	return w
+
+# Which concrete class a family's instances are — the ONE place this mapping lives (#73).
+# Any weapon_type not listed falls through to plain WeaponInstance; #82 tracks giving every
+# family its own class and removing that fallback.
+static func _instance_for(type: WeaponData.WeaponType) -> WeaponInstance:
+	match type:
+		WeaponData.WeaponType.SPRINGSPEAR:
+			return SpringWeaponInstance.new()
+		_:
+			return WeaponInstance.new()
+
+# Readiness seam (#73) — default: no gating at all. A subclass with its own wind-up/recovery
+# economy (e.g. SpringWeaponInstance) overrides these; every other weapon never thinks about
+# readiness.
+func is_attack_fireable(_attack: WeaponAttackData) -> bool:
+	return true
+
+func can_reload() -> bool:
+	return false
+
+func reload() -> void:
+	pass
+
+func consume_readiness_for(_attack: WeaponAttackData) -> void:
+	pass
 
 # Copy for grants/saves: template stays SHARED (the point of the model); spaces copy
 # shallowly — fitted mods are authored content refs, so sharing them is correct and keeps

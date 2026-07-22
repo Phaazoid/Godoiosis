@@ -34,43 +34,6 @@ const OVERLAY_TARGET_ATLAS := Vector2i(3,0)
 const OVERLAY_SQUAD_SELECT_ATLAS := Vector2i(5,0)
 const OVERLAY_UNIT_IN_SQUAD_ATLAS := Vector2i(6, 0)
 
-const GAME_MENU_MOVE := 0
-const GAME_MENU_ATTACK := 1
-const GAME_MENU_OTHER := 2
-const GAME_MENU_CANCEL := 3
-const GAME_MENU_WAIT := 4
-const GAME_MENU_ENDTURN := 5
-const GAME_MENU_SQUADUP := 6
-const GAME_MENU_JOINSQUAD := 7
-const GAME_MENU_LEAVESQUAD := 8
-const GAME_MENU_DISBAND_SQUAD := 9
-const GAME_MENU_INSPECT := 10
-const GAME_MENU_EXECUTE_ORDERS := 11
-const GAME_MENU_RESCUE := 12
-const GAME_MENU_RALLY := 13
-const GAME_MENU_GROUP_MOVE := 14
-const GAME_MENU_INTIMIDATE := 15
-
-# Menu display data AND print order: declaration order here IS the menu's order (Godot
-# dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
-const ACTION_DATA := {
-	GAME_MENU_EXECUTE_ORDERS: {"name": "Execute Orders"},
-	GAME_MENU_MOVE: {"name": "Move"},
-	GAME_MENU_GROUP_MOVE: {"name": "Group Move"},
-	GAME_MENU_ATTACK: {"name": "Attack"},
-	GAME_MENU_RESCUE: {"name": "Rescue"},
-	GAME_MENU_RALLY: {"name": "Rally"},
-	GAME_MENU_INTIMIDATE: {"name": "Intimidate"},
-	GAME_MENU_SQUADUP: {"name": "Squad Up"},
-	GAME_MENU_JOINSQUAD: {"name": "Join Squad"},
-	GAME_MENU_LEAVESQUAD: {"name": "Leave Squad"},
-	GAME_MENU_DISBAND_SQUAD: {"name": "Disband Squad"},
-	GAME_MENU_WAIT: {"name": "Wait"},
-	GAME_MENU_CANCEL: {"name": "Cancel Actions"},
-	GAME_MENU_INSPECT: {"name": "Inspect"},
-	GAME_MENU_ENDTURN: {"name": "End Turn"},
-}
-
 enum GameState {
 	IDLE,
 	TILE_SELECTED,
@@ -94,6 +57,7 @@ var dev_controller: DevController
 var ai_controller: AIController
 var terrain_states: TerrainStateManager
 var zone_manager: ZoneManager
+var main_action_menu: MainActionMenu
 
 func _ready() -> void:
 	dev_controller = DevController.new()
@@ -111,6 +75,10 @@ func _ready() -> void:
 	zone_manager = ZoneManager.new()
 	zone_manager.name = "ZoneManager"
 	add_child(zone_manager)
+	
+	main_action_menu = MainActionMenu.new()
+	main_action_menu.game = self
+	add_child(main_action_menu)
 	
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 	spawn_test_units()
@@ -157,41 +125,6 @@ func can_control(unit: Unit) -> bool:
 		return false
 	return unit.get_faction() == turn_manager.active_faction()
 		
-func _on_friendly_action_menu_pressed(action_id: int, unit: Unit) -> void:
-	match action_id:
-		GAME_MENU_MOVE:
-			enter_move_mode(unit)
-		GAME_MENU_ATTACK: #Attack
-			_begin_attack(unit)
-		GAME_MENU_CANCEL: #Cancel
-			cancel_orders(unit)
-			clear_selection()
-		GAME_MENU_WAIT: #Wait
-			squad_manager.set_has_acted(unit.squad, true)
-			clear_selection()
-		GAME_MENU_ENDTURN: #End Turn
-			end_turn()
-		GAME_MENU_SQUADUP: 
-			create_squad(unit)
-		GAME_MENU_JOINSQUAD:
-			join_squad_mode(unit)
-		GAME_MENU_DISBAND_SQUAD:
-			disband_squad(unit)
-		GAME_MENU_LEAVESQUAD:
-			squad_manager.leave_squad(unit)
-		GAME_MENU_INSPECT:
-			unit_info_panel.set_unit(unit, can_control(unit))
-		GAME_MENU_EXECUTE_ORDERS:
-			execute_orders(unit)
-		GAME_MENU_RESCUE:
-			enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, _board()), func(target: Unit): queue_rescue(unit, target))
-		GAME_MENU_RALLY:
-			queue_rally(unit)
-		GAME_MENU_INTIMIDATE:
-			enter_target_pick_mode(RulesService.adjacent_enemies(unit, _board()), func(target: Unit): queue_intimidate(unit, target))
-		GAME_MENU_GROUP_MOVE:
-			enter_group_move_mode(unit)
-
 # Attack entry (#30 C, generalized #72): a rune with several channelable carvings, or a weapon
 # with several stock attacks, opens a pick menu first; a single choice auto-selects. Reset first
 # so a stale pick never leaks into a new aim.
@@ -212,12 +145,17 @@ func show_attack_menu(pos: Vector2i, attacks: Array[AttackData], unit: Unit) -> 
 
 	# Synthetic items: index -> {name}, so the Control-based ActionMenuController (#26) renders the
 	# attack list without a bespoke menu class. Works for either kind since display_name lives on
-	# the shared AttackData base (#72).
+	# the shared AttackData base (#72). An unfireable pick (a sprung weapon, #73) stays LISTED but
+	# disabled — Law #2: the menu shows an unready attack, never hides it.
 	var items := []
 	var data := {}
 	for i in range(attacks.size()):
 		items.append(i)
-		data[i] = { "name": attacks[i].display_name }
+		var entry := { "name": attacks[i].display_name }
+		if not unit.is_attack_fireable(attacks[i]):
+			entry["disabled"] = true
+			entry["tooltip"] = "Not ready — reload the weapon first"
+		data[i] = entry
 
 	controller.action_selected.connect(func(idx, picking_unit): _on_attack_picked(picking_unit, attacks[idx]))
 	controller.cancelled.connect(clear_selection_controller)
@@ -250,6 +188,12 @@ func _apply_burning_tile_damage(faction: Team.Faction) -> void:
 			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
 	await _offer_pending_crisis()
 	_process_downed_pending()
+
+func queue_spring_load(unit: Unit):
+	var spring_load := SpringLoadAction.new()
+	spring_load.init(unit)
+	squad_manager.queue_action(unit.squad, spring_load)
+	clear_selection()
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
@@ -557,7 +501,7 @@ func _unhandled_input(event):
 					if target != null:
 						last_clicked_cell = clickedCell
 						game_state = GameState.TILE_SELECTED
-						show_action_menu(get_viewport().get_mouse_position(), populate_action_menu(target), target)
+						show_action_menu(get_viewport().get_mouse_position(), main_action_menu.populate(target), target)
 				GameState.CHOOSING_MOVE: 
 					#This is checking if you're clicking on a valid tile
 					var moverange := compute_move_range(lastUnit)
@@ -614,71 +558,6 @@ func _unhandled_input(event):
 		else:
 			camera_controller.center_on_position(mouse_world)
  
-# Shared gate for every main-action menu entry: one main action per unit per turn, squad
-# not spent, no other squad mid-activation. Per-action requirements chain onto this.
-func _can_take_main_action(unit: Unit) -> bool:
-	return not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad)
-
-func populate_action_menu(unit: Unit) -> Array:
-	var options = []
-	
-	if not can_control(unit):
-		options.append(GAME_MENU_INSPECT)
-		if not squad_manager.any_squad_active():
-			options.append(GAME_MENU_ENDTURN)
-		return options
-	
-	if unit.squad.has_any_queued_actions() and unit.is_leader():
-		options.append(GAME_MENU_EXECUTE_ORDERS)
-
-	if not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and not unit.has_main_action_queued() and not unit.squad.has_acted and not squad_manager.is_another_squad_active(unit.squad):
-		options.append(GAME_MENU_MOVE)
-
-	if unit.is_leader() and unit.has_squad() \
-		and not unit.has_action_type_queued(BaseAction.ActionType.MOVE) \
-		and not unit.squad.has_acted \
-		and not squad_manager.is_another_squad_active(unit.squad):
-		options.append(GAME_MENU_GROUP_MOVE)
-
-	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped():
-		options.append(GAME_MENU_ATTACK)
-		
-	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, _board()).is_empty() and unit.can_rescue_carry():
-		options.append(GAME_MENU_RESCUE)
-
-	if _can_take_main_action(unit) and unit.can_rally():
-		options.append(GAME_MENU_RALLY)
-
-	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, _board()).is_empty():
-		options.append(GAME_MENU_INTIMIDATE)
-
-		#Once Squad is active, squad state cannot change through actions
-	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not squad_manager.any_squad_active():
-		if squad_manager.can_create_any_squad(unit):
-			options.append(GAME_MENU_SQUADUP)
-		if squad_manager.can_join_any_squad(unit):
-			options.append(GAME_MENU_JOINSQUAD)
-		if unit.has_squad():
-			options.append(GAME_MENU_LEAVESQUAD)
-			if unit.squad.get_leader() == unit:
-				options.append(GAME_MENU_DISBAND_SQUAD)
-
-	if unit != null:
-		options.append(GAME_MENU_INSPECT)
-	
-	if squad_manager.active_squad == null:
-		options.append(GAME_MENU_WAIT)
-		options.append(GAME_MENU_ENDTURN)
-	
-	if unit != null and unit.has_any_actions(): #TODO separate general cancel and cancel queued plans
-		options.append(GAME_MENU_CANCEL)
-		
-	var ordered := []
-	for id in ACTION_DATA:
-		if options.has(id):
-			ordered.append(id)
-	return ordered
-
 func queue_rescue(rescuer: Unit, target: Unit) -> void:
 	var rescue := RescueAction.new()
 	rescue.init(rescuer, target)
@@ -716,11 +595,11 @@ func show_action_menu(pos: Vector2i, items: Array, unit: Unit):
 	add_child(controller)
 	controller.setup(unit)
 
-	controller.action_selected.connect(_on_friendly_action_menu_pressed)
+	controller.action_selected.connect(main_action_menu.on_pressed)
 	controller.cancelled.connect(clear_selection_controller)
 	controller.cancelled.connect(_on_action_menu_cancelled)
 
-	controller.populate(items, ACTION_DATA)
+	controller.populate(items, MainActionMenu.ACTION_DATA)
 	controller.setpos(pos)
 
 func _on_action_menu_cancelled(controller):
