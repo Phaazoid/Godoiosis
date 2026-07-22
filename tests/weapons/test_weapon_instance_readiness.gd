@@ -1,9 +1,11 @@
 # Readiness seam (#73): the WeaponInstance subclass design that fixes the two-spears-in-one-
 # inventory bug — readiness lives on the WEAPON instance, not the Unit, so two spears track
 # independently. Covers: base WeaponInstance's no-op defaults (every other family stays
-# unaffected), WeaponInstance.make()'s weapon_type dispatch, SpringWeaponInstance's state
-# machine under both balance-knob variants (Stab.requires_readiness true/false), the actual
-# bug this design fixes (inventory-swap independence), and the two legality gates
+# unaffected), WeaponInstance.make()'s weapon_type dispatch to every family's own class
+# (#82 generalized this to all seven; still just push_error+null for anything unmapped),
+# SpringWeaponInstance's state machine under both balance-knob variants
+# (Stab.requires_readiness true/false), the actual bug this design fixes (inventory-swap
+# independence), and the two legality gates
 # (AttackAction.actor_can_perform, SpringLoadAction). AttackAction.execute()'s readiness
 # spend is a few lines gated only on is_secondary_hit/fired_attack type (no resolved/damage
 # dependency) — per tests/law/test_resolution_laws.gd's own precedent, execute()'s animation
@@ -39,10 +41,11 @@ func _plain_template() -> WeaponData:
 	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
-# --- base WeaponInstance: every non-Springspear family is unaffected ---
+# --- base WeaponInstance: every pass-through family is unaffected ---
 
-func test_make_returns_plain_weapon_instance_for_an_unmapped_family() -> void:
+func test_make_returns_chainsword_weapon_instance_for_chainsword() -> void:
 	var w := WeaponInstance.make(_plain_template())
+	assert_bool(w is ChainswordWeaponInstance).is_true()
 	assert_bool(w is SpringWeaponInstance).is_false()
 
 func test_base_weapon_instance_defaults_never_gate_anything() -> void:
@@ -53,11 +56,32 @@ func test_base_weapon_instance_defaults_never_gate_anything() -> void:
 	w.consume_readiness_for(_attack("x", true, true))   # no-op, must not error
 	assert_bool(w.can_reload()).is_false()              # still nothing to reload
 
-# --- WeaponInstance.make() dispatch ---
+# --- WeaponInstance.make() dispatch (#82: every family maps to its own class) ---
 
 func test_make_returns_spring_weapon_instance_for_springspear() -> void:
 	var w := WeaponInstance.make(_spring_template(true))
 	assert_bool(w is SpringWeaponInstance).is_true()
+
+func test_make_dispatches_every_family_to_its_own_class() -> void:
+	var expected := {
+		WeaponData.WeaponType.CHAINSWORD: "ChainswordWeaponInstance",
+		WeaponData.WeaponType.DRILL: "DrillWeaponInstance",
+		WeaponData.WeaponType.SPRINGSPEAR: "SpringWeaponInstance",
+		WeaponData.WeaponType.CARBINE: "CarbineWeaponInstance",
+		WeaponData.WeaponType.KINETIC_MACE: "KineticMaceWeaponInstance",
+		WeaponData.WeaponType.CHEMICAL_SPITTER: "ChemicalSpitterWeaponInstance",
+		WeaponData.WeaponType.PROSTHETIC: "ProstheticWeaponInstance",
+	}
+	for type in expected:
+		var t := WeaponData.new()
+		t.weapon_type = type
+		var w := WeaponInstance.make(t)
+		assert_str(w.get_script().get_global_name()).is_equal(expected[type])
+
+func test_make_returns_null_for_an_unmapped_weapon_type() -> void:
+	var t := WeaponData.new()
+	t.weapon_type = WeaponData.WeaponType.NONE
+	assert_object(WeaponInstance.make(t)).is_null()
 
 # --- SpringWeaponInstance state machine ---
 

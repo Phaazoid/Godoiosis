@@ -29,6 +29,7 @@ func _data(name: String, fac: Team.Faction) -> UnitData:
 
 func _arm(unit: Unit, power: int) -> void:
 	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD   # any mapped family works (#82); pass-through
 	template.main_attack = WeaponAttackData.new()
 	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
 	unit.add_item(WeaponInstance.make(template))

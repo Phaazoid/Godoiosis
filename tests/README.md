@@ -21,6 +21,26 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # one folder or suite
 
 **Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below.
 
+## Writing a new test suite — quick-start
+
+1. **Pick where it lives.** Mirror the existing folders: `unit/` (pure logic, no scene), `squad/` (node-fixture squad/counter/volley invariants), `law/` (cross-cutting guards), or a new domain folder (`weapons/`, `jobs/`, `ai/`, ...) if none fit. `run_tests.ps1 res://tests/<folder>` runs just that folder while iterating.
+
+2. **Decide which fixture helper you need** (`support/squad_fixtures.gd`, `const H := preload(...)`). Does the code path under test call `get_projected_destination()` — directly or transitively (`PlanResolver`, `AttackAction.execute()`, anything squad-membership-aware)?
+   - **Yes** → `H.spawn_solo(suite, manager, faction, cell, ...)` + `H.make_manager(suite)` in `before_test()`.
+   - **No** (plain unit-level helpers/gates) → bare `H.spawn_unit(suite, faction, cell, overrides={}, give_weapon=true, weapon_power=3)` is enough and much less setup.
+
+   Getting this right up front avoids standing up a `SquadManager` fixture you didn't need.
+
+3. **Never call `AttackAction.execute()` directly in a test.** It `await`s `actor.visuals.play_attack_lunge(...)`, an animation coroutine. Call `PlanResolver.resolve()` and assert `.resolved.damage`/`.resolved.lethality` instead, or call the specific method `execute()`'s body would call. Side-channel actions with no animation (`IntimidateAction`, `SpringLoadAction`, `RallyAction`) don't have this problem — call `execute()` directly on those.
+
+4. **Build content ad hoc — never load a `.tres`.** Construct `WeaponData`/`WeaponAttackData`/`UnitData` directly via `.new()` in a local helper function: throwaway, not catalog-registered (mirrors `make_unit_data` in the fixtures file).
+
+5. **New global `class_name`?** See the import gotcha below — prefer `preload()` in test-only support files to sidestep it entirely.
+
+6. **Assertion idioms used across the suite:** `assert_bool(x).is_true()/.is_false()`, `assert_int(x).is_equal(y)`, `assert_array(x).contains_exactly([...])`, `assert_object(x).is_same(y)` (reference identity, not value equality), `assert_that(x).is_equal(y)` for enums.
+
+7. **Run it:** `powershell -File tests\run_tests.ps1 res://tests/<your-folder>`. On a large run, redirect to a file and search it (`... *> out.txt`) rather than trusting a truncated terminal capture. Always re-run after fixing a failure — see the truncation gotcha below.
+
 ## Gotchas (learned the hard way — don't re-discover)
 
 - **Use the `_console.exe`** Godot build on Windows, or you capture no stdout.
@@ -34,6 +54,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # one folder or suite
 - **Orphan-node hygiene = the exit code.** gdUnit4 counts "orphan nodes" (`root.get_orphan_node_ids()` — any `Node` not in the SceneTree) sampled *during* each test, and returns `101` if any remain. So a fixture that `Node.new()`s something must keep it **in the tree** or `auto_free` it. The big trap here: `SquadManager` creates `Squad` nodes as *its own* children, so if the manager itself is orphaned (not in the tree) every squad it makes is an orphan too. `make_manager` therefore stands the manager up **inside the tree** (see fixtures below). Counterpart: `queue_free()` only works for in-tree nodes, which is a second reason to keep the graph in-tree.
 - **RefCounted reference cycles leak** (no GC). A volley's `AttackAction.volley` array references every sibling including itself, so a volley is a self-referential cycle that never frees — the volley suite breaks it in `after_test` (`attack.volley = empty`). See findings; this is a real (small) gameplay leak too.
 - **A failure truncates the REST of that suite file, silently.** Observed 2026-07-15 (#56): fixing one failing assertion in `test_ai_tactics.gd` revealed a second, previously-unrun test in the same file with the identical bug — the run before the fix reported "9 test cases" for that suite when the file has more; only after the fix did the remaining tests execute. So a suite's printed test count is not proof the whole file ran — if you fix a failure, **always re-run** rather than trusting the fix from reasoning alone, and don't assume "only 1 failure reported" means "only 1 test in this file is affected."
+- **Content-scan catalogs can key off a name that changes.** `WeaponAttackCatalog` (and similar folder-scan catalogs) use `display_name` as the registry key, falling back to the resource's filename when `display_name` is unset. Authoring a real `display_name` for a previously-unnamed attack changes its catalog key — a test asserting the old filename-derived key breaks (happened 2026-07-22: Springspear's main attack, "Springspear" → "Stab"). Expect this to recur as the remaining weapon families get real content.
 
 ## Install (already done; recorded for reproducibility)
 

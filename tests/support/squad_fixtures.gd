@@ -65,6 +65,7 @@ static func make_unit_data(overrides: Dictionary, faction: Team.Faction) -> Unit
 # rule that a weapon always carries at least its main.
 static func make_weapon(power: int = 3) -> WeaponInstance:
 	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD   # any mapped family works (#82); pass-through
 	template.main_attack = WeaponAttackData.new()
 	template.main_attack.power = power
 	return WeaponInstance.make(template)

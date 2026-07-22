@@ -18,18 +18,33 @@ extends EquippableData
 
 static func make(p_template: WeaponData) -> WeaponInstance:
 	var w := _instance_for(p_template.weapon_type)
+	if w == null:
+		push_error("WeaponInstance.make(): no subclass mapped for weapon_type %s (%s) — every family needs a class (#82)" % [WeaponData.WeaponType.keys()[p_template.weapon_type], p_template.resource_path])
+		return null
 	w.template = p_template
 	return w
 
-# Which concrete class a family's instances are — the ONE place this mapping lives (#73).
-# Any weapon_type not listed falls through to plain WeaponInstance; #82 tracks giving every
-# family its own class and removing that fallback.
+# Which concrete class a family's instances are — the ONE place this mapping lives (#73,
+# generalized #82). Every real family has a class; an unmapped type (NONE, or a future
+# family added to the enum without one) is a loud failure, not a silent generic weapon.
 static func _instance_for(type: WeaponData.WeaponType) -> WeaponInstance:
 	match type:
+		WeaponData.WeaponType.CHAINSWORD:
+			return ChainswordWeaponInstance.new()
+		WeaponData.WeaponType.DRILL:
+			return DrillWeaponInstance.new()
 		WeaponData.WeaponType.SPRINGSPEAR:
 			return SpringWeaponInstance.new()
+		WeaponData.WeaponType.CARBINE:
+			return CarbineWeaponInstance.new()
+		WeaponData.WeaponType.KINETIC_MACE:
+			return KineticMaceWeaponInstance.new()
+		WeaponData.WeaponType.CHEMICAL_SPITTER:
+			return ChemicalSpitterWeaponInstance.new()
+		WeaponData.WeaponType.PROSTHETIC:
+			return ProstheticWeaponInstance.new()
 		_:
-			return WeaponInstance.new()
+			return null
 
 # Readiness seam (#73) — default: no gating at all. A subclass with its own wind-up/recovery
 # economy (e.g. SpringWeaponInstance) overrides these; every other weapon never thinks about
