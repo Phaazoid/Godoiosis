@@ -48,6 +48,7 @@ attack_pattern = SubResource("Resource_ktj6r")
 [sub_resource type="Resource" id="Resource_rgd8f"]
 script = ExtResource("9_egxjn")
 main_attack = SubResource("AtkData_migrated_Resource_rgd8f")
+weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -155,6 +156,7 @@ attack_pattern = SubResource("Resource_x0ps1")
 [sub_resource type="Resource" id="Resource_to1je"]
 script = ExtResource("9_egxjn")
 main_attack = SubResource("AtkData_migrated_Resource_to1je")
+weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -196,6 +198,7 @@ attack_pattern = SubResource("Resource_jpc4i")
 [sub_resource type="Resource" id="Resource_xl846"]
 script = ExtResource("9_egxjn")
 main_attack = SubResource("AtkData_migrated_Resource_xl846")
+weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -237,6 +240,7 @@ attack_pattern = SubResource("Resource_yh5u4")
 [sub_resource type="Resource" id="Resource_50555"]
 script = ExtResource("9_egxjn")
 main_attack = SubResource("AtkData_migrated_Resource_50555")
+weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"
@@ -279,6 +283,7 @@ attack_pattern = SubResource("Resource_ixphs")
 [sub_resource type="Resource" id="Resource_76xgq"]
 script = ExtResource("9_egxjn")
 main_attack = SubResource("AtkData_migrated_Resource_76xgq")
+weapon_type = 1
 item_name = "Chainsword"
 icon = ExtResource("8_hmg5l")
 description = "Vroom Vroom"

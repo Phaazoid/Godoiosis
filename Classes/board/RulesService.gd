@@ -38,18 +38,20 @@ static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> in
 static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null) -> Dictionary:
 	var start := unit.movement.cell
 	var max_cost := unit.get_mov()
-	var frontier := []
+
+	var frontier: Array[Vector2i] = [start]
 	var cost_so_far := {}
 	var came_from := {}
 
-	frontier.append({"cell": start, "cost": 0})
 	cost_so_far[start] = 0
 	came_from[start] = start
 
+	# Label-correcting search — no priority ordering needed: a cell that later gets a
+	# cheaper cost is re-appended and re-relaxed (the strict `<` check below), so
+	# distances converge exactly. The old per-pop frontier sort compared stale
+	# enqueue-time costs anyway, and cost O(n log n) per iteration for nothing.
 	while frontier.size() > 0:
-		frontier.sort_custom(func(a, b): return a.cost < b.cost)
-		var current = frontier.pop_front()
-		var current_cell: Vector2i = current.cell
+		var current_cell: Vector2i = frontier.pop_front()
 
 		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
 			var next: Vector2i = current_cell + dir
@@ -68,7 +70,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 
 			cost_so_far[next] = new_cost
 			came_from[next] = current_cell
-			frontier.append({"cell": next, "cost": new_cost})
+			frontier.append(next)
 
 	var reachable := {}
 	var squad_unreachable := {}

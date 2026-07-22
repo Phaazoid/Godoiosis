@@ -20,7 +20,7 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 func refresh_dropdown():
 	scenario_dropdown.clear()
 	for path in scenario_manager.get_saved_scenarios():
-		scenario_dropdown.add_item(path.get_file().get_basename())
+		scenario_dropdown.add_item(path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres"))
 
 func _build_ai_toggles():
 	for child in ai_toggle_list.get_children():

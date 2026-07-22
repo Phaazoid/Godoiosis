@@ -1,14 +1,13 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://blw1aiqpgyjp0"]
 
 [ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_58p3y"]
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_p28ji"]
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="3_ayafk"]
 [ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="3_mrekx"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/items/WeaponModData.gd" id="4_l5o8g"]
 [ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="4_q8cs3"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="5_5q7c0"]
-[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_5_5q7c0"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
 [ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
@@ -27,6 +26,8 @@
 [ext_resource type="Texture2D" uid="uid://g2uho841m3aw" path="res://Art/Units/MapSprites/Mage_Moving.png" id="22_owa6k"]
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
+[ext_resource type="Script" uid="uid://cr8iufdh4c638" path="res://Classes/items/WeaponInstance.gd" id="wi_5_5q7c0"]
 
 [sub_resource type="Resource" id="Resource_mrekx"]
 script = ExtResource("3_mrekx")
@@ -38,6 +39,7 @@ script = ExtResource("atkdata_script_migrated")
 power = 5
 attack_pattern = SubResource("Resource_mrekx")
 hits_allies = true
+
 [sub_resource type="Resource" id="Resource_q8cs3"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_q8cs3")
@@ -47,10 +49,10 @@ icon = ExtResource("4_q8cs3")
 description = "I think that enemy got... the point"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_q8cs3_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_q8cs3")
+
 [sub_resource type="Resource" id="Resource_k5dlx"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier5"
@@ -87,6 +89,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_juf0b")
+
 [sub_resource type="Resource" id="Resource_l6fmy"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_l6fmy")
@@ -96,10 +99,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_l6fmy_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_l6fmy")
+
 [sub_resource type="Resource" id="Resource_bd7ju"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier11"
@@ -135,6 +138,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_28v45")
+
 [sub_resource type="Resource" id="Resource_rblmy"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_rblmy")
@@ -144,10 +148,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_rblmy_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_rblmy")
+
 [sub_resource type="Resource" id="Resource_owa6k"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier12"
@@ -183,6 +187,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_gscw2")
+
 [sub_resource type="Resource" id="Resource_4ji6m"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_4ji6m")
@@ -192,10 +197,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_4ji6m_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_4ji6m")
+
 [sub_resource type="Resource" id="Resource_8jbv5"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier13"
@@ -228,6 +233,7 @@ script = ExtResource("16_bd7ju")
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_5w2v2")
+
 [sub_resource type="Resource" id="Resource_3peij"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_3peij")
@@ -237,10 +243,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_3peij_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_3peij")
+
 [sub_resource type="Resource" id="Resource_d0hyj"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier14"
@@ -276,6 +282,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_o6nlq")
+
 [sub_resource type="Resource" id="Resource_md83g"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_md83g")
@@ -285,10 +292,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_md83g_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_md83g")
+
 [sub_resource type="Resource" id="Resource_e57e2"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier15"
@@ -323,6 +330,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_3su2r")
+
 [sub_resource type="Resource" id="Resource_7as0p"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_7as0p")
@@ -332,10 +340,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_7as0p_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_7as0p")
+
 [sub_resource type="Resource" id="Resource_gcqw6"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier16"
@@ -368,6 +376,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_osbp3")
+
 [sub_resource type="Resource" id="Resource_klalk"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_klalk")
@@ -377,10 +386,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_klalk_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_klalk")
+
 [sub_resource type="Resource" id="Resource_64uc1"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier17"
@@ -413,6 +422,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_rvwfj")
+
 [sub_resource type="Resource" id="Resource_f5dmr"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_f5dmr")
@@ -422,10 +432,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_f5dmr_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_f5dmr")
+
 [sub_resource type="Resource" id="Resource_a1ncn"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier18"
@@ -459,6 +469,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_dkftm")
+
 [sub_resource type="Resource" id="Resource_3jx8a"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_3jx8a")
@@ -468,10 +479,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_3jx8a_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_3jx8a")
+
 [sub_resource type="Resource" id="Resource_qrxbn"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier19"
@@ -504,6 +515,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_0lehi")
+
 [sub_resource type="Resource" id="Resource_ej0nd"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_ej0nd")
@@ -513,10 +525,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_ej0nd_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_ej0nd")
+
 [sub_resource type="Resource" id="Resource_2k7ol"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier20"
@@ -550,6 +562,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_kty5u")
+
 [sub_resource type="Resource" id="Resource_ik5qu"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_ik5qu")
@@ -559,10 +572,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_ik5qu_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_ik5qu")
+
 [sub_resource type="Resource" id="Resource_jfiwm"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier21"
@@ -595,6 +608,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_sj1h7")
+
 [sub_resource type="Resource" id="Resource_g0pgd"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_g0pgd")
@@ -604,10 +618,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_g0pgd_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_g0pgd")
+
 [sub_resource type="Resource" id="Resource_5nxcx"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier22"
@@ -642,6 +656,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_wh38c")
+
 [sub_resource type="Resource" id="Resource_obq4n"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_obq4n")
@@ -651,10 +666,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_obq4n_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_obq4n")
+
 [sub_resource type="Resource" id="Resource_a2f7v"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier23"
@@ -689,6 +704,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("atkdata_script_migrated")
 power = 3
 attack_pattern = SubResource("Resource_0v1ws")
+
 [sub_resource type="Resource" id="Resource_4rrsq"]
 script = ExtResource("5_5q7c0")
 main_attack = SubResource("AtkData_migrated_Resource_4rrsq")
@@ -698,10 +714,10 @@ icon = ExtResource("4_ghe54")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
-
 [sub_resource type="Resource" id="Resource_4rrsq_inst"]
 script = ExtResource("wi_5_5q7c0")
 template = SubResource("Resource_4rrsq")
+
 [sub_resource type="Resource" id="Resource_yt1ub"]
 script = ExtResource("8_1v4i7")
 display_name = "Soldier24"

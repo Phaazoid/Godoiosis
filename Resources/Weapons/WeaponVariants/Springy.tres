@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SpringWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/items/SpringspearWeaponInstance.gd" id="1_gslgn"]
+[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="2_j3gl4"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="3_vq7ax"]
+
+[resource]
+script = ExtResource("1_gslgn")
+template = ExtResource("3_vq7ax")
+item_name = "Springy"

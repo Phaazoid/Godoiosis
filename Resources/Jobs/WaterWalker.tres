@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="JobData" format=3 uid="uid://bd1xnrq2m46ye"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_8kpst"]
+[ext_resource type="Script" uid="uid://crvojjncxspaf" path="res://Classes/jobs/JobData.gd" id="2_8kqck"]
+[ext_resource type="Resource" uid="uid://p6hymhad5ta8" path="res://Resources/Abilities/Waterwalk.tres" id="2_w04r8"]
+
+[resource]
+script = ExtResource("2_8kqck")
+id = "Water Wallker"
+display_name = "Water Wallker"
+stat_nudges = Dictionary[int, int]({
+4: 3
+})
+ability_pool = Array[ExtResource("1_8kpst")]([ExtResource("2_w04r8")])
+metadata/_custom_type_script = "uid://crvojjncxspaf"

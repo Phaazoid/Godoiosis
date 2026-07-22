@@ -34,6 +34,7 @@ elemental_damage_type = 3
 [sub_resource type="Resource" id="Resource_j5i3j"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_j5i3j")
+weapon_type = 5
 item_name = "Shock Rod"
 
 
@@ -71,6 +72,7 @@ elemental_damage_type = 3
 [sub_resource type="Resource" id="Resource_3f5s2"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_3f5s2")
+weapon_type = 5
 item_name = "Shock Rod"
 
 
@@ -114,6 +116,7 @@ elemental_damage_type = 1
 [sub_resource type="Resource" id="Resource_6osgg"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_6osgg")
+weapon_type = 6
 scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
@@ -161,6 +164,7 @@ elemental_damage_type = 1
 [sub_resource type="Resource" id="Resource_b7r45"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_b7r45")
+weapon_type = 6
 scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
@@ -202,6 +206,7 @@ elemental_damage_type = 2
 [sub_resource type="Resource" id="Resource_rskt5"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_rskt5")
+weapon_type = 5
 item_name = "Water Staff"
 
 
@@ -240,6 +245,7 @@ elemental_damage_type = 2
 [sub_resource type="Resource" id="Resource_yb65v"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_yb65v")
+weapon_type = 5
 item_name = "Water Staff"
 
 

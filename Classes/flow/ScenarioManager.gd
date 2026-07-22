@@ -61,8 +61,8 @@ func save_scenario(scenario_name: String):
 
 		scenario.unit_entries.append(entry)
 
-	DirAccess.make_dir_recursive_absolute(SCENARIO_DIR)
 	var path := SCENARIO_DIR + scenario_name + ".tres"
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var err := ResourceSaver.save(scenario, path)
 	if err != OK:
 		push_error("Failed to save scenario: error %s" % err)
@@ -130,14 +130,18 @@ func reload_current():
 
 func get_saved_scenarios() -> Array[String]:
 	var paths: Array[String] = []
-	if not DirAccess.dir_exists_absolute(SCENARIO_DIR):
-		return paths
-
-	for file in DirAccess.get_files_at(SCENARIO_DIR):
-		if file.ends_with(".tres"):
-			paths.append(SCENARIO_DIR + file)
-
+	_collect_scenarios(SCENARIO_DIR.trim_suffix("/"), paths)
 	return paths
+
+# Subfolders first, so fixtures/ groups above the root playtest saves.
+func _collect_scenarios(dir: String, paths: Array[String]) -> void:
+	if not DirAccess.dir_exists_absolute(dir):
+		return
+	for sub in DirAccess.get_directories_at(dir):
+		_collect_scenarios(dir.path_join(sub), paths)
+	for file in DirAccess.get_files_at(dir):
+		if file.ends_with(".tres"):
+			paths.append(dir.path_join(file))
 
 func _unhandled_input(event):
 	if event.is_action_pressed("dev_reset_scenario"):
