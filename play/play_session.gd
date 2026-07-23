@@ -154,7 +154,9 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time
 	# (#15), mirroring game.gd. Pre-expanding a volley here made resolve_plan re-expand each member
 	# -> N^2 hits for AoE weapons. `victims` above is used only to validate + describe the aim.
-	var any_ok := squad_manager.queue_action(unit.squad, AttackAction.create(unit, origin, null, aim))
+	# declare() stamps fired_attack (#78) -- Play aims fire what the unit would (rune carvings
+	# included), same as the player's click and the AI.
+	var any_ok := squad_manager.queue_action(unit.squad, AttackAction.declare(unit, origin, aim))
 	if not any_ok:
 		return {"ok": false, "error": "another squad is already active this turn"}
 	var names: Array[String] = []

@@ -533,8 +533,7 @@ func _unhandled_input(event):
 							# #47: cells are the target. A legal aim is queueable whether or not a unit
 							# is there — victims (and later terrain effects, #50) are derived at resolve
 							# time (#15). Store the AIM only (actor + aimed cell); null target = derived later.
-							var attack := AttackAction.create(lastUnit, origin, null, clickedCell)
-							attack.fired_attack = lastUnit.get_fired_attack()
+							var attack := AttackAction.declare(lastUnit, origin, clickedCell)
 							squad_manager.queue_action(lastUnit.squad, attack)
 					exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc						
 				GameState.PICKING_TARGET:

@@ -1,12 +1,15 @@
-# AITactics (#29): the shared board queries the archetypes compose with. Runs on the real
-# managers + TestTiles terrain via the Play API's headless board_builder (proven pattern).
-# Fixture weapons are pattern-less -> CombatComponent reach falls back to Manhattan range 1,
-# so attack geometry is trivial: distance <= 1 can hit. Units default to MOV 4 (#56: MOV is
-# now a derived readout — JOBLESS_MOV_BASE 4 + dex_mov_band(5)=0 for the default statline).
+# AITactics (#29, chooser rebuilt #78): the shared board queries the archetypes compose with,
+# plus the ATTACK path of queue_main_action. Runs on the real managers + TestTiles terrain via
+# the Play API's headless board_builder (proven pattern). Fixture weapons are pattern-less ->
+# CombatComponent reach falls back to Manhattan range 1, so attack geometry is trivial:
+# distance <= 1 can hit. Units default to MOV 4 (#56: MOV is now a derived readout —
+# JOBLESS_MOV_BASE 4 + dex_mov_band(5)=0 for the default statline).
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
+
+const ATTACK_ONLY: Array = [BaseAction.ActionType.ATTACK]
 
 
 func _build_board(size := Rect2i(0, 0, 8, 3)) -> Dictionary:
@@ -70,20 +73,24 @@ func test_nearest_enemy_none_returns_null() -> void:
 	assert_object(AITactics.nearest_enemy(player, _context(board))).is_null()
 
 
-# --- attack_if_possible ---
+# --- queue_main_action: the ATTACK path (#78; replaces attack_if_possible) ---
 
-func test_attack_in_reach_queues_one_aim() -> void:
+func test_attack_in_reach_queues_one_stamped_aim() -> void:
 	var board: Dictionary = _build_board()
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(2, 1))
 	var enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(2, 2))
 
-	var queued: bool = AITactics.attack_if_possible(player, _context(board), board.squad_manager)
+	var queued: bool = AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)
 
 	assert_bool(queued).is_true()
 	assert_int(player.squad.action_queue.size()).is_equal(1)
 	var aim: AttackAction = player.squad.action_queue[0] as AttackAction
 	assert_object(aim).is_not_null()
 	assert_that(aim.target_cell).is_equal(enemy.movement.cell)
+	# The declare stamp (#78's fists bug): an AI aim carries its chosen attack exactly like a
+	# player aim -- here the fixture weapon's main.
+	var weapon: WeaponInstance = player.get_equipped_weapon() as WeaponInstance
+	assert_object(aim.fired_attack).is_same(weapon.template.main_attack)
 
 
 func test_attack_out_of_reach_queues_nothing() -> void:
@@ -91,7 +98,7 @@ func test_attack_out_of_reach_queues_nothing() -> void:
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(2, 1))
 	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(5, 1))   # distance 3 > reach 1
 
-	assert_bool(AITactics.attack_if_possible(player, _context(board), board.squad_manager)).is_false()
+	assert_bool(AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)).is_false()
 	assert_array(player.squad.action_queue).is_empty()
 
 
@@ -100,9 +107,9 @@ func test_attack_respects_existing_main_action() -> void:
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(2, 1))
 	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(2, 2))
 
-	assert_bool(AITactics.attack_if_possible(player, _context(board), board.squad_manager)).is_true()
+	assert_bool(AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)).is_true()
 	# One main action per unit per turn: a second pass may not queue a duplicate order.
-	assert_bool(AITactics.attack_if_possible(player, _context(board), board.squad_manager)).is_false()
+	assert_bool(AITactics.queue_main_action(player, _context(board), board.squad_manager, ATTACK_ONLY)).is_false()
 	assert_int(player.squad.action_queue.size()).is_equal(1)
 
 

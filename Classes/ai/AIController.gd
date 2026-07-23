@@ -33,6 +33,8 @@ func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 			continue
 
 		await game.camera_controller.pan_to(squad.get_leader())
+		for member in squad.get_members():
+			member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
 		AIArchetype.resolve(squad.archetype).call(squad, board, game.squad_manager)
 		await game.execute_orders(squad.get_leader())
 

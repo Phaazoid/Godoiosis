@@ -15,4 +15,4 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 		squad_manager.queue_group_move(squad, destination, board)
 
 	for member in squad.get_members():
-		AITactics.attack_if_possible(member, board, squad_manager)
+		AITactics.queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
