@@ -1,10 +1,10 @@
 extends GridContainer
 
-const DOWNED_ICON := preload("res://Art/Icons/Down.png")
-const SEVERED_ARM := preload("res://Art/Icons/SeveredArm.png")
-const SEVERED_LEG := preload("res://Art/Icons/SeveredLeg.png")
+const DOWNED_ICON := preload("res://Art/Icons/StateIcons/Down.png")
+const SEVERED_ARM := preload("res://Art/Icons/StateIcons/SeveredArm.png")
+const SEVERED_LEG := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const STATUS_ICON_SIZE := Vector2i(16, 16)
-const CRISIS_ICON := preload("res://Art/Icons/DedIcon.png")
+const CRISIS_ICON := preload("res://Art/Icons/StateIcons/DedIcon.png")
 
 var unit: Unit
 @onready var portrait_texture = $PortraitTexture

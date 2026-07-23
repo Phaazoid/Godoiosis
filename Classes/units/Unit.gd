@@ -165,6 +165,9 @@ func get_current_hp() -> int:
 func get_mov() -> int:
 	return unit_instance.get_mov(_gear_weight())
 
+func get_weight() -> int:
+	return unit_instance.get_weight(_gear_weight())
+
 func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
 	return unit_instance.get_proficiency(family)
 

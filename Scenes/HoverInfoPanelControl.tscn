@@ -1,7 +1,7 @@
 [gd_scene format=3 uid="uid://djnudhqoi3lqw"]
 
-[ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/ui/HoverInfoPanelControl.gd" id="1_gf6xf"]
-[ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/ui/hover_info_grid_container.gd" id="2_jsdin"]
+[ext_resource type="Script" uid="uid://glgvsafkyrlm" path="res://Classes/ui/panels/HoverInfoPanelControl.gd" id="1_gf6xf"]
+[ext_resource type="Script" uid="uid://bfekqmbhonh1f" path="res://Classes/ui/panels/hover_info_grid_container.gd" id="2_jsdin"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ernvn"]
 bg_color = Color(0.83109, 0.50150293, 0.39258364, 1)

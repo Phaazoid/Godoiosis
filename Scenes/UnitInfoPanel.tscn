@@ -1,162 +1,240 @@
-[gd_scene format=3 uid="uid://damgnt4d7qqj3"]
+[gd_scene load_steps=12 format=3 uid="uid://damgnt4d7qqj3"]
 
-[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/ui/UnitInfoPanelControl.gd" id="1_a3gw8"]
-[ext_resource type="Script" uid="uid://cbs7vntrvmsmu" path="res://Classes/ui/UnitStatusGridContainer.gd" id="3_ov1ts"]
-[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/portrait_panel.gd" id="4_uqtkw"]
-[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/ui/info_panel.gd" id="5_s5bvs"]
-[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/ui/inventory_panel.gd" id="6_yiwsu"]
-[ext_resource type="Script" uid="uid://dped5mpr4jp3w" path="res://Classes/ui/UnitStatesBar.gd" id="7_jcfpm"]
-[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/ui/squad_info_panel.gd" id="8_rlbgq"]
+[ext_resource type="Script" uid="uid://8y7b6ai5o6aj" path="res://Classes/ui/panels/UnitInfoPanelControl.gd" id="1_ctrl"]
+[ext_resource type="Script" uid="uid://cekw8ivergjuo" path="res://Classes/ui/panels/portrait_panel.gd" id="2_port"]
+[ext_resource type="Script" uid="uid://b2xd1pqpbkfqh" path="res://Classes/ui/panels/info_panel.gd" id="3_stats"]
+[ext_resource type="Script" uid="uid://bn16gox5tv0c8" path="res://Classes/ui/panels/inventory_panel.gd" id="4_inv"]
+[ext_resource type="Script" uid="uid://b4eg3txg1aw5q" path="res://Classes/ui/panels/squad_info_panel.gd" id="5_squad"]
+[ext_resource type="Script" uid="uid://dped5mpr4jp3w" path="res://Classes/ui/panels/UnitStatesBar.gd" id="6_states"]
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_yiwsu"]
-bg_color = Color(0.19607843, 0.19607843, 0.19607843, 0.64705884)
-border_width_left = 2
-border_width_top = 2
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_panel"]
+bg_color = Color(0.12, 0.12, 0.14, 0.97)
 border_width_right = 2
-border_width_bottom = 2
-border_color = Color(0.103743516, 0.103743546, 0.10374344, 1)
+border_color = Color(0.08, 0.08, 0.09, 1)
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_s5bvs"]
-bg_color = Color(0.16470589, 0.16470589, 0.16470589, 0.5529412)
-border_width_left = 4
-border_width_top = 4
-border_width_right = 4
-border_width_bottom = 4
-border_color = Color(0.12955853, 0.12955844, 0.12955844, 1)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_section"]
+bg_color = Color(0.09, 0.09, 0.1, 0.7)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.2, 0.2, 0.22, 1)
 corner_radius_top_left = 4
 corner_radius_top_right = 4
 corner_radius_bottom_right = 4
 corner_radius_bottom_left = 4
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_rlbgq"]
-bg_color = Color(0.13725491, 0.17254902, 0.22352941, 1)
-border_width_left = 2
-border_width_top = 2
-border_width_right = 2
-border_width_bottom = 2
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_barbg"]
+bg_color = Color(0.07, 0.07, 0.08, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
-[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_jcfpm"]
-bg_color = Color(1, 0, 0, 1)
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hpfill"]
+bg_color = Color(0.29, 0.72, 0.35, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
 
-[node name="UnitInfoPanelControl" type="Control" unique_id=1128572749]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_willfill"]
+bg_color = Color(0.55, 0.47, 0.9, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
+[node name="UnitInfoPanelControl" type="Control"]
 visible = false
 layout_mode = 3
-anchors_preset = 0
-script = ExtResource("1_a3gw8")
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 300.0
+grow_vertical = 2
+script = ExtResource("1_ctrl")
 
-[node name="UnitInfoPanel" type="Panel" parent="." unique_id=79521181]
-custom_minimum_size = Vector2(320, 160)
-layout_mode = 0
-offset_right = 320.0
-offset_bottom = 160.0
-theme_override_styles/panel = SubResource("StyleBoxFlat_yiwsu")
+[node name="UnitInfoPanel" type="PanelContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_panel")
 
-[node name="UnitStatusHBox" type="GridContainer" parent="UnitInfoPanel" unique_id=830887380]
-layout_mode = 0
-offset_right = 328.0
-offset_bottom = 328.0
-columns = 2
-script = ExtResource("3_ov1ts")
-
-[node name="HBoxContainer" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox" unique_id=520673113]
+[node name="Margin" type="MarginContainer" parent="UnitInfoPanel"]
 layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
 
-[node name="PortraitPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer" unique_id=883391330]
-custom_minimum_size = Vector2(160, 160)
+[node name="VBox" type="VBoxContainer" parent="UnitInfoPanel/Margin"]
 layout_mode = 2
-script = ExtResource("4_uqtkw")
+theme_override_constants/separation = 8
 
-[node name="PortraitTexture" type="TextureRect" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/PortraitPanel" unique_id=1208957522]
-custom_minimum_size = Vector2(160, 160)
-layout_mode = 0
+[node name="HeaderRow" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PortraitPanel" type="Panel" parent="UnitInfoPanel/Margin/VBox/HeaderRow"]
+custom_minimum_size = Vector2(96, 96)
+layout_mode = 2
+script = ExtResource("2_port")
+
+[node name="PortraitTexture" type="TextureRect" parent="UnitInfoPanel/Margin/VBox/HeaderRow/PortraitPanel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
 stretch_mode = 5
 
-[node name="StatsPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer" unique_id=1160511504]
-custom_minimum_size = Vector2(160, 160)
+[node name="HeaderText" type="VBoxContainer" parent="UnitInfoPanel/Margin/VBox/HeaderRow"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_s5bvs")
-script = ExtResource("5_s5bvs")
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
 
-[node name="StatsMargin" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel" unique_id=1105607699]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
-theme_override_constants/margin_left = 8
-theme_override_constants/margin_top = 8
-theme_override_constants/margin_right = 8
-theme_override_constants/margin_bottom = 8
-
-[node name="StatsVBox" type="VBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin" unique_id=301430278]
+[node name="NameLabel" type="Label" parent="UnitInfoPanel/Margin/VBox/HeaderRow/HeaderText"]
 layout_mode = 2
+theme_override_font_sizes/font_size = 18
+autowrap_mode = 3
 
-[node name="HeaderHBox" type="HBoxContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=1569280146]
+[node name="JobsLabel" type="Label" parent="UnitInfoPanel/Margin/VBox/HeaderRow/HeaderText"]
 layout_mode = 2
+theme_override_colors/font_color = Color(0.7, 0.72, 0.7, 1)
+theme_override_font_sizes/font_size = 12
+autowrap_mode = 3
 
-[node name="NameLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox/HeaderHBox" unique_id=1267400032]
+[node name="CloseButton" type="Button" parent="UnitInfoPanel/Margin/VBox/HeaderRow"]
+custom_minimum_size = Vector2(24, 24)
 layout_mode = 2
+size_flags_vertical = 0
+text = "X"
 
-[node name="HPLabel" type="Label" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=413307239]
+[node name="StatsSection" type="VBoxContainer" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 4
+script = ExtResource("3_stats")
+
+[node name="HPRow" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HPTag" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
+text = "HP"
+
+[node name="HPBar" type="ProgressBar" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_barbg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_hpfill")
+show_percentage = false
+
+[node name="HPValue" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/HPRow"]
+custom_minimum_size = Vector2(60, 0)
 layout_mode = 2
 horizontal_alignment = 2
 
-[node name="HSeparator" type="HSeparator" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=625630440]
+[node name="WillRow" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="WillTag" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
+custom_minimum_size = Vector2(30, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
+text = "WIL"
+
+[node name="WillBar" type="ProgressBar" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
+custom_minimum_size = Vector2(0, 16)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_styles/background = SubResource("StyleBoxFlat_barbg")
+theme_override_styles/fill = SubResource("StyleBoxFlat_willfill")
+show_percentage = false
+
+[node name="WillValue" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection/WillRow"]
+custom_minimum_size = Vector2(60, 0)
+layout_mode = 2
+horizontal_alignment = 2
+
+[node name="LimbsRow" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="HSep1" type="HSeparator" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
 layout_mode = 2
 
-[node name="StatsContainer" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/HBoxContainer/StatsPanel/StatsMargin/StatsVBox" unique_id=1391879818]
+[node name="StatsGrid" type="GridContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
 layout_mode = 2
 columns = 4
+theme_override_constants/h_separation = 12
 
-[node name="InventoryPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=1204748592]
+[node name="HSep2" type="HSeparator" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
 layout_mode = 2
-script = ExtResource("6_yiwsu")
 
-[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel" unique_id=16924804]
-show_behind_parent = true
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="AbilitiesHeader" type="Label" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
+layout_mode = 2
+theme_override_colors/font_color = Color(0.6, 0.62, 0.6, 1)
+theme_override_font_sizes/font_size = 12
+text = "ABILITIES"
+
+[node name="AbilitiesList" type="VBoxContainer" parent="UnitInfoPanel/Margin/VBox/StatsSection"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="HSep3" type="HSeparator" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+
+[node name="InventoryPanel" type="PanelContainer" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_section")
+script = ExtResource("4_inv")
+
+[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/Margin/VBox/InventoryPanel"]
+layout_mode = 2
 theme_override_constants/margin_left = 5
 theme_override_constants/margin_top = 5
 theme_override_constants/margin_right = 5
 theme_override_constants/margin_bottom = 5
 
-[node name="InventorySlots" type="GridContainer" parent="UnitInfoPanel/UnitStatusHBox/InventoryPanel/MarginContainer" unique_id=1887954267]
+[node name="InventorySlots" type="GridContainer" parent="UnitInfoPanel/Margin/VBox/InventoryPanel/MarginContainer"]
 layout_mode = 2
 columns = 2
+theme_override_constants/h_separation = 4
+theme_override_constants/v_separation = 4
 
-[node name="SquadInfoPanel" type="Panel" parent="UnitInfoPanel/UnitStatusHBox" unique_id=587355051]
-custom_minimum_size = Vector2(100, 70)
+[node name="SquadInfoPanel" type="PanelContainer" parent="UnitInfoPanel/Margin/VBox"]
 layout_mode = 2
-theme_override_styles/panel = SubResource("StyleBoxFlat_rlbgq")
-script = ExtResource("8_rlbgq")
+theme_override_styles/panel = SubResource("StyleBoxFlat_section")
+script = ExtResource("5_squad")
 
-[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/UnitStatusHBox/SquadInfoPanel" unique_id=1113387784]
-layout_mode = 0
-offset_right = 40.0
-offset_bottom = 40.0
+[node name="MarginContainer" type="MarginContainer" parent="UnitInfoPanel/Margin/VBox/SquadInfoPanel"]
+layout_mode = 2
 theme_override_constants/margin_left = 5
-theme_override_constants/margin_top = 2
-theme_override_constants/margin_right = 2
-theme_override_constants/margin_bottom = 2
+theme_override_constants/margin_top = 5
+theme_override_constants/margin_right = 5
+theme_override_constants/margin_bottom = 5
 
-[node name="SquadLabel" type="RichTextLabel" parent="UnitInfoPanel/UnitStatusHBox/SquadInfoPanel/MarginContainer" unique_id=271216556]
-custom_minimum_size = Vector2(500, 50)
+[node name="SquadLabel" type="RichTextLabel" parent="UnitInfoPanel/Margin/VBox/SquadInfoPanel/MarginContainer"]
+custom_minimum_size = Vector2(0, 72)
 layout_mode = 2
+bbcode_enabled = true
 
-[node name="UnitStatesBar" type="HBoxContainer" parent="UnitInfoPanel" unique_id=150209455]
-layout_mode = 1
-anchors_preset = 12
-anchor_top = 1.0
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 0
-script = ExtResource("7_jcfpm")
+[node name="Spacer" type="Control" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
 
-[node name="CloseButton" type="Button" parent="UnitInfoPanel" unique_id=1787164880]
-custom_minimum_size = Vector2(24, 24)
-layout_mode = 1
-offset_right = 24.0
-offset_bottom = 31.0
-theme_override_styles/normal = SubResource("StyleBoxFlat_jcfpm")
-text = "X"
+[node name="UnitStatesBar" type="HBoxContainer" parent="UnitInfoPanel/Margin/VBox"]
+layout_mode = 2
+script = ExtResource("6_states")

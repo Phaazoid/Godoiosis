@@ -1,16 +1,16 @@
 [gd_scene format=4 uid="uid://b1qp1sxn6wnsi"]
 
 [ext_resource type="Script" uid="uid://w2uqgp6gxmcn" path="res://game.gd" id="1_e2o6t"]
-[ext_resource type="Texture2D" uid="uid://dyl7pa2nfnk1b" path="res://Art/select.png" id="3_feb5d"]
+[ext_resource type="Texture2D" uid="uid://dyl7pa2nfnk1b" path="res://Art/Board/select.png" id="3_feb5d"]
 [ext_resource type="Script" uid="uid://djobys843dl6i" path="res://Classes/flow/TurnManager.gd" id="3_i6g32"]
 [ext_resource type="Script" uid="uid://ccyb45oc8osqf" path="res://Classes/squads/SquadManager.gd" id="3_nb51f"]
 [ext_resource type="Script" uid="uid://bg1vqwce8ve4e" path="res://Classes/board/CursorController.gd" id="3_o5yvi"]
 [ext_resource type="Script" uid="uid://cvnk17sime06w" path="res://Classes/board/CameraController.gd" id="3_rku1e"]
 [ext_resource type="Script" uid="uid://csr88wyxc1rhp" path="res://Classes/flow/ScenarioManager.gd" id="4_ewbju"]
 [ext_resource type="Script" uid="uid://2lmauvlhh6rs" path="res://Classes/board/OverlayManager.gd" id="4_h4fw4"]
-[ext_resource type="Texture2D" uid="uid://coaleb8oik4ri" path="res://Art/Basic_Tile_Overlay.png" id="4_ldgsr"]
+[ext_resource type="Texture2D" uid="uid://coaleb8oik4ri" path="res://Art/Board/Basic_Tile_Overlay.png" id="4_ldgsr"]
 [ext_resource type="TileSet" uid="uid://br1jl2l6yxyuf" path="res://Resources/TestTiles.tres" id="4_v158k"]
-[ext_resource type="Texture2D" uid="uid://bmsvpw377pueh" path="res://Art/Basic_Hover_Tile.png" id="5_ldgsr"]
+[ext_resource type="Texture2D" uid="uid://bmsvpw377pueh" path="res://Art/Board/Basic_Hover_Tile.png" id="5_ldgsr"]
 [ext_resource type="PackedScene" uid="uid://cbuid8103rdvh" path="res://Scenes/TurnBanner.tscn" id="7_1l0tm"]
 [ext_resource type="PackedScene" uid="uid://damgnt4d7qqj3" path="res://Scenes/UnitInfoPanel.tscn" id="8_v158k"]
 [ext_resource type="Texture2D" uid="uid://bcoyc0w1aws1m" path="res://Basic_Tile_Overlay.png" id="10_alh3a"]
@@ -159,14 +159,6 @@ tile_set = SubResource("TileSet_fc0e3")
 [node name="UILayer" type="CanvasLayer" parent="." unique_id=901426984]
 
 [node name="UnitInfoPanelControl" parent="UILayer" unique_id=1128572749 instance=ExtResource("8_v158k")]
-anchors_preset = 14
-anchor_top = 0.5
-anchor_right = 1.0
-anchor_bottom = 0.5
-offset_top = -324.0
-offset_bottom = -324.0
-grow_horizontal = 2
-grow_vertical = 2
 
 [node name="HoverInfoPanelControl" parent="UILayer" unique_id=98776626 instance=ExtResource("12_rfjv2")]
 

@@ -1,4 +1,8 @@
-extends Panel
+extends PanelContainer
+
+# Inventory section of the inspect panel (UnitInfoPanel.tscn): the fixed grid of item slots
+# (code-generated), with an equip/unequip/toss action popup when the inspected unit is
+# controllable (can_act). Slot rows show the computed weapon view (elements incl. mods).
 
 @onready var slots_container = $MarginContainer/InventorySlots
 
@@ -18,7 +22,7 @@ func _ready() -> void:
 func _create_slots():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		var slot_panel := Panel.new()
-		slot_panel.custom_minimum_size = Vector2i(180, 48)
+		slot_panel.custom_minimum_size = Vector2i(130, 40)
 		slot_panel.mouse_filter = Control.MOUSE_FILTER_STOP
 
 		var style := StyleBoxFlat.new()
@@ -42,7 +46,7 @@ func _create_slots():
 		hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 		var icon := TextureRect.new()
-		icon.custom_minimum_size = Vector2i(32, 32)
+		icon.custom_minimum_size = Vector2i(24, 24)
 		icon.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		icon.name = "Icon"

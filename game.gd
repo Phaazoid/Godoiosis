@@ -1001,15 +1001,14 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 			overlay_manager.create_unit_icon(unit, icontype)
 
 func _show_hover_panel(hovered: Unit) -> void:
-	# Inspect + hover must never overlap. While a unit is inspected:
-	#   - hovering that SAME unit adds nothing -> suppress the hover panel
-	#   - hovering a DIFFERENT unit -> force it onto the opposite screen half
+	# Inspect + hover must never overlap. The inspect panel is a docked left column (#68):
+	#   - hovering the inspected unit adds nothing -> suppress the hover card
+	#   - any other unit -> the card keeps its own top/bottom logic, shifted right of the column
 	if unit_info_panel.is_showing():
 		if unit_info_panel.is_showing_unit(hovered):
 			hover_info_panel.clear()
 			return
-		var half: int = HoverInfoPanelControl.Half.BOTTOM if unit_info_panel.is_on_top() else HoverInfoPanelControl.Half.TOP
-		hover_info_panel.set_unit(hovered, half)
+		hover_info_panel.set_unit(hovered, int(unit_info_panel.panel_width()) + 8)
 	else:
 		hover_info_panel.set_unit(hovered)
 

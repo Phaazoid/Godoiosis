@@ -4,7 +4,7 @@ class_name StateIcons
 # Single source of truth for elemental-state icon art, shared by every surface that shows a
 # unit's held states (hover card, inspect bar). Append-only alongside Elemental.State.
 const ICONS := {
-	Elemental.State.WET: preload("res://Art/Icons/WetIcon.png"),
+	Elemental.State.WET: preload("res://Art/Icons/StateIcons/WetIcon.png"),
 }
 const ICON_SIZE := Vector2i(16, 16)
 
