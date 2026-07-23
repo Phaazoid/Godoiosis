@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://fqtgv4q7w314"]
 
-[ext_resource type="Texture2D" uid="uid://j2caoj41u5by" path="res://Art/Icons/RallyIcon.png" id="1_biwx1"]
-[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/items/TransmutationData.gd" id="1_krjn7"]
-[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/items/RuneData.gd" id="2_7d53w"]
+[ext_resource type="Texture2D" uid="uid://j2caoj41u5by" path="res://Art/Icons/ActionIcons/RallyIcon.png" id="1_biwx1"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_krjn7"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="2_7d53w"]
 [ext_resource type="Resource" uid="uid://cyixd5k6kftlk" path="res://Resources/TransmutationData/Fireball.tres" id="3_jtvju"]
 [ext_resource type="Resource" uid="uid://dkweset762aec" path="res://Resources/TransmutationData/Splash.tres" id="4_ht21o"]
 

@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="TransmutationData" format=3 uid="uid://dkweset762aec"]
 
-[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/items/TransmutationData.gd" id="1_6nsqn"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_6nsqn"]
 [ext_resource type="Script" uid="uid://cuvfasmongryk" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="1_hwgco"]
-[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/WetIcon.png" id="2_emron"]
+[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="2_emron"]
 
 [sub_resource type="Resource" id="Resource_jx6qm"]
 script = ExtResource("1_hwgco")

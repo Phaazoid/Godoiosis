@@ -3,7 +3,7 @@
 **Size M · gameplay code (user types) · run before 7 (the bands feed the effective-stat spine).** Source: [stats.md](../design/stats.md) → "CON — ADOPTED 2026-07-06" + "The band doctrine".
 
 ```
-Project: Iosis (tactical RPG, Godot 4.6, GDScript). Work in C:\Iosis\Godoiosis. Read CLAUDE.md first (collaboration contract: the user hand-types ALL gameplay code — deliver complete typed code blocks with file anchors and the why, verify by reading the real file after each step; sharp edges: enums are APPEND-ONLY once persisted, .tres data migrations are real). Then read docs/design/stats.md IN FULL — it is canon; do not redesign it. Code to read: Classes/core/Stats.gd, Classes/units/UnitInstance.gd, Classes/units/UnitData.gd, the damage path (Classes/actions/PlanResolver.gd + AttackAction.gd + Unit.take_damage), and Classes/squads/ for who reads LDR.
+Project: Iosis (tactical RPG, Godot 4.6, GDScript). Work in C:\Iosis\Godoiosis. Read CLAUDE.md first (collaboration contract: the user hand-types ALL gameplay code — deliver complete typed code blocks with file anchors and the why, verify by reading the real file after each step; sharp edges: enums are APPEND-ONLY once persisted, .tres data migrations are real). Then read docs/design/stats.md IN FULL — it is canon; do not redesign it. Code to read: Classes/core/Stats.gd, Classes/units/UnitInstance.gd, Classes/units/UnitData.gd, the damage path (Classes/actions/resolution/PlanResolver.gd + AttackAction.gd + Unit.take_damage), and Classes/squads/ for who reads LDR.
 
 Goal: land the CON stat and the band doctrine — the stat-layer foundation everything after builds on.
 

@@ -6,11 +6,11 @@ class_name GridUtils
 # terrain_type custom-data -> Terrain.Kind / icon lookups.
 
 const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
-	Terrain.Kind.GRASS: preload("res://Art/Icons/TerrainIcons/grass.png"),
-	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/rock.png"),
-	Terrain.Kind.MUD: preload("res://Art/Icons/TerrainIcons/mud.png"),
-	Terrain.Kind.TREE: preload("res://Art/Icons/TerrainIcons/tree.png"),
-	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/water.png")
+	Terrain.Kind.GRASS: preload("res://Art/Icons/TerrainIcons/Grass.png"),
+	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/Rock.png"),
+	Terrain.Kind.MUD: preload("res://Art/Icons/TerrainIcons/Mud.png"),
+	Terrain.Kind.TREE: preload("res://Art/Icons/TerrainIcons/Tree.png"),
+	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/Water.png")
 }
 
 const ERROR_ICON: Texture2D = preload("res://Art/Icons/ArrowIcons/ERROR.png")

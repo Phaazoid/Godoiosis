@@ -1,7 +1,7 @@
 extends BaseAction
 class_name RallyAction
 
-const RALLY_ICON := preload("res://Art/Icons/RallyIcon.png")
+const RALLY_ICON := preload("res://Art/Icons/ActionIcons/RallyIcon.png")
 
 func init(rallier: Unit) -> void:
 	actor = rallier

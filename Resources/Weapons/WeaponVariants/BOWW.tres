@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponInstance" format=3]
 
-[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="1_qrdlq"]
-[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="2_1ckcs"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponInstance.gd" id="1_qrdlq"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_1ckcs"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="3_b850j"]
 
 [resource]

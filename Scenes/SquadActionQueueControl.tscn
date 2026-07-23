@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://cqf51nnsk42dv"]
 
-[ext_resource type="Script" uid="uid://bc5mnwx7424ki" path="res://Classes/ui/SquadActionQueueControl.gd" id="1_voyyq"]
+[ext_resource type="Script" uid="uid://bc5mnwx7424ki" path="res://Classes/ui/queue/SquadActionQueueControl.gd" id="1_voyyq"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_voyyq"]
 bg_color = Color(1, 0.78613406, 0.68115425, 1)

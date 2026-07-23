@@ -1,7 +1,7 @@
 extends BaseAction
 class_name RescueAction
 
-const RESCUE_ICON := preload("res://Art/Icons/Rescue.png")
+const RESCUE_ICON := preload("res://Art/Icons/ActionIcons/Rescue.png")
 
 var target: Unit   # the downed ally being picked up
 

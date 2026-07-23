@@ -8,7 +8,7 @@ class_name IntimidateAction
 # a queued attack does (that would mean threading this action into the resolver's _Hypo
 # dictionary, a bigger change than this seed pass attempts).
 
-const INTIMIDATE_ICON := preload("res://Art/Icons/IntimidateIcon.png")
+const INTIMIDATE_ICON := preload("res://Art/Icons/ActionIcons/IntimidateIcon.png")
 
 var target: Unit   # the enemy being intimidated
 

@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="SpringWeaponInstance" format=3]
 
-[ext_resource type="Script" path="res://Classes/items/SpringspearWeaponInstance.gd" id="1_gslgn"]
-[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="2_j3gl4"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/SpringWeaponInstance.gd" id="1_gslgn"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_j3gl4"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="3_vq7ax"]
 
 [resource]

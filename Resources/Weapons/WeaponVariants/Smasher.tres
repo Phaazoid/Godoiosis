@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="KineticMaceWeaponInstance" format=3]
 
-[ext_resource type="Script" path="res://Classes/items/KineticMaceWeaponInstance.gd" id="1_jd0wr"]
-[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="2_0r6ud"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="1_jd0wr"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_0r6ud"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="3_2lmt2"]
 
 [resource]

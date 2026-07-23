@@ -1,6 +1,6 @@
 [gd_resource type="Resource" script_class="ElementalReaction" format=3 uid="uid://5k6ev0e7ymmi"]
 
-[ext_resource type="Texture2D" uid="uid://c65xgscuwul4u" path="res://Art/Icons/ShockIcon.png" id="1_cisoi"]
+[ext_resource type="Texture2D" uid="uid://c65xgscuwul4u" path="res://Art/Icons/StateIcons/ShockIcon.png" id="1_cisoi"]
 [ext_resource type="Script" uid="uid://bfm0j6xji22k" path="res://Classes/elemental/ElementalReaction.gd" id="1_ryvc4"]
 
 [resource]

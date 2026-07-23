@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="RuneData" format=3 uid="uid://dx1l8hljkyor2"]
 
-[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/items/TransmutationData.gd" id="1_f57nc"]
-[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/items/RuneData.gd" id="2_m0he7"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_f57nc"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="2_m0he7"]
 [ext_resource type="Resource" uid="uid://cyixd5k6kftlk" path="res://Resources/TransmutationData/Fireball.tres" id="2_t3s6l"]
 
 [resource]

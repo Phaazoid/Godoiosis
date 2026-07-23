@@ -23,11 +23,11 @@ var fired_attack: AttackData = null
 
 var preview_sprites: Array[Node2D] = []
 
-const ATTACK_ICON := preload("res://Art/Icons/FightActionIcon.png")
-const DOWN_ICON := preload("res://Art/Icons/Down.png")
-const KILL_ICON := preload("res://Art/Icons/DedIcon.png")
-const MAIM_ICON := preload("res://Art/Icons/DownMaim.png")
-const CRISIS_ICON := preload("res://Art/Icons/CrisisIcon.png")
+const ATTACK_ICON := preload("res://Art/Icons/ActionIcons/FightActionIcon.png")
+const DOWN_ICON := preload("res://Art/Icons/StateIcons/Down.png")
+const KILL_ICON := preload("res://Art/Icons/StateIcons/DedIcon.png")
+const MAIM_ICON := preload("res://Art/Icons/StateIcons/DownMaim.png")
+const CRISIS_ICON := preload("res://Art/Icons/ActionIcons/CrisisIcon.png")
 
 func init(attacker: Unit, origin: Vector2i, target_unit: Unit, target_location: Vector2i):
 	actor = attacker
@@ -134,6 +134,14 @@ func add_preview_sprites(sprite: Node2D):
 static func create(attacker: Unit, origin: Vector2i, target: Unit, target_cell: Vector2i) -> AttackAction:
 	var action := AttackAction.new()
 	action.init(attacker, origin, target, target_cell)
+	return action
+
+# Declare-time factory (Law #2): stamps the actor's current pick so player and AI declare
+# sites can't diverge -- the rune-fists bug (#78) was exactly a forgotten stamp. Bare create()
+# stays for derived actions, where the resolver COPIES the stored aim's stamp instead.
+static func declare(attacker: Unit, origin: Vector2i, aim_cell: Vector2i) -> AttackAction:
+	var action := AttackAction.create(attacker, origin, null, aim_cell)
+	action.fired_attack = attacker.get_fired_attack()
 	return action
 
 static func create_volley(attacker: Unit, origin: Vector2i, aim_cell: Vector2i, victims: Array[Unit], fired_attack: AttackData = null) -> Array[AttackAction]:

@@ -9,7 +9,7 @@ class_name CounterAttackAction
 
 var source_attack: AttackAction
 
-const COUNTER_ATTACK_ICON := preload("res://Art/Icons/CounterAttackIcoon.png")
+const COUNTER_ATTACK_ICON := preload("res://Art/Icons/ActionIcons/CounterAttackIcon.png")
 
 
 func init_counter(counter_unit: Unit, target_unit: Unit, attack_origin: Vector2i, source: AttackAction):

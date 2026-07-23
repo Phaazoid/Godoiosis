@@ -7,8 +7,8 @@ var destination_texture: Texture2D
 var preview: Array[Sprite2D] = []
 var is_hold_position := false
 
-const GENERIC_TILE := preload("res://Art/Icons/GenericTileIcon.png")
-const MOVE_ICON := preload("res://Art/Icons/MoveActionIcon.png")
+const GENERIC_TILE := preload("res://Art/Icons/BoardIcons/GenericTileIcon.png")
+const MOVE_ICON := preload("res://Art/Icons/ActionIcons/MoveActionIcon.png")
 const HOLD_ICON := preload("res://Art/Icons/ArrowIcons/nomove.png")
 const ARROW_BASE_Z_INDEX = 3
 const HOVERED_ARROW_Z_INDEX = 10

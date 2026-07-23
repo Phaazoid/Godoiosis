@@ -48,7 +48,7 @@ plus the running order of the queue-UX checklist. Update it as items land.
 
 **Found stale during the 2026-07-16 design-doc sweep:** this checklist read as an active running
 order with only item 2 checked off, but issue #49 is closed and every item is built — verified
-directly against `Classes/ui/SquadActionQueueControl.gd` / `ActionQueueRow.gd` /
+directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow.gd` /
 `AttackAction.gd`. Kept as a build-record (the principles above stay live guidelines):
 
 1. **More info per row — damage + target HP before -> after.** — **DONE.**

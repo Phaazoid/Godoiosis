@@ -59,11 +59,11 @@ enum OverlayType {
 }
 
 const ICON_TEXTURES = {
-	OverlayIcon.IconType.CURSOR: preload("res://Art/Icons/CursorIcon.png"),
-	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/CrownIcon.png"),
-	OverlayIcon.IconType.TARGET: preload("res://Art/Icons/SelectedIcon.png"),
-	OverlayIcon.IconType.INVALID: preload("res://Art/Icons/NegativeIcon.png"),
-	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/SquadHighlighIcon.png")
+	OverlayIcon.IconType.CURSOR: preload("res://Art/Icons/BoardIcons/CursorIcon.png"),
+	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
+	OverlayIcon.IconType.TARGET: preload("res://Art/Icons/BoardIcons/SelectedIcon.png"),
+	OverlayIcon.IconType.INVALID: preload("res://Art/Icons/BoardIcons/NegativeIcon.png"),
+	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadHighlightIcon.png")
 }
 
 var overlay_map = {}

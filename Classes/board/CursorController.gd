@@ -13,10 +13,10 @@ enum CursorState {
 }
 
 const CURSOR_TEXTURES = {
-	CursorState.DEFAULT: preload("res://Art/Icons/CursorIcon.png"),
-	CursorState.TARGET: preload("res://Art/Icons/SelectedIcon.png"),
-	CursorState.INVALID: preload("res://Art/Icons/NegativeIcon.png"),
-	CursorState.VALID: preload("res://Art/Icons/PositiveIcon.png")
+	CursorState.DEFAULT: preload("res://Art/Icons/BoardIcons/CursorIcon.png"),
+	CursorState.TARGET: preload("res://Art/Icons/BoardIcons/SelectedIcon.png"),
+	CursorState.INVALID: preload("res://Art/Icons/BoardIcons/NegativeIcon.png"),
+	CursorState.VALID: preload("res://Art/Icons/BoardIcons/PositiveIcon.png")
 }
 
 # Called when the node enters the scene tree for the first time.
