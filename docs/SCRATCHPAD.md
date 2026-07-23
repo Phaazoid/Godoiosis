@@ -36,10 +36,13 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-## 🗂 Dispersed (log)
+For weapon modifications - different weapon modification slots are different sized squares, similar to the navi customization system in megaman battle network 3, and different mods are like different shaped tetris blocks we can try and fit in
 
-- Double-barreled gun: every other shot a different effect (per-barrel mods or authored cycle) → weapon-mod-ideas.md #31 "Duplex Breech" [CB] keystone sketch (2026-07-14)
-- Far-future data-driven balance metrics (beta telemetry: collect/analyze what's strong/weak) → issue #53 (P2-someday, the #52 far-future pattern; Play API #46 named as the natural substrate) (2026-07-14)
+Transmutation strain could be something a unit is granted by an ability through a job (blood transmuation or something) rather than a universal transmuation feature
+
+Each weapon should have at least one thing to make their archetype unique... Springspears already have the secondary attack/reload mechanic.  Chainswords should do something with revving.  Kinetic maces should do something with enemy unit displacement.  Drills should do something with creating cover/defensible terrain.  Prosthetics are already unique with stat replacement.  Perhaps carbines will need to reload as well, but for their main attack, and after a certain number of attacks rather than just one?  This will be something that can be changed up through mods, I imagine.  (oh yeah, in case this isn't part of the system yet, there are definitely going to be lots of weapon mods that will only work on specific weapon families)  And the chemical spitters... they still need some workshopping.  Perhaps the generic one can be filled with materia to output elemental aoe damage in a cone, but prototypes are more efficient with a specific element and can't use others.  We'll see.  This should all be one big issue.  
+
+## 🗂 Dispersed (log)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)
 - Range-dependent damage / sweet-spot patterns (carbine harder at range, shotgun up close, Springspear AoE center tile) → weapons.md (Captured ideas); relates to issue #25 (2026-06-17)
@@ -57,4 +60,3 @@ Then report a short per-idea summary: where each went, and anything that needs t
 - Player-built transmutations (creation system) + the rune balance axes → **outdated on arrival** (dev: written pre-2026-07-04-grill; the sigil/flourish model already delivers it) — capture withdrawn; issue #52 **repurposed** → manual rune carving (players draw the carving themselves, dev + co-dev long-wanted) → transmutation-model-proposal.md (Far future) + grill-queue.md Parked 15 (2026-07-08)
 - Hover an action-menu option → highlight its potential targets on the map → #44 comment (board-legibility umbrella) (2026-07-08)
 - Rebecca reveal: flip the academy test order — hidden alkahest point zeroed by the raid's limb tax; the Isaac pre-training-maim seam flagged → story open-questions.md **Q9** + 🔴 flags in rebecca.md / isaac.md (2026-07-08)
-- Grafted-on extra inventory slot per installed prosthetic, styled like the limb grafting itself — only matters if inventory ever goes back to a slot-count limiter (currently weight-based) → weapons.md Captured ideas (2026-07-17)
