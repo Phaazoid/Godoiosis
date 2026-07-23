@@ -1,11 +1,14 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://b57pxoxlptmeu"]
 
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="2_rs6kj"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="2_rs6kj"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Prototypes/TheJaw.tres" id="3_main"]
+[ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_icon"]
 
 [resource]
 script = ExtResource("2_rs6kj")
 main_attack = ExtResource("3_main")
 weapon_type = 1
 is_prototype = true
+item_name = "The Jaw"
+icon = ExtResource("4_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

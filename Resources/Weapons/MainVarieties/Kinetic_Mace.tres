@@ -1,11 +1,13 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://ceogmk32dfq6l"]
 
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_plvjd"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="1_plvjd"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Kinetic_Mace.tres" id="2_main"]
+[ext_resource type="Texture2D" uid="uid://bhak4vdv2k32b" path="res://Art/Icons/WeaponIcons/Club.png" id="3_icon"]
 
 [resource]
 script = ExtResource("1_plvjd")
 main_attack = ExtResource("2_main")
 weapon_type = 5
 item_name = "Kinetic Mace"
+icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

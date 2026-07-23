@@ -1,11 +1,13 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://cacktf60jcb0s"]
 
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="1_iwmi1"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="1_iwmi1"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Carbine.tres" id="2_main"]
+[ext_resource type="Texture2D" uid="uid://bndrafy1uydrf" path="res://Art/Icons/WeaponIcons/Crossbow.png" id="3_icon"]
 
 [resource]
 script = ExtResource("1_iwmi1")
 main_attack = ExtResource("2_main")
 weapon_type = 4
 item_name = "Carbine"
+icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

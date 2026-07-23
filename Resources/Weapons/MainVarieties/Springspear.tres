@@ -1,8 +1,8 @@
 [gd_resource type="Resource" script_class="WeaponData" format=3 uid="uid://fx3dcqyslgbe"]
 
-[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="1_r4sgd"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_r4sgd"]
 [ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_x53eu"]
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="3_5mube"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="3_5mube"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Springspear.tres" id="4_main"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/Spring.tres" id="5_spring"]
 
