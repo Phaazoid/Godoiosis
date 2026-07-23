@@ -36,13 +36,11 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-For weapon modifications - different weapon modification slots are different sized squares, similar to the navi customization system in megaman battle network 3, and different mods are like different shaped tetris blocks we can try and fit in
-
-Transmutation strain could be something a unit is granted by an ability through a job (blood transmuation or something) rather than a universal transmuation feature
-
-Each weapon should have at least one thing to make their archetype unique... Springspears already have the secondary attack/reload mechanic.  Chainswords should do something with revving.  Kinetic maces should do something with enemy unit displacement.  Drills should do something with creating cover/defensible terrain.  Prosthetics are already unique with stat replacement.  Perhaps carbines will need to reload as well, but for their main attack, and after a certain number of attacks rather than just one?  This will be something that can be changed up through mods, I imagine.  (oh yeah, in case this isn't part of the system yet, there are definitely going to be lots of weapon mods that will only work on specific weapon families)  And the chemical spitters... they still need some workshopping.  Perhaps the generic one can be filled with materia to output elemental aoe damage in a cone, but prototypes are more efficient with a specific element and can't use others.  We'll see.  This should all be one big issue.  
-
 ## 🗂 Dispersed (log)
+
+- MMBN3 NaviCust-style shaped mod fitting (sized squares + tetris-block mods) → weapons.md (Captured ideas — flagged as revising the ratified #59 capacity model, grill first) (2026-07-23)
+- Transmutation strain as a job-granted ability ("blood transmutation") rather than universal → transmutation-model-proposal.md (captured; decision point = #76's access-rules playtest) + job-ideas.md §C (Blood Transmuter sketch) (2026-07-23)
+- Family uniqueness pass (every family ≥1 archetype-unique mechanic; carbine magazine reload; chem-spitter materia cone + element-locked prototypes; family-locked mods confirmed already the norm) → **issue #84** (the "one big issue", per your note) + weapons.md (Captured ideas + the Open list) (2026-07-23)
 
 - Revved Chainsword chews through Cover terrain over a turn → weapons.md (Captured ideas) + terrain.md ("Attack the map") (2026-06-17)
 - Range-dependent damage / sweet-spot patterns (carbine harder at range, shotgun up close, Springspear AoE center tile) → weapons.md (Captured ideas); relates to issue #25 (2026-06-17)
