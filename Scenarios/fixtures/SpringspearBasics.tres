@@ -2,19 +2,20 @@
 
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_gmakd"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_a8fvq"]
-[ext_resource type="Script" path="res://Classes/items/SpringspearWeaponInstance.gd" id="3_f0b8s"]
-[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="4_7y775"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/SpringWeaponInstance.gd" id="3_f0b8s"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="4_7y775"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="5_rsud5"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="6_0yiuf"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="7_6k614"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="8_cfsub"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="9_nvli8"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="10_wpqf1"]
-[ext_resource type="Script" path="res://Classes/items/KineticMaceWeaponInstance.gd" id="11_0723f"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="11_0723f"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="12_wntg6"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="13_6bgjo"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="14_fsdnq"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="15_72gwt"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
 
 [sub_resource type="Resource" id="Resource_0fusu"]
 script = ExtResource("3_f0b8s")
@@ -42,7 +43,8 @@ downed_sprite = ExtResource("6_0yiuf")
 script = ExtResource("2_a8fvq")
 unit_data = SubResource("Resource_y1nr1")
 cell = Vector2i(-2, -1)
-equipped_weapon = SubResource("Resource_0fusu")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_0fusu")])
+equipped_index = 0
 squad_id = 0
 is_leader = true
 
@@ -73,7 +75,8 @@ downed_sprite = ExtResource("13_6bgjo")
 script = ExtResource("2_a8fvq")
 unit_data = SubResource("Resource_t3o1j")
 cell = Vector2i(0, -1)
-equipped_weapon = SubResource("Resource_cnok6")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_cnok6")])
+equipped_index = 0
 squad_id = 1
 is_leader = true
 

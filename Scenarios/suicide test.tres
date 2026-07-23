@@ -8,13 +8,14 @@
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_506fj"]
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="7_3ieh3"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="8_hmg5l"]
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="9_egxjn"]
-[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" path="res://Classes/items/WeaponInstance.gd" id="wi_9_egxjn"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="9_egxjn"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponInstance.gd" id="wi_9_egxjn"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="10_va7vr"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="11_6bpjd"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="12_e4dmj"]
 [ext_resource type="Texture2D" uid="uid://dt0jmba48go5e" path="res://Art/Units/MapSprites/General.png" id="13_x0ps1"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
 
 [sub_resource type="Resource" id="Resource_nexwe"]
 script = ExtResource("6_506fj")
@@ -78,7 +79,8 @@ metadata/_custom_type_script = "uid://cvvknuw621ar2"
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_crpss")
 cell = Vector2i(4, 4)
-equipped_weapon = SubResource("Resource_rgd8f_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_rgd8f_inst")])
+equipped_index = 0
 squad_id = 1
 is_leader = true
 
@@ -184,7 +186,8 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_jcyyb")
 cell = Vector2i(-5, 5)
-equipped_weapon = SubResource("Resource_to1je_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_to1je_inst")])
+equipped_index = 0
 squad_id = 4
 
 [sub_resource type="Resource" id="Resource_jpc4i"]
@@ -226,7 +229,8 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_pg8n1")
 cell = Vector2i(-4, 6)
-equipped_weapon = SubResource("Resource_xl846_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_xl846_inst")])
+equipped_index = 0
 squad_id = 4
 
 [sub_resource type="Resource" id="Resource_yh5u4"]
@@ -268,7 +272,8 @@ move_sprite = ExtResource("12_e4dmj")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_fmrml")
 cell = Vector2i(-3, 5)
-equipped_weapon = SubResource("Resource_50555_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_50555_inst")])
+equipped_index = 0
 squad_id = 4
 is_leader = true
 
@@ -312,7 +317,8 @@ move_sprite = ExtResource("13_x0ps1")
 script = ExtResource("2_nhl1v")
 unit_data = SubResource("Resource_6ivc3")
 cell = Vector2i(-4, 5)
-equipped_weapon = SubResource("Resource_76xgq_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_76xgq_inst")])
+equipped_index = 0
 squad_id = 5
 is_leader = true
 

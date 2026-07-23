@@ -5,9 +5,9 @@
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="3_ayafk"]
 [ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="3_mrekx"]
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
-[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/items/WeaponModData.gd" id="4_l5o8g"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="4_l5o8g"]
 [ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="4_q8cs3"]
-[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/items/WeaponData.gd" id="5_5q7c0"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="5_5q7c0"]
 [ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
 [ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
@@ -26,8 +26,9 @@
 [ext_resource type="Texture2D" uid="uid://g2uho841m3aw" path="res://Art/Units/MapSprites/Mage_Moving.png" id="22_owa6k"]
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
-[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/items/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" uid="uid://cr8iufdh4c638" path="res://Classes/items/WeaponInstance.gd" id="wi_5_5q7c0"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
+[ext_resource type="Script" uid="uid://cr8iufdh4c638" path="res://Classes/weapons/WeaponInstance.gd" id="wi_5_5q7c0"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
 
 [sub_resource type="Resource" id="Resource_mrekx"]
 script = ExtResource("3_mrekx")
@@ -75,7 +76,8 @@ downed_sprite = ExtResource("6_k5dlx")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_k5dlx")
 cell = Vector2i(4, -2)
-equipped_weapon = SubResource("Resource_q8cs3_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_q8cs3_inst")])
+equipped_index = 0
 squad_id = 0
 is_leader = true
 
@@ -125,7 +127,8 @@ downed_sprite = ExtResource("13_juf0b")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_bd7ju")
 cell = Vector2i(3, 0)
-equipped_weapon = SubResource("Resource_l6fmy_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_l6fmy_inst")])
+equipped_index = 0
 squad_id = 0
 
 [sub_resource type="Resource" id="Resource_28v45"]
@@ -174,7 +177,8 @@ downed_sprite = ExtResource("13_juf0b")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_owa6k")
 cell = Vector2i(4, 0)
-equipped_weapon = SubResource("Resource_rblmy_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_rblmy_inst")])
+equipped_index = 0
 squad_id = 0
 
 [sub_resource type="Resource" id="Resource_gscw2"]
@@ -223,7 +227,8 @@ downed_sprite = ExtResource("13_juf0b")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_8jbv5")
 cell = Vector2i(5, 0)
-equipped_weapon = SubResource("Resource_4ji6m_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4ji6m_inst")])
+equipped_index = 0
 squad_id = 0
 
 [sub_resource type="Resource" id="Resource_5w2v2"]
@@ -269,7 +274,8 @@ downed_sprite = ExtResource("17_jydfm")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_d0hyj")
 cell = Vector2i(4, 1)
-equipped_weapon = SubResource("Resource_3peij_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_3peij_inst")])
+equipped_index = 0
 squad_id = 0
 
 [sub_resource type="Resource" id="Resource_o6nlq"]
@@ -317,7 +323,8 @@ downed_sprite = ExtResource("20_rblmy")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_e57e2")
 cell = Vector2i(8, 4)
-equipped_weapon = SubResource("Resource_md83g_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_md83g_inst")])
+equipped_index = 0
 squad_id = 1
 
 [sub_resource type="Resource" id="Resource_3su2r"]
@@ -365,7 +372,8 @@ downed_sprite = ExtResource("20_rblmy")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_gcqw6")
 cell = Vector2i(7, 5)
-equipped_weapon = SubResource("Resource_7as0p_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_7as0p_inst")])
+equipped_index = 0
 squad_id = 1
 
 [sub_resource type="Resource" id="Resource_osbp3"]
@@ -411,7 +419,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_64uc1")
 cell = Vector2i(9, 4)
-equipped_weapon = SubResource("Resource_klalk_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_klalk_inst")])
+equipped_index = 0
 squad_id = 1
 
 [sub_resource type="Resource" id="Resource_rvwfj"]
@@ -457,7 +466,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_a1ncn")
 cell = Vector2i(8, 5)
-equipped_weapon = SubResource("Resource_f5dmr_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_f5dmr_inst")])
+equipped_index = 0
 squad_id = 1
 is_leader = true
 
@@ -504,7 +514,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_qrxbn")
 cell = Vector2i(7, 6)
-equipped_weapon = SubResource("Resource_3jx8a_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_3jx8a_inst")])
+equipped_index = 0
 squad_id = 1
 
 [sub_resource type="Resource" id="Resource_0lehi"]
@@ -550,7 +561,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_2k7ol")
 cell = Vector2i(0, 5)
-equipped_weapon = SubResource("Resource_ej0nd_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_ej0nd_inst")])
+equipped_index = 0
 squad_id = 2
 is_leader = true
 
@@ -597,7 +609,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_jfiwm")
 cell = Vector2i(1, 6)
-equipped_weapon = SubResource("Resource_ik5qu_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_ik5qu_inst")])
+equipped_index = 0
 squad_id = 2
 
 [sub_resource type="Resource" id="Resource_sj1h7"]
@@ -643,7 +656,8 @@ downed_sprite = ExtResource("23_facq7")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_5nxcx")
 cell = Vector2i(-1, 4)
-equipped_weapon = SubResource("Resource_g0pgd_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_g0pgd_inst")])
+equipped_index = 0
 squad_id = 2
 
 [sub_resource type="Resource" id="Resource_wh38c"]
@@ -691,7 +705,8 @@ downed_sprite = ExtResource("20_rblmy")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_a2f7v")
 cell = Vector2i(1, 5)
-equipped_weapon = SubResource("Resource_obq4n_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_obq4n_inst")])
+equipped_index = 0
 squad_id = 2
 
 [sub_resource type="Resource" id="Resource_0v1ws"]
@@ -739,7 +754,8 @@ downed_sprite = ExtResource("20_rblmy")
 script = ExtResource("2_p28ji")
 unit_data = SubResource("Resource_yt1ub")
 cell = Vector2i(0, 4)
-equipped_weapon = SubResource("Resource_4rrsq_inst")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_4rrsq_inst")])
+equipped_index = 0
 squad_id = 2
 
 [resource]

@@ -114,10 +114,9 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 
 	for unit in spawned:
 		var entry: ScenarioUnitEntry = entry_by_unit[unit]
-		if entry.equipped_weapon != null:
-			# copy_equippable, never duplicate(true) — a WeaponInstance must keep its template
-			# shared (#59); mirrors ScenarioManager.load_scenario.
-			unit.add_item(entry.equipped_weapon.copy_equippable())
+		# The whole UnitInstance-side snapshot — stats/HP/Will/inventory/limbs/proficiency/
+		# aura/jobs (#83); mirrors ScenarioManager.load_scenario.
+		entry.apply_unit_state(unit)
 
 	for squad_id in members.keys():
 		var leader: Unit = leaders.get(squad_id)

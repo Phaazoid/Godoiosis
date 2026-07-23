@@ -54,10 +54,7 @@ func save_scenario(scenario_name: String):
 			entry.squad_archetype = unit.squad.archetype
 			entry.squad_zone = unit.squad.zone_name
 
-		if unit.has_equipped_weapon():
-			entry.equipped_weapon = unit.get_equipped_weapon().copy_equippable()
-
-		entry.jobs = unit.unit_instance.jobs.duplicate()
+		entry.capture_unit_state(unit)
 
 		scenario.unit_entries.append(entry)
 
@@ -92,11 +89,7 @@ func load_scenario(path: String):
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 
-		if entry.equipped_weapon != null:
-			unit.add_item(entry.equipped_weapon.copy_equippable())
-		# (already null-safe: a dropped weapon simply leaves the unit unarmed)
-
-		unit.unit_instance.jobs = entry.jobs.duplicate()
+		entry.apply_unit_state(unit)
 
 		if entry.squad_id == -1:
 			continue

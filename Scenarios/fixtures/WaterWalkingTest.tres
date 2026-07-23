@@ -2,14 +2,15 @@
 
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_80mtm"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_mbji1"]
-[ext_resource type="Script" path="res://Classes/items/KineticMaceWeaponInstance.gd" id="3_dbnlj"]
-[ext_resource type="Script" path="res://Classes/items/WeaponModData.gd" id="4_88a4s"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="3_dbnlj"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="4_88a4s"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="5_gbwx6"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Dancer_Downed.png" id="6_166ei"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Dancer.png" id="7_hhe43"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Dancer_Moving.png" id="8_rhb3h"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="9_8e5no"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="10_2v58y"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
 
 [sub_resource type="Resource" id="Resource_80mtm"]
 script = ExtResource("3_dbnlj")
@@ -37,7 +38,8 @@ downed_sprite = ExtResource("6_166ei")
 script = ExtResource("2_mbji1")
 unit_data = SubResource("Resource_mbji1")
 cell = Vector2i(-1, 5)
-equipped_weapon = SubResource("Resource_80mtm")
+inventory = Array[ExtResource("90_equipdata")]([SubResource("Resource_80mtm")])
+equipped_index = 0
 squad_id = 0
 is_leader = true
 jobs = Array[String](["Water Wallker"])
