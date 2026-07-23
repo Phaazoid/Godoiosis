@@ -2,7 +2,7 @@
 
 **Canon checked through #78 (2026-07-22).**
 
-**Status: BUILT 2026-07-22** — ratified and hand-typed the same day (#78); full suite 444/444 green, in-game feel-test pending. The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
+**Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
 ## The doctrine: the AI is a player, all the way down
 
