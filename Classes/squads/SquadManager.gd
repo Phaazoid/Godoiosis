@@ -441,6 +441,15 @@ func calculate_counterattacks_for_squad(attacking_squad: Squad, attacks: Array[A
 	
 func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
+	var hypo: Dictionary = {}
+	var reactions := ReactionCatalog.get_all()
+	var terrain_reactions := TerrainReactionCatalog.get_all()
+
+	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
+	# pass's shove projections before recomputing; a unit's own queued move is untouched.
+	for unit in board.units:
+		unit.clear_projected_knockback()
+
 	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
 	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
 	# projection-aware, so a re-planned move re-targets the blast — like counters.
@@ -461,6 +470,15 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		else:
 			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack):
 				plan.attacks.append(atk)
+
+	# Phase 1: resolve attacks so each shove's landing cell exists...
+	PlanResolver.resolve_attacks(plan, hypo, reactions, board, terrain_reactions)
+	# ...then reflect it in the target's projected destination — counter derivation below (and
+	# re-targeting, and the board preview) all read where the unit LANDS, not where it stood.
+	for atk in plan.attacks:
+		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+			atk.target.set_projected_knockback(atk.resolved.knockback_to)
+
 	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
 	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the
 	# attack loop above uses — so an AoE counter splashes everyone in the blast, not just its
@@ -472,7 +490,9 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
-	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board, TerrainReactionCatalog.get_all())
+
+	# Phase 2: counters, now built from post-shove positions.
+	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
 	return plan
 
 func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[ActionQueueDisplayEntry]:

@@ -11,7 +11,8 @@ var states_removed: Array[Elemental.State] = []
 var popups: Array[String] = []
 var reaction_icons: Array[Texture2D] = []        # icons of reactions that FIRED this hit — drawn behind the target in the queue
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
-
+var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
+var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — previewed and applied verbatim (Law #2)
 
 
 # Predicted lifecycle result for this hit's TARGET (R8's "lifecycle result"). Mirrors

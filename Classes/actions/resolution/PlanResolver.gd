@@ -8,32 +8,34 @@ class_name PlanResolver
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
-	var hypo: Dictionary = {}   # Unit -> _Hypo (the threaded working copy)
+	var hypo: Dictionary = {}   # Unit -> _Hypo, shared across both phases so counter liveness sees the attacks
+	resolve_attacks(plan, hypo, reactions, board, terrain_reactions)
+	resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+
+# Phase 1: the ordered attacks. Split out so SquadManager.resolve_plan can reflect knockback shoves
+# into projected positions BEFORE deriving counters (#84 approach B) — a counter is judged from
+# where a shoved unit LANDS, not where it stood.
+static func resolve_attacks(plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
 	for atk in plan.attacks:
-		_resolve_one(atk, reactions, hypo)
-		# Cell-effect stage (#50): a map-hitting attack deposits terrain effects across its WHOLE
-		# blast footprint, not just the aimed cell — parity with how AoE damage hits every cell.
-		# Derived once per aim: a volley's secondaries share the footprint, so only its lead member
-		# (is_secondary_hit == false) deposits. Runs only with a board (unit-only callers pass none);
-		# counters still skip the stage (a later slice).
+		_resolve_one(atk, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
+
+# Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
+static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
 	for ctr in plan.counters:
 		if not _counter_actor_live(ctr, hypo):
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
 			ctr.resolved = no_op                    # counter-er is down/dead this pass -> no counter
 			continue
-		_resolve_one(ctr, reactions, hypo)
-		# A live, map-hitting counter ignites its own footprint too (#50) — same channel as an
-		# attack. Sits after the liveness `continue`, so a skipped counter never deposits; gated
-		# identically (lead volley member only, board only).
+		_resolve_one(ctr, reactions, hypo, board)
 		if board != null and not ctr.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
 
-static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary) -> void:
+static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
 	var outcome := ResolvedOutcome.new()
 	var attacker := action.actor
 	var target := action.target
@@ -78,8 +80,11 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	outcome.states_added = net_added
 	outcome.states_removed = removes
 
-	# final damage (E8): round(base * Pi(mult) + Sum(bonus)), never negative
-	outcome.damage = max(0, int(round(base * mult + bonus)))
+	# final damage (E8): round(base * mult + bonus), then flat DEF mitigation (#84), never negative.
+	# DEF subtracts AFTER elemental scaling and BEFORE the 0-floor; a revved Chainsword attacker
+	# pierces it entirely. Iron Will (below) stays the last clamp — an absolute cap on damage taken.
+	var mitigation := _mitigation_for(action, target, target_hypo, board)
+	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
@@ -114,7 +119,28 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		target_hypo.hp = Unit.CRISIS_REVIVE_HP                # stood back up mid-pass (enter_crisis)
 	outcome.target_hp_after = target_hypo.hp
 
+	# Displacement stage (#84): a knockback attack shoves the target directly away from the
+	# attacker, stopping at the first wall/unit/edge, threaded into the hypo so a later hit this
+	# pass sees the moved cell (R4). Needs a board to test cells; unit-only callers skip it.
+	_resolve_knockback(action, outcome, target_hypo, board)
+
 	action.resolved = outcome
+
+# DEF mitigation (#84): the flat, gear-and-terrain damage reduction the target brings to THIS
+# hit. DEF is gear-only (stats.md — no base DEF on the statline), so "ignore DEF bonuses" means
+# ignore all of it: a revved Chainsword attacker (WeaponInstance.ignores_def()) returns 0. Reads
+# the target's live DEF, which is stable across a pass (armor + CON don't change mid-resolution).
+static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> int:
+	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+	if weapon != null and weapon.ignores_def():
+		return 0
+	return target.get_effective_def() + _cover_def(board, target_hypo.position)
+
+# Terrain Cover mitigation: flat, never CON-scaled (terrain.md). No Cover exists in code yet, so
+# this is 0 today — present so the mitigation sum (and the revved pierce that zeroes it) covers
+# "armor + terrain" by construction the day Cover lands.
+static func _cover_def(_board: BoardContext, _cell: Vector2i) -> int:
+	return 0
 
 # The attack's source surface: the order's stamped fired_attack (a carving OR a specific weapon
 # attack) if it carries one, else the attacker's equipped weapon's default (main). A rune casts
@@ -145,6 +171,29 @@ static func _source_hits_map(action: AttackAction) -> bool:
 		return action.fired_attack.hits_map()   # hits_map() lives on the shared AttackData base — no cast needed
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	return weapon != null and weapon.hits_map(action.fired_attack as WeaponAttackData)
+
+static func _source_knockback(action: AttackAction) -> int:
+	if action.fired_attack != null:
+		return action.fired_attack.knockback   # on the shared AttackData base — no cast needed
+	return 0   # counters fire main (no stamped attack) — no shove
+
+static func _resolve_knockback(action: AttackAction, outcome: ResolvedOutcome, target_hypo: _Hypo, board: BoardContext) -> void:
+	var distance := _source_knockback(action)
+	if distance <= 0 or board == null or outcome.lethality == ResolvedOutcome.Lethality.KILLED:
+		return   # no shove: no knockback, no board to test cells, or the target is dead (leaving)
+	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
+	if dir == Vector2i.ZERO:
+		return
+	var landing := target_hypo.position
+	for _i in range(distance):
+		var next: Vector2i = landing + dir
+		if not board.is_walkable(next) or board.unit_at_cell(next) != null:
+			break   # stop at the first wall / off-board / occupied cell
+		landing = next
+	if landing != target_hypo.position:
+		outcome.knockback_applied = true
+		outcome.knockback_to = landing
+		target_hypo.position = landing   # thread it forward (R4)
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded

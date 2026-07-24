@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
 
-**Canon checked through #82 (2026-07-22).**
+**Canon checked through #84 (2026-07-23).**
 
 ---
 
@@ -40,7 +40,7 @@
 22. **Trench Auger Kit** [DR] — **Burrow**: erect cover/obstruction terrain (the signature mechanic, itemized; consumes the shaped-terrain variety in [terrain.md](terrain.md)).
 23. **Grindlock Governor** [CS] — sustained rev chews destructible terrain/Cover over a turn (the captured idea, itemized).
 24. **Twinned Mechanism** [∀] — **double-attack**: the standard attack hits twice, DEX-gated (the captured "double-attack as weapon property, gated by stats" — finally placed). ⚠ power watch.
-25. **Seismic Crown** [BL] — Pummel becomes a small AoE shove (crowd control keystone).
+25. **Seismic Crown** [BL] — Pummel becomes a small AoE shove (crowd control keystone). *Concrete mechanism (2026-07-23): strike an **empty** adjacent cell → shove every enemy around it outward (displace multiple at once).*
 26. **Watchman's Sear** [CB] — **overwatch**: end the turn aiming down a facing line (telegraphed-but-undirected, Axiom-4-legal); the first enemy entering the line takes the shot. The weapon-side overwatch the jobs boundary reserved.
 27. **Alembic Mixer** [SP] — load **two** elements; attacks apply both in queued order (a walking combo applicator — combinatrix gold, ⚠ watch).
 28. **Volatile Core** [∀] — big power spike; drawback: the wielder's tile gains FIRE on use (previewed, positioning tax).
@@ -58,6 +58,14 @@
 - **The Longest Arm** [SS] — attacks at range 3 *without* vaulting to ranged form.
 - **The Aegis** [∀?] — the blocking weapon: its counter also guards (identity: defense-as-offense).
 - **Ol' Faithful** [CS] — full stats for a 0-proficiency wielder (the *training* prototype — inverts the license rule as its unique trick).
+
+## Kinetic Mace captures (#84 build, 2026-07-23)
+
+Surfaced while building Pummel (charge → Blowback, [weapons.md](weapons.md)). Not yet slotted into the numbered bank; all [BL], all playtest-tunable:
+
+- **Kinetic Governor** [BL] — reworks the charge economy: charge → **push distance** instead of extra Blowbacks (only one Blowback stored, but a 3-charge shove goes 3 tiles). The single-big-shove build vs. the default multi-shove build.
+- **Groundbreaker Head** [BL] — Blowback (or the standard attack) **smashes temporary terrain buffs** — drill-dug cover, sandbags, deployed obstructions — but NOT permanent structure (castle walls). The melee answer to Drill's Burrow; pairs with terrain.md's destructible-Cover thread.
+- **Seismic Primer** [BL] — a **ground-slam self-charge**: a main action that banks charge with no enemy to hit. Lets a Bludgeon spin up before contact. ⚠ **May belong as a DEFAULT** rather than a mod (dev flag — the current default only charges by attacking).
 
 ## Watch-list & fences
 

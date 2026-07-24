@@ -61,6 +61,20 @@ func reload() -> void:
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
+# Rev seam (#84) — default: no revving, no DEF pierce. Only ChainswordWeaponInstance overrides
+# these; every other family never revs. Mirrors the readiness seam above.
+func can_rev() -> bool:
+	return false
+
+func rev() -> void:
+	pass
+
+func tick_rev() -> void:
+	pass
+
+func ignores_def() -> bool:
+	return false
+
 # Copy for grants/saves: template stays SHARED (the point of the model); spaces copy
 # shallowly — fitted mods are authored content refs, so sharing them is correct and keeps
 # them as ExtResource refs in saved files.

@@ -25,6 +25,7 @@ const RALLY := 13
 const GROUP_MOVE := 14
 const INTIMIDATE := 15
 const SPRING_LOAD := 16
+const REV := 17
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
@@ -45,6 +46,7 @@ const ACTION_DATA := {
 	INSPECT: {"name": "Inspect"},
 	ENDTURN: {"name": "End Turn"},
 	SPRING_LOAD: {"name": "Spring Load"},
+	REV: {"name": "Rev"},
 }
 
 func on_pressed(action_id: int, unit: Unit) -> void:
@@ -83,6 +85,8 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.enter_group_move_mode(unit)
 		SPRING_LOAD:
 			game.queue_spring_load(unit)
+		REV:
+			game.queue_rev(unit)
 
 # Shared gate for every main-action menu entry: one main action per unit per turn, squad
 # not spent, no other squad mid-activation. Per-action requirements chain onto this.
@@ -124,6 +128,9 @@ func populate(unit: Unit) -> Array:
 
 	if _can_take_main_action(unit) and unit.can_reload_weapon():
 		options.append(SPRING_LOAD)
+
+	if _can_take_main_action(unit) and unit.can_rev_weapon():
+		options.append(REV)
 
 		#Once Squad is active, squad state cannot change through actions
 	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not game.squad_manager.any_squad_active():

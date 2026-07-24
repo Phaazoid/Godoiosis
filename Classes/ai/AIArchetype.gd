@@ -52,11 +52,13 @@ const MAIN_ACTION_PRIORITY := {
 
 # RALLY everywhere (dev call 2026-07-22): early rallies burn the strong falloff steps while
 # idling -- revisit with real Will-awareness. RESCUE/INTIMIDATE on Rushdown: pure aggression.
+# REV everywhere (#84): "rev now vs. attack now" is real tactics -- a naive builder would rev
+# every turn and never swing. Deferred like RALLY; a scored _try_rev is its own follow-up.
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.RALLY,
-			BaseAction.ActionType.INTIMIDATE],
-	Type.HOLD: [BaseAction.ActionType.RALLY],
-	Type.SENTRY: [BaseAction.ActionType.RALLY],
+			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.REV],
+	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV],
+	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV],
 }
 
 static func main_action_priority(t: Type) -> Array:

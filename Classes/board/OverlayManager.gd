@@ -76,6 +76,13 @@ var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghost
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
+var knockback_preview_sprites: Array[Node2D] = []
+
+# Knockback preview (#84): a ghosted arrow (target cell -> landing cell) plus a planning-ghost of
+# the shoved unit where it lands. Same "resolve the plan, show it pending" rail as the terrain
+# preview; its own sprite list so a plan change clears and redraws it cleanly.
+var knockback_hidden_units: Array[Unit] = []   # shoved units whose real sprite we hid behind a ghost
+
 
 # Called when the node enters the scene tree for the first time.
 func _ready() -> void:
@@ -117,7 +124,7 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 			squadrange_overlay.erase_cell(cell)
 
 # Painted AI zones (Sentry archetype). Persistent like terrain -- not cleared by
-# clear_all/selection changes. All zones share one tint for now; painted regions read as
+# clear_selection_overlays (or any selection change). All zones share one tint for now; painted regions read as
 # distinct by shape/position, not color.
 func redraw_zones(zones: ZoneManager) -> void:
 	zone_overlay.clear()
@@ -156,6 +163,39 @@ func clear_terrain_preview() -> void:
 		if is_instance_valid(sprite):
 			sprite.queue_free()
 	terrain_preview_sprites.clear()
+
+func show_knockback_preview(shoves: Array) -> void:
+	clear_knockback_preview()
+	for shove in shoves:
+		var from: Vector2i = shove["from"]
+		var to: Vector2i = shove["to"]
+		var target: Unit = shove["target"]
+		var dir := to - from
+		# arrow: start tile on the target, arrowhead on the landing cell (reuses the move atlases)
+		knockback_preview_sprites.append(_create_arrow_sprite(from, _get_start_atlas(dir), true))
+		knockback_preview_sprites.append(_create_arrow_sprite(to, _get_arrowhead_atlas(dir), true))
+		# hide the real sprite while its ghost stands in at the landing cell — the same pairing
+		# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
+		target.visuals.set_projected(true)
+		knockback_hidden_units.append(target)
+		var ghost := Sprite2D.new()
+		ghost.texture = target.get_move_texture()
+		ghost.global_position = board_tilemap.to_global(board_tilemap.map_to_local(to))
+		ghost.z_index = Unit.BASE_SPRITE_INDEX
+		ghost.modulate = PROJECTED_MODULATE
+		ghost.offset = Vector2i(0, -8)
+		projected_unit_overlay.add_child(ghost)
+		knockback_preview_sprites.append(ghost)
+
+func clear_knockback_preview() -> void:
+	for unit in knockback_hidden_units:
+		if is_instance_valid(unit):
+			unit.visuals.set_projected(false)   # restore the real sprite
+	knockback_hidden_units.clear()
+	for sprite in knockback_preview_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	knockback_preview_sprites.clear()
 
 func show_planned_path(unit: Unit, move: MoveAction):
 	if planned_move_by_unit.has(unit):
@@ -285,7 +325,7 @@ func clear_target_icon_by_cell(target_cell: Vector2i, type: OverlayIcon.IconType
 		if icons_by_cell[target_cell].is_empty():
 			icons_by_cell.erase(target_cell)
 
-func clear_all():
+func clear_selection_overlays():
 	move_overlay.clear()
 	attack_overlay.clear()
 	hover_overlay.clear()
@@ -294,7 +334,7 @@ func clear_all():
 	squadrange_overlay.clear()
 
 # The live terrain state on the board (#50). Drawn from TerrainStateManager after execution,
-# NOT cleared by clear_all/selection changes — a burning tile stays burning regardless of what
+# NOT cleared by clear_selection_overlays (or any selection change) — a burning tile stays burning regardless of what
 # you click. Its own sprite dict, so the icon/overlay clears never touch it.
 func redraw_terrain_live(states: TerrainStateManager) -> void:
 	_clear_terrain_live()

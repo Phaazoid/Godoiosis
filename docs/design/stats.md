@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #79 (2026-07-20).**
+**Canon checked through #84 (2026-07-23).**
 
 ## Core stance
 
@@ -58,7 +58,7 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 - **LDR / Leadership** — a **squad-capacity budget** (see [squad-system.md](squad-system.md)). Continuous, not binary — some units are simply better leaders.
 - **WIL / Will** *(provisional — may become "Tenacity")* — the **death-ladder pool** (see [will-and-death.md](will-and-death.md)).
 - **Weight** *(derived)* — pushability (air/water/mace/dirt), swim/terrain, maybe movement.
-- **DEF** *(derived, gear-only)* — damage mitigation; never on the statline.
+- **DEF** *(derived, gear-only)* — damage mitigation; never on the statline. **Applied in combat since [#84](https://github.com/Phaazoid/Godoiosis/issues/84) (2026-07-23):** `PlanResolver` subtracts the target's `armor DEF + terrain Cover` flat — after elemental scaling, before the 0-floor, with Iron Will still the last clamp (Cover term stubbed at 0 until the Cover build). Before #84 it was a display-only readout the resolver never read. A **revved Chainsword** attacker pierces it entirely ([weapons.md](weapons.md)).
 
 ### CON — ADOPTED 2026-07-06 (mini-grill, post-JOBS; the reconsideration below resolved)
 

@@ -218,6 +218,22 @@ func spring_load(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't spring-load now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> spring load" % handle}
 
+# Rev: self-targeted Chainsword rev-up (a main action, #84) — the same RevAction the menu
+# queues, driving the generic Unit.can_rev_weapon()/rev_weapon() seam. While revved, this
+# unit's attacks ignore the target's DEF (PlanResolver mitigation stage).
+func rev(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not unit.can_rev_weapon():
+		return {"ok": false, "error": "%s can't rev (no chainsword equipped)" % handle}
+	var action := RevAction.new()
+	action.init(unit)
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't rev now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> rev" % handle}
+
 # member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
 # "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
 # nothing has committed to acting yet.
@@ -414,6 +430,19 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	for s in r.states_added:
 		target.add_element_state(s)
 	events.append("%s hits %s for %d%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality)])
+	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
+	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.
+	if r.knockback_applied and is_instance_valid(target):
+		target.movement.set_cell(r.knockback_to)
+		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
+	# Post-fire economy (#73/#84): mirror AttackAction.execute()'s readiness/charge hook — the
+	# headless executor bypasses that method, so without this the play path diverges from the game
+	# (a fired Spring stays sprung; a Blowback keeps its charge). Lead volley member with a real
+	# weapon attack only; counters fire main (no stamped attack), so they never reach here.
+	if not atk.is_secondary_hit and atk.fired_attack is WeaponAttackData:
+		var weapon := actor.get_equipped_weapon() as WeaponInstance
+		if weapon != null:
+			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
 
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 	match lethality:

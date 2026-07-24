@@ -14,6 +14,11 @@ extends Resource
 @export var can_counter := true
 @export var hits_allies := false
 @export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
+@export var knockback: int = 0
+# Deterministic shove (#84, Kinetic Mace): tiles this attack pushes its target directly away
+# from the attacker, stopping at the first wall/unit/edge. 0 = no displacement (every attack
+# today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
+# PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
 
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH

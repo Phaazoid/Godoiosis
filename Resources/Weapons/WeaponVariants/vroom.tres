@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ChainswordWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="1_80uo1"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_1y2am"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="3_01l8k"]
+
+[resource]
+script = ExtResource("1_80uo1")
+template = ExtResource("3_01l8k")
+item_name = "vroom"

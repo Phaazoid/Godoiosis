@@ -3,10 +3,13 @@
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="1_plvjd"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Kinetic_Mace.tres" id="2_main"]
 [ext_resource type="Texture2D" uid="uid://bhak4vdv2k32b" path="res://Art/Icons/WeaponIcons/Club.png" id="3_icon"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="4_wad"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Blowback.tres" id="5_blow"]
 
 [resource]
 script = ExtResource("1_plvjd")
 main_attack = ExtResource("2_main")
+extra_attacks = Array[ExtResource("4_wad")]([ExtResource("5_blow")])
 weapon_type = 5
 item_name = "Kinetic Mace"
 icon = ExtResource("3_icon")

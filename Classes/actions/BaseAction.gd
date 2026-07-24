@@ -18,7 +18,8 @@ enum ActionType {
 	RESCUE,
 	RALLY,
 	INTIMIDATE,
-	SPRING_LOAD
+	SPRING_LOAD,
+	REV,
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -33,6 +34,7 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.RALLY,
 	ActionType.INTIMIDATE,
 	ActionType.SPRING_LOAD,
+	ActionType.REV
 ]
 
 # Execution order of the side-channel tail — stored orders that bypass PlanResolver
@@ -43,6 +45,7 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.RALLY,
 	ActionType.INTIMIDATE,
 	ActionType.SPRING_LOAD,
+	ActionType.REV
 ]
 
 func is_main_action() -> bool:

@@ -34,6 +34,9 @@ var active_attack: AttackData = null   # the specific attack picked to fire this
 var equipped_weapon: EquippableData = null
 var worn_armor: ArmorData = null   # DEF seam (#55): fixture-level until the armor content pass
 
+var _projected_knockback_cell: Vector2i
+var _has_projected_knockback := false
+
 # Battle-scoped elemental states (boolean — you have it or you don't). These live on
 # the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
 # owns them (resolution-pipeline.md persistence seam / elemental fork 3). The resolver
@@ -354,10 +357,22 @@ func has_any_actions() -> bool:
 			return true
 	return false
 
+# A queued blowback's landing cell, so this unit's projected position reflects the shove (#84,
+# approach B): counter derivation, attack re-targeting, and the board preview all read one source.
+# Set/cleared by SquadManager.resolve_plan each pass; a unit's OWN queued move still wins.
+func set_projected_knockback(cell: Vector2i) -> void:
+	_projected_knockback_cell = cell
+	_has_projected_knockback = true
+
+func clear_projected_knockback() -> void:
+	_has_projected_knockback = false
+
 func get_projected_destination() -> Vector2i:
 	for action in squad.get_actions():
 		if action.actor == self and action.action_type == BaseAction.ActionType.MOVE and action.is_valid:
 			return action.get_destination()
+	if _has_projected_knockback:
+		return _projected_knockback_cell
 	return self.movement.cell
 	
 func get_equipped_weapon() -> EquippableData:
@@ -555,3 +570,17 @@ func reload_weapon() -> void:
 	var weapon := get_equipped_weapon() as WeaponInstance
 	if weapon != null:
 		weapon.reload()
+
+func can_rev_weapon() -> bool:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon != null and weapon.can_rev()
+
+func rev_weapon() -> void:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null:
+		weapon.rev()
+
+func tick_weapon_rev() -> void:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null:
+		weapon.tick_rev()

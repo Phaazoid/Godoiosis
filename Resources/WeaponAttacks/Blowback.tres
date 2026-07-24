@@ -9,7 +9,8 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_wad")
-display_name = "Smash"
+display_name = "Blowback"
 power = 3
 attack_pattern = SubResource("Resource_pat")
+knockback = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

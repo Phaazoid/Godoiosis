@@ -4,7 +4,7 @@
 
 > **Build status — #50 DONE + CLOSED (2026-06-28 → 06-30, three sessions).** The dynamic per-cell state store exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState {BURNING, FROZEN}` and a `Terrain.Kind` enum (GRASS/MUD/ROCK/TREE/WATER) read straight off the tileset's `terrain_type` int custom-data layer (`Resources/TestTiles.tres` — an int layer as of [#71](https://github.com/Phaazoid/Godoiosis/issues/71); the string->enum mapping boundary it used to need is gone). Fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). **All three planned slices shipped:** slice 1 (headless plumbing), slice 2 (live execution + queue preview), slice 3 (`ICE × water → FROZEN`, `FIRE × FROZEN → water`, both authored `.tres` reactions). Also shipped beyond the original scope: AoE-footprint deposit (every affected cell, not just the aim cell), counters depositing too, persistence (`ScenarioData.terrain_states` — see below), burnout/melt after 3 turn cycles (`STATE_DURATIONS`/`tick_states`), and burning-tile damage on end-of-phase (routed through `take_damage`, so downs/Crisis apply correctly). Proven in `tests/terrain/{test_cell_effects, test_terrain_persistence, test_burnout, test_ice}.gd`. **Deferred by design, not gaps:** burning spread + a varied elemental-effect roster beyond fire/ice (separate future PR); the plan-time ghost preview stays fire-only (`OverlayManager.show_terrain_preview` hardcodes BURNING — the live post-execution overlay already renders every mapped state).
 
-**Canon checked through #71 (2026-07-19).**
+**Canon checked through #84 (2026-07-23).**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -38,7 +38,7 @@ Each is **deterministic and telegraphed**. ✦ = also an elemental state (shared
 - **Flammable** (object) — catches from adjacent Fire; forests/timber are Flammable children; burns down over turns.
 - **Powder Barrel** (object) — chain-explodes on AoE/Fire; **inert while Wet**.
 - **Landmine** (object) — AoE when crossed; type sets damage/range.
-- **Cover** (object) — defensive benefit to occupants: **flat mitigation, NOT CON-scaled** (decided 2026-07-06 — terrain doesn't care who stands in it; the "Avo" half stays dead under Law #1). **Captured (2026-07-06): shaped terrain wants variety** — flat damage-debuff cover, costs-more-to-cross, damaging-to-cross — an authoring axis for Drill/Burrow, transmutation, and maps alike.
+- **Cover** (object) — defensive benefit to occupants: **flat mitigation, NOT CON-scaled** (decided 2026-07-06 — terrain doesn't care who stands in it; the "Avo" half stays dead under Law #1). **The DEF-mitigation *stage* it plugs into now exists** ([#84](https://github.com/Phaazoid/Godoiosis/issues/84), 2026-07-23 — `PlanResolver` subtracts armor DEF + a Cover term); Cover's term is stubbed at 0 (`PlanResolver._cover_def`) until this object is wired to deposit into it. A **revved Chainsword ignores it** along with armor ([weapons.md](weapons.md)). **Captured (2026-07-06): shaped terrain wants variety** — flat damage-debuff cover, costs-more-to-cross, damaging-to-cross — an authoring axis for Drill/Burrow, transmutation, and maps alike.
 - **Fault** (ground) — heavy move penalty; strips object mods.
 - **Tornado** (atmosphere) — Air damage on cross + **shove** (the wiki's "move randomly 1 square" → de-RNG'd to a deterministic directional shove).
 - **Moving terrain** — fast rivers, trains, landslides, airships (fixed paths; de-randomized "moving terrain" — see elemental-interactions "fixed-path lava/rivers").
@@ -47,7 +47,7 @@ Each is **deterministic and telegraphed**. ✦ = also an elemental state (shared
 
 Terrain is a **target**, not just a backdrop — this is where terrain & elemental overlap most, so they're owned jointly: Drill/EARTH break boulders (open paths, leave Cover rubble) · FIRE burns brambles · EARTH raises a destructible wall · WATER floods low ground (→ freeze → Ice bridge) · conductive rails. The full list lives in [elemental-interactions.md](elemental-interactions.md) ("attack the map"); **terrain.md owns the persistent-state bookkeeping, elemental owns the reaction.**
 
-*Captured (2026-06-17, scratchpad):* destructible terrain may also wear down to **sustained melee**, not only elemental/Drill work — e.g. a **revved Chainsword chewing through Cover over a turn** ([weapons.md](weapons.md)). Deterministic attrition (telegraphed across the turn), giving melee a terrain-attack lane. Not committed — captured.
+*Captured (2026-06-17, scratchpad):* destructible terrain may also wear down to **sustained melee**, not only elemental/Drill work — e.g. a **revved Chainsword chewing through Cover over a turn** ([weapons.md](weapons.md)). Deterministic attrition (telegraphed across the turn), giving melee a terrain-attack lane. Not committed — captured. *(Rev itself shipped 2026-07-23 as DEF-pierce, #84; this terrain-grind is a distinct, still-unbuilt second use gated on destructible Cover.)*
 
 ## Atmosphere as chemistry (captured — [WORKSHOP], from scratchpad)
 

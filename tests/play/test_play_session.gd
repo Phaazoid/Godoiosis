@@ -183,6 +183,22 @@ func test_rally_previews_and_executes() -> void:
 	assert_bool(exe.ok).is_true()
 	assert_int(hero.unit_instance.get_current_will()).is_greater(will_before)
 
+# Rev rides the same generic side-channel tail (#84): a queued Rev shows in the preview's
+# side_actions and actually revs the equipped chainsword when executed headless (Law #2 parity).
+func test_rev_previews_and_executes() -> void:
+	var hero: Unit = _session.unit_by_handle("A")
+	var weapon := hero.get_equipped_weapon() as ChainswordWeaponInstance
+	assert_bool(weapon != null).is_true()
+	assert_bool(weapon.is_revved()).is_false()
+	var res: Dictionary = _session.rev("A")
+	assert_bool(res.ok).is_true()
+	var prev: Dictionary = _session.preview()
+	assert_bool(prev.ok).is_true()
+	assert_int(prev.plan.side_actions.size()).is_equal(1)
+	assert_str(prev.plan.side_actions[0].type).is_equal("REV")
+	_session.execute()
+	assert_bool(weapon.is_revved()).is_true()
+
 # A queued rescue rides the same generic side_actions list, target handle included.
 func test_rescue_appears_in_side_actions() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "RescueDescribeRoot")

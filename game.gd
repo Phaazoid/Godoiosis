@@ -99,8 +99,7 @@ func _ready() -> void:
 	
 
 func _on_turn_started(faction: Team.Faction):
-	_tick_downed_countdowns(faction)
-	_tick_crisis_surges(faction)
+	_run_turn_start_ticks(faction)
 	# A faction with no commandable (active) units has nothing to do — its downed clocks already
 	# ticked above, so pass straight to the next. Guard against an all-downed board, where skipping
 	# would recurse with no faction left to stop on.
@@ -195,6 +194,12 @@ func queue_spring_load(unit: Unit):
 	squad_manager.queue_action(unit.squad, spring_load)
 	clear_selection()
 
+func queue_rev(unit: Unit):
+	var rev := RevAction.new()
+	rev.init(unit)
+	squad_manager.queue_action(unit.squad, rev)
+	clear_selection()
+
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
 # its own mode — directional aiming doesn't fit this shape.
@@ -228,6 +233,10 @@ func execute_orders(unit):
 	var plan := squad_manager.resolve_plan(squad, _board())
 	var move_actions := []
 	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
+
+	overlay_manager.clear_knockback_preview()
+	for action in squad.action_queue.duplicate():
+		action.actor.visuals.set_projected(false)
 
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
@@ -606,26 +615,24 @@ func _on_action_menu_cancelled(controller):
 
 func exit_current_mode():
 	overlay_manager.clear_hover_move_path()
-	
+	last_clicked_cell = Vector2i(-999, -999)
+	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
 		overlay_manager.redraw_planned_paths()
 		overlay_manager.redraw_projected_units()
 		refresh_action_queue(squad_manager.active_squad)
 
-	
-	last_clicked_cell = Vector2i(-999, -999)
-	clear_selection()
-
-func _tick_downed_countdowns(faction: Team.Faction):
+# Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
+# weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
+# turn-start tick as one line here — no wrapper, no _on_turn_started edit.
+func _run_turn_start_ticks(faction: Team.Faction) -> void:
 	for unit in _all_units():
-		if unit.is_downed() and unit.get_faction() == faction:
-			unit.tick_downed_countdown()
-
-func _tick_crisis_surges(faction: Team.Faction):
-	for unit in _all_units():
-		if unit.get_faction() == faction:
-			unit.advance_crisis_surge()
+		if unit.get_faction() != faction:
+			continue
+		unit.tick_downed_countdown()
+		unit.advance_crisis_surge()
+		unit.tick_weapon_rev()
 
 func clear_selection():
 	game_state = GameState.IDLE
@@ -634,8 +641,9 @@ func clear_selection():
 	_target_pick_callback = Callable()   # drop captured refs
 	
 	overlay.clear()
-	overlay_manager.clear_all()
+	overlay_manager.clear_selection_overlays()
 	overlay_manager.clear_terrain_preview()
+	overlay_manager.clear_knockback_preview()
 	if squad_manager.active_squad == null:
 		overlay_manager.clear_squad_range()
 	if squad_manager.active_squad == null:
@@ -651,11 +659,12 @@ func refresh_action_queue(squad: Squad):
 	if squad == null:
 		squad_action_queue_control.show_display_entries([])
 		overlay_manager.clear_terrain_preview()
+		overlay_manager.clear_knockback_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
 	var entries := squad_manager.get_display_entries_for_squad(squad, _board())
 	squad_action_queue_control.show_display_entries(entries)
-	_preview_terrain_effects(squad)
+	_preview_plan_effects(squad)
 	var can_execute: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions()
 		and not squad_manager.squad_has_invalid_actions(squad)
@@ -667,15 +676,20 @@ func refresh_action_queue(squad: Squad):
 	else:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
 
-# Law #2 board preview: the cells the active plan WILL ignite, derived from the same resolver pass
-# the queue panel reads. Ghosted so it reads as "pending", not "already on fire".
-func _preview_terrain_effects(squad: Squad) -> void:
+# Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
+# the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).
+func _preview_plan_effects(squad: Squad) -> void:
 	var plan := squad_manager.resolve_plan(squad, _board())
 	var cells: Array[Vector2i] = []
 	for effect in plan.cell_effects:
 		if effect.states_added.has(Terrain.TileState.BURNING) and not cells.has(effect.cell):
 			cells.append(effect.cell)
 	overlay_manager.show_terrain_preview(cells)
+	var shoves: Array = []
+	for atk in plan.attacks:
+		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+			shoves.append({"target": atk.target, "from": atk.target.movement.cell, "to": atk.resolved.knockback_to})
+	overlay_manager.show_knockback_preview(shoves)
 
 func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	var unit = UnitFactory.create_unit(data, grid, pos)
@@ -799,7 +813,7 @@ func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())
 
 func draw_joinable_squads(joining_unit: Unit):
-	overlay_manager.clear_all()
+	overlay_manager.clear_selection_overlays()
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if squad_manager.can_join_squad(joining_unit, unit.squad) and unit.is_leader():
@@ -896,7 +910,7 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 	if game_state == GameState.IDLE: 
 		#Always show selected tile and info for what you're hovering over
 		cursor_controller.set_cursor_pos(hoveredCell)
-		overlay_manager.clear_all()
+		overlay_manager.clear_selection_overlays()
 
 		if hoveredUnit != null:
 			var moverange := compute_move_range(hoveredUnit)
@@ -914,7 +928,7 @@ func update_hover_visuals(hoveredCell: Vector2i, mousepos: Vector2i):
 				icons_to_draw = get_squad_icons(hoveredUnit.squad) #Have this add to the dictionary of icons. 
 		else:
 			hover_info_panel.clear()
-			overlay_manager.clear_all()
+			overlay_manager.clear_selection_overlays()
 			cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 			if squad_manager.active_squad == null:
 				clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])

@@ -72,7 +72,10 @@ func execute():
 			target.remove_element_state(s)
 		for s in resolved.states_added:
 			target.add_element_state(s)
-
+		# Knockback (#84): shove the target to the resolved landing cell. set_cell is instant (a
+		# tweened slide is polish, TODO); the resolver already stopped it at any wall/unit/edge.
+		if resolved.knockback_applied and is_instance_valid(target):
+			target.movement.set_cell(resolved.knockback_to)
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
 	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
 	# Counters always fire main (#72), which never consumes, so this never fires on a counter.
