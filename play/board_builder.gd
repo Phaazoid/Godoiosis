@@ -50,6 +50,13 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	turn_manager.name = "TurnManager"
 	root.add_child(turn_manager)
 
+	# The dynamic tile-state store (#50), the twin of game.terrain_states. A child of root so it
+	# frees with the board; without it BoardContext carries no terrain and every cell-state read
+	# (BURNING, and Cover's DEF since #84) silently answers "nothing here".
+	var terrain_states := TerrainStateManager.new()
+	terrain_states.name = "TerrainStateManager"
+	root.add_child(terrain_states)
+
 	return {
 		"root": root,
 		"grid": grid,
@@ -57,6 +64,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"overlay_manager": overlay,
 		"squad_manager": squad_manager,
 		"turn_manager": turn_manager,
+		"terrain_states": terrain_states,
 	}
 
 static func paint_rect(grid: TileMapLayer, rect: Rect2i) -> void:
@@ -88,6 +96,8 @@ static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
 # squad rebuilds read them.
 static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[Unit]:
 	board.grid.tile_map_data = scenario.tile_data
+	if board.get("terrain_states") != null:
+		board.terrain_states.load_state_dict(scenario.terrain_states)   # mirrors ScenarioManager
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry

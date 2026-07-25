@@ -12,6 +12,7 @@ var units_root: Node2D
 var squad_manager: SquadManager
 var turn_manager: TurnManager
 var overlay_manager: OverlayManager
+var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
@@ -27,6 +28,7 @@ func _init(board: Dictionary) -> void:
 	squad_manager = board.squad_manager
 	turn_manager = board.turn_manager
 	overlay_manager = board.overlay_manager
+	terrain_states = board.get("terrain_states")
 	for unit in live_units():
 		_register(unit)
 
@@ -83,7 +85,7 @@ func unit_by_handle(h: String) -> Unit:
 	return null
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()
@@ -234,6 +236,23 @@ func rev(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rev now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> rev" % handle}
 
+# Burrow: the Drill's self-targeted entrenchment (a main action, #84) — the same BurrowAction the
+# Weapon Action menu queues. Its consequence is TERRAIN: a COVER tile deposited on the burrower's
+# cell by the resolver's plan (see execute's cell-effect step), granting flat DEF to whoever
+# stands there.
+func burrow(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not unit.can_burrow_weapon():
+		return {"ok": false, "error": "%s can't burrow (no drill equipped)" % handle}
+	var action := BurrowAction.new()
+	action.init(unit)
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't burrow now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> burrow" % handle}
+
 # member joins leader's squad — one join_squad call covers both "squad up" (leader was solo) and
 # "join squad", with the player's own eligibility: same faction, within the leader's LDR range,
 # nothing has committed to acting yet.
@@ -382,9 +401,12 @@ func execute() -> Dictionary:
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
-	# 2) attacks, then 3) counters — apply resolved outcomes (mirrors AttackAction.execute guards)
+	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
+	# Same order as game.execute_orders — a tile deposited this pass is live for the counters that
+	# follow it, and for every later pass.
 	for atk in plan.attacks:
 		_apply_attack(atk, events)
+	_apply_cell_effects(plan.cell_effects, events)
 	for ctr in plan.counters:
 		_apply_attack(ctr, events)
 
@@ -409,6 +431,17 @@ func execute() -> Dictionary:
 		squad_manager.set_has_acted(squad, true)
 
 	return {"ok": true, "events": events}
+
+# Play the resolved terrain deposits into the live store (twin of game._apply_cell_effects, minus
+# the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
+func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[String]) -> void:
+	if terrain_states == null:
+		return
+	for effect in cell_effects:
+		terrain_states.apply(effect)
+		for state in effect.states_added:
+			events.append("%s becomes %s" % [str(effect.cell), Terrain.TileState.keys()[state]])
+
 
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	var actor := atk.actor

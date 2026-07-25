@@ -123,18 +123,21 @@ func can_control(unit: Unit) -> bool:
 	if not unit.is_active():        # downed/dead units can't be commanded (will-and-death.md)
 		return false
 	return unit.get_faction() == turn_manager.active_faction()
-		
-# Attack entry (#30 C, generalized #72): a rune with several channelable carvings, or a weapon
-# with several stock attacks, opens a pick menu first; a single choice auto-selects. Reset first
-# so a stale pick never leaks into a new aim.
+
+# Attack entry (weapons-only Weapon Action refactor, 2026-07-24): a WEAPON always fires its default
+# (main) attack — no submenu; its extras + self-abilities live under Weapon Action now. A RUNE keeps
+# the carving pick-menu (its carvings become an Ability Action category later, #88). Reset the pick
+# so a stale one never leaks into a new aim.
 func _begin_attack(unit: Unit) -> void:
 	unit.active_attack = null
-	var choices := unit.get_selectable_attacks()
-	if choices.size() > 1:
-		show_attack_menu(get_viewport().get_mouse_position(), choices, unit)
-		return
-	if not choices.is_empty():
-		unit.active_attack = choices[0]
+	var rune := unit.get_equipped_weapon() as RuneData
+	if rune != null:
+		var choices := unit.get_selectable_attacks()
+		if choices.size() > 1:
+			show_attack_menu(get_viewport().get_mouse_position(), choices, unit)
+			return
+		if not choices.is_empty():
+			unit.active_attack = choices[0]
 	enter_attack_mode(unit)
 
 func show_attack_menu(pos: Vector2i, attacks: Array[AttackData], unit: Unit) -> void:
@@ -167,6 +170,62 @@ func _on_attack_picked(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	enter_attack_mode(unit)
 
+# Weapon Action submenu (2026-07-24): the equipped weapon's non-main attacks + its self-abilities
+# (Spring Load / Rev; Burrow when Drill lands), gathered under one menu entry instead of a top-level
+# slot each. A picked attack routes to targeting; a picked self-ability queues immediately. Purely a
+# menu grouping — the queued orders stay ATTACK/SPRING_LOAD/REV, so nothing downstream changes.
+func show_weapon_action_menu(unit: Unit) -> void:
+	var controller := ActionMenuController.new()
+	add_child(controller)
+	controller.setup(unit)
+
+	var items := []
+	var data := {}
+	var entries := []   # index -> {"attack": WeaponAttackData} OR {"self": BaseAction.ActionType}
+	var idx := 0
+	for atk in unit.get_weapon_secondary_attacks():
+		var entry := {"name": atk.display_name}
+		if not unit.is_attack_fireable(atk):
+			entry["disabled"] = true
+			entry["tooltip"] = "Not ready — reload the weapon first"
+		items.append(idx)
+		data[idx] = entry
+		entries.append({"attack": atk})
+		idx += 1
+	if unit.can_reload_weapon():
+		items.append(idx)
+		data[idx] = {"name": "Spring Load"}
+		entries.append({"self": BaseAction.ActionType.SPRING_LOAD})
+		idx += 1
+	if unit.can_rev_weapon():
+		items.append(idx)
+		data[idx] = {"name": "Rev"}
+		entries.append({"self": BaseAction.ActionType.REV})
+		idx += 1
+	if unit.can_burrow_weapon():
+		items.append(idx)
+		data[idx] = {"name": "Burrow"}
+		entries.append({"self": BaseAction.ActionType.BURROW})
+		idx += 1
+
+	controller.action_selected.connect(func(sel_idx, picking_unit): _on_weapon_action_picked(picking_unit, entries[sel_idx]))
+	controller.cancelled.connect(clear_selection_controller)
+	controller.cancelled.connect(_on_action_menu_cancelled)
+	controller.populate(items, data)
+	controller.setpos(get_viewport().get_mouse_position())
+
+func _on_weapon_action_picked(unit: Unit, entry: Dictionary) -> void:
+	if entry.has("attack"):
+		_on_attack_picked(unit, entry["attack"])
+	else:
+		match entry["self"]:
+			BaseAction.ActionType.SPRING_LOAD:
+				queue_spring_load(unit)
+			BaseAction.ActionType.REV:
+				queue_rev(unit)
+			BaseAction.ActionType.BURROW:
+				queue_burrow(unit)
+
 func end_turn():
 	await _apply_burning_tile_damage(turn_manager.active_faction())
 	clear_selection()
@@ -198,6 +257,12 @@ func queue_rev(unit: Unit):
 	var rev := RevAction.new()
 	rev.init(unit)
 	squad_manager.queue_action(unit.squad, rev)
+	clear_selection()
+
+func queue_burrow(unit: Unit):
+	var burrow := BurrowAction.new()
+	burrow.init(unit)
+	squad_manager.queue_action(unit.squad, burrow)
 	clear_selection()
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
@@ -680,11 +745,18 @@ func refresh_action_queue(squad: Squad):
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).
 func _preview_plan_effects(squad: Squad) -> void:
 	var plan := squad_manager.resolve_plan(squad, _board())
-	var cells: Array[Vector2i] = []
+	var deposits: Array = []
+	var seen := {}
 	for effect in plan.cell_effects:
-		if effect.states_added.has(Terrain.TileState.BURNING) and not cells.has(effect.cell):
-			cells.append(effect.cell)
-	overlay_manager.show_terrain_preview(cells)
+		for state in effect.states_added:
+			# Vector3i key = (cell.x, cell.y, state) — dedupes per cell-AND-state, so two
+			# attacks igniting one cell draw one icon but a cell gaining two states draws both.
+			var key := Vector3i(effect.cell.x, effect.cell.y, state)
+			if seen.has(key):
+				continue
+			seen[key] = true
+			deposits.append({"cell": effect.cell, "state": state})
+	overlay_manager.show_terrain_preview(deposits)
 	var shoves: Array = []
 	for atk in plan.attacks:
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):

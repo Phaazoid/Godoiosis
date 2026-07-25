@@ -2,6 +2,7 @@ class_name Terrain
 extends Object
 
 const BURNING_TILE_DAMAGE := 5
+const COVER_DEF := 2   # flat DEF a Cover tile grants its occupant (#84 Burrow) — a tuning dial
 
 # Tile vocabulary for #50 — deliberately SEPARATE from Elemental (dev call 2026-06-28).
 # A tile's condition is its own enum, not Elemental.State; the two stay independent until
@@ -13,7 +14,9 @@ const BURNING_TILE_DAMAGE := 5
 enum TileState {
 	NONE,
 	BURNING,
-	FROZEN
+	FROZEN,
+	COVER    # #84: Burrow-dug entrenchment. Permanent (no STATE_DURATIONS entry -> never ticks out);
+			 # removed only by a destructive hit (states_removed), never by a timer.
 }
 
 # Static authored tile content, read straight off the tileset's "terrain_type" int

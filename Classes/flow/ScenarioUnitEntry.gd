@@ -22,6 +22,7 @@ class_name ScenarioUnitEntry
 @export var current_will := -1   # -1 = unsaved; 0 is a legal saved value
 @export var inventory: Array[EquippableData] = []
 @export var equipped_index := -1   # into inventory; -1 = unarmed. Replaced the equipped_weapon copy (#83).
+@export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
 @export var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
 @export var aura: Dictionary[Elemental.Element, int] = {}
 @export var limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
@@ -56,6 +57,11 @@ func capture_unit_state(unit: Unit) -> void:
 		# equipped directly without an inventory slot (fixtures do this) — save it anyway
 		equipped_index = inventory.size()
 		inventory.append(unit.get_equipped_weapon().copy_equippable())
+	worn_armor_index = sources.find(unit.worn_armor)
+	if unit.worn_armor != null and worn_armor_index == -1:
+		# worn without an inventory slot (dev/fixtures do this) — save it anyway
+		worn_armor_index = inventory.size()
+		inventory.append(unit.worn_armor.copy_equippable())
 
 	limb_states = {}
 	limb_prosthetic_stats = {}
@@ -100,6 +106,10 @@ func apply_unit_state(unit: Unit) -> void:
 		unit.equip_weapon_from_inventory(equipped_index)
 	else:
 		unit.unequip_weapon()
+	if worn_armor_index >= 0 and worn_armor_index < unit.inventory.size():
+		unit.worn_armor = unit.inventory[worn_armor_index] as ArmorData
+	else:
+		unit.worn_armor = null
 
 	for slot in limb_states:
 		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]

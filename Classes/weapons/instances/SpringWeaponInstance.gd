@@ -20,3 +20,6 @@ func reload() -> void:
 func consume_readiness_for(attack: WeaponAttackData) -> void:
 	if attack.consumes_readiness:
 		ready = false
+
+func status_text() -> String:
+	return "Loaded" if ready else "Spent — needs Spring Load"

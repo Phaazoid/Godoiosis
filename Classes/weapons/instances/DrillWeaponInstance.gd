@@ -1,5 +1,9 @@
 class_name DrillWeaponInstance
 extends WeaponInstance
 
-# Pure pass-through — Drill has no signature-mechanic state yet (Burrow is
-# undesigned). Exists so weapon_type dispatch (#82) has a real class to build.
+# Drill's signature is Burrow (#84): a main action that lays a permanent COVER tile (flat terrain
+# DEF) on the burrower's cell — the melee terrain-engineer. No per-weapon battle state (the deposit
+# lives in the plan/terrain layer, not on the weapon), so can_burrow() is the entire surface.
+
+func can_burrow() -> bool:
+	return true

@@ -61,6 +61,12 @@ func reload() -> void:
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
+# Burrow seam (#84) — default: this family can't burrow. Only DrillWeaponInstance overrides it.
+# No per-weapon STATE (unlike rev/readiness): a Burrow's consequence is a terrain tile, derived in
+# the plan, not weapon state — so this capability query is the whole surface.
+func can_burrow() -> bool:
+	return false
+
 # Rev seam (#84) — default: no revving, no DEF pierce. Only ChainswordWeaponInstance overrides
 # these; every other family never revs. Mirrors the readiness seam above.
 func can_rev() -> bool:
@@ -74,6 +80,13 @@ func tick_rev() -> void:
 
 func ignores_def() -> bool:
 	return false
+
+# Status seam (#44) — default: this family has no battle state worth reporting. Families with a
+# signature mechanic override it so the player can SEE the state their decisions depend on
+# (a spent spear can't Spring, an uncharged mace can't Blowback). Presentation-only: nothing in
+# the rules reads this string.
+func status_text() -> String:
+	return ""
 
 # Copy for grants/saves: template stays SHARED (the point of the model); spaces copy
 # shallowly — fitted mods are authored content refs, so sharing them is correct and keeps

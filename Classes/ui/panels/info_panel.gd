@@ -12,6 +12,8 @@ const EMPTY_COLOR := Color(0.9, 0.3, 0.3)
 const PROSTHETIC_COLOR := Color(0.45, 0.8, 0.95)
 const AT_RISK_COLOR := Color(0.95, 0.8, 0.25)
 const CRISIS_COLOR := Color(0.95, 0.35, 0.3)
+const TERRAIN_BUFF_COLOR := Color(0.95, 0.85, 0.3)   # a TEMPORARY source (terrain you stand on)
+const NO_TINT := Color(0, 0, 0, 0)                   # alpha 0 = leave the theme's colour alone
 
 const LIMB_SHORT: Dictionary[UnitInstance.LimbSlot, String] = {
 	UnitInstance.LimbSlot.ARM_L: "LA",
@@ -35,8 +37,10 @@ const LIMB_FULL: Dictionary[UnitInstance.LimbSlot, String] = {
 @onready var abilities_list: VBoxContainer = $AbilitiesList
 
 var unit: Unit
+var board: BoardContext   # for board-dependent readouts (terrain Cover DEF); null = armor only
 
-func set_unit(target: Unit):
+func set_unit(target: Unit, context: BoardContext = null):
+	board = context
 	if unit != null and is_instance_valid(unit):
 		unit.unit_instance.hp_changed.disconnect(_on_hp_changed)
 		unit.unit_instance.will_changed.disconnect(_on_will_changed)
@@ -142,8 +146,13 @@ func _refresh_stats():
 	if unit.worn_armor != null:
 		armor_name = unit.worn_armor.item_name
 		armor_power = unit.worn_armor.def_power
-	_add_stat("DEF", str(unit.get_effective_def()), def_tooltip(
-		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON)))
+	# One shared breakdown (the resolver sums the same call). Yellow = a temporary source is
+	# contributing — terrain you're standing on, not gear you own.
+	var def := RulesService.def_breakdown(unit, unit.movement.cell, board)
+	var def_color: Color = TERRAIN_BUFF_COLOR if def["cover"] > 0 else NO_TINT
+	_add_stat("DEF", str(def["total"]), def_tooltip(
+		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON),
+		def["armor"], def["cover"]), def_color)
 	_add_stat("LDR", str(unit.get_effective_ldr()), "LDR %d %+d PER band" % [
 		unit.get_effective_stat(Stats.Stat.LDR),
 		Stats.per_ldr_band(unit.get_effective_stat(Stats.Stat.PER))])
@@ -151,7 +160,7 @@ func _refresh_stats():
 		"Capacity: 1 + leader eLDR %d / %d per member" % [
 			unit.squad.get_leader().get_effective_ldr(), Squad.MEMBER_LDR_COST])
 
-func _add_stat(stat_name: String, value: String, tip: String):
+func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_TINT):
 	var name_lbl := Label.new()
 	name_lbl.text = stat_name
 	name_lbl.add_theme_color_override("font_color", DIM_COLOR)
@@ -159,6 +168,8 @@ func _add_stat(stat_name: String, value: String, tip: String):
 	value_lbl.text = value
 	value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	value_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	if value_color.a > 0.0:
+		value_lbl.add_theme_color_override("font_color", value_color)
 	if tip != "":
 		for lbl: Label in [name_lbl, value_lbl]:
 			lbl.tooltip_text = tip
@@ -218,10 +229,16 @@ static func mov_tooltip(base: int, dex_band: int, weight: int, threshold: int, p
 static func weight_tooltip(body: int, gear: int, threshold: int, penalty: int) -> String:
 	return "Body (CON) %d + gear %d\nAt %d+ MOV takes -%d" % [body, gear, threshold, penalty]
 
-static func def_tooltip(armor_name: String, def_power: int, con: int) -> String:
+static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int) -> String:
+	var lines: Array[String] = []
 	if armor_name == "":
-		return "No armor worn"
-	return "%s: %d armor x CON %d" % [armor_name, def_power, con]
+		lines.append("No armor worn")
+	else:
+		lines.append("%s: %d armor x CON %d = %d" % [armor_name, def_power, con, armor_def])
+	if cover_def > 0:
+		lines.append("Cover (terrain): +%d" % cover_def)
+	lines.append("Total: %d" % (armor_def + cover_def))
+	return "\n".join(lines)
 
 static func ability_tooltip(display_name: String, kind_name: String, description: String) -> String:
 	var text := "%s (%s)" % [display_name, kind_name]

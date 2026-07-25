@@ -493,6 +493,19 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+
+	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile on the burrower's
+	# projected cell. Routed through cell_effects so preview + execution consume the same object
+	# (R3) — it serializes and draws for free, exactly like an elemental terrain deposit.
+	if board != null:
+		for action in squad.action_queue:
+			if action.action_type != BaseAction.ActionType.BURROW:
+				continue
+			var cover := ResolvedCellEffect.new()
+			cover.cell = action.actor.get_projected_destination()
+			cover.states_added.append(Terrain.TileState.COVER)
+			plan.cell_effects.append(cover)
+
 	return plan
 
 func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[ActionQueueDisplayEntry]:

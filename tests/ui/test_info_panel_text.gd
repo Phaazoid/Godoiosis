@@ -24,12 +24,28 @@ func test_weight_tooltip_breakdown() -> void:
 	assert_str(tip).contains("At 8+ MOV takes -1")
 
 func test_def_tooltip_no_armor() -> void:
-	assert_str(InfoPanel.def_tooltip("", 0, 5)).is_equal("No armor worn")
+	assert_str(InfoPanel.def_tooltip("", 0, 5, 0, 0)).is_equal("No armor worn\nTotal: 0")
 
 func test_def_tooltip_with_armor() -> void:
-	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5)
+	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5, 10, 0)
 	assert_str(tip).contains("Scrap Plate")
-	assert_str(tip).contains("10 armor x CON 5")
+	assert_str(tip).contains("10 armor x CON 5 = 10")
+	assert_str(tip).not_contains("Cover")     # bare ground contributes no line at all
+	assert_str(tip).contains("Total: 10")
+
+func test_def_tooltip_itemizes_terrain_cover() -> void:
+	# Standing in a Burrow-dug entrenchment (#84): the terrain term is broken out, not folded
+	# silently into the armor figure, so the player can see WHY the number is up.
+	var tip: String = InfoPanel.def_tooltip("Scrap Plate", 10, 5, 10, 2)
+	assert_str(tip).contains("10 armor x CON 5 = 10")
+	assert_str(tip).contains("Cover (terrain): +2")
+	assert_str(tip).contains("Total: 12")
+
+func test_def_tooltip_cover_without_armor() -> void:
+	var tip: String = InfoPanel.def_tooltip("", 0, 5, 0, 2)
+	assert_str(tip).contains("No armor worn")
+	assert_str(tip).contains("Cover (terrain): +2")
+	assert_str(tip).contains("Total: 2")
 
 func test_ability_tooltip_with_description() -> void:
 	assert_str(InfoPanel.ability_tooltip("Iron Will", "Passive", "Caps damage taken.")) \

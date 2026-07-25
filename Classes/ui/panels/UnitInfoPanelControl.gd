@@ -15,25 +15,36 @@ class_name UnitInfoPanelControl
 @onready var states_bar = $UnitInfoPanel/Margin/VBox/UnitStatesBar
 
 var current_unit: Unit
+var current_board: BoardContext   # kept so a live refresh can recompute terrain-dependent DEF
 
 func _ready() -> void:
 	$UnitInfoPanel/Margin/VBox/HeaderRow/CloseButton.pressed.connect(clear)
+	inventory_panel.loadout_changed.connect(_on_loadout_changed)
 
-func set_unit(unit: Unit, can_act := false):
+func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:
 		return
 	if unit == null:
 		clear()
 		return
 	current_unit = unit
+	current_board = board
 	visible = true
 	name_label.text = unit.get_unit_name()
 	jobs_label.text = _jobs_text(unit)
 	portrait_panel.set_unit(unit)
-	stats_section.set_unit(unit)
+	stats_section.set_unit(unit, board)
 	inventory_panel.set_unit(unit, can_act)
 	squad_panel.set_unit(unit)
 	states_bar.set_unit(unit)
+
+# Re-read only the derived numbers. set_unit early-returns on the same unit (it's called on every
+# inspect), so a loadout change made while the panel is OPEN would otherwise leave DEF and MOV
+# showing their values from inspect time.
+func _on_loadout_changed():
+	if current_unit == null:
+		return
+	stats_section.set_unit(current_unit, current_board)
 
 func clear():
 	current_unit = null
