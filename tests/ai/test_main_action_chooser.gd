@@ -175,7 +175,7 @@ func test_sprung_weapon_falls_through_to_spring_load() -> void:
 	template.main_attack = WeaponAttackData.new()
 	template.main_attack.power = 5
 	template.main_attack.requires_readiness = true
-	var spear: SpringWeaponInstance = WeaponInstance.make(template) as SpringWeaponInstance
+	var spear: SpringspearWeaponInstance = WeaponInstance.make(template) as SpringspearWeaponInstance
 	spear.ready = false   # sprung
 	attacker.equipped_weapon = spear
 	var _victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))

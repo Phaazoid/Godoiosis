@@ -1,4 +1,4 @@
-class_name SpringWeaponInstance
+class_name SpringspearWeaponInstance
 extends WeaponInstance
 
 # Springspear's wind-up/recovery economy (#73). `ready` is deliberately NOT @export:
