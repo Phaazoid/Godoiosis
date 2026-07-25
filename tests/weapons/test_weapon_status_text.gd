@@ -63,7 +63,7 @@ func test_mace_status_calls_out_that_blowback_is_unavailable() -> void:
 
 
 func test_springspear_status_tracks_readiness() -> void:
-	var spear := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringWeaponInstance
+	var spear := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringspearWeaponInstance
 	var loaded := spear.status_text()
 	spear.ready = false
 	var spent := spear.status_text()
@@ -75,8 +75,8 @@ func test_springspear_status_tracks_readiness() -> void:
 func test_status_is_per_instance_not_per_family() -> void:
 	# Two spears in one inventory track independently (#73) -- the readout must too, or the
 	# tooltip would lie about whichever one you're hovering.
-	var first := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringWeaponInstance
-	var second := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringWeaponInstance
+	var first := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringspearWeaponInstance
+	var second := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringspearWeaponInstance
 	first.ready = false
 	assert_str(first.status_text()).is_not_equal(second.status_text())
 

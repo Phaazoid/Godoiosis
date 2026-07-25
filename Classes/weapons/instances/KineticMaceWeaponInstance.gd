@@ -2,7 +2,7 @@ class_name KineticMaceWeaponInstance
 extends WeaponInstance
 
 # Kinetic Mace's signature: charge -> Blowback (#84). `charge` is battle-scoped runtime state on
-# THIS instance (non-@export, mirrors SpringWeaponInstance.ready / Chainsword's rev timer): resets
+# THIS instance (non-@export, mirrors SpringspearWeaponInstance.ready / Chainsword's rev timer): resets
 # each mission via make()/copy_equippable(), tracks per-physical-weapon. A normal attack BUILDS +1
 # charge (capped); the Blowback attack (any attack with knockback > 0) REQUIRES and SPENDS 1. No
 # reload action needed — charge accrues from attacking. Reuses the #73 readiness seam's fireability

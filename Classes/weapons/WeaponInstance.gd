@@ -34,7 +34,7 @@ static func _instance_for(type: WeaponData.WeaponType) -> WeaponInstance:
 		WeaponData.WeaponType.DRILL:
 			return DrillWeaponInstance.new()
 		WeaponData.WeaponType.SPRINGSPEAR:
-			return SpringWeaponInstance.new()
+			return SpringspearWeaponInstance.new()
 		WeaponData.WeaponType.CARBINE:
 			return CarbineWeaponInstance.new()
 		WeaponData.WeaponType.KINETIC_MACE:
@@ -47,7 +47,7 @@ static func _instance_for(type: WeaponData.WeaponType) -> WeaponInstance:
 			return null
 
 # Readiness seam (#73) — default: no gating at all. A subclass with its own wind-up/recovery
-# economy (e.g. SpringWeaponInstance) overrides these; every other weapon never thinks about
+# economy (e.g. SpringspearWeaponInstance) overrides these; every other weapon never thinks about
 # readiness.
 func is_attack_fireable(_attack: WeaponAttackData) -> bool:
 	return true

@@ -3,7 +3,7 @@
 # independently. Covers: base WeaponInstance's no-op defaults (every other family stays
 # unaffected), WeaponInstance.make()'s weapon_type dispatch to every family's own class
 # (#82 generalized this to all seven; still just push_error+null for anything unmapped),
-# SpringWeaponInstance's state machine under both balance-knob variants
+# SpringspearWeaponInstance's state machine under both balance-knob variants
 # (Stab.requires_readiness true/false), the actual bug this design fixes (inventory-swap
 # independence), and the two legality gates
 # (AttackAction.actor_can_perform, SpringLoadAction). AttackAction.execute()'s readiness
@@ -46,7 +46,7 @@ func _plain_template() -> WeaponData:
 func test_make_returns_chainsword_weapon_instance_for_chainsword() -> void:
 	var w := WeaponInstance.make(_plain_template())
 	assert_bool(w is ChainswordWeaponInstance).is_true()
-	assert_bool(w is SpringWeaponInstance).is_false()
+	assert_bool(w is SpringspearWeaponInstance).is_false()
 
 func test_base_weapon_instance_defaults_never_gate_anything() -> void:
 	var w := WeaponInstance.make(_plain_template())
@@ -60,13 +60,13 @@ func test_base_weapon_instance_defaults_never_gate_anything() -> void:
 
 func test_make_returns_spring_weapon_instance_for_springspear() -> void:
 	var w := WeaponInstance.make(_spring_template(true))
-	assert_bool(w is SpringWeaponInstance).is_true()
+	assert_bool(w is SpringspearWeaponInstance).is_true()
 
 func test_make_dispatches_every_family_to_its_own_class() -> void:
 	var expected := {
 		WeaponData.WeaponType.CHAINSWORD: "ChainswordWeaponInstance",
 		WeaponData.WeaponType.DRILL: "DrillWeaponInstance",
-		WeaponData.WeaponType.SPRINGSPEAR: "SpringWeaponInstance",
+		WeaponData.WeaponType.SPRINGSPEAR: "SpringspearWeaponInstance",
 		WeaponData.WeaponType.CARBINE: "CarbineWeaponInstance",
 		WeaponData.WeaponType.KINETIC_MACE: "KineticMaceWeaponInstance",
 		WeaponData.WeaponType.CHEMICAL_SPITTER: "ChemicalSpitterWeaponInstance",
@@ -83,27 +83,27 @@ func test_make_returns_null_for_an_unmapped_weapon_type() -> void:
 	t.weapon_type = WeaponData.WeaponType.NONE
 	assert_object(WeaponInstance.make(t)).is_null()
 
-# --- SpringWeaponInstance state machine ---
+# --- SpringspearWeaponInstance state machine ---
 
 func test_starts_ready() -> void:
-	var w := WeaponInstance.make(_spring_template(true)) as SpringWeaponInstance
+	var w := WeaponInstance.make(_spring_template(true)) as SpringspearWeaponInstance
 	assert_bool(w.can_reload()).is_false()   # nothing to reload while already ready
 
 func test_while_ready_every_attack_is_fireable() -> void:
 	var t := _spring_template(true)
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	assert_bool(w.is_attack_fireable(t.main_attack)).is_true()
 	assert_bool(w.is_attack_fireable(t.extra_attacks[0])).is_true()
 
 func test_firing_spring_consumes_readiness() -> void:
 	var t := _spring_template(true)
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
 	assert_bool(w.can_reload()).is_true()
 
 func test_firing_stab_never_consumes_readiness() -> void:
 	var t := _spring_template(true)
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.main_attack)
 	assert_bool(w.can_reload()).is_false()   # Stab doesn't consume — still ready
 
@@ -111,21 +111,21 @@ func test_firing_stab_never_consumes_readiness() -> void:
 
 func test_all_locks_variant_blocks_stab_while_unready() -> void:
 	var t := _spring_template(true)   # Stab.requires_readiness = true
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
 	assert_bool(w.is_attack_fireable(t.main_attack)).is_false()
 	assert_bool(w.is_attack_fireable(t.extra_attacks[0])).is_false()
 
 func test_spring_only_variant_leaves_stab_fireable_while_unready() -> void:
 	var t := _spring_template(false)   # Stab.requires_readiness = false
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
 	assert_bool(w.is_attack_fireable(t.main_attack)).is_true()
 	assert_bool(w.is_attack_fireable(t.extra_attacks[0])).is_false()   # re-Spring still blocked
 
 func test_reload_restores_fireability() -> void:
 	var t := _spring_template(true)
-	var w := WeaponInstance.make(t) as SpringWeaponInstance
+	var w := WeaponInstance.make(t) as SpringspearWeaponInstance
 	w.consume_readiness_for(t.extra_attacks[0])
 	w.reload()
 	assert_bool(w.can_reload()).is_false()
@@ -138,8 +138,8 @@ func test_two_spears_in_one_inventory_track_readiness_independently() -> void:
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	var t1 := _spring_template(true)
 	var t2 := _spring_template(true)
-	var spear_a := WeaponInstance.make(t1) as SpringWeaponInstance
-	var spear_b := WeaponInstance.make(t2) as SpringWeaponInstance
+	var spear_a := WeaponInstance.make(t1) as SpringspearWeaponInstance
+	var spear_b := WeaponInstance.make(t2) as SpringspearWeaponInstance
 	unit.add_item(spear_a)   # slot 0, auto-equips
 	unit.add_item(spear_b)   # slot 1
 
@@ -159,7 +159,7 @@ func test_two_spears_in_one_inventory_track_readiness_independently() -> void:
 func test_unit_has_any_fireable_attack_reflects_readiness() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
-	var spear := WeaponInstance.make(t) as SpringWeaponInstance
+	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 	assert_bool(unit.has_any_fireable_attack()).is_true()
 	spear.consume_readiness_for(t.extra_attacks[0])
@@ -170,7 +170,7 @@ func test_unit_has_any_fireable_attack_reflects_readiness() -> void:
 func test_attack_action_refuses_to_queue_an_unfireable_pick() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
-	var spear := WeaponInstance.make(t) as SpringWeaponInstance
+	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 	spear.consume_readiness_for(t.extra_attacks[0])   # now unready, all-locks variant
 
@@ -181,7 +181,7 @@ func test_attack_action_refuses_to_queue_an_unfireable_pick() -> void:
 func test_attack_action_allows_a_fireable_pick() -> void:
 	var t := _spring_template(false)   # Stab stays fireable while unready
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
-	var spear := WeaponInstance.make(t) as SpringWeaponInstance
+	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 	spear.consume_readiness_for(t.extra_attacks[0])
 
@@ -194,7 +194,7 @@ func test_attack_action_allows_a_fireable_pick() -> void:
 func test_spring_load_actor_can_perform_requires_unready() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
-	var spear := WeaponInstance.make(t) as SpringWeaponInstance
+	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 
 	var action := SpringLoadAction.new()
@@ -207,7 +207,7 @@ func test_spring_load_actor_can_perform_requires_unready() -> void:
 func test_spring_load_execute_restores_readiness() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
-	var spear := WeaponInstance.make(t) as SpringWeaponInstance
+	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 	spear.consume_readiness_for(t.extra_attacks[0])
 
