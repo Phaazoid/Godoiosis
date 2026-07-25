@@ -69,6 +69,7 @@ Most scripts are reached by `class_name` (global), so folders are for humans nav
 ## Sharp edges (each of these has already bitten once)
 
 - **Grant/copy an equippable via `copy_equippable()`, never a bare `duplicate(true)`** (revised #59 — this used to say the opposite). `RuneData` still wants a full deep copy (its base implementation), but `WeaponInstance` overrides it to keep `template` a SHARED reference while its own `space_1/2/3` copy shallowly — a generic `duplicate(true)` would deep-copy the template too and silently fork a weapon off its family.
+- **gdUnit4's `Total execution time` line is not wall clock and inflates badly** — it read `1min 55s` for a 573-case run right after a cache clear, then `12s` for the identical run warm. Trust `run_tests.ps1`'s own stopwatched `Elapsed` line instead. The suite takes **~20s** full / **~7s** for `run_tests.ps1 fast` / ~3-5s per area; a belief that it took "about two minutes" came straight from this bad number (corrected 2026-07-24). Re-measure before ever acting on "the tests are getting slow".
 - `.tres` files omit properties at default values — an "empty-looking" resource may just be unsaved-at-defaults.
 - UI rule: **scene for static, code for dynamic.** Fixed controls live in `.tscn`; data-shaped UI (editor fields, stat rows) is generated.
 - Plain `Panel`s report 0×0 minimum size for absolutely-positioned children inside containers.

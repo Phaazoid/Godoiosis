@@ -1,8 +1,30 @@
 # One-command headless gdUnit4 runner for Iosis.
-# Usage:   powershell -File tests\run_tests.ps1 [res://path]
-#   (default runs the whole tests/ tree; pass a folder/suite to narrow)
+#
+# Usage:
+#   powershell -File tests\run_tests.ps1                   # full tree (default)
+#   powershell -File tests\run_tests.ps1 fast              # the fast tier -- inner-loop check
+#   powershell -File tests\run_tests.ps1 weapons items     # one or more areas (folders under tests/)
+#   powershell -File tests\run_tests.ps1 res://tests/ai    # explicit res:// path (back-compat)
+#
+# WHY TIERS EXIST -- measured 2026-07-24 over 573 cases / 79 suites (report_173):
+# cost is ~0.10s per test case plus ~0.75s per suite FILE, and it is near-UNIFORM. The
+# cheapest possible test (comparing two const arrays, no scene) costs 0.078s; the most
+# expensive (loading every scenario off disk) costs 0.221s -- only 2.9x apart. That means
+# there are no slow suites to quarantine: the only lever is running FEWER tests. Roughly
+# half the full run's wall clock is fixed overhead, so a tier saves on both axes.
+#
 # Override the engine with $env:GODOT_BIN if your Godot lives elsewhere.
-param([string]$TestPath = "res://tests")
+
+param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Targets)
+
+# Named tiers -> folder names under tests/. An EMPTY list means "the whole tree".
+# `fast` is the invariant core: the Law guards (registry completeness, AI action coverage,
+# damage floor, DEF mitigation) plus the pure rule/math layers. It is the "did I break
+# something cross-cutting" check, NOT a substitute for the full run before a commit.
+$Tiers = @{
+	'full' = @()
+	'fast' = @('law', 'rules', 'stats', 'unit', 'util')
+}
 
 $bin = $env:GODOT_BIN
 if (-not $bin) { $bin = "C:\Godot\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe" }
@@ -12,5 +34,49 @@ if (-not (Test-Path $bin)) {
 }
 
 $root = Split-Path $PSScriptRoot -Parent
-& $bin --path $root --headless -s "res://addons/gdUnit4/bin/GdUnitCmdTool.gd" -a $TestPath --ignoreHeadlessMode
-exit $LASTEXITCODE
+if (-not $Targets -or $Targets.Count -eq 0) { $Targets = @('full') }
+
+$folders = New-Object System.Collections.Generic.List[string]
+$explicit = New-Object System.Collections.Generic.List[string]
+$wholeTree = $false
+
+foreach ($t in $Targets) {
+	if ($t -like 'res://*') { $explicit.Add($t); continue }
+	if ($Tiers.ContainsKey($t)) {
+		if ($Tiers[$t].Count -eq 0) { $wholeTree = $true }
+		else { foreach ($f in $Tiers[$t]) { $folders.Add($f) } }
+		continue
+	}
+	$folders.Add($t)
+}
+
+# Fail loudly on a typo'd area rather than silently running nothing -- gdUnit4 treats an
+# unknown -a path as "zero suites matched" and still exits 0, which reads as a clean pass.
+$known = Get-ChildItem -Path $PSScriptRoot -Directory | Select-Object -ExpandProperty Name
+foreach ($f in $folders) {
+	if ($known -notcontains $f) {
+		Write-Error "Unknown test area '$f'. Tiers: $($Tiers.Keys -join ', '). Areas: $($known -join ', ')."
+		exit 1
+	}
+}
+
+$paths = New-Object System.Collections.Generic.List[string]
+if ($wholeTree) {
+	$paths.Add('res://tests')
+} else {
+	foreach ($f in ($folders | Select-Object -Unique)) { $paths.Add("res://tests/$f") }
+	foreach ($e in $explicit) { $paths.Add($e) }
+}
+
+# -a appends (GdUnitTestCIRunner.add_test_suite -> _included_tests.append), so it repeats.
+$argv = @('--path', $root, '--headless', '-s', 'res://addons/gdUnit4/bin/GdUnitCmdTool.gd')
+foreach ($p in $paths) { $argv += @('-a', $p) }
+$argv += '--ignoreHeadlessMode'
+
+Write-Host "Running: $($paths -join '  ')" -ForegroundColor Cyan
+$sw = [System.Diagnostics.Stopwatch]::StartNew()
+& $bin @argv
+$code = $LASTEXITCODE
+$sw.Stop()
+Write-Host ("Elapsed {0:N1}s  (exit {1})" -f $sw.Elapsed.TotalSeconds, $code) -ForegroundColor Cyan
+exit $code
