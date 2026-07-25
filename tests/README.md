@@ -9,15 +9,27 @@ Pins the **settled** systems (the squad spec) as executable invariants so they d
 One command (PowerShell), from anywhere in the repo:
 
 ```
-powershell -File tests\run_tests.ps1                     # whole tests/ tree
-powershell -File tests\run_tests.ps1 res://tests/squad   # one folder or suite
+powershell -File tests\run_tests.ps1                     # full tree            ~20s
+powershell -File tests\run_tests.ps1 fast                # the fast tier        ~7s
+powershell -File tests\run_tests.ps1 weapons items       # one or more areas    ~3-5s each
+powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-compat)
 ```
+
+**Tiers** (added 2026-07-24) are named in `run_tests.ps1`'s `$Tiers` table — edit it there, it's the only definition:
+
+- **`fast`** = `law` + `rules` + `stats` + `unit` + `util` — 149 cases. The invariant core: the Law guards (action-registry completeness, AI action coverage, damage floor, DEF mitigation) plus the pure rule/math layers. This is the "did I break something cross-cutting" check for the inner loop, **not** a substitute for the full run before a commit.
+- **`full`** = the whole tree (the default).
+- Anything else is treated as an **area** — a folder name under `tests/`. A typo'd area is a hard error, deliberately: gdUnit4 treats an unmatched `-a` path as "zero suites" and still **exits 0**, which reads as a clean pass.
+
+`-a` is repeatable (`GdUnitTestCIRunner.add_test_suite` appends), which is what makes multi-area runs work.
 
 `run_tests.ps1` runs Godot headless against gdUnit4 and returns the suite's exit code. It defaults to `C:\Godot\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe`; override with `$env:GODOT_BIN`. The raw command it runs:
 
 ```
 <godot-console-exe> --path . --headless -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode
 ```
+
+> **⚠ Ignore gdUnit4's `Total execution time` line — it is not wall clock and inflates badly.** It printed `1min 55s` for a 573-case run immediately after a cache clear, then `12s` for the *identical* run warm. `run_tests.ps1` prints its own stopwatched `Elapsed` line; trust that one. (This mismeasurement is why the suite was believed to take ~2 minutes; it takes ~20 seconds. Cost is ~0.035s/case warm, so suite size is not a looming problem.)
 
 **Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below.
 
@@ -53,6 +65,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # one folder or suite
 - **`--remote-debug` needs a real port** (1–65535); `tcp://127.0.0.1:0` is rejected in 4.6, so we don't pass it.
 - **Orphan-node hygiene = the exit code.** gdUnit4 counts "orphan nodes" (`root.get_orphan_node_ids()` — any `Node` not in the SceneTree) sampled *during* each test, and returns `101` if any remain. So a fixture that `Node.new()`s something must keep it **in the tree** or `auto_free` it. The big trap here: `SquadManager` creates `Squad` nodes as *its own* children, so if the manager itself is orphaned (not in the tree) every squad it makes is an orphan too. `make_manager` therefore stands the manager up **inside the tree** (see fixtures below). Counterpart: `queue_free()` only works for in-tree nodes, which is a second reason to keep the graph in-tree.
 - **RefCounted reference cycles leak** (no GC). A volley's `AttackAction.volley` array references every sibling including itself, so a volley is a self-referential cycle that never frees — the volley suite breaks it in `after_test` (`attack.volley = empty`). See findings; this is a real (small) gameplay leak too.
+- **`tests/flow/test_scenario_load_integrity.gd` segfaults on SHUTDOWN when run alone** (exit `-1073741819` = `0xC0000005` access violation). All 7 cases pass — `0 errors, 0 failures, 0 orphans` — and *then* the process dies tearing down. It is **masked in the full run** (which exits 0), so it went unnoticed until per-area runs existed; found 2026-07-24 while adding tiers. Tracked as [#93](https://github.com/Phaazoid/Godoiosis/issues/93). Until fixed, `run_tests.ps1 flow` reports failure despite a clean pass — read the summary line, not just the exit code, for that one area.
 - **A failure truncates the REST of that suite file, silently.** Observed 2026-07-15 (#56): fixing one failing assertion in `test_ai_tactics.gd` revealed a second, previously-unrun test in the same file with the identical bug — the run before the fix reported "9 test cases" for that suite when the file has more; only after the fix did the remaining tests execute. So a suite's printed test count is not proof the whole file ran — if you fix a failure, **always re-run** rather than trusting the fix from reasoning alone, and don't assume "only 1 failure reported" means "only 1 test in this file is affected."
 - **Content-scan catalogs can key off a name that changes.** `WeaponAttackCatalog` (and similar folder-scan catalogs) use `display_name` as the registry key, falling back to the resource's filename when `display_name` is unset. Authoring a real `display_name` for a previously-unnamed attack changes its catalog key — a test asserting the old filename-derived key breaks (happened 2026-07-22: Springspear's main attack, "Springspear" → "Stab"). Expect this to recur as the remaining weapon families get real content.
 
