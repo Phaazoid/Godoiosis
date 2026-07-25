@@ -24,8 +24,7 @@ const RESCUE := 12
 const RALLY := 13
 const GROUP_MOVE := 14
 const INTIMIDATE := 15
-const SPRING_LOAD := 16
-const REV := 17
+const WEAPON_ACTION := 16
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
@@ -34,6 +33,7 @@ const ACTION_DATA := {
 	MOVE: {"name": "Move"},
 	GROUP_MOVE: {"name": "Group Move"},
 	ATTACK: {"name": "Attack"},
+	WEAPON_ACTION: {"name": "Weapon Action"},
 	RESCUE: {"name": "Rescue"},
 	RALLY: {"name": "Rally"},
 	INTIMIDATE: {"name": "Intimidate"},
@@ -45,8 +45,6 @@ const ACTION_DATA := {
 	CANCEL: {"name": "Cancel Actions"},
 	INSPECT: {"name": "Inspect"},
 	ENDTURN: {"name": "End Turn"},
-	SPRING_LOAD: {"name": "Spring Load"},
-	REV: {"name": "Rev"},
 }
 
 func on_pressed(action_id: int, unit: Unit) -> void:
@@ -72,7 +70,7 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 		LEAVESQUAD:
 			game.squad_manager.leave_squad(unit)
 		INSPECT:
-			game.unit_info_panel.set_unit(unit, game.can_control(unit))
+			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
 		EXECUTE_ORDERS:
 			game.execute_orders(unit)
 		RESCUE:
@@ -83,10 +81,8 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.enter_target_pick_mode(RulesService.adjacent_enemies(unit, game._board()), func(target: Unit): game.queue_intimidate(unit, target))
 		GROUP_MOVE:
 			game.enter_group_move_mode(unit)
-		SPRING_LOAD:
-			game.queue_spring_load(unit)
-		REV:
-			game.queue_rev(unit)
+		WEAPON_ACTION:
+			game.show_weapon_action_menu(unit)
 
 # Shared gate for every main-action menu entry: one main action per unit per turn, squad
 # not spent, no other squad mid-activation. Per-action requirements chain onto this.
@@ -126,11 +122,8 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
 		options.append(INTIMIDATE)
 
-	if _can_take_main_action(unit) and unit.can_reload_weapon():
-		options.append(SPRING_LOAD)
-
-	if _can_take_main_action(unit) and unit.can_rev_weapon():
-		options.append(REV)
+	if _can_take_main_action(unit) and unit.has_weapon_actions():
+		options.append(WEAPON_ACTION)
 
 		#Once Squad is active, squad state cannot change through actions
 	if not unit.squad.has_any_queued_actions() and not unit.squad.has_acted and not game.squad_manager.any_squad_active():

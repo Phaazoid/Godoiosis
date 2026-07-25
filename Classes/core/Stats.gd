@@ -33,9 +33,11 @@ const BAND_MID_MAX := 7    # 4-7 = mid rung (all defaults land here); 8+ = high
 const DEX_MOV_MID_MAX := 5    # 4-5 = +0
 const DEX_MOV_HIGH_MAX := 8   # 6-8 = +1; 9+ = +2
 
-static func armor_def(def_power: int, con: int) -> int:
-	# DEF x CON (stats.md): a multiplier with NO base — zero armor or zero CON -> zero DEF.
-	return int(round(def_power * con * CON_DEF_FACTOR))
+static func armor_def(def_power: int, con: int, flat_def: int = 0) -> int:
+	# DEF = flat term + (power x CON) (stats.md). The SCALED term is a multiplier with NO base,
+	# so zero armor or zero CON contributes nothing to it; flat_def is the un-scaled term a piece
+	# may carry on top, so a CON-GATED piece can pay out without double-dipping CON (2026-07-24).
+	return flat_def + int(round(def_power * con * CON_DEF_FACTOR))
 
 static func dex_mov_band(dex: int) -> int:
 	if dex <= BAND_LOW_MAX:

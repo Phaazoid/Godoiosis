@@ -164,11 +164,13 @@ func get_weight(gear: int = 0) -> int:
 	var carried := 0
 	return body + gear + modules + carried
 
-func get_mov(gear: int = 0) -> int:
+func get_mov(gear: int = 0, dex_modifier: int = 0) -> int:
 	# MOV is a READOUT: flat jobless base + DEX band, minus the heavy-load step, then the leg
 	# throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat. Job-driven MOV base
 	# is parked (#61, docs/design/jobs.md "Parked") — audit A4 reopens.
-	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX))
+	# dex_modifier is the worn-gear DEX tax, threaded in the same shape as `gear` weight: gear
+	# lives on the transient Unit, so UnitInstance can't reach it directly.
+	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX) + dex_modifier)
 	if get_weight(gear) >= WEIGHT_MOV_THRESHOLD:
 		mov -= WEIGHT_MOV_PENALTY
 	match empty_leg_count():

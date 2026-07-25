@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ArmorData" format=3]
+
+[ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="1_armor"]
+
+[resource]
+script = ExtResource("1_armor")
+def_power = 4
+stat_modifiers = Dictionary[int, int]({
+4: -1
+})
+item_name = "Riveted Mail"
+description = "Honest interlocked rings. No gate, no trick -- anyone can put it on, and everyone pays the same coin for it: the shoulders never move quite as freely again."
+metadata/_custom_type_script = "uid://dj0617uewvdny"

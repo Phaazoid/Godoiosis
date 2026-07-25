@@ -35,6 +35,7 @@ const PATH_ARROW_DOWN := preload("res://Art/Icons/ArrowIcons/endfromtop.png")
 const TERRAIN_STATE_ICONS: Dictionary = {
 	Terrain.TileState.BURNING: preload("res://Art/Icons/TerrainIcons/Fire.png"),
 	Terrain.TileState.FROZEN: preload("res://Art/Icons/TerrainIcons/Ice.png"),
+	Terrain.TileState.COVER: preload("res://Art/Icons/TerrainIcons/Cover.png"),
 }
 
 const TERRAIN_Z_INDEX := 1                                # above the board, below unit sprites — tweak by eye
@@ -145,13 +146,19 @@ func clear_hover_move_path():
 		m.clear_preview_sprites()
 	hover_move_previews.clear()
 
-# Plan-time preview of pending deposits (Law #2 — the queue/board shows the ignite BEFORE you
-# execute). Ephemeral: redrawn on plan change, cleared on deselect, like the planning overlays.
-func show_terrain_preview(cells: Array[Vector2i]) -> void:
+# Plan-time preview of pending deposits (Law #2 — the board shows the ignite/entrenchment BEFORE
+# you execute). Takes {"cell": Vector2i, "state": Terrain.TileState} entries (mirrors
+# show_knockback_preview's shape) so each deposit draws its OWN icon — was BURNING-only until
+# Burrow (#84) made a second previewable state real. Ephemeral: redrawn on plan change.
+func show_terrain_preview(deposits: Array) -> void:
 	clear_terrain_preview()
-	for cell in cells:
+	for deposit in deposits:
+		var state: Terrain.TileState = deposit["state"]
+		if not TERRAIN_STATE_ICONS.has(state):
+			continue
+		var cell: Vector2i = deposit["cell"]
 		var sprite := Sprite2D.new()
-		sprite.texture = TERRAIN_STATE_ICONS[Terrain.TileState.BURNING]
+		sprite.texture = TERRAIN_STATE_ICONS[state]
 		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
 		sprite.z_index = TERRAIN_Z_INDEX
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE

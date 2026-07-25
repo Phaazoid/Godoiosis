@@ -163,3 +163,15 @@ static func adjacent_enemies(unit: Unit, board: BoardContext) -> Array[Unit]:
 		if other != null and other != unit and not other.is_dead() and Team.is_enemy(unit.get_faction(), other.get_faction()):
 			result.append(other)
 	return result
+	
+# Every source of DEF for `unit` standing on `cell`, itemized (#84). ONE composition point: the
+# resolver sums it to mitigate damage, the inspect panel shows it — so the readout can never claim
+# a different number than the one actually subtracted (Law #2's spirit applied to a stat readout).
+# A future DEF source (a Guard ability, a buff) gets added HERE and both sites pick it up free.
+static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Dictionary[String, int]:
+	var armor := unit.get_effective_def()
+	var cover := 0
+	if board != null:
+		cover = board.cover_def_at(cell)
+	var result: Dictionary[String, int] = {"armor": armor, "cover": cover, "total": armor + cover}
+	return result

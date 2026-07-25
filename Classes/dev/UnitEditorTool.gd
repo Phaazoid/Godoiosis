@@ -65,6 +65,10 @@ func _equippable_catalog() -> Dictionary:
 	var weapons := WeaponCatalog.get_editable()
 	for k in weapons:
 		items[k] = weapons[k]
+	var armors := ArmorCatalog.get_editable()
+	for k in armors:
+		items[k] = armors[k]
+	return items
 	var runes := RuneCatalog.get_editable()
 	for k in runes:
 		items[k] = runes[k]
@@ -113,17 +117,38 @@ func _add_inventory_section(unit: Unit):
 			held_label.text = "holds: %s" % held_name
 			row.add_child(held_label)
 
+		var is_armor := current_item is ArmorData
 		var equip_btn := CheckBox.new()
-		equip_btn.text = "Equip"
-		equip_btn.button_group = equip_group
+		equip_btn.text = "Wear" if is_armor else "Equip"
 		equip_btn.disabled = not (current_item is EquippableData)
-		equip_btn.button_pressed = (current_item != null and current_item == unit.get_equipped_weapon())
-		equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(unit, i))
+		if is_armor:
+			equip_btn.button_pressed = (current_item == unit.worn_armor)
+			equip_btn.toggled.connect(func(pressed): _toggle_armor(unit, i, pressed))
+		else:
+			equip_btn.button_group = equip_group
+			equip_btn.button_pressed = (current_item != null and current_item == unit.get_equipped_weapon())
+			equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(unit, i))
 		row.add_child(equip_btn)
 
+		if is_armor:
+			var gate_label := Label.new()
+			var gate: String = current_item.requirement_text()
+			gate_label.text = "(%s)" % gate if gate != "" else "(no requirement)"
+			row.add_child(gate_label)
+
 		unit_editor_container.add_child(row)
 
 		unit_editor_container.add_child(row)
+
+func _toggle_armor(unit: Unit, index: int, pressed: bool):
+	# Dev tools stay omnipotent: this assigns directly, BYPASSING can_equip on purpose, so
+	# out-of-spec combos can be tested. The requirement is shown in the row label instead.
+	# The player path (inventory_panel -> Unit.wear_armor) is where the gate actually bites.
+	if pressed:
+		unit.worn_armor = unit.inventory[index] as ArmorData
+	elif unit.inventory[index] == unit.worn_armor:
+		unit.remove_armor()
+	populate_unit_editor(unit)
 
 func _entry_matches(entry, item) -> bool:
 	# A template entry matches an instance built on it; saved instances / runes match by name.
@@ -200,9 +225,9 @@ func _add_limbs_section(unit: Unit):
 		DevWidgets.add_option(unit_editor_container, slot_names[slot], state_names, state_names[fitting.state],
 			func(s): _on_limb_state_picked(unit, slot, s))
 
-	DevWidgets.add_label(unit_editor_container, "MOV: %d" % inst.get_mov())
+	DevWidgets.add_label(unit_editor_container, "MOV: %d" % unit.get_mov())
 	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d" % [
-		inst.get_effective_stat(Stats.Stat.STR), inst.get_effective_stat(Stats.Stat.DEX)])
+		unit.get_effective_stat(Stats.Stat.STR), unit.get_effective_stat(Stats.Stat.DEX)])
 
 func _add_affinity_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Affinity")

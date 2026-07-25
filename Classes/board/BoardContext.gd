@@ -43,7 +43,15 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 # resolver) so tests can stub it — the headless fixture grid has no TileSet to paint.
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 	return GridUtils.get_terrain_kind_at_cell(grid, cell)
-	
+
+# The rules' single read-point for a cell's terrain DEF (#84): a Burrow-dug COVER tile shelters
+# whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
+# stage and the inspect panel's DEF readout both come through here, so they can't drift.
+func cover_def_at(cell: Vector2i) -> int:
+	if terrain_states == null:
+		return 0
+	return Terrain.COVER_DEF if terrain_states.has_state(cell, Terrain.TileState.COVER) else 0
+
 # Census over this board's units — shared by game.gd and the headless PlaySession so the
 # turn cycle's membership/auto-skip reads have ONE implementation.
 func present_factions() -> Array[Team.Faction]:

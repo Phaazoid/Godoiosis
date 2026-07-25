@@ -1,6 +1,8 @@
 extends Object
 class_name PlanResolver
 
+const INSULATED_POPUP := "Insulated!"
+
 # The one place consequences are derived (docs/design/resolution-pipeline.md, R1-R8).
 # ONE pure pass over the ordered plan — attacks, then counters (R7) — threading a
 # hypothetical {position, element states, HP, Will-slot} per unit forward (R4). Per hit:
@@ -49,7 +51,11 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	var target_hypo: _Hypo = _hypo_for(target, hypo)
-	var elements := _source_elements(action)
+	var incoming := _source_elements(action)
+	var elements := _surviving_elements(incoming, target)
+	var fully_insulated := not incoming.is_empty() and elements.is_empty()
+	if elements.size() < incoming.size():
+		outcome.popups.append(INSULATED_POPUP)
 	var mult := 1.0
 	var bonus := 0
 	var adds: Array[Elemental.State] = []
@@ -85,6 +91,19 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# pierces it entirely. Iron Will (below) stays the last clamp — an absolute cap on damage taken.
 	var mitigation := _mitigation_for(action, target, target_hypo, board)
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
+
+	# Insulation (armor immune_elements): an attack whose damage IS elemental -- a rune carving,
+	# which scales off the wielder's AURA rather than their body -- is TURNED ASIDE ENTIRELY when
+	# the armor blocks every element it carries. Deliberately NOT modelled as a 0-damage hit: those
+	# still COUNT as hits and still finish a downed unit (stats.md's 0-damage rule). The bolt never
+	# arrived -- so it can't kill, can't shove, and triggers nothing on-hit. A weapon merely TAGGED
+	# with a blocked element skips this branch and still lands its swing: insulation, not a shield.
+	if fully_insulated and action.fired_attack is TransmutationData:
+		outcome.damage = 0
+		outcome.lethality = ResolvedOutcome.Lethality.NONE
+		outcome.target_hp_after = target_hypo.hp
+		action.resolved = outcome
+		return
 
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
@@ -126,21 +145,26 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	action.resolved = outcome
 
-# DEF mitigation (#84): the flat, gear-and-terrain damage reduction the target brings to THIS
-# hit. DEF is gear-only (stats.md — no base DEF on the statline), so "ignore DEF bonuses" means
-# ignore all of it: a revved Chainsword attacker (WeaponInstance.ignores_def()) returns 0. Reads
-# the target's live DEF, which is stable across a pass (armor + CON don't change mid-resolution).
+# Elements that survive the target's gear. A blocked element is erased from the hit entirely, so
+# no reaction keyed on it can fire -- canon calls this shape "immune to SHOCK reactions"
+# (elemental-interactions.md's GROUNDED state, the designed shock counter).
+static func _surviving_elements(elements: Array[Elemental.Element], target: Unit) -> Array[Elemental.Element]:
+	var kept: Array[Elemental.Element] = []
+	for e in elements:
+		if not target.is_immune_to(e):
+			kept.append(e)
+	return kept
+
+# DEF mitigation (#84): the flat, gear-and-terrain damage reduction the target brings to THIS hit,
+# read from RulesService's shared breakdown so the inspect panel's DEF readout is the same number.
+# DEF is gear-and-terrain only (stats.md — no base DEF), so "ignore DEF bonuses" means ignore all
+# of it: a revved Chainsword attacker (WeaponInstance.ignores_def()) returns 0, armor AND cover.
 static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> int:
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	if weapon != null and weapon.ignores_def():
 		return 0
-	return target.get_effective_def() + _cover_def(board, target_hypo.position)
-
-# Terrain Cover mitigation: flat, never CON-scaled (terrain.md). No Cover exists in code yet, so
-# this is 0 today — present so the mitigation sum (and the revved pierce that zeroes it) covers
-# "armor + terrain" by construction the day Cover lands.
-static func _cover_def(_board: BoardContext, _cell: Vector2i) -> int:
-	return 0
+	var def := RulesService.def_breakdown(target, target_hypo.position, board)
+	return def["total"]
 
 # The attack's source surface: the order's stamped fired_attack (a carving OR a specific weapon
 # attack) if it carries one, else the attacker's equipped weapon's default (main). A rune casts

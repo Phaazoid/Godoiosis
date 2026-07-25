@@ -32,7 +32,9 @@ var pending_grid : TileMapLayer
 var pending_cell : Vector2i
 var active_attack: AttackData = null   # the specific attack picked to fire this aim — a carving or a weapon attack (#30 C, generalized #72); null = auto
 var equipped_weapon: EquippableData = null
-var worn_armor: ArmorData = null   # DEF seam (#55): fixture-level until the armor content pass
+var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Carried in `inventory`
+                                   # like a weapon but filling its OWN slot — set only via
+                                   # wear_armor(), the one place the wear gate lives.
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
@@ -117,7 +119,11 @@ func add_item(item: Item) -> bool:
 		if inventory[i] == null:
 			inventory[i] = item
 
-			if equipped_weapon == null and item is EquippableData:
+			# Auto-equip the first WEAPON-shaped equippable only. ArmorData is an EquippableData
+			# too, but it fills a different slot -- auto-equipping it here would "arm" a unit with
+			# a vest and shadow the real weapon they pick up next. Armor is never auto-worn: the
+			# wear gate makes silent auto-wear ambiguous, so wearing is always an explicit act.
+			if equipped_weapon == null and item is EquippableData and not item is ArmorData:
 				equipped_weapon = item
 
 			return true
@@ -146,6 +152,8 @@ func remove_item(index: int):
 			return
 		if item == equipped_weapon:
 			equipped_weapon = null
+		if item == worn_armor:
+			worn_armor = null
 		inventory[index] = null
 		
 func _on_instance_died():
@@ -157,7 +165,14 @@ func get_base_stat(stat: Stats.Stat) -> int:
 	return unit_instance.get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	return unit_instance.get_effective_stat(stat)
+	return unit_instance.get_effective_stat(stat) + _gear_modifier(stat)
+
+# The "-> gear" tail of the effective-stat chain (stats.md). Derived live from what's worn,
+# the same way get_effective_def reads worn_armor live -- no stored mirror to keep in sync.
+func _gear_modifier(stat: Stats.Stat) -> int:
+	if worn_armor == null:
+		return 0
+	return worn_armor.stat_modifiers.get(stat, 0)
 
 func get_modifier(stat: Stats.Stat) -> int:
 	return unit_instance.stat_modifiers.get(stat, 0)
@@ -166,7 +181,7 @@ func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov(_gear_weight())
+	return unit_instance.get_mov(_gear_weight(), _gear_modifier(Stats.Stat.DEX))
 
 func get_weight() -> int:
 	return unit_instance.get_weight(_gear_weight())
@@ -188,7 +203,11 @@ func get_effective_def() -> int:
 	# DEF is gear-only (stats.md); the CON math lives with the stat doctrine in Stats.
 	if worn_armor == null:
 		return 0
-	return Stats.armor_def(worn_armor.def_power, get_effective_stat(Stats.Stat.CON))
+	return Stats.armor_def(worn_armor.def_power, get_effective_stat(Stats.Stat.CON), worn_armor.flat_def)
+
+func is_immune_to(element: Elemental.Element) -> bool:
+	# Targeted elemental protection lives on GEAR (alchemy-kit.md: no catch-all RES stat).
+	return worn_armor != null and worn_armor.blocks_element(element)
 
 func has_element_state(state: Elemental.State) -> bool:
 	return element_states.has(state)
@@ -413,11 +432,29 @@ func equip_weapon_from_inventory(index: int) -> bool:
 	if not item is EquippableData:
 		return false
 
+	if item is ArmorData:
+		return false   # armor fills the armor slot -- use wear_armor()
+
 	equipped_weapon = item
 	return true
 
 func unequip_weapon():
 	equipped_weapon = null
+
+func wear_armor(index: int) -> bool:
+	# The ONE chokepoint where armor gets worn, so the wear gate has exactly one place to live.
+	if index < 0 or index >= inventory.size():
+		return false
+	var armor := inventory[index] as ArmorData
+	if armor == null:
+		return false
+	if not armor.can_equip(self):
+		return false
+	worn_armor = armor
+	return true
+
+func remove_armor():
+	worn_armor = null
 
 func revive():
 	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
@@ -522,6 +559,31 @@ func get_selectable_attacks() -> Array[AttackData]:
 			result.append(a)
 	return result
 
+# The equipped WEAPON's non-main attacks — surfaced under the Weapon Action menu (2026-07-24).
+# Empty for a rune (its carvings stay under Attack) or an empty slot. = available_attacks minus main.
+func get_weapon_secondary_attacks() -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon == null or weapon.template == null:
+		return result
+	var main := weapon.template.main_attack
+	for a in weapon.available_attacks(self):
+		if a != main:
+			result.append(a)
+	return result
+
+# Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
+# reload) OR a fireable secondary attack. Mere existence isn't enough — a mace's Blowback that can't
+# fire yet (0 charge) must not light up the button. Unfireable secondaries still LIST (disabled)
+# inside the submenu when something else opens it. Runes never qualify (the ability queries fail the cast).
+func has_weapon_actions() -> bool:
+	if can_rev_weapon() or can_reload_weapon() or can_burrow_weapon():
+		return true
+	for atk in get_weapon_secondary_attacks():
+		if is_attack_fireable(atk):
+			return true
+	return false
+
 # What a COUNTER fires — deliberately separate from get_fired_attack(): a rune counters with
 # whatever it would currently fire (unchanged #30 quirk), but a weapon ALWAYS counters with its
 # main attack, ignoring any live active_attack selection (#72 ruling; overwatch-style alt-attack
@@ -584,3 +646,7 @@ func tick_weapon_rev() -> void:
 	var weapon := get_equipped_weapon() as WeaponInstance
 	if weapon != null:
 		weapon.tick_rev()
+
+func can_burrow_weapon() -> bool:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	return weapon != null and weapon.can_burrow()

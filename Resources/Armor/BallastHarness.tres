@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ArmorData" format=3]
+
+[ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="1_armor"]
+
+[resource]
+script = ExtResource("1_armor")
+def_power = 2
+stat_maximums = Dictionary[int, int]({
+4: 4
+})
+item_name = "Ballast Harness"
+description = "A counterweighted rig that trades all agility for a braced stance. A nimble fighter's reflexes fight the ballast and tangle -- only someone already unhurried can wear it at all."
+metadata/_custom_type_script = "uid://dj0617uewvdny"

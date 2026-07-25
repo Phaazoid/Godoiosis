@@ -27,3 +27,8 @@ func tick_rev() -> void:
 
 func ignores_def() -> bool:
 	return is_revved()
+
+func status_text() -> String:
+	if revved_turns_remaining > 0:
+		return "Revved — %d turn(s) left (ignores DEF)" % revved_turns_remaining
+	return "Not revved"

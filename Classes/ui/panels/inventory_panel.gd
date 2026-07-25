@@ -5,6 +5,7 @@ extends PanelContainer
 # controllable (can_act). Slot rows show the computed weapon view (elements incl. mods).
 
 @onready var slots_container = $MarginContainer/InventorySlots
+signal loadout_changed
 
 var unit: Unit = null
 var can_act := false
@@ -82,6 +83,11 @@ func _select_slot(index: int):
 		_close_action_popup()
 		_refresh()
 		return
+	if selected_index == index and action_popup != null:
+		selected_index = -1        # clicking the open slot again = "never mind"
+		_close_action_popup()
+		_refresh()
+		return
 	selected_index = index
 	_refresh()
 	if can_act:
@@ -96,13 +102,26 @@ func _show_action_popup(index: int):
 	var item = unit.inventory[index]
 	if item == null:
 		return
+		
 
 	var popup := PanelContainer.new()
 	popup.z_index = 10
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
 
-	if item is WeaponInstance:
+	if item is ArmorData:
+		var wear_btn := Button.new()
+		if item == unit.worn_armor:
+			wear_btn.text = "Remove"
+			wear_btn.pressed.connect(_do_remove_armor)
+		elif item.can_equip(unit):
+			wear_btn.text = "Wear"
+			wear_btn.pressed.connect(_do_wear.bind(index))
+		else:
+			wear_btn.text = "Wear — needs %s" % item.requirement_text()
+			wear_btn.disabled = true      # the gate, shown rather than silently swallowed
+		vbox.add_child(wear_btn)
+	elif item is WeaponInstance:
 		var equip_btn := Button.new()
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
@@ -117,7 +136,12 @@ func _show_action_popup(index: int):
 		toss_btn.text = "Toss"
 		toss_btn.pressed.connect(_do_toss.bind(index))
 		vbox.add_child(toss_btn)
-		
+
+	var cancel_btn := Button.new()
+	cancel_btn.text = "Cancel"
+	cancel_btn.pressed.connect(_do_cancel)
+	vbox.add_child(cancel_btn)
+
 	add_child(popup)
 	var slot = slots_container.get_child(index)
 	popup.global_position = slot.global_position + Vector2(slot.size.x + 4, 0)
@@ -128,24 +152,67 @@ func _close_action_popup():
 		action_popup.queue_free()
 	action_popup = null
 
+# Every loadout mutation funnels through here: close the popup, redraw the slots, and announce
+# that DERIVED readouts are stale -- DEF from armor, MOV from gear weight. The panel that owns
+# the stats section listens; this one deliberately doesn't know how to reach it.
+func _apply_change():
+	_close_action_popup()
+	_refresh()
+	loadout_changed.emit()
+
 func _do_equip(index: int):
 	if unit != null:
 		unit.equip_weapon_from_inventory(index)
-	_close_action_popup()
-	_refresh()
+	_apply_change()
 
 func _do_unequip(index: int):
 	if unit != null:
 		unit.unequip_weapon()
-	_close_action_popup()
-	_refresh()
+	_apply_change()
+
+func _do_wear(index: int):
+	if unit != null:
+		unit.wear_armor(index)
+	_apply_change()
+
+func _do_remove_armor():
+	if unit != null:
+		unit.remove_armor()
+	_apply_change()
 
 func _do_toss(index: int):
 	if unit != null:
 		unit.remove_item(index)
 	selected_index = -1
+	_apply_change()
+
+func _do_cancel():
+	selected_index = -1
 	_close_action_popup()
 	_refresh()
+
+# Hover readout for one slot. Leads with the numbers a decision actually turns on -- live weapon
+# state, or armor's itemized DEF -- and puts flavour text last.
+func _tooltip_for(item) -> String:
+	var lines: Array[String] = []
+	if item is WeaponInstance:
+		lines.append(item.shown_name())
+		if unit != null:
+			lines.append("Damage %d" % item.base_damage(unit))
+		var status: String = item.status_text()
+		if status != "":
+			lines.append(status)
+	elif item is ArmorData:
+		lines.append(item.item_name)
+		var mech: String = item.mechanical_text(unit)
+		if mech != "":
+			lines.append(mech)
+	else:
+		lines.append(item.item_name)
+	if item.description != "":
+		lines.append("")
+		lines.append(item.description)
+	return "\n".join(lines)
 
 func _refresh():
 	for i in range(Unit.MAX_INVENTORY_SIZE):
@@ -169,10 +236,13 @@ func _refresh():
 			if item == unit.get_equipped_weapon():
 				display_name += "  (E)"
 				name_label.modulate = COLOR_EQUIPPED
+			elif item == unit.worn_armor:
+				display_name += "  (W)"
+				name_label.modulate = COLOR_EQUIPPED
 			else:
 				name_label.modulate = Color(1, 1, 1, 1)
-			if item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template):
-				display_name += "  [installed]"
+			if item is ArmorData and item.modifier_text() != "":
+				display_name += "  [%s]" % item.modifier_text()
 
 			# Append elemental damage — the computed view, so mod-added elements show too.
 			if item is WeaponInstance and unit != null:
@@ -181,7 +251,9 @@ func _refresh():
 					display_name += "  [%s]" % Elemental.Element.keys()[elems[0]].capitalize()
 
 			name_label.text = display_name
+			slot.tooltip_text = _tooltip_for(item)
 		else:
 			icon.texture = null
 			name_label.text = "Empty"
 			name_label.modulate = COLOR_EMPTY
+			slot.tooltip_text = ""

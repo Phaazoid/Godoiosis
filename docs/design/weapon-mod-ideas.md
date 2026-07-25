@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
 
-**Canon checked through #84 (2026-07-23).**
+**Canon checked through #89 (2026-07-24).**
 
 ---
 
@@ -17,7 +17,7 @@
 5. **Bayonet Lug** [CB] — the gun gains the 1-tile melee standard attack.
 6. **Sprung Lanyard** [∀] — weapon cannot be Stripped/disarmed (the anti-Filcher fitting; legibility: visible cord).
 7. **Recoil Lugs** [BL] — Pummel shoves +1 tile.
-8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash.
+8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash. **Newly buildable 2026-07-24 ([#89](https://github.com/Phaazoid/Godoiosis/issues/89)):** elemental immunity now exists as machinery — `ArmorData.immune_elements` + `Unit.is_immune_to`, which `PlanResolver` reads to erase blocked elements from an incoming hit. This mod needs only to route a *weapon-sourced* immunity into the same read point (today it's armor-only), not new resolver plumbing.
 9. **Tuning Weights** [SS] — sweet-spot cell damage +1 (rides the #25 per-cell damage-band thread).
 10. **Oiled Action** [∀] — this weapon's attack resolves before same-initiative? — ⚠ no initiative system exists; park. Replace: equip/unequip this weapon costs no action (if inventory actions ever cost).
 
@@ -37,8 +37,8 @@
 ## Size 3 — keystones (space 3 only: the folded "5th-tier spike")
 
 21. **Supercharged Steam Generator** [∀] — unlocks the family's authored **alt-fire mode** (e.g. a stronger AoE burst, then a main-action rewind before it fires again — the wind-up economy Springspear's own Stab/Spring/Spring Load now exercises for real, [#73](https://github.com/Phaazoid/Godoiosis/issues/73); `WeaponAttackData.requires_readiness`/`consumes_readiness` already exist, so a mod-granted alt-fire would reuse the same two flags, not invent new plumbing).
-22. **Trench Auger Kit** [DR] — **Burrow**: erect cover/obstruction terrain (the signature mechanic, itemized; consumes the shaped-terrain variety in [terrain.md](terrain.md)).
-23. **Grindlock Governor** [CS] — sustained rev chews destructible terrain/Cover over a turn (the captured idea, itemized).
+22. **Trench Auger Kit** [DR] — **Burrow**: erect cover/obstruction terrain (the signature mechanic, itemized; consumes the shaped-terrain variety in [terrain.md](terrain.md)). ⚠ **Base Burrow SHIPPED 2026-07-24 (#84)** — the defensive Cover half is now stock on every Drill, so this mod needs a new job: the **obstruction** half (impassable mounds, deliberately unbuilt), or a *shaped/upgraded* Cover (bigger DEF, an adjacent cell instead of your own, a second flavor from terrain.md's variety axis).
+23. **Grindlock Governor** [CS] — sustained rev chews destructible terrain/Cover over a turn (the captured idea, itemized). **Newly unblocked 2026-07-24:** destructible Cover exists now (Burrow deposits it, removal rides `states_removed`), so this needs only the grind mechanic, not new terrain.
 24. **Twinned Mechanism** [∀] — **double-attack**: the standard attack hits twice, DEX-gated (the captured "double-attack as weapon property, gated by stats" — finally placed). ⚠ power watch.
 25. **Seismic Crown** [BL] — Pummel becomes a small AoE shove (crowd control keystone). *Concrete mechanism (2026-07-23): strike an **empty** adjacent cell → shove every enemy around it outward (displace multiple at once).*
 26. **Watchman's Sear** [CB] — **overwatch**: end the turn aiming down a facing line (telegraphed-but-undirected, Axiom-4-legal); the first enemy entering the line takes the shot. The weapon-side overwatch the jobs boundary reserved.
@@ -64,7 +64,7 @@
 Surfaced while building Pummel (charge → Blowback, [weapons.md](weapons.md)). Not yet slotted into the numbered bank; all [BL], all playtest-tunable:
 
 - **Kinetic Governor** [BL] — reworks the charge economy: charge → **push distance** instead of extra Blowbacks (only one Blowback stored, but a 3-charge shove goes 3 tiles). The single-big-shove build vs. the default multi-shove build.
-- **Groundbreaker Head** [BL] — Blowback (or the standard attack) **smashes temporary terrain buffs** — drill-dug cover, sandbags, deployed obstructions — but NOT permanent structure (castle walls). The melee answer to Drill's Burrow; pairs with terrain.md's destructible-Cover thread.
+- **Groundbreaker Head** [BL] — Blowback (or the standard attack) **smashes temporary terrain buffs** — drill-dug cover, sandbags, deployed obstructions — but NOT permanent structure (castle walls). The melee answer to Drill's Burrow; pairs with terrain.md's destructible-Cover thread. **Newly buildable 2026-07-24:** its target now literally exists — Burrow-dug `Terrain.TileState.COVER` is permanent-until-destroyed by design, and the removal path (`ResolvedCellEffect.states_removed`) is already the machinery an attack would use. This is the most build-ready mod in the bank.
 - **Seismic Primer** [BL] — a **ground-slam self-charge**: a main action that banks charge with no enemy to hit. Lets a Bludgeon spin up before contact. ⚠ **May belong as a DEFAULT** rather than a mod (dev flag — the current default only charges by attacking).
 
 ## Watch-list & fences

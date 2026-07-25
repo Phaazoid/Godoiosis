@@ -175,6 +175,95 @@ func test_fixture_style_direct_equip_is_captured() -> void:
 	assert_object(loaded).is_not_null()
 	assert_int(loaded.template.main_attack.power).is_equal(4)
 
+# --- worn_armor round-trip (#65). Armor is inventory-backed like weapons, so it saves as an
+# INDEX (worn_armor_index), never as a second copy alongside the carried one. ---
+
+func _plate() -> ArmorData:
+	var armor := ArmorData.new()
+	armor.item_name = "Plate"
+	armor.def_power = 6
+	armor.flat_def = 1
+	armor.stat_minimums[Stats.Stat.CON] = 6
+	armor.immune_elements.append(Elemental.Element.SHOCK)
+	return armor
+
+func test_worn_armor_round_trips() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 8}, false)
+	var armor := _plate()
+	a.add_item(armor)
+	assert_bool(a.wear_armor(0)).is_true()
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {Stats.Stat.CON: 8}, false)
+	entry.apply_unit_state(b)
+
+	assert_object(b.worn_armor).is_not_null()
+	assert_str(b.worn_armor.item_name).is_equal("Plate")
+	assert_int(b.worn_armor.def_power).is_equal(6)
+	# every field of the model rides along -- gates and immunity are as persistent as DEF
+	assert_int(b.worn_armor.flat_def).is_equal(1)
+	assert_int(b.worn_armor.stat_minimums[Stats.Stat.CON]).is_equal(6)
+	assert_bool(b.worn_armor.blocks_element(Elemental.Element.SHOCK)).is_true()
+	assert_object(b.worn_armor).is_not_same(armor)   # copy_equippable, not the shared source
+
+func test_worn_armor_is_the_carried_copy_not_a_duplicate() -> void:
+	# The index, not a parallel copy: what the unit WEARS must be the very object sitting in its
+	# inventory, or tossing the item would leave phantom DEF behind on load.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 8}, false)
+	a.add_item(_plate())
+	a.wear_armor(0)
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {Stats.Stat.CON: 8}, false)
+	entry.apply_unit_state(b)
+
+	assert_int(entry.worn_armor_index).is_equal(0)
+	assert_object(b.worn_armor).is_same(b.inventory[0])
+
+func test_armor_worn_without_an_inventory_slot_is_still_saved() -> void:
+	# The dev tool assigns worn_armor directly (deliberate bypass). Capture must not drop it --
+	# same fallback equipped_index uses for fixture-style direct equips.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 8}, false)
+	a.worn_armor = _plate()
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {Stats.Stat.CON: 8}, false)
+	entry.apply_unit_state(b)
+
+	assert_int(entry.worn_armor_index).is_equal(0)
+	assert_object(b.worn_armor).is_not_null()
+	assert_object(b.worn_armor).is_same(b.inventory[0])
+
+func test_load_does_not_re_run_the_wear_gate() -> void:
+	# A save is authoritative. If stats drifted below the requirement between save and load,
+	# re-gating would silently strip armor off a unit who was legally wearing it.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 8}, false)
+	a.add_item(_plate())
+	a.wear_armor(0)
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	entry.stats[Stats.Stat.CON] = 2   # now far below the plate's CON 6 gate
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+
+	assert_object(b.worn_armor).is_not_null()
+	assert_bool(b.worn_armor.can_equip(b)).is_false()   # illegal, and kept anyway
+
+func test_unarmored_unit_stays_unarmored() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	b.worn_armor = ArmorData.new()   # dirty the target first -- apply must clear it, not skip
+	entry.apply_unit_state(b)
+
+	assert_object(b.worn_armor).is_null()
+
 # --- rider round-trips (#83): proficiency, aura, limbs ---
 
 func test_weapon_proficiency_round_trips() -> void:

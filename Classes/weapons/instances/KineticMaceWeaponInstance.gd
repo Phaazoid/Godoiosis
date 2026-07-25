@@ -25,3 +25,8 @@ func consume_readiness_for(attack: WeaponAttackData) -> void:
 		charge = maxi(0, charge - 1)
 	else:
 		charge = mini(MAX_CHARGE, charge + 1)
+
+func status_text() -> String:
+	if charge <= 0:
+		return "Charge 0/%d — Blowback unavailable" % MAX_CHARGE
+	return "Charge %d/%d" % [charge, MAX_CHARGE]
