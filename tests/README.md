@@ -43,7 +43,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 
    Getting this right up front avoids standing up a `SquadManager` fixture you didn't need.
 
-3. **Never call `AttackAction.execute()` directly in a test.** It `await`s `actor.visuals.play_attack_lunge(...)`, an animation coroutine. Call `PlanResolver.resolve()` and assert `.resolved.damage`/`.resolved.lethality` instead, or call the specific method `execute()`'s body would call. Side-channel actions with no animation (`IntimidateAction`, `SpringLoadAction`, `RallyAction`) don't have this problem — call `execute()` directly on those.
+3. **Never call `AttackAction.execute()` directly in a test.** It `await`s `actor.visuals.play_attack_lunge(...)`, an animation coroutine. Call `PlanResolver.resolve()` and assert `.resolved.damage`/`.resolved.lethality` instead, or call the specific method `execute()`'s body would call. Side-channel actions with no animation (`IntimidateAction`, `ReloadAction`, `RallyAction`) don't have this problem — call `execute()` directly on those.
 
 4. **Build content ad hoc — never load a `.tres`.** Construct `WeaponData`/`WeaponAttackData`/`UnitData` directly via `.new()` in a local helper function: throwaway, not catalog-registered (mirrors `make_unit_data` in the fixtures file).
 

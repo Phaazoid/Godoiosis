@@ -1,7 +1,7 @@
 # Installed prosthetic weapons (#59 item 6, weapons.md Prosthetic family): equip/unequip
 # freely like any ordinary weapon — the only lock is Toss (Unit.remove_item), since removing
 # an installed prosthetic from inventory would mean detaching a limb (a between-mission
-# action that isn't built yet). No CombatComponent special-casing needed: it's just a normal
+# action that isnt built yet). No attack-geometry special-casing needed: its just a normal
 # WeaponInstance sitting in inventory once equipped.
 extends GdUnitTestSuite
 

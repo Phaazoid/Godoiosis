@@ -55,7 +55,7 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	PlanResolver.resolve(plan)
 	var previewed := attack.resolved.damage   # main-attack power(6) + effective STR(4), via the resolver
 
-	target.combat.apply_damage(previewed)      # the execution seam
+	target.take_damage(previewed)      # the execution seam
 
 	assert_int(previewed).is_equal(10)
 	assert_int(target.get_current_hp()).is_equal(start_hp - previewed)

@@ -46,7 +46,7 @@ as parameters instead of reading `game.gd` globals:
 - `movement_cost(cell, unit, board)`
 - `gather_attack_victims(attacker, affected_cells, board)`
 
-Attack *geometry* already lives in `CombatComponent` (`get_attack_cells_from`,
+Attack *geometry* already lives in `Reach` (`get_attack_cells_from`,
 `get_affected_cells_from`, `can_hit_cell_from`) — reuse as-is, no extraction needed.
 
 ### 2. `PlaySession` — NEW scaffolding (transport-agnostic)

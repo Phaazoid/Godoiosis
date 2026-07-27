@@ -43,7 +43,10 @@ const TERRAIN_PREVIEW_MODULATE := Color(1, 1, 1, 0.5)     # ghost the pending-ig
 
 const ICON_SCENE = preload("res://Scenes/OverlayIcon.tscn")
 const SOURCE_ID = 0
-const ATLAS_COORDS = Vector2i(0,0)
+# The overlay tileset's atlas coordinates, and the single home for them: game.gd used to keep a
+# duplicate `OVERLAY_DEFAULT_ATLAS = Vector2i(0,0)` plus five more that were never referenced.
+const ATLAS_COORDS = Vector2i(0,0)          # plain fill — what every overlay layer draws with
+const TARGET_ATLAS_COORDS = Vector2i(3, 0)  # the "pick this unit" marker (PICKING_TARGET)
 const ICON_Z_INDEX = 15
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
@@ -68,10 +71,8 @@ const ICON_TEXTURES = {
 }
 
 var overlay_map = {}
-var icons_by_cell = {} # {Cell : { IconType : Icon } } 
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
-var squad_range_overlays := {} #{OverlayType : Array[Vector2i]}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
 var hover_move_preview: MoveAction = null
@@ -108,9 +109,6 @@ func _ready() -> void:
 
 func set_zone_visibility(shown: bool) -> void:
 	zone_overlay.visible = shown
-
-func modulate_overlay(type: int, rgba: Color):
-	overlay_map[type].modulate = rgba
 
 func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
@@ -212,9 +210,6 @@ func show_planned_path(unit: Unit, move: MoveAction):
 	planned_move_by_unit[unit] = move
 	redraw_planned_paths()
 
-func get_units_with_plans() -> Array:
-	return planned_move_by_unit.keys()
-
 func clear_planned_path(unit: Unit):
 	if planned_move_by_unit.has(unit):
 		var move: MoveAction = planned_move_by_unit[unit]
@@ -237,23 +232,6 @@ func redraw_planned_paths():
 	for action in planned_move_by_unit.values():
 		draw_path_arrows(action)
 
-func create_cell_icon(cell: Vector2i, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
-	if icons_by_cell.has(cell):
-		if icons_by_cell[cell].has(type):
-			return icons_by_cell[cell][type]
-	
-	var icon = ICON_SCENE.instantiate()
-	icon_overlay.add_child(icon)
-	icon.setup(ICON_TEXTURES[type], cell, type)
-	icon.position = board_tilemap.map_to_local(cell) #+ offset
-	icon.z_index = ICON_Z_INDEX
-	
-	if !icons_by_cell.has(cell):
-		icons_by_cell[cell] = {}
-		
-	icons_by_cell[cell][type] = icon
-	return icon
-	
 func create_unit_icon(unit: Unit, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
 	if unit == null:
 		return null
@@ -311,27 +289,6 @@ func redraw_squad_unit_icons(squad: Squad):
 		if member == squad.get_leader():
 			create_unit_icon(member, OverlayIcon.IconType.CROWN)
 				
-func clear_cell_icon_types(icontypes: Array[OverlayIcon.IconType]):
-	var cells = icons_by_cell.keys().duplicate()
-	for cell: Vector2i in cells:
-		for type: OverlayIcon.IconType in icontypes:
-			if icons_by_cell.has(cell) and icons_by_cell[cell].has(type):
-				var icon = icons_by_cell[cell][type]
-				icon.hide()
-				icon.queue_free()
-				icons_by_cell[cell].erase(type)
-				if icons_by_cell[cell].is_empty():
-					icons_by_cell.erase(cell)
-
-func clear_target_icon_by_cell(target_cell: Vector2i, type: OverlayIcon.IconType):
-	if icons_by_cell.has(target_cell) and icons_by_cell[target_cell].has(type):
-		var icon = icons_by_cell[target_cell][type]
-		icon.hide()
-		icon.queue_free()
-		icons_by_cell[target_cell].erase(type)
-		if icons_by_cell[target_cell].is_empty():
-			icons_by_cell.erase(target_cell)
-
 func clear_selection_overlays():
 	move_overlay.clear()
 	attack_overlay.clear()

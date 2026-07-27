@@ -53,12 +53,12 @@ func test_chainsword_shows_weapon_action_via_rev_with_no_secondary_attacks() -> 
 
 
 func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
-	# A weapon with no secondaries and no self-ability (the fixture default, mapped to CHAINSWORD
-	# but with rev never triggered) still revs — so use a family with truly nothing: Carbine, no
-	# extra_attacks, no rev/reload surface (all no-op virtuals on the base WeaponInstance).
+	# A weapon with no secondaries and no self-ability. The fixture default (CHAINSWORD) still revs
+	# and the Carbine now reloads (#84), so this needs the one family left with no signature at all:
+	# Chemical Spitter, still a pure pass-through pending the materia pass.
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var template := WeaponData.new()
-	template.weapon_type = WeaponData.WeaponType.CARBINE
+	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER
 	template.main_attack = WeaponAttackData.new()
 	unit.equipped_weapon = WeaponInstance.make(template)
 	assert_bool(unit.has_weapon_actions()).is_false()

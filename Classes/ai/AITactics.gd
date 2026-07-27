@@ -62,8 +62,8 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_rally(unit, squad_manager)
 			BaseAction.ActionType.INTIMIDATE:
 				queued = _try_intimidate(unit, board, squad_manager)
-			BaseAction.ActionType.SPRING_LOAD:
-				queued = _try_spring_load(unit, squad_manager)
+			BaseAction.ActionType.RELOAD:
+				queued = _try_reload(unit, squad_manager)
 			_:
 				push_error("No AI builder for ActionType %s" % BaseAction.ActionType.keys()[t])
 		if queued:
@@ -100,7 +100,7 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 		if not unit.is_attack_fireable(attack):
 			continue
 		unit.active_attack = attack   # probe via the player's pick slot -- reach/victim/splash queries all read it
-		var reach := unit.combat.get_all_attack_cells_from(origin)
+		var reach := Reach.get_all_attack_cells_from(unit, origin)
 		for other in board.units:
 			if not is_instance_valid(other):
 				continue
@@ -110,7 +110,7 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 				continue
 			if not reach.has(other.movement.cell):
 				continue
-			var affected := unit.combat.get_affected_cells_from(origin, other.movement.cell)
+			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell)
 			var victims := RulesService.gather_attack_victims(unit, affected, board)
 			if victims.is_empty():
 				continue
@@ -193,10 +193,10 @@ static func _try_intimidate(unit: Unit, board: BoardContext, squad_manager: Squa
 	action.init(unit, target)
 	return squad_manager.queue_action(unit.squad, action)
 
-static func _try_spring_load(unit: Unit, squad_manager: SquadManager) -> bool:
+static func _try_reload(unit: Unit, squad_manager: SquadManager) -> bool:
 	if not unit.can_reload_weapon():
 		return false
-	var action := SpringLoadAction.new()
+	var action := ReloadAction.new()
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
 
@@ -208,13 +208,13 @@ static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardConte
 	var range := RulesService.compute_move_range(leader, board)
 	var enemy_cell := enemy.movement.cell
 	var best: Vector2i = leader.movement.cell
-	var best_can_attack: bool = leader.combat.get_all_attack_cells_from(best).has(enemy_cell)
+	var best_can_attack: bool = Reach.get_all_attack_cells_from(leader, best).has(enemy_cell)
 	var best_dist: int = GridUtils.manhattan_distance(best, enemy_cell)
 
 	for cell in range.reachable.keys():
 		if allowed != null and not allowed.has(cell):
 			continue
-		var can_attack: bool = leader.combat.get_all_attack_cells_from(cell).has(enemy_cell)
+		var can_attack: bool = Reach.get_all_attack_cells_from(leader, cell).has(enemy_cell)
 		var dist: int = GridUtils.manhattan_distance(cell, enemy_cell)
 		if can_attack and not best_can_attack:
 			best = cell

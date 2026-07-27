@@ -6,7 +6,7 @@
 # SpringspearWeaponInstance's state machine under both balance-knob variants
 # (Stab.requires_readiness true/false), the actual bug this design fixes (inventory-swap
 # independence), and the two legality gates
-# (AttackAction.actor_can_perform, SpringLoadAction). AttackAction.execute()'s readiness
+# (AttackAction.actor_can_perform, ReloadAction). AttackAction.execute()'s readiness
 # spend is a few lines gated only on is_secondary_hit/fired_attack type (no resolved/damage
 # dependency) — per tests/law/test_resolution_laws.gd's own precedent, execute()'s animation
 # await is bypassed everywhere in this suite; consume_readiness_for is exercised directly
@@ -189,29 +189,29 @@ func test_attack_action_allows_a_fireable_pick() -> void:
 	attack.fired_attack = t.main_attack
 	assert_bool(attack.actor_can_perform()).is_true()
 
-# --- SpringLoadAction ---
+# --- ReloadAction (was SpringLoadAction, generalized #84) ---
 
-func test_spring_load_actor_can_perform_requires_unready() -> void:
+func test_reload_actor_can_perform_requires_unready() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 
-	var action := SpringLoadAction.new()
+	var action := ReloadAction.new()
 	action.init(unit)
 	assert_bool(action.actor_can_perform()).is_false()   # already ready — nothing to load
 
 	spear.consume_readiness_for(t.extra_attacks[0])
 	assert_bool(action.actor_can_perform()).is_true()
 
-func test_spring_load_execute_restores_readiness() -> void:
+func test_reload_execute_restores_readiness() -> void:
 	var t := _spring_template(true)
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	var spear := WeaponInstance.make(t) as SpringspearWeaponInstance
 	unit.add_item(spear)
 	spear.consume_readiness_for(t.extra_attacks[0])
 
-	var action := SpringLoadAction.new()
+	var action := ReloadAction.new()
 	action.init(unit)
 	action.execute()
 

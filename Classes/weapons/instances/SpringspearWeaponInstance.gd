@@ -23,3 +23,6 @@ func consume_readiness_for(attack: WeaponAttackData) -> void:
 
 func status_text() -> String:
 	return "Loaded" if ready else "Spent — needs Spring Load"
+
+func reload_label() -> String:
+	return "Spring Load"

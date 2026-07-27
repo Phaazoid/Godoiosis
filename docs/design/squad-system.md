@@ -72,7 +72,7 @@ Counters are **derived**: recomputed from the current plan whenever it changes, 
 
 ## Display model
 
-The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_display_entries_for_squad` — never raw queues. Sections per action type, counters indented under their provoking attack. Display rebuild happens on every plan change; the UI must tolerate freed units (actions cache display name/texture at init).
+The queue UI renders `ActionQueueDisplayEntry` lists built by `ActionQueueDisplayEntry.build_for(squad, plan)` (requested via `SquadManager.get_display_entries_for_squad`, which supplies the resolved plan) — never raw queues. Sections per action type, counters indented under their provoking attack. Display rebuild happens on every plan change; the UI must tolerate freed units (actions cache display name/texture at init).
 
 ## Known gaps / future work
 
@@ -81,5 +81,5 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `SquadManager.get_
 - AoE victim lists don't re-resolve when moves are re-planned after the volley is queued (fix belongs in `validate_squad_plan`).
 - ~~Death handling undesigned~~ — **superseded by the #33 lifecycle build (2026-06-21→25):** a would-be-fatal hit now downs (`Unit.LifecycleState`), squad ejection defers to after the resolution pass (`game._downed_pending`), counters skip mid-pass-downed actors, and rescue/countdown govern the aftermath — see [will-and-death.md](will-and-death.md) *Implementation status*. Still open squad-side: leader-down feel (leadership reassigns via I5) and squad tactics *around* downed allies (defend-the-body play).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.
-- Squad-formation UX rules (who may join whom, range checks at join time) live partly in `game.gd` (`can_join_squad`, `can_squad_up`) — candidates to migrate into `SquadManager`.
+- Squad-formation eligibility (`can_join_squad`, `can_squad_up`, and the `can_*_any_squad` sweeps) lives in `SquadManager` — migrated out of `game.gd` in #22; both predicates share `_formation_basics_ok` since 2026-07-26.
 - **Squad archetypes by leader specialization** (idea, undesigned): a leader's dominant stat could shape the squad's identity — e.g. a high-CON leader yields a defensive squad (holds ground, blocks for members; *example updated 2026-07-07 — DEF is gear-only, never a unit stat; CON is the defensive input since the 2026-07-06 adoption, [stats.md](stats.md)*). Largely overtaken by **leader-posture jobs** ([jobs.md](jobs.md)) — fold there if pursued. Captured from the wiki scratchpad during the #32 triage.

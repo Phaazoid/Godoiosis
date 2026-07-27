@@ -2,7 +2,7 @@ extends Node2D
 class_name CameraController
 
 @onready var camera: Camera2D = $Camera2D
-const TILE_SIZE = 16
+const TILE_SIZE := GridUtils.TILE_SIZE
 const CELL_WORLD := TILE_SIZE * 2   # 32px/cell — matches your existing min/max_world math
 const EDIT_MARGIN_CELLS := 8
 
@@ -24,13 +24,13 @@ var _panning := false         # true while pan_to's tween owns global_position -
 var target_position: Vector2 = global_position
 
 var min_world := Vector2(
-	-map_width / 2.0 * TILE_SIZE * 2,
-	-map_height / 2.0 * TILE_SIZE * 2
+	-map_width / 2.0 * CELL_WORLD,
+	-map_height / 2.0 * CELL_WORLD
 )
 
 var max_world := Vector2(
-	map_width / 2.0 * TILE_SIZE * 2,
-	map_height / 2.0 * TILE_SIZE * 2
+	map_width / 2.0 * CELL_WORLD,
+	map_height / 2.0 * CELL_WORLD
 )
 
 # Called when the node enters the scene tree for the first time.

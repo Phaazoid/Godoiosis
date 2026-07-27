@@ -7,9 +7,21 @@ class_name SquadManager
 # fresh ResolvedPlan each pass (attacks -> derived counters), and calculate_counterattacks_for_
 # squad is where counter-attack existence gets derived, never stored. See docs/design/
 # squad-system.md and docs/design/resolution-pipeline.md.
+#
+# Three tenants moved out 2026-07-26 — this file had become the second dumping ground after
+# game.gd, and two of its sections were literally labelled "migrated from game.gd":
+#   SquadPlanValidator (squads/)        — plan-context validity, marked onto each action
+#   GroupMoveSolver (squads/)           — the pure formation solver; queue_group_move commits it
+#   ActionQueueDisplayEntry.build_for() — queue-panel layout, now beside the view model
+# What stays is squad lifecycle, order queueing, activation state, and plan resolution.
 
 var squads: Array[Squad] = []
 var active_squad: Squad = null
+
+# True while several orders are queued as ONE player action (Group Move): the expensive per-order
+# fan-out runs once at the end instead. Every order still passes queue_action's gates (Law #3).
+# ONLY safe while a batch stays synchronous — docs/performance.md has the invariants.
+var batching := false
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var grid: TileMapLayer = $"../Grid"
 
@@ -21,9 +33,6 @@ signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
 
 
-func is_active_squad(squad: Squad):
-	return squad == active_squad
-	
 func any_squad_active() -> bool:
 	for squad in squads:
 		if not squad.get_actions().is_empty():
@@ -31,12 +40,12 @@ func any_squad_active() -> bool:
 			
 	return false
 
-func is_another_squad_active(squad: Squad):
+func is_another_squad_active(squad: Squad) -> bool:
 	if active_squad == null:
 		return false
 	return active_squad != squad
 
-func reset_faction_actions(faction):
+func reset_faction_actions(faction: Team.Faction) -> void:
 	for squad in squads:
 		if squad.leader.get_faction() == faction:
 			squad._reset_squad()
@@ -108,15 +117,18 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 		leave_squad(newest)
 
 func validate_squad_plan(squad: Squad) -> bool:
-	return _validate_action_list(squad, squad.action_queue)
-	
-#We need to pass in an action list as well for the specific case of the hover preview, where we use a different action list than saved in the squad depending on cell hovered
-func _get_projected_cell_for_unit(unit: Unit, actions: Array[BaseAction]) -> Vector2i:
-	for action in actions:
-		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE:
-			return action.get_destination()
-	return unit.movement.cell
-	
+	return SquadPlanValidator.validate(squad, squad.action_queue)
+
+# Validate a HYPOTHETICAL queue: the hover preview asks "what if this unit moved here instead?",
+# so the candidate action replaces the actor's same-type order in a throwaway copy of the list.
+func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
+	var actions := squad.action_queue.duplicate()
+	for action in actions.duplicate():
+		if action.actor == preview_action.actor and action.action_type == preview_action.action_type:
+			actions.erase(action)
+	actions.append(preview_action)
+	return SquadPlanValidator.validate(squad, actions)
+
 #Note - only treats valid actions as projected moves
 func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
 	if active_squad == null:
@@ -125,134 +137,6 @@ func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
 		if action.action_type == BaseAction.ActionType.MOVE and action.get_destination() == cell and action.is_valid:
 			return action.actor
 	return null
-
-func _validate_action_list(squad: Squad, actions: Array[BaseAction]) -> bool:
-	# Reset is_valid ONCE up front. Each pass then layers invalidations WITHOUT resetting,
-	# so an invalidation found in one pass stays visible to the occupancy reads in the next.
-	# (Resetting every pass made the loop recompute the same order-dependent answer — #16.)
-	for action in actions:
-		action.clear_validation_errors()
-
-	var max_passes := squad.get_members().size() + 1
-	for _i in range(max_passes):
-		var before := actions.map(func(a): return a.is_valid)
-		_validate_action_list_once(squad, actions)
-		if actions.map(func(a): return a.is_valid) == before:
-			break
-
-	for action in actions:
-		if not action.is_valid:
-			return false
-	return true
-
-func _validate_action_list_once(squad: Squad, actions: Array[BaseAction]) -> bool:
-	var valid := true
-	var move_actions := []
-	var actions_by_destination = {} #{Vector2i : Array[MoveActions]}
-	var current_member_locations = {} #{Vector2i : Unit}
-	
-	var projected_leader_cell := _get_projected_cell_for_unit(squad.leader, actions)
-	var leader_range := squad.get_squad_range_from_cell(projected_leader_cell)
-	for action in actions:
-		action.clear_validation_messages()
-		
-	for action in actions: 
-		if action.action_type == BaseAction.ActionType.MOVE:
-			move_actions.append(action)
-
-	for member in squad.get_members() :#{Vector2i: Unit}
-		current_member_locations[member.movement.cell] = member
-	
-	#Leader-range validity must be resolved BEFORE the occupancy check below,
-	#so that check can trust each move's is_valid flag.
-	for action in move_actions:
-		var moving_unit: Unit = action.actor
-		
-		if moving_unit == squad.leader or not moving_unit.has_squad():
-			continue
-
-		if not leader_range.has(action.get_destination()):
-			action.add_validation_error("Squad leader range invalidates other movement")
-			valid = false
-	
-	for action in move_actions:
-		var destination = action.destination
-			
-		if not actions_by_destination.has(destination):
-			actions_by_destination[destination] = []
-		
-		actions_by_destination[destination].append(action)
-		
-	for destination in actions_by_destination.keys():
-		var actions_at_cell: Array = actions_by_destination[destination]
-
-		#A squadmate's cell only frees up if that squadmate has a VALID move AWAY from it.
-		#An invalid move (out of leader range) or a hold means they stay put — cell stays occupied.
-		if current_member_locations.has(destination):
-			var occupying_unit: Unit = current_member_locations[destination]
-			if not _unit_has_valid_move_away_from(occupying_unit, destination, actions):
-				for action in actions_at_cell:
-					if action.actor == occupying_unit:
-						continue  # the occupant's own hold/stay on this cell is not a self-collision
-					action.add_validation_error("Destination occupied")
-					valid = false
-				continue
-
-		if actions_at_cell.size() > 1:
-			valid = false
-			for action in actions_at_cell:
-				action.add_validation_error("Multiple units attempting to move here")
-
-	# Re-validate rescues: the rescuer must still END its (projected) move adjacent to a
-	# still-downed ally. Mirrors the AoE re-derivation debt — a move re-planned away from the
-	# body invalidates the rescue, and a target rescued by someone else first drops out too.
-	for action in actions:
-		if action is RescueAction:
-			var rescue := action as RescueAction
-			var target: Unit = rescue.target
-			if target == null or not is_instance_valid(target) or not target.is_downed():
-				rescue.add_validation_error("Rescue target is no longer down")
-				valid = false
-				continue
-			var rescuer_cell := _get_projected_cell_for_unit(rescue.actor, actions)
-			if not GridUtils.cells_within_manhattan_range(rescuer_cell, 1).has(target.movement.cell):
-				rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
-				valid = false
-
-	# Re-validate intimidates the same way: the actor's projected cell must stay adjacent
-	# to a still-living (active or downed) target.
-	for action in actions:
-		if action is IntimidateAction:
-			var intimidate := action as IntimidateAction
-			var victim: Unit = intimidate.target
-			if victim == null or not is_instance_valid(victim) or victim.is_dead():
-				intimidate.add_validation_error("Intimidate target is gone")
-				valid = false
-				continue
-			var intimidator_cell := _get_projected_cell_for_unit(intimidate.actor, actions)
-			if not GridUtils.cells_within_manhattan_range(intimidator_cell, 1).has(victim.movement.cell):
-				intimidate.add_validation_error("No longer adjacent to the intimidate target")
-				valid = false
-
-	return valid
-
-func _unit_has_valid_move_away_from(unit: Unit, cell: Vector2i, actions: Array[BaseAction]) -> bool:
-	for action in actions:
-		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE and action.is_valid and action.get_destination() != cell:
-			return true
-	return false
-	
-func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
-	var actions := squad.action_queue.duplicate()
-	
-	#Replace this unit's existing action of same type in hypothetical list
-	for action in actions.duplicate():
-		if action.actor == preview_action.actor and action.action_type == preview_action.action_type:
-			actions.erase(action)
-			
-	actions.append(preview_action)
-	
-	return _validate_action_list(squad, actions)
 
 func setup_hold_move_actions(squad: Squad):
 	for member in squad.get_members():
@@ -305,14 +189,17 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 
 	active_squad = squad
 	squad._queue_action(action)
+	if batching:
+		return true   # the batch re-validates and redraws once, after the last order
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 
 	return true
-func set_has_acted(squad: Squad, acted: bool):
+
+func set_has_acted(squad: Squad, acted: bool) -> void:
 	squad._set_has_acted(acted)
-	
-func remove_actions_for_unit(unit: Unit):
+
+func remove_actions_for_unit(unit: Unit) -> void:
 	var squad = unit.squad
 	for action in squad.action_queue.duplicate():
 		if action.actor == unit:
@@ -339,11 +226,15 @@ func cancel_move_for_unit(unit: Unit):
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 			
-func only_hold_actions() -> bool: #checking if the only actions a squad has are the 'not move' action
-	if active_squad == null:
+# True when a squad's queue holds nothing but hold-position moves — i.e. no real orders. Also
+# true for an EMPTY queue, which is what lets revert_if_only_hold subsume "nothing left".
+# Takes the squad explicitly: it used to read active_squad implicitly while every sibling took a
+# parameter, so a caller asking about a different squad silently got the wrong answer.
+func only_hold_actions(squad: Squad) -> bool:
+	if squad == null:
 		return false
-		
-	for action in active_squad.action_queue:
+
+	for action in squad.action_queue:
 		if not action.action_type == BaseAction.ActionType.MOVE:
 			return false
 		if action.action_type == BaseAction.ActionType.MOVE and action.is_hold_position == false:
@@ -356,7 +247,7 @@ func only_hold_actions() -> bool: #checking if the only actions a squad has are 
 # Mirrors the revert inside remove_actions_for_unit; call it from cancel paths that DON'T funnel
 # through there — notably the action-queue X button. Returns true if it actually reverted.
 func revert_if_only_hold(squad: Squad) -> bool:
-	if active_squad != squad or not only_hold_actions():
+	if active_squad != squad or not only_hold_actions(squad):
 		return false
 	squad._clear_all_actions()   # fires actions_became_empty -> queue + board cleanup
 	active_squad = null
@@ -385,9 +276,10 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 		return false
 	if not is_instance_valid(countering_unit) or not is_instance_valid(target_unit):
 		return false
-	if not countering_unit.combat.can_counter:
-		return false
-	if not countering_unit.combat.can_attack(countering_unit, target_unit):
+	# NB: there is no per-UNIT counter flag. CombatComponent carried a `can_counter` @export that
+	# was never authored on any unit, so the gate here was permanently open; the authored one is
+	# AttackData.can_counter, checked below via attack_source_can_counter().
+	if not RulesService.can_target(countering_unit, target_unit):
 		return false
 	if not countering_unit.attack_source_can_counter():
 		return false
@@ -395,7 +287,7 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 	var counter_cell := countering_unit.get_projected_destination()
 	var target_cell := target_unit.get_projected_destination()
 
-	return countering_unit.combat.can_hit_cell_from(counter_cell, target_cell)
+	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell)
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) -> Unit:
 	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a
@@ -458,7 +350,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			continue
 		var aim := action as AttackAction
 		var origin := aim.actor.get_projected_destination()
-		var affected := aim.actor.combat.get_affected_cells_from(origin, aim.target_cell)
+		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell)
 		var victims := RulesService.gather_attack_victims(aim.actor, affected, board)
 		if victims.is_empty():
 			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
@@ -486,7 +378,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	for aim in calculate_counterattacks_for_squad(squad, plan.attacks):
 		var c_origin := aim.actor.get_projected_destination()
 		var c_aim_cell := aim.target.get_projected_destination()
-		var c_affected := aim.actor.combat.get_affected_cells_from(c_origin, c_aim_cell)
+		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell)
 		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
@@ -508,86 +400,30 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 
 	return plan
 
-func get_display_entries_for_squad(squad: Squad, board: BoardContext) -> Array[ActionQueueDisplayEntry]:
-	var entries: Array[ActionQueueDisplayEntry] = []
 
-	var move_actions: Array[BaseAction] = []
-	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
-	for action in squad.action_queue:
-		if action.action_type == BaseAction.ActionType.MOVE:
-			move_actions.append(action)
-		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
-			if not side_channel.has(action.action_type):
-				side_channel[action.action_type] = []
-			side_channel[action.action_type].append(action)
+# A dead unit leaves the board entirely, so it just detaches.
+func handle_unit_death(unit: Unit) -> void:
+	_remove_from_squad_and_revalidate(unit, false)
 
-	# One pass derives counters AND resolves every outcome; rows read .resolved (R3/R8).
-	var plan := resolve_plan(squad, board)
+# A downed unit SURVIVES as a body on the board, so it can't be left squad-less (invariant: every
+# unit is in exactly one squad) — leave_squad detaches it AND gives it a fresh solo squad.
+func handle_unit_downed(unit: Unit) -> void:
+	_remove_from_squad_and_revalidate(unit, true)
 
-	if not move_actions.is_empty():
-		entries.append(ActionQueueDisplayEntry.header("MOVE"))
-		for action in move_actions:
-			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
-
-	if not plan.attacks.is_empty():
-		if not entries.is_empty():
-			entries.append(ActionQueueDisplayEntry.divider())
-		entries.append(ActionQueueDisplayEntry.header("ATTACK"))
-		for attack in plan.attacks:
-			entries.append(ActionQueueDisplayEntry.action_row(attack, 0))
-
-	# Side-channel sections in registry order — the header IS the enum name, so a newly
-	# registered type gets its section for free.
-	for type in BaseAction.SIDE_CHANNEL_ORDER:
-		var batch: Array = side_channel.get(type, [])
-		if batch.is_empty():
-			continue
-		if not entries.is_empty():
-			entries.append(ActionQueueDisplayEntry.divider())
-		entries.append(ActionQueueDisplayEntry.header(BaseAction.ActionType.keys()[type]))
-		for action in batch:
-			entries.append(ActionQueueDisplayEntry.action_row(action, 0))
-
-
-	# Counters last, in their own section — derived, not stored (Law #2). A skipped counter
-	# (the counterer went down/dead this pass) is hidden.
-	var live_counters: Array[BaseAction] = []
-	for counter in plan.counters:
-		if not counter.resolved.skipped:
-			live_counters.append(counter)
-	if not live_counters.is_empty():
-		if not entries.is_empty():
-			entries.append(ActionQueueDisplayEntry.divider())
-		entries.append(ActionQueueDisplayEntry.header("COUNTER"))
-		for counter in live_counters:
-			entries.append(ActionQueueDisplayEntry.action_row(counter, 0))
-
-	return entries
-
-func handle_unit_death(unit: Unit):
+# Shared cleanup: silently drop the unit's planned orders (a death/down is not an order
+# cancellation, and the cancel handlers would restore squad badges), pull it out of its squad,
+# then re-validate whatever's left behind.
+func _remove_from_squad_and_revalidate(unit: Unit, keep_on_board: bool) -> void:
 	var squad := unit.squad
 	if squad == null or not is_instance_valid(squad):
 		return
 
 	squad._remove_actions_for_actor_silent(unit)
 
-	_detach_from_current_squad(unit)
-
-	if is_instance_valid(squad) and not squad.get_members().is_empty():
-		validate_squad_plan(squad)
-		overlay_manager.redraw_planned_paths()
-
-func handle_unit_downed(unit: Unit):
-	# Twin of handle_unit_death's squad cleanup — but the unit SURVIVES as a body on the
-	# board, so it can't be left squad-less (invariant: every unit is in exactly one squad).
-	# leave_squad() detaches it from its old squad AND gives it a fresh solo squad.
-	var squad := unit.squad
-	if squad == null or not is_instance_valid(squad):
-		return
-
-	squad._remove_actions_for_actor_silent(unit)   # cancel the downed unit's planned orders
-
-	leave_squad(unit)                              # eject: detach from old squad + become solo
+	if keep_on_board:
+		leave_squad(unit)
+	else:
+		_detach_from_current_squad(unit)
 
 	if is_instance_valid(squad) and not squad.get_members().is_empty():
 		validate_squad_plan(squad)
@@ -609,17 +445,33 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 			return true
 	return false
 
-func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
-	var dist = GridUtils.manhattan_distance(joining_unit.movement.cell, squad.leader.movement.cell)
-	if dist <= squad.get_max_squad_range() and squad.members.size() < squad.max_size() and squad.leader.get_faction() == joining_unit.get_faction() and not joining_unit.has_squad() and not squad.get_members().has(joining_unit) and not joining_unit.squad.has_acted and squad.action_queue.is_empty() and not squad.has_acted and not joining_unit.has_any_actions():
-		return true
-	return false
+# Shared by both formation checks: in range of the leader, room in the squad, same faction, not
+# already a member, and neither side has spent its turn.
+func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
+	if GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell) > squad.get_max_squad_range():
+		return false
+	if squad.members.size() >= squad.max_size():
+		return false
+	if squad.leader.get_faction() != unit.get_faction():
+		return false
+	if squad.get_members().has(unit):
+		return false
+	return not squad.has_acted and not unit.squad.has_acted
 
+# Pulling a loose unit INTO a squad being formed: the recruit must be solo and both sides must
+# still be order-free, since squad membership can't change once a plan exists.
+func can_squad_up(joining_unit: Unit, squad: Squad) -> bool:
+	if not _formation_basics_ok(joining_unit, squad):
+		return false
+	if joining_unit.has_squad() or joining_unit.has_any_actions():
+		return false
+	return squad.action_queue.is_empty()
+
+# Joining an ALREADY-FORMED squad — so the target's leader must actually have squadmates.
 func can_join_squad(unit: Unit, squad: Squad) -> bool:
-	var dist = GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell)
-	if dist <= squad.get_max_squad_range() and squad.members.size() < squad.max_size() and squad.leader.get_faction() == unit.get_faction() and not squad.get_members().has(unit) and squad.leader.has_squad() and not squad.has_acted and not unit.squad.has_acted:
-		return true
-	return false
+	if not _formation_basics_ok(unit, squad):
+		return false
+	return squad.leader.has_squad()
 
 func _all_units() -> Array[Unit]:
 	# Every unit belongs to exactly one managed squad (solo units get a 1-member squad),
@@ -631,121 +483,32 @@ func _all_units() -> Array[Unit]:
 			result.append(member)
 	return result
 	
-# --- Group Move solver (migrated from game.gd, #22 / #4) ---
-# Domain logic: assigns each squad member a destination that best preserves its path-cost
-# offset to the leader. Deterministic (Law #1). `board` is passed in (SquadManager has no
-# _board()); it's a snapshot keyed on actual cells, so it stays valid across the queued moves.
-
-func plan_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> Array[MoveAction]:
-	var moves: Array[MoveAction] = []
-	var leader := squad.get_leader()
-	var leader_start := leader.movement.cell
-	var displacement := leader_destination - leader_start
-
-	var leader_path := RulesService.reconstruct_path(RulesService.compute_move_range(leader, board).came_from, leader_start, leader_destination)
-	var leader_move := MoveAction.new()
-	leader_move.init(leader, leader_path, GridUtils.get_terrain_icon_at_cell(grid, leader_destination))
-	moves.append(leader_move)
-
-	# Cohesion leash from the leader's new cell (path-far cells split the squad around walls).
-	var leader_field := _path_hops(leader_destination, board)
-	var leash: int = squad.get_max_squad_range() * 2
-
-	var taken := { leader_destination: true }
-
-	for member in squad.get_members():
-		if member == leader:
-			continue
-
-		var target: Vector2i = member.movement.cell + displacement
-		var to_target := _path_hops(target, board)
-
-		# Member reach against the leader's NEW cell (override) -> no need to queue the leader first,
-		# which is what lets this same plan run as a non-committing hover preview.
-		var reach := RulesService.compute_move_range(member, board, leader_destination)
-		var here: Vector2i = member.movement.cell
-
-		var candidates := {}
-		for cell in reach.reachable.keys():
-			if taken.has(cell):
-				continue
-			if leader_field.get(cell, 999999) > leash:
-				continue
-			if allowed_cells != null and not allowed_cells.has(cell):
-				continue
-			candidates[cell] = reach.reachable[cell]
-		if not taken.has(here) and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_squad_range() and leader_field.get(here, 999999) <= leash:
-			if allowed_cells == null or allowed_cells.has(here):
-				candidates[here] = 0
-
-		if candidates.is_empty():
-			continue
-
-		var have_best := false
-		var best: Vector2i = here
-		var best_to_target := 0
-		var best_cost := 0
-		for cell in candidates.keys():
-			var d: int = to_target.get(cell, 999999)
-			var cost: int = candidates[cell]
-			if not have_best \
-				or d < best_to_target \
-				or (d == best_to_target and cost < best_cost) \
-				or (d == best_to_target and cost == best_cost and _cell_before(cell, best)):
-				have_best = true
-				best = cell
-				best_to_target = d
-				best_cost = cost
-
-		taken[best] = true
-		if best == here:
-			continue
-
-		var member_path := RulesService.reconstruct_path(reach.came_from, here, best)
-		var member_move := MoveAction.new()
-		member_move.init(member, member_path, GridUtils.get_terrain_icon_at_cell(grid, best))
-		moves.append(member_move)
-
-	return moves
+# --- Group Move ---
+# The formation solver itself lives in GroupMoveSolver (split out 2026-07-26). This is the
+# COMMITTING half: same plan, queued through the Law #3 chokepoint and drawn on the board.
 
 func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> void:
-	for move in plan_group_move(squad, leader_destination, board, allowed_cells):
-		queue_action(squad, move)
+	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells)
+
+	# One player action, so one fan-out. Note `batching` also covers the hold-position moves that
+	# setup_hold_move_actions queues when the squad first activates — those fire the same signal.
+	batching = true
+	var queued: Array[MoveAction] = []
+	for move in moves:
+		if queue_action(squad, move):
+			queued.append(move)
 		overlay_manager.show_planned_path(move.actor, move)
 		if move.is_valid:
 			overlay_manager.show_projected_unit(move.actor, move.destination)
+	batching = false
+
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
 	overlay_manager.redraw_projected_units()
-
-func _path_hops(source: Vector2i, board: BoardContext) -> Dictionary:
-	# Terrain-aware hop-distance (BFS over walkable cells) from `source` -> { cell: hops }.
-	# Unweighted by design — formation cares about how terrain connects, not move-cost. O(cells)
-	# with no frontier sort, so it doesn't hitch like the old weighted cost field.
-	var dist := { source: 0 }
-	var queue := [source]
-	var head := 0
-	while head < queue.size():
-		var cell: Vector2i = queue[head]
-		head += 1
-		var d: int = dist[cell] + 1
-		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
-			var next: Vector2i = cell + dir
-			if dist.has(next):
-				continue
-			if not board.grid.get_used_rect().has_point(next):
-				continue
-			if not board.is_walkable(next):
-				continue
-			dist[next] = d
-			queue.append(next)
-	return dist
-
-func _cell_before(a: Vector2i, b: Vector2i) -> bool:
-	# Row-major tie-break so the solver is fully deterministic.
-	if a.y != b.y:
-		return a.y < b.y
-	return a.x < b.x
+	# Re-emit for the last order so listeners do their squad-level repaint exactly once. Reusing
+	# the existing signal keeps the batch invisible to everyone downstream.
+	if not queued.is_empty():
+		squad_action_queued.emit(squad, queued[queued.size() - 1])
 
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):

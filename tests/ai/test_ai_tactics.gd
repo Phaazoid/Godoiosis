@@ -1,7 +1,7 @@
 # AITactics (#29, chooser rebuilt #78): the shared board queries the archetypes compose with,
 # plus the ATTACK path of queue_main_action. Runs on the real managers + TestTiles terrain via
 # the Play API's headless board_builder (proven pattern). Fixture weapons are pattern-less ->
-# CombatComponent reach falls back to Manhattan range 1, so attack geometry is trivial:
+# Reach falls back to Manhattan range 1 with no pattern, so attack geometry is trivial:
 # distance <= 1 can hit. Units default to MOV 4 (#56: MOV is now a derived readout —
 # JOBLESS_MOV_BASE 4 + dex_mov_band(5)=0 for the default statline).
 extends GdUnitTestSuite
@@ -125,7 +125,7 @@ func test_best_attack_destination_moves_into_range() -> void:
 	# (4,0) is the only reachable cell in Manhattan-1 reach of (5,0): the enemy blocks the
 	# corridor, so (6,0) is unreachable, and (5,0) itself is occupied.
 	assert_that(dest).is_equal(Vector2i(4, 0))
-	assert_bool(leader.combat.get_all_attack_cells_from(dest).has(enemy.movement.cell)).is_true()
+	assert_bool(Reach.get_all_attack_cells_from(leader, dest).has(enemy.movement.cell)).is_true()
 
 
 func test_best_attack_destination_closes_distance_when_out_of_reach() -> void:

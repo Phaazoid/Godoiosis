@@ -47,7 +47,7 @@ func test_negative_damage_floors_at_zero_and_never_heals() -> void:
 	assert_that(attack.resolved.lethality).is_equal(ResolvedOutcome.Lethality.NONE)
 
 	# Execution seam: applying the resolved number leaves HP byte-identical — no heal.
-	target.combat.apply_damage(attack.resolved.damage)
+	target.take_damage(attack.resolved.damage)
 	assert_int(target.get_current_hp()).is_equal(start_hp)
 
 func test_exactly_zero_is_a_legal_outcome() -> void:

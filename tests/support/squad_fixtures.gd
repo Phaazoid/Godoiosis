@@ -10,7 +10,7 @@
 #   * Unit._ready() only wires movement to a grid if setup() was called first, so
 #     we DON'T call setup() — we set `movement.cell` directly (a plain field).
 #     No TileMapLayer / grid node is needed anywhere in these tests.
-#   * A pattern-less weapon makes CombatComponent fall back to Manhattan range 1,
+#   * A pattern-less weapon makes Reach fall back to Manhattan range 1,
 #     so counter reach is trivial and grid-free: distance <= 1 can hit, >= 2 cannot.
 #   * SquadManager is stood up IN the SceneTree (see make_manager) so the Squad
 #     nodes it creates are tree nodes, not orphans — that keeps gdUnit4's orphan
@@ -58,7 +58,7 @@ static func make_unit_data(overrides: Dictionary, faction: Team.Faction) -> Unit
 	data.faction = faction
 	return data
 
-# A pattern-less weapon: CombatComponent.get_attack_cells_from falls back to
+# A pattern-less weapon: Reach.get_attack_cells_from falls back to
 # Manhattan range 1 when the main attack's pattern is null. Keeps counter geometry simple.
 # Ad-hoc template, never catalog-registered — exactly how a real template works, just
 # throwaway (mirrors make_unit_data's ad-hoc UnitData). The bare main attack mirrors #72's

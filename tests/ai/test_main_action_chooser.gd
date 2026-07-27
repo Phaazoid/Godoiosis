@@ -61,7 +61,7 @@ func _rune_alchemist(faction: Team.Faction, cell: Vector2i, carving: Transmutati
 # Expand and resolve one queued aim the way resolve_plan would, minus the reaction catalogs
 # (deterministic damage, no .tres coupling). Returns the resolved volley.
 func _resolve_aim(attacker: Unit, aim: AttackAction, units: Array[Unit]) -> ResolvedPlan:
-	var affected: Array[Vector2i] = attacker.combat.get_affected_cells_from(aim.origin_cell, aim.target_cell)
+	var affected: Array[Vector2i] = Reach.get_affected_cells_from(attacker, aim.origin_cell, aim.target_cell)
 	var victims: Array[Unit] = RulesService.gather_attack_victims(attacker, affected, _board(units))
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	for a in AttackAction.create_volley(attacker, aim.origin_cell, aim.target_cell, victims, aim.fired_attack):
@@ -166,8 +166,8 @@ func test_clear_line_queues_the_same_attack() -> void:
 
 # --- the priority walk + fallback builders ---
 
-func test_sprung_weapon_falls_through_to_spring_load() -> void:
-	# The #73 readiness economy meets the chooser: no fireable attack -> the SPRING_LOAD
+func test_sprung_weapon_falls_through_to_reload() -> void:
+	# The #73 readiness economy meets the chooser: no fireable attack -> the RELOAD
 	# candidate wins the walk. Next turn the spear is armed again -- no special-casing.
 	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
 	var template: WeaponData = WeaponData.new()
@@ -181,10 +181,10 @@ func test_sprung_weapon_falls_through_to_spring_load() -> void:
 	var _victim: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
 
 	var units: Array[Unit] = [attacker, _victim]
-	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.SPRING_LOAD]
+	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD]
 	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
 	assert_int(attacker.squad.action_queue.size()).is_equal(1)
-	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.SPRING_LOAD)
+	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
 
 
 func test_priority_order_is_respected_when_both_are_buildable() -> void:

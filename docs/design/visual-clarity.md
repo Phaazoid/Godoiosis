@@ -54,7 +54,7 @@ directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow
 1. **More info per row — damage + target HP before -> after.** — **DONE.**
    `AttackAction.get_outcome_summary()` renders `-N (before->after)`, with a dedicated honest form
    for CRISIS rows (extended alongside #57).
-2. **Counters render after all attacks.** — **DONE** — `SquadManager.get_display_entries_for_squad`
+2. **Counters render after all attacks.** — **DONE** — `ActionQueueDisplayEntry.build_for`
    builds COUNTER as its own section, last, with skipped counters hidden.
 3. **Group a volley into one expandable row.** — **DONE** —
    `SquadActionQueueControl._collect_volley_group` / `_add_volley_group`, per-actor expand/collapse

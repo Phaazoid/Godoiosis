@@ -4,7 +4,6 @@ class_name UnitVisuals
 @export var sprite: Sprite2D
 
 var visual_tween: Tween
-const TILE_SIZE = 16
 const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
 
 var base_position: Vector2
@@ -20,8 +19,12 @@ func _ready():
 	base_position = sprite.position
 	base_modulate = sprite.modulate
 	base_scale = sprite.scale
+	# Deliberately the CONST, not sprite.z_index: child _ready runs before the parent's, and
+	# Unit._ready is what assigns BASE_SPRITE_INDEX to the sprite. Reading it here would
+	# capture the scene's pre-assignment value.
 	base_z_index = Unit.BASE_SPRITE_INDEX
-	
+
+
 func reset_visuals():
 	if sprite == null:
 		return
@@ -74,6 +77,8 @@ func set_highlighted(value: bool) -> void:
 		set_hovered(false)
 
 func set_projected(value: bool):
+	if sprite == null:
+		return
 	if value:
 		sprite.hide()
 	else:
@@ -87,7 +92,7 @@ func play_attack_lunge(direction: Vector2):
 		visual_tween.kill()
 	
 	sprite.position = base_position
-	var lunge_distance = TILE_SIZE / 2
+	var lunge_distance := GridUtils.TILE_SIZE / 2
 	var lunge_pos = base_position + direction.normalized() * lunge_distance
 	visual_tween = create_tween()
 	

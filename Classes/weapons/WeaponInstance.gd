@@ -58,6 +58,12 @@ func can_reload() -> bool:
 func reload() -> void:
 	pass
 
+# What the Weapon Action menu CALLS this family's rearm. The ORDER is always ActionType.RELOAD —
+# only the word changes, so Springspear keeps "Spring Load" while the queue, the AI, and the Play
+# API all see one verb (#84).
+func reload_label() -> String:
+	return "Reload"
+
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
@@ -147,6 +153,33 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 
 # Stock attacks this wielder can choose from — the template's list today. Mod-granted /
 # mod-replaced attacks compose here when #74 lands (why wielder is already in the signature).
+# --- Attack-source surface (EquippableData) ---
+
+func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	for a in available_attacks(wielder):
+		result.append(a)
+	return result
+
+func default_attack(_wielder: Unit) -> AttackData:
+	return template.main_attack if template != null else null
+
+# ALWAYS main, ignoring any live active_attack pick (#72 ruling; overwatch-style alt-attack
+# countering is out of scope, #73). This is the divergence from RuneData.counter_attack.
+func counter_attack(_wielder: Unit) -> AttackData:
+	return template.main_attack if template != null else null
+
+# available_attacks minus main — what the Weapon Action submenu lists.
+func secondary_attacks(wielder: Unit) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	if template == null:
+		return result
+	var main := template.main_attack
+	for a in available_attacks(wielder):
+		if a != main:
+			result.append(a)
+	return result
+
 func available_attacks(_wielder: Unit) -> Array[WeaponAttackData]:
 	if template == null:
 		return []
