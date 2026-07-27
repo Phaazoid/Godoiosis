@@ -92,3 +92,17 @@ func test_modifier_text_signs_the_tax() -> void:
 	assert_str(_taxing_armor(Stats.Stat.DEX, -1).modifier_text()).is_equal("DEX -1")
 	assert_str(_taxing_armor(Stats.Stat.CON, 2).modifier_text()).is_equal("CON +2")
 	assert_str(ArmorData.new().modifier_text()).is_equal("")   # untaxed = nothing to say
+
+
+func test_initialize_clears_the_crisis_modifier_bag() -> void:
+	# stat_modifiers is BATTLE-scoped (the Crisis surge) but lives on the PERSISTENT instance,
+	# and ScenarioUnitEntry never captures it. Before 2026-07-26 initialize() reset hp/will but
+	# not this bag, so a unit whose surge was still applied at battle's end would carry +5 to
+	# every scaling stat forever once instances survive missions. initialize() owns the reset.
+	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.STR: 6})
+	unit.unit_instance.stat_modifiers[Stats.Stat.STR] = 5   # stand in for an applied surge
+	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(11)
+
+	unit.unit_instance.initialize()   # what the next battle does
+	assert_bool(unit.unit_instance.stat_modifiers.is_empty()).is_true()
+	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(6)

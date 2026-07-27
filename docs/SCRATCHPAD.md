@@ -36,6 +36,8 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
+Dev tool menu fix - in scenarios right now, the top line doesn't work too well.  If I want to update a scenario I already have saved, I have to retype it's name in the save field from scratch.  Save As, Update, and Load should be the three options. And they should be better separated than the current options, physically.   
+
 ## 🗂 Dispersed (log)
 
 - MMBN3 NaviCust-style shaped mod fitting (sized squares + tetris-block mods) → weapons.md (Captured ideas — flagged as revising the ratified #59 capacity model, grill first) (2026-07-23)

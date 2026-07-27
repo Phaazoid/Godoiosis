@@ -2,7 +2,7 @@ extends Node
 class_name Squad
 
 
-const NO_HOME := Vector2i(-999999, -999999)
+const NO_HOME := GridUtils.NO_CELL   # no sentry post assigned
 const SQUAD_RANGE := 3        # playtest-tunable: static cohesion radius (Manhattan), decoupled from LDR (#63)
 const MEMBER_LDR_COST := 2    # playtest-tunable: effective-LDR budget per member beyond the leader; familiarity discounts later
 
@@ -27,9 +27,12 @@ func set_leader(unit: Unit):
 func get_leader() -> Unit:
 	return leader
 
-func get_members() -> Array:
+# Returns the LIVE array, not a copy (unlike get_actions) — no caller mutates it today, but
+# SquadManager stays the only thing that may.
+func get_members() -> Array[Unit]:
 	return members
-	
+
+
 func _add_member(unit: Unit):
 	if not members.has(unit):
 		members.append(unit)
@@ -39,10 +42,9 @@ func _erase_member(unit: Unit):
 	members.erase(unit)
 
 func has_any_queued_actions() -> bool:
-	if action_queue.is_empty():
-		return false
-	return true
-		
+	return not action_queue.is_empty()
+
+
 func get_max_squad_range() -> int:
 	return SQUAD_RANGE
 

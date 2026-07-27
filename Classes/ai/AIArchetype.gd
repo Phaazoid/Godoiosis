@@ -43,11 +43,11 @@ static func resolve(t: Type) -> Callable:
 # test_ai_action_coverage.gd: a new verb can't silently skip the AI -- declare a stance
 # (even NEVER) or the suite goes red.
 const MAIN_ACTION_PRIORITY := {
-	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.SPRING_LOAD],
+	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD],
 	Type.HOLD: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.SPRING_LOAD, BaseAction.ActionType.INTIMIDATE],
+			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
 	Type.SENTRY: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
-			BaseAction.ActionType.SPRING_LOAD, BaseAction.ActionType.INTIMIDATE],
+			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
 }
 
 # RALLY everywhere (dev call 2026-07-22): early rallies burn the strong falloff steps while

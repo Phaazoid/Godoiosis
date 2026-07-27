@@ -18,7 +18,7 @@ enum ActionType {
 	RESCUE,
 	RALLY,
 	INTIMIDATE,
-	SPRING_LOAD,
+	RELOAD,
 	REV,
 	BURROW,
 }
@@ -34,7 +34,7 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.RESCUE,
 	ActionType.RALLY,
 	ActionType.INTIMIDATE,
-	ActionType.SPRING_LOAD,
+	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW
 ]
@@ -46,7 +46,7 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.RESCUE,
 	ActionType.RALLY,
 	ActionType.INTIMIDATE,
-	ActionType.SPRING_LOAD,
+	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW
 ]
@@ -74,7 +74,7 @@ func get_target_texture() -> Texture2D:
 func get_description() -> String:
 	return "Action"
 
-func clear_validation_errors():
+func reset_validation():
 	is_valid = true
 	validation_errors.clear()
 	

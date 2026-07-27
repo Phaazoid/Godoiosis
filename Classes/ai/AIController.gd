@@ -3,8 +3,8 @@ class_name AIController
 
 # Runs archetype AI (#29) for AI-controlled factions. Orders funnel through
 # SquadManager.queue_action exclusively (Law #3) -- this class only decides WHEN an
-# archetype plans, then reuses game.execute_orders (the same path the player's Execute
-# button takes) so a bot turn resolves identically to a human one.
+# archetype plans, then reuses OrderExecutor.execute_orders (the same path the player's
+# Execute button takes) so a bot turn resolves identically to a human one.
 #
 # Two independent layers. ENABLED is per-faction and session-only (Dev Overlay -> Scenario
 # tab checkboxes) -- a kill switch that always reverts a faction to manual control, never
@@ -36,6 +36,6 @@ func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 		for member in squad.get_members():
 			member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
 		AIArchetype.resolve(squad.archetype).call(squad, board, game.squad_manager)
-		await game.execute_orders(squad.get_leader())
+		await game.order_executor.execute_orders(squad.get_leader())
 
 	await game.end_turn()

@@ -129,12 +129,20 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 		if unit == null or unit == attacker or victims.has(unit):
 			continue
 
-		if attacker.combat.can_attack(attacker, unit):
+		if can_target(attacker, unit):
 			victims.append(unit)
 		elif hits_allies:
 			victims.append(unit)
 
 	return victims
+
+# Hostility gate: never yourself, and only a faction you're at war with. Was
+# CombatComponent.can_attack, which took the attacker as a parameter despite being an instance
+# method on that very attacker — a static rule wearing a component's clothes.
+static func can_target(attacker: Unit, target: Unit) -> bool:
+	if attacker == target:
+		return false
+	return Team.is_enemy(attacker.get_faction(), target.get_faction())
 	
 # Downed allies orthogonally adjacent to where `unit` will END UP (projected position, so
 # "move next to the body, then rescue" works). Faction-based, not squad-based — the downed

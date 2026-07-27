@@ -28,14 +28,14 @@ Candidate builders live in `AITactics` (one per type, each mirroring `MainAction
 
 ### Ratified tables (dev calls, 2026-07-22)
 
-| | ATTACK | RESCUE | SPRING_LOAD | INTIMIDATE | RALLY |
+| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY |
 |---|---|---|---|---|---|
 | **Rushdown** | 1 | never | 2 | never | never |
 | **Hold** | 1 | 2 | 3 | 4 | never |
 | **Sentry** | 1 | 2 | 3 | 4 | never |
 
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
-- Rescue before Spring Load: a returned unit now beats rearming for later. Intimidate last: menace only when nothing better exists.
+- Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.
 - RALLY is NEVER everywhere for now: early rallies burn the strong falloff steps (6/4/2…) while idling. Revisit with real Will-awareness — this is a deliberately parked knob, not an oversight.
 
 ## Attack scoring (ratified, flagged evolvable)

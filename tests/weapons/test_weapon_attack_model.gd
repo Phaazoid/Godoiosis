@@ -85,10 +85,10 @@ func test_hits_map_defaults_to_main_and_accepts_override() -> void:
 
 func test_mains_catalog_contains_every_family_and_prototype() -> void:
 	var mains := WeaponAttackCatalog.get_mains()
-	# Springspear's main is authored (Stab, #73) and Kinetic Mace's now is too (Smash, #84) —
-	# both key by their real display_name instead of the filename fallback the still-placeholder
-	# families use.
-	for key in ["ChainSword", "Stab", "Drill", "Carbine", "Smash", "Chemical_Spitter", "Prosthetic", "TheJaw"]:
+	# Authored mains key by their real display_name; the still-placeholder families fall back to the
+	# filename. Springspear (Stab, #73), Kinetic Mace (Smash) and Carbine (Shot) are authored — the
+	# key moving off the family name is the signal that a family got real attack content.
+	for key in ["ChainSword", "Stab", "Drill", "Shot", "Smash", "Chemical_Spitter", "Prosthetic", "TheJaw"]:
 		assert_bool(mains.has(key)).is_true()
 
 func test_library_scan_ignores_the_mains_subfolder() -> void:

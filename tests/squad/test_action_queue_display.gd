@@ -1,5 +1,5 @@
 # Queue-panel section guard (action-registry refactor, 2026-07-20): the display buckets in
-# get_display_entries_for_squad iterate BaseAction.SIDE_CHANNEL_ORDER, so every queued
+# ActionQueueDisplayEntry.build_for iterate BaseAction.SIDE_CHANNEL_ORDER, so every queued
 # side-channel action MUST surface as a section (header = enum name) in registry order —
 # regardless of queue insertion order. Before the registry, a type missed here rendered
 # nowhere in the queue panel, silently.
@@ -36,7 +36,8 @@ func test_side_channel_sections_follow_registry_order() -> void:
 	assert_bool(manager.queue_action(hero.squad, rescue)).is_true()
 
 	var context := BoardContext.new(board.grid, [hero, mate, ally], manager)
-	var entries: Array[ActionQueueDisplayEntry] = manager.get_display_entries_for_squad(hero.squad, context)
+	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
+	var entries: Array[ActionQueueDisplayEntry] = ActionQueueDisplayEntry.build_for(hero.squad, plan)
 
 	var headers: Array[String] = []
 	var rows: Array = []

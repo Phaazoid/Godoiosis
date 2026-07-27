@@ -1,11 +1,11 @@
 extends BaseAction
 class_name RevAction
 
-# Rev (#84): the Chainsword's signature main action. Mirrors SpringLoadAction's shape exactly —
+# Rev (#84): the Chainsword's signature main action. Mirrors ReloadAction's shape exactly —
 # self-only, no resolver pass, a plain state mutation on execute(). While the wielder's chainsword
 # is revved, every attack it makes ignores the target's DEF (PlanResolver's mitigation stage).
-# Named per-mechanic like SpringLoad/Rally/Intimidate; its body drives the generic
-# Unit.can_rev_weapon()/rev_weapon() seam.
+# Named per-mechanic like Rally/Intimidate (unlike ReloadAction, which went generic once a second
+# family wanted it); its body drives the generic Unit.can_rev_weapon()/rev_weapon() seam.
 
 const REV_ICON := preload("res://Art/Icons/WeaponIcons/Chainsword.png")   # placeholder
 

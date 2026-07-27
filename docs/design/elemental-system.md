@@ -48,7 +48,7 @@ Numbered for test coverage. Violating any is a bug.
 
 ### Where it lives
 
-Derived-from-plan logic — same family as `SquadManager.calculate_counterattacks_for_squad` / `get_display_entries_for_squad`. A dedicated `ElementResolver` invoked by `SquadManager` is the clean seam (SquadManager is already overweight); the concrete touchpoint is that the damage `AttackAction.create()` computes today becomes a value the resolver writes. *[Class layout is a build-time call, not locked here.]*
+Derived-from-plan logic — same family as `SquadManager.calculate_counterattacks_for_squad` / `get_display_entries_for_squad`. A dedicated `ElementResolver` invoked by `SquadManager` is the clean seam (and the 2026-07-26 split — `SquadPlanValidator`/`GroupMoveSolver`/`ActionQueueDisplayEntry.build_for` — set the precedent: pure static collaborators that read a plan and return a result); the concrete touchpoint is that the damage `AttackAction.create()` computes today becomes a value the resolver writes. *[Class layout is a build-time call, not locked here.]*
 
 ## Reactions as data
 

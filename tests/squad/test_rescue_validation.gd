@@ -1,4 +1,4 @@
-# Rescue re-validation (SquadManager._validate_action_list_once, #33). A queued rescue must
+# Rescue re-validation (SquadPlanValidator._revalidate_rescues, #33). A queued rescue must
 # stay adjacent to a STILL-downed ally; if a re-planned move carries the rescuer out of range,
 # or the target is picked up / killed first, the rescue invalidates — and the existing
 # invalid-action gate then blocks execution. Mirrors the AoE victim re-derivation debt.

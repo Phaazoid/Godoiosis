@@ -34,7 +34,7 @@ func test_archetype_resolution_falls_back_to_default() -> void:
 		assert_bool(AIArchetype.resolve(archetype_value).is_valid()).is_true()
 
 
-# --- plan_group_move allowed_cells clamp ---
+# --- GroupMoveSolver.plan allowed_cells clamp ---
 
 func _build_squad_board() -> Dictionary:
 	var board: Dictionary = BB.build(self)
@@ -68,7 +68,7 @@ func test_group_move_members_stay_inside_allowed() -> void:
 		Vector2i(0, 0): true, Vector2i(1, 0): true, Vector2i(2, 0): true,
 		Vector2i(3, 0): true, Vector2i(3, 1): true,
 	}
-	var moves: Array[MoveAction] = board.squad_manager.plan_group_move(leader.squad, Vector2i(3, 0), _context(board), allowed)
+	var moves: Array[MoveAction] = GroupMoveSolver.plan(leader.squad, Vector2i(3, 0), _context(board), allowed)
 
 	assert_int(moves.size()).is_equal(2)   # leader + member both got destinations
 	for move in moves:
@@ -83,7 +83,7 @@ func test_group_move_member_on_disallowed_cell_steps_inside() -> void:
 	# The member's own cell (1,0) is NOT allowed -> its stay-put candidate is dropped, so it
 	# must be assigned a move into the allowed set rather than idling outside it.
 	var allowed := { Vector2i(0, 0): true, Vector2i(2, 0): true, Vector2i(3, 0): true }
-	var moves: Array[MoveAction] = board.squad_manager.plan_group_move(leader.squad, Vector2i(3, 0), _context(board), allowed)
+	var moves: Array[MoveAction] = GroupMoveSolver.plan(leader.squad, Vector2i(3, 0), _context(board), allowed)
 
 	var member_moves: Array[MoveAction] = []
 	for move in moves:
@@ -100,7 +100,7 @@ func test_group_move_unclamped_is_unchanged() -> void:
 	var member: Unit = board.member
 
 	# Default (null) clamp: the member preserves its +1 offset behind the leader.
-	var moves: Array[MoveAction] = board.squad_manager.plan_group_move(leader.squad, Vector2i(3, 0), _context(board))
+	var moves: Array[MoveAction] = GroupMoveSolver.plan(leader.squad, Vector2i(3, 0), _context(board))
 
 	assert_int(moves.size()).is_equal(2)
 	var member_destination := Vector2i(-1, -1)
@@ -108,3 +108,54 @@ func test_group_move_unclamped_is_unchanged() -> void:
 		if move.actor == member:
 			member_destination = move.destination
 	assert_that(member_destination).is_equal(Vector2i(4, 0))
+
+
+# --- GroupMoveSolver BFS bounds (perf fix 2026-07-26) ---
+# The solver stopped walking the whole board for every member. Both stopping rules must only skip
+# work whose answer was going to be discarded, so a bounded walk has to agree with a full one
+# everywhere it reports at all. These pin that; if they drift, formations change silently.
+
+func test_depth_bounded_field_agrees_with_the_full_walk() -> void:
+	var board: Dictionary = _build_squad_board()
+	var context := _context(board)
+	var source := Vector2i(0, 0)
+
+	var full: Dictionary = GroupMoveSolver._path_hops(source, context)
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, 3)
+
+	assert_int(bounded.size()).is_less(full.size())   # it really did stop early
+	for cell in bounded:
+		assert_int(bounded[cell]).is_equal(full[cell])
+		assert_int(bounded[cell]).is_less_equal(3)
+	# Nothing within the bound may be missing.
+	for cell in full:
+		if full[cell] <= 3:
+			assert_bool(bounded.has(cell)).is_true()
+
+
+func test_until_bounded_field_covers_every_requested_cell() -> void:
+	var board: Dictionary = _build_squad_board()
+	var context := _context(board)
+	var source := Vector2i(0, 0)
+	var full: Dictionary = GroupMoveSolver._path_hops(source, context)
+
+	var wanted := { Vector2i(2, 0): true, Vector2i(1, 1): true }
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, -1, wanted)
+
+	for cell in wanted:
+		assert_bool(bounded.has(cell)).is_true()
+		assert_int(bounded[cell]).is_equal(full[cell])
+
+
+func test_until_falls_back_to_the_full_walk_when_a_cell_is_unreachable() -> void:
+	# An unreachable request can never satisfy the stop condition; the walk must terminate anyway
+	# rather than spin, and still answer correctly for everything it did reach.
+	var board: Dictionary = _build_squad_board()
+	var context := _context(board)
+	var source := Vector2i(0, 0)
+
+	var wanted := { Vector2i(99, 99): true }
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, -1, wanted)
+
+	assert_bool(bounded.has(Vector2i(99, 99))).is_false()
+	assert_int(bounded.size()).is_equal(GroupMoveSolver._path_hops(source, context).size())

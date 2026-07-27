@@ -96,6 +96,27 @@ func is_legal() -> bool:
 	return true
 
 # The held carvings this wielder can actually channel (temper floors + trained leeway).
+# --- Attack-source surface (EquippableData) ---
+# A rune fires whichever inscribed carving it can currently channel; an aura-dry rune offers
+# nothing, which is the honest bare-fist fallback.
+
+func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	for t in channelable(wielder):
+		result.append(t)
+	return result
+
+func default_attack(wielder: Unit) -> AttackData:
+	var fireable := channelable(wielder)
+	if fireable.is_empty():
+		return null
+	return fireable[0]
+
+# A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
+# A weapon deliberately does NOT; see WeaponInstance.counter_attack.
+func counter_attack(wielder: Unit) -> AttackData:
+	return wielder.get_fired_attack()
+
 func channelable(wielder: Unit) -> Array[TransmutationData]:
 	var result: Array[TransmutationData] = []
 	for t in inscriptions:

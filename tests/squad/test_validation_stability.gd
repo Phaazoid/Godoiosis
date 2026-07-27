@@ -2,7 +2,7 @@
 # planned moves must not depend on the order the actions happen to sit in the list. The
 # occupancy resolver decides whether a destination is free by reading whether the current
 # occupant has a *valid* move away — a flag other moves in the same pass can still flip — so
-# _validate_action_list must settle to a fixpoint that is stable across orderings.
+# SquadPlanValidator.validate must settle to a fixpoint that is stable across orderings.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -41,7 +41,7 @@ func test_swap_chain_validity_is_order_independent() -> void:
 		assert_dict(result).is_equal(baseline)
 
 # Build fresh MoveActions in the given order, validate the hypothetical list through the real
-# SquadManager, and return {label: is_valid}. Fresh actions each call so there is no is_valid
+# validator, and return {label: is_valid}. Fresh actions each call so there is no is_valid
 # carryover between orderings; labelled keys map back to the same unit regardless of order.
 func _validity_for(squad: Squad, specs: Array) -> Dictionary:
 	var actions: Array[BaseAction] = []
@@ -49,7 +49,7 @@ func _validity_for(squad: Squad, specs: Array) -> Dictionary:
 		var move := MoveAction.new()
 		move.init(spec[1], [spec[2]], null)   # one-cell path => destination = that cell
 		actions.append(move)
-	_sm._validate_action_list(squad, actions)
+	SquadPlanValidator.validate(squad, actions)
 	var by_label := {}
 	for i in specs.size():
 		by_label[specs[i][0]] = actions[i].is_valid

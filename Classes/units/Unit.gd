@@ -2,10 +2,10 @@ extends Node2D
 class_name Unit
 
 #This is a container for everything that is a unit on the map.  These only exist during combat. 
-#These have different components (movement, combat) that allow them to work, and reference specific UnitInstances to get their data. 
+#It owns a MovementComponent (board position + walk animation) and UnitVisuals, delegates attack
+#geometry to the static Reach, and references a UnitInstance for everything that outlives a battle.
 
 #Core stats
-@onready var combat: CombatComponent = $CombatComponent
 @onready var movement: MovementComponent = $MovementComponent
 @onready var map_sprite: Sprite2D = $MapSprite
 @onready var move_sprite: Sprite2D = $MoveSprite
@@ -33,8 +33,8 @@ var pending_cell : Vector2i
 var active_attack: AttackData = null   # the specific attack picked to fire this aim — a carving or a weapon attack (#30 C, generalized #72); null = auto
 var equipped_weapon: EquippableData = null
 var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Carried in `inventory`
-                                   # like a weapon but filling its OWN slot — set only via
-                                   # wear_armor(), the one place the wear gate lives.
+								   # like a weapon but filling its OWN slot — set only via
+								   # wear_armor(), the one place the wear gate lives.
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
@@ -88,10 +88,14 @@ func setup(grid : TileMapLayer, cell: Vector2i):
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
+	# Sized before the guard below: bailing out with a zero-length inventory made every later
+	# add_item() fail silently rather than just leaving the unit statless.
+	inventory.resize(MAX_INVENTORY_SIZE)
+
 	if unit_data == null:
 		push_error("Unit missing UnitData.")
 		return
-	
+
 	#This exists because node parent/child relations don't exist until node is added to a tree
 	if pending_grid:
 		movement.set_grid(pending_grid)
@@ -100,7 +104,6 @@ func _ready():
 	unit_instance = UnitInstance.new()
 	unit_instance.data = unit_data
 	unit_instance.initialize()
-	inventory.resize(MAX_INVENTORY_SIZE)
 	unit_instance.died.connect(_on_instance_died)
 	map_sprite.z_index = BASE_SPRITE_INDEX
 	move_sprite.z_index = BASE_SPRITE_INDEX
@@ -146,23 +149,24 @@ func get_unit_name() -> String:
 	return unit_data.display_name
 
 func remove_item(index: int):
-	if index >= 0 and index < inventory.size():
-		var item := inventory[index]
-		if unit_instance.is_installed_prosthetic(_template_of(item)):
-			return
-		if item == equipped_weapon:
-			equipped_weapon = null
-		if item == worn_armor:
-			worn_armor = null
-		inventory[index] = null
-		
+	if index < 0 or index >= inventory.size():
+		return
+	var item := inventory[index]
+	if item == null:
+		return
+	# An installed prosthetic is load-bearing gear, not loose inventory — it can't be dropped.
+	var weapon := item as WeaponInstance
+	if weapon != null and unit_instance.is_installed_prosthetic(weapon.template):
+		return
+	if item == equipped_weapon:
+		equipped_weapon = null
+	if item == worn_armor:
+		worn_armor = null
+	inventory[index] = null
+
+
 func _on_instance_died():
 	die()
-
-func get_base_stat(stat: Stats.Stat) -> int:
-	if unit_instance == null:
-		return -1
-	return unit_instance.get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
 	return unit_instance.get_effective_stat(stat) + _gear_modifier(stat)
@@ -174,7 +178,7 @@ func _gear_modifier(stat: Stats.Stat) -> int:
 		return 0
 	return worn_armor.stat_modifiers.get(stat, 0)
 
-func get_modifier(stat: Stats.Stat) -> int:
+func get_temp_modifier(stat: Stats.Stat) -> int:
 	return unit_instance.stat_modifiers.get(stat, 0)
 
 func get_current_hp() -> int:
@@ -209,9 +213,6 @@ func is_immune_to(element: Elemental.Element) -> bool:
 	# Targeted elemental protection lives on GEAR (alchemy-kit.md: no catch-all RES stat).
 	return worn_armor != null and worn_armor.blocks_element(element)
 
-func has_element_state(state: Elemental.State) -> bool:
-	return element_states.has(state)
-
 func add_element_state(state: Elemental.State) -> void:
 	if state == Elemental.State.NONE:
 		return
@@ -221,38 +222,24 @@ func add_element_state(state: Elemental.State) -> void:
 func remove_element_state(state: Elemental.State) -> void:
 	element_states.erase(state)
 
-func _template_of(item: EquippableData) -> WeaponData:
-	var weapon := item as WeaponInstance
-	return weapon.template if weapon != null else null
-
-func get_all_stats() -> Dictionary:
-	var result := {}
-	for stat in unit_data.base_stats.keys():
-		result[stat] = get_base_stat(stat)
-	return result
-
 func get_faction() -> Team.Faction:
 	return unit_data.faction
 
+# NB: "has squadMATES" — a solo unit still belongs to a managed squad of one.
 func has_squad() -> bool:
-	if squad.get_members().size() == 1:
-		return false
-	else:
-		return true
+	return squad.get_members().size() > 1
 
 func is_leader() -> bool:
-	if squad.get_leader() == self:
-		return true
-	else:
-		return false
-	
+	return squad.get_leader() == self
+
+
 func die():
 	lifecycle_state = LifecycleState.DEAD
 	unit_died.emit(self)
 	queue_free()
 
 func take_damage(damage: int):
-	# Lifecycle-aware combat damage entry (CombatComponent routes here). Raw HP math stays
+	# Lifecycle-aware damage entry -- every damage source calls this. Raw HP math stays
 	# on UnitInstance; the down/kill DECISION is battle-scoped, so it lives here on the Unit.
 	if lifecycle_state == LifecycleState.DEAD:
 		return
@@ -356,13 +343,6 @@ func has_valid_move_queued() -> bool:
 		if move.is_valid:
 			return true
 	return false
-	
-func get_unit_actions() -> Array[BaseAction]:
-	var actions = []
-	for action in squad.get_actions():
-		if action.actor == self:
-			actions.append(action)
-	return actions
 	
 func get_move_action() -> MoveAction:
 	for action in squad.get_actions():
@@ -483,12 +463,12 @@ func rally() -> void:
 func is_crisis_eligible() -> bool:
 	# Crisis gates on a FULL Will pool (will-and-death.md) — an identity gate, faction-agnostic
 	# since #57. Eligibility is universal; the DECISION differs by controller (live prompt vs
-	# archetype stance — see game._offer_crisis).
+	# archetype stance — see OrderExecutor._offer_crisis).
 	return not in_crisis \
 		and unit_instance.get_current_will() >= CRISIS_WILL_GATE
 
 func enter_crisis():
-	# Player accepted the live offer (game._process_downed_pending). The unit went DOWNED during the
+	# Player accepted the live offer (OrderExecutor._process_downed_pending). The unit went DOWNED during the
 	# pass; reverse that into the gambit: up at CRISIS_REVIVE_HP, Will locked at 0, surge primed for
 	# next turn, no safety net for the rest of the battle.
 	in_crisis = true
@@ -510,13 +490,13 @@ func advance_crisis_surge():
 
 func _apply_crisis_surge():
 	for stat in CRISIS_SURGE_STATS:
-		unit_instance.stat_modifiers[stat] = get_modifier(stat) + CRISIS_SURGE
+		unit_instance.stat_modifiers[stat] = get_temp_modifier(stat) + CRISIS_SURGE
 	crisis_surge_pending = false
 	crisis_surge_active = true
 
 func _clear_crisis_surge():
 	for stat in CRISIS_SURGE_STATS:
-		unit_instance.stat_modifiers[stat] = get_modifier(stat) - CRISIS_SURGE
+		unit_instance.stat_modifiers[stat] = get_temp_modifier(stat) - CRISIS_SURGE
 	crisis_surge_active = false
 
 func get_element_aura(element: Elemental.Element) -> int:
@@ -527,50 +507,33 @@ func get_element_aura(element: Elemental.Element) -> int:
 func has_any_affinity() -> bool:
 	return unit_instance != null and unit_instance.has_any_affinity()
 
-# The attack this unit would fire right now: a rune auto-picks its first channelable carving; a
-# weapon defaults to its main attack. active_attack (the player's live pick) always wins when set
-# — reset at the start of _begin_attack, so it's fresh for the unit's OWN declared aim. #30 B2/#72.
+# --- What this unit fires ---
+# Each question is asked of the EQUIPPABLE, which answers for its own kind (EquippableData's
+# attack-source surface). Unit used to fork on `as RuneData` / `as WeaponInstance` in every one
+# of these; the kind-specific behaviour now lives with the kind, and an empty slot is the only
+# case Unit still handles.
+
+# active_attack (the player's live pick) always wins when set — reset at the start of
+# MainActionMenu.begin_attack, so it's fresh for the unit's OWN declared aim. #30 B2/#72.
 func get_fired_attack() -> AttackData:
 	if active_attack != null:
 		return active_attack
-	var rune := get_equipped_weapon() as RuneData
-	if rune != null:
-		var fireable := rune.channelable(self)
-		if not fireable.is_empty():
-			return fireable[0]
+	if equipped_weapon == null:
 		return null
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null and weapon.template != null:
-		return weapon.template.main_attack
-	return null
+	return equipped_weapon.default_attack(self)
 
-# The full menu of attacks this unit could choose to fire — for the pick-menu at attack entry.
-# A rune offers its channelable carvings; a weapon offers its stock attacks (main + extras, #72).
+# The full menu of attacks this unit could choose to fire — the pick-menu at attack entry.
 func get_selectable_attacks() -> Array[AttackData]:
-	var result: Array[AttackData] = []
-	var rune := get_equipped_weapon() as RuneData
-	if rune != null:
-		for t in rune.channelable(self):
-			result.append(t)
-		return result
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		for a in weapon.available_attacks(self):
-			result.append(a)
-	return result
+	if equipped_weapon == null:
+		return []
+	return equipped_weapon.selectable_attacks(self)
 
 # The equipped WEAPON's non-main attacks — surfaced under the Weapon Action menu (2026-07-24).
-# Empty for a rune (its carvings stay under Attack) or an empty slot. = available_attacks minus main.
+# Empty for a rune (its carvings stay under Attack) or an empty slot.
 func get_weapon_secondary_attacks() -> Array[AttackData]:
-	var result: Array[AttackData] = []
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon == null or weapon.template == null:
-		return result
-	var main := weapon.template.main_attack
-	for a in weapon.available_attacks(self):
-		if a != main:
-			result.append(a)
-	return result
+	if equipped_weapon == null:
+		return []
+	return equipped_weapon.secondary_attacks(self)
 
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
 # reload) OR a fireable secondary attack. Mere existence isn't enough — a mace's Blowback that can't
@@ -584,24 +547,22 @@ func has_weapon_actions() -> bool:
 			return true
 	return false
 
-# What a COUNTER fires — deliberately separate from get_fired_attack(): a rune counters with
-# whatever it would currently fire (unchanged #30 quirk), but a weapon ALWAYS counters with its
-# main attack, ignoring any live active_attack selection (#72 ruling; overwatch-style alt-attack
-# countering is out of scope, #73).
+# What a COUNTER fires — deliberately separate from get_fired_attack(), because the two kinds
+# diverge on whether the live pick counts: a rune counters with whatever it would currently fire
+# (#30 quirk), a weapon ALWAYS counters with main (#72). Each kind states its own answer.
 func get_counter_attack() -> AttackData:
-	var rune := get_equipped_weapon() as RuneData
-	if rune != null:
-		return get_fired_attack()
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null and weapon.template != null:
-		return weapon.template.main_attack
-	return null
+	if equipped_weapon == null:
+		return null
+	return equipped_weapon.counter_attack(self)
 
 # Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
-# never the live selection — see that method's header for why.
+# never the live selection — see that method's header for why. Since #84 the counter attack must
+# also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
+# Stab requires_readiness) can't counter with an attack the menu already refuses. A counter that
+# DOES land spends whatever its main consumes — AttackAction.execute()'s post-fire hook.
 func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
-	return atk != null and atk.can_counter
+	return atk != null and atk.can_counter and is_attack_fireable(atk)
 
 # Does this unit's CURRENT attack source splash allies (friendly fire)? Reads whatever this unit
 # would fire right now (get_fired_attack) -- the AoE mirror of attack_source_can_counter, but
@@ -623,6 +584,12 @@ func has_any_fireable_attack() -> bool:
 		if is_attack_fireable(a):
 			return true
 	return false
+	
+# Can the ATTACK menu entry do anything? Since the 2026-07-24 refactor Attack always fires the
+# DEFAULT attack with no submenu, so the entry gates on that ONE attack — reading the same
+# get_fired_attack() AttackAction stamps, so the menu and the Law #3 queue gate can't disagree.
+func can_fire_default_attack() -> bool:
+	return is_attack_fireable(get_fired_attack())
 
 func can_reload_weapon() -> bool:
 	var weapon := get_equipped_weapon() as WeaponInstance
@@ -632,6 +599,12 @@ func reload_weapon() -> void:
 	var weapon := get_equipped_weapon() as WeaponInstance
 	if weapon != null:
 		weapon.reload()
+
+func reload_label() -> String:
+	var weapon := get_equipped_weapon() as WeaponInstance
+	if weapon != null:
+		return weapon.reload_label()
+	return "Reload"
 
 func can_rev_weapon() -> bool:
 	var weapon := get_equipped_weapon() as WeaponInstance

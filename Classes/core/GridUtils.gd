@@ -5,6 +5,16 @@ class_name GridUtils
 # overlays, dev tools): Manhattan/blended ranges, cardinal facings, and the tileset's
 # terrain_type custom-data -> Terrain.Kind / icon lookups.
 
+# The tileset's tile size in pixels — the single definition (CameraController and UnitVisuals
+# each used to declare their own `TILE_SIZE = 16`). NB: a board CELL is two tiles wide; see
+# CameraController.CELL_WORLD.
+const TILE_SIZE := 16
+
+# "No cell" sentinel — far outside any real board, so it can never collide with a live cell.
+# One definition: game.gd/HoverPresenter used bare Vector2i(-999,-999) literals while Squad
+# spelled the same idea Vector2i(-999999,-999999).
+const NO_CELL := Vector2i(-999, -999)
+
 const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
 	Terrain.Kind.GRASS: preload("res://Art/Icons/TerrainIcons/Grass.png"),
 	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/Rock.png"),

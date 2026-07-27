@@ -67,7 +67,7 @@ func execute():
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
 	if target != null and resolved != null:
-		target.combat.apply_damage(resolved.damage)
+		target.take_damage(resolved.damage)
 		for s in resolved.states_removed:
 			target.remove_element_state(s)
 		for s in resolved.states_added:
@@ -78,7 +78,10 @@ func execute():
 			target.movement.set_cell(resolved.knockback_to)
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
 	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
-	# Counters always fire main (#72), which never consumes, so this never fires on a counter.
+	# Counters run through here too: they stamp main (#72), so a family whose MAIN spends — a
+	# Carbine's magazine (#84) — pays for reactive fire, while Stab/Smash mains (consumes_readiness
+	# false) stay no-ops. The matching "can I even counter on empty" gate is on
+	# Unit.attack_source_can_counter().
 	if not is_secondary_hit and fired_attack is WeaponAttackData:
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:

@@ -93,6 +93,11 @@ func initialize():
 	#reset battle stats
 	current_hp = get_max_hp()
 	current_will = get_max_will()
+	# stat_modifiers is a BATTLE-scoped add/subtract bag (the Crisis surge) that happens to live
+	# on the persistent instance, so it has to be cleared here with the other battle state. Without
+	# this, a unit whose surge was still applied when the battle ended would carry it forever once
+	# instances survive missions (the campaign layer). Not captured by ScenarioUnitEntry either.
+	stat_modifiers.clear()
 
 func add_job(job_id: String) -> bool:
 	if job_id == "" or jobs.has(job_id) or JobCatalog.get_job(job_id) == null:

@@ -17,7 +17,7 @@ var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
-var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors game._downed_pending)
+var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
 
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
@@ -51,13 +51,13 @@ func _on_unit_died(unit: Unit) -> void:
 
 func _on_unit_downed(unit: Unit) -> void:
 	# The down fires INSIDE the attack/counter pass (take_damage -> _go_downed). Defer the
-	# squad ejection until the pass settles, exactly like game._on_unit_downed, so we never
+	# squad ejection until the pass settles, exactly like OrderExecutor.on_unit_downed, so we never
 	# restructure squads mid-resolution.
 	if not _downed_pending.has(unit):
 		_downed_pending.append(unit)
 
 func _process_downed_pending() -> void:
-	# Twin of game._process_downed_pending: eject each survivor-but-downed unit into a solo
+	# Twin of OrderExecutor._process_downed_pending: eject each survivor-but-downed unit into a solo
 	# squad. Skip any that got finished off (KILLED) later in the same pass — death already
 	# cleaned those up.
 	for unit in _downed_pending:
@@ -147,9 +147,9 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
 	var origin := unit.get_projected_destination()
-	if not unit.combat.can_hit_cell_from(origin, aim):
+	if not Reach.can_hit_cell_from(unit, origin, aim):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	var affected := unit.combat.get_affected_cells_from(origin, aim)
+	var affected := Reach.get_affected_cells_from(unit, origin, aim)
 	var victims := RulesService.gather_attack_victims(unit, affected, _board())
 	if victims.is_empty():
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
@@ -205,20 +205,21 @@ func rally(handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rally now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> rally" % handle}
 
-# Spring Load: self-targeted weapon rearm (a main action, #73) — the same SpringLoadAction
-# the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon() seam.
-func spring_load(handle: String) -> Dictionary:
+# Reload: self-targeted weapon rearm (a main action, #73 as Spring Load, generalized #84) — the
+# same ReloadAction the menu queues, driving the generic Unit.can_reload_weapon()/reload_weapon()
+# seam. One command for every family: a Springspear's spring, a Carbine's magazine.
+func reload(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
 	var gate := _controllable(unit, handle)
 	if not gate.ok:
 		return gate
 	if not unit.can_reload_weapon():
-		return {"ok": false, "error": "%s can't spring-load (weapon already ready, or nothing to reload)" % handle}
-	var action := SpringLoadAction.new()
+		return {"ok": false, "error": "%s can't reload (weapon already loaded, or nothing to reload)" % handle}
+	var action := ReloadAction.new()
 	action.init(unit)
 	if not squad_manager.queue_action(unit.squad, action):
-		return {"ok": false, "error": "%s can't spring-load now (already has a main action, or another squad is active)" % handle}
-	return {"ok": true, "summary": "%s -> spring load" % handle}
+		return {"ok": false, "error": "%s can't reload now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> %s" % [handle, unit.reload_label().to_lower()]}
 
 # Rev: self-targeted Chainsword rev-up (a main action, #84) — the same RevAction the menu
 # queues, driving the generic Unit.can_rev_weapon()/rev_weapon() seam. While revved, this
@@ -402,7 +403,7 @@ func execute() -> Dictionary:
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
-	# Same order as game.execute_orders — a tile deposited this pass is live for the counters that
+	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
 	# follow it, and for every later pass.
 	for atk in plan.attacks:
 		_apply_attack(atk, events)
@@ -421,7 +422,7 @@ func execute() -> Dictionary:
 			action.execute()
 			events.append(action.get_description())
 
-	# 5) eject units downed during the pass into solo squads (mirrors game._process_downed_pending)
+	# 5) eject units downed during the pass into solo squads (mirrors OrderExecutor._process_downed_pending)
 	_process_downed_pending()
 
 	# clear the squad's orders + mark acted (mirrors execute_orders' tail)
@@ -432,7 +433,7 @@ func execute() -> Dictionary:
 
 	return {"ok": true, "events": events}
 
-# Play the resolved terrain deposits into the live store (twin of game._apply_cell_effects, minus
+# Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[String]) -> void:
 	if terrain_states == null:
@@ -457,7 +458,7 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		return
 	if r.skipped:
 		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
-	target.combat.apply_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
+	target.take_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
 	for s in r.states_removed:
 		target.remove_element_state(s)
 	for s in r.states_added:
@@ -470,8 +471,10 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
 	# Post-fire economy (#73/#84): mirror AttackAction.execute()'s readiness/charge hook — the
 	# headless executor bypasses that method, so without this the play path diverges from the game
-	# (a fired Spring stays sprung; a Blowback keeps its charge). Lead volley member with a real
-	# weapon attack only; counters fire main (no stamped attack), so they never reach here.
+	# (a fired Spring stays sprung; a Blowback keeps its charge). Lead volley member only. Counters
+	# DO reach here — they stamp main (CounterAttackAction.create_counter_volley), so a family whose
+	# main spends (a Carbine's magazine) is charged for reactive fire too, while Stab/Smash mains
+	# with consumes_readiness = false are no-ops exactly as before.
 	if not atk.is_secondary_hit and atk.fired_attack is WeaponAttackData:
 		var weapon := actor.get_equipped_weapon() as WeaponInstance
 		if weapon != null:
