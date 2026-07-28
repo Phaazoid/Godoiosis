@@ -13,7 +13,8 @@ func _mace_unit() -> Unit:
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var blowback := WeaponAttackData.new()
 	blowback.display_name = "Blowback"
-	blowback.knockback = 1
+	blowback.requires_readiness = true   # the authored gate, not knockback (#108)
+	blowback.consumes_readiness = true
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.KINETIC_MACE
 	template.main_attack = WeaponAttackData.new()

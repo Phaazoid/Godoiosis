@@ -13,4 +13,6 @@ display_name = "Blowback"
 power = 3
 attack_pattern = SubResource("Resource_pat")
 knockback = 1
+requires_readiness = true
+consumes_readiness = true
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

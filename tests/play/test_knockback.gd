@@ -27,12 +27,18 @@ func _mace_board(hero_cell: Vector2i, foe_cell: Vector2i, extra_blocker: Vector2
 	if extra_blocker != Vector2i(999, 999):
 		BoardBuilder.spawn(b, _data("Wall", ENEMY), extra_blocker)
 
+	# knockback is the shove; the charge economy rides on the authored readiness flags (#108),
+	# which is why this fixture sets both rather than relying on knockback to imply them.
 	var blowback := WeaponAttackData.new()
 	blowback.display_name = "Blowback"
 	blowback.knockback = 1
+	blowback.requires_readiness = true
+	blowback.consumes_readiness = true
 	var template := WeaponData.new()
 	template.weapon_type = WeaponData.WeaponType.KINETIC_MACE
-	template.main_attack = WeaponAttackData.new()
+	var smash := WeaponAttackData.new()
+	smash.builds_readiness = true
+	template.main_attack = smash
 	var extras: Array[WeaponAttackData] = [blowback]
 	template.extra_attacks = extras
 	hero.add_item(WeaponInstance.make(template))

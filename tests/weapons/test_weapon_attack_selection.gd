@@ -42,7 +42,8 @@ func _mace_template() -> WeaponData:
 	var t := WeaponData.new()
 	t.main_attack = _attack(3, true, false)
 	var blowback := _attack(3, false, false)
-	blowback.knockback = 1   # knockback > 0 is what marks the charge-spender
+	blowback.requires_readiness = true   # the authored gate (#108 — was knockback > 0)
+	blowback.consumes_readiness = true
 	t.extra_attacks = [blowback]
 	t.weapon_type = WeaponData.WeaponType.KINETIC_MACE
 	t.scaling_blend = {Stats.Stat.STR: 100}
@@ -138,7 +139,7 @@ func test_can_fire_default_attack_still_tracks_an_unfireable_default() -> void:
 	# closes the entry — the carbine's empty-magazine case (tests/weapons/test_carbine_magazine.gd),
 	# pinned here too so the #102 fix can't be "fixed" by dropping the check.
 	var t := _mace_template()
-	t.main_attack.knockback = 1   # now the MAIN is the charge-spender, and charge is 0
+	t.main_attack.requires_readiness = true   # now the MAIN is the gated attack, and charge is 0
 	var unit := _wielder(t)
 	assert_bool(unit.can_fire_default_attack()).is_false()
 

@@ -18,3 +18,12 @@ extends AttackData
 # Firing this attack leaves its weapon un-ready (#73). false = today's behavior. Independent
 # of requires_readiness: an attack can spend readiness without itself needing it, though
 # Spring (#73's worked example) does both.
+
+@export var builds_readiness: bool = false
+# Firing this attack RESTORES readiness to its weapon (#108). The third state the #73 pair was
+# missing: requires/consumes can say "needs one and spends one" but not "banks one", so the Kinetic
+# Mace inferred its charge-builder from `knockback > 0` instead — a second, private answer to a
+# question these flags already own (design law #4), which made authoring either flag on that family
+# silently inert. false = today's behavior for every existing attack. What "readiness" IS remains
+# the wielding WeaponInstance's call: a bool for the Springspear, a magazine for the Carbine, a
+# charge bank for the mace.
