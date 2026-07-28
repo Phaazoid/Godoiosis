@@ -28,7 +28,10 @@ func test_resolve_retargets_when_a_squadmate_moves_into_the_blast() -> void:
 	_sm.join_squad(mate, attacker.squad)
 	_sm.active_squad = attacker.squad
 
-	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0)))
+	# declare(), not create() — a QUEUED aim always carries a stamped fired_attack in production,
+	# and since #102 that stamp is what resolve_plan derives the blast and the friendly-fire rule
+	# from. Bare create() leaves it null, which means "this unit has no attack at all".
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
 	var board := _board_with([attacker, mate])
 
 	# Before the move: (1,0) is empty, so the aim resolves to a CELL attack (#47 — no victim,
@@ -57,7 +60,10 @@ func test_resolve_drops_a_target_who_moves_out_of_the_blast() -> void:
 	_sm.join_squad(mate, attacker.squad)
 	_sm.active_squad = attacker.squad
 
-	attacker.squad._queue_action(AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0)))
+	# declare(), not create() — a QUEUED aim always carries a stamped fired_attack in production,
+	# and since #102 that stamp is what resolve_plan derives the blast and the friendly-fire rule
+	# from. Bare create() leaves it null, which means "this unit has no attack at all".
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
 	var board := _board_with([attacker, mate])
 
 	# Before the move: the squadmate is standing in the blast.

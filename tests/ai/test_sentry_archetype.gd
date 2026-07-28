@@ -100,7 +100,7 @@ func test_intruder_triggers_zone_clamped_engage() -> void:
 	var moves: Array[Vector2i] = _move_destinations(squad)
 	assert_int(moves.size()).is_equal(1)
 	assert_bool(zones.contains(ZONE, moves[0])).is_true()
-	assert_bool(Reach.get_all_attack_cells_from(guard, moves[0]).has(intruder.movement.cell)).is_true()
+	assert_bool(Reach.get_all_attack_cells_from(guard, moves[0], guard.get_fired_attack()).has(intruder.movement.cell)).is_true()
 
 	var aims: Array[AttackAction] = _attack_aims(squad)
 	assert_int(aims.size()).is_equal(1)

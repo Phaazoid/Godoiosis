@@ -148,10 +148,14 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	if not unit.has_equipped_weapon():
 		return {"ok": false, "error": "%s has no equipped weapon" % handle}
 	var origin := unit.get_projected_destination()
-	if not Reach.can_hit_cell_from(unit, origin, aim):
+	# Aiming: the live pick IS the question, and it is exactly what declare() stamps below (#102).
+	# Play never sets active_attack, so today this is always the weapon's main -- the headless
+	# side has no way to select a secondary at all (#110).
+	var aiming := unit.get_fired_attack()
+	if not Reach.can_hit_cell_from(unit, origin, aim, aiming):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
-	var affected := Reach.get_affected_cells_from(unit, origin, aim)
-	var victims := RulesService.gather_attack_victims(unit, affected, _board())
+	var affected := Reach.get_affected_cells_from(unit, origin, aim, aiming)
+	var victims := RulesService.gather_attack_victims(unit, affected, _board(), aiming)
 	if victims.is_empty():
 		return {"ok": false, "error": "no valid targets at %s" % str(aim)}
 	# Store ONE aim order (target=null); resolve_plan derives the volley/victims at resolve time

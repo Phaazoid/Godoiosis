@@ -35,7 +35,7 @@ func test_gather_victims_picks_enemies_not_allies() -> void:
 	var enemy := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
 
-	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(1, 0), Vector2i(0, 1)], _board())
+	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(1, 0), Vector2i(0, 1)], _board(), attacker.get_fired_attack())
 
 	assert_array(victims).contains([enemy])
 	assert_array(victims).not_contains([ally])
@@ -45,6 +45,7 @@ func test_gather_victims_includes_allies_when_weapon_hits_allies() -> void:
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
 	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.hits_allies = true
 
-	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(0, 1)], _board())
+	# The flag is read off the attack passed in, not off the attacker (#102).
+	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(0, 1)], _board(), attacker.get_fired_attack())
 
 	assert_array(victims).contains([ally])

@@ -125,7 +125,7 @@ func test_best_attack_destination_moves_into_range() -> void:
 	# (4,0) is the only reachable cell in Manhattan-1 reach of (5,0): the enemy blocks the
 	# corridor, so (6,0) is unreachable, and (5,0) itself is occupied.
 	assert_that(dest).is_equal(Vector2i(4, 0))
-	assert_bool(Reach.get_all_attack_cells_from(leader, dest).has(enemy.movement.cell)).is_true()
+	assert_bool(Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell)).is_true()
 
 
 func test_best_attack_destination_closes_distance_when_out_of_reach() -> void:

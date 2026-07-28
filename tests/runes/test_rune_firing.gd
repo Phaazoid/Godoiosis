@@ -172,8 +172,9 @@ func test_rune_carving_can_counter_false_blocks_the_counter() -> void:
 	assert_int(plan.counters.size()).is_equal(0)
 
 # A rune AoE carving with hits_allies splashes a friendly in the blast -- the carving's flag is
-# honored exactly like a weapon's, because gather_attack_victims reads the unified source. The
-# AoE mirror of the counter symmetry above. #30.
+# honored exactly like a weapon's, because gather_attack_victims reads the flag straight off the
+# AttackData it is handed and a carving IS one (#102; it used to ask the attacker). The AoE mirror
+# of the counter symmetry above. #30.
 func test_rune_carving_hits_allies_includes_a_friendly() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var ally: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
@@ -182,5 +183,5 @@ func test_rune_carving_hits_allies_includes_a_friendly() -> void:
 	alch.equipped_weapon = _make_rune(fireball)
 
 	var units: Array[Unit] = [alch, ally]
-	var victims := RulesService.gather_attack_victims(alch, [Vector2i(0, 1)], _StubBoard.new(_sm.grid, units, _sm, {}))
+	var victims := RulesService.gather_attack_victims(alch, [Vector2i(0, 1)], _StubBoard.new(_sm.grid, units, _sm, {}), alch.get_fired_attack())
 	assert_array(victims).contains([ally])

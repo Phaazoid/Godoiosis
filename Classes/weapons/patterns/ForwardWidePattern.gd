@@ -1,6 +1,9 @@
 class_name ForwardWidePattern
 extends AttackPattern
 
+# DECLARED overlap (#20, re-verified #104): at width = 1 this is cell-for-cell identical to
+# ForwardLinePattern. See that file's header for the standing decision to keep both.
+
 @export var length := 1
 # Tiles across the facing line — odd only, symmetric about the line. The editor offers odds
 # only (see @export_enum); even widths can't be symmetric and produced an off-centre tile

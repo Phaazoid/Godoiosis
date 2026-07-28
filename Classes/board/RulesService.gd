@@ -115,9 +115,11 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 	path.push_front(start)
 	return path
 
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext) -> Array[Unit]:
+static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData) -> Array[Unit]:
 	var victims: Array[Unit] = []
-	var hits_allies := attacker.attack_source_hits_allies()
+	# Friendly fire is a property of the ATTACK BEING FIRED, not of whatever the attacker last
+	# aimed with (#102). A counter fires main, which may not splash even when a live pick would.
+	var hits_allies := attack != null and attack.hits_allies
 
 	for cell in affected_cells:
 		var unit := board.unit_at_cell(cell)

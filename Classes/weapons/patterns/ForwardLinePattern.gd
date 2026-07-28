@@ -1,6 +1,11 @@
 class_name ForwardLinePattern
 extends AttackPattern
 
+# DECLARED overlap (#20, re-verified #104): ForwardWidePattern with width = 1 produces the
+# IDENTICAL cell set. Kept as two concepts on purpose — forward-line reach vs sideways cleave —
+# on the expectation they diverge as patterns grow. Neither is authoritative; they are siblings.
+# If they still haven't diverged when the next pattern lands, consolidate rather than add a third.
+
 @export var length := 2
 
 func get_selectable_cells(user: Unit, origin_cell: Vector2i, facing_hint: Vector2i) -> Array[Vector2i]:

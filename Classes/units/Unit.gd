@@ -289,6 +289,10 @@ func is_active() -> bool:
 func is_downed() -> bool:
 	return lifecycle_state == LifecycleState.DOWNED
 
+# DECLARED three-way split (re-verified #104, guard declared on UnitInstance.permadead):
+# THIS is "went down the permanent path this mission" and is the only one anything reads.
+# UnitInstance.is_dead() is `current_hp <= 0` (currently zero call sites); permadead is
+# "never fields again" (unwired). Don't add a fourth, and don't rename any of them to `dead`.
 func is_dead() -> bool:
 	return lifecycle_state == LifecycleState.DEAD
 
@@ -553,13 +557,6 @@ func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
 	return atk != null and atk.can_counter and is_attack_fireable(atk)
 
-# Does this unit's CURRENT attack source splash allies (friendly fire)? Reads whatever this unit
-# would fire right now (get_fired_attack) -- the AoE mirror of attack_source_can_counter, but
-# NOT counter-locked to main: the ally-splash check reflects the live aim. #30/#72.
-func attack_source_hits_allies() -> bool:
-	var atk := get_fired_attack()
-	return atk != null and atk.hits_allies
-	
 # Readiness seam (#73) — delegates entirely to the equipped WeaponInstance; Unit carries no
 # readiness state of its own (two weapons in inventory must track independently).
 func is_attack_fireable(attack: AttackData) -> bool:
@@ -578,10 +575,14 @@ func has_any_fireable_attack() -> bool:
 # DEFAULT attack with no submenu, so the entry gates on that ONE attack. Deliberately NOT
 # get_fired_attack(): that returns a live active_attack, but begin_attack() clears the pick
 # before aiming — so the gate would judge the entry by an attack it will never fire (#102).
+# A weapon with NO main attack (the #80 data-rot shape) fires nothing, so the entry closes:
+# is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
+# answer to "is this gated?" and the wrong one to "is there anything here?".
 func can_fire_default_attack() -> bool:
 	if equipped_weapon == null:
 		return false
-	return is_attack_fireable(equipped_weapon.default_attack(self))
+	var atk := equipped_weapon.default_attack(self)
+	return atk != null and is_attack_fireable(atk)
 
 # --- The equipped thing's self-abilities ---
 # Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack

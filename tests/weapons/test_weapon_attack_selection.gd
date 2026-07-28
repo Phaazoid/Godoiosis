@@ -99,14 +99,24 @@ func test_attack_source_can_counter_reads_main_not_the_live_pick() -> void:
 	unit.active_attack = t.extra_attacks[0]   # the extra CAN counter, but must never be consulted
 	assert_bool(unit.attack_source_can_counter()).is_false()
 
-# --- hits_allies asymmetry: reflects the LIVE pick, not locked to main ---
+# --- hits_allies is a property of the ATTACK, asked of the attack being fired ---
+# Was test_attack_source_hits_allies_reflects_the_live_pick, against Unit.attack_source_hits_allies().
+# That method is gone (#102): it answered from the live pick while the order it gated carried its own
+# stamp, so a counter firing a non-splashing main could splash off a leftover pick. gather_attack_victims
+# now takes the attack, and the flag is read straight off it.
 
-func test_attack_source_hits_allies_reflects_the_live_pick() -> void:
+func test_gather_victims_splashes_allies_only_when_the_fired_attack_says_so() -> void:
 	var t := _spring_template()   # main hits_allies=false, extra hits_allies=true
-	var unit := _wielder(t)
-	assert_bool(unit.attack_source_hits_allies()).is_false()
-	unit.active_attack = t.extra_attacks[0]
-	assert_bool(unit.attack_source_hits_allies()).is_true()
+	var attacker := _squadded_wielder(t, PLAYER, Vector2i(0, 0))
+	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var units: Array[Unit] = [attacker, mate]
+	var board := _StubBoard.new(_sm.grid, units, _sm)
+	var cells: Array[Vector2i] = [Vector2i(1, 0)]
+
+	# A live pick on the unit must not change either answer — only the attack passed in does.
+	attacker.active_attack = t.extra_attacks[0]
+	assert_array(RulesService.gather_attack_victims(attacker, cells, board, t.main_attack)).is_empty()
+	assert_array(RulesService.gather_attack_victims(attacker, cells, board, t.extra_attacks[0])).contains_exactly([mate])
 
 # --- #102: the Attack-menu gate reads the DEFAULT, never the live pick ---
 

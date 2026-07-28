@@ -235,8 +235,9 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 
 	if attacker != null:
 		var origin := attacker.get_projected_destination()
+		var aiming := attacker.get_fired_attack()   # exactly what declare() will stamp (#102)
 		# Directional weapons aim by direction; point weapons need the cell in range.
-		if Reach.is_directional_attack(attacker) or Reach.can_hit_cell_from(attacker, origin, cell):
+		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
 			# #47: cells are the target. A legal aim is queueable whether or not a unit is
 			# there — victims (and terrain effects, #50) are derived at resolve time (#15).
 			# Store the AIM only (actor + aimed cell); null target = derived later.
@@ -350,7 +351,7 @@ func enter_group_move_mode(unit: Unit):
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination()), OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()), OverlayManager.ATLAS_COORDS)
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
@@ -368,6 +369,8 @@ func set_dev_mode(active: bool):
 	dev_overlay.sync_dev_mode_button(active)
 
 func exit_current_mode():
+	if game_state == GameState.ATTACK_TARGETING:
+		_clear_aiming_pick()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	clear_selection()
@@ -376,6 +379,17 @@ func exit_current_mode():
 		overlay_manager.redraw_planned_paths()
 		overlay_manager.redraw_projected_units()
 		refresh_action_queue(squad_manager.active_squad)
+
+# Aiming is over — committed or cancelled — so the pick dies with the mode it belonged to. Since
+# #102 nothing outside aiming reads it (a queued order carries its own stamped fired_attack), so
+# this can no longer change how anything resolves; it just stops a spent pick from surviving into
+# next turn's menu gates and overlays. Finds the aimer the same way _click_attack_targeting does.
+func _clear_aiming_pick() -> void:
+	var aimer: Unit = get_unit_at_cell(last_clicked_cell)
+	if aimer == null:
+		aimer = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
+	if aimer != null:
+		aimer.active_attack = null
 
 func clear_selection():
 	game_state = GameState.IDLE

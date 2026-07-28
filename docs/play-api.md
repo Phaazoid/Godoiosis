@@ -44,7 +44,7 @@ as parameters instead of reading `game.gd` globals:
 - `compute_move_range(unit, board)` → `{reachable, came_from, squad_unreachable}`
 - `reconstruct_path(came_from, start, goal)`
 - `movement_cost(cell, unit, board)`
-- `gather_attack_victims(attacker, affected_cells, board)`
+- `gather_attack_victims(attacker, affected_cells, board, attack)` — `attack` since #102; friendly-fire is read off it, never off the attacker's live pick
 
 Attack *geometry* already lives in `Reach` (`get_attack_cells_from`,
 `get_affected_cells_from`, `can_hit_cell_from`) — reuse as-is, no extraction needed.

@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #96 (2026-07-28).**
+**Canon checked through #110 (2026-07-28).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -8,7 +8,7 @@
 
 Law #3 ("AI issues orders exclusively through `SquadManager.queue_action`") was necessary but not sufficient — the fists bug (#78) happened because the AI queued through the right chokepoint while *skipping steps of the player's declare flow* (the `fired_attack` stamp). The rebuilt doctrine closes that class of bug:
 
-- **Pick** — the AI selects among `Unit.get_selectable_attacks()` by setting `Unit.active_attack`, the same slot the player's pick menu writes. Every reach/victim/splash query reads it, so probe and declare can't disagree.
+- **Pick** — the AI selects among `Unit.get_selectable_attacks()`, then writes the winner to `Unit.active_attack` immediately before `declare()` stamps it, the same slot the player's pick menu writes. **Scoring itself no longer touches that slot (#102):** each candidate is passed directly to the reach/victim/splash queries, which take the attack as a parameter. Probe and declare can't disagree because they name the same object, not because they share mutable state — the old arrangement left a live pick behind that skewed every later read.
 - **Declare** — both the player's click handler and the AI build attacks through `AttackAction.declare()`, the one factory that stamps `fired_attack` (Law #2's declare-time snapshot). Bare `create()` is for derived actions only.
 - **Queue** — `queue_action` + `actor_can_perform()` stay the backstop behind every builder's own gate.
 - **Forecast** — candidate scoring runs `PlanResolver.resolve()` on a throwaway volley. The resolver is a pure pass (R2), so this is free of side effects and *cannot drift*: the AI evaluates a candidate with exactly the math the queue panel previews, lethality included.
@@ -55,7 +55,7 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 
 ## Known v1 approximations (accepted at ratification)
 
-- **Destination planning reads the default pick** — `best_attack_destination` evaluates reach with `active_attack` reset, not per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
+- **Destination planning reads the default pick** — `best_attack_destination` hoists one `leader.get_fired_attack()` and evaluates every cell against it, rather than per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
 - **Counters aren't scored** — the throwaway plan resolves the AI's own volley only; walking into counter range costs nothing in the score.
 - **Movement never seeks rescue/intimidate targets** — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Squad-level coordination** — members choose independently in member order; no focus-fire or combined-arms reasoning.

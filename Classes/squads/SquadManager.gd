@@ -287,7 +287,10 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 	var counter_cell := countering_unit.get_projected_destination()
 	var target_cell := target_unit.get_projected_destination()
 
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell)
+	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
+	# not by whatever this unit last aimed with. Reading the live pick here let a melee unit
+	# counter from a reach attack's range and then swing a range-1 main (#102).
+	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell, countering_unit.get_counter_attack())
 
 func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) -> Unit:
 	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a
@@ -350,8 +353,8 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			continue
 		var aim := action as AttackAction
 		var origin := aim.actor.get_projected_destination()
-		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell)
-		var victims := RulesService.gather_attack_victims(aim.actor, affected, board)
+		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack)
+		var victims := RulesService.gather_attack_victims(aim.actor, affected, board, aim.fired_attack)
 		if victims.is_empty():
 			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
 			# (target stays null = no unit hit). It plays out and is where terrain effects will
@@ -378,11 +381,13 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	for aim in calculate_counterattacks_for_squad(squad, plan.attacks):
 		var c_origin := aim.actor.get_projected_destination()
 		var c_aim_cell := aim.target.get_projected_destination()
-		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell)
-		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board)
+		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
+		# create_counter_volley stamps below (#102).
+		var c_attack := aim.actor.get_counter_attack()
+		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack)
+		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
-
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
 

@@ -99,8 +99,10 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 	for attack in candidates:
 		if not unit.is_attack_fireable(attack):
 			continue
-		unit.active_attack = attack   # probe via the player's pick slot -- reach/victim/splash queries all read it
-		var reach := Reach.get_all_attack_cells_from(unit, origin)
+		# The candidate is passed straight to the geometry now (#102). This loop used to write it
+		# into unit.active_attack purely so Reach/victim queries would pick it up — a side channel
+		# that left a live pick behind and skewed later reads.
+		var reach := Reach.get_all_attack_cells_from(unit, origin, attack)
 		for other in board.units:
 			if not is_instance_valid(other):
 				continue
@@ -110,8 +112,8 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 				continue
 			if not reach.has(other.movement.cell):
 				continue
-			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell)
-			var victims := RulesService.gather_attack_victims(unit, affected, board)
+			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell, attack)
+			var victims := RulesService.gather_attack_victims(unit, affected, board, attack)
 			if victims.is_empty():
 				continue
 			var plan := ResolvedPlan.new()
@@ -200,21 +202,20 @@ static func _try_reload(unit: Unit, squad_manager: SquadManager) -> bool:
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
 
-# Closest reachable cell that puts `leader` in attack range of `enemy`; if none does, the
-# closest reachable cell period. `allowed`: optional Dictionary set restricting destinations.
 # Reach here reads the DEFAULT pick (AIController resets active_attack before planning) --
 # destination-per-candidate-attack is a known v1 approximation, noted on #78.
 static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardContext, allowed = null) -> Vector2i:
 	var range := RulesService.compute_move_range(leader, board)
 	var enemy_cell := enemy.movement.cell
+	var aiming := leader.get_fired_attack()
 	var best: Vector2i = leader.movement.cell
-	var best_can_attack: bool = Reach.get_all_attack_cells_from(leader, best).has(enemy_cell)
+	var best_can_attack: bool = Reach.get_all_attack_cells_from(leader, best, aiming).has(enemy_cell)
 	var best_dist: int = GridUtils.manhattan_distance(best, enemy_cell)
 
 	for cell in range.reachable.keys():
 		if allowed != null and not allowed.has(cell):
 			continue
-		var can_attack: bool = Reach.get_all_attack_cells_from(leader, cell).has(enemy_cell)
+		var can_attack: bool = Reach.get_all_attack_cells_from(leader, cell, aiming).has(enemy_cell)
 		var dist: int = GridUtils.manhattan_distance(cell, enemy_cell)
 		if can_attack and not best_can_attack:
 			best = cell

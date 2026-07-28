@@ -268,9 +268,11 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 	var elements := _source_elements(action)
 	if elements.is_empty():
 		return effects
-	# The footprint is the SAME geometry the volley fired over (get_affected_cells_from), so the
-	# deposit lands exactly where the blast did — every cell, occupied or not.
-	for cell in Reach.get_affected_cells_from(attacker, action.origin_cell, action.target_cell):
+	# The footprint is the SAME geometry the volley fired over, because both are derived from this
+	# order's own stamped attack (#102) — not, as before, from whatever the attacker happens to
+	# have picked right now. The deposit lands exactly where the blast did — every cell, occupied
+	# or not.
+	for cell in Reach.get_affected_cells_from(attacker, action.origin_cell, action.target_cell, action.fired_attack):
 		var effect := _resolve_cell_effect_at(cell, elements, board, terrain_reactions)
 		if effect != null:
 			effects.append(effect)

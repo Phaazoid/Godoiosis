@@ -61,8 +61,10 @@ func _rune_alchemist(faction: Team.Faction, cell: Vector2i, carving: Transmutati
 # Expand and resolve one queued aim the way resolve_plan would, minus the reaction catalogs
 # (deterministic damage, no .tres coupling). Returns the resolved volley.
 func _resolve_aim(attacker: Unit, aim: AttackAction, units: Array[Unit]) -> ResolvedPlan:
-	var affected: Array[Vector2i] = Reach.get_affected_cells_from(attacker, aim.origin_cell, aim.target_cell)
-	var victims: Array[Unit] = RulesService.gather_attack_victims(attacker, affected, _board(units))
+	# Both read the order's OWN stamp, exactly as resolve_plan does since #102 -- not the actor's
+	# live pick, which is what let geometry and damage answer from two different attacks.
+	var affected: Array[Vector2i] = Reach.get_affected_cells_from(attacker, aim.origin_cell, aim.target_cell, aim.fired_attack)
+	var victims: Array[Unit] = RulesService.gather_attack_victims(attacker, affected, _board(units), aim.fired_attack)
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	for a in AttackAction.create_volley(attacker, aim.origin_cell, aim.target_cell, victims, aim.fired_attack):
 		plan.attacks.append(a)

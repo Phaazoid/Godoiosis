@@ -53,7 +53,10 @@ func _resolve(plan: ResolvedPlan, reactions: Array[TerrainReaction], kinds: Dict
 
 func _resolve_cell_attack(attacker: Unit, aim_cell: Vector2i, reactions: Array[TerrainReaction], kinds: Dictionary = { TREE_CELL: Terrain.Kind.TREE }) -> ResolvedPlan:
 	var plan: ResolvedPlan = ResolvedPlan.new()
-	plan.attacks.append(AttackAction.create(attacker, attacker.movement.cell, null, aim_cell))
+	# declare(), not create() — since #102 the deposit footprint is derived from the order's OWN
+	# stamped fired_attack, so an unstamped action reads as "this unit has no attack" and collapses
+	# to the single aimed cell. Production only ever queues stamped aims.
+	plan.attacks.append(AttackAction.declare(attacker, attacker.movement.cell, aim_cell))
 	return _resolve(plan, reactions, kinds)
 
 # --- the channel + the kind gate ---
@@ -104,8 +107,10 @@ func test_secondary_volley_member_skips_the_deposit() -> void:
 	# ignites once, never once-per-victim (the duplication this fixes). Target-less so it stays
 	# grid/squad-free, like the rest of this suite; the gate is what's under test.
 	var attacker: Unit = _fire_line_attacker(EquippableData.TargetMode.MAP, 3)
-	var primary := AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0))
-	var secondary := AttackAction.create(attacker, attacker.movement.cell, null, Vector2i(1, 0))
+	# Both stamped, like create_volley does for a real volley — the footprint comes off the stamp
+	# now (#102), and an unstamped member would collapse to the aimed cell alone.
+	var primary := AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0))
+	var secondary := AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0))
 	secondary.is_secondary_hit = true
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	plan.attacks.append(primary)
@@ -126,6 +131,7 @@ func test_counter_deposits_terrain_across_its_footprint() -> void:
 	var counter_unit: Unit = _fire_line_attacker(EquippableData.TargetMode.MAP, 2)
 	var counter := CounterAttackAction.new()
 	counter.init(counter_unit, counter_unit.movement.cell, null, Vector2i(1, 0))
+	counter.fired_attack = counter_unit.get_counter_attack()   # what create_counter_volley stamps (#102)
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	plan.counters.append(counter)
 	var reactions: Array[TerrainReaction] = [_fire_burns_tree()]

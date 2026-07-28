@@ -141,10 +141,11 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var preview_cells: Array[Vector2i] = []
 	if attacker != null:
 		var origin := attacker.get_projected_destination()
+		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
 		# Directional: any non-zero facing is a legal aim (the whole spread is the target).
 		# Point: the hovered cell itself must be in range.
-		if Reach.is_directional_attack(attacker) or Reach.can_hit_cell_from(attacker, origin, cell):
-			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell)
+		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
+			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming)
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
