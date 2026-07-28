@@ -103,7 +103,7 @@ func _paint_zone(cell: Vector2i) -> void:
 	var zone_name = game.dev_overlay.tile_brush.selected_zone_name()
 	if zone_name == "":
 		return
-	game.zone_manager.paint_cell(zone_name, cell)
+	game.zone_manager.paint_cell(zone_name, game.dev_overlay.tile_brush.selected_zone_kind(), cell)
 	game.overlay_manager.redraw_zones(game.zone_manager)
 
 func _erase_zone(cell: Vector2i) -> void:
@@ -118,3 +118,4 @@ func resize_map(width: int, height: int, fill_tile: Vector2i) -> void:
 		for y in range(height):
 			game.grid.set_cell(Vector2i(x, y), 0, fill_tile)
 	game.camera_controller.refresh_bounds(game.grid)
+	

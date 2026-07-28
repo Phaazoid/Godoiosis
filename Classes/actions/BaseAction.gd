@@ -21,6 +21,7 @@ enum ActionType {
 	RELOAD,
 	REV,
 	BURROW,
+	CAPTURE
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -36,7 +37,8 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
-	ActionType.BURROW
+	ActionType.BURROW,
+	ActionType.CAPTURE
 ]
 
 # Execution order of the side-channel tail — stored orders that bypass PlanResolver
@@ -48,7 +50,8 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.INTIMIDATE,
 	ActionType.RELOAD,
 	ActionType.REV,
-	ActionType.BURROW
+	ActionType.BURROW,
+	ActionType.CAPTURE
 ]
 
 func is_main_action() -> bool:

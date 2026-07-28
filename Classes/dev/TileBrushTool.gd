@@ -6,6 +6,7 @@ class_name TileBrushTool
 # from the tileset itself, never hardcoded.
 
 const SOURCE_ID := 0
+const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
@@ -14,6 +15,7 @@ enum PaintMode { TERRAIN, ZONE }
 var paint_mode := PaintMode.TERRAIN
 var _zone_name := ""
 var _zone_name_row: HBoxContainer
+var _zone_kind := ZoneManager.Kind.PATROL
 
 # Parallel to the dropdown: the atlas coords each entry paints. Built by scanning the
 # board tileset for tiles carrying a terrain_type kind, so any terrain tile authored in
@@ -110,13 +112,19 @@ func _build_extra_controls() -> void:
 
 	add_child(row)
 
-	# Part 3: zone paint mode (Sentry archetype regions).
-	# Part 3: zone paint mode (Sentry archetype regions). The terrain dropdown and the zone
-	# name field are mode-specific -- show whichever the active mode uses.
+	# Part 3: zone painting. A capture point is a zone of kind CAPTURE, so this stays ONE mode with
+	# a kind picker rather than a mode per objective type. The terrain dropdown and zone-name field
+	# are mode-specific; the kind picker stays visible because DevWidgets.add_option returns nothing
+	# to hold a reference to.
 	DevWidgets.add_checkbox(self, "Paint Zones (instead of terrain)", false, _on_zone_mode_toggled)
+	DevWidgets.add_option(self, "Zone Kind", KIND_LABELS, KIND_LABELS[0],
+		func(label: String): _zone_kind = KIND_LABELS.find(label) as ZoneManager.Kind)
 	_zone_name_row = DevWidgets.add_lineedit(self, "Zone Name", "", func(s): _zone_name = s)
 	_zone_name_row.visible = false
-	
+
+func selected_zone_kind() -> ZoneManager.Kind:
+	return _zone_kind
+
 func _on_zone_mode_toggled(pressed: bool) -> void:
 	paint_mode = PaintMode.ZONE if pressed else PaintMode.TERRAIN
 	tile_dropdown.visible = not pressed

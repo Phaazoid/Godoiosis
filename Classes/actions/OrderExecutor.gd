@@ -66,6 +66,9 @@ func execute_orders(unit):
 		var batch: Array = side_channel.get(type, [])
 		await _execute_action_sequence(batch)
 	_process_downed_pending()
+	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
+	# squad-validity guard below -- a squad that wiped itself must not skip the check.
+	game.mission_controller.check()
 
 	if not is_instance_valid(squad):
 		return

@@ -64,8 +64,9 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell)` | validity + updated plan |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
-| `execute()` | apply the resolved plan headlessly; return the event log |
-| `end_turn()` | new turn/faction |
+| `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
+| `end_turn()` | new turn/faction; refuses once the mission is over |
+| `mission_outcome()` / `mission_tag()` | won / lost / ongoing — the same `MissionRules` call the game makes (#96) |
 
 `preview()` is the playtesting superpower: deterministic look-ahead at exact damage/deaths before I
 commit.
@@ -175,8 +176,17 @@ visual calls. Saved scenarios under `res://Scenarios/` become playtest fixtures.
 
 Headless **cannot** judge feel, animation timing, readability, or input UX. It **can** judge balance,
 determinism/correctness, reachability/softlocks, squad/counter/elemental interactions, and scenario
-win/loss. Until enemy AI exists, Claude plays **both sides** (hotseat-as-Claude) — itself a way to
-pressure-test scenarios — through the exact API the archetype AI will later use.
+win/loss (real since #96 — `mission_tag()` reports it). Claude can play **both sides**
+(hotseat-as-Claude) — itself a way to pressure-test scenarios — through the exact API the
+archetype AI uses.
+
+**Headless sees rout and defeat only (#96 gap).** `mission_outcome()` calls the same
+`MissionRules.evaluate` the game does, but there is no `MissionController` out here, so it always
+passes `Progress.NONE` — every board evaluates as a plain rout map, and an authored CAPTURE or
+EXTRACT objective is invisible. There is also no `capture` command to queue a `CaptureAction`
+(the action itself would execute fine: `SIDE_CHANNEL_ORDER` gives it a phase for free). Closing
+this means teaching the headless board about zones and captured-zone state — worth doing when the
+Play API becomes the verification lane for missions.
 
 ## Open questions
 

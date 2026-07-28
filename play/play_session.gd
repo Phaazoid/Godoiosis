@@ -18,6 +18,7 @@ var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
 var _next_enemy := 0
 var _downed_pending: Array[Unit] = []   # units downed mid-execute; ejected AFTER the pass (mirrors OrderExecutor._downed_pending)
+var _mission_contested := false         # "both sides were up at once" latch (mirrors MissionController._contested)
 
 const PLAYER_GLYPHS := "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 const ENEMY_GLYPHS := "abcdefghijklmnopqrstuvwxyz"
@@ -431,7 +432,12 @@ func execute() -> Dictionary:
 			squad_manager.remove_action(squad, action)
 		squad_manager.set_has_acted(squad, true)
 
-	return {"ok": true, "events": events}
+	# The pass has settled -- the same point OrderExecutor asks MissionController.check() (#96).
+	var mission := mission_tag()
+	if mission == "":
+		return {"ok": true, "events": events}
+	events.append("MISSION %s" % mission)
+	return {"ok": true, "events": events, "mission": mission}
 
 # Play the resolved terrain deposits into the live store (twin of OrderExecutor._apply_cell_effects, minus
 # the redraw). Preview and execution consume the SAME ResolvedCellEffect objects (R3).
@@ -480,6 +486,29 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		if weapon != null:
 			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
 
+# ---- mission outcome (#96) ----
+
+# The headless twin of MissionController: the SAME MissionRules call the game makes, with the
+# same caller-held `contested` latch (see MissionRules.evaluate -- a live read could never end a
+# mission). The game's version also raises a banner and locks the board; headless has no use for
+# either, so this reports and nothing more.
+func mission_outcome() -> MissionRules.Outcome:
+	var board := _board()
+	if not _mission_contested:
+		_mission_contested = MissionRules.is_contested(board)
+	return MissionRules.evaluate(board, _mission_contested)
+
+# "VICTORY" / "DEFEAT", or "" while the mission is ongoing -- so callers can test one string
+# instead of importing the enum.
+func mission_tag() -> String:
+	match mission_outcome():
+		MissionRules.Outcome.VICTORY:
+			return "VICTORY"
+		MissionRules.Outcome.DEFEAT:
+			return "DEFEAT"
+		_:
+			return ""
+
 func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 	match lethality:
 		ResolvedOutcome.Lethality.KILLED:
@@ -492,6 +521,13 @@ func _lethality_tag(lethality: ResolvedOutcome.Lethality) -> String:
 # ---- turn flow ----
 
 func end_turn() -> Dictionary:
+	# A finished mission does not hand off (mirrors game.end_turn's bail on mission_controller
+	# .is_over()). Refusing rather than silently passing keeps a headless run from grinding out
+	# turns on a board nobody can still win or lose.
+	var already := mission_tag()
+	if already != "":
+		return {"ok": false, "error": "mission is over (%s)" % already, "mission": already}
+
 	var board := _board()
 	turn_manager.end_turn(board.present_factions())
 	# Mirror the game's auto-skip: pass over factions with no commandable units (e.g. only
