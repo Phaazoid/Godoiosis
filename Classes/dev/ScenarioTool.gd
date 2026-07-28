@@ -7,6 +7,8 @@ class_name ScenarioTool
 @onready var squad_list: VBoxContainer = %SquadList
 var scenario_manager: ScenarioManager
 var game
+var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
+var _objective_warning: Label
 
 const NO_ZONE_LABEL := "(no zone)"
 
@@ -16,6 +18,7 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 	refresh_dropdown()
 	_build_ai_toggles()
 	refresh_squads()
+	_build_objectives()
 
 func refresh_dropdown():
 	scenario_dropdown.clear()
@@ -98,3 +101,46 @@ func _on_load_pressed():
 	var paths := scenario_manager.get_saved_scenarios()
 	scenario_manager.load_scenario(paths[scenario_dropdown.selected])
 	refresh_squads()
+	refresh_objectives()
+	
+# One checkbox per objective, driven off the enum so a new objective kind needs no edit here.
+func _build_objectives() -> void:
+	DevWidgets.add_label(self, "Mission objectives")
+	for objective in MissionRules.Objective.values():
+		var box := CheckBox.new()
+		box.text = String(MissionRules.Objective.keys()[objective]).capitalize()
+		box.button_pressed = game.mission_controller.objectives.has(objective)
+		box.toggled.connect(func(pressed: bool): _on_objective_toggled(objective, pressed))
+		add_child(box)
+		_objective_boxes[objective] = box
+
+	_objective_warning = Label.new()
+	_objective_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_objective_warning.modulate = Color(1, 0.45, 0.35)
+	add_child(_objective_warning)
+	_refresh_objective_warning()
+
+func refresh_objectives() -> void:
+	for objective in _objective_boxes:
+		_objective_boxes[objective].set_pressed_no_signal(game.mission_controller.objectives.has(objective))
+	_refresh_objective_warning()
+
+func _on_objective_toggled(objective: MissionRules.Objective, pressed: bool) -> void:
+	if pressed:
+		if not game.mission_controller.objectives.has(objective):
+			game.mission_controller.objectives.append(objective)
+	else:
+		game.mission_controller.objectives.erase(objective)
+	_refresh_objective_warning()
+
+# The guard you asked for: an objective ticked with no matching zone painted makes the mission
+# unwinnable. Far cheaper to say so at authoring time than to find out mid-playtest.
+func _refresh_objective_warning() -> void:
+	var missing: Array = game.mission_controller.objectives_missing_geometry()
+	if missing.is_empty():
+		_objective_warning.text = ""
+		return
+	var names := []
+	for objective in missing:
+		names.append(MissionRules.Objective.keys()[objective])
+	_objective_warning.text = "⚠ No zone painted for: %s — this mission cannot be won." % ", ".join(names)

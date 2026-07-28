@@ -121,6 +121,14 @@ tile_set = SubResource("TileSet_nnt18")
 [node name="ZoneOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1517273389]
 tile_set = SubResource("TileSet_nnt18")
 
+[node name="CaptureOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1517273390]
+z_index = 1
+tile_set = SubResource("TileSet_nnt18")
+
+[node name="ExtractionOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1517273391]
+z_index = 1
+tile_set = SubResource("TileSet_nnt18")
+
 [node name="InvalidMoveOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=364384559]
 tile_set = SubResource("TileSet_nb51f")
 

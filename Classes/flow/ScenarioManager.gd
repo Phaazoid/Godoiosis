@@ -6,13 +6,17 @@ class_name ScenarioManager
 
 const SCENARIO_DIR := "res://Scenarios/"
 
+# Missions are ordinary saved scenarios living in a subfolder -- the convention fixtures/ set.
+# Saving under this path needs no new code: save_scenario already makes the directory, so a
+# scenario named "missions/Camp" lands here.
+const MISSION_DIR := SCENARIO_DIR + "missions/"
+
 @onready var game = get_parent()
 @onready var grid: TileMapLayer = $"../Grid"
 @onready var units_root: Node2D = $"../Units"
 @onready var squad_manager: SquadManager = $"../SquadManager"
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var turn_manager: TurnManager = $"../TurnManager"
-
 
 var last_loaded_path := ""
 
@@ -39,6 +43,7 @@ func save_scenario(scenario_name: String):
 	scenario.active_faction = turn_manager.active_faction()
 	scenario.terrain_states = game.terrain_states.to_state_dict()
 	scenario.zones = game.zone_manager.to_dict()
+	scenario.objectives = game.mission_controller.objectives.duplicate()
 
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
@@ -73,12 +78,13 @@ func load_scenario(path: String):
 		push_error("Could not load scenario at %s" % path)
 		return
 
-	_clear_board()
+	clear_board()
 
 	grid.tile_map_data = scenario.tile_data
 	game.terrain_states.load_state_dict(scenario.terrain_states)
 	game.zone_manager.load_dict(scenario.zones)
 	overlay_manager.redraw_zones(game.zone_manager)
+	game.mission_controller.set_objectives(scenario.objectives)
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -126,6 +132,15 @@ func get_saved_scenarios() -> Array[String]:
 	_collect_scenarios(SCENARIO_DIR.trim_suffix("/"), paths)
 	return paths
 
+# The player-facing subset: everything the Mission Select screen offers. Dev scratch saves in the
+# root (and fixtures/) are deliberately excluded -- that separation IS the mission/sandbox split.
+func get_missions() -> Array[String]:
+	var result: Array[String] = []
+	for path in get_saved_scenarios():
+		if path.begins_with(MISSION_DIR):
+			result.append(path)
+	return result
+
 # Subfolders first, so fixtures/ groups above the root playtest saves.
 func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 	if not DirAccess.dir_exists_absolute(dir):
@@ -140,7 +155,10 @@ func _unhandled_input(event):
 	if event.is_action_pressed("dev_reset_scenario"):
 		reload_current()
 
-func _clear_board():
+func clear_board():
+	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
+	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
+	overlay_manager.redraw_zones(game.zone_manager)
 	game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()
 	squad_manager.clear_all_squads()

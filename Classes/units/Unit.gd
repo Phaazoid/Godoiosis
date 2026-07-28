@@ -575,10 +575,13 @@ func has_any_fireable_attack() -> bool:
 	return false
 	
 # Can the ATTACK menu entry do anything? Since the 2026-07-24 refactor Attack always fires the
-# DEFAULT attack with no submenu, so the entry gates on that ONE attack — reading the same
-# get_fired_attack() AttackAction stamps, so the menu and the Law #3 queue gate can't disagree.
+# DEFAULT attack with no submenu, so the entry gates on that ONE attack. Deliberately NOT
+# get_fired_attack(): that returns a live active_attack, but begin_attack() clears the pick
+# before aiming — so the gate would judge the entry by an attack it will never fire (#102).
 func can_fire_default_attack() -> bool:
-	return is_attack_fireable(get_fired_attack())
+	if equipped_weapon == null:
+		return false
+	return is_attack_fireable(equipped_weapon.default_attack(self))
 
 # --- The equipped thing's self-abilities ---
 # Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack

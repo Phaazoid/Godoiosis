@@ -58,6 +58,7 @@ static func _run_pass(squad: Squad, actions: Array[BaseAction]) -> void:
 	_check_destination_conflicts(squad, actions, move_actions)
 	_revalidate_rescues(actions)
 	_revalidate_intimidates(actions)
+	_revalidate_captures(actions)
 
 # A non-leader squadmate may only land inside the leader's projected cohesion range.
 static func _check_leader_range(squad: Squad, actions: Array[BaseAction], move_actions: Array[MoveAction]) -> void:
@@ -132,6 +133,16 @@ static func _revalidate_intimidates(actions: Array[BaseAction]) -> void:
 			continue
 		if not _actor_ends_adjacent_to(intimidate, victim, actions):
 			intimidate.add_validation_error("No longer adjacent to the intimidate target")
+
+# A re-planned move that walks the actor out of the zone invalidates the capture, rather than
+# claiming wherever it ended up. Same shape as rescue/intimidate; the context is a CELL.
+static func _revalidate_captures(actions: Array[BaseAction]) -> void:
+	for action in actions:
+		if not (action is CaptureAction):
+			continue
+		var capture := action as CaptureAction
+		if projected_cell_for(capture.actor, actions) != capture.cell:
+			capture.add_validation_error("No longer standing on the capture point")
 
 static func _actor_ends_adjacent_to(action: BaseAction, target: Unit, actions: Array[BaseAction]) -> bool:
 	var actor_cell := projected_cell_for(action.actor, actions)

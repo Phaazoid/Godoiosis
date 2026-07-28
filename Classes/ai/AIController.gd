@@ -27,6 +27,10 @@ func is_ai_faction(faction: Team.Faction) -> bool:
 
 func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 	for squad in game.squad_manager.squads.duplicate():
+		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
+		# issuing orders behind the end-of-mission card (#96).
+		if game.mission_controller.is_over():
+			return
 		if not is_instance_valid(squad) or squad.has_acted:
 			continue
 		if squad.leader.get_faction() != faction or not squad.leader.is_active():
@@ -38,4 +42,6 @@ func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 		AIArchetype.resolve(squad.archetype).call(squad, board, game.squad_manager)
 		await game.order_executor.execute_orders(squad.get_leader())
 
+	if game.mission_controller.is_over():
+		return
 	await game.end_turn()

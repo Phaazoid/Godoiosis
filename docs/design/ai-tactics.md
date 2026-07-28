@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #78 (2026-07-22).**
+**Canon checked through #96 (2026-07-28).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -62,4 +62,9 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 
 ## Not this layer
 
-Win/loss detection, the Balanced archetype (#29 leftovers), strain's fate (#76 — its AI integration is already free by construction), the ability-chassis content itself (#61, closed).
+The Balanced archetype (#29 leftover), strain's fate (#76 — its AI integration is already free by construction), the ability-chassis content itself (#61, closed).
+
+**Win/loss detection is no longer a leftover** — it landed 2026-07-28 as #96 and lives outside this layer, in `MissionRules`/`MissionController` ([missions.md](missions.md)). The AI has two points of contact:
+
+- **A guard.** `AIController.take_faction_turn` stops issuing orders the moment the mission is over, so a squad that wipes the player mid-turn doesn't keep playing behind the end-of-mission card.
+- **`CAPTURE` is `MAIN_ACTION_NEVER` on all three archetypes**, forced to be an explicit decision by `tests/law/test_ai_action_coverage.gd`'s partition. **This one is not drift.** Rev and Burrow are `NEVER` because nobody has written a scored builder yet; `CAPTURE` is `NEVER` because there is nothing for an AI faction to *win* by capturing — enemy objectives are out of #96's scope, and the point belongs to the player. The AI contests it positionally with what it already has: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own — which is exactly [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s "defend a point", and the first thing that will need a real capture builder.

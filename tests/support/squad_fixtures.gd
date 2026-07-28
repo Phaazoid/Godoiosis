@@ -27,7 +27,7 @@ const UNIT_SCENE := preload("res://Scenes/Unit.tscn")
 const OVERLAY_CHILD_NAMES := [
 	"MoveOverlay", "AttackOverlay", "HoverOverlay", "SquadOverlay", "IconOverlay",
 	"ArrowIconOverlay", "ProjectedUnitOverlay", "SquadRangeOverlay", "InvalidMoveOverlay",
-	"ZoneOverlay",
+	"ZoneOverlay", "CaptureOverlay", "ExtractionOverlay",
 ]
 
 # Test-tuned values for the few stats the suites actually reason about: low MHP so a couple

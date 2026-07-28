@@ -12,6 +12,8 @@ class_name OverlayManager
 @onready var invalidmove_overlay = $InvalidMoveOverlay
 @onready var board_tilemap = $"../Grid"
 @onready var zone_overlay = $ZoneOverlay
+@onready var capture_overlay = $CaptureOverlay
+@onready var extraction_overlay = $ExtractionOverlay
 
 const PATH_ERROR := preload("res://Art/Icons/ArrowIcons/ERROR.png")
 const PATH_HORIZONTAL := preload("res://Art/Icons/ArrowIcons/horizontal.png")
@@ -79,7 +81,10 @@ var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
 var knockback_preview_sprites: Array[Node2D] = []
-
+# ZoneManager.Kind -> the TileMapLayer that draws it. A layer per kind rather than a method per
+# kind: colour is `modulate`, which is per-LAYER, so a kind that needs its own colour needs its
+# own layer. Adding a kind is one line here.
+var zone_layer_map := {}
 # Knockback preview (#84): a ghosted arrow (target cell -> landing cell) plus a planning-ghost of
 # the shoved unit where it lands. Same "resolve the plan, show it pending" rail as the terrain
 # preview; its own sprite list so a plan change clears and redraws it cleanly.
@@ -106,9 +111,15 @@ func _ready() -> void:
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
 	zone_overlay.modulate = Color(1, 0.5, 0, 0.35)
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
-
-func set_zone_visibility(shown: bool) -> void:
-	zone_overlay.visible = shown
+	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
+	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
+	# PATROL is an authoring aid (DevOverlay shows it with the Tile Brush tab); CAPTURE is live
+	# objective information and stays visible for the whole battle.
+	zone_layer_map = {
+		ZoneManager.Kind.PATROL: zone_overlay,
+		ZoneManager.Kind.CAPTURE: capture_overlay,
+		ZoneManager.Kind.EXTRACTION: extraction_overlay,
+	}
 
 func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]
@@ -122,13 +133,23 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 			squad_overlay.erase_cell(cell)
 			squadrange_overlay.erase_cell(cell)
 
-# Painted AI zones (Sentry archetype). Persistent like terrain -- not cleared by
-# clear_selection_overlays (or any selection change). All zones share one tint for now; painted regions read as
-# distinct by shape/position, not color.
-func redraw_zones(zones: ZoneManager) -> void:
-	zone_overlay.clear()
+# PATROL only -- capture zones are objective info, not an authoring overlay.
+func set_zone_visibility(shown: bool) -> void:
+	zone_overlay.visible = shown
+
+# One method for every zone kind: each zone draws into the layer registered for its kind, and a
+# kind with no layer simply isn't drawn. `hidden` drops zones that are done with (a captured
+# point stops glowing) without needing a second redraw entry point.
+func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
+	for layer in zone_layer_map.values():
+		layer.clear()
 	for name in zones.zone_names():
-		draw_cells(zone_overlay, zones.cells_in(name), ATLAS_COORDS)
+		if hidden.has(name):
+			continue
+		var layer = zone_layer_map.get(zones.kind_of(name))
+		if layer == null:
+			continue
+		draw_cells(layer, zones.cells_in(name), ATLAS_COORDS)
 
 func show_hover_move_path(move: MoveAction):
 	clear_hover_move_path()

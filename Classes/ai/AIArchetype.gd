@@ -50,15 +50,19 @@ const MAIN_ACTION_PRIORITY := {
 			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
 }
 
-# RALLY everywhere (dev call 2026-07-22): early rallies burn the strong falloff steps while
-# idling -- revisit with real Will-awareness. RESCUE/INTIMIDATE on Rushdown: pure aggression.
-# REV + BURROW everywhere (#84): both are "signature now vs. attack now" calls a naive builder would
-# spam (rev/entrench every turn, never swing). Deferred like RALLY; scored builders are follow-ups.
+# CAPTURE everywhere (#96 slice 3): not deferred like the others — there is nothing for an AI
+# faction to WIN by capturing, because enemy objectives are out of #96's scope. The point is the
+# player's. The AI contests it positionally, which it already does: Rushdown walks into the
+# approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit
+# only when non-player factions get objectives of their own.
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.RALLY,
-			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW],
-	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW],
-	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW],
+			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.CAPTURE],
+	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.CAPTURE],
+	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.CAPTURE],
 }
 
 static func main_action_priority(t: Type) -> Array:

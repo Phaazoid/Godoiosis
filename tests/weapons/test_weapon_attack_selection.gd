@@ -2,8 +2,9 @@
 # tests/runes/test_rune_firing.gd's B2/counter coverage but for WeaponAttackData. Covers:
 # get_selectable_attacks (the pick-menu list), get_fired_attack (live pick, else main),
 # the counter-always-uses-main guarantee (ruling #72/4) even with a live alt pick, the
-# hits_allies asymmetry (reflects the live pick, NOT locked to main), and full resolution
-# through PlanResolver/SquadManager for an EXTRA attack (not just main).
+# hits_allies asymmetry (reflects the live pick, NOT locked to main), the Attack-menu gate
+# reading the DEFAULT rather than the live pick (#102), and full resolution through
+# PlanResolver/SquadManager for an EXTRA attack (not just main).
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -31,6 +32,19 @@ func _spring_template() -> WeaponData:
 	t.main_attack = _attack(1, true, false)
 	t.extra_attacks = [_attack(9, false, true)]
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	t.scaling_blend = {Stats.Stat.STR: 100}
+	return t
+
+# Mace-shaped (#84): a main that always fires, plus an extra that is UNFIREABLE until charged.
+# The real KINETIC_MACE type, because the base WeaponInstance's readiness surface is a no-op —
+# a family that actually gates is the only way to hold an unfireable live pick (#102).
+func _mace_template() -> WeaponData:
+	var t := WeaponData.new()
+	t.main_attack = _attack(3, true, false)
+	var blowback := _attack(3, false, false)
+	blowback.knockback = 1   # knockback > 0 is what marks the charge-spender
+	t.extra_attacks = [blowback]
+	t.weapon_type = WeaponData.WeaponType.KINETIC_MACE
 	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
@@ -93,6 +107,36 @@ func test_attack_source_hits_allies_reflects_the_live_pick() -> void:
 	assert_bool(unit.attack_source_hits_allies()).is_false()
 	unit.active_attack = t.extra_attacks[0]
 	assert_bool(unit.attack_source_hits_allies()).is_true()
+
+# --- #102: the Attack-menu gate reads the DEFAULT, never the live pick ---
+
+func test_can_fire_default_attack_ignores_an_unfireable_live_pick() -> void:
+	# The #102 soft-lock. Nothing clears active_attack after an attack resolves, so a spent
+	# Blowback stays live — and a gate reading get_fired_attack() then judged the Attack entry
+	# by an attack pressing Attack would never fire (begin_attack clears the pick first). Main
+	# is always fireable, so the entry must stay up no matter what is left in the pick slot.
+	var t := _mace_template()
+	var unit := _wielder(t)
+	assert_bool(unit.can_fire_default_attack()).is_true()
+
+	unit.active_attack = t.extra_attacks[0]
+	assert_bool(unit.is_attack_fireable(t.extra_attacks[0])).is_false()   # 0 charge
+	assert_bool(unit.can_fire_default_attack()).is_true()
+
+func test_can_fire_default_attack_still_tracks_an_unfireable_default() -> void:
+	# The other direction: the gate must not become "always true". A main the weapon can't fire
+	# closes the entry — the carbine's empty-magazine case (tests/weapons/test_carbine_magazine.gd),
+	# pinned here too so the #102 fix can't be "fixed" by dropping the check.
+	var t := _mace_template()
+	t.main_attack.knockback = 1   # now the MAIN is the charge-spender, and charge is 0
+	var unit := _wielder(t)
+	assert_bool(unit.can_fire_default_attack()).is_false()
+
+func test_can_fire_default_attack_is_false_with_an_empty_slot() -> void:
+	# No equipped thing = no default attack to fire. Unobservable through the menu (its gate
+	# checks has_equipped_weapon first), but the honest answer for the question being asked.
+	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
+	assert_bool(unit.can_fire_default_attack()).is_false()
 
 # --- end-to-end: PlanResolver resolves an EXTRA attack, not just main ---
 

@@ -28,7 +28,7 @@ func _make_zone_manager() -> ZoneManager:
 	var zones: ZoneManager = auto_free(ZoneManager.new())
 	for x in range(0, 4):
 		for y in range(0, 3):
-			zones.paint_cell(ZONE, Vector2i(x, y))
+			zones.paint_cell(ZONE, ZoneManager.Kind.PATROL, Vector2i(x, y))
 	return zones
 
 

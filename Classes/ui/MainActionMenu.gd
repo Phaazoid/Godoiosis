@@ -35,6 +35,7 @@ const RALLY := 13
 const GROUP_MOVE := 14
 const INTIMIDATE := 15
 const WEAPON_ACTION := 16
+const CAPTURE := 17
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
@@ -47,6 +48,7 @@ const ACTION_DATA := {
 	RESCUE: {"name": "Rescue"},
 	RALLY: {"name": "Rally"},
 	INTIMIDATE: {"name": "Intimidate"},
+	CAPTURE: {"name": "Capture Point"},
 	SQUADUP: {"name": "Squad Up"},
 	JOINSQUAD: {"name": "Join Squad"},
 	LEAVESQUAD: {"name": "Leave Squad"},
@@ -200,6 +202,10 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
 		options.append(INTIMIDATE)
 
+	if _can_take_main_action(unit) and game.mission_controller.is_capture_zone_at(unit.get_projected_destination()) \
+		and not game.mission_controller.is_zone_captured(game.zone_manager.zone_at(unit.get_projected_destination())):
+		options.append(CAPTURE)
+
 	if _can_take_main_action(unit) and unit.has_weapon_actions():
 		options.append(WEAPON_ACTION)
 
@@ -263,9 +269,11 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 		RESCUE:
 			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board()), func(target: Unit): game.queue_rescue(unit, target))
 		RALLY:
-			game.queue_rally(unit)
+			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
 		INTIMIDATE:
 			game.enter_target_pick_mode(RulesService.adjacent_enemies(unit, game._board()), func(target: Unit): game.queue_intimidate(unit, target))
+		CAPTURE:
+			game.queue_capture(unit)
 		GROUP_MOVE:
 			game.enter_group_move_mode(unit)
 		WEAPON_ACTION:
@@ -279,10 +287,4 @@ func _pick_weapon_action(unit: Unit, entry: Dictionary) -> void:
 	if entry.has("attack"):
 		_pick_attack(unit, entry["attack"])
 	else:
-		match entry["self"]:
-			BaseAction.ActionType.RELOAD:
-				game.queue_reload(unit)
-			BaseAction.ActionType.REV:
-				game.queue_rev(unit)
-			BaseAction.ActionType.BURROW:
-				game.queue_burrow(unit)
+		game.queue_simple_action(unit, entry["self"])

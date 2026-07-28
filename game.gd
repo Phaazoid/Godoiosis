@@ -29,7 +29,7 @@ extends Node2D
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
 @onready var cursor_controller: CursorController = $CursorController
 @onready var camera_controller: CameraController = $CameraController
-
+@onready var scenario_manager: ScenarioManager = $ScenarioManager
 
 enum GameState {
 	IDLE,
@@ -40,7 +40,9 @@ enum GameState {
 	BETWEEN_TURNS,
 	DEV_MODE,
 	PICKING_TARGET,
-	AI_TURN
+	AI_TURN,
+	MISSION_OVER,
+	MENU
 }
 
 var game_state: GameState = GameState.IDLE
@@ -56,6 +58,7 @@ var terrain_states: TerrainStateManager
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
+var mission_controller: MissionController
 var order_executor: OrderExecutor
 
 # ==============================================================================
@@ -69,11 +72,14 @@ func _ready() -> void:
 	# the tree — set the viewport default instead (CLAUDE.md "Sharp edges"). Do not undo.
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 
-	# Spawns BEFORE _wire_signals, deliberately: the starting board must not fire the
-	# squad-activation handlers on its way in.
-	TestBoard.spawn(self)
 	_wire_signals()
 	camera_controller.refresh_bounds(grid)
+	# The front door (#96 slice 2). TestBoard is no longer spawned at boot — it is a row on the
+	# menu now. Lock the board synchronously, but DEFER opening the screen by a frame: during
+	# _ready the SubViewport container hasn't sized its viewport yet, and a full-rect Control
+	# built against a 0x0 rect lays itself out in the corner.
+	game_state = GameState.MENU
+	mission_controller.open_mission_select.call_deferred()
 
 func _build_collaborators() -> void:
 	dev_controller = DevController.new()
@@ -99,6 +105,10 @@ func _build_collaborators() -> void:
 	order_executor = OrderExecutor.new()
 	order_executor.game = self
 	add_child(order_executor)
+
+	mission_controller = MissionController.new()
+	mission_controller.game = self
+	add_child(mission_controller)
 
 	hover_presenter = HoverPresenter.new()
 	hover_presenter.game = self
@@ -246,9 +256,15 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	_run_turn_start_ticks(faction)
+	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
+	# happens outside a resolution pass (#96).
+	mission_controller.check()
+	if mission_controller.is_over():
+		return
 	# A faction with no commandable (active) units has nothing to do — its downed clocks already
-	# ticked above, so pass straight to the next. Guard against an all-downed board, where skipping
-	# would recurse with no faction left to stop on.
+	# ticked above, so pass straight to the next. The guard against an all-downed board stays:
+	# the mission check above catches the case that should be a LOSS, but an uncontested dev
+	# sandbox board can still reach all-downed, and this is what keeps that inert not hung.
 	var board := _board()
 	if not board.faction_has_active_units(faction) and board.has_active_units():
 		turn_manager.end_turn(board.present_factions())
@@ -275,6 +291,9 @@ func start_faction_turn(faction: Team.Faction):
 
 func end_turn():
 	await order_executor.apply_burning_tile_damage(turn_manager.active_faction())
+	mission_controller.check()   # a burning tile can take the last unit (#96)
+	if mission_controller.is_over():
+		return
 	clear_selection()
 	unit_info_panel.clear()
 	turn_manager.end_turn(_board().present_factions())
@@ -294,10 +313,10 @@ func _run_turn_start_ticks(faction: Team.Faction) -> void:
 		unit.advance_crisis_surge()
 		unit.tick_weapon_rev()
 
-# The board is fully hands-off for the player while an AI faction resolves its turn -- no
-# selection, no menu, no queue-panel interaction (Execute/Cancel/reorder).
+# The board is fully hands-off for the player while an AI faction resolves its turn, while the
+# end-of-mission card is up, and while Mission Select is up.
 func _board_locked_for_player() -> bool:
-	return game_state == GameState.AI_TURN
+	return game_state == GameState.AI_TURN or game_state == GameState.MISSION_OVER or game_state == GameState.MENU
 
 func can_control(unit: Unit) -> bool:
 	if unit == null:
@@ -376,22 +395,39 @@ func clear_selection():
 #  Queueing orders
 # ==============================================================================
 
-func queue_reload(unit: Unit):
-	var reload := ReloadAction.new()
-	reload.init(unit)
-	squad_manager.queue_action(unit.squad, reload)
+# The no-argument main-action verbs: all four differed only by which BaseAction subclass got
+# instantiated, so they share one queue path (dev call 2026-07-28). Rescue/intimidate/capture stay
+# separate on purpose — they take real arguments (a unit, a unit, a cell), and forcing them
+# through this signature would just move the branching into a parameter bag.
+func queue_simple_action(unit: Unit, type: BaseAction.ActionType):
+	var action := _make_simple_action(type)
+	if action == null:
+		push_error("queue_simple_action: no class registered for %s" % BaseAction.ActionType.keys()[type])
+		return
+	action.init(unit)
+	squad_manager.queue_action(unit.squad, action)
 	clear_selection()
 
-func queue_rev(unit: Unit):
-	var rev := RevAction.new()
-	rev.init(unit)
-	squad_manager.queue_action(unit.squad, rev)
-	clear_selection()
+# A match rather than a class dictionary: class references aren't const-foldable, and this keeps
+# every branch statically typed. An unregistered type returns null and is a loud failure above.
+func _make_simple_action(type: BaseAction.ActionType) -> BaseAction:
+	match type:
+		BaseAction.ActionType.RALLY:
+			return RallyAction.new()
+		BaseAction.ActionType.RELOAD:
+			return ReloadAction.new()
+		BaseAction.ActionType.REV:
+			return RevAction.new()
+		BaseAction.ActionType.BURROW:
+			return BurrowAction.new()
+	return null
 
-func queue_burrow(unit: Unit):
-	var burrow := BurrowAction.new()
-	burrow.init(unit)
-	squad_manager.queue_action(unit.squad, burrow)
+# The cell comes from the PROJECTED destination, so a capture queued behind a move claims the
+# tile the move ends on (#96 slice 3).
+func queue_capture(unit: Unit):
+	var capture := CaptureAction.new()
+	capture.init(unit, unit.get_projected_destination(), mission_controller)
+	squad_manager.queue_action(unit.squad, capture)
 	clear_selection()
 
 func queue_rescue(rescuer: Unit, target: Unit) -> void:
@@ -403,12 +439,6 @@ func queue_intimidate(intimidator: Unit, target: Unit) -> void:
 	var intimidate := IntimidateAction.new()
 	intimidate.init(intimidator, target)
 	squad_manager.queue_action(intimidator.squad, intimidate)
-
-func queue_rally(unit: Unit):
-	var rally := RallyAction.new()
-	rally.init(unit)
-	squad_manager.queue_action(unit.squad, rally)
-	clear_selection()
 
 # ==============================================================================
 #  The action-queue panel
@@ -601,6 +631,15 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 # ==============================================================================
 #  Populating the board
 # ==============================================================================
+
+# The hardcoded five-unit board, now reached from Mission Select's Sandbox row instead of _ready
+# (#96 slice 2). Still the ONLY TestBoard call site, so retiring it stays a one-line deletion.
+# Clearing last_loaded_path matters: without it the end-of-mission Retry button would reload
+# whatever scenario was loaded before the sandbox.
+func spawn_sandbox() -> void:
+	scenario_manager.clear_board()
+	scenario_manager.last_loaded_path = ""
+	TestBoard.spawn(self)
 
 # Returns null when the cell can't take a unit. NB: UnitFactory.create_unit already instantiated
 # the node, so every refusal path has to free it — an un-parented Unit is an orphan nothing else
