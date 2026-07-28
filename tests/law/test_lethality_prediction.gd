@@ -1,10 +1,12 @@
 # Will/death stage of the resolver (docs/design/resolution-pipeline.md R7/R8,
 # will-and-death.md "Law #2 requirement"). PlanResolver predicts whether a hit DOWNS or
 # KILLS its target, stored on ResolvedOutcome.lethality, so the action queue can preview
-# the rung (the down/skull icons). The prediction MUST mirror Unit.take_damage +
-# _select_lethal_rung exactly — Law #2 (the queue never lies): the rung shown at plan time
-# is the rung execution lands on. STUB era: the rung keys off Unit.OVERKILL_CEILING, not
-# spent Will; these tests pin the down/kill math so the Will stage can't silently regress it.
+# the rung (the down/skull icons). Since 2026-07-27 the preview and Unit.take_damage call the
+# SAME ladder (LethalityRules.predict), so they can no longer disagree by construction — but the
+# execution-parity cases at the bottom stay, because "same rung named" and "same rung carried out"
+# are different claims and only the second one is what Law #2 (the queue never lies) promises.
+# STUB era: the rung keys off LethalityRules.OVERKILL_CEILING, not spent Will; these tests pin the
+# down/kill math so the Will stage can't silently regress it.
 #
 # Damage is made exact by spawning attackers with STR 0 + a known weapon power
 # (PlanResolver._source_base_damage = main-attack power + scaling), and resolving with an empty
@@ -64,13 +66,13 @@ func test_overkill_past_the_ceiling_kills() -> void:
 # overkill == ceiling exactly is still DOWN (the kill test is `overkill > ceiling`).
 func test_overkill_at_the_ceiling_still_downs() -> void:
 	var hp := 20
-	var outcome := _resolve_attack(_attacker(hp + Unit.OVERKILL_CEILING), _target(hp))
+	var outcome := _resolve_attack(_attacker(hp + LethalityRules.OVERKILL_CEILING), _target(hp))
 	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.DOWNED)
 
 # one point past the ceiling flips to KILL.
 func test_one_past_the_ceiling_kills() -> void:
 	var hp := 20
-	var outcome := _resolve_attack(_attacker(hp + Unit.OVERKILL_CEILING + 1), _target(hp))
+	var outcome := _resolve_attack(_attacker(hp + LethalityRules.OVERKILL_CEILING + 1), _target(hp))
 	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 # --- already-downed target (Fork 3: a hit on a downed unit kills it, any damage) ---
@@ -93,7 +95,22 @@ func test_predicted_down_matches_execution() -> void:
 
 func test_predicted_kill_matches_execution() -> void:
 	var target := _target(20)
-	var outcome := _resolve_attack(_attacker(20 + Unit.OVERKILL_CEILING + 5), target)   # past ceiling -> KILL
+	var outcome := _resolve_attack(_attacker(20 + LethalityRules.OVERKILL_CEILING + 5), target)   # past ceiling -> KILL
 	assert_int(outcome.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 	target.take_damage(outcome.damage)
+	assert_bool(target.is_dead()).is_true()
+
+# --- the death fan-out fires exactly once ---
+
+func test_die_is_idempotent() -> void:
+	# unit_died drives squad teardown in game.gd AND play_session, so a second emission would run
+	# both again against an already-freed unit. Four call sites reach die() and all of them guard
+	# upstream today, so this pins the guard itself rather than a reproduced bug (added in the
+	# 2026-07-27 Unit.gd review). Array box because a GDScript lambda captures locals by value.
+	var target := _target(20)
+	var emissions := [0]
+	target.unit_died.connect(func(_u: Unit) -> void: emissions[0] += 1)
+	target.die()
+	target.die()
+	assert_int(emissions[0]).is_equal(1)
 	assert_bool(target.is_dead()).is_true()

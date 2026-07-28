@@ -6,22 +6,23 @@ extends GdUnitTestSuite
 const InfoPanel := preload("res://Classes/ui/panels/info_panel.gd")
 
 func test_mov_tooltip_unencumbered() -> void:
-	assert_str(InfoPanel.mov_tooltip(4, 1, 5, 8, 1, 0)).is_equal("Base 4 +1 DEX band")
+	assert_str(InfoPanel.mov_tooltip(4, 1, 0)).is_equal("Base 4 +1 DEX band")
 
-func test_mov_tooltip_heavy_load() -> void:
-	assert_str(InfoPanel.mov_tooltip(4, 0, 9, 8, 1, 0)).contains("-1 heavy load (WT 9 >= 8)")
-
-func test_mov_tooltip_below_threshold_has_no_penalty_line() -> void:
-	assert_str(InfoPanel.mov_tooltip(4, 0, 7, 8, 1, 0)).not_contains("heavy load")
+func test_mov_tooltip_never_mentions_weight() -> void:
+	# Weight is tracked but wired to nothing (2026-07-27): MOV's readout must not imply
+	# an encumbrance rule that no longer exists.
+	assert_str(InfoPanel.mov_tooltip(4, 0, 0)).not_contains("heavy load")
+	assert_str(InfoPanel.mov_tooltip(4, 0, 0)).not_contains("WT")
 
 func test_mov_tooltip_leg_throttle() -> void:
-	assert_str(InfoPanel.mov_tooltip(4, 0, 5, 8, 1, 1)).contains("Halved")
-	assert_str(InfoPanel.mov_tooltip(4, 0, 5, 8, 1, 2)).contains("Pinned to 1")
+	assert_str(InfoPanel.mov_tooltip(4, 0, 1)).contains("Halved")
+	assert_str(InfoPanel.mov_tooltip(4, 0, 2)).contains("Pinned to 1")
 
-func test_weight_tooltip_breakdown() -> void:
-	var tip: String = InfoPanel.weight_tooltip(4, 5, 8, 1)
-	assert_str(tip).contains("Body (CON) 4 + gear 5")
-	assert_str(tip).contains("At 8+ MOV takes -1")
+func test_weight_tooltip_reports_carried_only() -> void:
+	# No CON body term (doctrine corrected 2026-07-27) — weight is gear, full stop.
+	var tip: String = InfoPanel.weight_tooltip(5)
+	assert_str(tip).contains("Carried gear 5")
+	assert_str(tip).not_contains("CON")
 
 func test_def_tooltip_no_armor() -> void:
 	assert_str(InfoPanel.def_tooltip("", 0, 5, 0, 0)).is_equal("No armor worn\nTotal: 0")

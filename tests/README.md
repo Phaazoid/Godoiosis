@@ -9,9 +9,9 @@ Pins the **settled** systems (the squad spec) as executable invariants so they d
 One command (PowerShell), from anywhere in the repo:
 
 ```
-powershell -File tests\run_tests.ps1                     # full tree            ~20s
-powershell -File tests\run_tests.ps1 fast                # the fast tier        ~7s
-powershell -File tests\run_tests.ps1 weapons items       # one or more areas    ~3-5s each
+powershell -File tests\run_tests.ps1                     # full tree            ~155s (see note)
+powershell -File tests\run_tests.ps1 fast                # the fast tier        ~42s
+powershell -File tests\run_tests.ps1 weapons items       # one or more areas    ~0.26s per case
 powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-compat)
 ```
 
@@ -29,7 +29,13 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 <godot-console-exe> --path . --headless -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode
 ```
 
-> **⚠ Ignore gdUnit4's `Total execution time` line — it is not wall clock and inflates badly.** It printed `1min 55s` for a 573-case run immediately after a cache clear, then `12s` for the *identical* run warm. `run_tests.ps1` prints its own stopwatched `Elapsed` line; trust that one. (This mismeasurement is why the suite was believed to take ~2 minutes; it takes ~20 seconds. Cost is ~0.035s/case warm, so suite size is not a looming problem.)
+> **⚠ Ignore gdUnit4's `Total execution time` line — it is not wall clock.** It printed `1min 55s` for a 573-case run immediately after a cache clear, then `12s` for the *identical* run warm. It is wrong in both directions, so don't read it as an upper *or* lower bound. `run_tests.ps1` prints its own stopwatched `Elapsed` line; trust only that one.
+>
+> **Measured on `Elapsed`:** full run **153–157s** (eleven consecutive runs 2026-07-26 at 605 cases; independently **158s** at 610 cases on 2026-07-27) — budget ~2.5 minutes. `fast` is **42s** (156 cases) and three areas together **51s** (both 2026-07-27).
+>
+> That works out to **~0.26s per case in every tier** — the cost is flat per-case, not a fixed startup you can amortize, so a tier only helps in proportion to how many cases it skips. The same suite passes **Linux CI in a 34s total job** while the case count only grew 573 → 610, so the ~4.5x gap is a Windows/environment factor rather than suite size. **Cause unconfirmed**; antivirus scanning the repo tree and `.godot` cache state are the untested suspects. (Earlier notes here claimed ~20s full / ~7s fast / ~3-5s per area, taken from gdUnit4's warm number; corrected 2026-07-27.)
+>
+> **Observation, 2026-07-27 (Unit.gd review session):** three consecutive full runs measured **19.5s / 19.9s / 20.9s** at 610–612 cases, hours after the 158s reading above and on the same machine. The session had just run `godot --headless --import` (to register a new `class_name`), and the speed persisted across later runs that did *not* re-import — a data point for the `.godot`-cache suspect. **The 153–158s figures above stand**: the slow behaviour keeps recurring and the fast state has not been shown to last. Treat this as "try an import pass before you accept a 2.5-minute loop", not as a new baseline.
 
 **Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below.
 

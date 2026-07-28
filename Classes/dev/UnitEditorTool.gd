@@ -58,8 +58,9 @@ func populate_unit_editor(unit):
 	dup_button.pressed.connect(func(): _arm_duplicate())
 	unit_editor_container.add_child(dup_button)
 
-# Weapons + authored rune variants, in one ordered list, so a unit can equip either. Built here
-# and reused by both the picker and the pick handler so their indices stay in lockstep. #30 D.
+# Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
+# them. Built here and reused by both the picker and the pick handler so their indices stay in
+# lockstep. #30 D.
 func _equippable_catalog() -> Dictionary:
 	var items := {}
 	var weapons := WeaponCatalog.get_editable()
@@ -68,7 +69,6 @@ func _equippable_catalog() -> Dictionary:
 	var armors := ArmorCatalog.get_editable()
 	for k in armors:
 		items[k] = armors[k]
-	return items
 	var runes := RuneCatalog.get_editable()
 	for k in runes:
 		items[k] = runes[k]
@@ -135,8 +135,6 @@ func _add_inventory_section(unit: Unit):
 			var gate: String = current_item.requirement_text()
 			gate_label.text = "(%s)" % gate if gate != "" else "(no requirement)"
 			row.add_child(gate_label)
-
-		unit_editor_container.add_child(row)
 
 		unit_editor_container.add_child(row)
 

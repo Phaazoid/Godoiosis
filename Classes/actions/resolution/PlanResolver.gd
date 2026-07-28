@@ -119,8 +119,9 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 			target_hypo.states.append(s)
 
 	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
-	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below.
-	outcome.lethality = _predict_lethality(target_hypo, outcome.damage)
+	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same call
+	# Unit.take_damage makes at execution time — one ladder, two callers.
+	outcome.lethality = LethalityRules.predict(target_hypo, outcome.damage)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
 		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
@@ -240,57 +241,18 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
 		h.can_maim = unit.unit_instance.next_maim_slot() != -1
-		h.crisis_stance_accepts = unit.get_faction() != Team.Faction.PLAYER and AIArchetype.accepts_crisis(unit.squad.archetype)
+		h.crisis_stance_accepts = LethalityRules.accepts_crisis_by_stance(unit)
 		hypo[unit] = h
 	return hypo[unit]
 
-static func _predict_lethality(h: _Hypo, damage: int) -> ResolvedOutcome.Lethality:
-	# Mirror of Unit.take_damage + _go_downed + the Crisis offer (Law #2 — preview must equal
-	# execution). Takes the threaded hypo whole — eight loose params was a call-site hazard.
-	#   already DEAD        -> no-op (NONE)
-	#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
-	#   damage < hp         -> survivable (NONE)
-	#   overkill > ceiling  -> KILLED
-	#   would-be-down       -> CRISIS if full-Will + stance accepts (deterministic, R9),
-	#                          else MAIMED if Will can't pay and a limb remains, else DOWNED
-	#
-	# Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down
-	# is death), and EVERY independently-lethal hit stays flagged KILLED even after the unit
-	# "dies" earlier in the pass — the player must see that dodging one fatal counter won't
-	# save them. "Independently lethal" = the hit alone would fell the unit at pass-start HP.
-	if h.in_crisis:
-		if h.lifecycle == Unit.LifecycleState.DEAD:
-			return ResolvedOutcome.Lethality.KILLED if damage >= h.start_hp else ResolvedOutcome.Lethality.NONE
-		if damage >= h.hp:
-			return ResolvedOutcome.Lethality.KILLED
-		return ResolvedOutcome.Lethality.NONE
-	if h.lifecycle == Unit.LifecycleState.DEAD:
-		return ResolvedOutcome.Lethality.NONE
-	if h.lifecycle == Unit.LifecycleState.DOWNED:
-		return ResolvedOutcome.Lethality.KILLED
-	if damage < h.hp:
-		return ResolvedOutcome.Lethality.NONE
-	if damage - h.hp > Unit.OVERKILL_CEILING:
-		return ResolvedOutcome.Lethality.KILLED
-	if h.will >= Unit.CRISIS_WILL_GATE and h.crisis_stance_accepts:
-		return ResolvedOutcome.Lethality.CRISIS   # stands back up surged — stances are deterministic
-	if h.will < UnitInstance.DOWN_WILL_COST:
-		return ResolvedOutcome.Lethality.MAIMED if h.can_maim else ResolvedOutcome.Lethality.DOWNED
-	return ResolvedOutcome.Lethality.DOWNED
-
-# Per-unit threaded hypothetical (R4). Will-ready: HP is threaded now; `will` is the
-# reserved Phase-3 slot.
-class _Hypo:
+# Per-unit threaded hypothetical (R4). Everything the lethality ladder reads lives on the
+# LethalityRules.Situation base, so a hypo IS a situation and _predict_lethality is just
+# LethalityRules.predict — no second copy of the ladder to keep in sync (Law #2). This class
+# adds only what the rest of the pass threads: the projected cell and the element states.
+class _Hypo extends LethalityRules.Situation:
 	var position: Vector2i
 	var states: Array[Elemental.State] = []
-	var hp: int = 0
-	var lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
-	var will: int = 0   # threaded so a multi-hit pass previews maim correctly (Law #2)
-	var in_crisis: bool = false   # crisis units die instead of downing — mirror take_damage's short-circuit
-	var start_hp: int = 0   # HP at pass start — a crisis hit is "independently lethal" if damage >= this
-	var can_maim: bool = true   # false = fully maimed at pass start; a down can't cost a limb
-	var crisis_stance_accepts: bool = false   # non-player + stance ALWAYS -> a would-be-down previews CRISIS
-	
+
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
 # hits every affected cell. Terrain reactions turn each into tile-state changes (FIRE on a tree ->

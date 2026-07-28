@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #89 (2026-07-24).**
+**Canon checked through #97 (2026-07-27).**
 
 ## Core stance
 
@@ -42,11 +42,11 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 | Layer | Contents |
 |---|---|
 | **Base statline** (innate, authored, echoes the portrait) | HP · STR · DEX · PER · CON · LDR · WIL |
-| **Derived** (computed, never authored) | Weight (**body term = CON** + prosthetics + inventory) · DEF (gear only) |
+| **Derived** (computed, never authored) | Weight (**carried gear only — no body term**, corrected 2026-07-27) · DEF (gear only) |
 | **Effective** | base → limb-slot substitution (STR/DEX only, BUILT #56) → ± gear modifiers (`get_effective_stat`) |
 | **Channel** (off-enum, per-element) | AURA ×5 (+ the hidden Alkahest — never displayed; Isaac reads as aura in all) |
 | **Cut** | *(none — CON adopted 2026-07-06, see below)* |
-| **Parked** | STR↔carry-limits (the band doctrine's open slot) |
+| **Parked** | STR↔carry-limits (the band doctrine's open slot — **the named candidate** if Weight is ever given teeth, 2026-07-27) |
 
 ### Per-stat job
 
@@ -54,17 +54,17 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 - **STR / Heft** — gates + scales heavy & signature weapons; helps anchor against shoves. Story: the bruiser.
 - **DEX / Finesse** — gates + scales fast/precise weapons (double-hit). Story: the duelist/scout.
 - **PER / Perception** — sight & reveal (the *only* honest hidden-info channel — philosophy Axiom 4); weapon range bands; reveals enemy jobs ([jobs.md](jobs.md)); small LDR band. Story: the watchful one.
-- **CON / Constitution** *(adopted 2026-07-06)* — gates + scales defensive gear; the body term of Weight; small MHP band. Story: the unbreakable one.
+- **CON / Constitution** *(adopted 2026-07-06)* — gates + scales defensive gear; small MHP band. *(No longer a term of Weight — see the retraction below.)* Story: the unbreakable one.
 - **LDR / Leadership** — a **squad-capacity budget** (see [squad-system.md](squad-system.md)). Continuous, not binary — some units are simply better leaders.
 - **WIL / Will** *(provisional — may become "Tenacity")* — the **death-ladder pool** (see [will-and-death.md](will-and-death.md)).
-- **Weight** *(derived)* — pushability (air/water/mace/dirt), swim/terrain, maybe movement.
+- **Weight** *(derived, gear-only)* — the sum of every item carried, nothing else. Intended eventual uses: pushability (air/water/mace/dirt), swim/terrain, maybe movement. **Currently INERT** — tracked and displayed, read by no rule (dev call 2026-07-27: "useful to keep around as a balance lever, but also fine to just cut completely later on"). Built on `Item.weight`, so anything that can sit in an inventory can weigh something.
 - **DEF** *(derived, gear-only)* — damage mitigation; never on the statline. **Applied in combat since [#84](https://github.com/Phaazoid/Godoiosis/issues/84) (2026-07-23):** `PlanResolver` subtracts the target's `armor DEF + terrain Cover` flat — after elemental scaling, before the 0-floor, with Iron Will still the last clamp. Before #84 it was a display-only readout the resolver never read. **Both terms are live since 2026-07-24** — the Cover term, stubbed at 0 through Rev and Pummel, was filled in by the Drill's Burrow ([terrain.md](terrain.md)); the two are summed in one shared place, `RulesService.def_breakdown`, which the inspect panel reads too. A **revved Chainsword** attacker pierces it entirely ([weapons.md](weapons.md)).
 
 ### CON — ADOPTED 2026-07-06 (mini-grill, post-JOBS; the reconsideration below resolved)
 
 The 2026-06-20 cut is reversed **with teeth this time** — scaling alone still isn't teeth, so CON earns its slot by:
 
-1. **Physics:** CON is the **body term of derived Weight** (pushability/swim — finally says where Weight's "body" comes from).
+1. ~~**Physics:** CON is the **body term of derived Weight** (pushability/swim).~~ **RETRACTED 2026-07-27 (dev): this was drift, not doctrine.** Weight was always meant to be derived purely from gear carried; CON adding body mass was never intended and had been built. It is now removed from the calculation. If a stat ever influences carry it is **STR** (capacity — more strength lets you carry more before a penalty), never CON adding mass. Consequence to own honestly: CON's adoption case rested on three teeth and this was the first of them. The remaining two (**gate** + **scaling**, plus the MHP band) are what CON now stands on — still enough to clear the bar the 2026-06-20 cut set, but the physics claim is gone and should not be quietly reinstated.
 2. **Gate:** CON gates **heavy armor** exactly the way STR gates heavy weapons.
 3. **Scaling rides on top:** CON scales defensive-gear bonuses — as a **multiplier with no base**. Naked CON grants zero DEF, so the **DEF-is-gear-only stance survives intact** (no innate tanky-person number). **AMENDED 2026-07-24 (dev, [#89](https://github.com/Phaazoid/Godoiosis/issues/89)):** a piece may ALSO carry an un-scaled `flat_def` term on top of the scaled one. Rationale — a CON *gate* plus CON *scaling* double-dips the same stat, so a gated piece should be able to pay out on a term that doesn't. **The original rule still governs the scaled half**: CON 0 zeroes it completely and only the flat term survives, so "multiplier with no base" is amended in scope, not repealed. Naked units still have zero DEF (the term lives on gear, not the body).
 4. **Band:** CON casts a small **MHP band** (extremes ≤4–5 MHP apart — placeholder; the CON analogue of DEX→MOV).
@@ -99,8 +99,8 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 ## Open forks
 
-- ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline; Weight×MOV resolved at the CON mini-grill (coarse thresholds). (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.)
-- **STR ↔ inventory weight / carry limits.**
+- ~~**Move/Speed**~~ — **derivation RESOLVED 2026-07-06 (jobs grill): MOV = main-job base + DEX band modifier** ([jobs.md](jobs.md)). No SPD stat, ever; no innate per-unit MOV on the statline. (Ghost `SPD` retired 2026-07-07: the last fixture swept; scenario `.tres` were verified already clean — the audit's `.tres` claim was stale.) **The Weight×MOV coarse-threshold step from the CON mini-grill was UNWIRED 2026-07-27** — it had never once fired in play (every unit sat at CON 5 with weight-0 gear, under a threshold of 8), and it was removed rather than tuned so that re-introducing encumbrance is a deliberate decision instead of a number nudge. MOV is now base + DEX band + leg throttle, full stop.
+- **STR ↔ inventory weight / carry limits** — *promoted from idle to the live question 2026-07-27.* Weight is now tracked gear-only and feeds nothing; STR-as-capacity (raising a personal carry ceiling, rather than any stat adding mass) is the named shape if it is ever wired up. Equally acceptable outcome: cut Weight entirely.
 - **Will** — per-unit (current lean: per-unit, squad-fed) vs. squad-pooled. *(Persist-vs-reset is **decided: persists on `UnitInstance`** — #8, 2026-06-21.)* See [will-and-death.md](will-and-death.md).
 - ~~**Squad range** tuning~~ — **BUILT 2026-07-14, feel-tested + CLOSED 2026-07-16** (`SQUAD_RANGE = 3` static + `MEMBER_LDR_COST = 2` capacity budget — see [squad-system.md](squad-system.md) banner; [#63](https://github.com/Phaazoid/Godoiosis/issues/63)).
 - ~~**Jobs**~~ — **RATIFIED 2026-07-06, own doc: [jobs.md](jobs.md)** (LDR/WIL take the big job influence; input stats ±1–2; ceilings-not-prereqs clamping *effective* stats; MOV ownership).

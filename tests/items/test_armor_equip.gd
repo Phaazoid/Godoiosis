@@ -48,6 +48,18 @@ func test_armor_cannot_be_equipped_as_a_weapon() -> void:
 	assert_bool(unit.has_equipped_weapon()).is_false()
 
 
+func test_set_equipped_weapon_also_refuses_armor() -> void:
+	# The THIRD door into the weapon slot. add_item and equip_weapon_from_inventory both refused
+	# armor from the start; set_equipped_weapon didn't (found in the 2026-07-27 Unit.gd review).
+	# Nothing reached it with armor in practice -- DevController is its only caller -- so this
+	# pins the gate rather than a fixed bug: three doors, one rule.
+	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var vest := _vest()
+	unit.add_item(vest)
+	assert_bool(unit.set_equipped_weapon(vest)).is_false()
+	assert_bool(unit.has_equipped_weapon()).is_false()
+
+
 func test_a_weapon_cannot_be_worn_as_armor() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	unit.add_item(H.make_weapon(3))

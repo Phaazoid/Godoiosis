@@ -52,7 +52,6 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
 # Percentage weights across STR/DEX/PER/CON; missing key = 0%, should sum to 100 (not
 # hard-enforced). The family's identity — instances never carry their own copy.
 @export var scaling_blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}
-@export var base_weight: int = 0   # playtest-tunable
 
 func space_capacities() -> Array[int]:
 	if is_prototype:

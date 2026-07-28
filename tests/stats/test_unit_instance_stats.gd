@@ -46,7 +46,6 @@ func test_effective_ldr_consumes_per_band() -> void:
 	assert_int(_make_instance({Stats.Stat.LDR: 5, Stats.Stat.PER: 5}).get_effective_ldr()).is_equal(5)
 	assert_int(_make_instance({Stats.Stat.LDR: 5, Stats.Stat.PER: 2}).get_effective_ldr()).is_equal(4)
 
-func test_weight_is_the_con_body_term() -> void:
-	# Derived, never authored; gear/module/inventory terms are still placeholder 0 (7/10).
-	assert_int(_make_instance({Stats.Stat.CON: 7}).get_weight()).is_equal(7)
-	assert_int(_make_instance({Stats.Stat.CON: 5}).get_weight()).is_equal(5)
+# Weight left UnitInstance entirely on 2026-07-27: it is gear-only, and gear lives on the
+# transient Unit, so there was nothing for the persistent instance to compute. Coverage moved
+# to tests/stats/test_carried_weight.gd.

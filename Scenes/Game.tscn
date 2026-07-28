@@ -1,7 +1,6 @@
 [gd_scene format=4 uid="uid://b1qp1sxn6wnsi"]
 
 [ext_resource type="Script" uid="uid://w2uqgp6gxmcn" path="res://game.gd" id="1_e2o6t"]
-[ext_resource type="Texture2D" uid="uid://dyl7pa2nfnk1b" path="res://Art/Board/select.png" id="3_feb5d"]
 [ext_resource type="Script" uid="uid://djobys843dl6i" path="res://Classes/flow/TurnManager.gd" id="3_i6g32"]
 [ext_resource type="Script" uid="uid://ccyb45oc8osqf" path="res://Classes/squads/SquadManager.gd" id="3_nb51f"]
 [ext_resource type="Script" uid="uid://bg1vqwce8ve4e" path="res://Classes/board/CursorController.gd" id="3_o5yvi"]
@@ -66,16 +65,6 @@ texture = ExtResource("4_ldgsr")
 
 [sub_resource type="TileSet" id="TileSet_nb51f"]
 sources/0 = SubResource("TileSetAtlasSource_1phco")
-
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_feb5d"]
-texture = ExtResource("3_feb5d")
-0:0/0 = 0
-1:0/0 = 0
-2:0/0 = 0
-3:0/0 = 0
-4:0/0 = 0
-5:0/0 = 0
-6:0/0 = 0
 
 [node name="Game" type="Node2D" unique_id=743556953]
 script = ExtResource("1_e2o6t")

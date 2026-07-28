@@ -48,42 +48,21 @@ static func _instance_for(type: WeaponData.WeaponType) -> WeaponInstance:
 
 # Readiness seam (#73) — default: no gating at all. A subclass with its own wind-up/recovery
 # economy (e.g. SpringspearWeaponInstance) overrides these; every other weapon never thinks about
-# readiness.
+# readiness. These two stay HERE rather than on EquippableData because they take a
+# WeaponAttackData: widening the parameter to fit the base would break every family override.
 func is_attack_fireable(_attack: WeaponAttackData) -> bool:
 	return true
-
-func can_reload() -> bool:
-	return false
-
-func reload() -> void:
-	pass
-
-# What the Weapon Action menu CALLS this family's rearm. The ORDER is always ActionType.RELOAD —
-# only the word changes, so Springspear keeps "Spring Load" while the queue, the AI, and the Play
-# API all see one verb (#84).
-func reload_label() -> String:
-	return "Reload"
 
 func consume_readiness_for(_attack: WeaponAttackData) -> void:
 	pass
 
-# Burrow seam (#84) — default: this family can't burrow. Only DrillWeaponInstance overrides it.
-# No per-weapon STATE (unlike rev/readiness): a Burrow's consequence is a terrain tile, derived in
-# the plan, not weapon state — so this capability query is the whole surface.
-func can_burrow() -> bool:
-	return false
+# The self-abilities themselves — can_reload/reload/reload_label, can_rev/rev/tick_rev, can_burrow —
+# are declared as inert virtuals on EquippableData (promoted there 2026-07-27), because Unit
+# delegates them straight to whatever is equipped and shouldn't have to cast first. Families
+# override them exactly as before: Chainsword revs, Carbine and Springspear reload, Drill burrows.
 
-# Rev seam (#84) — default: no revving, no DEF pierce. Only ChainswordWeaponInstance overrides
-# these; every other family never revs. Mirrors the readiness seam above.
-func can_rev() -> bool:
-	return false
-
-func rev() -> void:
-	pass
-
-func tick_rev() -> void:
-	pass
-
+# Rev's DEF pierce (#84) — read by PlanResolver through a deliberate `as WeaponInstance` cast,
+# never by Unit, so it stays down here with the rest of the weapon-only surface.
 func ignores_def() -> bool:
 	return false
 
@@ -185,11 +164,12 @@ func available_attacks(_wielder: Unit) -> Array[WeaponAttackData]:
 		return []
 	return template.attacks()
 
-# ALL fitted modules count, active or not — mass is physical, not capability-gated.
+# ALL fitted modules count, active or not -- mass is physical, not capability-gated. The
+# instance's own weight rides on top of the family's, so a one-off heavier copy is authorable.
 func get_effective_weight() -> int:
 	if template == null:
-		return 0
-	var total := template.base_weight
+		return weight
+	var total := weight + template.weight
 	for i in range(space_count()):
 		for mod in space(i):
 			total += mod.weight

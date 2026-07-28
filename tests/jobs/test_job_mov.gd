@@ -5,11 +5,16 @@ extends GdUnitTestSuite
 
 const F := preload("res://tests/support/job_fixtures.gd")
 
+# get_mov takes the finished effective DEX since 2026-07-27 (see tests/stats/test_mov.gd);
+# a bare instance has no gear, so its own effective DEX is the whole answer.
+func _mov(inst: UnitInstance) -> int:
+	return inst.get_mov(inst.get_effective_stat(Stats.Stat.DEX))
+
 func test_jobless_mov_uses_the_jobless_base() -> void:
 	var inst := F.make_instance()
-	assert_int(inst.get_mov()).is_equal(UnitInstance.JOBLESS_MOV_BASE)
+	assert_int(_mov(inst)).is_equal(UnitInstance.JOBLESS_MOV_BASE)
 
 func test_holding_a_job_does_not_change_mov() -> void:
 	var inst := F.make_instance()
 	inst.add_job("tank")
-	assert_int(inst.get_mov()).is_equal(UnitInstance.JOBLESS_MOV_BASE)
+	assert_int(_mov(inst)).is_equal(UnitInstance.JOBLESS_MOV_BASE)

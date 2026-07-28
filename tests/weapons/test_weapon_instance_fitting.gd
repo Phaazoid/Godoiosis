@@ -7,13 +7,13 @@ extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 
-func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}, base_weight: int = 0, is_prototype: bool = false, elemental: Elemental.Element = Elemental.Element.NONE) -> WeaponData:
+func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}, weight: int = 0, is_prototype: bool = false, elemental: Elemental.Element = Elemental.Element.NONE) -> WeaponData:
 	var t := WeaponData.new()
 	t.main_attack = WeaponAttackData.new()
 	t.main_attack.power = power
 	t.main_attack.elemental_damage_type = elemental
 	t.scaling_blend = blend
-	t.base_weight = base_weight
+	t.weight = weight
 	t.is_prototype = is_prototype
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	return t
@@ -97,7 +97,7 @@ func test_active_modules_only_pulls_from_activated_spaces() -> void:
 # --- Effective weight: ALL fitted mods count, active or not (mass is physical) ---
 
 func test_effective_weight_counts_inactive_mods_too() -> void:
-	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}, 2))   # base_weight 2
+	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}, 2))   # family weight 2
 	w.fit(0, _mod(1, 0, 3))   # weight 3, in the one space that stays active below
 	w.fit(2, _mod(1, 0, 4))   # weight 4, in a space that stays INACTIVE below
 	var wielder := _wielder()

@@ -42,8 +42,6 @@ const MAX_WILL := 20                # ceiling for the WIL-stat-derived Will pool
 var current_will: int = 0
 
 const JOBLESS_MOV_BASE := 4       # playtest-tunable; prompt 9 swaps in the main job's base
-const WEIGHT_MOV_THRESHOLD := 8   # playtest-tunable: at/above this Weight, one coarse step off
-const WEIGHT_MOV_PENALTY := 1     # a step, never per-point (jobs.md — plate isn't double-punished)
 
 # --- Weapon proficiency (docs/design/weapons.md, #59) ---
 const DEFAULT_PROFICIENCY := 3   # == WeaponData.SPACE_CAPACITIES.size() — all spaces active by
@@ -142,6 +140,13 @@ func get_proficiency(family: WeaponData.WeaponType) -> int:
 func set_proficiency(family: WeaponData.WeaponType, value: int) -> void:
 	weapon_proficiency[family] = clampi(value, 0, 3)
 
+func add_stat_modifier(stat: Stats.Stat, delta: int) -> void:
+	# The one mutator for the battle-scoped add/subtract bag (the Crisis surge today), so the
+	# dictionary is only ever written beside the initialize() that clears it. Callers used to
+	# read-modify-write stat_modifiers directly from Unit -- the single place Unit reached into
+	# UnitInstance's internals instead of asking it something.
+	stat_modifiers[stat] = stat_modifiers.get(stat, 0) + delta
+
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
@@ -159,25 +164,17 @@ func get_max_hp() -> int:
 func get_effective_ldr() -> int:
 	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
 
-func get_weight(gear: int = 0) -> int:
-	# Derived, never authored (stats.md): body + gear + modules + carried.
-	# gear = the wielder's equipped weapon's effective weight — Unit passes it in, since
-	# UnitInstance has no visibility into equipped_weapon (the other side of the persistence
-	# seam, #59). Only the CON body term + gear exist yet — modules/carried are still 0.
-	var body := get_base_stat(Stats.Stat.CON)
-	var modules := 0
-	var carried := 0
-	return body + gear + modules + carried
-
-func get_mov(gear: int = 0, dex_modifier: int = 0) -> int:
-	# MOV is a READOUT: flat jobless base + DEX band, minus the heavy-load step, then the leg
-	# throttle LAST: one empty leg halves (round up), two pin MOV to 1 flat. Job-driven MOV base
-	# is parked (#61, docs/design/jobs.md "Parked") — audit A4 reopens.
-	# dex_modifier is the worn-gear DEX tax, threaded in the same shape as `gear` weight: gear
-	# lives on the transient Unit, so UnitInstance can't reach it directly.
-	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(get_effective_stat(Stats.Stat.DEX) + dex_modifier)
-	if get_weight(gear) >= WEIGHT_MOV_THRESHOLD:
-		mov -= WEIGHT_MOV_PENALTY
+func get_mov(effective_dex: int) -> int:
+	# MOV is a READOUT: flat jobless base + DEX band, then the leg throttle LAST: one empty leg
+	# halves (round up), two pin MOV to 1 flat. Job-driven MOV base is parked (#61,
+	# docs/design/jobs.md "Parked") -- audit A4 reopens. Weight is deliberately NOT wired in:
+	# it's tracked on Unit as a balance lever, with no gameplay effect yet.
+	#
+	# Takes the FINISHED effective DEX (Unit.get_effective_stat -- gear included), not a gear
+	# delta to add on. Until 2026-07-27 it took the delta and rebuilt the sum itself, which meant
+	# the chain's last stage was expressed in two places: a stage added to Unit.get_effective_stat
+	# later would have reached the stat panel but silently missed MOV. One expression, one answer.
+	var mov := JOBLESS_MOV_BASE + Stats.dex_mov_band(effective_dex)
 	match empty_leg_count():
 		2:
 			return 1
@@ -197,6 +194,19 @@ func apply_damage(amount: int):
 
 func is_dead() -> bool:
 	return current_hp <= 0
+
+# Permadeath. A unit that really dies in a mission never fields again, and that fact has to
+# outlive the battle -- so it sits here on the persistent instance, not on the transient Unit.
+#
+# NOT WIRED YET, on purpose: there are no missions or persistent rosters, so nothing sets or
+# reads it. When the campaign layer lands, `Unit.die()` is the setter (it already funnels every
+# death path, including the dev kill button) and roster assembly is the reader. Enemies will set
+# it too and simply never be asked.
+#
+# Named for the game term because it is the THIRD distinct "dead" on this seam and the other two
+# are both battle-scoped: `is_dead()` above is `current_hp <= 0`, and `Unit.is_dead()` is
+# "went down the permanent path THIS mission". Neither answers "gone for good".
+var permadead: bool = false
 
 # --- Will API ---
 

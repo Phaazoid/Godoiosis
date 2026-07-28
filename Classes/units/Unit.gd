@@ -52,21 +52,15 @@ var element_states: Array[Elemental.State] = []
 enum LifecycleState { ACTIVE, DOWNED, DEAD }
 var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 
-# The rung a would-be-fatal hit lands on. STUB: only DOWN/KILL exist today; MAIM (Will-
-# exhausted) and CRISIS join once the Will resource + Forks 2-3 land. Runtime-only enum,
-# so it can grow freely.
-enum LethalRung { DOWN, KILL }
-
-# Stub overkill ceiling: a hit exceeding remaining HP by more than this kills outright
-# (will-and-death.md rung 3 — so low-HP units aren't immortal). Tune to taste; replaced
-# by Will math later.
-const OVERKILL_CEILING := 10
+# Which rung a would-be-fatal hit lands on is decided by LethalityRules.predict(), NOT here —
+# the resolver has to ask the same question at plan time (Law #2), so the ladder and its tuning
+# (OVERKILL_CEILING, CRISIS_WILL_GATE) live in one shared place. Unit owns only what happens
+# NEXT: take_damage carries the named rung out.
 
 # --- Crisis Mode (opt-in gambit; will-and-death.md, #33). Offered as a live interrupt when a
 # FULL-Will unit would go down: accept -> up at low HP with a one-turn scaling-stat surge, but
 # Will locks at 0 and there is no safety net (a would-be-down is death) for the rest of the
 # battle. All of this is battle-scoped, so it lives here on the transient Unit. ---
-const CRISIS_WILL_GATE := UnitInstance.MAX_WILL        # full Will (20) — an identity gate (placeholder)
 const CRISIS_REVIVE_HP := 5                            # HP the unit stands back up with (placeholder)
 const CRISIS_SURGE := 5                                # +this to each scaling stat for the surge turn (placeholder)
 const CRISIS_SURGE_STATS: Array[Stats.Stat] = [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER]  # "scaling stats" (assumption)
@@ -178,24 +172,23 @@ func _gear_modifier(stat: Stats.Stat) -> int:
 		return 0
 	return worn_armor.stat_modifiers.get(stat, 0)
 
-func get_temp_modifier(stat: Stats.Stat) -> int:
-	return unit_instance.stat_modifiers.get(stat, 0)
-
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
 
 func get_mov() -> int:
-	return unit_instance.get_mov(_gear_weight(), _gear_modifier(Stats.Stat.DEX))
+	return unit_instance.get_mov(get_effective_stat(Stats.Stat.DEX))
 
+# Everything carried, equipped or not: armor and the equipped weapon both live in `inventory`,
+# so one sweep covers them. No body term -- weight is gear only.
 func get_weight() -> int:
-	return unit_instance.get_weight(_gear_weight())
+	var total := 0
+	for item in inventory:
+		if item != null:
+			total += item.get_effective_weight()
+	return total
 
 func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
 	return unit_instance.get_proficiency(family)
-
-func _gear_weight() -> int:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon.get_effective_weight() if weapon != null else 0
 
 func get_max_hp() -> int:
 	return unit_instance.get_max_hp()
@@ -234,44 +227,37 @@ func is_leader() -> bool:
 
 
 func die():
+	# Idempotent on purpose: four call sites reach here (the instance's died signal, two branches
+	# of take_damage, the downed countdown, plus the dev kill button), and unit_died drives squad
+	# teardown in both game.gd and play_session. Every current path is guarded upstream, so this
+	# is belt-and-braces -- but the invariant belongs at the one place that can violate it.
+	if lifecycle_state == LifecycleState.DEAD:
+		return
 	lifecycle_state = LifecycleState.DEAD
 	unit_died.emit(self)
 	queue_free()
 
 func take_damage(damage: int):
-	# Lifecycle-aware damage entry -- every damage source calls this. Raw HP math stays
-	# on UnitInstance; the down/kill DECISION is battle-scoped, so it lives here on the Unit.
-	if lifecycle_state == LifecycleState.DEAD:
-		return
-	if lifecycle_state == LifecycleState.DOWNED:
-		die()                                   # Fork 3 (provisional): hitting a downed unit kills it
-		return
-	var hp := get_current_hp()
-	if damage < hp:
-		unit_instance.apply_damage(damage)      # survivable hit — ordinary HP loss, no rung decision
-		return
-	# Would-be-fatal: pick the rung instead of dying automatically.
-	if in_crisis:
-		die()   # Crisis traded the safety net away — a would-be-down is death now (will-and-death.md)
-		return
-	match _select_lethal_rung(damage, hp):
-		LethalRung.KILL:
-			unit_instance.apply_damage(damage)  # HP -> 0 -> died -> _on_instance_died -> die()
-		LethalRung.DOWN:
+	# Lifecycle-aware damage entry -- every damage source calls this. LethalityRules names the
+	# rung (the same call PlanResolver makes at plan time, so the preview cannot disagree —
+	# Law #2); this function is the only thing that CARRIES it out. Raw HP math stays on
+	# UnitInstance; which rung to pay is battle-scoped, so paying it lives here on the Unit.
+	match LethalityRules.predict(LethalityRules.situation_for(self), damage):
+		ResolvedOutcome.Lethality.NONE:
+			if lifecycle_state != LifecycleState.DEAD:
+				unit_instance.apply_damage(damage)   # survivable hit — ordinary HP loss
+		ResolvedOutcome.Lethality.KILLED:
+			if lifecycle_state == LifecycleState.DEAD:
+				return                               # already gone; the flag is preview-only (R9)
+			if lifecycle_state == LifecycleState.DOWNED or in_crisis:
+				die()                                # Fork 3 / the Crisis gambit: no safety net left
+			else:
+				unit_instance.apply_damage(damage)   # HP -> 0 -> died -> _on_instance_died -> die()
+		_:
+			# DOWNED, MAIMED and CRISIS are all the same execution: go down. spend_will_for_down
+			# picks clean-vs-maimed, and the Crisis offer is settled after the pass by
+			# OrderExecutor._offer_pending_crisis reading crisis_offered_pending.
 			_go_downed()
-
-func _select_lethal_rung(damage: int, hp: int) -> LethalRung:
-	# STUB of will-and-death.md's deterministic stakes ladder. No Will yet:
-	#   overkill (exceeds remaining HP by more than the ceiling) -> KILL (rung 3)
-	#   otherwise                                                -> DOWN (rung 1, the safe down)
-	# Rungs 2 (MAIM / Will-exhausted) and 4 (CRISIS) are gated on the Will resource + forks.
-	# This is the SINGLE home of the rung decision: when the resolution pipeline grows its
-	# Will stage (resolution-pipeline.md R7), it calls this at plan time and the preview
-	# renders the result (Law #2). Today it runs only at execution time.
-	var overkill := damage - hp
-	if overkill > OVERKILL_CEILING:
-		return LethalRung.KILL
-	return LethalRung.DOWN
 
 func _go_downed():
 	crisis_offered_pending = is_crisis_eligible()  # capture BEFORE spend — eligibility reads FULL Will
@@ -388,6 +374,9 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 	if not inventory.has(weapon):
 		return false
 
+	if weapon is ArmorData:
+		return false   # armor fills its OWN slot -- wear_armor() is the door, same as the other two
+
 	equipped_weapon = weapon
 	return true
 
@@ -465,7 +454,7 @@ func is_crisis_eligible() -> bool:
 	# since #57. Eligibility is universal; the DECISION differs by controller (live prompt vs
 	# archetype stance — see OrderExecutor._offer_crisis).
 	return not in_crisis \
-		and unit_instance.get_current_will() >= CRISIS_WILL_GATE
+		and unit_instance.get_current_will() >= LethalityRules.CRISIS_WILL_GATE
 
 func enter_crisis():
 	# Player accepted the live offer (OrderExecutor._process_downed_pending). The unit went DOWNED during the
@@ -490,13 +479,13 @@ func advance_crisis_surge():
 
 func _apply_crisis_surge():
 	for stat in CRISIS_SURGE_STATS:
-		unit_instance.stat_modifiers[stat] = get_temp_modifier(stat) + CRISIS_SURGE
+		unit_instance.add_stat_modifier(stat, CRISIS_SURGE)
 	crisis_surge_pending = false
 	crisis_surge_active = true
 
 func _clear_crisis_surge():
 	for stat in CRISIS_SURGE_STATS:
-		unit_instance.stat_modifiers[stat] = get_temp_modifier(stat) - CRISIS_SURGE
+		unit_instance.add_stat_modifier(stat, -CRISIS_SURGE)
 	crisis_surge_active = false
 
 func get_element_aura(element: Elemental.Element) -> int:
@@ -591,35 +580,33 @@ func has_any_fireable_attack() -> bool:
 func can_fire_default_attack() -> bool:
 	return is_attack_fireable(get_fired_attack())
 
+# --- The equipped thing's self-abilities ---
+# Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack
+# surface above. These used to open with `get_equipped_weapon() as WeaponInstance` seven times
+# over; the inert defaults now live on EquippableData, so an empty slot is the only case left
+# for Unit to handle. Families override the real behaviour (Chainsword revs, Carbine and
+# Springspear reload, Drill burrows).
+
 func can_reload_weapon() -> bool:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.can_reload()
+	return equipped_weapon != null and equipped_weapon.can_reload()
 
 func reload_weapon() -> void:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		weapon.reload()
+	if equipped_weapon != null:
+		equipped_weapon.reload()
 
 func reload_label() -> String:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		return weapon.reload_label()
-	return "Reload"
+	return equipped_weapon.reload_label() if equipped_weapon != null else "Reload"
 
 func can_rev_weapon() -> bool:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.can_rev()
+	return equipped_weapon != null and equipped_weapon.can_rev()
 
 func rev_weapon() -> void:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		weapon.rev()
+	if equipped_weapon != null:
+		equipped_weapon.rev()
 
 func tick_weapon_rev() -> void:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		weapon.tick_rev()
+	if equipped_weapon != null:
+		equipped_weapon.tick_rev()
 
 func can_burrow_weapon() -> bool:
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.can_burrow()
+	return equipped_weapon != null and equipped_weapon.can_burrow()

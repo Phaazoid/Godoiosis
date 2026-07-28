@@ -135,12 +135,8 @@ func _refresh_stats():
 	_add_stat("MOV", str(unit.get_mov()), mov_tooltip(
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
-		unit.get_weight(), UnitInstance.WEIGHT_MOV_THRESHOLD,
-		UnitInstance.WEIGHT_MOV_PENALTY, inst.empty_leg_count()))
-	var body := inst.get_base_stat(Stats.Stat.CON)
-	_add_stat("WT", str(unit.get_weight()), weight_tooltip(
-		body, unit.get_weight() - body,
-		UnitInstance.WEIGHT_MOV_THRESHOLD, UnitInstance.WEIGHT_MOV_PENALTY))
+		inst.empty_leg_count()))
+	_add_stat("WT", str(unit.get_weight()), weight_tooltip(unit.get_weight()))
 	var armor_name := ""
 	var armor_power := 0
 	if unit.worn_armor != null:
@@ -215,10 +211,8 @@ func _on_unit_died():
 func _on_countdown_changed(_turns: int):
 	_refresh_limbs()
 
-static func mov_tooltip(base: int, dex_band: int, weight: int, threshold: int, penalty: int, empty_legs: int) -> String:
+static func mov_tooltip(base: int, dex_band: int, empty_legs: int) -> String:
 	var lines: Array[String] = ["Base %d %+d DEX band" % [base, dex_band]]
-	if weight >= threshold:
-		lines.append("-%d heavy load (WT %d >= %d)" % [penalty, weight, threshold])
 	match empty_legs:
 		1:
 			lines.append("Halved: one leg gone")
@@ -226,8 +220,8 @@ static func mov_tooltip(base: int, dex_band: int, weight: int, threshold: int, p
 			lines.append("Pinned to 1: both legs gone")
 	return "\n".join(lines)
 
-static func weight_tooltip(body: int, gear: int, threshold: int, penalty: int) -> String:
-	return "Body (CON) %d + gear %d\nAt %d+ MOV takes -%d" % [body, gear, threshold, penalty]
+static func weight_tooltip(carried: int) -> String:
+	return "Carried gear %d\nTracked only -- no effect yet" % carried
 
 static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int) -> String:
 	var lines: Array[String] = []

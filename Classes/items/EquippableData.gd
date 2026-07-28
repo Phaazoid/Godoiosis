@@ -4,7 +4,8 @@ extends Item
 # Shared base for anything a unit slots into its single equip slot — today WeaponInstance and
 # RuneData. Its job is to be the slot's TYPE, so the equip slot, inventory, and save entry can
 # hold "an equippable" without caring which kind (docs/design/alchemy-kit.md) — AND to answer
-# what that equippable can fire (see the attack-source surface below).
+# what that equippable can fire (the attack-source surface) or DO (the weapon-verb surface),
+# both declared below as inert defaults.
 #
 # NOTE (2026-07-26) — this REPLACES the older rule that EquippableData deliberately had no combat
 # surface and that "combat sites cast as WeaponInstance; a rune yields null -> inert path". That
@@ -42,3 +43,38 @@ func counter_attack(wielder: Unit) -> AttackData:
 # Non-default attacks, surfaced under the Weapon Action submenu. Weapons only.
 func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
+
+# --- Weapon-verb surface (#73/#84, promoted here from WeaponInstance 2026-07-27) ---
+# The self-abilities the Weapon Action menu can offer. Same shape and same reasoning as the
+# attack surface above: every default is the INERT answer, so Unit asks whatever is in the slot
+# without knowing its kind, and a rune or an armour piece answers "no" for free.
+#
+# Where the line falls: what UNIT delegates lives here; what a deliberate `as WeaponInstance`
+# cast reads stays down on WeaponInstance. That is not a style call — `is_attack_fireable` and
+# `consume_readiness_for` take a `WeaponAttackData`, so widening them to `AttackData` for this
+# base would break every family override's signature. The verbs below take no arguments, so
+# they promote cleanly. Real bodies (and per-family overrides) live on WeaponInstance.
+
+func can_reload() -> bool:
+	return false
+
+func reload() -> void:
+	pass
+
+# What the Weapon Action menu CALLS this rearm. The ORDER is always ActionType.RELOAD — only the
+# word changes, so Springspear keeps "Spring Load" while the queue, the AI, and the Play API all
+# see one verb (#84).
+func reload_label() -> String:
+	return "Reload"
+
+func can_rev() -> bool:
+	return false
+
+func rev() -> void:
+	pass
+
+func tick_rev() -> void:
+	pass
+
+func can_burrow() -> bool:
+	return false
