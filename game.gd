@@ -663,26 +663,22 @@ func spawn_sandbox() -> void:
 func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	var unit: Unit = UnitFactory.create_unit(data, grid, pos)
 
-	var tile_data: TileData = unit.pending_grid.get_cell_tile_data(unit.pending_cell)
-	if tile_data == null:
+	if grid.get_cell_tile_data(pos) == null:
 		unit.queue_free()
 		return null  # outside the map
 
-	var walkable: bool = true
-	if tile_data.has_custom_data("walkable"):
-		walkable = tile_data.get_custom_data("walkable")
-
-	if get_unit_at_cell(unit.pending_cell) != null:
-		walkable = false
-
-	if not walkable: #TODO later change this for various unit types, i.e. flyers can spawn on rocks, etc
+	# One walkability answer for the whole game (#109). The inline `walkable` custom-data read this
+	# replaced couldn't see tile state, so dev-mode refused to place a unit on a FROZEN water tile
+	# that movement, pathing and knockback all treat as solid ground. Occupancy stays a SEPARATE
+	# question: is_walkable answers "may a unit stand here", never "is someone already standing here".
+	#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
+	if not _board().is_walkable(pos) or get_unit_at_cell(pos) != null:
 		unit.queue_free()
 		return null
 
 	units_root.add_child(unit)
 	squad_manager.create_squad(unit)
 	unit.unit_died.connect(_on_unit_died)
-	unit.went_downed.connect(order_executor.on_unit_downed)
 	return unit
 
 func _on_unit_died(unit: Unit):

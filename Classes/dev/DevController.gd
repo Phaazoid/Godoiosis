@@ -36,6 +36,9 @@ func resolve_pending(cell: Vector2i) -> void:
 		return
 	if game.grid.get_cell_tile_data(cell) == null:   # clicked off the map
 		return
+	var board: BoardContext = game._board()
+	if not board.is_walkable(cell):                  # #109: the same answer spawn_unit gives, so
+		return                                       # dev-move and dev-duplicate can't disagree
 	if game.get_unit_at_cell(cell) != null:          # occupied (incl. the unit's own cell) -> no-op
 		return
 	match action:

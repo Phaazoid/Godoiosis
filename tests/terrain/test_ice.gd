@@ -92,6 +92,34 @@ func test_frozen_tile_is_walkable() -> void:
 	assert_bool(board.is_walkable(WATER_CELL)).is_true()
 	assert_bool(board.is_walkable(Vector2i(9, 9))).is_false()
 
+func test_a_tileset_that_omits_the_walkable_flag_reads_unwalkable() -> void:
+	# #109 picked is_walkable's missing-flag default and made it explicit: an undeclared `walkable`
+	# layer means NOT walkable. Two of the four old hand-rolls said the opposite, so the fork was a
+	# live contradiction rather than a decision. It also wasn't free: without the has_custom_data
+	# guard this path raised TWO runtime errors per call (the engine's "TileSet has no layer with
+	# name: walkable", then "Trying to return value of type Nil from a function whose return type
+	# is bool") and only answered false as a Nil->bool coercion byproduct — once per neighbour per
+	# frame inside the move-range BFS. Every tile in TestTiles.tres declares the flag, so a
+	# synthetic tileset is the only way to reach the branch at all.
+	var ts := TileSet.new()
+	ts.add_custom_data_layer(0)
+	ts.set_custom_data_layer_name(0, "move_cost")
+	ts.set_custom_data_layer_type(0, TYPE_INT)
+	var src := TileSetAtlasSource.new()
+	src.texture = ImageTexture.create_from_image(Image.create(16, 16, false, Image.FORMAT_RGBA8))
+	src.texture_region_size = Vector2i(16, 16)
+	src.create_tile(Vector2i.ZERO)
+	ts.add_source(src, 0)
+
+	var grid: TileMapLayer = auto_free(TileMapLayer.new())
+	grid.tile_set = ts
+	add_child(grid)
+	grid.set_cell(Vector2i.ZERO, 0, Vector2i.ZERO)
+
+	var no_units: Array[Unit] = []
+	var board := BoardContext.new(grid, no_units, null)
+	assert_bool(board.is_walkable(Vector2i.ZERO)).is_false()
+
 func test_frozen_melts_after_three_ticks() -> void:
 	var tsm := _frozen_store()
 	tsm.tick_states()

@@ -227,6 +227,13 @@ static func _resolve_knockback(action: AttackAction, outcome: ResolvedOutcome, t
 	var landing := target_hypo.position
 	for _i in range(distance):
 		var next: Vector2i = landing + dir
+		# DECLARED, not an oversight (#115): a shove asks the CELL-level question
+		# (BoardContext.is_walkable), never the per-unit one (RulesService.can_traverse) that
+		# movement and GroupMoveSolver ask. So a Waterwalker is NOT shoved onto water — the
+		# ability lets you walk there under your own power, and being thrown is not walking.
+		# This is parked rather than settled: what a shove into a hazard should DO is #116
+		# (off a cliff = a kill; into water = deliberately still an open question). Resolve it
+		# there, not by quietly swapping the predicate here.
 		if not board.is_walkable(next) or board.unit_at_cell(next) != null:
 			break   # stop at the first wall / off-board / occupied cell
 		landing = next

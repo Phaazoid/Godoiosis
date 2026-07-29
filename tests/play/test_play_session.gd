@@ -218,6 +218,27 @@ func test_rescue_appears_in_side_actions() -> void:
 	assert_str(prev.plan.side_actions[0].target).is_equal(sess.handle_for(ally))
 
 # Squad management through the same SquadManager the player uses: join, then leave.
+func test_frozen_water_reads_walkable_to_the_headless_view() -> void:
+	# #109: terrain_at re-read the `walkable` tile flag itself, so it could not see tile STATE. A
+	# FROZEN water tile — which BoardContext, and therefore queue_move, GroupMoveSolver and
+	# knockback, all treat as crossable — rendered as `#` impassable in board_view while the rules
+	# pathed straight across it. The headless VIEW contradicting the headless RULES is precisely
+	# the Law #2 failure the Play API exists to surface, so the view now asks the board.
+	var cell := Vector2i(5, 5)
+	BoardBuilder.paint_cell(_board.grid, cell, BoardBuilder.WATER_ATLAS)
+	assert_bool(_session.terrain_at(cell).walkable).is_false()
+	assert_str(BoardView.render_overview(_session)).contains("#")
+
+	# terrain_states.apply IS the production write path — play_session._apply_cell_effects and
+	# OrderExecutor both hand a resolved effect to exactly this call. Only the effect's source is
+	# synthesized here; test_ice.gd covers deriving one from a real ICE hit.
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = cell
+	freeze.states_added.assign([Terrain.TileState.FROZEN])
+	_board.terrain_states.apply(freeze)
+
+	assert_bool(_session.terrain_at(cell).walkable).is_true()
+
 func test_join_and_leave_squad() -> void:
 	var b: Dictionary = BoardBuilder.build(self, "SquadRoot")
 	auto_free(b.root)

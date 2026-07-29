@@ -6,6 +6,23 @@ extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
 const BB := preload("res://play/board_builder.gd")
+const F := preload("res://tests/support/job_fixtures.gd")
+
+# Scout's ability_pool is forced to just WATERWALK for the duration of every test here (mirrors
+# tests/rules/test_movement_cost.gd), so the #115 traversal case stays correct regardless of
+# Scout's real authored kit. Harmless to the other tests — none of them assigns a job.
+var _scout: JobData
+var _scout_snap: Dictionary
+
+func before_test() -> void:
+	_scout = JobCatalog.get_job("scout")
+	_scout_snap = F.snapshot(_scout)
+	var ability := AbilityData.new()
+	ability.id = Abilities.Id.WATERWALK
+	_scout.ability_pool = [ability]
+
+func after_test() -> void:
+	F.restore(_scout, _scout_snap)
 
 
 # --- AIController enable toggles ---
@@ -120,8 +137,9 @@ func test_depth_bounded_field_agrees_with_the_full_walk() -> void:
 	var context := _context(board)
 	var source := Vector2i(0, 0)
 
-	var full: Dictionary = GroupMoveSolver._path_hops(source, context)
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, 3)
+	var walker: Unit = board.leader
+	var full: Dictionary = GroupMoveSolver._path_hops(source, context, walker)
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, 3)
 
 	assert_int(bounded.size()).is_less(full.size())   # it really did stop early
 	for cell in bounded:
@@ -137,10 +155,11 @@ func test_until_bounded_field_covers_every_requested_cell() -> void:
 	var board: Dictionary = _build_squad_board()
 	var context := _context(board)
 	var source := Vector2i(0, 0)
-	var full: Dictionary = GroupMoveSolver._path_hops(source, context)
+	var walker: Unit = board.leader
+	var full: Dictionary = GroupMoveSolver._path_hops(source, context, walker)
 
 	var wanted := { Vector2i(2, 0): true, Vector2i(1, 1): true }
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, -1, wanted)
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, -1, wanted)
 
 	for cell in wanted:
 		assert_bool(bounded.has(cell)).is_true()
@@ -154,8 +173,48 @@ func test_until_falls_back_to_the_full_walk_when_a_cell_is_unreachable() -> void
 	var context := _context(board)
 	var source := Vector2i(0, 0)
 
+	var walker: Unit = board.leader
 	var wanted := { Vector2i(99, 99): true }
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, -1, wanted)
+	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, -1, wanted)
 
 	assert_bool(bounded.has(Vector2i(99, 99))).is_false()
-	assert_int(bounded.size()).is_equal(GroupMoveSolver._path_hops(source, context).size())
+	assert_int(bounded.size()).is_equal(GroupMoveSolver._path_hops(source, context, walker).size())
+
+
+# --- #115: the cohesion field is per-unit, not per-cell ---
+
+func test_hop_field_crosses_water_only_for_a_waterwalker() -> void:
+	# The leash field used to be built once from the bare cell predicate and shared by every
+	# member, which silently un-did Waterwalk: a Scout's own `reach` correctly included near-shore
+	# water, then the leash rejected exactly those cells as UNREACHABLE. So the ability worked when
+	# the unit moved alone and stopped working the moment it moved with its squad.
+	var board: Dictionary = _build_squad_board()
+	for y in range(0, 3):
+		BB.paint_cell(board.grid, Vector2i(4, y), BB.WATER_ATLAS)   # a full-height wall of water
+	var context := _context(board)
+
+	var plain: Unit = board.leader
+	var walker: Unit = board.member
+	walker.unit_instance.add_job("scout")
+
+	var plain_field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, plain)
+	var walker_field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, walker)
+
+	assert_bool(plain_field.has(Vector2i(4, 0))).is_false()    # the water itself
+	assert_bool(plain_field.has(Vector2i(6, 0))).is_false()    # and everything behind it
+	assert_bool(walker_field.has(Vector2i(4, 0))).is_true()
+	assert_bool(walker_field.has(Vector2i(6, 0))).is_true()
+
+
+func test_an_enemy_body_does_not_sever_the_cohesion_field() -> void:
+	# _path_hops asks can_traverse, NOT movement_cost — occupancy blocks a move but is not terrain,
+	# and it moves every turn. Pinned because routing the field through movement_cost is the
+	# obvious-looking simplification and it would quietly change formations near any enemy.
+	var board: Dictionary = _build_squad_board()
+	BB.spawn(board, H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(4, 0))   # hostile to the ENEMY squad
+	var context := _context(board)
+
+	var field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, board.leader)
+
+	assert_bool(field.has(Vector2i(4, 0))).is_true()
+	assert_bool(field.has(Vector2i(6, 0))).is_true()

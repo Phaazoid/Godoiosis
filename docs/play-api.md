@@ -105,7 +105,9 @@ the live bridge). A board is a picture made of tokens — render the picture.
 
 **Glyphs.** One char per cell. `UPPERCASE` = player unit, `lowercase` = enemy (digits = OTHER faction
 if it ever matters); each unit gets a unique letter handle used in commands. Terrain: `.` floor,
-`#` unwalkable, with a small per-scenario legend (water / cover, once terrain types land). A legend
+`#` unwalkable, with a small per-scenario legend (water / cover, once terrain types land). `#` reflects
+**dynamic tile state, not just the authored flag** — `terrain_at` reads `BoardContext.is_walkable`
+since #109, so a frozen-over water tile renders passable exactly as the rules treat it. A legend
 table carries what a glyph can't (name, hp, squad/leader, weapon). Unit handles are session-stable ids
 assigned by `PlaySession` — units have no persistent id today.
 

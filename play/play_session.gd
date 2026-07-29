@@ -101,15 +101,16 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
 	if data == null:
 		return {"exists": false, "walkable": false, "cost": 0, "type": "void"}
-	var walkable := false
-	if data.has_custom_data("walkable"):
-		walkable = bool(data.get_custom_data("walkable"))
 	var cost := 0
 	if data.has_custom_data("move_cost"):
 		cost = int(data.get_custom_data("move_cost"))
 	var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 	var kind_name: String = Terrain.Kind.keys()[kind]
-	return {"exists": true, "walkable": walkable, "cost": cost, "type": kind_name.to_lower()}
+	# Walkability comes from the board, never from a second read of the tile (#109). This used to
+	# re-derive it off `walkable` custom data alone, so a FROZEN water tile rendered as impassable
+	# in board_view while queue_move happily pathed across it — the headless VIEW contradicting the
+	# headless RULES, which is exactly the Law #2 failure the Play API exists to catch.
+	return {"exists": true, "walkable": _board().is_walkable(cell), "cost": cost, "type": kind_name.to_lower()}
 
 # ---- commands (mutating) — all flow through the real SquadManager (Law #3) ----
 

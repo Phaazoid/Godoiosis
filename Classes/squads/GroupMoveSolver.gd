@@ -28,17 +28,23 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 	leader_move.init(leader, leader_path, GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
 	moves.append(leader_move)
 
-	# Cohesion leash from the leader's new cell (path-far cells split the squad around walls).
-	# Bounded AT the leash: this field is only ever compared against it, so a cell further away is
-	# rejected whether or not we know its true distance.
 	var leash: int = squad.get_max_squad_range() * 2
-	var leader_field := _path_hops(leader_destination, board, leash)
-
 	var taken := { leader_destination: true }
 
 	for member in squad.get_members():
 		if member == leader:
 			continue
+
+		# Cohesion leash from the leader's new cell (path-far cells split the squad around walls).
+		# Bounded AT the leash: this field is only ever compared against it, so a cell further away
+		# is rejected whether or not we know its true distance.
+		#
+		# Measured with THIS member's own traversal (#115). It used to be one shared field built
+		# from the bare cell predicate: a Waterwalker's `reach` below correctly included near-shore
+		# water, and then the leash rejected exactly those cells as UNREACHABLE. Per-member costs a
+		# handful of extra depth-bounded walks — negligible beside the compute_move_range call
+		# right under it, which is essentially all of plan()'s time (docs/performance.md).
+		var leader_field := _path_hops(leader_destination, board, member, leash)
 
 		var reach := RulesService.compute_move_range(member, board, leader_destination)
 		var here: Vector2i = member.movement.cell
@@ -51,7 +57,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# can stop the moment it has covered them. It used to cross the whole board to answer a
 		# couple of dozen queries, once per member.
 		var target: Vector2i = here + displacement
-		var to_target := _path_hops(target, board, -1, candidates)
+		var to_target := _path_hops(target, board, member, -1, candidates)
 
 		var best := _best_candidate(candidates, to_target, here)
 		taken[best] = true
@@ -106,13 +112,17 @@ static func _best_candidate(candidates: Dictionary, to_target: Dictionary, here:
 			best_cost = cost
 	return best
 
-# Terrain-aware hop-distance (BFS over walkable cells) from `source` -> { cell: hops }. Unweighted
-# by design — formation cares about how terrain CONNECTS, not move-cost.
+# Hop-distance (BFS over cells `unit` can traverse) from `source` -> { cell: hops }. Unweighted by
+# design — formation cares about how terrain CONNECTS, not move-cost.
+#
+# Takes the unit because traversal is per-unit (#115): a Waterwalker's connected region includes
+# water. Asks RulesService.can_traverse and NOT movement_cost — occupancy blocks a move but is not
+# terrain, and letting an enemy body sever this field would change formations near any enemy.
 #
 # Neither caller needs the whole field, so both stop early: `max_depth` past N hops, `until` once
 # every cell in that set has a distance. Both only skip work whose answer was already going to be
 # discarded, so the plan is unchanged. Why that holds: docs/performance.md → Invariants.
-static func _path_hops(source: Vector2i, board: BoardContext, max_depth: int = -1, until: Dictionary = {}) -> Dictionary:
+static func _path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}) -> Dictionary:
 	var dist := { source: 0 }
 
 	var pending := 0
@@ -137,7 +147,7 @@ static func _path_hops(source: Vector2i, board: BoardContext, max_depth: int = -
 				continue
 			if not bounds.has_point(next):
 				continue
-			if not board.is_walkable(next):
+			if not RulesService.can_traverse(next, unit, board):
 				continue
 			dist[next] = d
 			if not until.is_empty() and until.has(next):

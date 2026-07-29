@@ -2,7 +2,7 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill); co-dev pass 2026-07-11 — verdict: BUILD TO TEST; descoped 2026-07-20 (#61) to the load-bearing minimum for ability-balance testing.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
-**Canon checked through #79 (2026-07-20).**
+**Canon checked through #116 (2026-07-29).**
 
 **#61 DESCOPED 2026-07-20:** #58 (2026-07-16) had built a fuller model — certify-once qualification, a 1-main+2-sub linked trio, stat ceilings, job-driven MOV base — but none of it had earned its keep against a playtest yet, and it stood between the actual open question (do abilities feel good?) and testing it. Stripped to the load-bearing minimum: **a job is `{id, display_name, stat_nudges, ability_pool}` — no cap on how many a unit holds, no certification step, abilities are live the instant a job is assigned.** The removed material is preserved below (*Parked*), not deleted from thought — it's shelved pending a playtest verdict on whether jobs are even the right vehicle for it. **#61 also shipped the actual keystone this whole system exists to test: a working ability chassis** — see *The ability chassis* below.
 
@@ -25,7 +25,7 @@
    - **Iron Will** (Passive) — a deterministic per-hit damage cap on the holder, composed with the 0-damage floor (#55) inside `PlanResolver`'s shared preview/execution seam.
    - **Intimidation** (Action) — a plannable main-action Will-drain, a `BaseAction` subclass mirroring `RallyAction`. Ships as a Rally-style side-channel action (bypasses `PlanResolver`): its preview shows the drain amount accurately but doesn't thread into the same-pass maim-cliff prediction the way a queued attack does — flagged as a known gap, not a silent one.
    - **Taunt** (Reaction) — while held, squad counters must target the taunter where legal; implemented as a rule inside `SquadManager.choose_counter_target`.
-   - **Waterwalk** (Movement) — ignores water's impassability, gated in `RulesService.movement_cost`.
+   - **Waterwalk** (Movement) — ignores water's impassability. Gated in **`RulesService.can_traverse`**, which is the single home for the per-unit traversal question as of #115 (it was `movement_cost`, and the *other* readers of that question — the Group Move cohesion field especially — bypassed it, so the ability quietly stopped working whenever a Scout moved with its squad). One deliberate exception remains, declared at the call site: a shove does **not** consult it, so a Waterwalker is not knocked back onto water — see [#116](https://github.com/Phaazoid/Godoiosis/issues/116), where what a shove into water *should* do is an open question.
    - Fortitude, Rally-enhancers, and Guard redirects remain named follow-ups, not built.
 5. **Dispatch is explicit and boring, not a generic effects engine**: each seed ability's mechanic is a hardcoded check (`UnitInstance.has_live_ability("iron_will")` etc.) at its one relevant hook — the resolver, the action layer, the counter layer, or the movement layer. `AbilityData` itself stays identity-only (no effects payload); a future content pass would need to decide whether that changes.
 

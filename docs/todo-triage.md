@@ -35,11 +35,13 @@ no-leveling decision. Called out so the bin isn't silently empty.
 
 Load-bearing reminders that depend on systems that don't exist yet. Keep as-is.
 
+*Anchored by function, not line number* — a 2026-07-29 sweep (#109) found every line number in this
+table stale, and two rows describing one TODO that had only ever existed once.
+
 | Where | Depends on |
 |---|---|
-| `game.gd:532` — flyers spawning on non-walkable tiles | unit movement-classes |
-| `game.gd:648` — more tile-walkability values (flyers vs. nothing) | unit movement-classes |
-| `game.gd:862` — muted squad-icon colours when another squad is active | multi-squad visual layer — now tracked under **#44** (visual clarity) |
+| `game.spawn_unit` — flyers spawning on non-walkable tiles | unit movement-classes |
+| `game.gd` (squad icons) — muted squad-icon colours when another squad is active | multi-squad visual layer — now tracked under **#44** (visual clarity) |
 | `Classes/squads/Squad.gd:94` — preserve status actions when clearing the queue | a status-effect system (explicitly "if that becomes a thing") |
 
 ## 4 · Overdue — worth doing now

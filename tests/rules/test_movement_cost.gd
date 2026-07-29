@@ -61,6 +61,36 @@ func test_waterwalk_water_step_costs_the_same_as_any_other_tile() -> void:
 
 	assert_int(cost).is_equal(1)
 
+func test_can_traverse_is_the_per_unit_terrain_answer() -> void:
+	# #115 gave the unit-level question ONE home. BoardContext.is_walkable answers the cell-only
+	# form ("may a unit stand here", #109); can_traverse is the per-unit layer on top, and both
+	# movement_cost and GroupMoveSolver._path_hops now read it instead of each deciding separately.
+	var board := _board()
+	BoardBuilder.paint_cell(board.grid, Vector2i(1, 0), BoardBuilder.WATER_ATLAS)
+	var plain := _spawn(board, Vector2i(0, 0), false)
+	var walker := _spawn(board, Vector2i(3, 0), true)
+	var context := _rules_board(board, plain)
+
+	assert_bool(context.is_walkable(Vector2i(1, 0))).is_false()          # the cell says no
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), plain, context)).is_false()
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), walker, context)).is_true()
+	# Ordinary ground is unaffected either way.
+	assert_bool(RulesService.can_traverse(Vector2i(2, 0), plain, context)).is_true()
+
+
+func test_can_traverse_ignores_occupancy() -> void:
+	# Deliberate split: an enemy body blocks a MOVE (movement_cost adds that) but is not a terrain
+	# fact, so the connectivity field must still see through it. Pinned so the two don't get merged.
+	var board := _board()
+	var mover := _spawn(board, Vector2i(0, 0), false)
+	var blocker := BoardBuilder.spawn(board, H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(1, 0))
+	var units: Array[Unit] = [mover, blocker]
+	var context := BoardContext.new(board.grid, units, board.squad_manager)
+
+	assert_bool(RulesService.can_traverse(Vector2i(1, 0), mover, context)).is_true()
+	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
+
+
 func test_waterwalk_move_range_stays_within_mov_budget_across_water() -> void:
 	var board := _board()
 	for x in range(1, 10):

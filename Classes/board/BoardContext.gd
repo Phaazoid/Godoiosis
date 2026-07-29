@@ -26,10 +26,22 @@ func unit_at_cell(cell: Vector2i) -> Unit:
 	return null
 
 func is_walkable(cell: Vector2i) -> bool:
+	# THE walkability answer for the whole game (#109) — three hand-rolled copies of this used to
+	# live in HoverPresenter, game.spawn_unit and play_session, and none of them could see tile
+	# STATE, so all three called a FROZEN water tile impassable while movement, pathing and
+	# knockback walked across it.
+	#
+	# The FROZEN short-circuit deliberately runs BEFORE the tile lookup: the headless fixtures
+	# carry a bare grid with no TileSet, and ice-over-water is the one thing they need to answer.
 	if terrain_states != null and terrain_states.has_state(cell, Terrain.TileState.FROZEN):
 		return true
 	var tile_data: TileData = grid.get_cell_tile_data(cell)
 	if tile_data == null:
+		return false
+	# DECIDED (#109): a tile whose tileset doesn't declare `walkable` is NOT walkable. Without this
+	# guard get_custom_data raises "TileSet has no layer with name: walkable" and then returns Nil
+	# into a bool return — twice per call, per neighbour, inside the move-range BFS.
+	if not tile_data.has_custom_data("walkable"):
 		return false
 	return tile_data.get_custom_data("walkable")
 

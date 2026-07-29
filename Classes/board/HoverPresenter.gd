@@ -83,7 +83,8 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 			game.overlay_manager.create_unit_icon(unit, icontype)
 
 func _hover_dev_mode(cell: Vector2i) -> void:
-	if not _is_walkable(cell) or game.unit_at_pointer(cell) != null:
+	var board: BoardContext = game._board()
+	if not board.is_walkable(cell) or game.unit_at_pointer(cell) != null:
 		game.cursor_controller.set_state(CursorController.CursorState.INVALID)
 	else:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
@@ -229,14 +230,6 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 # ==============================================================================
 #  Shared helpers
 # ==============================================================================
-
-func _is_walkable(cell: Vector2i) -> bool:
-	var tile_data: TileData = game.grid.get_cell_tile_data(cell)
-	if tile_data == null:
-		return false
-	if not tile_data.has_custom_data("walkable"):
-		return true   # a tile that doesn't declare the flag is walkable
-	return tile_data.get_custom_data("walkable")
 
 # Every pick mode reads the same way: nothing previewed means the aim is illegal.
 func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:

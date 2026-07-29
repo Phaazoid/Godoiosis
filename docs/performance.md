@@ -28,7 +28,13 @@ real call) and `_plan_signature()`, which is how you prove an optimisation didn'
 
 **Always capture a plan signature before optimising.** It is the difference between "it's faster"
 and "it's faster and still correct". Both fixes below were verified against a signature recorded
-before any change.
+before any change. It is just as useful in the other direction: #115 *added* work to the solver, and
+the signature is what proved the added work changed no formation (see below).
+
+**One run is not a measurement.** Four consecutive runs of this profiler on identical code put
+`GroupMoveSolver.plan` between **5.6 and 7.0 ms** — a ~25% spread. Anything smaller than that is
+invisible here, so take 3–4 samples and compare *ranges*, not single numbers. Sub-millisecond claims
+need a tighter harness than this one.
 
 ---
 
@@ -83,6 +89,22 @@ queue panel goes stale and the guarantee is gone.
 a batch. Don't: `game._on_unit_action_queued` does one cheap per-*unit* job — swapping the real
 sprite for the projected ghost — and skipping it would leave every member but the last rendered
 twice. Only the expensive squad-level repaint (`game._repaint_squad_plan`) is coalesced.
+
+**`_path_hops` must ask `RulesService.can_traverse`, not `movement_cost`** (#115, 2026-07-29). It
+takes a unit now, because traversal is per-unit — a Waterwalker's connected region includes water,
+and building one shared field from the bare cell predicate silently un-did the ability for any unit
+moving with its squad. Routing it through `movement_cost` instead is the obvious-looking
+simplification and is **wrong**: that adds the enemy-occupancy rule, which would let a single enemy
+body sever the cohesion field and change formations near any enemy. Occupancy blocks a move; it is
+not terrain, and it moves every turn. Pinned by `test_an_enemy_body_does_not_sever_the_cohesion_field`.
+
+**The cohesion (leash) field is computed per member, and that is not a regression to "fix".** It was
+one shared call before #115. Cost of the change, measured over four runs against a single-run 5.75 ms
+baseline: `plan` came in at 5.6–7.0 ms, i.e. **inside the harness's own noise** — the extra
+depth-bounded walks are far cheaper than the `compute_move_range` call sitting beside them in the
+same loop (~1 ms per member, essentially all of `plan`'s time). The plan signature was **IDENTICAL**
+on all four runs, which is the part that matters: Castle Assault has no Waterwalkers, so any
+signature change would have meant ordinary formations moved.
 
 **`_path_hops`' two stopping rules only skip work whose answer was already discarded.**
 - `max_depth` — the caller only compares the result against a threshold, so a cell beyond the bound

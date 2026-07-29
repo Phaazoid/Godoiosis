@@ -9,17 +9,30 @@ class_name RulesService
 const CANNOT_WALK_TILE := 99
 const OUT_OF_MAP_TILE := 999
 
+# May THIS unit traverse this cell's TERRAIN? BoardContext.is_walkable answers the cell-only form
+# ("may a unit stand here", #109); this is the per-unit layer on top, and #115 made it the ONE
+# home for that layer — movement_cost and GroupMoveSolver._path_hops had been deciding separately,
+# so Waterwalk worked when a unit moved alone and silently stopped working when it moved with its
+# squad.
+#
+# Deliberately says NOTHING about occupancy. An enemy body blocks a MOVE (movement_cost adds that
+# below) but is not a terrain fact and moves every turn — a connectivity field must see through it.
+static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
+	if board.is_walkable(cell):
+		return true
+	# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's
+	# impassability for the holder — the same shape as is_walkable's FROZEN bypass, just per-unit
+	# instead of per-cell, which is why it lives here where `unit` is in scope. Reached only when
+	# the cell is ALREADY impassable, so the JobCatalog lookup stays off the hot path for ordinary
+	# ground (it used to be computed for every cell — see docs/performance.md).
+	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
+		and unit.unit_instance.has_live_ability(Abilities.Id.WATERWALK)
+
 static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)
 	if data == null:
 		return OUT_OF_MAP_TILE
-	# Waterwalk (Movement, docs/design/jobs.md "The ability chassis"): ignores water's
-	# impassability for the holder — the same shape as BoardContext.is_walkable's existing
-	# FROZEN bypass, just per-unit instead of per-cell, so it has to live here where `unit`
-	# is actually in scope (is_walkable only takes a cell).
-	var waterwalking := board.terrain_kind_at(cell) == Terrain.Kind.WATER \
-		and unit.unit_instance.has_live_ability(Abilities.Id.WATERWALK)
-	if not waterwalking and board.is_walkable(cell) == false:
+	if not can_traverse(cell, unit, board):
 		return CANNOT_WALK_TILE
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE
