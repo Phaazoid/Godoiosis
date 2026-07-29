@@ -300,9 +300,32 @@ func get_effective_def() -> int:
 		return 0
 	return Stats.armor_def(worn_armor.def_power, get_effective_stat(Stats.Stat.CON), worn_armor.flat_def)
 
+# THE composition point for "what is this unit immune to" — the role RulesService.def_breakdown
+# plays for DEF. Any UNIT-level immunity readout (a status icon, an inspect row) asks HERE and
+# never re-derives from whatever gear happens to be worn. The body still reads worn_armor
+# directly; #90b moves it onto the ability kit, at which point immunity stops being an
+# armor-specific channel at all — it arrives as an ability, from whatever source granted it.
 func is_immune_to(element: Elemental.Element) -> bool:
-	# Targeted elemental protection lives on GEAR (alchemy-kit.md: no catch-all RES stat).
-	return worn_armor != null and worn_armor.blocks_element(element)
+	if not Abilities.INSULATION.has(element):
+		return false
+	return has_live_ability(Abilities.INSULATION[element])
+
+# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ worn gear, deduped
+# by id, earlier sources winning ties. THE answer — UnitInstance's version is the persistent
+# inner layer. Derived live off what's worn, never stored, which is also what makes a wear-gate
+# strip correct for free: drop the armor and its grants leave with it, no invalidation needed.
+func get_live_abilities() -> Array[AbilityData]:
+	var live: Array[AbilityData] = []
+	AbilityData.add_live(live, unit_instance.get_live_abilities())
+	if worn_armor != null:
+		AbilityData.add_live(live, worn_armor.granted_abilities)
+	return live
+
+func has_live_ability(id: Abilities.Id) -> bool:
+	for ability in get_live_abilities():
+		if ability.id == id:
+			return true
+	return false
 
 func add_element_state(state: Elemental.State) -> void:
 	if state == Elemental.State.NONE:
@@ -654,7 +677,9 @@ func get_selectable_attacks() -> Array[AttackData]:
 	return equipped_weapon.selectable_attacks(self)
 
 # The equipped WEAPON's non-main attacks — surfaced under the Weapon Action menu (2026-07-24).
-# Empty for a rune (its carvings stay under Attack) or an empty slot.
+# Empty for a rune or an empty slot. A rune's carvings are the OTHER side of this fork
+# (choice_attacks -> the Transmutation category, #88), never Weapon Action and no longer
+# a submenu hanging off Attack.
 func get_weapon_secondary_attacks() -> Array[AttackData]:
 	if equipped_weapon == null:
 		return []
@@ -671,6 +696,20 @@ func has_weapon_actions() -> bool:
 		if is_attack_fireable(atk):
 			return true
 	return false
+
+# --- The Transmutation submenu (#88) ---
+
+func get_transmutation_choices() -> Array[AttackData]:
+	if equipped_weapon == null:
+		return []
+	return equipped_weapon.choice_attacks(self)
+
+# Any channelable carving at all opens the category — deliberately NOT "2 or more". With one
+# carving this duplicates what Attack fires, and that's accepted: the submenu is a READOUT as
+# much as a picker (hover descriptions, unqualified carvings shown blotted out — see
+# visual-clarity.md), so it earns its row even at one entry. Dev call 2026-07-29.
+func has_transmutations() -> bool:
+	return not get_transmutation_choices().is_empty()
 
 # What a COUNTER fires — deliberately separate from get_fired_attack(), because the two kinds
 # diverge on whether the live pick counts: a rune counters with whatever it would currently fire

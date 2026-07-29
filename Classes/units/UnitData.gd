@@ -7,7 +7,6 @@ class_name UnitData
 @export var display_name: String = "Unit"
 @export var portrait: Texture2D = load("res://Art/Units/Portraits/faceless_one.png")
 @export var base_stats: Dictionary[Stats.Stat, int]
-@export var innate_abilities: Array[String]
 @export var faction: Team.Faction
 @export var map_sprite: Texture2D 
 @export var move_sprite: Texture2D 
@@ -15,3 +14,8 @@ class_name UnitData
 @export var base_aura: Dictionary[Elemental.Element, int]
 @export var base_affinity: Array[Elemental.Element] = []   # genetic; order = rank, [0] = primary
 @export var base_is_alkahest_affine: bool = false          # Isaac's hidden sixth — never a UI bar
+# Abilities this character is BORN with (jobs.md — the story/innate source, alongside jobs and
+# gear). Authored per character; nothing awards one at runtime yet. The moment something does,
+# this becomes base_abilities seeding a mutable UnitInstance.innate_abilities, and
+# ScenarioUnitEntry has to round-trip it in the same change.
+@export var innate_abilities: Array[AbilityData] = []

@@ -113,13 +113,14 @@ func _limb_chip(inst: UnitInstance, slot: UnitInstance.LimbSlot, at_risk: int) -
 	if slot == at_risk:
 		chip.add_theme_color_override("font_color", AT_RISK_COLOR)
 		chip.tooltip_text += " — NEXT AT RISK (Will can't cover another down)"
+	chip.tooltip_text = UiText.wrap(chip.tooltip_text)
 	return chip
 
 func _badge(text: String, color: Color, tip: String) -> Label:
 	var lbl := Label.new()
 	lbl.text = text
 	lbl.add_theme_color_override("font_color", color)
-	lbl.tooltip_text = tip
+	lbl.tooltip_text = UiText.wrap(tip)
 	lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	return lbl
 
@@ -198,8 +199,9 @@ func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_
 	if value_color.a > 0.0:
 		value_lbl.add_theme_color_override("font_color", value_color)
 	if tip != "":
+		var wrapped := UiText.wrap(tip)
 		for lbl: Label in [name_lbl, value_lbl]:
-			lbl.tooltip_text = tip
+			lbl.tooltip_text = wrapped
 			lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	stats_grid.add_child(name_lbl)
 	stats_grid.add_child(value_lbl)
@@ -207,7 +209,7 @@ func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_
 func _refresh_abilities():
 	for child in abilities_list.get_children():
 		child.queue_free()
-	var live := unit.unit_instance.get_live_abilities()
+	var live := unit.get_live_abilities()
 	if live.is_empty():
 		abilities_list.add_child(_badge("None", DIM_COLOR, ""))
 		return
@@ -218,7 +220,7 @@ func _ability_row(ability: AbilityData) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.mouse_filter = Control.MOUSE_FILTER_STOP
 	var kind_name: String = AbilityData.AbilityKind.keys()[ability.kind].capitalize()
-	row.tooltip_text = ability_tooltip(ability.display_name, kind_name, ability.description)
+	row.tooltip_text = UiText.wrap(ability_tooltip(ability.display_name, kind_name, ability.description))
 	var name_lbl := Label.new()
 	name_lbl.text = ability.display_name
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL

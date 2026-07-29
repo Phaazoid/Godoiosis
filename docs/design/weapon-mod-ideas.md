@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
 
-**Canon checked through #89 (2026-07-24).**
+**Canon checked through #116 (2026-07-29).**
 
 ---
 
@@ -17,7 +17,7 @@
 5. **Bayonet Lug** [CB] — the gun gains the 1-tile melee standard attack.
 6. **Sprung Lanyard** [∀] — weapon cannot be Stripped/disarmed (the anti-Filcher fitting; legibility: visible cord).
 7. **Recoil Lugs** [BL] — Pummel shoves +1 tile.
-8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash. **Newly buildable 2026-07-24 ([#89](https://github.com/Phaazoid/Godoiosis/issues/89)):** elemental immunity now exists as machinery — `ArmorData.immune_elements` + `Unit.is_immune_to`, which `PlanResolver` reads to erase blocked elements from an incoming hit. This mod needs only to route a *weapon-sourced* immunity into the same read point (today it's armor-only), not new resolver plumbing.
+8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash. **Machinery exists, one gate left.** [#89](https://github.com/Phaazoid/Godoiosis/issues/89) built elemental immunity; [#90](https://github.com/Phaazoid/Godoiosis/issues/90) (2026-07-29) then made it an ordinary granted **ability** (`Abilities.Id.INSULATED_SHOCK`) rather than an armor field, and taught `Unit.get_live_abilities()` to union worn gear in — so an equippable granting immunity is now a solved, tested shape. What's still missing is narrow and named: **only `worn_armor` contributes to the kit.** Wiring `equipped_weapon` (and a rune) in is one more `add_live` call, but it's a real decision about *which slots contribute* that #90 deliberately left open — the same gate the three mods below sit behind. No resolver plumbing either way.
 9. **Tuning Weights** [SS] — sweet-spot cell damage +1 (rides the #25 per-cell damage-band thread).
 10. **Oiled Action** [∀] — this weapon's attack resolves before same-initiative? — ⚠ no initiative system exists; park. Replace: equip/unequip this weapon costs no action (if inventory actions ever cost).
 
@@ -27,7 +27,7 @@
 12. **Extended Piston** [SS] — reach +1 forward.
 13. **Capacitor Bank** [CB] — the charge system, itemized: forgo attacking this turn (telegraphed stance) → next shot +N. The deterministic "big hit" the no-crit doctrine promised.
 14. **Pneumatic Ram** [BL/DR] — standard attack shoves 1 tile, Weight-gated (physics teeth; pit/hazard pairing).
-15. **Deflector Plate** [∀] — weapon-tied Guard: once per pass, blocks N damage to the wielder (standing policy, previewed — chassis-compliant).
+15. **Deflector Plate** [∀] — weapon-tied Guard: once per pass, blocks N damage to the wielder (standing policy, previewed — chassis-compliant). Behind the same one gate as Insulated Grips (#8): gear granting a passive is built and tested as of [#90](https://github.com/Phaazoid/Godoiosis/issues/90), but only `worn_armor` feeds the ability kit — a *weapon* slot doesn't yet.
 16. **Payload Doser** [SP] — hits also apply the loaded element's **tile** state under the target (attack the map through a body).
 17. **Safety Governor** [SP] — volleys exclude allies (`hits_allies` off). ⚠ Removes a core AoE tension — kept at size 2 so it *costs*; overlaps Lamplighter's Spotter (job vs gear redundancy is fine — different sources).
 18. **Gyro Stabilizer** [∀ two-handed] — usable one-armed (relieves the maim verb-lock; dark, useful, very Iosis).

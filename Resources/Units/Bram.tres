@@ -19,7 +19,6 @@ base_stats = Dictionary[int, int]({
 5: 4,
 6: 5
 })
-innate_abilities = Array[String](["Rushdown"])
 map_sprite = ExtResource("2_nyms1")
 move_sprite = ExtResource("3_t8aii")
 downed_sprite = ExtResource("1_ef1sp")

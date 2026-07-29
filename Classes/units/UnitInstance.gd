@@ -105,28 +105,19 @@ func remove_job(job_id: String) -> bool:
 func has_job(job_id: String) -> bool:
 	return jobs.has(job_id)
 
+# The JOBS-ONLY inner layer. Unit.get_live_abilities() is the answer to "what can this unit
+# do" — it adds worn gear. Nothing outside Unit should call this one (docs/design/jobs.md
+# "The ability chassis") — holding the job is the whole gate, no training/unlock layer.
 func get_live_abilities() -> Array[AbilityData]:
-	# Union of every held job's pool, de-duplicated by ability id (docs/design/jobs.md
-	# "The ability chassis") — no training/unlock layer, holding the job is the whole gate.
-	var seen: Dictionary[Abilities.Id, bool] = {}
 	var live: Array[AbilityData] = []
+	if data != null:
+		AbilityData.add_live(live, data.innate_abilities)
 	for job_id in jobs:
 		var job := JobCatalog.get_job(job_id)
 		if job == null:
 			continue
-		for ability in job.ability_pool:
-			if ability == null or ability.id == Abilities.Id.NONE:
-				continue   # NONE = unfinished authoring — never live
-			if not seen.has(ability.id):
-				seen[ability.id] = true
-				live.append(ability)
+		AbilityData.add_live(live, job.ability_pool)
 	return live
-
-func has_live_ability(id: Abilities.Id) -> bool:
-	for ability in get_live_abilities():
-		if ability.id == id:
-			return true
-	return false
 
 func get_proficiency(family: WeaponData.WeaponType) -> int:
 	return weapon_proficiency.get(family, DEFAULT_PROFICIENCY)

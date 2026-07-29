@@ -44,6 +44,13 @@ func counter_attack(wielder: Unit) -> AttackData:
 func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
 
+# Attacks this source offers as a flat menu of EQUALS — the Transmutation category (#88). A rune
+# has no authored main_attack: its carvings are interchangeable, so all of them belong in one
+# picker. A weapon does have an authored main, so its extras go under Weapon Action instead and
+# this stays empty. Exactly the split secondary_attacks() makes, from the other side.
+func choice_attacks(_wielder: Unit) -> Array[AttackData]:
+	return []
+
 # --- Weapon-verb surface (#73/#84, promoted here from WeaponInstance 2026-07-27) ---
 # The self-abilities the Weapon Action menu can offer. Same shape and same reasoning as the
 # attack surface above: every default is the INERT answer, so Unit asks whatever is in the slot

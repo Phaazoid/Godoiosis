@@ -112,6 +112,12 @@ func default_attack(wielder: Unit) -> AttackData:
 		return null
 	return fireable[0]
 
+# Every carving the wielder can currently channel — aura-filtered, so an unaffordable one is
+# absent rather than listed-and-disabled. That differs from a weapon's unfireable secondary on
+# purpose (see #88 follow-up); it falls out of channelable() already being the gate.
+func choice_attacks(wielder: Unit) -> Array[AttackData]:
+	return selectable_attacks(wielder)
+
 # A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
 # A weapon deliberately does NOT; see WeaponInstance.counter_attack.
 func counter_attack(wielder: Unit) -> AttackData:

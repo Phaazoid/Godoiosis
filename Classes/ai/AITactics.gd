@@ -181,7 +181,7 @@ static func _try_rally(unit: Unit, squad_manager: SquadManager) -> bool:
 	return squad_manager.queue_action(unit.squad, rally)
 
 static func _try_intimidate(unit: Unit, board: BoardContext, squad_manager: SquadManager) -> bool:
-	if not unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION):
+	if not unit.has_live_ability(Abilities.Id.INTIMIDATION):
 		return false
 	var target: Unit = null
 	for enemy in RulesService.adjacent_enemies(unit, board):

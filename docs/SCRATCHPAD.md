@@ -36,7 +36,31 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-_(empty — swept 2026-07-28)_
+Certain elemental damage, stuff that doesn't damage through blunt force, should ignore defense.  So, fire, shock, could ignore defense, whereas pelting someone with blocks of earth or ice shards would still be blocked by defense.  
+
+Just going to copy/paste a convo with codev about pushing into pits/weight
+
+"Phaazoid [឵឵឵み],  — 11:43 AM
+hmm for Iosis
+
+obviously if a unit is shoved off a cliff that's insta death
+
+but like, what if they're just pushed into a water tile
+
+Right now I don't have water tiles normally walkable.
+
+Not allowing units to be shoved onto those tiles, treating them like walls, seems weird.  But normal water tiles probably shouldn't be insta death either. 
+
+Maybe we separate shallow and deep water?  Shallow water has a high move cost (3, as opposed to mud's 2?), so being shoved into it is very annoying? Deep water, maybe they have like a turn to be rescued by another unit before they just drown?
+c3potheds — 11:54 AM
+Maybe the weight they carry affects whether they can swim
+Phaazoid [឵឵឵み],  — 11:54 AM
+I was also just thinking this could be a way to make weight mean something
+could have a weight/push level thing, where like, the weakest tier 1 wind could only work on units of up to a certain weight
+weight could potentially determine how many tiles a unit gets knocked back, too.
+
+could be a tradeoff between like, heavier units can't move as far, but lighter units are more susceptible to getting shoved around."
+
 
 ## 🗂 Dispersed (log)
 

@@ -12,9 +12,10 @@ extends EquippableData
 @export var stat_minimums: Dictionary[Stats.Stat, int] = {}
 @export var stat_maximums: Dictionary[Stats.Stat, int] = {}
 
-# Elements this armor turns aside (alchemy-kit.md: elemental effects are mitigated by TARGETED
-# gear, never a catch-all RES stat). The resolver filters these out of an incoming hit.
-@export var immune_elements: Array[Elemental.Element] = []
+# Abilities this piece grants while WORN — the gear source of the chassis (jobs.md). Read LIVE
+# off the worn piece by Unit.get_live_abilities, never mirrored onto UnitInstance: a stored copy
+# would restore worn_armor on load and silently lose whatever it granted (#89's rule).
+@export var granted_abilities: Array[AbilityData] = []
 
 # Live stat contribution while worn (stats.md "gear carries stat-cost tradeoffs"). Negative
 # values are the classic armor tax. Read live off the worn piece by Unit._gear_modifier --
@@ -48,9 +49,6 @@ func can_equip(wearer: Unit) -> bool:
 func modifier_text() -> String:
 	return Stats.modifier_text(stat_modifiers)
 
-func blocks_element(element: Elemental.Element) -> bool:
-	return immune_elements.has(element)
-
 # Human-readable gate, for the equip UI's "why can't I wear this" label.
 func requirement_text() -> String:
 	var parts: Array[String] = []
@@ -81,9 +79,11 @@ func mechanical_text(wearer: Unit) -> String:
 	var mods := modifier_text()
 	if mods != "":
 		lines.append("While worn: %s" % mods)
-	if not immune_elements.is_empty():
+	if not granted_abilities.is_empty():
 		var names: Array[String] = []
-		for e in immune_elements:
-			names.append(Elemental.Element.keys()[e].capitalize())
-		lines.append("Immune to: %s" % ", ".join(names))
+		for ability in granted_abilities:
+			if ability != null and ability.id != Abilities.Id.NONE:
+				names.append(ability.display_name)
+		if not names.is_empty():
+			lines.append("Grants: %s" % ", ".join(names))
 	return "\n".join(lines)

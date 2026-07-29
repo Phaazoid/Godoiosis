@@ -121,7 +121,9 @@ func _show_action_popup(index: int):
 			wear_btn.text = "Wear — needs %s" % item.requirement_text()
 			wear_btn.disabled = true      # the gate, shown rather than silently swallowed
 		vbox.add_child(wear_btn)
-	elif item is WeaponInstance:
+	# Any non-armor equippable: weapons AND runes. Mirrors equip_weapon_from_inventory's
+	# own split — armor is caught above and fills a different slot.
+	elif item is EquippableData:
 		var equip_btn := Button.new()
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
@@ -255,7 +257,7 @@ func _refresh():
 					display_name += "  [%s]" % Elemental.Element.keys()[elems[0]].capitalize()
 
 			name_label.text = display_name
-			slot.tooltip_text = _tooltip_for(item)
+			slot.tooltip_text = UiText.wrap(_tooltip_for(item))
 		else:
 			icon.texture = null
 			name_label.text = "Empty"

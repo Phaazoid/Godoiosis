@@ -24,7 +24,7 @@ func execute() -> void:
 	finish_execution()
 
 func actor_can_perform() -> bool:
-	return actor.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION)
+	return actor.has_live_ability(Abilities.Id.INTIMIDATION)
 
 func get_description() -> String:
 	if target != null and is_instance_valid(target):

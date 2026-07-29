@@ -55,12 +55,11 @@ Placed above where obvious; still orphaned or contestable:
 - **Rescue-chain verbs** (carry a downed ally *and* hand off to another carrier in one pass) — Sawbones/Quartermaster pairing; a squad-verb ("stronger with both in the squad").
 - **Facing-setter** (an ability that lets a unit *end* its move facing any direction as a locked plan choice, feeding backstrike play) — Skirmisher or Duelist.
 - **Weight-shifter** (drop carried inventory as a free action to duck under a shove threshold / swim) — Quartermaster sub or a Movement perk anywhere.
-- **Elemental immunities** — **NOT jobs.** Status/element resistance routes through gear/runes — a rider that survives CON's 2026-07-06 adoption (CON scales defensive gear, never status resistance; [stats.md](stats.md)). Jobs get *exploitation* (Opportunist), never immunity.
 - **Overwatch, dual-wield, terrain-grinding, alt-fire anything** — **NOT jobs.** Weapon-side, parts system ([weapons.md](weapons.md)).
 
 ## Watch-list & fences (carry into the roster pass)
 
-1. **Doctrine fences:** no job grants aura/temper (alchemy's genetics stand); no elemental immunity (gear's lane); no weapon-behavior abilities (parts system's lane); no AI manipulation beyond published policy overrides (taunt-family).
+1. **Doctrine fences:** no job grants aura/temper (alchemy's genetics stand); no weapon-behavior abilities (parts system's lane); no AI manipulation beyond published policy overrides (taunt-family). **The elemental-immunity fence was REPEALED 2026-07-29 (dev call, during [#90](https://github.com/Phaazoid/Godoiosis/issues/90))** — it said immunity was gear's lane and jobs got only *exploitation*. [#90](https://github.com/Phaazoid/Godoiosis/issues/90) made immunity an ordinary `AbilityData` (`Abilities.Id.INSULATED_SHOCK`) rather than an armor-specific field, so any source the ability chassis knows — gear, a job pool, a story-innate grant — can confer it, and the dev's reading is that a job doing so is fair game. Gear remains the *intended* source and the only authored one; nothing enforces that beyond content discipline.
 2. **Balance watch:** Deathwish (Crisis gate), Adjutant (LDR pooling), Semaphore (action economy), Ghost (zone stealth vs AI legibility), Riposte (counter economy). Each is previewable and deterministic — the risk is power, not law-breaking.
 3. **Economy-dial jobs** (Dowser/Quartermaster camp effects) stay "maybe" — authored dials only, never faucets.
 4. **Deferred-system riders:** Beasthandler (taming), backstrike abilities (facing seam), camp multipliers (recovery grill) — author the job, stub the rider.
