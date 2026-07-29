@@ -265,6 +265,22 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 # LethalityRules.Situation base, so a hypo IS a situation and _predict_lethality is just
 # LethalityRules.predict — no second copy of the ladder to keep in sync (Law #2). This class
 # adds only what the rest of the pass threads: the projected cell and the element states.
+#
+# STAT MODIFIERS ARE DELIBERATELY NOT THREADED (#112, verified 2026-07-29). It looks like the
+# obvious next field beside `states`, and it isn't — yet:
+#
+#   * Every stat-derived number (base damage, DEF mitigation) is computed ONCE here at plan time
+#     and frozen onto the ResolvedOutcome; AttackAction.execute is pure playback (R3).
+#   * The one thing execution DOES recompute — LethalityRules.predict, via Unit.take_damage — reads
+#     hp/will/lifecycle/limbs and no effective stat at all.
+#
+# So a stat change landing mid-pass (today only a maim's forced unequip, Unit._settle_stat_change)
+# cannot make preview and execution disagree. It is un-modelled identically by both halves — a
+# fidelity gap, not a Law #2 break. Both bullets are pinned by tests/law/test_resolution_laws.gd.
+#
+# Threading becomes OWED the moment a QUEUED ACTION applies an effect — a transmutation buffing an
+# ally, a tonic — because then one order's stat change has to reach a later order's damage in the
+# same plan. That is issue #113, and this comment is the first item on its checklist.
 class _Hypo extends LethalityRules.Situation:
 	var position: Vector2i
 	var states: Array[Elemental.State] = []

@@ -73,7 +73,7 @@ func test_apply_default_entry_keeps_initialize_state() -> void:
 	entry.apply_unit_state(unit)
 
 	var inst: UnitInstance = unit.unit_instance
-	assert_int(inst.current_hp).is_equal(inst.get_max_hp())
+	assert_int(inst.current_hp).is_equal(unit.get_max_hp())
 	assert_int(inst.current_will).is_equal(inst.get_max_will())
 	assert_int(inst.get_base_stat(Stats.Stat.STR)).is_equal(H.baseline_stats()[Stats.Stat.STR])
 	assert_bool(unit.has_equipped_weapon()).is_false()
@@ -84,7 +84,7 @@ func test_capture_apply_round_trips_stats_hp_will_jobs() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	a.unit_instance.stats[Stats.Stat.STR] = 9
 	a.unit_instance.stats[Stats.Stat.MHP] = 12
-	a.unit_instance.set_current_hp(7)
+	a.set_current_hp(7)
 	a.unit_instance.set_current_will(2)
 	a.unit_instance.jobs = ["test_job_83"]  # persistence only; catalog validity is #9's concern
 
@@ -111,7 +111,7 @@ func test_apply_clamps_hp_and_will_to_edited_maxes() -> void:
 
 	entry.apply_unit_state(unit)
 
-	assert_int(unit.unit_instance.current_hp).is_equal(unit.unit_instance.get_max_hp())
+	assert_int(unit.unit_instance.current_hp).is_equal(unit.get_max_hp())
 	assert_int(unit.unit_instance.current_will).is_equal(unit.unit_instance.get_max_will())
 
 	entry.current_hp = 0

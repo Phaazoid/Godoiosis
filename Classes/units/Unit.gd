@@ -45,6 +45,16 @@ var _has_projected_knockback := false
 # threads a COPY of this set forward as a hypothetical; live mutation is execution-only.
 var element_states: Array[Elemental.State] = []
 
+# --- Temporary stat effects (#112) — THE seam for temporary stats ---
+# Battle-scoped, so they live here on the transient Unit, which is why UnitInstance.stat_modifiers
+# no longer exists. Deliberately NOT captured by ScenarioUnitEntry, same as element_states.
+var stat_effects: Array[StatEffect] = []
+
+# Fired once per settled stat change, for READOUTS only. It is not how plan validity is decided —
+# "may this be queued?" is a question about the PROJECTED stat and belongs to SquadPlanValidator
+# (#113); answering it in a listener would put Law #2 one race away from breaking.
+signal stats_changed
+
 # --- Lifecycle (docs/design/will-and-death.md) ---
 # State is battle-scoped: it resets each mission, like element_states, so it lives on the
 # transient Unit. (Will — the PERSISTENT resource — lives on UnitInstance. Different sides
@@ -64,11 +74,12 @@ var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 const CRISIS_REVIVE_HP := 5                            # HP the unit stands back up with (placeholder)
 const CRISIS_SURGE := 5                                # +this to each scaling stat for the surge turn (placeholder)
 const CRISIS_SURGE_STATS: Array[Stats.Stat] = [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER]  # "scaling stats" (assumption)
+const CRISIS_SURGE_SOURCE := "Crisis"                  # the StatEffect this unit's surge is filed under
+const CRISIS_SURGE_TURNS := 3                          # playtest-tunable: a gambit this costly should feel powerful (2026-07-28)
 
 var in_crisis: bool = false              # afflicted (skull icon, Will locked, die-on-down) for the battle
 var crisis_offered_pending: bool = false # this down qualified for the offer (set at down-time, read post-pass)
 var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
-var crisis_surge_active: bool = false    # surge is currently applied (cleared at the following turn start)
 
 # Turns remaining before a downed unit dies without rescue. Starts at 3 when
 # the unit goes down, ticks once per player-turn start, dies at 0. -1 = not counting.
@@ -158,12 +169,90 @@ func remove_item(index: int):
 		worn_armor = null
 	inventory[index] = null
 
+# Re-settle HP against a max that just moved: a stat change never RAISES current HP, it only
+# pulls it down if the new max is below it. Its ONLY caller is _settle_stat_change, so that
+# "who re-clamps HP?" has exactly one answer no matter what moved the stat — gear, an expiring
+# effect, or a maim.
+#
+# Cannot kill, and doesn't need a floor to say so: max HP never drops below 1, and a living unit
+# is never below 1, so the clamp can't reach the <=0 that emits died(). That invariant is
+# currently a content constraint rather than an enforced one — if it ever needs teeth, it belongs
+# on get_max_hp (the derivation), not as a floor at every write site.
+func reclamp_hp() -> void:
+	set_current_hp(get_current_hp())
+
+func apply_stat_effect(effect: StatEffect) -> void:
+	if effect == null:
+		return
+	stat_effects.append(effect.instantiate())
+	_settle_stat_change()
+
+# Retire by SOURCE, not by delta — the whole reason this replaced the old bag.
+func remove_stat_effects_from(source: String) -> void:
+	var kept: Array[StatEffect] = []
+	for effect in stat_effects:
+		if effect.source_name != source:
+			kept.append(effect)
+	if kept.size() == stat_effects.size():
+		return                      # nothing matched: stay silent rather than fire a no-op signal
+	stat_effects = kept
+	_settle_stat_change()
+
+func has_stat_effect_from(source: String) -> bool:
+	for effect in stat_effects:
+		if effect.source_name == source:
+			return true
+	return false
+
+# One turn of decay, at the OWNING FACTION's turn start (game._run_turn_start_ticks), so a 3-turn
+# effect covers three of THIS unit's turns rather than three passes of everyone.
+func tick_stat_effects() -> void:
+	var kept: Array[StatEffect] = []
+	for effect in stat_effects:
+		if not effect.tick():
+			kept.append(effect)
+	if kept.size() == stat_effects.size():
+		return
+	stat_effects = kept
+	_settle_stat_change()
+
+# Everything that has to settle after a stat moves, wherever it moved from. Every mutator ends
+# here, so "what happens when a stat changes?" has one answer and one place to extend.
+#
+# ORDER IS LOAD-BEARING: gates run FIRST (they can strip armour, which moves CON, which moves max
+# HP), then HP re-clamps against the settled max. It cannot loop, because gates read get_body_stat
+# and so are blind to the gear this may remove.
+func _settle_stat_change() -> void:
+	_enforce_gear_gates()
+	reclamp_hp()
+	stats_changed.emit()
+
+# Gear you no longer qualify for comes OFF (#112). It stays in inventory — you're carrying it, just
+# not wearing it. Triggered by a buff lapsing, a debuff, or a maim.
+func _enforce_gear_gates() -> void:
+	if worn_armor != null and not worn_armor.can_equip(self):
+		worn_armor = null
 
 func _on_instance_died():
 	die()
 
+# The BODY: base → limb → jobs → temporary effects. Everything EXCEPT gear.
+#
+# This is what wear gates judge against (ArmorData.can_equip). Excluding gear is load-bearing in
+# two directions: legality never depends on what you have on, and forced unequip can never cascade.
+func get_body_stat(stat: Stats.Stat) -> int:
+	return unit_instance.get_effective_stat(stat) + _effect_modifier(stat)
+
 func get_effective_stat(stat: Stats.Stat) -> int:
-	return unit_instance.get_effective_stat(stat) + _gear_modifier(stat)
+	return get_body_stat(stat) + _gear_modifier(stat)
+
+# The stored half of the temporary stage. Additive across sources (dev, 2026-07-28) — a source
+# that imposed a CAP rather than a delta is unsupported and would need its own decision.
+func _effect_modifier(stat: Stats.Stat) -> int:
+	var total := 0
+	for effect in stat_effects:
+		total += effect.get_modifier(stat)
+	return total
 
 # The "-> gear" tail of the effective-stat chain (stats.md). Derived live from what's worn,
 # the same way get_effective_def reads worn_armor live -- no stored mirror to keep in sync.
@@ -191,10 +280,19 @@ func get_weapon_proficiency(family: WeaponData.WeaponType) -> int:
 	return unit_instance.get_proficiency(family)
 
 func get_max_hp() -> int:
-	return unit_instance.get_max_hp()
+	return unit_instance.get_max_hp(get_effective_stat(Stats.Stat.CON))
+
+# The one door for WRITING hp. UnitInstance can't derive its own ceiling (gear and temporary
+# effects both live here), so this is where the two halves meet: outside code asks the Unit, it
+# never reaches through into the instance and rebuilds the answer.
+func set_current_hp(value: int) -> void:
+	unit_instance.set_current_hp(value, get_max_hp())
 
 func get_effective_ldr() -> int:
-	return unit_instance.get_effective_ldr()
+	# Lives here, not on UnitInstance (#106): both terms are FINISHED effective stats, and the
+	# chain's gear stage is only reachable from this layer. LDR is not cosmetic — it drives
+	# Squad.max_size(), so a gear-less reading silently caps how many units a leader can field.
+	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
 
 func get_effective_def() -> int:
 	# DEF is gear-only (stats.md); the CON math lives with the stat doctrine in Stats.
@@ -245,14 +343,14 @@ func take_damage(damage: int):
 	match LethalityRules.predict(LethalityRules.situation_for(self), damage):
 		ResolvedOutcome.Lethality.NONE:
 			if lifecycle_state != LifecycleState.DEAD:
-				unit_instance.apply_damage(damage)   # survivable hit — ordinary HP loss
+				unit_instance.apply_damage(damage, get_max_hp())   # survivable hit — ordinary HP loss
 		ResolvedOutcome.Lethality.KILLED:
 			if lifecycle_state == LifecycleState.DEAD:
 				return                               # already gone; the flag is preview-only (R9)
 			if lifecycle_state == LifecycleState.DOWNED or in_crisis:
 				die()                                # Fork 3 / the Crisis gambit: no safety net left
 			else:
-				unit_instance.apply_damage(damage)   # HP -> 0 -> died -> _on_instance_died -> die()
+				unit_instance.apply_damage(damage, get_max_hp())   # HP -> 0 -> died -> _on_instance_died -> die()
 		_:
 			# DOWNED, MAIMED and CRISIS are all the same execution: go down. spend_will_for_down
 			# picks clean-vs-maimed, and the Crisis offer is settled after the pass by
@@ -262,8 +360,9 @@ func take_damage(damage: int):
 func _go_downed():
 	crisis_offered_pending = is_crisis_eligible()  # capture BEFORE spend — eligibility reads FULL Will
 	lifecycle_state = LifecycleState.DOWNED
-	unit_instance.set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
+	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
 	unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
+	_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
 	downed_turns_remaining = 3
 	_show_downed_sprite(true)
 	went_downed.emit(self)
@@ -461,10 +560,12 @@ func wear_armor(index: int) -> bool:
 	if not armor.can_equip(self):
 		return false
 	worn_armor = armor
+	_settle_stat_change()
 	return true
 
 func remove_armor():
 	worn_armor = null
+	_settle_stat_change()
 
 func revive():
 	# Rescue brings a downed unit back up — ACTIVE again, still at 1 HP (no heal). It stays in
@@ -505,29 +606,23 @@ func enter_crisis():
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
-	unit_instance.set_current_hp(CRISIS_REVIVE_HP)
+	set_current_hp(CRISIS_REVIVE_HP)
 	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
 	crisis_surge_pending = true
 
 func advance_crisis_surge():
-	# Called at this unit's faction-turn start. The surge runs for exactly one turn:
-	# pending -> (this turn) active -> (next turn) cleared. Applying from the NEXT turn keeps the
-	# Crisis-entry pass to "survives standing" only (will-and-death.md ripple containment).
-	if crisis_surge_active:
-		_clear_crisis_surge()
-	elif crisis_surge_pending:
-		_apply_crisis_surge()
-
-func _apply_crisis_surge():
-	for stat in CRISIS_SURGE_STATS:
-		unit_instance.add_stat_modifier(stat, CRISIS_SURGE)
+	# Called at this unit's faction-turn start. Primed on ENTRY and applied on the NEXT turn start,
+	# which keeps the Crisis-entry pass to "survives standing" only (will-and-death.md ripple
+	# containment) — that timing is unchanged. EXPIRY is no longer this function's business: the
+	# surge is a StatEffect with a duration, and tick_stat_effects retires it. The old +5/-5 pair
+	# had to be balanced by hand and had already gone permanent once (#112).
+	if not crisis_surge_pending:
+		return
 	crisis_surge_pending = false
-	crisis_surge_active = true
-
-func _clear_crisis_surge():
+	var mods: Dictionary[Stats.Stat, int] = {}
 	for stat in CRISIS_SURGE_STATS:
-		unit_instance.add_stat_modifier(stat, -CRISIS_SURGE)
-	crisis_surge_active = false
+		mods[stat] = CRISIS_SURGE
+	apply_stat_effect(StatEffect.make(CRISIS_SURGE_SOURCE, mods, CRISIS_SURGE_TURNS))
 
 func get_element_aura(element: Elemental.Element) -> int:
 	if unit_instance == null:

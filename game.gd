@@ -311,6 +311,7 @@ func _run_turn_start_ticks(faction: Team.Faction) -> void:
 		if unit.get_faction() != faction:
 			continue
 		unit.tick_downed_countdown()
+		unit.tick_stat_effects()      # BEFORE the surge below: an effect applied this turn must not tick this turn
 		unit.advance_crisis_surge()
 		unit.tick_weapon_rev()
 

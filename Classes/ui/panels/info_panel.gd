@@ -46,6 +46,7 @@ func set_unit(target: Unit, context: BoardContext = null):
 		unit.unit_instance.will_changed.disconnect(_on_will_changed)
 		unit.unit_instance.died.disconnect(_on_unit_died)
 		unit.downed_countdown_changed.disconnect(_on_countdown_changed)
+		unit.stats_changed.disconnect(_on_stats_changed)
 	unit = target
 	if unit == null:
 		_clear_dynamic()
@@ -56,6 +57,7 @@ func set_unit(target: Unit, context: BoardContext = null):
 	unit.unit_instance.will_changed.connect(_on_will_changed)
 	unit.unit_instance.died.connect(_on_unit_died)
 	unit.downed_countdown_changed.connect(_on_countdown_changed)
+	unit.stats_changed.connect(_on_stats_changed)
 	_refresh()
 
 func _refresh():
@@ -127,11 +129,11 @@ func _refresh_stats():
 	var inst := unit.unit_instance
 	for stat: Stats.Stat in [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.CON, Stats.Stat.PER]:
 		var eff := unit.get_effective_stat(stat)
-		var base := inst.get_base_stat(stat)
-		var tip := ""
-		if eff != base:
-			tip = "Base %d, effective %d (limbs / jobs / gear)" % [base, eff]
-		_add_stat(Stats.Stat.keys()[stat], str(eff), tip)
+		# Yellow = a TEMPORARY source is contributing — the same language the DEF row already uses
+		# for terrain cover. It means this number will move on its own when the effect runs out.
+		var stat_color: Color = TERRAIN_BUFF_COLOR if _temporary_delta(stat) != 0 else NO_TINT
+		_add_stat(Stats.Stat.keys()[stat], str(eff),
+			stat_tooltip(inst.get_base_stat(stat), eff, _stat_sources(stat)), stat_color)
 	_add_stat("MOV", str(unit.get_mov()), mov_tooltip(
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
@@ -148,13 +150,42 @@ func _refresh_stats():
 	var def_color: Color = TERRAIN_BUFF_COLOR if def["cover"] > 0 else NO_TINT
 	_add_stat("DEF", str(def["total"]), def_tooltip(
 		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON),
-		def["armor"], def["cover"]), def_color)
+		def["armor"], def["cover"], def["total"]), def_color)
 	_add_stat("LDR", str(unit.get_effective_ldr()), "LDR %d %+d PER band" % [
 		unit.get_effective_stat(Stats.Stat.LDR),
 		Stats.per_ldr_band(unit.get_effective_stat(Stats.Stat.PER))])
 	_add_stat("SQD", "%d/%d" % [unit.squad.get_members().size(), unit.squad.max_size()],
 		"Capacity: 1 + leader eLDR %d / %d per member" % [
 			unit.squad.get_leader().get_effective_ldr(), Squad.MEMBER_LDR_COST])
+
+# Every contributor to `stat`, itemized in chain order (stats.md: base -> limb -> jobs -> effects
+# -> gear). This is what StatEffect.source_name exists for: before #112 the modifier stage was an
+# anonymous bag of ints, so the best a tooltip could do was say "(limbs / jobs / gear)" and shrug.
+func _stat_sources(stat: Stats.Stat) -> Array[String]:
+	var inst := unit.unit_instance
+	var lines: Array[String] = []
+	var limb := inst.get_limb_effective_base(stat)
+	var limb_delta := limb - inst.get_base_stat(stat)
+	if limb_delta != 0:
+		lines.append("Limbs %+d" % limb_delta)
+	var job_delta := inst.get_effective_stat(stat) - limb
+	if job_delta != 0:
+		lines.append("Jobs %+d" % job_delta)
+	for effect in unit.stat_effects:
+		var delta := effect.get_modifier(stat)
+		if delta != 0:
+			lines.append(effect_source_text(effect.source_name, delta, effect.turns_remaining))
+	var gear_delta := unit.get_effective_stat(stat) - unit.get_body_stat(stat)
+	if gear_delta != 0 and unit.worn_armor != null:
+		lines.append("%s %+d" % [unit.worn_armor.item_name, gear_delta])
+	return lines
+
+# How much of `stat` is currently on loan — drives the temporary tint above.
+func _temporary_delta(stat: Stats.Stat) -> int:
+	var total := 0
+	for effect in unit.stat_effects:
+		total += effect.get_modifier(stat)
+	return total
 
 func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_TINT):
 	var name_lbl := Label.new()
@@ -211,6 +242,9 @@ func _on_unit_died():
 func _on_countdown_changed(_turns: int):
 	_refresh_limbs()
 
+func _on_stats_changed():
+	_refresh()   # a stat move can shift bars (max HP), the limb row (a maim fired it) AND the grid
+
 static func mov_tooltip(base: int, dex_band: int, empty_legs: int) -> String:
 	var lines: Array[String] = ["Base %d %+d DEX band" % [base, dex_band]]
 	match empty_legs:
@@ -220,10 +254,29 @@ static func mov_tooltip(base: int, dex_band: int, empty_legs: int) -> String:
 			lines.append("Pinned to 1: both legs gone")
 	return "\n".join(lines)
 
+# One line per contributor, or nothing at all when the stat is untouched. Sources are listed even
+# when they CANCEL OUT — a +2 tonic against a -2 armour tax nets zero, but losing the tonic is
+# about to cost 2, and a silent tooltip would make that read as a bug.
+static func stat_tooltip(base: int, effective: int, sources: Array[String]) -> String:
+	if sources.is_empty():
+		return ""
+	var lines: Array[String] = ["Base %d  ->  %d" % [base, effective]]
+	lines.append_array(sources)
+	return "\n".join(lines)
+
+static func effect_source_text(source_name: String, delta: int, turns_remaining: int) -> String:
+	if turns_remaining == StatEffect.PERMANENT:
+		return "%s %+d" % [source_name, delta]
+	var plural := "" if turns_remaining == 1 else "s"
+	return "%s %+d (%d turn%s)" % [source_name, delta, turns_remaining, plural]
+
 static func weight_tooltip(carried: int) -> String:
 	return "Carried gear %d\nTracked only -- no effect yet" % carried
 
-static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int) -> String:
+static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def: int, cover_def: int, total: int) -> String:
+	# `total` is passed, not re-added: RulesService.def_breakdown already composed it, and a
+	# second addition of a number that already exists is a seam waiting to diverge — the next
+	# DEF source added there would reach the value and miss this line.
 	var lines: Array[String] = []
 	if armor_name == "":
 		lines.append("No armor worn")
@@ -231,7 +284,7 @@ static func def_tooltip(armor_name: String, def_power: int, con: int, armor_def:
 		lines.append("%s: %d armor x CON %d = %d" % [armor_name, def_power, con, armor_def])
 	if cover_def > 0:
 		lines.append("Cover (terrain): +%d" % cover_def)
-	lines.append("Total: %d" % (armor_def + cover_def))
+	lines.append("Total: %d" % total)
 	return "\n".join(lines)
 
 static func ability_tooltip(display_name: String, kind_name: String, description: String) -> String:
