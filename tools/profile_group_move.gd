@@ -98,6 +98,7 @@ func _run() -> void:
 	print("\nTHE ACTUAL CLICK")
 	game.game_state = game.GameState.CHOOSING_GROUP_MOVE
 	game.last_clicked_cell = leader.movement.cell
+	game.selected_unit = leader   # the click handlers read the stored selection, not the cell
 	t = Time.get_ticks_usec()
 	game._click_choosing_group_move(dest)
 	_stamp("_click_choosing_group_move TOTAL", Time.get_ticks_usec() - t)

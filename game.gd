@@ -47,6 +47,12 @@ enum GameState {
 
 var game_state: GameState = GameState.IDLE
 var last_clicked_cell: Vector2i = GridUtils.NO_CELL
+# The unit whose menu is open — set once at selection, never re-derived from a cell. Read by
+# HoverPresenter. Looking it back up needs a pointer resolver and a cell that agrees with it;
+# both drift (#107). Cleared in exit_current_mode() beside last_clicked_cell, and NOT in
+# clear_selection() — that runs on every menu PICK (ActionMenuController fires `cancelled`
+# before `action_selected`), so clearing there wipes the selection on the way INTO a mode.
+var selected_unit: Unit = null
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(picked: Unit) -> void
 
@@ -186,26 +192,27 @@ func _on_left_click(cell: Vector2i) -> void:
 
 func _on_right_click() -> void:
 	if game_state == GameState.CHOOSING_MOVE:
-		overlay_manager.clear_planned_path(get_unit_at_cell(last_clicked_cell))
+		overlay_manager.clear_planned_path(selected_unit)
 	exit_current_mode()
 	unit_info_panel.clear()   #TODO Add close button to this panel
 
 # Clicking a unit selects it and opens its action menu. Controlling enemies is deliberately
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.
 func _click_idle(cell: Vector2i) -> void:
-	var target := get_clicked_unit(cell)
+	var target := unit_at_pointer(cell)
 	if target == null:
 		return
 	last_clicked_cell = cell
+	selected_unit = target
 	game_state = GameState.TILE_SELECTED
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 
 func _click_choosing_move(cell: Vector2i) -> void:
-	var unit := get_unit_at_cell(last_clicked_cell)
+	var unit := selected_unit
 	var moverange := compute_move_range(unit)
 	# squad_unreachable cells are clickable too — they queue, then validation flags them.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
-		var path := RulesService.reconstruct_path(moverange.came_from, last_clicked_cell, cell)
+		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
 		var move := MoveAction.new()
 		move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, path.back()))
 		squad_manager.queue_action(unit.squad, move)
@@ -215,7 +222,7 @@ func _click_choosing_move(cell: Vector2i) -> void:
 	exit_current_mode()
 
 func _click_choosing_group_move(cell: Vector2i) -> void:
-	var leader := get_unit_at_cell(last_clicked_cell)
+	var leader := selected_unit
 	if compute_move_range(leader).reachable.keys().has(cell):
 		squad_manager.queue_group_move(leader.squad, cell, _board())
 	exit_current_mode()
@@ -224,15 +231,13 @@ func _click_dev_mode(cell: Vector2i) -> void:
 	if dev_controller.is_armed():
 		dev_controller.resolve_pending(cell)
 		return
-	var clicked := get_unit_at_cell(cell)
+	# The pointer resolver, matching _hover_dev_mode -- the editor opens on the sprite you clicked.
+	var clicked := unit_at_pointer(cell)
 	if clicked != null:
 		dev_overlay.unit_editor.edit_unit(clicked)
 
 func _click_attack_targeting(cell: Vector2i) -> void:
-	var attacker: Unit = get_unit_at_cell(last_clicked_cell)
-	if attacker == null:
-		attacker = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
-
+	var attacker := selected_unit
 	if attacker != null:
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # exactly what declare() will stamp (#102)
@@ -374,6 +379,7 @@ func exit_current_mode():
 		_clear_aiming_pick()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
+	selected_unit = null
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)
@@ -384,13 +390,10 @@ func exit_current_mode():
 # Aiming is over — committed or cancelled — so the pick dies with the mode it belonged to. Since
 # #102 nothing outside aiming reads it (a queued order carries its own stamped fired_attack), so
 # this can no longer change how anything resolves; it just stops a spent pick from surviving into
-# next turn's menu gates and overlays. Finds the aimer the same way _click_attack_targeting does.
+# next turn's menu gates and overlays.
 func _clear_aiming_pick() -> void:
-	var aimer: Unit = get_unit_at_cell(last_clicked_cell)
-	if aimer == null:
-		aimer = squad_manager.get_projected_unit_from_cell(last_clicked_cell)
-	if aimer != null:
-		aimer.active_attack = null
+	if selected_unit != null:
+		selected_unit.active_attack = null
 
 func clear_selection():
 	game_state = GameState.IDLE
@@ -756,17 +759,17 @@ func get_unit_at_cell(cell: Vector2i) -> Unit:
 			return unit
 	return null
 
-func get_clicked_unit(cell: Vector2i) -> Unit:
-	#Always hit the unit whose SPRITE is at this cell.
-	#A projected "ghost" (an active-squad unit with a valid queued move landing here)
-	#wins over a unit that physically sits here but has queued a valid move away from it.
-	var projected := squad_manager.get_projected_unit_from_cell(cell)
-	if projected != null:
-		return projected
-	var unit := get_unit_at_cell(cell)
-	if unit != null and not unit.has_valid_move_queued():
-		return unit
-	return null
+# Which unit's SPRITE is on this cell? The one answer for every pointer question -- what a click
+# selects, what the hover card shows, what hovered_unit_changed names.
+#
+# Nothing is derived here. The board draws exactly one sprite per unit, at that unit's PROJECTED
+# cell: both ghost-drawers pair "hide the real sprite" with "draw a ghost" (redraw_projected_units
+# for a valid queued move, show_knockback_preview for a shove), so the inverse of the projection
+# (#105) already IS the pointer answer. The plan's answer and the pointer's answer being identical
+# is Law #2 working, not a coincidence -- if they diverged, the board would be previewing something
+# the plan does not do.
+func unit_at_pointer(cell: Vector2i) -> Unit:
+	return squad_manager.get_projected_unit_from_cell(cell)
 
 func compute_move_range(unit: Unit) -> Dictionary:
 	return RulesService.compute_move_range(unit, _board())

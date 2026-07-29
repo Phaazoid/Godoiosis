@@ -10,6 +10,9 @@ class_name HoverPresenter
 # signals. This node is its own first listener (see _ready), so external listeners -- wired
 # from game._ready -- always run after it.
 #
+# Explicit types throughout this file: `game` is untyped (game.gd has no class_name), so every
+# game.* call reads as Variant and `:=` cannot infer from it.
+#
 # One branch per GameState, mirroring game.gd's click handlers. The branches are read-only on
 # game state; anything that needs to MUTATE it belongs on the coordinator. The one deliberate
 # exception is CHOOSING_MOVE, which re-validates the squad plan as the mouse sweeps: that live
@@ -36,7 +39,9 @@ func _process(_delta: float) -> void:
 	if hovered_cell == last_hovered_cell:   # everything below only runs on a CELL change
 		return
 
-	hovered_unit_changed.emit(game.get_unit_at_cell(last_hovered_cell), game.get_unit_at_cell(hovered_cell))
+	var previous: Unit = game.unit_at_pointer(last_hovered_cell)
+	var current: Unit = game.unit_at_pointer(hovered_cell)
+	hovered_unit_changed.emit(previous, current)
 	hovered_cell_changed.emit(hovered_cell)
 	last_hovered_cell = hovered_cell
 
@@ -78,7 +83,7 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 			game.overlay_manager.create_unit_icon(unit, icontype)
 
 func _hover_dev_mode(cell: Vector2i) -> void:
-	if not _is_walkable(cell) or _hovered_unit_at(cell) != null:
+	if not _is_walkable(cell) or game.unit_at_pointer(cell) != null:
 		game.cursor_controller.set_state(CursorController.CursorState.INVALID)
 	else:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
@@ -89,7 +94,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	game.cursor_controller.set_cursor_pos(cell)
 	game.overlay_manager.clear_selection_overlays()
 
-	var hovered := _hovered_unit_at(cell)
+	var hovered: Unit = game.unit_at_pointer(cell)
 	if hovered == null:
 		game.hover_info_panel.clear()
 		game.overlay_manager.clear_selection_overlays()
@@ -125,7 +130,7 @@ func _hover_picking_target(cell: Vector2i) -> void:
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
 
 func _hover_choosing_group_move(cell: Vector2i) -> void:
-	var leader: Unit = game.get_unit_at_cell(game.last_clicked_cell)
+	var leader: Unit = game.selected_unit
 	game.overlay_manager.clear_hover_move_path()
 
 	var reachable: bool = leader != null and game.compute_move_range(leader).reachable.keys().has(cell)
@@ -134,9 +139,7 @@ func _hover_choosing_group_move(cell: Vector2i) -> void:
 	_set_cursor_for_preview(cell, reachable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
-	var attacker: Unit = game.get_unit_at_cell(game.last_clicked_cell)
-	if attacker == null:
-		attacker = game.squad_manager.get_projected_unit_from_cell(game.last_clicked_cell)
+	var attacker: Unit = game.selected_unit
 
 	var preview_cells: Array[Vector2i] = []
 	if attacker != null:
@@ -151,7 +154,7 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
 
 func _hover_choosing_move(cell: Vector2i) -> void:
-	var unit: Unit = game.get_unit_at_cell(game.last_clicked_cell)
+	var unit: Unit = game.selected_unit
 	game.overlay_manager.clear_hover_move_path()
 	var moverange: Dictionary = game.compute_move_range(unit)
 
@@ -168,7 +171,7 @@ func _hover_choosing_move(cell: Vector2i) -> void:
 
 	# Live preview: build the move this click WOULD queue and validate the plan against it, so
 	# the arrow and the queue panel show the real consequence before anything is committed.
-	var path := RulesService.reconstruct_path(moverange.came_from, game.last_clicked_cell, cell)
+	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
 	var move := MoveAction.new()
 	move.init(unit, path, GridUtils.get_terrain_icon_at_cell(game.grid, path.back()))
 
@@ -226,20 +229,6 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 # ==============================================================================
 #  Shared helpers
 # ==============================================================================
-
-# The unit whose SPRITE sits at this cell. A projected "ghost" (queued a valid move landing
-# here) wins over a unit physically standing here that has queued a move away. Same question
-# game.get_clicked_unit answers for clicks.
-func _hovered_unit_at(cell: Vector2i) -> Unit:
-	# Explicit types throughout this file: `game` is untyped (game.gd has no class_name), so
-	# every game.* call reads as Variant and `:=` cannot infer from it.
-	var hovered: Unit = game.get_unit_at_cell(cell)
-	if hovered != null and hovered.has_action_type_queued(BaseAction.ActionType.MOVE):
-		hovered = null
-	var projected: Unit = game.squad_manager.get_projected_unit_from_cell(cell)
-	if projected != null:
-		hovered = projected
-	return hovered
 
 func _is_walkable(cell: Vector2i) -> bool:
 	var tile_data: TileData = game.grid.get_cell_tile_data(cell)
