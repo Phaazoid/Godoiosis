@@ -39,6 +39,14 @@ static func armor_def(def_power: int, con: int, flat_def: int = 0) -> int:
 	# may carry on top, so a CON-GATED piece can pay out without double-dipping CON (2026-07-24).
 	return flat_def + int(round(def_power * con * CON_DEF_FACTOR))
 
+# Human-readable stat delta ("DEX -1, CON +2") for any modifier dict — armour taxes, StatEffects,
+# a future weapon mod. One renderer so two sources can't drift on formatting.
+static func modifier_text(mods: Dictionary[Stat, int]) -> String:
+	var parts: Array[String] = []
+	for stat in mods:
+		parts.append("%s %+d" % [Stat.keys()[stat], mods[stat]])
+	return ", ".join(parts)
+
 static func dex_mov_band(dex: int) -> int:
 	if dex <= BAND_LOW_MAX:
 		return -1

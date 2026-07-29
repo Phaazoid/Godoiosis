@@ -49,11 +49,9 @@ func test_non_limb_stats_pass_through() -> void:
 	_empty(inst, UnitInstance.LimbSlot.ARM_L)   # CON is torso-bound — limbs never touch it
 	assert_int(inst.get_effective_stat(Stats.Stat.CON)).is_equal(8)
 
-func test_modifiers_apply_after_limb_substitution() -> void:
-	var inst := _make_instance({Stats.Stat.STR: 7})
-	_empty(inst, UnitInstance.LimbSlot.ARM_L)
-	inst.stat_modifiers[Stats.Stat.STR] = 2
-	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(6)   # ceil(3.5) + 2
+# The "modifiers apply after limb substitution" case moved to tests/stats/test_stat_effects.gd
+# on 2026-07-29 (#112): the modifier stage left UnitInstance entirely — temporary effects are
+# battle-scoped, so they live on Unit — and the order can only be observed from that layer now.
 
 func test_is_maimed_derives_from_empty_slots_only() -> void:
 	var inst := _make_instance({})

@@ -123,6 +123,9 @@ func apply_unit_state(unit: Unit) -> void:
 				fitting.prosthetic_item = carried.template   # re-link: the carried copy's SHARED template, never a fork
 
 	if current_hp >= 0:
-		inst.set_current_hp(maxi(1, current_hp))   # floor 1: never fire died() out of a load
+		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a
+		# gear-less max — so every save/load of an armoured unit quietly shed the band's worth of
+		# HP. A data-losing round trip, not just a bad readout.
+		unit.set_current_hp(maxi(1, current_hp))   # floor 1: never fire died() out of a load
 	if current_will >= 0:
 		inst.set_current_will(current_will)

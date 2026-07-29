@@ -53,10 +53,10 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 	if copy == null:
 		return null
 	copy.unit_instance.stats = source.unit_instance.stats.duplicate(true)
-	copy.unit_instance.set_current_hp(source.get_current_hp())
 	for i in range(source.inventory.size()):
 		var item: Item = source.inventory[i]
 		copy.inventory[i] = item.copy_equippable() if item is EquippableData else (item.duplicate(true) if item != null else null)
+	copy.set_current_hp(source.get_current_hp())   # after gear: the clamp reads a gear-aware max (#106)
 	var equipped := source.get_equipped_weapon()
 	if equipped != null:
 		var idx := source.inventory.find(equipped)

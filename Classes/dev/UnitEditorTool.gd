@@ -32,7 +32,7 @@ func populate_unit_editor(unit):
 
 	for stat in unit.unit_instance.stats:
 		DevWidgets.add_spinbox(unit_editor_container, Stats.Stat.keys()[stat], unit.unit_instance.stats[stat], func(v): unit.unit_instance.stats[stat] = int(v))
-	DevWidgets.add_spinbox(unit_editor_container, "Current HP", unit.get_current_hp(), func(v): unit.unit_instance.set_current_hp(maxi(1, int(v))))
+	DevWidgets.add_spinbox(unit_editor_container, "Current HP", unit.get_current_hp(), func(v): unit.set_current_hp(maxi(1, int(v))))
 	DevWidgets.add_spinbox(unit_editor_container, "Current Will", unit.unit_instance.get_current_will(), func(v): unit.unit_instance.set_current_will(int(v)))
 	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[unit.get_faction()], func(s): _set_unit_faction(unit, s))
 	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", unit.squad.squad_name, func(s): unit.squad.squad_name = s)

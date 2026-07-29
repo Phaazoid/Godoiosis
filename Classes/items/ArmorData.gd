@@ -17,31 +17,36 @@ extends EquippableData
 @export var immune_elements: Array[Elemental.Element] = []
 
 # Live stat contribution while worn (stats.md "gear carries stat-cost tradeoffs"). Negative
-# values are the classic armor tax. Read live off the worn piece -- deliberately NOT pushed into
-# UnitInstance.stat_modifiers, which is a stateful add/subtract bag (Crisis surge) that isn't
-# serialized; armor swapping through it would desync the moment a save round-tripped.
+# values are the classic armor tax. Read live off the worn piece by Unit._gear_modifier --
+# deliberately NOT applied as a stored StatEffect (#112). Wearing a piece stores nothing, so
+# taking it off removes the contribution with no bookkeeping and a save round-trip cannot desync
+# it. Only effects with a life of their OWN (a timed tonic, the Crisis surge) get stored.
 @export var stat_modifiers: Dictionary[Stats.Stat, int] = {}
 
 func can_equip(wearer: Unit) -> bool:
-	# Gates read the wearer's PRE-GEAR stats (base -> limb -> job), never Unit.get_effective_stat.
-	# Otherwise a piece's own -DEX could unlock a DEX-ceiling piece, and whether you could wear
-	# something would depend on what you happened to have on -- order-dependent and unexplainable.
-	# The gate asks about the BODY, not the outfit.
-	var inst: UnitInstance = wearer.unit_instance
+	# Gates read the wearer's BODY — base -> limb -> jobs -> temporary effects — and NEVER gear
+	# (#112, amending #55/#89). Two rules in one line:
+	#
+	#   * A piece's own -DEX can't unlock a DEX-ceiling piece, so equip legality never depends on
+	#     what you happen to have on, or on the order you put it on in.
+	#   * Because NO gate reads gear, stripping one piece can never change another piece's answer.
+	#     That is precisely what keeps Unit._enforce_gear_gates to a SINGLE pass with no cascade
+	#     and no termination question. Do not "simplify" this into get_effective_stat.
+	#
+	# A tonic that raises CON DOES let you wear the heavy plate — and when it lapses, the plate
+	# comes off. Carrying armour you can only wear while buffed is legal, just fragile; and
+	# debuffing an enemy under a gate strips their kit.
 	for stat in stat_minimums:
-		if inst.get_effective_stat(stat) < stat_minimums[stat]:
+		if wearer.get_body_stat(stat) < stat_minimums[stat]:
 			return false
 	for stat in stat_maximums:
-		if inst.get_effective_stat(stat) > stat_maximums[stat]:
+		if wearer.get_body_stat(stat) > stat_maximums[stat]:
 			return false
 	return true
 
 # Human-readable stat tax, for the equip UI (e.g. "DEX -1").
 func modifier_text() -> String:
-	var parts: Array[String] = []
-	for stat in stat_modifiers:
-		parts.append("%s %+d" % [Stats.Stat.keys()[stat], stat_modifiers[stat]])
-	return ", ".join(parts)
+	return Stats.modifier_text(stat_modifiers)
 
 func blocks_element(element: Elemental.Element) -> bool:
 	return immune_elements.has(element)

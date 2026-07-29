@@ -134,6 +134,63 @@ func test_reverse_index_finds_a_shoved_unit() -> void:
 	assert_object(manager.get_projected_unit_from_cell(Vector2i(5, 3))).is_same(unit)
 	assert_object(manager.get_projected_unit_from_cell(Vector2i(3, 3))).is_null()
 
+# ==============================================================================
+#  Pointer resolution (#107) — the inverse IS the answer game.unit_at_pointer gives
+# ==============================================================================
+
+# "Which unit is the pointer over?" had three hand-written formulas (a click resolver in game.gd,
+# a hover-card one in HoverPresenter, and a raw cell scan feeding hovered_unit_changed), each
+# combining a cell scan with this index differently. They are one call now, because the board
+# draws exactly one sprite per unit AT its projected cell — redraw_projected_units and
+# show_knockback_preview both hide the real sprite when they put a ghost somewhere else. The two
+# cases below are the ones the old formulas disagreed on, so a reintroduced formula fails here.
+
+# The old hover formula nulled any unit with a MOVE queued before consulting this index, so a unit
+# whose move was REFUSED went un-hoverable while staying clickable. An invalid move moves nobody:
+# require_valid skips it, the sprite never left, and the pointer finds it where it stands.
+func test_a_refused_move_leaves_the_unit_findable_where_it_stands() -> void:
+	var leader := H.spawn_solo(self, manager, PLAYER, Vector2i(0, 0))
+	var member := H.spawn_unit(self, PLAYER, Vector2i(1, 0))
+	manager.create_squad(member)
+	manager.join_squad(member, leader.squad)
+
+	# Both aim at the same cell -> _check_destination_conflicts invalidates both.
+	var m1 := MoveAction.new()
+	m1.init(leader, [Vector2i(0, 0), Vector2i(0, 1)], null)
+	var m2 := MoveAction.new()
+	m2.init(member, [Vector2i(1, 0), Vector2i(0, 1)], null)
+	leader.squad._queue_action(m1)
+	leader.squad._queue_action(m2)
+	manager.validate_squad_plan(leader.squad)
+	assert_bool(m1.is_valid).is_false()
+
+	assert_object(manager.get_projected_unit_from_cell(Vector2i(0, 0))).is_same(leader)
+	assert_object(manager.get_projected_unit_from_cell(Vector2i(1, 0))).is_same(member)
+	assert_object(manager.get_projected_unit_from_cell(Vector2i(0, 1))).is_null()
+
+# The old CLICK formula fell back to "the unit standing here, if it has no VALID move queued" —
+# which is exactly a unit about to be shoved. Its real sprite is hidden and its ghost is on the
+# landing cell, so the vacated cell must answer with nobody even though a unit stands on it.
+func test_a_refused_move_plus_a_shove_answers_only_at_the_landing_cell() -> void:
+	var leader := H.spawn_solo(self, manager, PLAYER, Vector2i(0, 0))
+	var member := H.spawn_unit(self, PLAYER, Vector2i(1, 0))
+	manager.create_squad(member)
+	manager.join_squad(member, leader.squad)
+
+	var m1 := MoveAction.new()
+	m1.init(leader, [Vector2i(0, 0), Vector2i(0, 1)], null)
+	var m2 := MoveAction.new()
+	m2.init(member, [Vector2i(1, 0), Vector2i(0, 1)], null)
+	leader.squad._queue_action(m1)
+	leader.squad._queue_action(m2)
+	manager.validate_squad_plan(leader.squad)
+	assert_bool(m1.is_valid).is_false()
+
+	leader.set_projected_knockback(Vector2i(-1, 0))
+
+	assert_object(manager.get_projected_unit_from_cell(Vector2i(-1, 0))).is_same(leader)
+	assert_object(manager.get_projected_unit_from_cell(Vector2i(0, 0))).is_null()
+
 # A unit spawned but not yet squadded (game.spawn_unit's one-line window) must not crash the scan.
 func test_a_squadless_unit_answers_with_its_live_cell() -> void:
 	var loose := H.spawn_unit(self, PLAYER, Vector2i(7, 7))   # no create_squad

@@ -13,9 +13,6 @@ signal will_changed(current, max)
 #Permanent stat storage (base + growth gains, other permanent additions)
 var stats: Dictionary[Stats.Stat, int] = {}
 
-#all buffs and debuffs from everything. Terrain, items, enemy attacks, etc. 
-var stat_modifiers: Dictionary[Stats.Stat, int] = {}
-
 # Per-element aura — persistent damage scaling for runes (docs/design/alchemy-kit.md).
 # Mirrors `stats`: seeded from UnitData.base_aura, grows over a unit's life.
 var aura: Dictionary[Elemental.Element, int] = {}
@@ -89,13 +86,10 @@ func initialize():
 		elif data.base_aura[element] != 0:
 			push_warning("%s: base_aura has %s outside affinity — dropped" % [data.display_name, Elemental.Element.keys()[element]])
 	#reset battle stats
-	current_hp = get_max_hp()
+	# Gear-less CON is correct HERE and only here: initialize() runs from Unit._ready(), before the
+	# unit owns a single item. Every max-HP read after this one comes through Unit (#106).
+	current_hp = get_max_hp(get_effective_stat(Stats.Stat.CON))
 	current_will = get_max_will()
-	# stat_modifiers is a BATTLE-scoped add/subtract bag (the Crisis surge) that happens to live
-	# on the persistent instance, so it has to be cleared here with the other battle state. Without
-	# this, a unit whose surge was still applied when the battle ended would carry it forever once
-	# instances survive missions (the campaign layer). Not captured by ScenarioUnitEntry either.
-	stat_modifiers.clear()
 
 func add_job(job_id: String) -> bool:
 	if job_id == "" or jobs.has(job_id) or JobCatalog.get_job(job_id) == null:
@@ -140,13 +134,6 @@ func get_proficiency(family: WeaponData.WeaponType) -> int:
 func set_proficiency(family: WeaponData.WeaponType, value: int) -> void:
 	weapon_proficiency[family] = clampi(value, 0, 3)
 
-func add_stat_modifier(stat: Stats.Stat, delta: int) -> void:
-	# The one mutator for the battle-scoped add/subtract bag (the Crisis surge today), so the
-	# dictionary is only ever written beside the initialize() that clears it. Callers used to
-	# read-modify-write stat_modifiers directly from Unit -- the single place Unit reached into
-	# UnitInstance's internals instead of asking it something.
-	stat_modifiers[stat] = stat_modifiers.get(stat, 0) + delta
-
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
 		return stats[stat_name]
@@ -157,12 +144,15 @@ func get_base_stat(stat_name: Stats.Stat) -> int:
 func get_current_hp() -> int:
 	return current_hp
 
-func get_max_hp() -> int:
-	# The one max-HP truth: MHP base + CON band — EFFECTIVE CON as of #56 (gear can shift it).
-	return get_base_stat(Stats.Stat.MHP) + Stats.con_mhp_band(get_effective_stat(Stats.Stat.CON))
+func get_max_hp(effective_con: int) -> int:
+	# The one max-HP truth: MHP base + CON band. Takes the FINISHED effective CON — Unit's whole
+	# chain, gear included — for the same reason get_mov takes finished DEX. Until #106 it called
+	# get_effective_stat itself, which stops one stage short here because gear lives a layer up:
+	# a +CON armour moved DEF and never crossed an MHP band. One expression, one answer.
+	return get_base_stat(Stats.Stat.MHP) + Stats.con_mhp_band(effective_con)
 
-func get_effective_ldr() -> int:
-	return get_effective_stat(Stats.Stat.LDR) + Stats.per_ldr_band(get_effective_stat(Stats.Stat.PER))
+# get_effective_ldr moved to Unit (#106): BOTH its terms are finished effective stats, so it
+# only computes correctly at the layer that can see every stage of the chain.
 
 func get_mov(effective_dex: int) -> int:
 	# MOV is a READOUT: flat jobless base + DEX band, then the leg throttle LAST: one empty leg
@@ -182,15 +172,19 @@ func get_mov(effective_dex: int) -> int:
 			mov = ceili(mov / 2.0)
 	return maxi(1, mov)
 
-func set_current_hp(value: int):
-	current_hp = clamp(value, 0, get_max_hp())
-	emit_signal("hp_changed", current_hp, get_max_hp())
+func set_current_hp(value: int, max_hp: int) -> void:
+	# Takes the ceiling rather than deriving it: max HP depends on gear this layer can't see, so
+	# deriving it here would silently clamp a unit to its unarmoured max (#106) — not just a wrong
+	# readout but a real one, since the clamp is what a heal has to get past. Unit.set_current_hp
+	# is the arg-free front door; nothing outside UnitInstance should call this form.
+	current_hp = clamp(value, 0, max_hp)
+	emit_signal("hp_changed", current_hp, max_hp)
 
 	if current_hp <= 0:
 		emit_signal("died")
 
-func apply_damage(amount: int):
-	set_current_hp(current_hp - amount)
+func apply_damage(amount: int, max_hp: int) -> void:
+	set_current_hp(current_hp - amount, max_hp)
 
 func is_dead() -> bool:
 	return current_hp <= 0
@@ -347,12 +341,14 @@ func get_limb_effective_base(stat: Stats.Stat) -> int:
 			return get_base_stat(stat)
 
 func get_effective_stat(stat: Stats.Stat) -> int:
-	# base → limb substitution → summed job nudges (every held job, not just one) → gear.
+	# base → limb substitution → summed job nudges (every held job, not just one). That is the
+	# WHOLE of what the persistent instance knows. The two stages above it — temporary effects and
+	# gear — are both battle-scoped and live on Unit, so this is deliberately NOT the number the
+	# game reads: Unit.get_body_stat adds effects, Unit.get_effective_stat adds gear on top.
 	# No ceiling stage (#61 descoped it — docs/design/jobs.md "Parked").
 	var value := get_limb_effective_base(stat)
 	for job_id in jobs:
 		var job := JobCatalog.get_job(job_id)
 		if job != null:
 			value += job.stat_nudges.get(stat, 0)
-	value += stat_modifiers.get(stat, 0)
 	return value

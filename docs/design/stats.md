@@ -2,7 +2,7 @@
 
 **Status: WORKING DESIGN (agreed direction, open forks flagged).** Decided 2026-06-20 with the developer + co-dev in a dedicated stats session. Replaces the *placeholder* stance the `Stats.gd` enum (`MHP/STR/LDR/WIL`) was standing in for — STR was a cliche we never actually chose; this doc derives the roster from what the game needs. Supersedes the wiki's `Stats Overview.docx` (random level-up growth — dead under Law #1) and the scattered Spd/Skill/CON assumptions in old data/tests. Pairs with [progression.md](progression.md) (where growth lives) and [philosophy.md](philosophy.md) (the axioms).
 
-**Canon checked through #97 (2026-07-27).**
+**Canon checked through #113 (2026-07-29).**
 
 ## Core stance
 
@@ -35,7 +35,7 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 
 - **Input stats** (STR, DEX, PER, CON *— adopted 2026-07-06*) — scalar feeds for scaling / gates / physics. *"How good are you at X."*
 
-**The band doctrine (2026-07-06; co-dev ratified 2026-07-11; in code #55 2026-07-14 — `Stats.gd` band helpers, `get_max_hp()`, `get_effective_ldr()`, defaults land on the 0-rung so pre-CON content is numerically unchanged):** every input stat casts a **small, coarse, bounded shadow** on a capacity/readout — **DEX→MOV** ([jobs.md](jobs.md) band), **CON→MHP** (extremes ≤4–5 apart, all else equal), **PER→LDR** (small; fixed inputs mean no runaway budget), **STR→carry** (the parked slot). Bands are never grindable — inputs are fixed. *Co-dev rider:* the coarseness is a feature, not a compromise — **non-linear rewards and a jagged difficulty curve are design goals** (struggle → new powerup → easy → advance → struggle again beats smooth scaling; if everything calibrates exactly, nothing ever feels easy *or* hard). Don't smooth band thresholds into per-point scaling.
+**The band doctrine (2026-07-06; co-dev ratified 2026-07-11; in code #55 2026-07-14 — `Stats.gd` band helpers, defaults land on the 0-rung so pre-CON content is numerically unchanged):** every input stat casts a **small, coarse, bounded shadow** on a capacity/readout — **DEX→MOV** ([jobs.md](jobs.md) band), **CON→MHP** (extremes ≤4–5 apart, all else equal), **PER→LDR** (small; fixed inputs mean no runaway budget), **STR→carry** (the parked slot). Bands are never grindable — inputs are fixed. *Co-dev rider:* the coarseness is a feature, not a compromise — **non-linear rewards and a jagged difficulty curve are design goals** (struggle → new powerup → easy → advance → struggle again beats smooth scaling; if everything calibrates exactly, nothing ever feels easy *or* hard). Don't smooth band thresholds into per-point scaling.
 - **Capacity stats** (HP, WIL, LDR) — a pool you spend or allocate. *"How much of X you manage."* Their depth lives in the **build-and-spend flow**, not the raw number — which is how they avoid the "more = better" cliche.
 - **Channel stats** (per-element **AURA** ×5 — off the `Stats.Stat` enum; its own map + affinity set on `UnitInstance`) — *"how deep can you reach into element X."* Gates + scales transmutation channeling (floors = sigil weight; temper never brute-forced). The **one sanctioned growth number**: grown within genetic affinities, scarce and event-sized, **taxed −1 per lost limb** (highest pool first). Data model: [alchemy-kit.md](alchemy-kit.md) → *Aura*.
 
@@ -43,10 +43,110 @@ Three structural classes *(third added 2026-07-05, audit A3)*:
 |---|---|
 | **Base statline** (innate, authored, echoes the portrait) | HP · STR · DEX · PER · CON · LDR · WIL |
 | **Derived** (computed, never authored) | Weight (**carried gear only — no body term**, corrected 2026-07-27) · DEF (gear only) |
-| **Effective** | base → limb-slot substitution (STR/DEX only, BUILT #56) → ± gear modifiers (`get_effective_stat`) |
+| **Effective** | base → limb-slot substitution (STR/DEX only, BUILT #56) → job nudges → temporary modifiers → ± gear (`Unit.get_effective_stat` — see *One chain, one layer* below) |
 | **Channel** (off-enum, per-element) | AURA ×5 (+ the hidden Alkahest — never displayed; Isaac reads as aura in all) |
 | **Cut** | *(none — CON adopted 2026-07-06, see below)* |
 | **Parked** | STR↔carry-limits (the band doctrine's open slot — **the named candidate** if Weight is ever given teeth, 2026-07-27) |
+
+### One chain, one layer *(#106, 2026-07-28)*
+
+The effective-stat chain has five stages and its last one — **gear** — lives on the transient `Unit`,
+because gear is what the unit is *wearing*, not what it *is*. `UnitInstance` therefore holds only
+the first four and **cannot see the finished number**.
+
+**Every derivation off a stat must therefore live on `Unit`, or take the finished value as a
+parameter.** A derivation that calls `get_effective_stat` from inside `UnitInstance` is rebuilding
+the chain one stage short, silently.
+
+| derivation | where | how it gets the finished stat |
+|---|---|---|
+| MOV | `UnitInstance.get_mov(effective_dex)` | passed (2026-07-27) |
+| max HP | `UnitInstance.get_max_hp(effective_con)` | passed (#106) |
+| effective LDR | `Unit.get_effective_ldr()` | reads directly — both terms are effective stats, so it has no business a layer down |
+| DEF | `Unit.get_effective_def()` | reads directly |
+
+This is Design law #4 in its layer-boundary form: *if you can't reach the existing answer from where
+you're standing, take it as a parameter — don't rebuild it locally.* It cost real bugs before it was
+written down — a `+CON` armour moved DEF but never crossed an MHP band, the LDR readout contradicted
+its own tooltip, and because `set_current_hp` clamps against max HP, **every scenario save/load of an
+armoured unit silently shed the band's worth of HP**.
+
+Consequences that are now doctrine:
+
+- **Writing HP goes through `Unit.set_current_hp(value)`.** `UnitInstance.set_current_hp(value, max_hp)`
+  takes the ceiling rather than deriving it; nothing outside `UnitInstance` should call that form.
+- **A stat change never raises current HP** — it only pulls it down if the new max is below it
+  (`Unit.reclamp_hp`). Removing a `+CON` armour costs you the surplus; re-wearing does not give it back.
+- **Max HP never drops below 1**, so a re-clamp can never reach the `<= 0` that emits `died()`.
+  Only `take_damage` may end a unit; a bookkeeping recalculation may not.
+
+### Temporary stats — one seam *(#112, 2026-07-28)*
+
+Anything that moves a stat for a while is a **`StatEffect`**: a named source carrying an additive
+modifier dict and a duration in the owner's turns. The Crisis surge is one; tonics and
+transmutation buffs will be. They live on the transient `Unit` (battle-scoped, never saved).
+
+**One enumeration of contributors, not one bag of numbers.** A source that is *derivable from state
+that already exists* is never stored — worn armour is read live off `worn_armor`, and terrain would
+be read off the cell. Only effects with a life of their own get stored. That is what makes
+add/remove symmetric: you **retire a source**, never subtract a delta. The Crisis surge used to be
+a hand-balanced `+5`/`−5` pair and had already gone permanent once.
+
+**Expiry ticks at the owning faction's turn start**, so a 3-turn effect covers three of *that
+unit's* turns, not three passes of everyone.
+
+**Stacking is additive.** A source that imposed a *cap* rather than a delta is unsupported and would
+need its own decision.
+
+#### Forced unequip
+
+Gates read temporary effects, so **gear you stop qualifying for comes off immediately** — the buff
+lapses, or a debuff drops you under the floor, and the piece returns to inventory unworn. Carrying
+armour you can only wear while buffed is legal but fragile; debuffing an enemy out of their own kit
+is a real tactic. A maim fires the same check, since limb loss moves STR/DEX.
+
+**Excluding gear from gates is what keeps this from cascading.** Because no gate reads gear,
+stripping one piece can never change another piece's answer — so the sweep is a **single pass**
+with no fixed-point loop and no termination question. Folding gates into `get_effective_stat`
+would silently turn it into a cascade.
+
+Everything that follows a stat change runs in one place (`Unit._settle_stat_change`), in this order:
+**enforce gates → re-clamp HP → emit `stats_changed`.** The order is load-bearing — stripping
+armour moves CON, which moves max HP.
+
+**`stats_changed` is for readouts only.** *"May this be queued?"* is a question about the
+**projected** stat, not the live one, and belongs to `SquadPlanValidator`
+([#113](https://github.com/Phaazoid/Godoiosis/issues/113)); answering it in a signal listener would
+put Law #2 one race away from breaking.
+
+#### The readout
+
+A source with a name is a source the UI can explain. The inspect panel itemizes every contributor
+to an input stat in chain order — *Limbs −2 · Jobs +1 · Steady Tonic +3 (2 turns) · Bulwark Plate
++1* — and tints the value yellow while any temporary source is contributing, the same signal the
+DEF row already uses for terrain cover: **this number will move on its own.** Sources are listed
+even when they cancel out, because a +2 tonic against a −2 armour tax nets zero *right now* and
+costs 2 the moment it lapses.
+
+#### Mid-pass changes are not modelled *(verified 2026-07-29)*
+
+`PlanResolver._Hypo` threads position and element states through a resolution pass; it deliberately
+does **not** thread stat modifiers. Every stat-derived number is computed once at plan time and
+frozen (`AttackAction.execute` is pure playback, R3), and the one thing execution recomputes —
+`LethalityRules.predict` — reads no effective stat at all. So a stat change landing mid-pass (today
+only a maim's forced unequip) cannot make preview and execution disagree; it is un-modelled
+identically by both. **That stops being true the moment a queued ACTION applies an effect** — a
+transmutation buffing an ally — because then one order's stat change has to reach a later order's
+damage. Pinned by `tests/law/test_resolution_laws.gd`; owed by
+[#113](https://github.com/Phaazoid/Godoiosis/issues/113) (parked until a buff transmutation is
+wanted).
+
+A stat can also never **gate** what gets queued, and that is structural rather than unbuilt
+*(2026-07-29)*. No `actor_can_perform` override reads an effective stat, and `SquadPlanValidator`
+reads none; the only stat that gates planning at all is MOV, via `RulesService`'s reachable-cell
+query. And `OrderExecutor` resolves **moves first** — before attacks, counters and every
+side-channel verb — so a buff applied by any order cannot raise a mover's MOV in the same turn. It
+hasn't happened yet when the move runs. Don't file that as a bug; it's the phase order working.
 
 ### Per-stat job
 
@@ -93,9 +193,9 @@ The fixed-stat stance risks locking each unit to one weapon type. Resolved *with
 
 - **DEF is gear-only**, never authored on the unit — with one non-unit addition since 2026-07-24: **terrain Cover** contributes a flat DEF term to whoever stands on it (Burrow, [#84](https://github.com/Phaazoid/Godoiosis/issues/84); [terrain.md](terrain.md)). That doesn't reopen the gear-only stance — Cover belongs to the *tile*, not the statline, and stays flat rather than CON-scaled. Both terms are summed in exactly one place, `RulesService.def_breakdown` (`{armor, cover, total}`), which the resolver's mitigation stage and the inspect panel's DEF readout both call; the panel tints the number when a temporary term is contributing and itemizes the math on hover. **Because DEF is entirely "bonus" DEF, a revved Chainsword's `ignores_def()` zeroes the whole sum**, armor and cover alike.
 - **Gear carries stat-cost tradeoffs** — plate gives DEF but −DEX/−PER, so equipping is a genuine decision, not a strict upgrade (no full plate on a DEX-rapier fencer). **BUILT 2026-07-24 ([#89](https://github.com/Phaazoid/Godoiosis/issues/89)):** `ArmorData.stat_modifiers`, derived live off the worn piece. Because DEX casts a MOV band, a tax can reach *derived* readouts — and the band's coarseness means the same armor costs a DEX-6 unit a point of MOV while being **free** for a DEX-5 one. That jaggedness is the goal, not a rounding artifact.
-- **Wear gates are two-sided (2026-07-24, [#89](https://github.com/Phaazoid/Godoiosis/issues/89)).** #55's single `con_requirement` generalized into `stat_minimums`/`stat_maximums`: a piece can demand a floor on one stat *and* a ceiling on another (a braced rig only a slow unit can move in). **Gates read PRE-gear stats** — otherwise a piece's own −DEX could unlock a DEX-*ceiling* piece and equip legality would depend on swap order. The gate asks about the **body**, not the outfit.
+- **Wear gates are two-sided (2026-07-24, [#89](https://github.com/Phaazoid/Godoiosis/issues/89)).** #55's single `con_requirement` generalized into `stat_minimums`/`stat_maximums`: a piece can demand a floor on one stat *and* a ceiling on another (a braced rig only a slow unit can move in). **Gates read the BODY — base → limb → jobs → temporary effects — and never gear** (amended 2026-07-28, [#112](https://github.com/Phaazoid/Godoiosis/issues/112); it read *pre-gear* until then). Excluding gear stops a piece's own −DEX from unlocking a DEX-*ceiling* piece, which would make equip legality depend on swap order. Including temporary effects is the newer half: **a tonic can qualify you for armour, and losing it takes the armour off** — see *Forced unequip* below.
 - **Targeted elemental immunity is gear's lane** — `ArmorData.immune_elements` (BUILT 2026-07-24, [#89](https://github.com/Phaazoid/Godoiosis/issues/89)), honoring [alchemy-kit.md](alchemy-kit.md)'s "no catch-all RES stat, specific gear instead" and [job-ideas.md](job-ideas.md)'s fence keeping immunity out of jobs. A blocked element is **erased from the incoming hit**, so nothing keyed on it can fire; a weapon merely *tagged* with it still lands its physical swing, while a carving whose damage IS the element is turned aside entirely. A turned-aside attack is deliberately **not** a 0-damage hit — see the 0-damage rider above; it never arrived, so it can't finish a downed wearer.
-- **Effective stat = base → limb substitution → job nudge → gear.** The code splits `get_effective_stat` from `get_base_stat`; the limb-slot layer (STR/DEX only) landed in #56 (2026-07-15), the job-nudge layer in #58 (2026-07-16, [jobs.md](jobs.md)) — a unit sums `stat_nudges` across every job it holds, not just one — and **the gear stage finally landed 2026-07-24** ([#89](https://github.com/Phaazoid/Godoiosis/issues/89)), written down since #56 but unbuilt until armor with a stat tax became real content. Gear is derived live on `Unit` (never written into `UnitInstance.stat_modifiers`, which is a stateful, unserialized bag the Crisis surge owns — armor routed through it would survive a save as `worn_armor` but silently lose its tax). **No ceiling/clamp stage** — #58's job-ceiling clamp (and the `get_stat_before_ceiling` preview it needed) was descoped 2026-07-20 (#61, [jobs.md](jobs.md) *Parked*) along with the rest of the certify/trio machinery.
+- **Effective stat = base → limb substitution → job nudge → temporary effects → gear.** *(The temporary-effect stage landed 2026-07-28, [#112](https://github.com/Phaazoid/Godoiosis/issues/112) — see* One chain, one layer *above.)* The code splits `get_effective_stat` from `get_base_stat`; the limb-slot layer (STR/DEX only) landed in #56 (2026-07-15), the job-nudge layer in #58 (2026-07-16, [jobs.md](jobs.md)) — a unit sums `stat_nudges` across every job it holds, not just one — and **the gear stage finally landed 2026-07-24** ([#89](https://github.com/Phaazoid/Godoiosis/issues/89)), written down since #56 but unbuilt until armor with a stat tax became real content. Gear is derived live on `Unit` (never written into `UnitInstance.stat_modifiers`, which is a stateful, unserialized bag the Crisis surge owns — armor routed through it would survive a save as `worn_armor` but silently lose its tax). **No ceiling/clamp stage** — #58's job-ceiling clamp (and the `get_stat_before_ceiling` preview it needed) was descoped 2026-07-20 (#61, [jobs.md](jobs.md) *Parked*) along with the rest of the certify/trio machinery.
 
 ## Open forks
 

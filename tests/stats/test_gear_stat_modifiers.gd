@@ -30,14 +30,15 @@ func test_removing_gear_restores_the_stat() -> void:
 	assert_int(unit.get_effective_stat(Stats.Stat.DEX)).is_equal(6)
 
 
-func test_gear_never_writes_into_the_crisis_modifier_bag() -> void:
-	# unit_instance.stat_modifiers is a STATEFUL add/subtract bag (Crisis surge) and is not
-	# serialized. If armor pushed into it, a save/load would restore worn_armor but lose the
-	# tax -- silently desyncing the stat. Gear must stay purely derived.
+func test_gear_is_derived_and_stores_nothing() -> void:
+	# Gear must stay purely DERIVED: if wearing a piece stored its tax anywhere, a save/load would
+	# restore worn_armor and re-apply it, or lose it, and the stat would silently desync. Nothing
+	# below the Unit sees the tax, and no stored effect is created by wearing.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 6})
 	unit.worn_armor = _taxing_armor(Stats.Stat.DEX, -1)
-	assert_int(unit.unit_instance.stat_modifiers.get(Stats.Stat.DEX, 0)).is_equal(0)
+	assert_bool(unit.stat_effects.is_empty()).is_true()
 	assert_int(unit.unit_instance.get_effective_stat(Stats.Stat.DEX)).is_equal(6)   # pre-gear, untouched
+	assert_int(unit.get_body_stat(Stats.Stat.DEX)).is_equal(6)                      # body excludes gear
 
 
 func test_a_dex_tax_can_cost_a_point_of_mov() -> void:
@@ -72,11 +73,11 @@ func test_wear_gates_ignore_the_wearers_own_gear_tax() -> void:
 	assert_bool(ceiling.can_equip(unit)).is_false()       # ...but the gate still says no
 
 
-func test_gear_tax_composes_with_the_crisis_surge() -> void:
-	# Two different layers of the same chain: the surge lands in unit_instance's bag, the tax
-	# rides on top from gear. Both must show up in the one number the game reads.
+func test_gear_tax_composes_with_a_temporary_effect() -> void:
+	# Two adjacent stages of the same chain: the effect is STORED on the unit, the tax is DERIVED
+	# from the worn piece. Both must show up in the one number the game reads.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 6})
-	unit.unit_instance.stat_modifiers[Stats.Stat.DEX] = 2   # stand in for a surge
+	unit.apply_stat_effect(StatEffect.make("Tonic", {Stats.Stat.DEX: 2}))
 	unit.worn_armor = _taxing_armor(Stats.Stat.DEX, -1)
 	assert_int(unit.get_effective_stat(Stats.Stat.DEX)).is_equal(7)
 
@@ -94,15 +95,16 @@ func test_modifier_text_signs_the_tax() -> void:
 	assert_str(ArmorData.new().modifier_text()).is_equal("")   # untaxed = nothing to say
 
 
-func test_initialize_clears_the_crisis_modifier_bag() -> void:
-	# stat_modifiers is BATTLE-scoped (the Crisis surge) but lives on the PERSISTENT instance,
-	# and ScenarioUnitEntry never captures it. Before 2026-07-26 initialize() reset hp/will but
-	# not this bag, so a unit whose surge was still applied at battle's end would carry +5 to
-	# every scaling stat forever once instances survive missions. initialize() owns the reset.
+func test_temporary_effects_never_reach_the_persistent_instance() -> void:
+	# This case used to guard initialize()'s reset of UnitInstance.stat_modifiers — a BATTLE-scoped
+	# bag parked on the PERSISTENT instance, which had already gone permanent once by being missed.
+	# #112 removed the hazard instead of guarding it: temporary effects live on the transient Unit,
+	# so they cannot outlive a battle and there is no reset to forget. The instance is now
+	# base -> limb -> jobs and nothing else, which is why re-initializing changes nothing here.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.STR: 6})
-	unit.unit_instance.stat_modifiers[Stats.Stat.STR] = 5   # stand in for an applied surge
+	unit.apply_stat_effect(StatEffect.make("Surge", {Stats.Stat.STR: 5}))
 	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(11)
+	assert_int(unit.unit_instance.get_effective_stat(Stats.Stat.STR)).is_equal(6)
 
 	unit.unit_instance.initialize()   # what the next battle does
-	assert_bool(unit.unit_instance.stat_modifiers.is_empty()).is_true()
-	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(6)
+	assert_int(unit.unit_instance.get_effective_stat(Stats.Stat.STR)).is_equal(6)

@@ -101,7 +101,7 @@ func _arm_chainsword(unit: Unit) -> void:
 	t.main_attack.power = 4
 	unit.add_item(WeaponInstance.make(t))
 	unit.unit_instance.stats[Stats.Stat.MHP] = 50
-	unit.unit_instance.set_current_hp(50)
+	unit.set_current_hp(50)
 
 
 # Control: an armed, adjacent foe DOES counter a non-shoving attack — so the setup can produce a

@@ -45,7 +45,7 @@ func _board(hero_cell: Vector2i = Vector2i(0, 0), foe_cell: Vector2i = Vector2i(
 	hero.add_item(_carbine())
 	for u in [hero, foe]:
 		u.unit_instance.stats[Stats.Stat.MHP] = 200
-		u.unit_instance.set_current_hp(200)
+		u.set_current_hp(200)
 	return {"sess": PlaySession.new(b), "hero": hero, "foe": foe,
 			"weapon": hero.get_equipped_weapon() as CarbineWeaponInstance}
 
