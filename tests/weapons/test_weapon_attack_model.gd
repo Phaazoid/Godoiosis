@@ -46,10 +46,11 @@ func test_available_attacks_reads_template_and_handles_no_template() -> void:
 
 # --- per-attack damage (family scaling stays weapon-wide) ---
 
-func test_base_damage_defaults_to_main_attack() -> void:
-	var w := WeaponInstance.make(_template_with(_attack(10)))
+func test_base_damage_reads_the_attack_it_is_given() -> void:
+	var main := _attack(10)
+	var w := WeaponInstance.make(_template_with(main))
 	var wielder := _wielder({Stats.Stat.STR: 6})
-	assert_int(w.base_damage(wielder)).is_equal(16)   # 10 main power + 6 STR (100% blend)
+	assert_int(w.base_damage(wielder, main)).is_equal(16)   # 10 power + 6 STR (100% blend)
 
 func test_base_damage_uses_passed_attack_over_main() -> void:
 	var spring := _attack(9)
@@ -57,29 +58,37 @@ func test_base_damage_uses_passed_attack_over_main() -> void:
 	var wielder := _wielder({Stats.Stat.STR: 6})
 	assert_int(w.base_damage(wielder, spring)).is_equal(15)   # 9 + 6 — blend is the family's, not the attack's
 
-func test_base_damage_with_null_main_is_scaling_plus_mods_only() -> void:
-	var w := WeaponInstance.make(_template_with(null))
+func test_base_damage_of_no_attack_is_zero() -> void:
+	# `null` means NO ATTACK, not "the main one" (#102 follow-up, dev call 2026-07-28). It used to
+	# fall back to main here while meaning "no attack" to Reach — one value, two meanings. The
+	# bare-fist answer (STR) is the RESOLVER's to give; this method just declines to invent one.
+	var w := WeaponInstance.make(_template_with(_attack(10)))
 	var wielder := _wielder({Stats.Stat.STR: 6})
-	assert_int(w.base_damage(wielder)).is_equal(6)
+	assert_int(w.base_damage(wielder, null)).is_equal(0)
 
 # --- per-attack elements ---
 
 func test_get_elements_reads_the_passed_attack() -> void:
+	var fire := _attack(0, false, Elemental.Element.FIRE)
 	var acid := _attack(0, false, Elemental.Element.WATER)
-	var w := WeaponInstance.make(_template_with(_attack(0, false, Elemental.Element.FIRE), [acid]))
+	var w := WeaponInstance.make(_template_with(fire, [acid]))
 	var wielder := _wielder()
-	assert_array(w.get_elements(wielder)).contains_exactly([Elemental.Element.FIRE])
+	assert_array(w.get_elements(wielder, fire)).contains_exactly([Elemental.Element.FIRE])
 	assert_array(w.get_elements(wielder, acid)).contains_exactly([Elemental.Element.WATER])
 
-# --- per-attack hits_map ---
+func test_get_elements_of_no_attack_is_empty() -> void:
+	# Not even fitted mods contribute — with no attack the weapon isn't what's landing.
+	var w := WeaponInstance.make(_template_with(_attack(0, false, Elemental.Element.FIRE)))
+	assert_array(w.get_elements(_wielder(), null)).is_empty()
 
-func test_hits_map_defaults_to_main_and_accepts_override() -> void:
+# --- hits_map lives on the shared AttackData base ---
+
+func test_hits_map_is_answered_by_the_attack_itself() -> void:
+	# WeaponInstance.hits_map() is gone: once `null` stopped meaning "main", its only remaining job
+	# was that fallback, and PlanResolver asks the stamped attack directly.
 	var cell_burst := _attack(0, false, Elemental.Element.NONE, EquippableData.TargetMode.BOTH)
-	var w := WeaponInstance.make(_template_with(_attack(), [cell_burst]))
-	assert_bool(w.hits_map()).is_false()
-	assert_bool(w.hits_map(cell_burst)).is_true()
-	var no_main := WeaponInstance.make(_template_with(null))
-	assert_bool(no_main.hits_map()).is_false()
+	assert_bool(_attack().hits_map()).is_false()
+	assert_bool(cell_burst.hits_map()).is_true()
 
 # --- catalog partition: curated mains vs the general pool ---
 

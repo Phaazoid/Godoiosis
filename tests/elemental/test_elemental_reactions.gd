@@ -35,7 +35,7 @@ func _shock_electrocute(bonus: int = 5) -> ElementalReaction:
 	return r
 
 func _attack(attacker: Unit, target: Unit) -> AttackAction:
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 # --- E1/E3/E4: WATER sets WET, the next SHOCK sees it and electrocutes ---
 
@@ -161,7 +161,12 @@ func test_e7_counter_can_complete_a_combo() -> void:
 
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
+	# calculate_counterattacks_for_squad returns unstamped "aims" (who counters whom); resolve_plan
+	# feeds them to create_counter_volley, which is what stamps get_counter_attack(). This test
+	# short-circuits that expansion, so it has to stamp them itself (#102).
 	plan.counters = _sm.calculate_counterattacks_for_squad(p.squad, plan.attacks)
+	for c in plan.counters:
+		c.fired_attack = c.actor.get_counter_attack()
 	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
 	PlanResolver.resolve(plan, reactions)
 

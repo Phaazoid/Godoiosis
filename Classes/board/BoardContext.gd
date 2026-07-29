@@ -33,10 +33,11 @@ func is_walkable(cell: Vector2i) -> bool:
 		return false
 	return tile_data.get_custom_data("walkable")
 
+# Which unit ends up here once the plan resolves — the inverse of Unit.get_projected_destination,
+# derived from it (#105). Reads THIS board's own unit list, so the rules never resolve a cell
+# against a different roster than the one they were handed.
 func projected_unit_at_cell(cell: Vector2i) -> Unit:
-	if squad_manager == null:
-		return null
-	return squad_manager.get_projected_unit_from_cell(cell)
+	return Unit.projected_unit_at(units, cell)
 	
 # The rules' single read-point for a cell's static kind (#50): reads the tileset's
 # "terrain_type" int layer as a Terrain.Kind. A method (not an inline grid read in the

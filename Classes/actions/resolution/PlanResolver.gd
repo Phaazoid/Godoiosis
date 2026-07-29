@@ -18,7 +18,15 @@ static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = Re
 # into projected positions BEFORE deriving counters (#84 approach B) — a counter is judged from
 # where a shoved unit LANDS, not where it stood.
 static func resolve_attacks(plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
-	for atk in plan.attacks:
+	resolve_attack_group(plan.attacks, plan, hypo, reactions, board, terrain_reactions)
+
+# One volley (or a lone cell attack), resolved against the SHARED hypo and appending its cell
+# effects to the plan. Split out of resolve_attacks 2026-07-28 (#105) so SquadManager can interleave
+# resolution with volley EXPANSION: a shove only becomes a projected position once its own attack
+# has resolved, so expanding every volley up front put all victim-gathering strictly before all
+# shoves — and no aim could ever see one.
+static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	for atk in group:
 		_resolve_one(atk, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(atk, board, terrain_reactions):
@@ -167,35 +175,42 @@ static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hy
 	var def := RulesService.def_breakdown(target, target_hypo.position, board)
 	return def["total"]
 
-# The attack's source surface: the order's stamped fired_attack (a carving OR a specific weapon
-# attack) if it carries one, else the attacker's equipped weapon's default (main). A rune casts
-# to null here -> it contributes nothing in melee (its attack rides on fired_attack instead).
-# WeaponInstance.base_damage/get_elements/hits_map all accept an optional attack override that
-# defaults to main when null — passing a non-WeaponAttackData (or nothing) is exactly that
-# default, so a counter (which never stamps a WeaponAttackData) resolves off main for free. #30/#72.
+# The attack's source surface: the order's stamped fired_attack — a carving OR a specific weapon
+# attack. A NULL stamp means this unit fired NO attack at all (bare fists, an aura-dry rune, a
+# weapon with no authored main), and every question below answers accordingly.
+#
+# These used to fall back to the equipped weapon's MAIN when the stamp was null, which left `null`
+# meaning "no attack" to the geometry layer (Reach) and "main" here — one value, two meanings, i.e.
+# design law #4 one level down from #102 itself. Only hand-built actions ever hit it, because
+# declare() and create_counter_volley always stamp, but several test suites were doing exactly that.
+# Resolved 2026-07-28 (dev): null means no attack; a caller wanting main says so. Bare fists is
+# now the same answer on both sides — STR damage here, adjacency-1 in Reach.
+# A rune fails the WeaponAttackData check -> contributes nothing in melee (its attack rides on
+# fired_attack instead). #30/#72.
 static func _source_base_damage(action: AttackAction) -> int:
 	var attacker := action.actor
 	if action.fired_attack is TransmutationData:
 		return (action.fired_attack as TransmutationData).base_damage(attacker)
-	var weapon := attacker.get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
+	if action.fired_attack is WeaponAttackData:
+		var weapon := attacker.get_equipped_weapon() as WeaponInstance
+		if weapon != null:
+			return weapon.base_damage(attacker, action.fired_attack as WeaponAttackData)
 	return attacker.get_effective_stat(Stats.Stat.STR)
 
 static func _source_elements(action: AttackAction) -> Array[Elemental.Element]:
 	if action.fired_attack is TransmutationData:
 		return (action.fired_attack as TransmutationData).get_elements()
-	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
-	if weapon != null:
-		return weapon.get_elements(action.actor, action.fired_attack as WeaponAttackData)
+	if action.fired_attack is WeaponAttackData:
+		var weapon := action.actor.get_equipped_weapon() as WeaponInstance
+		if weapon != null:
+			return weapon.get_elements(action.actor, action.fired_attack as WeaponAttackData)
 	var none: Array[Elemental.Element] = []
 	return none
 
+# hits_map() lives on the shared AttackData base, so both kinds answer it directly — and with the
+# fallback gone, WeaponInstance.hits_map()'s only remaining job was that fallback, so it's deleted.
 static func _source_hits_map(action: AttackAction) -> bool:
-	if action.fired_attack is TransmutationData:
-		return action.fired_attack.hits_map()   # hits_map() lives on the shared AttackData base — no cast needed
-	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
-	return weapon != null and weapon.hits_map(action.fired_attack as WeaponAttackData)
+	return action.fired_attack != null and action.fired_attack.hits_map()
 
 static func _source_knockback(action: AttackAction) -> int:
 	if action.fired_attack != null:
@@ -217,6 +232,7 @@ static func _resolve_knockback(action: AttackAction, outcome: ResolvedOutcome, t
 		landing = next
 	if landing != target_hypo.position:
 		outcome.knockback_applied = true
+		outcome.knockback_from = target_hypo.position   # where THIS shove started (may be a prior shove's landing)
 		outcome.knockback_to = landing
 		target_hypo.position = landing   # thread it forward (R4)
 

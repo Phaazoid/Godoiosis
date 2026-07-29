@@ -46,7 +46,7 @@ func _board_with_cover(cell: Vector2i) -> BoardContext:
 # so the same helper covers both the mitigated and the revved-pierce cases.
 func _attack(attacker: Unit, target: Unit) -> AttackAction:
 	attacker.equipped_weapon = H.make_weapon(6)
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 
 func test_def_subtracts_from_damage() -> void:

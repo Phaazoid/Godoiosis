@@ -32,7 +32,7 @@ func _target(hp: int) -> Unit:
 
 # Resolve a single attack with NO reactions (damage == base) and hand back its outcome.
 func _resolve_attack(attacker: Unit, target: Unit) -> ResolvedOutcome:
-	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	var attack := H.stamped_attack(attacker, target)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	var no_reactions: Array[ElementalReaction] = []

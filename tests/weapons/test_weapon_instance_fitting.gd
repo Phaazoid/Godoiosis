@@ -111,7 +111,7 @@ func test_base_damage_pure_str_blend() -> void:
 	var w := WeaponInstance.make(_template(10, {Stats.Stat.STR: 100}))
 	var wielder := _wielder({Stats.Stat.STR: 6})
 	_set_proficiency(wielder, 3)
-	assert_int(w.base_damage(wielder)).is_equal(16)   # 10 power + 6 STR (100% blend)
+	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(16)   # 10 power + 6 STR (100% blend)
 
 func test_base_damage_ignores_inactive_space_power_delta() -> void:
 	var w := WeaponInstance.make(_template(10, {Stats.Stat.STR: 100}))
@@ -119,7 +119,7 @@ func test_base_damage_ignores_inactive_space_power_delta() -> void:
 	w.fit(2, _mod(1, 100))   # inactive at proficiency 1 — must NOT count
 	var wielder := _wielder({Stats.Stat.STR: 5})
 	_set_proficiency(wielder, 1)
-	assert_int(w.base_damage(wielder)).is_equal(17)   # 10 + 2 (active mod) + 5 (STR) — the +100 never applies
+	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(17)   # 10 + 2 (active mod) + 5 (STR) — the +100 never applies
 
 func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
@@ -127,21 +127,21 @@ func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
 	var wielder := _wielder({Stats.Stat.STR: 8, Stats.Stat.DEX: 2})
 	_set_proficiency(wielder, 1)
 	# blend becomes {STR:100, DEX:50}; weighted = (8*100 + 2*50) / 150 = 900/150 = 6
-	assert_int(w.base_damage(wielder)).is_equal(6)
+	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(6)
 
 func test_inactive_mod_scaling_nudge_is_ignored() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
 	w.fit(2, _mod(1, 0, 0, {Stats.Stat.DEX: 100}))   # sits in a space that never activates here
 	var wielder := _wielder({Stats.Stat.STR: 7, Stats.Stat.DEX: 20})
 	_set_proficiency(wielder, 1)
-	assert_int(w.base_damage(wielder)).is_equal(7)   # pure STR — the DEX nudge never entered the blend
+	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(7)   # pure STR — the DEX nudge never entered the blend
 
 # --- Elements: main attack + active mods, deduped ---
 
 func test_get_elements_includes_main_attack_element() -> void:
 	var w := WeaponInstance.make(_template(0, {}, 0, false, Elemental.Element.FIRE))
 	var wielder := _wielder()
-	assert_array(w.get_elements(wielder)).contains_exactly([Elemental.Element.FIRE])
+	assert_array(w.get_elements(wielder, w.template.main_attack)).contains_exactly([Elemental.Element.FIRE])
 
 func test_get_elements_includes_active_mod_elements_and_dedupes() -> void:
 	var w := WeaponInstance.make(_template(0, {}, 0, false, Elemental.Element.FIRE))
@@ -149,11 +149,11 @@ func test_get_elements_includes_active_mod_elements_and_dedupes() -> void:
 	w.fit(1, _mod(1, 0, 0, {}, Elemental.Element.WATER))
 	var wielder := _wielder()
 	_set_proficiency(wielder, 2)
-	assert_array(w.get_elements(wielder)).contains_exactly([Elemental.Element.FIRE, Elemental.Element.WATER])
+	assert_array(w.get_elements(wielder, w.template.main_attack)).contains_exactly([Elemental.Element.FIRE, Elemental.Element.WATER])
 
 func test_get_elements_excludes_inactive_mod_elements() -> void:
 	var w := WeaponInstance.make(_template(0, {}, 0, false, Elemental.Element.NONE))
 	w.fit(2, _mod(1, 0, 0, {}, Elemental.Element.WATER))   # inactive at proficiency 1
 	var wielder := _wielder()
 	_set_proficiency(wielder, 1)
-	assert_array(w.get_elements(wielder)).is_empty()
+	assert_array(w.get_elements(wielder, w.template.main_attack)).is_empty()

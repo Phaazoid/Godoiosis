@@ -70,6 +70,19 @@ static func make_weapon(power: int = 3) -> WeaponInstance:
 	template.main_attack.power = power
 	return WeaponInstance.make(template)
 
+# A targeted attack order, STAMPED the way every production declare path stamps it.
+#
+# Resolver-math suites used to call AttackAction.create() bare and lean on a null fired_attack
+# falling back to the equipped weapon's main. Since #102 that fallback is gone -- null means NO
+# attack (bare fists, STR damage, adjacency-1 reach), matching what Reach already meant by it --
+# so the stamp has to be explicit here exactly as it is in the game. Use this anywhere a test
+# needs a single attack against a known target; AttackAction.declare() is the production shape
+# but deliberately leaves `target` null, because the real game derives victims at resolve time.
+static func stamped_attack(attacker: Unit, target: Unit) -> AttackAction:
+	var action := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	action.fired_attack = attacker.get_fired_attack()
+	return action
+
 # Instance a real Unit, register it for cleanup, add it to the tree (so _ready
 # builds unit_instance and resolves the @onready components), then place it.
 # We set equipped_weapon directly: has_equipped_weapon()/get_equipped_weapon()

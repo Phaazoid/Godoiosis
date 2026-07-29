@@ -29,7 +29,7 @@ func _give_iron_will(unit: Unit) -> void:
 	unit.unit_instance.add_job("tank")
 
 func _attack(attacker: Unit, target: Unit) -> AttackAction:
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 func test_iron_will_caps_damage_above_the_cap() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 20}, true, 20)

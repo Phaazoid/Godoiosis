@@ -12,8 +12,12 @@ var popups: Array[String] = []
 var reaction_icons: Array[Texture2D] = []        # icons of reactions that FIRED this hit — drawn behind the target in the queue
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)
 var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
+var knockback_from: Vector2i = Vector2i.ZERO       # the cell it was standing on BEFORE this shove
 var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — previewed and applied verbatim (Law #2)
-
+# Both ends are recorded because a unit can be shoved MORE THAN ONCE in a plan (#105): the second
+# hit starts where the first one left it, not at its live board cell. The preview used to
+# reconstruct the start from `target.movement.cell`, which is a second answer to a question this
+# outcome already holds — and which produced a two-tile "direction" the arrow atlas can't name.
 
 # Predicted lifecycle result for this hit's TARGET (R8's "lifecycle result"). Mirrors
 # Unit.take_damage + _go_downed so the queue previews down/maim/kill (Law #2). MAIMED is a

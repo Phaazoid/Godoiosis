@@ -34,13 +34,15 @@ static func validate(squad: Squad, actions: Array[BaseAction]) -> bool:
 			return false
 	return true
 
-# The projected cell a unit will occupy under this action list. Takes the list explicitly rather
-# than reading the squad's queue, because the hover preview validates a HYPOTHETICAL list.
+# The projected cell a unit occupies under this action list — Unit.projected_cell with validation's
+# own two answers, stated here because BOTH are load-bearing and neither is obvious (#105):
+#   require_valid = false — this function runs inside the fixed-point loop that SETS is_valid, so
+#                           reading the flag would read our own partially-computed output.
+#   use_knockback = false — a shove is derived by a resolve pass that reads validity; feeding it
+#                           back in here would make validity depend on itself.
+# Everything OUTSIDE validation wants the opposite of both, which is Unit.get_projected_destination.
 static func projected_cell_for(unit: Unit, actions: Array[BaseAction]) -> Vector2i:
-	for action in actions:
-		if action.actor == unit and action.action_type == BaseAction.ActionType.MOVE:
-			return action.get_destination()
-	return unit.movement.cell
+	return Unit.projected_cell(unit, actions, false, false)
 
 static func _run_pass(squad: Squad, actions: Array[BaseAction]) -> void:
 	for action in actions:

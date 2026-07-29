@@ -198,7 +198,10 @@ func _tooltip_for(item) -> String:
 	if item is WeaponInstance:
 		lines.append(item.shown_name())
 		if unit != null:
-			lines.append("Damage %d" % item.base_damage(unit))
+			# The headline view is the weapon's MAIN attack, asked for explicitly — base_damage
+			# no longer defaults to it, because null there means "no attack" now (#102).
+			var main_atk: WeaponAttackData = item.default_attack(unit) as WeaponAttackData
+			lines.append("Damage %d" % item.base_damage(unit, main_atk))
 		var status: String = item.status_text()
 		if status != "":
 			lines.append(status)
@@ -246,7 +249,8 @@ func _refresh():
 
 			# Append elemental damage — the computed view, so mod-added elements show too.
 			if item is WeaponInstance and unit != null:
-				var elems: Array[Elemental.Element] = item.get_elements(unit)
+				var slot_main: WeaponAttackData = item.default_attack(unit) as WeaponAttackData
+				var elems: Array[Elemental.Element] = item.get_elements(unit, slot_main)
 				if not elems.is_empty():
 					display_name += "  [%s]" % Elemental.Element.keys()[elems[0]].capitalize()
 

@@ -26,7 +26,7 @@ func test_counter_derivation_is_deterministic() -> void:
 	var d1 := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 1))
 	var d2 := H.spawn_solo(self, sm, ENEMY, Vector2i(1, 1))
 	sm.join_squad(d2, d1.squad)
-	var attack := AttackAction.create(a1, a1.movement.cell, d1, d1.movement.cell)
+	var attack := H.stamped_attack(a1, d1)
 	a1.squad._queue_action(attack)
 
 	var attacks: Array[AttackAction] = [attack]
@@ -49,7 +49,7 @@ func test_previewed_damage_equals_applied_damage() -> void:
 	var target := H.spawn_solo(self, sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20})
 	var start_hp := target.get_current_hp()
 
-	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	var attack := H.stamped_attack(attacker, target)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)

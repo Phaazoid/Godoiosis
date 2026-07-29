@@ -122,12 +122,10 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 	var hits_allies := attack != null and attack.hits_allies
 
 	for cell in affected_cells:
-		var unit := board.unit_at_cell(cell)
-		if unit != null and unit.get_projected_destination() != cell:
-			unit = null
-		if unit == null:
-			unit = board.projected_unit_at_cell(cell)
-
+		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
+		# discard if it's moving away -> else who's moving in) reconciled the forward and reverse
+		# answers by hand, and could not see a knocked-back unit at all.
+		var unit := board.projected_unit_at_cell(cell)
 		if unit == null or unit == attacker or victims.has(unit):
 			continue
 

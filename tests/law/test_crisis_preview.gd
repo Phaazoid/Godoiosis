@@ -18,7 +18,7 @@ func before_test() -> void:
 # same shape as test_maim_preview.gd's helper, so the two Law guards read as a matched pair.
 func _fatal_attack(target: Unit) -> AttackAction:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {}, true, 5)
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 func _resolve(attacks: Array[AttackAction]) -> void:
 	var plan := ResolvedPlan.new()

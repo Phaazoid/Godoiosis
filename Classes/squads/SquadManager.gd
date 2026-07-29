@@ -129,14 +129,11 @@ func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bo
 	actions.append(preview_action)
 	return SquadPlanValidator.validate(squad, actions)
 
-#Note - only treats valid actions as projected moves
+# Same question BoardContext.projected_unit_at_cell answers, over squad membership rather than a
+# board snapshot — one rule (Unit.projected_unit_at), two unit sets. #105 retired the old move-order
+# scan, which knew nothing about knockback and only ever looked at the active squad.
 func get_projected_unit_from_cell(cell: Vector2i) -> Unit:
-	if active_squad == null:
-		return null
-	for action in active_squad.get_actions():
-		if action.action_type == BaseAction.ActionType.MOVE and action.get_destination() == cell and action.is_valid:
-			return action.actor
-	return null
+	return Unit.projected_unit_at(_all_units(), cell)
 
 func setup_hold_move_actions(squad: Squad):
 	for member in squad.get_members():
@@ -348,6 +345,12 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
 	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
 	# projection-aware, so a re-planned move re-targets the blast — like counters.
+	#
+	# Each aim is expanded AND RESOLVED before the next is expanded (#105). A shove only becomes a
+	# projected position once its attack has resolved, so expanding every volley up front put all
+	# victim-gathering strictly before all shoves: aiming at a landing cell found nobody, and a unit
+	# shoved OUT of a later blast was still hit by it. Interleaving costs nothing — same order,
+	# same hypo, same cell-effect sequence.
 	for action in squad.action_queue:
 		if action.action_type != BaseAction.ActionType.ATTACK:
 			continue
@@ -355,24 +358,25 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		var origin := aim.actor.get_projected_destination()
 		var affected := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack)
 		var victims := RulesService.gather_attack_victims(aim.actor, affected, board, aim.fired_attack)
+		var group: Array[AttackAction] = []
 		if victims.is_empty():
 			# #47: a legal aim at cells with no unit still resolves — a cell-targeted attack
 			# (target stays null = no unit hit). It plays out and is where terrain effects will
 			# land (#50). Units are a CONSEQUENCE of the aimed cells, not the gate.
 			var cell_attack := AttackAction.create(aim.actor, origin, null, aim.target_cell)
 			cell_attack.fired_attack = aim.fired_attack
-			plan.attacks.append(cell_attack)
+			group.append(cell_attack)
 		else:
-			for atk in AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack):
-				plan.attacks.append(atk)
+			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack)
+		plan.attacks.append_array(group)
 
-	# Phase 1: resolve attacks so each shove's landing cell exists...
-	PlanResolver.resolve_attacks(plan, hypo, reactions, board, terrain_reactions)
-	# ...then reflect it in the target's projected destination — counter derivation below (and
-	# re-targeting, and the board preview) all read where the unit LANDS, not where it stood.
-	for atk in plan.attacks:
-		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-			atk.target.set_projected_knockback(atk.resolved.knockback_to)
+		# Resolve THIS aim, then publish its shoves as projected positions — so the next aim's
+		# victim gather, the counter derivation below, and the board preview all read where the
+		# target LANDS (#84 approach B, extended to same-plan attacks by #105).
+		PlanResolver.resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
+		for atk in group:
+			if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+				atk.target.set_projected_knockback(atk.resolved.knockback_to)
 
 	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
 	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the

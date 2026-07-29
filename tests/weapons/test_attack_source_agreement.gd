@@ -164,3 +164,25 @@ func test_can_fire_default_attack_is_false_without_a_main_attack() -> void:
 
 	assert_object(unit.equipped_weapon.default_attack(unit)).is_null()
 	assert_bool(unit.can_fire_default_attack()).is_false()
+
+# --- a null stamp means NO attack, on BOTH sides ---
+
+func test_an_unstamped_order_resolves_as_bare_fists_not_as_main() -> void:
+	# `fired_attack == null` used to mean "no attack" to Reach and "fall back to main" to
+	# PlanResolver — one value, two meanings, design law #4 one level down from this issue.
+	# Resolved 2026-07-28 (dev): null means no attack, and a caller wanting main says so. Both
+	# sides now agree on the bare-fist answer: STR damage here, adjacency-1 in Reach.
+	var t := _template(_atk(50, _manhattan(1)), _atk(9, _manhattan(3)))   # a big main to be unmistakable
+	var attacker := _armed(PLAYER, Vector2i(0, 0), t)
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {}, false)
+
+	var atk := AttackAction.create(attacker, Vector2i(0, 0), foe, Vector2i(1, 0))   # deliberately unstamped
+	assert_object(atk.fired_attack).is_null()
+
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(atk)
+	var no_reactions: Array[ElementalReaction] = []
+	PlanResolver.resolve(plan, no_reactions)
+
+	# STR 5 (the fixture baseline), NOT main's 50 + 5.
+	assert_int(atk.resolved.damage).is_equal(attacker.get_effective_stat(Stats.Stat.STR))

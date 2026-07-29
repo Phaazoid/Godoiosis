@@ -190,23 +190,37 @@ func clear_terrain_preview() -> void:
 			sprite.queue_free()
 	terrain_preview_sprites.clear()
 
+# One entry per SHOVE ({"target", "from", "to"}), in resolve order. A unit can be shoved more than
+# once in a plan (#105 — two maces, or a mace plus a counter), so this draws an arrow PER HIT but
+# exactly ONE ghost per target, at the cell the chain ends on. Drawing a ghost per hit would leave a
+# copy of the unit standing on every waypoint.
 func show_knockback_preview(shoves: Array) -> void:
 	clear_knockback_preview()
+
+	var final_cell := {}   # Unit -> Vector2i; entries arrive in resolve order, so the last one wins
+	for shove in shoves:
+		final_cell[shove["target"]] = shove["to"]
+
 	for shove in shoves:
 		var from: Vector2i = shove["from"]
 		var to: Vector2i = shove["to"]
-		var target: Unit = shove["target"]
-		var dir := to - from
-		# arrow: start tile on the target, arrowhead on the landing cell (reuses the move atlases)
+		# The FACING, not the displacement: a shove of 2+ tiles (and, before #105, a mis-sourced
+		# start cell) makes to - from a vector the arrow atlas has no texture for, so it fell
+		# through to PATH_ERROR. Same helper the resolver picks the shove direction with.
+		var dir := GridUtils.cardinal_direction_i_between(from, to)
+		# arrow: start tile where the shove began, arrowhead on the landing cell (move atlases)
 		knockback_preview_sprites.append(_create_arrow_sprite(from, _get_start_atlas(dir), true))
 		knockback_preview_sprites.append(_create_arrow_sprite(to, _get_arrowhead_atlas(dir), true))
-		# hide the real sprite while its ghost stands in at the landing cell — the same pairing
-		# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
-		target.visuals.set_projected(true)
-		knockback_hidden_units.append(target)
+
+	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
+	# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
+	for target in final_cell:
+		var unit: Unit = target
+		unit.visuals.set_projected(true)
+		knockback_hidden_units.append(unit)
 		var ghost := Sprite2D.new()
-		ghost.texture = target.get_move_texture()
-		ghost.global_position = board_tilemap.to_global(board_tilemap.map_to_local(to))
+		ghost.texture = unit.get_move_texture()
+		ghost.global_position = board_tilemap.to_global(board_tilemap.map_to_local(final_cell[target]))
 		ghost.z_index = Unit.BASE_SPRITE_INDEX
 		ghost.modulate = PROJECTED_MODULATE
 		ghost.offset = Vector2i(0, -8)

@@ -17,7 +17,7 @@ func before_test() -> void:
 # One sub-overkill fatal hit: damage exactly equals HP (power 5 + fixture STR 5 = MHP 10).
 func _resolve_fatal_hit(target: Unit) -> AttackAction:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {}, true, 5)
-	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	var attack := H.stamped_attack(attacker, target)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)

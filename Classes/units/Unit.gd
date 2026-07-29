@@ -356,13 +356,50 @@ func set_projected_knockback(cell: Vector2i) -> void:
 func clear_projected_knockback() -> void:
 	_has_projected_knockback = false
 
+# --- Projected position: the ONE derivation (#105) ---
+# Every "where will this unit end up?" question resolves through here. Two callers want genuinely
+# different things, and the two axes below are the ONLY legitimate differences between them —
+# anything else answering this question is a duplicate seam (Design law #4).
+#
+#   require_valid  An invalid move doesn't move anyone. TRUE everywhere EXCEPT plan validation,
+#                  which runs inside the fixed-point loop that COMPUTES is_valid and would
+#                  otherwise read its own half-finished output.
+#   use_knockback  Fall back to a queued shove's landing cell (#84). TRUE everywhere EXCEPT plan
+#                  validation: knockback comes out of a resolve pass that reads validity, so
+#                  letting validity read knockback back would close the loop.
+#
+# `actions` is passed rather than read off the squad because the hover preview validates a
+# HYPOTHETICAL queue (SquadManager.validate_squad_plan_preview).
+static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid: bool, use_knockback: bool) -> Vector2i:
+	var shoved: bool = use_knockback and unit._has_projected_knockback
+	for action in actions:
+		if action.actor != unit or action.action_type != BaseAction.ActionType.MOVE:
+			continue
+		if require_valid and not action.is_valid:
+			continue
+		# A hold-position move means "not going anywhere under my own power" — a shove still moves
+		# you, so it wins. A REAL move beats the shove: you walked out from under it.
+		if action.is_hold_position and shoved:
+			return unit._projected_knockback_cell
+		return action.get_destination()
+	return unit._projected_knockback_cell if shoved else unit.movement.cell
+
+# The INVERSE of projected_cell: which unit ENDS UP on this cell? Derived from the forward answer
+# rather than re-implemented — the old version scanned MOVE orders, which meant it could not see a
+# knocked-back unit at all and only ever looked at one squad (#105). Takes the unit set explicitly
+# for the same reason the forward version takes the action list: callers legitimately have
+# different sets, and there is one rule.
+static func projected_unit_at(units: Array[Unit], cell: Vector2i) -> Unit:
+	for unit in units:
+		if is_instance_valid(unit) and unit.get_projected_destination() == cell:
+			return unit
+	return null
+
+# The live reading: my own squad's real queue, validity honoured, shoves included.
 func get_projected_destination() -> Vector2i:
-	for action in squad.get_actions():
-		if action.actor == self and action.action_type == BaseAction.ActionType.MOVE and action.is_valid:
-			return action.get_destination()
-	if _has_projected_knockback:
-		return _projected_knockback_cell
-	return self.movement.cell
+	if squad == null:
+		return movement.cell   # spawned but not yet squadded — game.spawn_unit's one-line window
+	return projected_cell(self, squad.get_actions(), true, true)
 	
 func get_equipped_weapon() -> EquippableData:
 	return equipped_weapon

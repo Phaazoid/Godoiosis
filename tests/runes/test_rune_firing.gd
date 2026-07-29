@@ -81,18 +81,22 @@ func test_fire_transmutation_ignites_a_tree() -> void:
 	assert_int(plan.cell_effects.size()).is_equal(1)
 	assert_bool(plan.cell_effects[0].states_added.has(Terrain.TileState.BURNING)).is_true()
 
-# A null transmutation falls back to the equipped weapon -- existing attacks are unchanged.
+# A weapon wielder with no carving in play resolves off its own stamped weapon attack -- existing
+# attacks are unchanged. declare() supplies the stamp, as every production path does: an UNSTAMPED
+# action now means "no attack at all" and resolves to bare fists (#102 follow-up).
 func test_no_transmutation_uses_the_weapon() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))   # fixture weapon, power 3
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
-	var atk: AttackAction = AttackAction.create(attacker, attacker.movement.cell, foe, Vector2i(1, 0))
+	var atk: AttackAction = AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0))
+	atk.target = foe
 
 	var plan: ResolvedPlan = ResolvedPlan.new()
 	plan.attacks.append(atk)
 	var no_reactions: Array[ElementalReaction] = []
 	PlanResolver.resolve(plan, no_reactions)
 
-	assert_int(atk.resolved.damage).is_equal((attacker.get_equipped_weapon() as WeaponInstance).base_damage(attacker))
+	var weapon: WeaponInstance = attacker.get_equipped_weapon() as WeaponInstance
+	assert_int(atk.resolved.damage).is_equal(weapon.base_damage(attacker, weapon.template.main_attack))
 
 # --- B2: the in-game firing path (auto-select + resolve_plan propagation) ---
 

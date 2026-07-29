@@ -189,32 +189,32 @@ func scaling_contribution(wielder: Unit, mods: Array[WeaponModData]) -> int:
 		return 0
 	return int(round(float(weighted_sum) / total_weight))
 
-# attack = null means the MAIN attack — counters, AI, and single-attack weapons all want
-# the default, so most call sites never pass one. Slice 2 threads the player's pick.
-func base_damage(wielder: Unit, attack: WeaponAttackData = null) -> int:
-	if template == null:
+# The attack is REQUIRED, and `null` means NO ATTACK -- not "the main one" (dev call 2026-07-28:
+# if a caller wants main, it says so). These used to default to main, which made null mean "no
+# attack" to the geometry layer (Reach) and "main" here: one value, two meanings, which is design
+# law #4 one level down from #102 itself. Callers wanting the headline view of a weapon pass
+# default_attack() explicitly -- see inventory_panel.
+func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
+	if template == null or attack == null:
 		return 0
-	var atk := attack if attack != null else template.main_attack
 	var mods := active_modules(wielder)
-	var eff_power := atk.power if atk != null else 0
+	var eff_power := attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
 	return eff_power + scaling_contribution(wielder, mods)
 
-func get_elements(wielder: Unit, attack: WeaponAttackData = null) -> Array[Elemental.Element]:
+# No attack means bare fists: not even fitted mods contribute, because the weapon isn't what's
+# landing. (A stamped attack still collects mod-added elements on top of its own.)
+func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.Element]:
 	var result: Array[Elemental.Element] = []
-	if template == null:
+	if template == null or attack == null:
 		return result
-	var atk := attack if attack != null else template.main_attack
-	if atk != null and atk.elemental_damage_type != Elemental.Element.NONE:
-		result.append(atk.elemental_damage_type)
+	if attack.elemental_damage_type != Elemental.Element.NONE:
+		result.append(attack.elemental_damage_type)
 	for mod in active_modules(wielder):
 		if mod.added_element != Elemental.Element.NONE and not result.has(mod.added_element):
 			result.append(mod.added_element)
 	return result
 
-func hits_map(attack: WeaponAttackData = null) -> bool:
-	if template == null:
-		return false
-	var atk := attack if attack != null else template.main_attack
-	return atk != null and atk.hits_map()
+# hits_map() is gone from here: with the null->main fallback removed it did nothing but forward to
+# AttackData.hits_map(), which both attack kinds already answer. PlanResolver calls that directly.

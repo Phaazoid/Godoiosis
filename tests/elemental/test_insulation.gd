@@ -75,7 +75,7 @@ func _shock_mech() -> Unit:
 
 
 func _attack(attacker: Unit, target: Unit) -> AttackAction:
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 
 # --- the carving half: damage that IS elemental is stopped outright ---
@@ -85,7 +85,7 @@ func test_a_lightning_carving_is_nullified_entirely() -> void:
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
 
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -100,7 +100,7 @@ func test_the_same_carving_hurts_an_unarmored_target() -> void:
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -119,7 +119,7 @@ func test_insulation_is_element_specific() -> void:
 	var fireball := TransmutationData.new()
 	fireball.power = 5
 	fireball.sigils.assign([Elemental.Element.FIRE])   # no quickening -> stays FIRE
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = fireball
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -191,7 +191,7 @@ func test_a_downed_insulated_unit_survives_a_lightning_bolt() -> void:
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
 	foe.lifecycle_state = Unit.LifecycleState.DOWNED
 
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -209,7 +209,7 @@ func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
 	foe.worn_armor = _insulated_against(Elemental.Element.FIRE)   # insulated against the WRONG thing
 	foe.lifecycle_state = Unit.LifecycleState.DOWNED
 
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)
@@ -243,7 +243,7 @@ func test_a_blocked_bolt_leaves_a_living_target_untouched() -> void:
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
 
-	var atk := AttackAction.create(alch, alch.movement.cell, foe, Vector2i(1, 0))
+	var atk := H.stamped_attack(alch, foe)
 	atk.fired_attack = _lightning_bolt(5)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(atk)

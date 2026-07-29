@@ -398,8 +398,6 @@ func clear_selection():
 	_target_pick_callback = Callable()   # drop captured refs
 
 	overlay_manager.clear_selection_overlays()
-	overlay_manager.clear_terrain_preview()
-	overlay_manager.clear_knockback_preview()
 	if squad_manager.active_squad == null:
 		overlay_manager.clear_squad_range()
 	if squad_manager.active_squad == null:
@@ -549,7 +547,7 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 	var shoves: Array = []
 	for atk in plan.attacks:
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-			shoves.append({"target": atk.target, "from": atk.target.movement.cell, "to": atk.resolved.knockback_to})
+			shoves.append({"target": atk.target, "from": atk.resolved.knockback_from, "to": atk.resolved.knockback_to})
 	overlay_manager.show_knockback_preview(shoves)
 
 func _squad_all_committed(squad: Squad) -> bool:

@@ -4,7 +4,9 @@
 
 > **Locked 2026-06-18 (#5):** R1–R8 ratified, plus three clarifications folded in for Will's sake — **R4** threads HP (+ a Will slot), not element-states-only; **R7** counter *derivation* reads the threaded hypothetical (liveness-ready); **R8** the `ResolvedOutcome` is the single source of truth for damage (`AttackAction` stops computing it). Deferred (not locked): volley / simultaneous-hit ordering within one AoE — revisit when tile states or multi-hit-same-target arrive. This doc sits *above* the counter rules in [squad-system.md](squad-system.md) and the [elemental](elemental-system.md) / [will-and-death](will-and-death.md) designs: it defines the single seam all three plug into. The **contract (R1–R8)** is what's being locked; class names are illustrative.
 
-**Canon checked through #83 (2026-07-22).**
+**Canon checked through #110 (2026-07-28).**
+
+> **Amendment 2026-07-28 (#105) — attacks are expanded and resolved one aim at a time.** `SquadManager.resolve_plan` used to expand *every* stored aim into a volley and only then resolve the batch. A knockback shove (#84) only becomes a projected position once its own attack has resolved, so that ordering put **every victim lookup strictly before every shove**: aiming at a landing cell found nobody, and a unit shoved *out* of a later blast was still hit by it. Each aim is now expanded, resolved (`PlanResolver.resolve_attack_group`) and its shoves published before the next is expanded. The pass is unchanged in every other respect — same order, same shared hypothetical, same cell-effect sequence — and R1–R9 are untouched; this is the ordering the contract always implied.
 
 ## Why this doc exists
 
@@ -34,7 +36,7 @@ That's *derive → show → replay*. The pipeline generalizes this one proven mo
 
 Conceptual stages, applied per attack in queued order while a **hypothetical copy of unit state** is threaded forward:
 
-1. **Position** — already projected today via `Unit.get_projected_destination()` (the leader's planned cell, etc.).
+1. **Position** — projected via `Unit.get_projected_destination()` (the leader's planned cell, etc.), which since #105 is one call of the shared `Unit.projected_cell(unit, actions, require_valid, use_knockback)` — the same derivation plan validation uses, with the two axes it needs answered differently stated as arguments. Its inverse, `Unit.projected_unit_at(units, cell)`, is what `BoardContext.projected_unit_at_cell` (and therefore victim gathering) asks.
 2. **Base damage** — originally the math inside `AttackAction.create()` (`weapon.power + scaling_stat`, or `STR` unarmed); per R8 this moved into the pipeline (elemental E1) and has moved again since — `PlanResolver._source_base_damage` now reads whichever `AttackData` the order stamped (`AttackAction.fired_attack`: a carving, a specific `WeaponAttackData`, or null = the weapon's main), scaled by `scaling_blend` + active mods (#59, #72), or bare `STR` unarmed.
 3. **Elemental** — read the target's hypothetical states, match an `ElementalReaction`, modify damage, write state add/remove. (Phase 2.)
 4. **Will / death** — read the *now-final* damage, pick the rung: downed / maim / overkill-kill / Crisis. (Phase 3.)

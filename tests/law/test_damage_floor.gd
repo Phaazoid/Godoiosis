@@ -28,7 +28,7 @@ func _fire_attack(attacker: Unit, target: Unit) -> AttackAction:
 	var weapon := H.make_weapon(6)
 	weapon.template.main_attack.elemental_damage_type = Elemental.Element.FIRE
 	attacker.equipped_weapon = weapon
-	return AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
+	return H.stamped_attack(attacker, target)
 
 func test_negative_damage_floors_at_zero_and_never_heals() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})

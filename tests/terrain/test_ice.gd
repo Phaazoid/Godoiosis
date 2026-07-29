@@ -49,7 +49,11 @@ func _frozen_store() -> TerrainStateManager:
 
 func _resolve(attacker: Unit, cell: Vector2i, reactions: Array[TerrainReaction], board: _IceBoard) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
-	plan.attacks.append(AttackAction.create(attacker, attacker.movement.cell, null, cell))
+	# Cell-targeted (no unit), but still STAMPED — since #102 an unstamped order means "no attack",
+	# so it would deposit nothing. Production's declare() does exactly this.
+	var aim := AttackAction.create(attacker, attacker.movement.cell, null, cell)
+	aim.fired_attack = attacker.get_fired_attack()
+	plan.attacks.append(aim)
 	var no_reactions: Array[ElementalReaction] = []
 	PlanResolver.resolve(plan, no_reactions, board, reactions)
 	return plan
