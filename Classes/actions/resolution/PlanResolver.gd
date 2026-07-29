@@ -100,7 +100,8 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var mitigation := _mitigation_for(action, target, target_hypo, board)
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
-	# Insulation (armor immune_elements): an attack whose damage IS elemental -- a rune carving,
+	# Insulation (a granted PASSIVE ability, #90 — from gear today, from any source the kit knows
+	# tomorrow): an attack whose damage IS elemental -- a rune carving,
 	# which scales off the wielder's AURA rather than their body -- is TURNED ASIDE ENTIRELY when
 	# the armor blocks every element it carries. Deliberately NOT modelled as a 0-damage hit: those
 	# still COUNT as hits and still finish a downed unit (stats.md's 0-damage rule). The bolt never
@@ -116,7 +117,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
 	# a non-issue since cap >= 0 makes max(0,min(cap,x)) == min(cap,max(0,x)) always.
-	if target.unit_instance.has_live_ability(Abilities.Id.IRON_WILL):
+	if target.has_live_ability(Abilities.Id.IRON_WILL):
 		outcome.damage = mini(outcome.damage, Abilities.IRON_WILL_DAMAGE_CAP)
 
 	# --- thread the hypothetical forward (R4) ---

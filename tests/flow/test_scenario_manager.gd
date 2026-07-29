@@ -184,7 +184,10 @@ func _plate() -> ArmorData:
 	armor.def_power = 6
 	armor.flat_def = 1
 	armor.stat_minimums[Stats.Stat.CON] = 6
-	armor.immune_elements.append(Elemental.Element.SHOCK)
+	var insulation := AbilityData.new()
+	insulation.id = Abilities.Id.INSULATED_SHOCK
+	insulation.kind = AbilityData.AbilityKind.PASSIVE
+	armor.granted_abilities = [insulation]
 	return armor
 
 func test_worn_armor_round_trips() -> void:
@@ -201,10 +204,16 @@ func test_worn_armor_round_trips() -> void:
 	assert_object(b.worn_armor).is_not_null()
 	assert_str(b.worn_armor.item_name).is_equal("Plate")
 	assert_int(b.worn_armor.def_power).is_equal(6)
-	# every field of the model rides along -- gates and immunity are as persistent as DEF
+	# every field of the model rides along -- gates and granted abilities are as persistent as DEF
 	assert_int(b.worn_armor.flat_def).is_equal(1)
 	assert_int(b.worn_armor.stat_minimums[Stats.Stat.CON]).is_equal(6)
-	assert_bool(b.worn_armor.blocks_element(Elemental.Element.SHOCK)).is_true()
+	# The whole chain has to survive, not just the field: copy_equippable carries granted_abilities,
+	# and the reconstituted wearer is still immune (#90). Compared by ID rather than identity on
+	# purpose -- duplicate(true) forks a pathless AbilityData like this fixture's, which is harmless
+	# precisely because the kit matches on id. A real authored .tres has a resource_path and stays shared.
+	assert_int(b.worn_armor.granted_abilities.size()).is_equal(1)
+	assert_int(b.worn_armor.granted_abilities[0].id).is_equal(Abilities.Id.INSULATED_SHOCK)
+	assert_bool(b.is_immune_to(Elemental.Element.SHOCK)).is_true()
 	assert_object(b.worn_armor).is_not_same(armor)   # copy_equippable, not the shared source
 
 func test_worn_armor_is_the_carried_copy_not_a_duplicate() -> void:

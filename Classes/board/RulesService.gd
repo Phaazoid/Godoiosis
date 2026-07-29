@@ -26,7 +26,7 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 	# the cell is ALREADY impassable, so the JobCatalog lookup stays off the hot path for ordinary
 	# ground (it used to be computed for every cell — see docs/performance.md).
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
-		and unit.unit_instance.has_live_ability(Abilities.Id.WATERWALK)
+		and unit.has_live_ability(Abilities.Id.WATERWALK)
 
 static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)

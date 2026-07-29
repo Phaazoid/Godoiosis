@@ -30,11 +30,31 @@ class _StubBoard extends BoardContext:
 		return kinds.get(cell, Terrain.Kind.NONE)
 
 
+func _ability(id: Abilities.Id) -> AbilityData:
+	var a := AbilityData.new()
+	a.id = id
+	a.kind = AbilityData.AbilityKind.PASSIVE
+	return a
+
+
+# Insulation arrives as a granted ABILITY since #90, not an element list on the armor -- so this
+# fixture now walks the same path real content does: gear -> the live ability kit -> is_immune_to.
+# Indexed, not .get()'d, on purpose: an element with no insulation ability authored yet is a loud
+# test failure rather than silently inert armor that would make its case pass for the wrong reason.
 func _insulated_against(element: Elemental.Element) -> ArmorData:
 	var weave := ArmorData.new()
 	weave.item_name = "Test Weave"
-	weave.immune_elements.append(element)
+	weave.granted_abilities = [_ability(Abilities.INSULATION[element])]
 	return weave
+
+
+# Armor that grants a real ability which is NOT insulation — the control for "it's the matching
+# insulation that protects you, not merely wearing something that grants an ability."
+func _armor_granting(id: Abilities.Id) -> ArmorData:
+	var armor := ArmorData.new()
+	armor.item_name = "Test Armor"
+	armor.granted_abilities = [_ability(id)]
+	return armor
 
 
 func _shock_electrocute(bonus: int = 5) -> ElementalReaction:
@@ -203,10 +223,14 @@ func test_a_downed_insulated_unit_survives_a_lightning_bolt() -> void:
 
 
 func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
-	# Control: the same downed unit, same bolt, wrong armor -- the ratified downed rule applies.
+	# Control: the same downed unit, same bolt, armor that grants the WRONG ability -- the ratified
+	# downed rule applies. Since #90 there is only one insulation id authored (SHOCK), so "insulated
+	# against fire" is no longer expressible; granting an unrelated ability is the stronger control
+	# anyway, because it rules out ANY ability-granting armor exempting a downed unit. TAUNT rather
+	# than IRON_WILL deliberately: a damage cap would confound the numbers on the way through.
 	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
-	foe.worn_armor = _insulated_against(Elemental.Element.FIRE)   # insulated against the WRONG thing
+	foe.worn_armor = _armor_granting(Abilities.Id.TAUNT)
 	foe.lifecycle_state = Unit.LifecycleState.DOWNED
 
 	var atk := H.stamped_attack(alch, foe)

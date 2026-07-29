@@ -295,7 +295,7 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) 
 	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
 	# falls through to the default policy below rather than suppressing the counter.
 	for member in attacking_party:
-		if member.unit_instance.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member):
+		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member):
 			return member
 	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:

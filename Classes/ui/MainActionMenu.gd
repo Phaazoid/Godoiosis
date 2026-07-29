@@ -11,10 +11,21 @@ class_name MainActionMenu
 # collapsed into _open_menu(), and two copies of the fireable-or-disabled row into
 # _attack_entry(). The coordinator now only says "open the menu for this unit at this point".
 #
-# Three menus live here. The MAIN menu (ACTION_DATA) is the top level. The ATTACK menu is the
-# rune carving picker. The WEAPON ACTION submenu gathers the equipped weapon's extras and its
-# self-abilities. Adding a general verb touches the main menu; a weapon-specific one touches
-# only show_weapon_action_menu -- see CLAUDE.md's new-action checklist.
+# The MAIN menu (ACTION_DATA) is the top level; below it sit THREE submenu categories, and Attack
+# itself is submenu-free for every kind of equipped item (#88, 2026-07-29):
+#   WEAPON ACTION  -- the equipped weapon's non-main attacks plus its self-abilities (Reload/Rev/
+#                     Burrow). A weapon HAS an authored main_attack, so Attack fires that.
+#   TRANSMUTATION  -- a rune's carvings. A rune has NO authored main, so they're interchangeable
+#                     equals and all of them list; Attack fires whichever is default (first
+#                     channelable). Built on show_attack_menu, the shared attack picker.
+#   ABILITY ACTION -- ability-driven verbs (Intimidate today; Fortitude/Guard later).
+# Transmutation is deliberately NOT folded under Ability Action even though #88's own text proposed
+# it: runes are equippables and a carving is not ability use (dev call). All three are purely a
+# menu-layer grouping -- the queued ActionType is unchanged, so resolver/queue panel/AI see nothing.
+#
+# Adding a general verb touches the main menu; a weapon-specific one touches only
+# show_weapon_action_menu; an ability-driven one touches only ability_action_entries and its
+# _pick_ability_action arm -- see CLAUDE.md's new-action checklist.
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
@@ -33,9 +44,10 @@ const EXECUTE_ORDERS := 11
 const RESCUE := 12
 const RALLY := 13
 const GROUP_MOVE := 14
-const INTIMIDATE := 15
+const ABILITY_ACTION := 15
 const WEAPON_ACTION := 16
 const CAPTURE := 17
+const TRANSMUTATION := 18
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
@@ -45,9 +57,10 @@ const ACTION_DATA := {
 	GROUP_MOVE: {"name": "Group Move"},
 	ATTACK: {"name": "Attack"},
 	WEAPON_ACTION: {"name": "Weapon Action"},
+	TRANSMUTATION: {"name": "Transmutation"},
+	ABILITY_ACTION: {"name": "Ability Action"},
 	RESCUE: {"name": "Rescue"},
 	RALLY: {"name": "Rally"},
-	INTIMIDATE: {"name": "Intimidate"},
 	CAPTURE: {"name": "Capture Point"},
 	SQUADUP: {"name": "Squad Up"},
 	JOINSQUAD: {"name": "Join Squad"},
@@ -74,14 +87,6 @@ func show_main_menu(unit: Unit, pos: Vector2i) -> void:
 # so a stale one never leaks into a new aim.
 func begin_attack(unit: Unit) -> void:
 	unit.active_attack = null
-	var rune := unit.get_equipped_weapon() as RuneData
-	if rune != null:
-		var choices := unit.get_selectable_attacks()
-		if choices.size() > 1:
-			show_attack_menu(unit, choices, game.get_viewport().get_mouse_position())
-			return
-		if not choices.is_empty():
-			unit.active_attack = choices[0]
 	game.enter_attack_mode(unit)
 
 # Synthetic items: index -> {name}, so the Control-based ActionMenuController (#26) renders the
@@ -199,8 +204,11 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.can_rally():
 		options.append(RALLY)
 
-	if _can_take_main_action(unit) and unit.unit_instance.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
-		options.append(INTIMIDATE)
+	if _can_take_main_action(unit) and not ability_action_entries(unit).is_empty():
+		options.append(ABILITY_ACTION)
+
+	if _can_take_main_action(unit) and unit.has_transmutations():
+		options.append(TRANSMUTATION)
 
 	if _can_take_main_action(unit) and game.mission_controller.is_capture_zone_at(unit.get_projected_destination()) \
 		and not game.mission_controller.is_zone_captured(game.zone_manager.zone_at(unit.get_projected_destination())):
@@ -270,8 +278,10 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board()), func(target: Unit): game.queue_rescue(unit, target))
 		RALLY:
 			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
-		INTIMIDATE:
-			game.enter_target_pick_mode(RulesService.adjacent_enemies(unit, game._board()), func(target: Unit): game.queue_intimidate(unit, target))
+		ABILITY_ACTION:
+			show_ability_action_menu(unit)
+		TRANSMUTATION:
+			show_attack_menu(unit, unit.get_transmutation_choices(), game.get_viewport().get_mouse_position())
 		CAPTURE:
 			game.queue_capture(unit)
 		GROUP_MOVE:
@@ -288,3 +298,36 @@ func _pick_weapon_action(unit: Unit, entry: Dictionary) -> void:
 		_pick_attack(unit, entry["attack"])
 	else:
 		game.queue_simple_action(unit, entry["self"])
+
+# Every ability-driven main action this unit could take RIGHT NOW (#88). ONE list, two readers:
+# populate() gates the top-level entry on it being non-empty, and show_ability_action_menu builds
+# the submenu from it — so the category can never open empty, nor hide an option that was live.
+# Each entry is {name, type}; the queued ActionType is unchanged, which is what keeps the resolver,
+# the queue panel and the AI untouched by this refactor.
+func ability_action_entries(unit: Unit) -> Array[Dictionary]:
+	var entries: Array[Dictionary] = []
+	if unit.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
+		entries.append({"name": "Intimidate", "type": BaseAction.ActionType.INTIMIDATE})
+	return entries
+
+func show_ability_action_menu(unit: Unit) -> void:
+	var entries := ability_action_entries(unit)
+	var items := []
+	var data := {}
+	for i in range(entries.size()):
+		items.append(i)
+		data[i] = {"name": entries[i]["name"]}
+
+	_open_menu(unit, items, data, game.get_viewport().get_mouse_position(),
+		func(idx, picking_unit): _pick_ability_action(picking_unit, entries[idx]["type"]))
+
+# Per-type dispatch, not one uniform queue call: an ability action can need a TARGET pick where a
+# weapon self-ability never does. Same reasoning that keeps queue_intimidate separate from
+# queue_simple_action — one signature would just move the branching into a parameter bag. An
+# unmatched type is loud, mirroring AITactics' builders.
+func _pick_ability_action(unit: Unit, type: BaseAction.ActionType) -> void:
+	match type:
+		BaseAction.ActionType.INTIMIDATE:
+			game.enter_target_pick_mode(RulesService.adjacent_enemies(unit, game._board()), func(target: Unit): game.queue_intimidate(unit, target))
+		_:
+			push_error("MainActionMenu: no dispatch for ability action %s" % BaseAction.ActionType.keys()[type])

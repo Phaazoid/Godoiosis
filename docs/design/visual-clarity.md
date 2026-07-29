@@ -64,6 +64,17 @@ directly against `Classes/ui/queue/SquadActionQueueControl.gd` / `ActionQueueRow
 5. **Click-drag to reorder attacks.** — **DONE** — full drag machinery (`_drag_row` / `_drag_section`,
    `reorder_attacks_requested` signal) in `SquadActionQueueControl`.
 
+## Tooltip / popup legibility — open items (added 2026-07-29)
+
+Collected at @Phaazoid's direction while building [#90](https://github.com/Phaazoid/Godoiosis/issues/90) and [#88](https://github.com/Phaazoid/Godoiosis/issues/88). All three are "the text is there but the player can't use it" problems, which is this umbrella's remit.
+
+1. **Popup line width — DONE 2026-07-29.** Long tooltips ran off the right edge of the screen and became unreadable (found by feel-test on a new ability description). Godot's built-in tooltip is a `Label` with autowrap **off**, and autowrap is a property rather than a theme item, so there is no global switch — every tooltip in `Classes/ui/` now routes through `UiText.wrap()` (`TOOLTIP_WIDTH`, playtest-tunable). Pinned by `tests/law/test_tooltip_wrapping.gd`, a **source-level** law: this layer has zero runtime coverage (#114), so a forgotten wrap is invisible to every other test. Known trade-off: a single word longer than the width overflows its line rather than breaking mid-word.
+2. **A rune has no meaningful inventory tooltip.** `inventory_panel._tooltip_for` has a `WeaponInstance` branch and an `ArmorData` branch; a `RuneData` falls through to the generic case and shows only its name plus flavour text. None of what a decision actually turns on is visible: **temper element, inscribed carvings, used/remaining capacity**. `RuneData` already exposes all of it (`temper`, `inscriptions`, `capacity()`, `used_capacity()`, `remaining_capacity()`), so this is a readout, not new machinery.
+3. **The Transmutation submenu should read as a catalogue, not just a picker** ([#88](https://github.com/Phaazoid/Godoiosis/issues/88)). Two parts, both dev-requested at build time:
+   - **Hover descriptions per carving** — the menu lists carving names with no indication of what any of them does.
+   - **Show un-channelable carvings, blotted out.** Today the category lists only what the wielder can currently afford, because `RuneData.choice_attacks` routes through the aura-filtered `channelable()`. A carving you own but can't pay for is therefore *absent* rather than greyed — the opposite of the law `_attack_entry` applies to weapons, where an unfireable pick stays **listed but disabled** (#73/#84). Closing it means the menu reading `inscriptions` (everything inscribed) and asking channelability per entry, rather than being handed a pre-filtered list.
+   - This is also **why the category opens for a single carving** rather than requiring two: with descriptions and blotted-out entries it is informative even when it offers no alternative choice. Recorded because the ≥1 gate looks redundant against Attack until you know it's coming.
+
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;

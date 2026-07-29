@@ -69,17 +69,28 @@ func test_insulated_weave_grants_no_def_and_no_gate() -> void:
 	assert_int(anyone.get_effective_def()).is_equal(0)
 
 
-func test_insulated_weave_blocks_shock_only() -> void:
+func test_insulated_weave_grants_shock_insulation_only() -> void:
+	# Reads the AUTHORED resource off disk, so this is what pins the .tres content itself: since #90
+	# the Weave carries no element list, it grants an ability, and immunity is only ever asked of the
+	# WEARER (Unit.is_immune_to) rather than of the piece.
 	var weave: ArmorData = ArmorCatalog.get_editable()["Insulated Weave"]
-	assert_bool(weave.blocks_element(Elemental.Element.SHOCK)).is_true()
-	assert_bool(weave.blocks_element(Elemental.Element.FIRE)).is_false()
+	assert_int(weave.granted_abilities.size()).is_equal(1)
+	assert_int(weave.granted_abilities[0].id).is_equal(Abilities.Id.INSULATED_SHOCK)
+
+	var anyone: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0))
+	anyone.worn_armor = weave
+	assert_bool(anyone.is_immune_to(Elemental.Element.SHOCK)).is_true()
+	assert_bool(anyone.is_immune_to(Elemental.Element.FIRE)).is_false()
 
 
-func test_the_def_armors_block_nothing() -> void:
+func test_the_def_armors_grant_nothing() -> void:
 	var armors := ArmorCatalog.get_editable()
+	var anyone: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0))
 	for name in ["Bulwark Plate", "Ballast Harness", "Riveted Mail"]:
 		var piece: ArmorData = armors[name]
-		assert_bool(piece.blocks_element(Elemental.Element.SHOCK)).is_false()
+		assert_array(piece.granted_abilities).is_empty()
+		anyone.worn_armor = piece
+		assert_bool(anyone.is_immune_to(Elemental.Element.SHOCK)).is_false()
 
 
 # --- Riveted Mail: no gate, but a live stat tax ---

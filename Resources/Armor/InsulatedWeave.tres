@@ -1,10 +1,12 @@
 [gd_resource type="Resource" script_class="ArmorData" format=3]
 
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="1_armor"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_ability"]
+[ext_resource type="Resource" path="res://Resources/Abilities/InsulatedShock.tres" id="3_insulation"]
 
 [resource]
 script = ExtResource("1_armor")
-immune_elements = Array[int]([3])
+granted_abilities = Array[ExtResource("2_ability")]([ExtResource("3_insulation")])
 item_name = "Insulated Weave"
 description = "Vulcanized cloth over a dead-air lattice. It stops nothing with mass -- no plate, no bracing -- but current finds no road through it, and the storm simply goes around."
 metadata/_custom_type_script = "uid://dj0617uewvdny"

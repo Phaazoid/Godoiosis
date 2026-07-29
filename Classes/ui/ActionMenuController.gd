@@ -55,7 +55,7 @@ func populate(items: Array, action_data: Dictionary) -> void:
 		button.focus_mode = Control.FOCUS_NONE
 		if action_data[item].get("disabled", false):
 			button.disabled = true
-			button.tooltip_text = action_data[item].get("tooltip", "")
+			button.tooltip_text = UiText.wrap(action_data[item].get("tooltip", ""))
 		else:
 			button.pressed.connect(_on_button_pressed.bind(item))
 		_button_box.add_child(button)
