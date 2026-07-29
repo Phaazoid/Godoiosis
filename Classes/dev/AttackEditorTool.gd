@@ -5,6 +5,8 @@ class_name AttackEditorTool
 @onready var load_dropdown: OptionButton = %CarvingLoadDropdown
 @onready var name_input: LineEdit = %CarvingNameInput
 @onready var new_button: Button = %NewButton
+@onready var update_button: Button = %UpdateAttackButton
+@onready var save_as_button: Button = %SaveAsAttackButton
 
 # Authors TransmutationData carvings, WeaponAttackData weapon attacks, AND edits an established
 # family's/prototype's MAIN attack in place — three modes, one form (#30 / #72; folded from a
@@ -41,17 +43,20 @@ func _on_weapon_attack_mode_selected():
 
 func _on_family_mains_mode_selected():
 	_mode = Mode.FAMILY_MAINS
-	new_button.disabled = true   # no "new" concept — a main is always tied to an existing family
+	new_button.disabled = true
 	_refresh_list()
 	if _items.is_empty():
 		current_template = null
 		current = null
 		name_input.text = ""
 		populate()
-	else:
-		_load_selected(0)
+		_refresh_buttons()
+		return
+	load_dropdown.select(0)
+	_load_selected()
+	_refresh_buttons()
 
-func _refresh_list():
+func _refresh_list(select_name := ""):
 	load_dropdown.clear()
 	match _mode:
 		Mode.TRANSMUTATION:
@@ -63,18 +68,39 @@ func _refresh_list():
 	for k in _items:
 		load_dropdown.add_item(k)
 
-func _load_selected(index: int):
-	if index < 0:
+	# add_item auto-selects index 0 -- Update must never aim at an entry nobody picked.
+	load_dropdown.select(-1)
+	for i in load_dropdown.item_count:
+		if load_dropdown.get_item_text(i) == select_name:
+			load_dropdown.select(i)
+			break
+	_refresh_buttons()
+
+# FAMILY_MAINS has no Save As: a main is always tied to an existing family, never created from
+# scratch, and its Update overwrites the attack's own file rather than a chosen name.
+func _refresh_buttons():
+	var noun := "family" if _mode == Mode.FAMILY_MAINS else "attack"
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), noun)
+	save_as_button.disabled = _mode == Mode.FAMILY_MAINS
+
+func _load_selected():
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "" or not _items.has(target):
 		return
-	var picked = _items[_items.keys()[index]]
+	var picked = _items[target]
 	if _mode == Mode.FAMILY_MAINS:
 		current_template = picked
 		current = current_template.main_attack if current_template != null else null
 	else:
 		current_template = null
 		current = picked.duplicate(true)
-	name_input.text = current.display_name if current != null else ""
 	populate()
+
+func _on_load_dropdown_item_selected(_index: int):
+	_refresh_buttons()
+
+func _on_load_pressed():
+	_load_selected()
 
 func _on_new_pressed():
 	if _mode == Mode.FAMILY_MAINS:
@@ -82,34 +108,45 @@ func _on_new_pressed():
 	current_template = null
 	current = TransmutationData.new() if _mode == Mode.TRANSMUTATION else WeaponAttackData.new()
 	name_input.text = ""
+	load_dropdown.select(-1)
+	_refresh_buttons()
 	populate()
 
-func _on_save_pressed():
+func _on_update_pressed():
 	if current == null:
 		return
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "":
+		return
 	if _mode == Mode.FAMILY_MAINS:
-		var live_name := name_input.text.strip_edges()
-		if live_name != "":
-			current.display_name = live_name
+		# The main is edited LIVE, never duplicated, so it already knows its own file.
 		if current.resource_path == "":
-			push_warning("This family's main attack has no saved path yet — author it in Weapon Attack mode first")
+			push_warning("%s's main attack has no saved file yet -- author it in Weapon Attack mode first" % target)
 			return
-		var save_err := ResourceSaver.save(current, current.resource_path)
-		if save_err != OK:
-			push_error("Failed to save (error %s)" % save_err)
+		DevWidgets.save_over(current, current.resource_path)
+		return
+	var path: String = _items[target].resource_path
+	if path == "":
+		push_warning("%s has no file on disk to update" % target)
+		return
+	if DevWidgets.save_over(current, path):
+		_refresh_list(current.display_name)
+
+func _on_save_as_pressed():
+	if current == null or _mode == Mode.FAMILY_MAINS:
 		return
 	var chosen_name := name_input.text.strip_edges()
 	if chosen_name == "":
 		push_warning("Needs a name to save")
 		return
-	current.display_name = chosen_name
 	var dir := TransmutationCatalog.CARVING_DIR if _mode == Mode.TRANSMUTATION else WeaponAttackCatalog.LIBRARY_DIR
-	DirAccess.make_dir_recursive_absolute(dir)
-	var err := ResourceSaver.save(current, dir + chosen_name + ".tres")
-	if err != OK:
-		push_error("Failed to save (error %s)" % err)
+	var path := dir + chosen_name + ".tres"
+	if DevWidgets.refuse_existing_file(path, "attack"):
 		return
-	_refresh_list()
+	current.display_name = chosen_name
+	if DevWidgets.save_over(current, path):
+		name_input.text = ""
+		_refresh_list(chosen_name)
 
 func populate():
 	for child in editor_container.get_children():
@@ -119,6 +156,8 @@ func populate():
 		if _mode == Mode.FAMILY_MAINS:
 			DevWidgets.add_label(editor_container, "(no main attack)")
 		return
+	var edited := current
+	DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
 	match _mode:
 		Mode.TRANSMUTATION:
 			var carving := current as TransmutationData

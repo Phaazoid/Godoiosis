@@ -138,28 +138,45 @@ metadata/_tab_index = 2
 [node name="VBoxContainer" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" unique_id=382651101]
 layout_mode = 2
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer" unique_id=304424042]
+[node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer" unique_id=304424042]
 layout_mode = 2
 
-[node name="ItemLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer" unique_id=1930122686]
+[node name="ItemLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow" unique_id=1930122686]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LoadItemButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow" unique_id=990000001]
+layout_mode = 2
+text = "Load"
+
+[node name="UpdateItemButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow" unique_id=990000002]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Update"
+
+[node name="NewRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer" unique_id=990000003]
+layout_mode = 2
+
+[node name="ItemTypeDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow" unique_id=1677820295]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="NewButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer" unique_id=589552703]
+[node name="NewButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow" unique_id=589552703]
 layout_mode = 2
 text = "New"
 
-[node name="ItemNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer" unique_id=671083507]
+[node name="ItemNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow" unique_id=671083507]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Item Name"
+size_flags_horizontal = 3
+placeholder_text = "New item name"
 
-[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer" unique_id=1821793525]
+[node name="SaveAsItemButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow" unique_id=990000004]
 layout_mode = 2
-text = "Save"
+text = "Save As"
 
-[node name="ItemTypeDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer" unique_id=1677820295]
-unique_name_in_owner = true
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer" unique_id=990000005]
 layout_mode = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer" unique_id=225885286]
@@ -200,26 +217,44 @@ layout_mode = 2
 button_group = ExtResource("6_p14e7")
 text = "Weapon Primary Attacks"
 
-[node name="HBoxContainer" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer" unique_id=422837885]
+[node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer" unique_id=422837885]
 layout_mode = 2
 
-[node name="CarvingLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer" unique_id=874102988]
+[node name="CarvingLoadDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow" unique_id=874102988]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 
-[node name="NewButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer" unique_id=316149437]
+[node name="LoadAttackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow" unique_id=990000006]
+layout_mode = 2
+text = "Load"
+
+[node name="UpdateAttackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow" unique_id=990000007]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Update"
+
+[node name="NewRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer" unique_id=990000008]
+layout_mode = 2
+
+[node name="NewButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/NewRow" unique_id=316149437]
 unique_name_in_owner = true
 layout_mode = 2
 text = "New"
 
-[node name="CarvingNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer" unique_id=248163186]
+[node name="CarvingNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/NewRow" unique_id=248163186]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "Name"
+size_flags_horizontal = 3
+placeholder_text = "New attack name"
 
-[node name="SaveButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer" unique_id=1710586333]
+[node name="SaveAsAttackButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/NewRow" unique_id=990000009]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Save"
+text = "Save As"
+
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer" unique_id=990000010]
+layout_mode = 2
 
 [node name="ScrollContainer" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer" unique_id=1479609793]
 layout_mode = 2
@@ -236,36 +271,79 @@ layout_mode = 2
 script = ExtResource("2_1dnd3")
 metadata/_tab_index = 4
 
-[node name="ScenarioRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1524370160]
-layout_mode = 2
-
-[node name="ScenarioNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=1875216039]
-unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 25)
-layout_mode = 2
-placeholder_text = "Scenario name"
-
-[node name="SaveScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=818624335]
-layout_mode = 2
-text = "Save"
-
-[node name="ScenarioDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=1217769002]
+[node name="LoadedScenarioLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=990000021]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.83, 0.4, 1)
+text = "Loaded: (unsaved board)"
 
-[node name="LoadScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow" unique_id=31186477]
+[node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1524370160]
+layout_mode = 2
+
+[node name="ScenarioDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=1217769002]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="LoadScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=31186477]
 layout_mode = 2
 text = "Load"
 
-[node name="AIToggleList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=585167637]
+[node name="UpdateScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=990000011]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Update"
+
+[node name="NewRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=990000012]
+layout_mode = 2
+
+[node name="ScenarioNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/NewRow" unique_id=1875216039]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(100, 25)
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "New scenario name"
+
+[node name="SaveAsScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/NewRow" unique_id=990000013]
+layout_mode = 2
+text = "Save As"
+
+[node name="HSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=990000014]
+layout_mode = 2
+
+[node name="LowerScroll" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=990000015]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ScenarioScrollVbox" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll" unique_id=990000016]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AIControlLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=990000017]
+layout_mode = 2
+text = "AI control"
+
+[node name="AIToggleList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=585167637]
 unique_name_in_owner = true
 layout_mode = 2
 
-[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=144604209]
+[node name="ObjectiveSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=990000018]
+layout_mode = 2
+
+[node name="ObjectiveList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=990000019]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="SquadSeparator" type="HSeparator" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=990000020]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=144604209]
 layout_mode = 2
 text = "Squads"
 
-[node name="SquadList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1095340861]
+[node name="SquadList" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/LowerScroll/ScenarioScrollVbox" unique_id=1095340861]
 unique_name_in_owner = true
 layout_mode = 2
 
@@ -298,17 +376,23 @@ layout_mode = 2
 [connection signal="text_changed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/UnitNameInput" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_unit_name_input_text_changed"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/WeaponRow/WeaponDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_weapon_dropdown_item_selected"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn/SpriteRow/SpriteDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Spawn" method="_on_sprite_dropdown_item_selected"]
-[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer/ItemLoadDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_load_selected"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer/NewButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_new_pressed"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer/SaveButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_save_pressed"]
-[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/HBoxContainer/ItemTypeDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_type_selected"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow/ItemLoadDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_load_dropdown_item_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow/LoadItemButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_load_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/ExistingRow/UpdateItemButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_update_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow/NewButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_new_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow/SaveAsItemButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_save_as_pressed"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor/VBoxContainer/NewRow/ItemTypeDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Item Editor" method="_on_type_selected"]
 [connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ToggleHBoxContainer/TransmutationModeCheck" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_transmutation_mode_selected"]
 [connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ToggleHBoxContainer/WeaponAttackModeCheck" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_weapon_attack_mode_selected"]
 [connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ToggleHBoxContainer/FamilyMainsModeCheck" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_family_mains_mode_selected"]
-[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer/CarvingLoadDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_load_selected"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer/NewButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_new_pressed"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/HBoxContainer/SaveButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_save_pressed"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow/SaveScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_save_pressed"]
-[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ScenarioRow/LoadScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_load_pressed"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow/CarvingLoadDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_load_dropdown_item_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow/LoadAttackButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_load_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/ExistingRow/UpdateAttackButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_update_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/NewRow/NewButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_new_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor/VBoxContainer/NewRow/SaveAsAttackButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor" method="_on_save_as_pressed"]
+[connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow/ScenarioDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_load_dropdown_item_selected"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow/LoadScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_load_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow/UpdateScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_update_pressed"]
+[connection signal="pressed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/NewRow/SaveAsScenarioButton" to="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" method="_on_save_as_pressed"]
 [connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow/TileBoxCheck" to="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush" method="_on_tile_brush_toggled"]
 [connection signal="item_selected" from="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush/Panel/TileBrushRow/TileDropdown" to="Panel/MarginContainer/VBoxContainer/DevTabs/Tile Brush" method="_on_tile_dropdown_item_selected"]

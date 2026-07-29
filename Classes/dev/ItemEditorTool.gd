@@ -5,6 +5,7 @@ class_name ItemEditorTool
 @onready var type_dropdown: OptionButton = %ItemTypeDropdown
 @onready var load_dropdown: OptionButton = %ItemLoadDropdown
 @onready var name_input: LineEdit = %ItemNameInput
+@onready var update_button: Button = %UpdateItemButton
 
 # Authors either a WeaponData or a RuneData (the equip slot takes both). The type dropdown
 # lists weapon bases + prototypes + rune sizes; the field area renders the weapon reflectively
@@ -31,7 +32,7 @@ func _base_catalog() -> Dictionary:
 		bases[k] = runes[k]
 	return bases
 
-func _refresh_variant_list():
+func _refresh_variant_list(select_name := ""):
 	load_dropdown.clear()
 	_variants = {}
 	var weapons := WeaponCatalog.get_saved()
@@ -43,42 +44,71 @@ func _refresh_variant_list():
 	for v in _variants:
 		load_dropdown.add_item(v)
 
+	# add_item auto-selects index 0 -- Update must never aim at an entry nobody picked.
+	load_dropdown.select(-1)
+	for i in load_dropdown.item_count:
+		if load_dropdown.get_item_text(i) == select_name:
+			load_dropdown.select(i)
+			break
+	_refresh_update_button()
+
+func _refresh_update_button():
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), "item")
+
 func _rebase_on_type(index: int):
 	var bases := _base_catalog()
 	var key = bases.keys()[index]
 	var base = bases[key]
 	current_item = WeaponInstance.make(base) if base is WeaponData else base.duplicate(true)
+	load_dropdown.select(-1)
+	_refresh_update_button()
 	populate()
 
 func _on_type_selected(index: int):
 	_rebase_on_type(index)
 
-func _load_selected(index: int):
-	if index < 0:
-		return
-	current_item = _variants[_variants.keys()[index]].copy_equippable()
-	name_input.text = current_item.item_name
-	populate()
-
 func _on_new_pressed():
 	_rebase_on_type(type_dropdown.selected)
 	name_input.text = ""
 
-func _on_save_pressed():
+func _on_load_dropdown_item_selected(_index: int):
+	_refresh_update_button()
+
+func _on_load_pressed():
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "":
+		return
+	current_item = _variants[target].copy_equippable()
+	populate()
+
+func _on_update_pressed():
+	var target := DevWidgets.selected_name(load_dropdown)
+	if current_item == null or target == "":
+		return
+	# Overwrite the file the entry actually came from. The dropdown key is the item's NAME, and a
+	# path rebuilt from it would miss any file whose basename differs.
+	var path: String = _variants[target].resource_path
+	if path == "":
+		push_warning("%s has no file on disk to update" % target)
+		return
+	if DevWidgets.save_over(current_item, path):
+		_refresh_variant_list(current_item.item_name)
+
+func _on_save_as_pressed():
 	if current_item == null:
 		return
 	var item_name := name_input.text.strip_edges()
 	if item_name == "":
 		push_warning("Item needs a name to save")
 		return
-	current_item.item_name = item_name
 	var dir := RuneCatalog.VARIANT_DIR if current_item is RuneData else WeaponCatalog.SAVED_DIR
-	DirAccess.make_dir_recursive_absolute(dir)
-	var err := ResourceSaver.save(current_item, dir + item_name + ".tres")
-	if err != OK:
-		push_error("Failed to save item (error %s)" % err)
+	var path := dir + item_name + ".tres"
+	if DevWidgets.refuse_existing_file(path, "item"):
 		return
-	_refresh_variant_list()
+	current_item.item_name = item_name
+	if DevWidgets.save_over(current_item, path):
+		name_input.text = ""
+		_refresh_variant_list(item_name)
 
 func populate():
 	for child in editor_container.get_children():
@@ -86,6 +116,8 @@ func populate():
 		child.queue_free()
 	if current_item == null:
 		return
+	var edited := current_item
+	DevWidgets.add_lineedit(editor_container, "Item name", edited.item_name, func(s: String): edited.item_name = s)
 	if current_item is RuneData:
 		_populate_rune_editor(current_item)
 	elif current_item is WeaponInstance:
