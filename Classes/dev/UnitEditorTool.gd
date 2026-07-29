@@ -3,45 +3,188 @@ class_name UnitEditorTool
 
 # Dev-only unit editor: the tab (in DevOverlay) for editing whichever unit is currently
 # selected — stats, inventory, squad, and job assignment. Never shown to a player.
+#
+# Every control edits the STAGED buffer below, never the unit; Save is the only writer.
+# UnitInstance can't serve as that buffer (its fields are plain vars, so duplicate() returns a
+# blank), so state is captured field by field on select and applied in dependency order on Save.
 
 @onready var unit_editor_container := %UnitEditorVbox
 var editing_unit: Unit = null
 var game   # injected by DevOverlay
 
+var _dirty := false
+var _stats: Dictionary[Stats.Stat, int] = {}
+var _current_hp := 0
+var _current_will := 0
+var _faction: Team.Faction = Team.Faction.PLAYER
+var _squad_name := ""
+var _jobs: Array[String] = []
+var _limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
+var _affinity: Array[Elemental.Element] = []
+var _alkahest := false
+var _aura: Dictionary[Elemental.Element, int] = {}
+var _inventory: Array[Item] = []
+var _equipped_index := -1
+var _armor_index := -1
+
+var _save_button: Button = null
+var _revert_button: Button = null
+
 func init(p_game):
 	game = p_game
 
 func edit_unit(unit):
+	if unit != null and unit == editing_unit:
+		return   # re-selecting the same unit must not wipe what's staged
+	if _dirty and is_instance_valid(editing_unit):
+		push_warning("Unit editor: discarded unsaved changes to %s" % editing_unit.get_unit_name())
 	editing_unit = unit
 	if unit != null:
 		_show_self()
+		_capture(unit)
+	else:
+		_dirty = false
 	populate_unit_editor(unit)
 
 func _show_self():
 	%DevTabs.current_tab = %DevTabs.get_tab_idx_from_control(self)
 
+func _capture(unit: Unit) -> void:
+	var inst: UnitInstance = unit.unit_instance
+	_stats = inst.stats.duplicate()
+	_current_hp = unit.get_current_hp()
+	_current_will = inst.get_current_will()
+	_faction = unit.get_faction()
+	_squad_name = unit.squad.squad_name
+	_jobs = inst.jobs.duplicate()
+	_affinity = inst.affinity.duplicate()
+	_alkahest = inst.is_alkahest_affine
+	_aura = inst.aura.duplicate()
+
+	_limb_states = {}
+	for slot in UnitInstance.LimbSlot.values():
+		_limb_states[slot] = inst.limbs[slot].state
+
+	# Fixed-size slot array, so a plain copy stages it. Entries stay shared -- the tool only ever
+	# swaps whole slots, never edits an item in place.
+	_inventory = unit.inventory.duplicate()
+	var equipped := unit.get_equipped_weapon()
+	# find(null) would return the first EMPTY slot, so guard both lookups.
+	_equipped_index = _inventory.find(equipped) if equipped != null else -1
+	_armor_index = _inventory.find(unit.worn_armor) if unit.worn_armor != null else -1
+	_dirty = false
+
+# Order matters: stats before HP (they move its ceiling), inventory and armor before HP too (the
+# clamp reads gear, #106), faction last so its repaint sees a finished unit.
+func _apply(unit: Unit) -> void:
+	var inst: UnitInstance = unit.unit_instance
+
+	for stat in _stats:
+		inst.stats[stat] = _stats[stat]
+	inst.jobs = _jobs.duplicate()
+	inst.affinity = _affinity.duplicate()
+	inst.is_alkahest_affine = _alkahest
+	inst.aura = _aura.duplicate()
+
+	for slot in _limb_states:
+		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
+		if fitting.state == _limb_states[slot]:
+			continue   # unchanged: keep whatever prosthetic is fitted
+		fitting.state = _limb_states[slot]
+		fitting.prosthetic_stat = 0
+		fitting.prosthetic_item = null
+
+	for i in range(Unit.MAX_INVENTORY_SIZE):
+		unit.inventory[i] = _inventory[i]
+	# Dev tools stay omnipotent: this assigns directly, BYPASSING the equip/wear gates on purpose
+	# so out-of-spec combos can be tested. The armor requirement is shown in the row label instead.
+	unit.unequip_weapon()
+	if _equipped_index >= 0 and _inventory[_equipped_index] is EquippableData:
+		unit.set_equipped_weapon(_inventory[_equipped_index])
+	if _armor_index >= 0:
+		unit.worn_armor = _inventory[_armor_index] as ArmorData
+	else:
+		unit.worn_armor = null
+
+	unit.set_current_hp(maxi(1, _current_hp))   # through the UNIT: only it can derive the ceiling
+	inst.set_current_will(_current_will)
+
+	if unit.get_faction() != _faction:
+		unit.change_faction(_faction)
+	unit.squad.squad_name = _squad_name
+	_dirty = false
+
+func _on_save_pressed() -> void:
+	if not is_instance_valid(editing_unit):
+		return
+	_apply(editing_unit)
+	_capture(editing_unit)   # re-read: HP may have clamped against a max the edit just moved
+	populate_unit_editor(editing_unit)
+
+func _on_revert_pressed() -> void:
+	if not is_instance_valid(editing_unit):
+		return
+	_capture(editing_unit)
+	populate_unit_editor(editing_unit)
+
+func _touch() -> void:
+	_dirty = true
+	_refresh_save_row()
+
+func _refresh_save_row() -> void:
+	if not is_instance_valid(_save_button):
+		return
+	_save_button.disabled = not _dirty
+	_revert_button.disabled = not _dirty
+	_save_button.text = "Save *" if _dirty else "Save"
+
+# Top of the form on purpose: it is the only control that writes to the unit, so it has to stay
+# reachable however far the sections below scroll.
+func _add_save_row() -> void:
+	var row := HBoxContainer.new()
+
+	_save_button = Button.new()
+	_save_button.text = "Save"
+	_save_button.tooltip_text = "Write staged edits onto the unit"
+	_save_button.pressed.connect(_on_save_pressed)
+	row.add_child(_save_button)
+
+	_revert_button = Button.new()
+	_revert_button.text = "Revert"
+	_revert_button.tooltip_text = "Throw staged edits away and re-read the unit"
+	_revert_button.pressed.connect(_on_revert_pressed)
+	row.add_child(_revert_button)
+
+	unit_editor_container.add_child(row)
+	_refresh_save_row()
+
 func populate_unit_editor(unit):
 	for child in unit_editor_container.get_children():
 		unit_editor_container.remove_child(child)
 		child.queue_free()
+	_save_button = null
+	_revert_button = null
 
 	if unit == null or not is_instance_valid(unit):
 		return
 
 	DevWidgets.add_label(unit_editor_container, "Editing: " + unit.get_unit_name())
+	_add_save_row()
 
-	for stat in unit.unit_instance.stats:
-		DevWidgets.add_spinbox(unit_editor_container, Stats.Stat.keys()[stat], unit.unit_instance.stats[stat], func(v): unit.unit_instance.stats[stat] = int(v))
-	DevWidgets.add_spinbox(unit_editor_container, "Current HP", unit.get_current_hp(), func(v): unit.set_current_hp(maxi(1, int(v))))
-	DevWidgets.add_spinbox(unit_editor_container, "Current Will", unit.unit_instance.get_current_will(), func(v): unit.unit_instance.set_current_will(int(v)))
-	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[unit.get_faction()], func(s): _set_unit_faction(unit, s))
-	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", unit.squad.squad_name, func(s): unit.squad.squad_name = s)
+	for stat in _stats:
+		var key: Stats.Stat = stat
+		DevWidgets.add_spinbox(unit_editor_container, Stats.Stat.keys()[key], _stats[key],
+			func(v): _stage_stat(key, int(v)))
+	DevWidgets.add_spinbox(unit_editor_container, "Current HP", _current_hp, func(v): _stage_hp(int(v)))
+	DevWidgets.add_spinbox(unit_editor_container, "Current Will", _current_will, func(v): _stage_will(int(v)))
+	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
+		func(s): _stage_faction(s))
+	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
 
-	_add_inventory_section(unit)
-	_add_jobs_section(unit)
+	_add_inventory_section()
+	_add_jobs_section()
 	_add_limbs_section(unit)
-	_add_affinity_section(unit)
-
+	_add_affinity_section()
 
 	var delete_button := Button.new()
 	delete_button.text = "Delete Unit"
@@ -57,6 +200,26 @@ func populate_unit_editor(unit):
 	dup_button.text = "Duplicate (then click a cell)"
 	dup_button.pressed.connect(func(): _arm_duplicate())
 	unit_editor_container.add_child(dup_button)
+
+func _stage_stat(stat: Stats.Stat, value: int) -> void:
+	_stats[stat] = value
+	_touch()
+
+func _stage_hp(value: int) -> void:
+	_current_hp = maxi(1, value)
+	_touch()
+
+func _stage_will(value: int) -> void:
+	_current_will = value
+	_touch()
+
+func _stage_faction(faction_name: String) -> void:
+	_faction = Team.Faction[faction_name]
+	_touch()
+
+func _stage_squad_name(new_name: String) -> void:
+	_squad_name = new_name
+	_touch()
 
 # Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
 # them. Built here and reused by both the picker and the pick handler so their indices stay in
@@ -74,7 +237,7 @@ func _equippable_catalog() -> Dictionary:
 		items[k] = runes[k]
 	return items
 
-func _add_inventory_section(unit: Unit):
+func _add_inventory_section():
 	DevWidgets.add_label(unit_editor_container, "Inventory")
 
 	var weapons := _equippable_catalog()   # name -> EquippableData (weapons + authored runes)
@@ -82,12 +245,13 @@ func _add_inventory_section(unit: Unit):
 	var equip_group := ButtonGroup.new()
 
 	for i in range(Unit.MAX_INVENTORY_SIZE):
-		var current_item = unit.inventory[i]
+		var slot_index := i
+		var current_item = _inventory[slot_index]
 
 		var row := HBoxContainer.new()
 
 		var label := Label.new()
-		label.text = "Slot %d" % (i + 1)
+		label.text = "Slot %d" % (slot_index + 1)
 		label.custom_minimum_size = Vector2(60, 0)
 		row.add_child(label)
 
@@ -104,7 +268,7 @@ func _add_inventory_section(unit: Unit):
 					matched = true
 					break
 		picker.select(sel)
-		picker.item_selected.connect(func(idx): _on_slot_picked(unit, i, idx))
+		picker.item_selected.connect(func(idx): _on_slot_picked(slot_index, idx))
 		row.add_child(picker)
 
 		if current_item != null and not matched:
@@ -122,12 +286,12 @@ func _add_inventory_section(unit: Unit):
 		equip_btn.text = "Wear" if is_armor else "Equip"
 		equip_btn.disabled = not (current_item is EquippableData)
 		if is_armor:
-			equip_btn.button_pressed = (current_item == unit.worn_armor)
-			equip_btn.toggled.connect(func(pressed): _toggle_armor(unit, i, pressed))
+			equip_btn.button_pressed = (slot_index == _armor_index)
+			equip_btn.toggled.connect(func(pressed): _toggle_armor(slot_index, pressed))
 		else:
 			equip_btn.button_group = equip_group
-			equip_btn.button_pressed = (current_item != null and current_item == unit.get_equipped_weapon())
-			equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(unit, i))
+			equip_btn.button_pressed = (current_item != null and slot_index == _equipped_index)
+			equip_btn.toggled.connect(func(pressed): if pressed: _equip_slot(slot_index))
 		row.add_child(equip_btn)
 
 		if is_armor:
@@ -138,15 +302,13 @@ func _add_inventory_section(unit: Unit):
 
 		unit_editor_container.add_child(row)
 
-func _toggle_armor(unit: Unit, index: int, pressed: bool):
-	# Dev tools stay omnipotent: this assigns directly, BYPASSING can_equip on purpose, so
-	# out-of-spec combos can be tested. The requirement is shown in the row label instead.
-	# The player path (inventory_panel -> Unit.wear_armor) is where the gate actually bites.
+func _toggle_armor(index: int, pressed: bool):
 	if pressed:
-		unit.worn_armor = unit.inventory[index] as ArmorData
-	elif unit.inventory[index] == unit.worn_armor:
-		unit.remove_armor()
-	populate_unit_editor(unit)
+		_armor_index = index
+	elif _armor_index == index:
+		_armor_index = -1
+	_touch()
+	populate_unit_editor(editing_unit)
 
 func _entry_matches(entry, item) -> bool:
 	# A template entry matches an instance built on it; saved instances / runes match by name.
@@ -156,34 +318,56 @@ func _entry_matches(entry, item) -> bool:
 		return entry.item_name == item.item_name and item.item_name != ""
 	return false
 
-func _add_jobs_section(unit: Unit):
+func _on_slot_picked(index: int, opt_index: int):
+	if opt_index == 0:
+		_set_slot(index, null)
+	else:
+		var items := _equippable_catalog()
+		_set_slot(index, items[items.keys()[opt_index - 1]])
+
+func _set_slot(index: int, entry: Resource):
+	_inventory[index] = WeaponCatalog.instantiate_entry(entry) if entry != null else null
+	if _equipped_index == index:
+		_equipped_index = -1
+	if _armor_index == index:
+		_armor_index = -1
+	# Auto-equip into an empty weapon slot, but never armor -- that has its own Wear checkbox.
+	if _inventory[index] is EquippableData and not (_inventory[index] is ArmorData) and _equipped_index == -1:
+		_equipped_index = index
+	_touch()
+	populate_unit_editor(editing_unit)
+
+func _equip_slot(index: int):
+	if _inventory[index] is EquippableData:
+		_equipped_index = index
+	_touch()
+	populate_unit_editor(editing_unit)
+
+func _add_jobs_section():
 	DevWidgets.add_label(unit_editor_container, "Jobs")
 
-	var inst := unit.unit_instance
 	var jobs := JobCatalog.get_editable()   # display_name -> JobData
 
-	for job_id in inst.jobs:
+	for job_id in _jobs:
+		var id: String = job_id
 		var row := HBoxContainer.new()
 		var label := Label.new()
-		label.text = _display_name_for(jobs, job_id)
+		label.text = _display_name_for(jobs, id)
 		row.add_child(label)
 
 		var remove_button := Button.new()
 		remove_button.text = "Remove"
-		remove_button.pressed.connect(func():
-			inst.remove_job(job_id)
-			populate_unit_editor(unit))
+		remove_button.pressed.connect(func(): _remove_job(id))
 		row.add_child(remove_button)
 
 		unit_editor_container.add_child(row)
 
-	_add_job_picker(unit, jobs)
+	_add_job_picker(jobs)
 
-func _add_job_picker(unit: Unit, jobs: Dictionary):
-	var inst := unit.unit_instance
+func _add_job_picker(jobs: Dictionary):
 	var available: Array[String] = []
 	for display_name in jobs:
-		if not inst.has_job(jobs[display_name].id):
+		if not _jobs.has(jobs[display_name].id):
 			available.append(display_name)
 
 	if available.is_empty():
@@ -197,13 +381,21 @@ func _add_job_picker(unit: Unit, jobs: Dictionary):
 
 	var button := Button.new()
 	button.text = "Add"
-	button.pressed.connect(func():
-		var picked: String = available[picker.selected]
-		inst.add_job(jobs[picked].id)
-		populate_unit_editor(unit))
+	button.pressed.connect(func(): _add_job(jobs[available[picker.selected]].id))
 	row.add_child(button)
 
 	unit_editor_container.add_child(row)
+
+func _add_job(id: String) -> void:
+	if not _jobs.has(id):
+		_jobs.append(id)
+	_touch()
+	populate_unit_editor(editing_unit)
+
+func _remove_job(id: String) -> void:
+	_jobs.erase(id)
+	_touch()
+	populate_unit_editor(editing_unit)
 
 func _display_name_for(jobs: Dictionary, id: String) -> String:
 	for display_name in jobs:
@@ -214,91 +406,73 @@ func _display_name_for(jobs: Dictionary, id: String) -> String:
 func _add_limbs_section(unit: Unit):
 	DevWidgets.add_label(unit_editor_container, "Limbs")
 
-	var inst := unit.unit_instance
 	var slot_names := UnitInstance.LimbSlot.keys()
 	var state_names := UnitInstance.LimbState.keys()
 
 	for slot in UnitInstance.LimbSlot.values():
-		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
-		DevWidgets.add_option(unit_editor_container, slot_names[slot], state_names, state_names[fitting.state],
-			func(s): _on_limb_state_picked(unit, slot, s))
+		var key: UnitInstance.LimbSlot = slot
+		DevWidgets.add_option(unit_editor_container, slot_names[key], state_names, state_names[_limb_states[key]],
+			func(s): _on_limb_state_picked(key, s))
 
-	DevWidgets.add_label(unit_editor_container, "MOV: %d" % unit.get_mov())
-	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d" % [
+	# Derived through Unit (gear + effects), which the staging buffer deliberately doesn't model,
+	# so these show what the unit IS, not what's staged.
+	DevWidgets.add_label(unit_editor_container, "MOV: %d (saved)" % unit.get_mov())
+	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d (saved)" % [
 		unit.get_effective_stat(Stats.Stat.STR), unit.get_effective_stat(Stats.Stat.DEX)])
 
-func _add_affinity_section(unit: Unit):
+func _on_limb_state_picked(slot: UnitInstance.LimbSlot, state_name: String):
+	_limb_states[slot] = UnitInstance.LimbState[state_name]
+	_touch()
+	populate_unit_editor(editing_unit)
+
+func _add_affinity_section():
 	DevWidgets.add_label(unit_editor_container, "Affinity")
 
-	var inst := unit.unit_instance
 	for element in Elemental.SIGIL_ELEMENTS:
-		var name = Elemental.Element.keys()[element]
-		DevWidgets.add_checkbox(unit_editor_container, name, inst.has_affinity(element),
-			func(pressed): _on_affinity_toggled(unit, element, pressed))
+		var e: Elemental.Element = element
+		DevWidgets.add_checkbox(unit_editor_container, Elemental.Element.keys()[e], _affinity.has(e),
+			func(pressed): _on_affinity_toggled(e, pressed))
 
-	DevWidgets.add_checkbox(unit_editor_container, "Alkahest affine (hidden — Isaac only)", inst.is_alkahest_affine,
-		func(pressed): inst.is_alkahest_affine = pressed)
+	DevWidgets.add_checkbox(unit_editor_container, "Alkahest affine (hidden — Isaac only)", _alkahest,
+		func(pressed): _stage_alkahest(pressed))
 
-	var primary := inst.primary_affinity()
+	var primary: Elemental.Element = _affinity[0] if not _affinity.is_empty() else Elemental.Element.NONE
 	DevWidgets.add_label(unit_editor_container, "Primary: %s" % (Elemental.Element.keys()[primary] if primary != Elemental.Element.NONE else "(none — Rebecca)"))
 
 	DevWidgets.add_label(unit_editor_container, "Aura")
 	for element in Elemental.SIGIL_ELEMENTS:
-		var name = Elemental.Element.keys()[element]
-		if inst.has_affinity(element):
-			DevWidgets.add_spinbox(unit_editor_container, name, inst.get_element_aura(element),
-				func(v): inst.aura[element] = int(v))
+		var e: Elemental.Element = element
+		if _affinity.has(e):
+			DevWidgets.add_spinbox(unit_editor_container, Elemental.Element.keys()[e], _aura.get(e, 0),
+				func(v): _stage_aura(e, int(v)))
 		else:
-			DevWidgets.add_label(unit_editor_container, "%s: — (no affinity)" % name)
+			DevWidgets.add_label(unit_editor_container, "%s: — (no affinity)" % Elemental.Element.keys()[e])
 
-func _on_affinity_toggled(unit: Unit, element: Elemental.Element, pressed: bool):
-	var inst := unit.unit_instance
+func _on_affinity_toggled(element: Elemental.Element, pressed: bool):
 	if pressed:
-		if not inst.affinity.has(element):
-			inst.affinity.append(element)
+		if not _affinity.has(element):
+			_affinity.append(element)
 	else:
-		inst.affinity.erase(element)
-		inst.aura.erase(element)   # can't hold aura outside affinity — Rebecca rule guard
-	populate_unit_editor(unit)
+		_affinity.erase(element)
+		_aura.erase(element)   # can't hold aura outside affinity — Rebecca rule guard
+	_touch()
+	populate_unit_editor(editing_unit)
 
-func _on_limb_state_picked(unit: Unit, slot: int, state_name: String):
-	var fitting: UnitInstance.LimbFitting = unit.unit_instance.limbs[slot]
-	fitting.state = UnitInstance.LimbState[state_name]
-	fitting.prosthetic_stat = 0
-	fitting.prosthetic_item = null
-	populate_unit_editor(unit)
+func _stage_alkahest(pressed: bool) -> void:
+	_alkahest = pressed
+	_touch()
 
-func _on_slot_picked(unit: Unit, index: int, opt_index: int):
-	if opt_index == 0:
-		_set_slot(unit, index, null)
-	else:
-		var items := _equippable_catalog()
-		_set_slot(unit, index, items[items.keys()[opt_index - 1]])
-
-func _set_slot(unit: Unit, index: int, entry: Resource):
-	var was_equipped = (unit.inventory[index] != null and unit.inventory[index] == unit.get_equipped_weapon())
-	unit.inventory[index] = WeaponCatalog.instantiate_entry(entry) if entry != null else null
-	if was_equipped:
-		unit.unequip_weapon()
-	if unit.inventory[index] is EquippableData and unit.get_equipped_weapon() == null:
-		unit.set_equipped_weapon(unit.inventory[index])
-	populate_unit_editor(unit)
-
-func _equip_slot(unit: Unit, index: int):
-	var item = unit.inventory[index]
-	if item is EquippableData:
-		unit.set_equipped_weapon(item)
-	populate_unit_editor(unit)
-
-func _set_unit_faction(unit: Unit, faction_name: String):
-	unit.change_faction(Team.Faction[faction_name])
+func _stage_aura(element: Elemental.Element, value: int) -> void:
+	_aura[element] = value
+	_touch()
 
 func _delete_unit(unit: Unit):
 	if is_instance_valid(unit):
 		unit.die()
 	editing_unit = null
+	_dirty = false
 	populate_unit_editor(null)
-	
+
 func _arm_move() -> void:
 	if game != null and is_instance_valid(editing_unit):
 		game.dev_controller.arm_move(editing_unit)

@@ -11,6 +11,9 @@ const SCENARIO_DIR := "res://Scenarios/"
 # scenario named "missions/Camp" lands here.
 const MISSION_DIR := SCENARIO_DIR + "missions/"
 
+static func scenario_path(scenario_name: String) -> String:
+	return SCENARIO_DIR + scenario_name + ".tres"
+
 @onready var game = get_parent()
 @onready var grid: TileMapLayer = $"../Grid"
 @onready var units_root: Node2D = $"../Units"
@@ -63,8 +66,11 @@ func save_scenario(scenario_name: String):
 
 		scenario.unit_entries.append(entry)
 
-	var path := SCENARIO_DIR + scenario_name + ".tres"
+	var path := scenario_path(scenario_name)
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	# load() serves the resource cache -- without this, re-saving a loaded scenario leaves Load
+	# and the F2 reset replaying the stale board.
+	scenario.take_over_path(path)
 	var err := ResourceSaver.save(scenario, path)
 	if err != OK:
 		push_error("Failed to save scenario: error %s" % err)

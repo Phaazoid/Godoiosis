@@ -3,8 +3,12 @@ class_name ScenarioTool
 
 @onready var scenario_name_input: LineEdit = %ScenarioNameInput
 @onready var scenario_dropdown: OptionButton = %ScenarioDropdown
+@onready var update_button: Button = %UpdateScenarioButton
 @onready var ai_toggle_list: VBoxContainer = %AIToggleList
+@onready var objective_list: VBoxContainer = %ObjectiveList
 @onready var squad_list: VBoxContainer = %SquadList
+@onready var loaded_label: Label = %LoadedScenarioLabel
+
 var scenario_manager: ScenarioManager
 var game
 var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
@@ -19,11 +23,45 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 	_build_ai_toggles()
 	refresh_squads()
 	_build_objectives()
+	refresh_loaded_label()
 
-func refresh_dropdown():
+# select_name is a dropdown-relative name ("fixtures/Foo"), not a path. Load and Save As hand it
+# whatever they just touched; the empty default re-selects what was already showing, so a rebuild
+# never silently moves Update's target.
+func refresh_dropdown(select_name := "") -> void:
+	if select_name == "":
+		select_name = DevWidgets.selected_name(scenario_dropdown)
+
 	scenario_dropdown.clear()
 	for path in scenario_manager.get_saved_scenarios():
 		scenario_dropdown.add_item(path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres"))
+
+	# add_item auto-selects index 0 -- force "nothing picked" unless the name really matched,
+	# or a deleted scenario leaves Update aimed at whatever sorts first.
+	scenario_dropdown.select(-1)
+	for i in scenario_dropdown.item_count:
+		if scenario_dropdown.get_item_text(i) == select_name:
+			scenario_dropdown.select(i)
+			break
+
+	_refresh_update_button()
+
+func refresh_loaded_label() -> void:
+	var path: String = scenario_manager.last_loaded_path
+	if path == "":
+		loaded_label.text = "Loaded: (unsaved board)"
+		return
+	loaded_label.text = "Loaded: %s" % path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres")
+
+# Called on tab-switch: a mission loaded from the boot screen, or an F2 reset, changes the board
+# without going through this tab.
+func refresh_on_show() -> void:
+	refresh_squads()
+	refresh_objectives()
+	refresh_loaded_label()
+
+func _refresh_update_button() -> void:
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(scenario_dropdown), "scenario")
 
 func _build_ai_toggles():
 	for child in ai_toggle_list.get_children():
@@ -91,33 +129,55 @@ func _build_squad_row(squad: Squad) -> HBoxContainer:
 
 	return row
 
-func _on_save_pressed():
-	scenario_manager.save_scenario(scenario_name_input.text)
-	refresh_dropdown()
-
-func _on_load_pressed():
-	if scenario_dropdown.selected < 0:
+func _on_load_pressed() -> void:
+	var target := DevWidgets.selected_name(scenario_dropdown)
+	if target == "":
 		return
-	var paths := scenario_manager.get_saved_scenarios()
-	scenario_manager.load_scenario(paths[scenario_dropdown.selected])
+	scenario_manager.load_scenario(ScenarioManager.scenario_path(target))
 	refresh_squads()
 	refresh_objectives()
+	refresh_dropdown(target)
+	refresh_loaded_label()
+
+func _on_update_pressed() -> void:
+	var target := DevWidgets.selected_name(scenario_dropdown)
+	if target == "":
+		return
+	# Subfolder names round-trip untouched: save_scenario make_dir_recursive's the base dir.
+	scenario_manager.save_scenario(target)
+	refresh_dropdown(target)
+	refresh_loaded_label()
+
+func _on_save_as_pressed() -> void:
+	var entered := scenario_name_input.text.strip_edges()
+	if entered == "":
+		push_warning("Scenario needs a name")
+		return
+	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario"):
+		return
+	scenario_manager.save_scenario(entered)
+	scenario_name_input.text = ""
+	refresh_dropdown(entered)
+	refresh_loaded_label()
+
+func _on_load_dropdown_item_selected(_index: int) -> void:
+	_refresh_update_button()
 	
 # One checkbox per objective, driven off the enum so a new objective kind needs no edit here.
 func _build_objectives() -> void:
-	DevWidgets.add_label(self, "Mission objectives")
+	DevWidgets.add_label(objective_list, "Mission objectives")
 	for objective in MissionRules.Objective.values():
 		var box := CheckBox.new()
 		box.text = String(MissionRules.Objective.keys()[objective]).capitalize()
 		box.button_pressed = game.mission_controller.objectives.has(objective)
 		box.toggled.connect(func(pressed: bool): _on_objective_toggled(objective, pressed))
-		add_child(box)
+		objective_list.add_child(box)
 		_objective_boxes[objective] = box
 
 	_objective_warning = Label.new()
 	_objective_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	_objective_warning.modulate = Color(1, 0.45, 0.35)
-	add_child(_objective_warning)
+	objective_list.add_child(_objective_warning)
 	_refresh_objective_warning()
 
 func refresh_objectives() -> void:

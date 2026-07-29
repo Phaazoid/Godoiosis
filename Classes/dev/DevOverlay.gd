@@ -40,7 +40,7 @@ func _on_tab_changed(_tab: int):
 	if current == spawn:
 		spawn.refresh_weapons()
 	if current == scenario_tool:
-		scenario_tool.refresh_squads()
+		scenario_tool.refresh_on_show()
 	if current != tile_brush:
 		tile_brush.deactivate()
 	_update_zone_visibility()

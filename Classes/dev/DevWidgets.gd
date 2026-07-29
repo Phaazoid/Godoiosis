@@ -149,3 +149,34 @@ static func _add_resource_swapper(container: Node, resource: Resource, prop: Dic
 	row.add_child(label)
 	row.add_child(option)
 	container.add_child(row)
+
+static func selected_name(dropdown: OptionButton) -> String:
+	if dropdown.selected < 0:
+		return ""
+	return dropdown.get_item_text(dropdown.selected)
+
+# Update is the one button that overwrites without asking -- name its victim in the tooltip.
+static func refresh_update_button(button: Button, target: String, noun: String) -> void:
+	button.disabled = target == ""
+	if target == "":
+		button.tooltip_text = "Pick a saved %s to overwrite" % noun
+	else:
+		button.tooltip_text = "Overwrite %s" % target
+
+# Save As creates, Update overwrites. Refusing a taken name is what keeps them non-overlapping.
+static func refuse_existing_file(path: String, noun: String) -> bool:
+	if not FileAccess.file_exists(path):
+		return false
+	push_warning("That %s already exists (%s) -- load it and press Update to overwrite" % [noun, path])
+	return true
+
+# load() serves the resource cache: without claiming the path first, a re-save leaves every later
+# load() returning the stale object. No-op when the resource already owns the path.
+static func save_over(resource: Resource, path: String) -> bool:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	resource.take_over_path(path)
+	var err := ResourceSaver.save(resource, path)
+	if err != OK:
+		push_error("Failed to save %s (error %s)" % [path, err])
+		return false
+	return true
