@@ -75,8 +75,37 @@ $argv += '--ignoreHeadlessMode'
 
 Write-Host "Running: $($paths -join '  ')" -ForegroundColor Cyan
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
-& $bin @argv
-$code = $LASTEXITCODE
+& $bin @argv | Tee-Object -Variable transcript
+$procCode = $LASTEXITCODE
 $sw.Stop()
-Write-Host ("Elapsed {0:N1}s  (exit {1})" -f $sw.Elapsed.TotalSeconds, $code) -ForegroundColor Cyan
-exit $code
+
+# THE VERDICT IS gdUnit4'S, NOT THE PROCESS'S (#93). Godot can die with an access violation
+# (0xC0000005 / -1073741819) while tearing the engine down, AFTER every test has already run
+# and been accounted for -- so the process exit code reports failure on a clean pass. It is a
+# gdUnit4 teardown bug, not ours: the same work driven by a plain `--script` SceneTree probe
+# exits 0, and it reproduces from a four-line suite that touches no game state at all.
+#
+# So: parse gdUnit4's own reported verdict and exit with THAT. This is strictly more truthful
+# than trusting the process, in both directions -- a real failure still prints "Exit code: 100"
+# and is still reported, and a crash that kills the run BEFORE gdUnit4 reports (no verdict line
+# at all) is treated as a hard failure rather than being papered over.
+$verdict = $null
+foreach ($line in $transcript) {
+	if ($line -match 'Exit code:\s*(\d+)') { $verdict = [int]$Matches[1] }
+}
+
+if ($null -eq $verdict) {
+	Write-Host ("Elapsed {0:N1}s  (process exit {1})" -f $sw.Elapsed.TotalSeconds, $procCode) -ForegroundColor Cyan
+	Write-Error "gdUnit4 never reported a verdict -- the run died before finishing. Treating as FAILURE."
+	if ($procCode -eq 0) { exit 1 }
+	exit $procCode
+}
+
+if ($procCode -ne $verdict) {
+	Write-Host ("Elapsed {0:N1}s  (gdUnit4 verdict {1}; process exited {2})" -f $sw.Elapsed.TotalSeconds, $verdict, $procCode) -ForegroundColor Cyan
+	Write-Host "NOTE: the engine crashed while shutting down, after all tests had run and been counted (#93)." -ForegroundColor Yellow
+	Write-Host "      Test results above are unaffected. Reporting gdUnit4's verdict ($verdict)." -ForegroundColor Yellow
+} else {
+	Write-Host ("Elapsed {0:N1}s  (exit {1})" -f $sw.Elapsed.TotalSeconds, $verdict) -ForegroundColor Cyan
+}
+exit $verdict

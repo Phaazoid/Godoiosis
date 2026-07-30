@@ -4,7 +4,9 @@
 [ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_megpd"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="3_prdh4"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponInstance.gd" id="wi_3_prdh4"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="wi_kineticmace"]
+[ext_resource type="Script" uid="uid://co5b1052qg1wu" path="res://Classes/weapons/instances/ChemicalSpitterWeaponInstance.gd" id="wi_chemicalspitter"]
 [ext_resource type="Texture2D" uid="uid://c533vn1he73hl" path="res://Art/Units/MapSprites/Druid.png" id="4_pliq5"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="5_3ci5y"]
 [ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="6_mifoh"]
@@ -39,7 +41,7 @@ item_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_3ci5y_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_kineticmace")
 template = SubResource("Resource_3ci5y")
 [sub_resource type="Resource" id="Resource_mifoh"]
 script = ExtResource("6_mifoh")
@@ -79,7 +81,7 @@ item_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_u6n6d_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_kineticmace")
 template = SubResource("Resource_u6n6d")
 [sub_resource type="Resource" id="Resource_n5k50"]
 script = ExtResource("6_mifoh")
@@ -127,7 +129,7 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 
 [sub_resource type="Resource" id="Resource_xys8w_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_chemicalspitter")
 template = SubResource("Resource_xys8w")
 [sub_resource type="Resource" id="Resource_lb0cr"]
 script = ExtResource("6_mifoh")
@@ -176,7 +178,7 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 
 [sub_resource type="Resource" id="Resource_4osyr_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_chemicalspitter")
 template = SubResource("Resource_4osyr")
 [sub_resource type="Resource" id="Resource_jrv5b"]
 script = ExtResource("6_mifoh")
@@ -217,7 +219,7 @@ item_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_ix2xb_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_kineticmace")
 template = SubResource("Resource_ix2xb")
 [sub_resource type="Resource" id="Resource_ha6eo"]
 script = ExtResource("6_mifoh")
@@ -258,7 +260,7 @@ item_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_w25rl_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_kineticmace")
 template = SubResource("Resource_w25rl")
 [sub_resource type="Resource" id="Resource_0fglh"]
 script = ExtResource("6_mifoh")
@@ -304,7 +306,7 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 
 [sub_resource type="Resource" id="Resource_y8fi4_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_y8fi4")
 [sub_resource type="Resource" id="Resource_4ooql"]
 script = ExtResource("6_mifoh")
@@ -351,7 +353,7 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 
 [sub_resource type="Resource" id="Resource_vollj_inst"]
-script = ExtResource("wi_3_prdh4")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_vollj")
 [sub_resource type="Resource" id="Resource_uckst"]
 script = ExtResource("6_mifoh")
