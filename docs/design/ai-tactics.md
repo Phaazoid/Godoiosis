@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #110 (2026-07-28).**
+**Canon checked through #117 (2026-07-29).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -59,6 +59,9 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 - **Counters aren't scored** — the throwaway plan resolves the AI's own volley only; walking into counter range costs nothing in the score.
 - **Movement never seeks rescue/intimidate targets** — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Squad-level coordination** — members choose independently in member order; no focus-fire or combined-arms reasoning.
+- **Movement is a group move, not per-unit destinations** — both moving archetypes call `queue_group_move`, so a member's destination is "preserve your path-offset from the leader" rather than anything tactical. Measured 2026-07-29 while fixing [#103](https://github.com/Phaazoid/Godoiosis/issues/103): this is **not** why the AI authored illegal plans (a single individual leader move produces the identical refusal — the invalid order is the hold-position filler `game.gd` gives every member, and the binding rule is `SquadPlanValidator._check_leader_range`, which applies to any plan from any author). But `GroupMoveSolver` is currently the AI's *only* cohesion solver, so this cannot simply be deleted. The replacement needs no new solver — `RulesService.compute_move_range` already leashes a non-leader to the leader's *projected* destination, so queueing the leader first makes each member's own range cohesion-clamped — what it needs is a decision about each archetype's per-unit movement taste. Tracked on [#117](https://github.com/Phaazoid/Godoiosis/issues/117).
+
+**The standing home for all of the above is [#117](https://github.com/Phaazoid/Godoiosis/issues/117)** (evergreen), added 2026-07-29 on the premise that the AI is permanently behind the feature set: every system we add creates AI work that lands after the system ships. New approximations go there as well as here — here for the doctrine, there for the queue.
 
 ## Not this layer
 

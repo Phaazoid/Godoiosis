@@ -38,6 +38,10 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 Certain elemental damage, stuff that doesn't damage through blunt force, should ignore defense.  So, fire, shock, could ignore defense, whereas pelting someone with blocks of earth or ice shards would still be blocked by defense.  
 
+During AI turns, the actions the AI takes need to be more clear.  Each action can be queued quickly, but there needs to be more of a pause between each action, so the player watching can understand what is going on.  And on this same seam, there should be a battle log the player can review.  We can adapt the action queue into one.  You should be able to scroll back and view the action queue of the AI's previous turn.  That UI will need some designing, though.  
+
+
+
 Just going to copy/paste a convo with codev about pushing into pits/weight
 
 "Phaazoid [឵឵឵み],  — 11:43 AM

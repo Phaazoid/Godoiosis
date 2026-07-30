@@ -679,6 +679,13 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	units_root.add_child(unit)
 	squad_manager.create_squad(unit)
 	unit.unit_died.connect(_on_unit_died)
+	# The DOWN twin of the line above. It goes straight to OrderExecutor rather than through a
+	# game.gd handler because OrderExecutor owns the DEFERRAL (_downed_pending, drained by
+	# _process_downed_pending at pass end) -- restructuring squads mid-await was the original bug
+	# that deferral exists for. Missing until 2026-07-29, which left _process_downed_pending and
+	# _offer_pending_crisis both unreachable: downed units were never ejected, so their tiles
+	# stayed walkable to squadmates and a downed leader kept the squad.
+	unit.went_downed.connect(order_executor.on_unit_downed)
 	return unit
 
 func _on_unit_died(unit: Unit):
