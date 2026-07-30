@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #120 (2026-07-29).**
 
 ## Principles
 
@@ -74,6 +74,32 @@ Collected at @Phaazoid's direction while building [#90](https://github.com/Phaaz
    - **Hover descriptions per carving** — the menu lists carving names with no indication of what any of them does.
    - **Show un-channelable carvings, blotted out.** Today the category lists only what the wielder can currently afford, because `RuneData.choice_attacks` routes through the aura-filtered `channelable()`. A carving you own but can't pay for is therefore *absent* rather than greyed — the opposite of the law `_attack_entry` applies to weapons, where an unfireable pick stays **listed but disabled** (#73/#84). Closing it means the menu reading `inscriptions` (everything inscribed) and asking channelability per entry, rather than being handed a pre-filtered list.
    - This is also **why the category opens for a single carving** rather than requiring two: with descriptions and blotted-out entries it is informative even when it offers no alternative choice. Recorded because the ≥1 gate looks redundant against Attack until you know it's coming.
+
+## Reading a turn: pacing and history (added 2026-07-29)
+
+From the scratchpad, @Phaazoid's note about AI turns being unreadable. One observation, two issues,
+because they solve different halves: **pacing** helps you read a turn *as it happens*, a **log** lets
+you read it *afterwards*. Both are #44 children.
+
+- **[#118](https://github.com/Phaazoid/Godoiosis/issues/118) — a beat between actions.**
+  `OrderExecutor._execute_action_sequence` advances the instant an action reports
+  `execution_complete`, so an AI squad's whole plan resolves at animation speed with nothing to
+  separate one hit from the next. Cheap and needs no design; the one real constraint is that the
+  suite awaits this same path, so the pause has to be a tunable a test can zero rather than a literal
+  at the await site.
+- **[#119](https://github.com/Phaazoid/Godoiosis/issues/119) — a reviewable battle log.** Nothing
+  like it exists yet. The principle this doc contributes: **share the widget, never the data
+  source.** The queue is a *live derived preview* rebuilt from the plan on every change
+  (`ActionQueueDisplayEntry.build_for`), while a log is a *frozen record of what executed*, whose
+  inputs are gone by the time it's read. Rendering log rows through `ActionQueueRow` is right and
+  cheap; handing the log a squad and a plan and calling `build_for` is Law #4 with the sign flipped —
+  one code path answering both "what will happen" and "what did happen".
+
+  Two things a log must show that **no queue row ever did**: post-**BREAK** reality (R9 is the one
+  place execution legitimately diverges from the preview — the banner tells you it happened, a log is
+  where you'd learn what changed), and every event that isn't a player order at all — end-of-phase
+  burn damage, Crisis outcomes, expiring downed clocks, squad ejections, terrain deposits. Those are
+  precisely the events players miss, and they are invisible to the queue by construction.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

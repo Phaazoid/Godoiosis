@@ -4,13 +4,13 @@
 
 > **Build status — #50 DONE + CLOSED (2026-06-28 → 06-30, three sessions).** The dynamic per-cell state store exists: `TerrainStateManager` (`Dictionary[Vector2i, Array[Terrain.TileState]]`), with `Terrain.TileState {BURNING, FROZEN, COVER}` (COVER added by Burrow, #84 — see *Cover* below) and a `Terrain.Kind` enum (GRASS/MUD/ROCK/TREE/WATER) read straight off the tileset's `terrain_type` int custom-data layer (`Resources/TestTiles.tres` — an int layer as of [#71](https://github.com/Phaazoid/Godoiosis/issues/71); the string->enum mapping boundary it used to need is gone). Fed by the resolver's **cell-effect channel** (`ResolvedPlan.cell_effects` / `ResolvedCellEffect`, populated by `PlanResolver` when given a board), gated by the per-attack `EquippableData.TargetMode` toggle (unit / map / both, default unit). `Terrain` is a **separate vocabulary** from `Elemental` (dev call). **All three planned slices shipped:** slice 1 (headless plumbing), slice 2 (live execution + queue preview), slice 3 (`ICE × water → FROZEN`, `FIRE × FROZEN → water`, both authored `.tres` reactions). Also shipped beyond the original scope: AoE-footprint deposit (every affected cell, not just the aim cell), counters depositing too, persistence (`ScenarioData.terrain_states` — see below), burnout/melt after 3 turn cycles (`STATE_DURATIONS`/`tick_states`), and burning-tile damage on end-of-phase (routed through `take_damage`, so downs/Crisis apply correctly). Proven in `tests/terrain/{test_cell_effects, test_terrain_persistence, test_burnout, test_ice}.gd`. **Deferred by design, not gaps:** burning spread + a varied elemental-effect roster beyond fire/ice (separate future PR). *(The fire-only plan-time ghost preview noted here as deferred was generalized 2026-07-24 by #84's Burrow — `show_terrain_preview` now takes `{cell, state}` entries and draws each deposit's own icon, matching the live overlay.)*
 
-**Canon checked through #115 (2026-07-29).**
+**Canon checked through #120 (2026-07-29).**
 
 ## The tile model (implemented — [LOCKED shape])
 
 The board is a `TileMapLayer` (`Grid`). Tiles already carry **custom data** the game reads today:
 
-- `walkable: bool` — pathing gate. **`BoardContext.is_walkable(cell)` is the one and only reader** (#109, 2026-07-29): it is the only answer that also knows about dynamic tile *state*, so a FROZEN water tile is walkable to movement, pathing, knockback, unit spawning, the dev cursor and the headless Play view alike. `HoverPresenter`, `game.spawn_unit` and `play_session.terrain_at` each used to re-read this flag themselves and none could see state — all three now delegate. Two rules worth knowing: a tile whose tileset **doesn't declare the flag is NOT walkable** (decided in #109, stated in a comment at the function — it used to be an unguarded read that raised two runtime errors per call), and **occupancy is a separate question** — `is_walkable` answers "may a unit stand here", never "is someone already standing here". The per-unit layer on top is **`RulesService.can_traverse(cell, unit, board)`** (#115) — a *declared* chain, not a second answer: it adds Waterwalk and nothing else, and both `movement_cost` and `GroupMoveSolver`'s cohesion field read it. It deliberately excludes **occupancy**, which blocks a move but is not terrain. One declared exception: a **shove** asks the cell-level `is_walkable` only, so a Waterwalker is not knocked onto water — parked at [#116](https://github.com/Phaazoid/Godoiosis/issues/116) along with what a shove into water should do at all.
+- `walkable: bool` — pathing gate. **`BoardContext.is_walkable(cell)` is the one and only reader** (#109, 2026-07-29): it is the only answer that also knows about dynamic tile *state*, so a FROZEN water tile is walkable to movement, pathing, knockback, unit spawning, the dev cursor and the headless Play view alike. `HoverPresenter`, `game.spawn_unit` and `play_session.terrain_at` each used to re-read this flag themselves and none could see state — all three now delegate. Two rules worth knowing: a tile whose tileset **doesn't declare the flag is NOT walkable** (decided in #109, stated in a comment at the function — it used to be an unguarded read that raised two runtime errors per call), and **occupancy is a separate question** — `is_walkable` answers "may a unit stand here", never "is someone already standing here". The per-unit layer on top is **`RulesService.can_traverse(cell, unit, board)`** (#115) — a *declared* chain, not a second answer: it adds Waterwalk and nothing else, and both `movement_cost` and `GroupMoveSolver`'s cohesion field read it. It deliberately excludes **occupancy**, which blocks a move but is not terrain. One declared exception: a **shove** asks the cell-level `is_walkable` only, so a Waterwalker is not knocked onto water — parked at [#116](https://github.com/Phaazoid/Godoiosis/issues/116) along with what a shove into water should do at all (see *Water — shallow vs deep* below for the captured candidate).
 - `move_cost: int` — terrain weight added in `movement_cost`.
 - a per-cell **terrain icon** (`GridUtils.get_terrain_icon_at_cell`), surfaced in the action queue.
 
@@ -42,6 +42,35 @@ Each is **deterministic and telegraphed**. ✦ = also an elemental state (shared
 - **Fault** (ground) — heavy move penalty; strips object mods.
 - **Tornado** (atmosphere) — Air damage on cross + **shove** (the wiki's "move randomly 1 square" → de-RNG'd to a deterministic directional shove).
 - **Moving terrain** — fast rivers, trains, landslides, airships (fixed paths; de-randomized "moving terrain" — see elemental-interactions "fixed-path lava/rivers").
+
+## Water — shallow vs deep (captured 2026-07-29, scratchpad — NOT decided)
+
+From a @Phaazoid ↔ @c3potheds conversation, recorded on [#116](https://github.com/Phaazoid/Godoiosis/issues/116)
+where the water fork is formally parked. The discomfort it starts from is worth keeping even if the
+answer changes: water tiles aren't walkable today, so **a shove treats deep water as a wall** — and a
+wall is a thing you brace against. Water reading as solid is worse than either extreme.
+
+The candidate dissolves the fork instead of picking a side — **two water tiles, not one**:
+
+- **Shallow water** — walkable at a **high move cost** (floated at 3, against mud's 2). Being shoved
+  in is *annoying*, not lethal. This is a `Terrain.Kind` member, **append-only** (the enum serializes
+  as ints into every saved scenario) plus a `move_cost`, and it needs **no rules-engine change at
+  all** — which is the argument for building this half first and alone.
+- **Deep water** — a **drown clock**: a turn or so to be pulled out by another unit before the unit
+  is lost. Which makes it a slow cousin of the ledge kill in #116, deliberately reading differently
+  on the board: the ledge is binary and instant, water is a countdown someone can answer.
+- **Check the down clock before building a second one (Law #4).** `Unit.downed_turns_remaining`
+  already starts at 3, already ticks per turn, and `RescueAction` is already the rescue verb — a
+  drowning unit may simply *be* a downed unit with a shorter clock. The one genuinely new thing is a
+  down with **no damage dealt**; `_go_downed` is currently only reachable through `take_damage`.
+- **WET is orthogonal and shouldn't wait.** `Elemental.State.WET` exists and is the FIRE/ICE
+  combinatrix hook; elemental-system.md already captures *"stepping on a river tile sets WET."*
+  Shallow water applying it on entry is independent of the shove question.
+- **Waterwalk** ([#115](https://github.com/Phaazoid/Godoiosis/issues/115)) gets two answers instead of
+  one overloaded one: walk on shallow, and deep is where the interesting call lives.
+- **Weight ties in** — *"maybe the weight they carry affects whether they can swim"* — which is the
+  same conversation's other half, now [#120](https://github.com/Phaazoid/Godoiosis/issues/120)
+  ([stats.md](stats.md) → *Weight*).
 
 ## "Attack the map" ([WORKSHOP] — shared with elemental)
 
