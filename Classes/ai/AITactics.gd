@@ -227,6 +227,23 @@ static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardConte
 
 	return best
 
+# Commit a group move, then keep it only if the squad's plan survived validation. An advance can
+# strand a member with nowhere legal to stand inside the leader's NEW cohesion range: the formation
+# solver places it nowhere, it keeps the hold-position order setup_hold_move_actions gave it, and
+# SquadPlanValidator._check_leader_range refuses the WHOLE plan over it. With no human to re-plan,
+# the squad would queue that same refused advance every turn forever (#103).
+#
+# Give up the ADVANCE, not the turn: cancelling every member's move restores the all-hold plan the
+# squad began with, which is legal by construction (each member was already inside the leader's
+# range, and a unit holding on its own cell cannot collide with itself). Every caller queues main
+# actions AFTER this, so there is never a rescue or attack hanging off the move being dropped.
+static func queue_group_move_if_coherent(squad: Squad, destination: Vector2i, board: BoardContext, squad_manager: SquadManager, allowed = null) -> void:
+	squad_manager.queue_group_move(squad, destination, board, allowed)
+	if not squad_manager.squad_has_invalid_actions(squad):
+		return
+	for member in squad.get_members():
+		squad_manager.cancel_move_for_unit(member)
+
 # Reachable cell that best approaches `goal_cell` (ties broken by move cost). Falls back to
 # staying put when nothing allowed improves on the current cell.
 static func closest_reachable_cell_to(unit: Unit, goal_cell: Vector2i, board: BoardContext, allowed = null) -> Vector2i:

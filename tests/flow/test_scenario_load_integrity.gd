@@ -102,6 +102,47 @@ func test_inventory_weapon_families_are_mapped() -> void:
 	assert_array(problems).is_empty()
 
 
+func test_saved_weapons_are_family_instances() -> void:
+	# #82: a carried weapon must BE its family's WeaponInstance subclass. Five pre-#82 scenarios
+	# stored 40 of them as the bare base class until 2026-07-29 (#114's side finding).
+	#
+	# That was LATENT, not live — measured, not assumed: `apply_unit_state` adds each item via
+	# `copy_equippable()`, which routes through `make(template)` and rebuilds the correct
+	# subclass, so the board was always right and the saved file was always wrong. This case
+	# exists because that is a bad thing to depend on. Correctness rested entirely on every
+	# path copying rather than assigning, the file said something untrue about itself, and
+	# anything reading the resource directly (dev tools, fixtures, tests) saw the wrong class.
+	#
+	# The family-mapping test above CANNOT catch it, which is why this needs its own case: it
+	# asks whether `WeaponInstance.make(template)` succeeds, and make() builds a FRESH, correct
+	# subclass every time — it never asks what class the SAVED item is. Compare against the
+	# script make() would pick, which is the only question that notices.
+	var problems: Array[String] = []
+	var scenarios := _loaded_scenarios()
+	for path in scenarios:
+		var scenario: ScenarioData = scenarios[path]
+		for i in scenario.unit_entries.size():
+			var entry: ScenarioUnitEntry = scenario.unit_entries[i]
+			if entry == null:
+				continue
+			for j in entry.inventory.size():
+				var weapon := entry.inventory[j] as WeaponInstance
+				if weapon == null or weapon.template == null:
+					continue  # reported by test_inventory_weapons_resolve_main_attack
+				var expected := WeaponInstance.make(weapon.template)
+				if expected == null:
+					continue  # reported by test_inventory_weapon_families_are_mapped
+				if weapon.get_script() != expected.get_script():
+					problems.append("%s: '%s' saved as %s, but weapon_type %s wants %s" % [
+						_entry_label(path, i, entry),
+						weapon.shown_name(),
+						weapon.get_script().resource_path.get_file(),
+						WeaponData.WeaponType.keys()[weapon.template.weapon_type],
+						expected.get_script().resource_path.get_file(),
+					])
+	assert_array(problems).is_empty()
+
+
 func test_saved_indices_are_in_bounds() -> void:
 	# #83: equipped_index and every limb_prosthetic_items value index into the saved
 	# inventory — a hand-edited or truncated save must fail here, not as a load-time miss.

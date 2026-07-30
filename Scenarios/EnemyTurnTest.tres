@@ -10,7 +10,7 @@
 [ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="8_omdak"]
 [ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="9_nngxg"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponInstance.gd" id="wi_9_nngxg"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
 [ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="10_m4yol"]
 [ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="11_asq74"]
 [ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
@@ -55,7 +55,7 @@ metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 
 [sub_resource type="Resource" id="Resource_yo78a_inst"]
-script = ExtResource("wi_9_nngxg")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_yo78a")
 [sub_resource type="Resource" id="Resource_3g7no"]
 script = ExtResource("6_hvxev")

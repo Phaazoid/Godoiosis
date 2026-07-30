@@ -35,6 +35,15 @@ func execute_orders(unit):
 	game.refresh_action_queue(squad)
 
 	if game.squad_manager.squad_has_invalid_actions(squad):
+		# A human gets control BACK here: flash the bad rows, leave the plan queued, let them fix it
+		# and press Execute again. An AI squad has nobody to hand control back TO -- nothing in the
+		# turn cycle mutates the state that produced the plan, so the identical plan is refused every
+		# turn while the board keeps its ghosts and the squad never acts (#103). It concedes instead:
+		# however a plan turns out, an AI pass must reach _end_squad_turn.
+		if game.ai_controller.is_ai_faction(squad.leader.get_faction()):
+			push_warning("AI squad conceded its turn: %s" % _invalid_plan_summary(squad))
+			_end_squad_turn(squad)
+			return
 		for action in squad.action_queue:
 			if not action.is_valid:
 				action.actor.visuals.play_invalid_flash()
@@ -73,12 +82,33 @@ func execute_orders(unit):
 	if not is_instance_valid(squad):
 		return
 
-	for action in squad.action_queue.duplicate():
-		game.squad_manager.remove_action(squad, action)
+	_end_squad_turn(squad)
 
+# The terminal state of a squad's turn, and the ONE place it is defined: no orders queued, no
+# projection or path arrows left, and the squad marked as having spent its turn. Reached at the end
+# of a successful pass AND from the invalid-plan concede above (#103).
+#
+# set_has_acted does most of the visual work for free -- Squad._set_has_acted clears the queue, and
+# every action_cancelled hop lands in game._on_unit_action_cancelled, which is what pulls a move's
+# ghost and arrow. The icon clear ahead of it is for the TARGET markers a queued attack drew; the
+# success path also clears them before it animates, and clearing twice is idempotent.
+func _end_squad_turn(squad: Squad) -> void:
+	game.clear_selection_icons()
+	for action in squad.action_queue.duplicate():
+		action.actor.visuals.set_projected(false)
+		game.squad_manager.remove_action(squad, action)
 	game.squad_manager.set_has_acted(squad, true)
 	for member in squad.members:
 		game.overlay_manager.clear_planned_path(member)
+
+# Why a concede happened, for the console: an AI cannot see a red flash, so this is the only place
+# the refusal is visible at all.
+func _invalid_plan_summary(squad: Squad) -> String:
+	var lines: Array[String] = []
+	for action in squad.action_queue:
+		if not action.is_valid:
+			lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
+	return " | ".join(lines)
 
 func _execute_action_phase_parallel(actions: Array):
 	if actions.is_empty():

@@ -27,7 +27,8 @@
 [ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
 [ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" uid="uid://cr8iufdh4c638" path="res://Classes/weapons/WeaponInstance.gd" id="wi_5_5q7c0"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="wi_springspear"]
 [ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
 
 [sub_resource type="Resource" id="Resource_mrekx"]
@@ -51,7 +52,7 @@ description = "I think that enemy got... the point"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_q8cs3_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_springspear")
 template = SubResource("Resource_q8cs3")
 
 [sub_resource type="Resource" id="Resource_k5dlx"]
@@ -102,7 +103,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_l6fmy_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_l6fmy")
 
 [sub_resource type="Resource" id="Resource_bd7ju"]
@@ -152,7 +153,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_rblmy_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_rblmy")
 
 [sub_resource type="Resource" id="Resource_owa6k"]
@@ -202,7 +203,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_4ji6m_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_4ji6m")
 
 [sub_resource type="Resource" id="Resource_8jbv5"]
@@ -249,7 +250,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_3peij_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_3peij")
 
 [sub_resource type="Resource" id="Resource_d0hyj"]
@@ -299,7 +300,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_md83g_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_md83g")
 
 [sub_resource type="Resource" id="Resource_e57e2"]
@@ -348,7 +349,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_7as0p_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_7as0p")
 
 [sub_resource type="Resource" id="Resource_gcqw6"]
@@ -395,7 +396,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_klalk_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_klalk")
 
 [sub_resource type="Resource" id="Resource_64uc1"]
@@ -442,7 +443,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_f5dmr_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_f5dmr")
 
 [sub_resource type="Resource" id="Resource_a1ncn"]
@@ -490,7 +491,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_3jx8a_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_3jx8a")
 
 [sub_resource type="Resource" id="Resource_qrxbn"]
@@ -537,7 +538,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_ej0nd_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_ej0nd")
 
 [sub_resource type="Resource" id="Resource_2k7ol"]
@@ -585,7 +586,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_ik5qu_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_ik5qu")
 
 [sub_resource type="Resource" id="Resource_jfiwm"]
@@ -632,7 +633,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_g0pgd_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_g0pgd")
 
 [sub_resource type="Resource" id="Resource_5nxcx"]
@@ -681,7 +682,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_obq4n_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_obq4n")
 
 [sub_resource type="Resource" id="Resource_a2f7v"]
@@ -730,7 +731,7 @@ description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
 
 [sub_resource type="Resource" id="Resource_4rrsq_inst"]
-script = ExtResource("wi_5_5q7c0")
+script = ExtResource("wi_chainsword")
 template = SubResource("Resource_4rrsq")
 
 [sub_resource type="Resource" id="Resource_yt1ub"]

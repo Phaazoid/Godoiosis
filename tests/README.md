@@ -39,6 +39,20 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 
 **Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below.
 
+> **The runner reports gdUnit4's verdict, not the process exit code** (changed 2026-07-29, [#93](https://github.com/Phaazoid/Godoiosis/issues/93)). Godot can die with an access violation *while tearing the engine down* — after every test has run and been counted — which made a clean pass report failure. `run_tests.ps1` now parses gdUnit4's own `Exit code: N` line and exits with that, printing a loud yellow NOTE when the process disagreed. This is strictly **more** truthful than trusting the process, in both directions:
+>
+> | situation | process | runner exits | how you see it |
+> |---|---|---|---|
+> | clean pass | 0 | **0** | normal |
+> | clean pass + teardown crash | `-1073741819` | **0** | yellow NOTE naming #93 |
+> | real test failure | 100 | **100** | the failures themselves |
+> | real failure + teardown crash | `-1073741819` | **100** | the failures themselves |
+> | crash *before* gdUnit4 reports | non-zero | **non-zero** | red "never reported a verdict" |
+>
+> The last row is the safety property: a run that dies mid-flight produces no verdict line, and **no verdict is treated as failure** — the fix cannot swallow a genuine crash. Verified against all four cases, including a deliberate `OS.crash()` mid-suite.
+>
+> **CI carries the same logic** (`.github/workflows/tests.yml`), because it invokes Godot directly rather than through this script. The full-tree run happens not to trigger the crash today, but that masking is incidental — it depends on how many suites are loaded and shifts whenever anyone adds one. Keep the two in step: if you change the verdict rule here, change it there.
+
 ## Writing a new test suite — quick-start
 
 1. **Pick where it lives.** Mirror the existing folders: `unit/` (pure logic, no scene), `squad/` (node-fixture squad/counter/volley invariants), `law/` (cross-cutting guards), or a new domain folder (`weapons/`, `jobs/`, `ai/`, ...) if none fit. `run_tests.ps1 res://tests/<folder>` runs just that folder while iterating.
@@ -71,9 +85,71 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 - **`--remote-debug` needs a real port** (1–65535); `tcp://127.0.0.1:0` is rejected in 4.6, so we don't pass it.
 - **Orphan-node hygiene = the exit code.** gdUnit4 counts "orphan nodes" (`root.get_orphan_node_ids()` — any `Node` not in the SceneTree) sampled *during* each test, and returns `101` if any remain. So a fixture that `Node.new()`s something must keep it **in the tree** or `auto_free` it. The big trap here: `SquadManager` creates `Squad` nodes as *its own* children, so if the manager itself is orphaned (not in the tree) every squad it makes is an orphan too. `make_manager` therefore stands the manager up **inside the tree** (see fixtures below). Counterpart: `queue_free()` only works for in-tree nodes, which is a second reason to keep the graph in-tree.
 - **RefCounted reference cycles leak** (no GC). A volley's `AttackAction.volley` array references every sibling including itself, so a volley is a self-referential cycle that never frees — the volley suite breaks it in `after_test` (`attack.volley = empty`). See findings; this is a real (small) gameplay leak too.
-- **`tests/flow/test_scenario_load_integrity.gd` segfaults on SHUTDOWN when run alone** (exit `-1073741819` = `0xC0000005` access violation). All 7 cases pass — `0 errors, 0 failures, 0 orphans` — and *then* the process dies tearing down. It is **masked in the full run** (which exits 0), so it went unnoticed until per-area runs existed; found 2026-07-24 while adding tiers. Tracked as [#93](https://github.com/Phaazoid/Godoiosis/issues/93). Until fixed, `run_tests.ps1 flow` reports failure despite a clean pass — read the summary line, not just the exit code, for that one area.
-- **A failure truncates the REST of that suite file, silently.** Observed 2026-07-15 (#56): fixing one failing assertion in `test_ai_tactics.gd` revealed a second, previously-unrun test in the same file with the identical bug — the run before the fix reported "9 test cases" for that suite when the file has more; only after the fix did the remaining tests execute. So a suite's printed test count is not proof the whole file ran — if you fix a failure, **always re-run** rather than trusting the fix from reasoning alone, and don't assume "only 1 failure reported" means "only 1 test in this file is affected."
+- **The engine can segfault on SHUTDOWN, after a clean pass** (exit `-1073741819` = `0xC0000005`). Root-caused 2026-07-29 ([#93](https://github.com/Phaazoid/Godoiosis/issues/93)) — **it is a gdUnit4 teardown bug, and it has nothing to do with the code under test.** Findings, each measured:
+  - It is **not Godot and not Iosis**: the identical work driven by a plain `--script` SceneTree probe exits 0. It happens only inside the gdUnit4 runner.
+  - It is **not fixed upstream**: reproduces unchanged on gdUnit4 **v6.2.0 stable** (the repo vendors `6.2.0-rc1`; the upgrade was tried and reverted — it changed 21 files and fixed nothing).
+  - It reproduces from a **four-line suite that loads nothing and touches no game state**. The scenario-loading in `test_scenario_load_integrity.gd` was a red herring:
+    ```gdscript
+    func test_x() -> void:
+        var item: EquippableData = null
+        assert_bool(item is WeaponInstance).is_false()
+    ```
+    The check does not even have to *execute* — with the loop guarded so it never runs, it still crashes. So this is compile/parse-time, not runtime.
+  - The trigger is a **(declared type, checked type) pair**, not a class: `EquippableData is WeaponInstance` and `Item is ChainswordWeaponInstance` crash, while `EquippableData is ChainswordWeaponInstance`, `EquippableData is RuneData` and `Resource is WeaponInstance` are clean. A `Variant` operand never crashes — one suite naming **all 115 Iosis classes** against a `Variant` is clean.
+  - The signature at exit is always identical: ~141 leaked objects and **102 leaked scripts, every one of them gdUnit4's own**. Zero Iosis scripts leak; clean runs leak nothing at all.
+  - It is **masked by running more suites**, which is why it only ever appeared in narrow runs. `run_tests.ps1 flow` was the original symptom and now exits 0 on its own, because #96 added a third suite to that folder.
+
+  **No test result is ever affected** — gdUnit4 finishes counting and prints its verdict before the process dies. `run_tests.ps1` now reports that verdict (see the exit-code table above), so this no longer lies in either direction. Left as a known upstream quirk rather than chased further into gdUnit4's internal refcounting.
+- **The FIRST failure ends that suite file — every later test in it is silently skipped.** First seen 2026-07-15 (#56); measured exactly 2026-07-29 (#103) with a three-case throwaway suite: make case 1 fail and the run reports `1 test cases | 1 failures` and `Executed test cases : (1/1)`; make case 1 pass and all three run. It is the runner, not your file — `GdUnitTestDiscoverer.discover_tests_from_gd_script()` finds all of them (worth checking with a `--script` probe if you suspect a discovery problem instead). Consequences:
+  - A suite's printed test count is **not** proof the whole file ran, and "only 1 failure reported" does not mean only one test is affected.
+  - After fixing a failure, **always re-run** rather than trusting the fix from reasoning.
+  - **While falsifying a new suite, verify each case's red state one at a time** — rename the others to a non-`test_` prefix, or the first failure hides the rest and you learn nothing about whether they have teeth.
 - **Content-scan catalogs can key off a name that changes.** `WeaponAttackCatalog` (and similar folder-scan catalogs) use `display_name` as the registry key, falling back to the resource's filename when `display_name` is unset. Authoring a real `display_name` for a previously-unnamed attack changes its catalog key — a test asserting the old filename-derived key breaks (happened 2026-07-22: Springspear's main attack, "Springspear" → "Stab"). Expect this to recur as the remaining weapon families get real content.
+
+## Testing the game scene (game.gd / HoverPresenter / MainActionMenu)
+
+**The game scene does NOT segfault in the runner.** That belief blocked [#114](https://github.com/Phaazoid/Godoiosis/issues/114) and is wrong: measured 2026-07-29, `Main.tscn` instantiates under gdUnit4, spawns a board, and dispatches clicks, with `0 orphans` and exit `0`. `tests/ui/test_game_scene_smoke.gd` is the working suite — copy its fixture.
+
+Two things make it work, and both are easy to get wrong:
+
+1. **Name the instanced root `Main` and add it to `/root`, not to the suite.** `game.gd` resolves the dev overlay by an *absolute* path (`get_node("/root/Main/DevOverlay")`), so under any other parent `dev_overlay` is null and `ScenarioManager.clear_board()` dies on `game.dev_overlay.unit_editor`. That error — not a segfault — is what made the scene look untestable.
+   ```gdscript
+   _main = (load("res://Scenes/Main.tscn") as PackedScene).instantiate()
+   _main.name = "Main"
+   get_tree().root.add_child(_main)
+   await await_idle_frame()
+   game = _main.get_node("GameContainer/GameView/Game")
+   ```
+   Free it in `after_test` with `remove_child` + `free` (not `auto_free`, which frees too late to keep `/root` clean between tests).
+
+2. **Drive `_on_left_click` / `_on_right_click` directly — never real `InputEvent`s.** Godot does not deliver input in headless mode. Those two functions *are* the dispatchers; `_unhandled_input` only picks a cell and calls them, so nothing meaningful is skipped.
+
+**A menu pick is not the same as setting `game_state` yourself.** `ActionMenuController` emits `cancelled` **before** `action_selected`, so `MainActionMenu._on_menu_cancelled` runs `game.clear_selection()` on the way *into* the mode you just chose. That ordering is precisely what caused #105 and #107 — and a test that jumps straight to `game.game_state = CHOOSING_MOVE` **cannot see either bug**. The first draft of this suite did exactly that and stayed green with #107 deliberately reintroduced. Go through the real sequence:
+
+```gdscript
+func _pick_menu_action(action_id: int, unit: Unit) -> void:
+	var controller: ActionMenuController = null
+	for child in game.get_children():
+		if child is ActionMenuController:
+			controller = child
+	controller.cancelled.emit(controller)          # clear_selection() fires HERE
+	controller.action_selected.emit(action_id, unit)
+```
+
+Falsified against the real regression: with #107 put back (`selected_unit = null` inside `clear_selection()`), `test_selection_survives_a_menu_pick` fails, `test_move_mode_queues_a_move_order` fails with 4 errors, and `test_attack_targeting_queues_an_attack_order` reports 0 attacks queued. All three pass once it is reverted.
+
+> **A suite's printed test count is not proof the whole file ran** — a failure truncates the rest of that file (see the gotcha below). While falsifying, disable the earlier failing test to confirm the later ones have teeth too.
+
+`tests/flow/test_mission_controller.gd` (31 cases) is the second suite on this fixture and the model for driving a *system* rather than the input layer: it clears the board with `scenario_manager.clear_board()`, then builds each situation cell by cell with `game.spawn_unit` and `zone_manager.paint_cell` so no test depends on the sandbox's contents.
+
+`tests/ai/test_ai_turn_terminates.gd` (5 cases, [#103](https://github.com/Phaazoid/Godoiosis/issues/103)) is the third, and it is here for a reason worth knowing: **the hold-position filler that decides a group move's validity is queued by a game.gd signal handler** (`_on_squad_became_active` → `SquadManager.setup_hold_move_actions`), so a board built by `play/board_builder.gd` never grows the orders the bug lives in. That is why the Play API could not reproduce #103 — the same board and the same orders give a different validity answer headless. Reach for the real scene whenever plan *validity* is under test, not just input.
+
+One case in it, `test_ai_turn_from_a_jam_terminates_every_turn`, costs **~12s** — by far the most expensive in the tree (~0.26s is typical). It runs three full `AIController.take_faction_turn` passes because #103's signature was *stability*, and `pan_to` is 2 real seconds per squad planned plus a 1s `BETWEEN_TURNS` timer per hand-off. Every other squad on that board is marked `has_acted` each turn precisely so it is skipped and not panned to; don't remove that or the case triples.
+
+**Falsify with mutations, and take the baseline from git.** That suite was checked by breaking `MissionController` seven ways — one per piece of doctrine — and confirming each was caught by the test that claims to own it. Two traps, both hit on the first attempt:
+
+- **A crashed mutation run leaves the source mutated.** The next run then read *that* as its "original" baseline and silently restored a broken file, making every later result meaningless — and it wrote the mutation into the repo. Always `git checkout -- <file>` to get the baseline *and* to restore, never a string captured from the working file.
+- **`$ErrorActionPreference = 'Stop'` plus `2>&1` on `godot.exe` aborts the run** on Godot's harmless `ObjectDB instances leaked at exit` warning, because PowerShell 5.1 wraps native stderr in ErrorRecords. Don't redirect a native exe's stderr here.
 
 ## Install (already done; recorded for reproducibility)
 

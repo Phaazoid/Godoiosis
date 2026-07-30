@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #101 (2026-07-28).**
+**Canon checked through #116 (2026-07-29).**
 
 ## What a mission is
 
@@ -141,7 +141,7 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 ## Known gaps
 
 - **The Play API cannot see authored objectives.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it always passes `Progress.NONE` — so headless runs evaluate every board as a rout map, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat.
-- **`MissionController` itself is untested.** `MissionRules` and `ZoneManager` are well covered (`tests/flow/test_mission_rules.gd`, `tests/ai/test_zone_manager.gd`); the latches, the objective composer, the banner and the six call sites are not, because they need the game scene, which segfaults inside the runner.
+- **The end-of-mission banner's three choices are untested.** `_end_mission` awaits `MissionEndBanner.show_banner`, and a button press cannot be given headlessly, so RETRY (reload + re-begin the turn), MISSION_SELECT (back to the front door) and STAY (unlock the board, mission stays over) are verified only in play. Coverage stops at the board reaching `MISSION_OVER` with input locked. *(The rest of `MissionController` IS covered as of 2026-07-29 — `tests/flow/test_mission_controller.gd`, 31 cases on a real game scene, pinning both latches, AND-composition, whole-zone capture, extraction counting the downed, declared-but-unpainted reading PENDING, and DEFEAT beating a met objective in the same pass; falsified against seven mutations, each caught by its own test. The "game scene segfaults in the runner" belief that had blocked this was false — see [#114](https://github.com/Phaazoid/Godoiosis/issues/114).)*
 - **No mission-status UI.** Nothing on screen says what the objectives are or how far along they are — you find out by winning. This is the prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D names, and a turn clock will force it.
 - **`CaptureAction`'s icon is a placeholder** (the board target marker).
 
