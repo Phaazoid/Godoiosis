@@ -6,6 +6,7 @@ class_name ResolvedOutcome
 
 var base_damage: int = 0
 var damage: int = 0                              # final, post-elemental
+var heal_amount: int = 0                          # final HP restored this hit (0 for a damage attack)
 var states_added: Array[Elemental.State] = []
 var states_removed: Array[Elemental.State] = []
 var popups: Array[String] = []
@@ -27,3 +28,5 @@ enum Lethality { NONE, DOWNED, KILLED, MAIMED, CRISIS }
 var lethality: Lethality = Lethality.NONE
 
 var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview
+
+var hp_before: int = 0   # target's HP going into this hit; recorded by the resolver, not derived

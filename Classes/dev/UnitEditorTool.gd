@@ -18,8 +18,10 @@ var _current_hp := 0
 var _current_will := 0
 var _faction: Team.Faction = Team.Faction.PLAYER
 var _squad_name := ""
+var _unit_name := ""
 var _jobs: Array[String] = []
 var _limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
+var _limb_prosthetics: Dictionary[UnitInstance.LimbSlot, int] = {}   # slot -> _inventory index, or -1 (placeholder)
 var _affinity: Array[Elemental.Element] = []
 var _alkahest := false
 var _aura: Dictionary[Elemental.Element, int] = {}
@@ -40,14 +42,21 @@ func edit_unit(unit):
 		push_warning("Unit editor: discarded unsaved changes to %s" % editing_unit.get_unit_name())
 	editing_unit = unit
 	if unit != null:
-		_show_self()
+		# Capture BEFORE _show_self(): its tab_changed fires refresh_catalogs() reentrantly,
+		# which would index into a stale _inventory otherwise.
 		_capture(unit)
+		_show_self()
 	else:
 		_dirty = false
 	populate_unit_editor(unit)
 
 func _show_self():
 	%DevTabs.current_tab = %DevTabs.get_tab_idx_from_control(self)
+
+# Catalog data can change while this tab isn't current; a full repaint picks it up fresh.
+func refresh_catalogs() -> void:
+	if is_instance_valid(editing_unit):
+		populate_unit_editor(editing_unit)
 
 func _capture(unit: Unit) -> void:
 	var inst: UnitInstance = unit.unit_instance
@@ -56,6 +65,7 @@ func _capture(unit: Unit) -> void:
 	_current_will = inst.get_current_will()
 	_faction = unit.get_faction()
 	_squad_name = unit.squad.squad_name
+	_unit_name = unit.get_unit_name()
 	_jobs = inst.jobs.duplicate()
 	_affinity = inst.affinity.duplicate()
 	_alkahest = inst.is_alkahest_affine
@@ -72,6 +82,16 @@ func _capture(unit: Unit) -> void:
 	# find(null) would return the first EMPTY slot, so guard both lookups.
 	_equipped_index = _inventory.find(equipped) if equipped != null else -1
 	_armor_index = _inventory.find(unit.worn_armor) if unit.worn_armor != null else -1
+
+	# Which carried item fills each PROSTHETIC slot, by inventory index. -1 = placeholder fitting.
+	_limb_prosthetics = {}
+	for slot in UnitInstance.LimbSlot.values():
+		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
+		if fitting.state == UnitInstance.LimbState.PROSTHETIC and fitting.prosthetic_item != null:
+			_limb_prosthetics[slot] = _inventory.find(fitting.prosthetic_item)
+		else:
+			_limb_prosthetics[slot] = -1
+
 	_dirty = false
 
 # Order matters: stats before HP (they move its ceiling), inventory and armor before HP too (the
@@ -88,11 +108,14 @@ func _apply(unit: Unit) -> void:
 
 	for slot in _limb_states:
 		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
-		if fitting.state == _limb_states[slot]:
-			continue   # unchanged: keep whatever prosthetic is fitted
-		fitting.state = _limb_states[slot]
-		fitting.prosthetic_stat = 0
-		fitting.prosthetic_item = null
+		var target_state: UnitInstance.LimbState = _limb_states[slot]
+		var item_index: int = _limb_prosthetics.get(slot, -1)
+		if target_state == UnitInstance.LimbState.PROSTHETIC and item_index >= 0:
+			inst.install_prosthetic(slot, _inventory[item_index] as WeaponInstance)
+		elif fitting.state != target_state or fitting.prosthetic_item != null:
+			fitting.state = target_state
+			fitting.prosthetic_stat = 0
+			fitting.prosthetic_item = null
 
 	for i in range(Unit.MAX_INVENTORY_SIZE):
 		unit.inventory[i] = _inventory[i]
@@ -112,6 +135,12 @@ func _apply(unit: Unit) -> void:
 	if unit.get_faction() != _faction:
 		unit.change_faction(_faction)
 	unit.squad.squad_name = _squad_name
+	var trimmed_name := _unit_name.strip_edges()
+	if trimmed_name != "":
+		unit.unit_data.display_name = trimmed_name
+	elif _unit_name != unit.get_unit_name():
+		push_warning("Unit editor: blank name ignored — keeping %s" % unit.get_unit_name())
+
 	_dirty = false
 
 func _on_save_pressed() -> void:
@@ -179,8 +208,9 @@ func populate_unit_editor(unit):
 	DevWidgets.add_spinbox(unit_editor_container, "Current Will", _current_will, func(v): _stage_will(int(v)))
 	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
 		func(s): _stage_faction(s))
+	DevWidgets.add_lineedit(unit_editor_container, "Name", _unit_name, func(s): _stage_unit_name(s))
 	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
-
+	
 	_add_inventory_section()
 	_add_jobs_section()
 	_add_limbs_section(unit)
@@ -219,6 +249,10 @@ func _stage_faction(faction_name: String) -> void:
 
 func _stage_squad_name(new_name: String) -> void:
 	_squad_name = new_name
+	_touch()
+	
+func _stage_unit_name(new_name: String) -> void:
+	_unit_name = new_name
 	_touch()
 
 # Weapons, armor, and authored rune variants in one ordered list, so a unit can equip any of
@@ -331,6 +365,10 @@ func _set_slot(index: int, entry: Resource):
 		_equipped_index = -1
 	if _armor_index == index:
 		_armor_index = -1
+	for slot in _limb_prosthetics.keys():
+		if _limb_prosthetics[slot] == index:
+			_limb_prosthetics.erase(slot)   # the item that filled this limb just changed under it
+
 	# Auto-equip into an empty weapon slot, but never armor -- that has its own Wear checkbox.
 	if _inventory[index] is EquippableData and not (_inventory[index] is ArmorData) and _equipped_index == -1:
 		_equipped_index = index
@@ -413,6 +451,8 @@ func _add_limbs_section(unit: Unit):
 		var key: UnitInstance.LimbSlot = slot
 		DevWidgets.add_option(unit_editor_container, slot_names[key], state_names, state_names[_limb_states[key]],
 			func(s): _on_limb_state_picked(key, s))
+		if _limb_states[key] == UnitInstance.LimbState.PROSTHETIC:
+			_add_limb_item_picker(key)
 
 	# Derived through Unit (gear + effects), which the staging buffer deliberately doesn't model,
 	# so these show what the unit IS, not what's staged.
@@ -424,6 +464,35 @@ func _on_limb_state_picked(slot: UnitInstance.LimbSlot, state_name: String):
 	_limb_states[slot] = UnitInstance.LimbState[state_name]
 	_touch()
 	populate_unit_editor(editing_unit)
+
+# Which carried item fills a PROSTHETIC slot -- candidates filtered to the same limb_kind gate
+# install_prosthetic() enforces, so this list can never offer an item Save would then refuse.
+func _add_limb_item_picker(slot: UnitInstance.LimbSlot):
+	var candidates: Array[int] = []
+	for i in range(_inventory.size()):
+		var item := _inventory[i] as WeaponInstance
+		if item != null and UnitInstance.can_install_as_prosthetic(slot, item):
+			candidates.append(i)
+
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "  -> item"
+	row.add_child(label)
+
+	var picker := OptionButton.new()
+	picker.add_item("(placeholder -- no item)")
+	for idx in candidates:
+		picker.add_item("Slot %d: %s" % [idx + 1, (_inventory[idx] as WeaponInstance).shown_name()])
+	var current: int = _limb_prosthetics.get(slot, -1)
+	picker.select(candidates.find(current) + 1)   # -1 (placeholder) or not-found both land on 0
+	picker.item_selected.connect(func(opt_index): _on_limb_item_picked(slot, opt_index, candidates))
+	row.add_child(picker)
+
+	unit_editor_container.add_child(row)
+
+func _on_limb_item_picked(slot: UnitInstance.LimbSlot, opt_index: int, candidates: Array[int]):
+	_limb_prosthetics[slot] = candidates[opt_index - 1] if opt_index > 0 else -1
+	_touch()
 
 func _add_affinity_section():
 	DevWidgets.add_label(unit_editor_container, "Affinity")

@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #116 (2026-07-29).**
+**Canon checked through #120 (2026-07-30).**
 
 ## What a mission is
 
@@ -118,7 +118,9 @@ Capture turned out to be the cheap case to preview (a cell test against the reso
 
 The persistence seam has always said battle-scoped state resets each mission — but **nothing had ever fired a mission-start event**, so that rule had never run. `MissionController.reset()` is the first thing to do it, called from `ScenarioManager.clear_board()`.
 
-Keep the distinction [#87](https://github.com/Phaazoid/Godoiosis/issues/87) flagged: **loading a mid-battle save restores battle state; starting a mission resets it.** Both currently route through `load_scenario`; when #87 splits them, `reset()` goes on the mission-start path only.
+**Resolved by [#87](https://github.com/Phaazoid/Godoiosis/issues/87) (2026-07-30), and the answer was NOT a flag on the load.** A scenario file *is* its board, so a load restores whatever the file recorded, and an authored mission simply recorded nothing — `reset()` runs first (via `clear_board()`), then `MissionController.restore_progress()` writes a mid-battle snapshot's captured zones and `contested` latch back over the blank slate. `outcome` is deliberately not saved: it is derived from those two plus the board, so the next `check()` re-reaches it.
+
+The reset side stays real for the path that does not exist yet — the future roster → board flow ([#70](https://github.com/Phaazoid/Godoiosis/issues/70)), where units arrive off a persistent roster carrying no battle state *by construction*, because every battle-scoped field lives on the transient `Unit` or on a non-`@export` `WeaponInstance` var.
 
 `clear_board()` also empties the zone store, which `load_scenario` refills — without that, the Sandbox board inherited the previous mission's zones (and therefore its objectives' geometry).
 
@@ -152,7 +154,7 @@ Campaign layer (mission ordering, unlocks, roster carried between missions, betw
 ## What this unblocks
 
 - [#70](https://github.com/Phaazoid/Godoiosis/issues/70) — between-missions-only job swap, blocked purely because no mission-boundary concept existed (`set_main_job`/`set_sub_job` carry a `TODO(campaign layer)`).
-- [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above.
+- [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above. **BUILT 2026-07-30**; `restore_progress()` is the restore half, and `ScenarioData` now carries the captured zones + `contested` latch.
 - [#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions, which reuse `check()`, the objectives list, and `ZoneManager.Kind` wholesale.
 
 Cross-refs: [level-concepts.md](level-concepts.md) (the set-piece pool missions will draw from), [will-and-death.md](will-and-death.md) (why all-downed is terminal, and why extraction counts the downed), [ai-tactics.md](ai-tactics.md), [resolution-pipeline.md](resolution-pipeline.md) (the persistence seam).

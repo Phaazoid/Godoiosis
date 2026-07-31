@@ -1,10 +1,10 @@
-[gd_resource type="Resource" script_class="DrillWeaponInstance" format=3]
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3]
 
-[ext_resource type="Script" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="1_4n163"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_4n163"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_ym0bg"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="3_unu12"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="3_ym0bg"]
 
 [resource]
 script = ExtResource("1_4n163")
-template = ExtResource("3_unu12")
-item_name = "brrr"
+template = ExtResource("3_ym0bg")
+item_name = "Gun"

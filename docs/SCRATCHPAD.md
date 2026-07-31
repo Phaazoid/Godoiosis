@@ -36,7 +36,17 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-*(empty — swept 2026-07-29)*
+Targetting allies is currently broken with the action queue, only discovered now because heal action is the first action you'd want to target units with
+
+Heal action was made to target units.  If I target a friendly in my squad who has not moved, then move that unit, the heal action is not canceled, it just sits in the action queue targetting nothing, when it should get canceled.  
+
+Downed enemy units should not block movement
+
+Heal also needs to be able to target self - if Manahattan range is set to 0.  Can use this as a way to let any manhattan range attack target self.  Will probably not often be used, but the option is nice. Target self probably also deserves it's own tag, on top of that, though.  
+
+There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage
+
+When attacking into a squad with a healer, that healer should be able to heal their team mates if they are in range.  
 
 ## 🗂 Dispersed (log)
 

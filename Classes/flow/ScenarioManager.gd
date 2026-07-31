@@ -3,6 +3,7 @@ class_name ScenarioManager
 
 # Owns scenario save/load and the board-reset flow (dev_reset_scenario): serializes every
 # live unit into a ScenarioUnitEntry/ScenarioData, and rebuilds the board from a saved one.
+# Since #87 a save is a true mid-battle snapshot, battle-scoped layer included.
 
 const SCENARIO_DIR := "res://Scenarios/"
 
@@ -40,6 +41,21 @@ func save_scenario(scenario_name: String):
 		push_warning("Scenario needs a name")
 		return
 
+	var scenario := capture_scenario(scenario_name)
+	var path := scenario_path(scenario_name)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	# load() serves the resource cache -- without this, re-saving a loaded scenario leaves Load
+	# and the F2 reset replaying the stale board.
+	scenario.take_over_path(path)
+	var err := ResourceSaver.save(scenario, path)
+	if err != OK:
+		push_error("Failed to save scenario: error %s" % err)
+		return
+
+	last_loaded_path = path
+
+# The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
+func capture_scenario(scenario_name: String) -> ScenarioData:
 	var scenario := ScenarioData.new()
 	scenario.scenario_name = scenario_name
 	scenario.tile_data = grid.tile_map_data
@@ -47,6 +63,8 @@ func save_scenario(scenario_name: String):
 	scenario.terrain_states = game.terrain_states.to_state_dict()
 	scenario.zones = game.zone_manager.to_dict()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
+	scenario.captured_zones = game.mission_controller.captured_zone_names()
+	scenario.contested = game.mission_controller.is_contested()
 
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
@@ -61,22 +79,13 @@ func save_scenario(scenario_name: String):
 			entry.squad_name = unit.squad.squad_name
 			entry.squad_archetype = unit.squad.archetype
 			entry.squad_zone = unit.squad.zone_name
+			entry.squad_has_acted = unit.squad.has_acted   # #87: a spent squad reloads spent
 
 		entry.capture_unit_state(unit)
 
 		scenario.unit_entries.append(entry)
 
-	var path := scenario_path(scenario_name)
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	# load() serves the resource cache -- without this, re-saving a loaded scenario leaves Load
-	# and the F2 reset replaying the stale board.
-	scenario.take_over_path(path)
-	var err := ResourceSaver.save(scenario, path)
-	if err != OK:
-		push_error("Failed to save scenario: error %s" % err)
-		return
-
-	last_loaded_path = path
+	return scenario
 
 func load_scenario(path: String):
 	var scenario: ScenarioData = load(path)
@@ -84,16 +93,22 @@ func load_scenario(path: String):
 		push_error("Could not load scenario at %s" % path)
 		return
 
+	apply_scenario(scenario)
+	last_loaded_path = path
+
+# Rebuild the board from a snapshot; path bookkeeping stays in load_scenario.
+func apply_scenario(scenario: ScenarioData) -> void:
 	clear_board()
 
 	grid.tile_map_data = scenario.tile_data
 	game.terrain_states.load_state_dict(scenario.terrain_states)
 	game.zone_manager.load_dict(scenario.zones)
-	overlay_manager.redraw_zones(game.zone_manager)
 	game.mission_controller.set_objectives(scenario.objectives)
+	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested)
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
+	var acted_squad_ids: Array[int] = []
 
 	for entry in valid_entries(scenario):
 		var unit: Unit = game.spawn_unit(entry.unit_data.duplicate(true), entry.cell)
@@ -112,6 +127,8 @@ func load_scenario(path: String):
 			unit.squad.archetype = entry.squad_archetype
 			unit.squad.zone_name = entry.squad_zone
 			unit.squad.home_cell = entry.cell
+			if entry.squad_has_acted:
+				acted_squad_ids.append(entry.squad_id)   # applied AFTER the rebuild below
 		else:
 			if not members_by_squad_id.has(entry.squad_id):
 				members_by_squad_id[entry.squad_id] = []
@@ -124,9 +141,15 @@ func load_scenario(path: String):
 
 		for member in members_by_squad_id[squad_id]:
 			squad_manager.join_squad(member, leader.squad)
-			
+
+	# has_acted after the rebuild: join_squad is ungated, but assemble-then-mark-spent stays correct
+	# if the loader is ever routed through the player-facing gate (_formation_basics_ok).
+	for squad_id: int in acted_squad_ids:
+		var acted_leader: Unit = leaders_by_squad_id.get(squad_id)
+		if acted_leader != null:
+			squad_manager.set_has_acted(acted_leader.squad, true)
+
 	turn_manager.set_active_faction(scenario.active_faction)
-	last_loaded_path = path
 
 func reload_current():
 	if last_loaded_path == "":

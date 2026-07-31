@@ -61,7 +61,7 @@ const MAIM_ROTATION: Array[LimbSlot] = [LimbSlot.ARM_R, LimbSlot.LEG_L, LimbSlot
 class LimbFitting:
 	var state: LimbState = LimbState.NATURAL
 	var prosthetic_stat: int = 0             # meaningful only when PROSTHETIC and there's no real item (dev/test placeholder fittings)
-	var prosthetic_item: WeaponData = null   # the integrated-weapon template, when this prosthetic is also a weapon
+	var prosthetic_item: WeaponInstance = null   # the specific carried instance, not just its template
 
 var limbs: Dictionary[LimbSlot, LimbFitting] = {}
 
@@ -264,36 +264,19 @@ func limb_stat(slot: LimbSlot) -> int:
 		LimbState.EMPTY:
 			return 0
 		LimbState.PROSTHETIC:
-			return fitting.prosthetic_item.built_in_stat if fitting.prosthetic_item != null else fitting.prosthetic_stat
+			return fitting.prosthetic_item.template.built_in_stat if fitting.prosthetic_item != null else fitting.prosthetic_stat
 		_:
 			var natural := Stats.Stat.STR if slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R else Stats.Stat.DEX
 			return get_base_stat(natural)
 
-func install_prosthetic(slot: LimbSlot, item: WeaponInstance) -> bool:
-	# Fits a real, content-authored prosthetic (weapons.md item 6). Its built_in_stat feeds
-	# limb_stat() LIVE off the template — no snapshot, so editing the .tres later propagates
-	# to every unit with it installed, same as scaling_blend does for ordinary weapons.
-	# limb_kind gates on the INSTANCE (2026-07-19), not the template — two instances of the
-	# same family need independent arm/leg identity.
-	if item == null or item.template == null:
-		return false
-	var is_arm_slot := slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R
-	var wanted := WeaponData.LimbKind.ARM if is_arm_slot else WeaponData.LimbKind.LEG
-	if item.limb_kind != wanted:
-		return false
-	var fitting: LimbFitting = limbs[slot]
-	fitting.state = LimbState.PROSTHETIC
-	fitting.prosthetic_item = item.template
-	return true
-
-func is_installed_prosthetic(template: WeaponData) -> bool:
+func is_installed_prosthetic(item: WeaponInstance) -> bool:
 	# An installed prosthetic weapon can't be swapped out (Unit.gd guards) — it's a limb,
 	# not held gear. "Uninstalling" is a between-mission action, not built yet.
-	if template == null:
+	if item == null:
 		return false
 	for slot in limbs:
 		var fitting: LimbFitting = limbs[slot]
-		if fitting.state == LimbState.PROSTHETIC and fitting.prosthetic_item == template:
+		if fitting.state == LimbState.PROSTHETIC and fitting.prosthetic_item == item:
 			return true
 	return false
 
@@ -343,3 +326,26 @@ func get_effective_stat(stat: Stats.Stat) -> int:
 		if job != null:
 			value += job.stat_nudges.get(stat, 0)
 	return value
+
+# ARM_L/ARM_R want an arm-kind prosthetic, LEG_L/LEG_R want a leg-kind one.
+static func limb_kind_for_slot(slot: LimbSlot) -> WeaponData.LimbKind:
+	var is_arm_slot := slot == LimbSlot.ARM_L or slot == LimbSlot.ARM_R
+	return WeaponData.LimbKind.ARM if is_arm_slot else WeaponData.LimbKind.LEG
+
+# "May THIS item install into THIS limb slot" -- one answer for install_prosthetic and any
+# candidate-listing UI. limb_kind alone isn't enough: it defaults to ARM on every WeaponInstance.
+static func can_install_as_prosthetic(slot: LimbSlot, item: WeaponInstance) -> bool:
+	if item == null or item.template == null:
+		return false
+	if not (item is ProstheticWeaponInstance):
+		return false
+	return item.limb_kind == limb_kind_for_slot(slot)
+
+func install_prosthetic(slot: LimbSlot, item: WeaponInstance) -> bool:
+	# built_in_stat feeds limb_stat() LIVE off the template -- no snapshot.
+	if not can_install_as_prosthetic(slot, item):
+		return false
+	var fitting: LimbFitting = limbs[slot]
+	fitting.state = LimbState.PROSTHETIC
+	fitting.prosthetic_item = item
+	return true

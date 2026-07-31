@@ -161,7 +161,7 @@ func remove_item(index: int):
 		return
 	# An installed prosthetic is load-bearing gear, not loose inventory — it can't be dropped.
 	var weapon := item as WeaponInstance
-	if weapon != null and unit_instance.is_installed_prosthetic(weapon.template):
+	if weapon != null and unit_instance.is_installed_prosthetic(weapon):
 		return
 	if item == equipped_weapon:
 		equipped_weapon = null
@@ -379,6 +379,10 @@ func take_damage(damage: int):
 			# picks clean-vs-maimed, and the Crisis offer is settled after the pass by
 			# OrderExecutor._offer_pending_crisis reading crisis_offered_pending.
 			_go_downed()
+
+func heal(amount: int) -> void:
+	# take_damage's sibling: same HP door, no lethality check, clamp handles overheal.
+	set_current_hp(get_current_hp() + amount)
 
 func _go_downed():
 	crisis_offered_pending = is_crisis_eligible()  # capture BEFORE spend — eligibility reads FULL Will
@@ -785,3 +789,19 @@ func tick_weapon_rev() -> void:
 
 func can_burrow_weapon() -> bool:
 	return equipped_weapon != null and equipped_weapon.can_burrow()
+
+# --- Restoring battle state from a mid-battle save (#87) ---
+# Replays the RESULT, never the EVENT: the normal entry points (_go_downed, apply_stat_effect)
+# have side effects a restore must not repeat (squad ejection, Will spend, countdown reseed).
+
+func restore_lifecycle(state: LifecycleState, turns_remaining: int) -> void:
+	lifecycle_state = state
+	downed_turns_remaining = turns_remaining
+	_show_downed_sprite(state == LifecycleState.DOWNED)
+
+func restore_stat_effects(effects: Array[StatEffect]) -> void:
+	stat_effects.clear()
+	for effect in effects:
+		if effect != null:
+			stat_effects.append(effect.duplicate(true))
+	_settle_stat_change()

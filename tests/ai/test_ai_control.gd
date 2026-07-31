@@ -127,10 +127,11 @@ func test_group_move_unclamped_is_unchanged() -> void:
 	assert_that(member_destination).is_equal(Vector2i(4, 0))
 
 
-# --- GroupMoveSolver BFS bounds (perf fix 2026-07-26) ---
-# The solver stopped walking the whole board for every member. Both stopping rules must only skip
-# work whose answer was going to be discarded, so a bounded walk has to agree with a full one
-# everywhere it reports at all. These pin that; if they drift, formations change silently.
+# --- RulesService.path_hops bounds (perf fix 2026-07-26) ---
+# The connectivity field stopped walking the whole board for every member. Both stopping rules must
+# only skip work whose answer was going to be discarded, so a bounded walk has to agree with a full
+# one everywhere it reports at all. These pin that; if they drift, formations change silently.
+# (Lived on GroupMoveSolver as _path_hops until the AI's approach ladder wanted the same field.)
 
 func test_depth_bounded_field_agrees_with_the_full_walk() -> void:
 	var board: Dictionary = _build_squad_board()
@@ -138,8 +139,8 @@ func test_depth_bounded_field_agrees_with_the_full_walk() -> void:
 	var source := Vector2i(0, 0)
 
 	var walker: Unit = board.leader
-	var full: Dictionary = GroupMoveSolver._path_hops(source, context, walker)
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, 3)
+	var full: Dictionary = RulesService.path_hops(source, context, walker)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker, 3)
 
 	assert_int(bounded.size()).is_less(full.size())   # it really did stop early
 	for cell in bounded:
@@ -156,10 +157,10 @@ func test_until_bounded_field_covers_every_requested_cell() -> void:
 	var context := _context(board)
 	var source := Vector2i(0, 0)
 	var walker: Unit = board.leader
-	var full: Dictionary = GroupMoveSolver._path_hops(source, context, walker)
+	var full: Dictionary = RulesService.path_hops(source, context, walker)
 
 	var wanted := { Vector2i(2, 0): true, Vector2i(1, 1): true }
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, -1, wanted)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker, -1, wanted)
 
 	for cell in wanted:
 		assert_bool(bounded.has(cell)).is_true()
@@ -175,10 +176,10 @@ func test_until_falls_back_to_the_full_walk_when_a_cell_is_unreachable() -> void
 
 	var walker: Unit = board.leader
 	var wanted := { Vector2i(99, 99): true }
-	var bounded: Dictionary = GroupMoveSolver._path_hops(source, context, walker, -1, wanted)
+	var bounded: Dictionary = RulesService.path_hops(source, context, walker, -1, wanted)
 
 	assert_bool(bounded.has(Vector2i(99, 99))).is_false()
-	assert_int(bounded.size()).is_equal(GroupMoveSolver._path_hops(source, context, walker).size())
+	assert_int(bounded.size()).is_equal(RulesService.path_hops(source, context, walker).size())
 
 
 # --- #115: the cohesion field is per-unit, not per-cell ---
@@ -197,8 +198,8 @@ func test_hop_field_crosses_water_only_for_a_waterwalker() -> void:
 	var walker: Unit = board.member
 	walker.unit_instance.add_job("scout")
 
-	var plain_field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, plain)
-	var walker_field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, walker)
+	var plain_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, plain)
+	var walker_field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, walker)
 
 	assert_bool(plain_field.has(Vector2i(4, 0))).is_false()    # the water itself
 	assert_bool(plain_field.has(Vector2i(6, 0))).is_false()    # and everything behind it
@@ -207,14 +208,14 @@ func test_hop_field_crosses_water_only_for_a_waterwalker() -> void:
 
 
 func test_an_enemy_body_does_not_sever_the_cohesion_field() -> void:
-	# _path_hops asks can_traverse, NOT movement_cost — occupancy blocks a move but is not terrain,
+	# path_hops asks can_traverse, NOT movement_cost — occupancy blocks a move but is not terrain,
 	# and it moves every turn. Pinned because routing the field through movement_cost is the
 	# obvious-looking simplification and it would quietly change formations near any enemy.
 	var board: Dictionary = _build_squad_board()
 	BB.spawn(board, H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(4, 0))   # hostile to the ENEMY squad
 	var context := _context(board)
 
-	var field: Dictionary = GroupMoveSolver._path_hops(Vector2i(0, 0), context, board.leader)
+	var field: Dictionary = RulesService.path_hops(Vector2i(0, 0), context, board.leader)
 
 	assert_bool(field.has(Vector2i(4, 0))).is_true()
 	assert_bool(field.has(Vector2i(6, 0))).is_true()

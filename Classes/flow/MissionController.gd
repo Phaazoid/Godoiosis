@@ -44,15 +44,27 @@ func check() -> void:
 	_end_mission()   # deliberately un-awaited: outcome is already set, so is_over() is true for
 					 # every caller the moment we return, while the banner blocks only itself
 
-# Mission START clears battle-scoped mission state. One caller today (a scenario load) -- this is
-# the seam #87 flagged and the first thing in the codebase to actually fire it: loading a
-# mid-battle save RESTORES battle state, starting a mission RESETS it.
+# Mission START: the blank slate restore_progress() writes a mid-battle snapshot back over (#87).
 func reset() -> void:
 	outcome = MissionRules.Outcome.ONGOING
 	_contested = false
 	_ending = false
 	_captured_zones.clear()
 	objectives.clear()
+
+# --- Mid-battle snapshot (#87) ---
+
+func captured_zone_names() -> Array[String]:
+	return _captured_zones.duplicate()
+
+func is_contested() -> bool:
+	return _contested
+
+# Runs after zones are refilled, since the redraw needs them painted.
+func restore_progress(zones: Array[String], contested: bool) -> void:
+	_captured_zones.assign(zones)
+	_contested = contested
+	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
 
 # ==============================================================================
 #  Starting a mission (slice 2)

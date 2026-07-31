@@ -39,6 +39,8 @@ func _on_tab_changed(_tab: int):
 	var current = %DevTabs.get_current_tab_control()
 	if current == spawn:
 		spawn.refresh_weapons()
+	if current == unit_editor:
+		unit_editor.refresh_catalogs()
 	if current == scenario_tool:
 		scenario_tool.refresh_on_show()
 	if current != tile_brush:

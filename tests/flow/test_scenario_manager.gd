@@ -302,6 +302,55 @@ func test_aura_round_trips() -> void:
 	assert_bool(b.unit_instance.aura.has(Elemental.Element.FIRE)).is_true()
 	assert_int(b.unit_instance.get_element_aura(Elemental.Element.FIRE)).is_equal(0)
 
+func test_affinity_and_alkahest_round_trip() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var aff: Array[Elemental.Element] = [Elemental.Element.AETHER, Elemental.Element.WATER]
+	a.unit_instance.affinity = aff
+	a.unit_instance.is_alkahest_affine = true
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+
+	assert_array(b.unit_instance.affinity).contains_exactly([Elemental.Element.AETHER, Elemental.Element.WATER])
+	assert_bool(b.unit_instance.is_alkahest_affine).is_true()
+
+func test_affinity_survives_so_a_loaded_alchemist_can_still_channel() -> void:
+	# The consequence that made this visible: aura WAS restored while affinity was not, so a
+	# loaded alchemist kept a full AETHER pool and still failed can_channel's Rebecca-rule gate
+	# (has_any_affinity) -- every carving on their rune silently became unfireable.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var aff: Array[Elemental.Element] = [Elemental.Element.AETHER]
+	a.unit_instance.affinity = aff
+	a.unit_instance.aura = {Elemental.Element.AETHER: 3}
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+
+	assert_bool(b.unit_instance.has_any_affinity()).is_true()
+	assert_int(b.unit_instance.get_element_aura(Elemental.Element.AETHER)).is_equal(3)
+
+	var carving := TransmutationData.new()
+	var sigils: Array[Elemental.Element] = [Elemental.Element.AETHER]
+	carving.sigils = sigils
+	assert_bool(carving.can_channel(b, Elemental.Element.AETHER)).is_true()
+
+func test_a_unit_with_no_affinity_stays_rebecca_after_a_round_trip() -> void:
+	# Empty affinity is a LEGAL saved value (the Rebecca rule), not "unsaved" -- which is why
+	# emptiness can't double as the not-captured sentinel the other fields here use.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	a.unit_instance.affinity = []
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+
+	assert_bool(b.unit_instance.has_any_affinity()).is_false()
+
 func test_limb_states_round_trip() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	var arm: UnitInstance.LimbFitting = a.unit_instance.limbs[UnitInstance.LimbSlot.ARM_R]
@@ -322,7 +371,7 @@ func test_limb_states_round_trip() -> void:
 	assert_int(inst.limbs[UnitInstance.LimbSlot.ARM_L].state).is_equal(UnitInstance.LimbState.NATURAL)
 	assert_bool(inst.has_missing_arm()).is_true()
 
-func test_installed_prosthetic_relinks_to_carried_template() -> void:
+func test_installed_prosthetic_relinks_to_carried_instance() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	var prosthetic: WeaponInstance = _make_prosthetic(7)
 	a.add_item(prosthetic)
@@ -337,9 +386,88 @@ func test_installed_prosthetic_relinks_to_carried_template() -> void:
 	assert_object(carried).is_not_null()
 	var fitting: UnitInstance.LimbFitting = b.unit_instance.limbs[UnitInstance.LimbSlot.ARM_L]
 	assert_int(fitting.state).is_equal(UnitInstance.LimbState.PROSTHETIC)
-	# the re-link contract: the fitting points at the CARRIED copy's shared template (which
-	# IS the original template — copy_equippable never forks it), so built_in_stat reads live
-	assert_object(fitting.prosthetic_item).is_same(carried.template)
-	assert_object(fitting.prosthetic_item).is_same(prosthetic.template)
-	assert_bool(b.unit_instance.is_installed_prosthetic(carried.template)).is_true()
+	# the re-link contract: the fitting points at the CARRIED INSTANCE itself (not just a
+	# template match, which can't tell two same-family carried items apart -- the TorvArm/
+	# TorvLeg bug), so built_in_stat still reads live off the shared template through it.
+	assert_object(fitting.prosthetic_item).is_same(carried)
+	assert_bool(b.unit_instance.is_installed_prosthetic(carried)).is_true()
 	assert_int(b.unit_instance.limb_stat(UnitInstance.LimbSlot.ARM_L)).is_equal(7)
+
+func test_installed_prosthetic_survives_an_actual_disk_save_and_load() -> void:
+	# Unlike the in-memory test above, this goes through REAL ResourceSaver.save()/load() --
+	# and uses the REAL on-disk family template (mirrors user-authored content) rather than an
+	# ad-hoc in-memory WeaponData, since an ad-hoc template has no resource_path of its own and
+	# could in principle serialize differently than one that does. No prior test in this suite
+	# exercised an actual file round trip for a scenario -- every other case here calls
+	# capture_unit_state/apply_unit_state back to back in memory.
+	var real_template: WeaponData = load("res://Resources/Weapons/MainVarieties/Prosthetic.tres")
+	assert_object(real_template).is_not_null()
+	var prosthetic: WeaponInstance = WeaponInstance.make(real_template)
+	prosthetic.limb_kind = WeaponData.LimbKind.LEG
+
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	a.add_item(prosthetic)
+	assert_bool(a.unit_instance.install_prosthetic(UnitInstance.LimbSlot.LEG_L, prosthetic)).is_true()
+
+	var entry := ScenarioUnitEntry.new()
+	entry.unit_data = a.unit_data
+	entry.cell = Vector2i.ZERO
+	entry.capture_unit_state(a)
+
+	var scenario := ScenarioData.new()
+	scenario.unit_entries.append(entry)
+	var path := "user://__diagnostic_prosthetic_scenario.tres"
+	scenario.take_over_path(path)
+	var err := ResourceSaver.save(scenario, path)
+	assert_int(err).is_equal(OK)
+
+	var reloaded_scenario: ScenarioData = load(path)
+	var reloaded_entry: ScenarioUnitEntry = reloaded_scenario.unit_entries[0]
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	reloaded_entry.apply_unit_state(b)
+
+	var carried := b.inventory[0] as WeaponInstance
+	assert_object(carried).is_not_null()
+	var fitting: UnitInstance.LimbFitting = b.unit_instance.limbs[UnitInstance.LimbSlot.LEG_L]
+	assert_int(fitting.state).is_equal(UnitInstance.LimbState.PROSTHETIC)
+	assert_object(fitting.prosthetic_item).is_not_null()
+	assert_int(b.unit_instance.limb_stat(UnitInstance.LimbSlot.LEG_L)).is_equal(real_template.built_in_stat)
+
+	var d := DirAccess.open("user://")
+	if d != null:
+		d.remove("__diagnostic_prosthetic_scenario.tres")
+
+func test_two_prosthetics_sharing_one_template_stay_distinct_through_save_and_load() -> void:
+	# The reported bug: TorvArm and TorvLeg, both built on the SAME shared family template,
+	# one installed as an arm and the other as a leg on the SAME unit. Re-linking "by template
+	# match" (the old capture_unit_state/apply_unit_state approach) cannot tell them apart --
+	# it finds whichever carried copy matches the template FIRST and links BOTH slots to it.
+	var shared_template := WeaponData.new()
+	shared_template.weapon_type = WeaponData.WeaponType.PROSTHETIC
+	shared_template.main_attack = WeaponAttackData.new()
+	shared_template.built_in_stat = 6
+
+	var arm_item := WeaponInstance.make(shared_template)
+	arm_item.limb_kind = WeaponData.LimbKind.ARM
+	var leg_item := WeaponInstance.make(shared_template)
+	leg_item.limb_kind = WeaponData.LimbKind.LEG
+
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	a.add_item(arm_item)
+	a.add_item(leg_item)
+	assert_bool(a.unit_instance.install_prosthetic(UnitInstance.LimbSlot.ARM_R, arm_item)).is_true()
+	assert_bool(a.unit_instance.install_prosthetic(UnitInstance.LimbSlot.LEG_L, leg_item)).is_true()
+
+	var entry := ScenarioUnitEntry.new()
+	entry.capture_unit_state(a)
+	var b: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(1, 0), {}, false)
+	entry.apply_unit_state(b)
+
+	var arm_fitting: UnitInstance.LimbFitting = b.unit_instance.limbs[UnitInstance.LimbSlot.ARM_R]
+	var leg_fitting: UnitInstance.LimbFitting = b.unit_instance.limbs[UnitInstance.LimbSlot.LEG_L]
+	assert_int(arm_fitting.state).is_equal(UnitInstance.LimbState.PROSTHETIC)
+	assert_int(leg_fitting.state).is_equal(UnitInstance.LimbState.PROSTHETIC)
+	assert_object(arm_fitting.prosthetic_item).is_not_null()
+	assert_object(leg_fitting.prosthetic_item).is_not_null()
+	# the actual regression: these must be the TWO DIFFERENT carried copies, not the same one twice
+	assert_object(arm_fitting.prosthetic_item).is_not_same(leg_fitting.prosthetic_item)

@@ -6,16 +6,19 @@
 
 [sub_resource type="Resource" id="Resource_mq7ng"]
 script = ExtResource("1_mq7ng")
+max_range = 2
+max_and_a_half = true
+min_range = 2
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("1_o3s3f")
-display_name = "Fireball"
 sigils = Array[int]([1])
+popup = "Fireball!"
+icon = ExtResource("2_bcr2w")
+display_name = "Fireball"
 power = 5
 attack_pattern = SubResource("Resource_mq7ng")
 hits_allies = true
-popup = "Fireball!"
-icon = ExtResource("2_bcr2w")
 targets = 2
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

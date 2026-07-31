@@ -32,6 +32,26 @@ func _context(board: Dictionary) -> BoardContext:
 	return BoardContext.new(board.grid, units, board.squad_manager)
 
 
+# A 12x6 board split by a solid wall at x=5, with the ONLY gap at (5,5):
+#
+#   x   0 1 2 3 4 5 6 7 8 9 10 11
+#   y=0 . . . . . #  . . E . .  .        # = unpainted (impassable)
+#   y=1 . . . . . #  . . . . .  .        E = where the tests put the enemy
+#    ...
+#   y=4 . . . . . #  . . . . .  .
+#   y=5 . . . . . .  . . . . .  .        <- the gap
+#
+# Straight-line distance says the cell against the wall is the best place to stand; the ROUTE says
+# the way through is down and around. Every approach test below lives on this board.
+func _wall_board(seal_the_gap := false) -> Dictionary:
+	var board: Dictionary = _build_board(Rect2i(0, 0, 12, 6))
+	var grid: TileMapLayer = board.grid
+	var wall_height: int = 6 if seal_the_gap else 5
+	for y in range(0, wall_height):
+		grid.erase_cell(Vector2i(5, y))
+	return board
+
+
 # --- nearest_enemy ---
 
 func test_nearest_enemy_picks_closest_active() -> void:
@@ -171,3 +191,92 @@ func test_closest_reachable_cell_to_stays_put_when_nothing_allowed() -> void:
 
 	var allowed := {}   # nothing legal -> current cell wins by fallback
 	assert_that(AITactics.closest_reachable_cell_to(unit, Vector2i(11, 0), _context(board), allowed)).is_equal(Vector2i(0, 0))
+
+
+# --- Approach is by ROUTE, not straight-line distance ---
+#
+# The bug these pin: every approach query ranked candidate cells by Manhattan distance, so a squad
+# facing a wall found that its own cell was already the distance-minimum -- no reachable cell scored
+# better -- and stood there. Not for a turn: forever, because nothing about the situation changed
+# between turns. Hop distance answers the question distance was standing in for.
+
+func test_best_attack_destination_leaves_a_wall_it_cannot_shoot_through() -> void:
+	var board: Dictionary = _wall_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 0))    # flat against the wall
+	var enemy: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(8, 0))    # two cells away, 14 by road
+
+	var dest: Vector2i = AITactics.best_attack_destination(leader, enemy, _context(board))
+
+	# Every reachable cell is further from (8,0) in a straight line than (4,0) is, which is exactly
+	# why the old ranking stalled here. By route, (4,4) is four hops of progress toward the gap.
+	assert_that(dest).is_not_equal(Vector2i(4, 0))
+	assert_that(dest).is_equal(Vector2i(4, 4))
+
+
+func test_rushdown_closes_the_whole_distance_over_multiple_turns() -> void:
+	var board: Dictionary = _wall_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 0))
+	var enemy: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(8, 0))
+
+	# One "turn" = pick a destination and walk it. NOTHING is carried between turns -- the field is
+	# re-derived from scratch each time, which is what makes a multi-turn route need no stored plan.
+	var reached := false
+	var crossed := false
+	var stalled := false
+	for _turn in range(12):
+		var dest: Vector2i = AITactics.best_attack_destination(leader, enemy, _context(board))
+		if dest == leader.movement.cell:
+			stalled = true   # the reported bug: a turn that decides to go nowhere, forever
+			break
+		leader.movement.set_cell(dest)
+		if dest.x > 5:
+			crossed = true
+		if Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell):
+			reached = true
+			break
+
+	assert_bool(stalled).is_false()
+	assert_bool(crossed).is_true()    # it really went through the gap, not just up to the wall
+	assert_bool(reached).is_true()
+
+
+func test_best_attack_destination_still_closes_in_when_the_target_is_sealed_off() -> void:
+	# No route at all: every candidate scores UNREACHABLE, so the ladder falls through to straight-
+	# line distance and the squad crowds the nearest shore -- the old behaviour, deliberately kept.
+	# What it must NOT do is read "no route" as "stay home".
+	var board: Dictionary = _wall_board(true)
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 0))
+	var enemy: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(8, 0))
+
+	assert_that(AITactics.best_attack_destination(leader, enemy, _context(board))).is_equal(Vector2i(4, 0))
+
+
+func test_closest_reachable_cell_to_routes_around_a_wall() -> void:
+	# Sentry's walk home rides the same ladder: a post on the far side of a wall is approached by
+	# route, not by the cell that merely looks nearest.
+	var board: Dictionary = _wall_board()
+	var unit: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 0))
+
+	assert_that(AITactics.closest_reachable_cell_to(unit, Vector2i(8, 0), _context(board))).is_equal(Vector2i(4, 4))
+
+
+func test_nearest_enemy_is_nearest_by_route() -> void:
+	# (6,0) is two cells away and twelve hops away; (0,4) is eight of each. Chasing the walled one
+	# is how a squad commits its whole turn to walking at a wall.
+	var board: Dictionary = _wall_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 0))
+	var _behind_the_wall: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(6, 0))
+	var open_side: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 4))
+
+	assert_object(AITactics.nearest_enemy(leader, _context(board))).is_same(open_side)
+
+
+func test_nearest_enemy_falls_back_to_distance_when_nothing_is_reachable() -> void:
+	# Both enemies are sealed away, so route ranks them equally (UNREACHABLE) and distance decides:
+	# an unreachable board must still produce a target, or Rushdown returns without acting at all.
+	var board: Dictionary = _wall_board(true)
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(4, 0))
+	var near: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(6, 0))
+	var _far: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(11, 5))
+
+	assert_object(AITactics.nearest_enemy(leader, _context(board))).is_same(near)

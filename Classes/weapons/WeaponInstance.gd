@@ -73,6 +73,14 @@ func ignores_def() -> bool:
 func status_text() -> String:
 	return ""
 
+# Battle-state seam (#87): this family's signature-mechanic runtime state, non-@export so a
+# mission boundary still resets it for free. Dict, not one int -- families may need >1 field.
+func capture_battle_state() -> Dictionary:
+	return {}
+
+func apply_battle_state(_state: Dictionary) -> void:
+	pass
+
 # Copy for grants/saves: template stays SHARED (the point of the model); spaces copy
 # shallowly — fitted mods are authored content refs, so sharing them is correct and keeps
 # them as ExtResource refs in saved files.

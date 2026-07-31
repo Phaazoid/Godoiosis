@@ -40,3 +40,11 @@ func status_text() -> String:
 	if charge <= 0:
 		return "Charge 0/%d — Blowback unavailable" % MAX_CHARGE
 	return "Charge %d/%d" % [charge, MAX_CHARGE]
+
+# Battle-state seam (#87) — the mission-boundary reset that had never been paid for: a mid-battle
+# save was where this was first noticed missing. Clamped like the Carbine's magazine.
+func capture_battle_state() -> Dictionary:
+	return {"charge": charge}
+
+func apply_battle_state(state: Dictionary) -> void:
+	charge = clampi(int(state.get("charge", 0)), 0, MAX_CHARGE)
