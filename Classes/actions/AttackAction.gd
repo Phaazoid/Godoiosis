@@ -67,7 +67,10 @@ func execute():
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
 	if target != null and resolved != null:
-		target.take_damage(resolved.damage)
+		if fired_attack != null and fired_attack.heals:
+			target.heal(resolved.heal_amount)
+		else:
+			target.take_damage(resolved.damage)
 		for s in resolved.states_removed:
 			target.remove_element_state(s)
 		for s in resolved.states_added:
@@ -169,14 +172,20 @@ func get_outcome_summary() -> String:
 		return ""
 		
 	var parts: Array[String] = []
+
+	# A heal reports its own shape and stops -- lethality/popups/states are damage-only.
+	if fired_attack != null and fired_attack.heals:
+		parts.append("+%d" % resolved.heal_amount)
+		parts.append("(%d->%d)" % [resolved.hp_before, resolved.target_hp_after])
+		return "   ".join(parts)
+	
 	parts.append("-%d" % resolved.damage)
 	# HP context: "before -> after". A CRISIS row breaks the subtraction arithmetic (the
 	# target stands back up at revive HP), so it gets its own honest form.
 	if resolved.lethality == ResolvedOutcome.Lethality.CRISIS:
 		parts.append("(CRISIS -> up at %d, surged)" % resolved.target_hp_after)
 	else:
-		var hp_before: int = resolved.target_hp_after + resolved.damage
-		parts.append("(%d->%d)" % [hp_before, resolved.target_hp_after])
+		parts.append("(%d->%d)" % [resolved.hp_before, resolved.target_hp_after])
 
 	match resolved.lethality:
 		ResolvedOutcome.Lethality.DOWNED:

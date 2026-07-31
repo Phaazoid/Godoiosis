@@ -8,10 +8,12 @@ class_name RulesService
 
 const CANNOT_WALK_TILE := 99
 const OUT_OF_MAP_TILE := 999
+const UNREACHABLE := 999999   # path_hops' "no route to here"; any real hop count is far below
+const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
 
 # May THIS unit traverse this cell's TERRAIN? BoardContext.is_walkable answers the cell-only form
 # ("may a unit stand here", #109); this is the per-unit layer on top, and #115 made it the ONE
-# home for that layer — movement_cost and GroupMoveSolver._path_hops had been deciding separately,
+# home for that layer — movement_cost and path_hops had been deciding separately,
 # so Waterwalk worked when a unit moved alone and silently stopped working when it moved with its
 # squad.
 #
@@ -66,7 +68,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 	while frontier.size() > 0:
 		var current_cell: Vector2i = frontier.pop_front()
 
-		for dir in [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]:
+		for dir in NEIGHBOURS:
 			var next: Vector2i = current_cell + dir
 			var move_cost: int = movement_cost(next, unit, board)
 
@@ -196,3 +198,52 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 		cover = board.cover_def_at(cell)
 	var result: Dictionary[String, int] = {"armor": armor, "cover": cover, "total": armor + cover}
 	return result
+
+# Hop-distance (BFS over cells `unit` can traverse) from `source` -> { cell: hops }. Unweighted by
+# design: it answers how terrain CONNECTS, not what a move costs. Read it as the counterpart to
+# compute_move_range -- that says where you can stand THIS turn, this says how much of the way is
+# left. Squad cohesion asks it, and so does every AI approach; it lived on GroupMoveSolver as
+# _path_hops until the second caller arrived (Law #4 -- one question, one answer).
+#
+# Takes the unit because traversal is per-unit (#115): a Waterwalker's connected region includes
+# water. Asks can_traverse and NOT movement_cost -- occupancy blocks a move but is not terrain and
+# moves every turn. Letting an enemy body sever this field would change formations near any enemy,
+# and would make a pursuing squad route around the very unit it is chasing.
+#
+# No caller needs the whole field, so both stopping rules exist: `max_depth` past N hops, `until`
+# once every cell in that set has a distance. Both only skip work whose answer was already going to
+# be discarded, so results are unchanged. Why that holds: docs/performance.md -> Invariants.
+static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}) -> Dictionary:
+	var dist := { source: 0 }
+
+	var pending := 0
+	for cell in until:
+		if not dist.has(cell):
+			pending += 1
+	if not until.is_empty() and pending == 0:
+		return dist
+
+	var bounds := board.grid.get_used_rect()   # hoisted: this used to be re-fetched per neighbour
+	var queue: Array[Vector2i] = [source]
+	var head := 0
+	while head < queue.size():
+		var cell: Vector2i = queue[head]
+		head += 1
+		var d: int = dist[cell] + 1
+		if max_depth >= 0 and d > max_depth:
+			break   # the queue is in nondecreasing distance order, so nothing after this is nearer
+		for dir in NEIGHBOURS:
+			var next: Vector2i = cell + dir
+			if dist.has(next):
+				continue
+			if not bounds.has_point(next):
+				continue
+			if not can_traverse(next, unit, board):
+				continue
+			dist[next] = d
+			if not until.is_empty() and until.has(next):
+				pending -= 1
+				if pending == 0:
+					return dist
+			queue.append(next)
+	return dist

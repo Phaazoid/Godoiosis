@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="ProstheticWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/instances/ProstheticWeaponInstance.gd" id="1_qtbnd"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_ufrhq"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="3_0esve"]
+
+[resource]
+script = ExtResource("1_qtbnd")
+template = ExtResource("3_0esve")
+item_name = "TorvArm"

@@ -160,22 +160,48 @@ func test_installed_prosthetic_stat_reads_live_off_the_template() -> void:
 	weapon.template.built_in_stat = 9
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)   # ceil(8) — no re-install needed
 
-func test_is_installed_prosthetic_matches_only_the_fitted_template() -> void:
+func test_is_installed_prosthetic_matches_only_the_fitted_instance() -> void:
 	var inst := _make_instance({})
 	var fitted := _prosthetic_weapon(5)
 	var other := _prosthetic_weapon(5)
 	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, fitted)
-	assert_bool(inst.is_installed_prosthetic(fitted.template)).is_true()
-	assert_bool(inst.is_installed_prosthetic(other.template)).is_false()
+	assert_bool(inst.is_installed_prosthetic(fitted)).is_true()
+	assert_bool(inst.is_installed_prosthetic(other)).is_false()
 	assert_bool(inst.is_installed_prosthetic(null)).is_false()
+
+func test_is_installed_prosthetic_distinguishes_same_template_different_instances() -> void:
+	# The TorvArm/TorvLeg bug: two DIFFERENT carried instances built on the SAME shared family
+	# template must not be confused with each other just because their templates match --
+	# is_installed_prosthetic (and the fitting itself) tracks the specific INSTANCE, not the template.
+	var shared_template := WeaponData.new()
+	shared_template.weapon_type = WeaponData.WeaponType.PROSTHETIC
+	shared_template.built_in_stat = 6
+	var arm_item := WeaponInstance.make(shared_template)
+	arm_item.limb_kind = WeaponData.LimbKind.ARM
+	var leg_item := WeaponInstance.make(shared_template)
+	leg_item.limb_kind = WeaponData.LimbKind.LEG
+
+	var inst := _make_instance({})
+	inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, arm_item)
+
+	assert_bool(inst.is_installed_prosthetic(arm_item)).is_true()
+	assert_bool(inst.is_installed_prosthetic(leg_item)).is_false()   # same template, NOT the installed instance
 
 func test_bare_placeholder_prosthetic_is_not_an_installed_weapon() -> void:
 	# The dev/test shortcut (_fit_prosthetic: a raw stat, no real item) stays legal —
-	# it just never counts as an "installed weapon" since there's no template to match.
+	# it just never counts as an "installed weapon" since there's no instance to match.
 	var inst := _make_instance({Stats.Stat.STR: 7})
 	_fit_prosthetic(inst, UnitInstance.LimbSlot.ARM_R, 9)
 	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(8)
-	assert_bool(inst.is_installed_prosthetic(_prosthetic_weapon(9).template)).is_false()
+	assert_bool(inst.is_installed_prosthetic(_prosthetic_weapon(9))).is_false()
+
+func test_limb_kind_for_slot_maps_arms_and_legs() -> void:
+	# The one place "is this an arm slot" lives -- install_prosthetic and the Unit Editor's
+	# limb-item picker both read this instead of each re-deriving it (Design Law #4).
+	assert_that(UnitInstance.limb_kind_for_slot(UnitInstance.LimbSlot.ARM_L)).is_equal(WeaponData.LimbKind.ARM)
+	assert_that(UnitInstance.limb_kind_for_slot(UnitInstance.LimbSlot.ARM_R)).is_equal(WeaponData.LimbKind.ARM)
+	assert_that(UnitInstance.limb_kind_for_slot(UnitInstance.LimbSlot.LEG_L)).is_equal(WeaponData.LimbKind.LEG)
+	assert_that(UnitInstance.limb_kind_for_slot(UnitInstance.LimbSlot.LEG_R)).is_equal(WeaponData.LimbKind.LEG)
 
 func test_install_prosthetic_refuses_an_arm_kind_instance_on_a_leg_slot() -> void:
 	var inst := _make_instance({Stats.Stat.DEX: 6})
@@ -196,6 +222,19 @@ func test_install_prosthetic_succeeds_with_a_matching_leg_kind_instance() -> voi
 	var leg_weapon := _prosthetic_weapon(9, WeaponData.LimbKind.LEG)
 	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.LEG_R, leg_weapon)).is_true()
 	assert_int(inst.get_effective_stat(Stats.Stat.DEX)).is_equal(8)   # ceil((7+9)/2)
+
+func test_install_prosthetic_refuses_a_non_prosthetic_weapon_even_with_matching_limb_kind() -> void:
+	# limb_kind alone isn't the gate -- it defaults to ARM on EVERY WeaponInstance, so a plain
+	# Chainsword (never touched its limb_kind) must still be refused for an arm slot. Caught by
+	# the dev testing the Unit Editor's item picker, which (correctly, per the OLD gate) offered
+	# it before this fix.
+	var inst := _make_instance({Stats.Stat.STR: 6})
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	var chainsword := WeaponInstance.make(template)
+	assert_bool(inst.install_prosthetic(UnitInstance.LimbSlot.ARM_R, chainsword)).is_false()
+	assert_that(inst.limbs[UnitInstance.LimbSlot.ARM_R].state).is_equal(UnitInstance.LimbState.NATURAL)
+	assert_int(inst.get_effective_stat(Stats.Stat.STR)).is_equal(6)   # unaffected -- the refused fit never applied
 
 func test_same_family_template_can_back_an_arm_instance_and_a_leg_instance_at_once() -> void:
 	# The whole point of the move: two prosthetics sharing ONE template can independently

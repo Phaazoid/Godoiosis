@@ -109,8 +109,16 @@ TransmutationData (the carving)
   base_damage(wielder) = power + Σ aura[e over elements]   # aura-scaled, flat parallel to weapons
   can_channel(wielder, temper)   # floors = sigil weight; temper never brute-forced; trained
                                   #   leeway (temper aura) budgets the rest -- #60
+  heals: bool                     # inherited from AttackData — BUILT (2026-07-30): an attack is
+                                  #   EITHER damage OR a heal, never both. A heal reinterprets the
+                                  #   SAME power/aura-scaled base_damage() number as HP restored,
+                                  #   capped at max HP, and skips DEF/elemental/lethality entirely
+                                  #   (DEF only stops harm — a heal was never harm to begin with).
+                                  #   Basics only: no overheal, no status/terrain effect riding on
+                                  #   it yet — see the still-PROPOSED line below.
   — materia_band                 # DEFERRED — some carvings will require fuel; not modeled yet
-  — effect / timing / damage-type # status | terrain-mod | heal(aether) | instant vs EoT — still PROPOSED
+  — effect / timing / damage-type # status | terrain-mod | instant vs EoT — still PROPOSED (the
+                                  #   heal/damage fork above is the one slice of this that's built)
 ```
 
 **Same element, different carving = different attack.** A simple fire carving is a plain **fireball** (front-loaded damage, point/short range). A more complex fire carving is an **AoE fire-wall** (less up-front damage + range, more DoT, more tiles affected) — same element, more sigils (bigger `cost()`), different `attack_pattern`. *Combining* elements opens new reactions: **Aether + Water → "Soul Dew"** (an AoE splash with a lesser healing quality — Aether is the life/stability element); **Aether + Earth → "Stone Armor"** (an enchantment: heavier but tougher armor). *(Names/effects are illustrative, not a build list.)*

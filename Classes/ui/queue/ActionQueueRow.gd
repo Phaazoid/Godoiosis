@@ -112,7 +112,7 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
 	# DISPLAYED "after" is clamped by the lifecycle result -- a down/maim leaves HP at 1, a kill at 0.
 	var raw_after: int = atk.resolved.target_hp_after
-	var hp_before: int = raw_after + atk.resolved.damage
+	var hp_before: int = atk.resolved.hp_before
 	var hp_after: int = raw_after
 	match atk.resolved.lethality:
 		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:

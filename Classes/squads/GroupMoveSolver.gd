@@ -14,9 +14,6 @@ class_name GroupMoveSolver
 # override) rather than by queueing the leader first — the other half of what keeps this
 # non-committing.
 
-const UNREACHABLE := 999999   # stand-in for "no path to here"; any real hop count is far below
-const NEIGHBOURS: Array[Vector2i] = [Vector2i.UP, Vector2i.DOWN, Vector2i.LEFT, Vector2i.RIGHT]
-
 static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> Array[MoveAction]:
 	var moves: Array[MoveAction] = []
 	var leader := squad.get_leader()
@@ -44,7 +41,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# water, and then the leash rejected exactly those cells as UNREACHABLE. Per-member costs a
 		# handful of extra depth-bounded walks — negligible beside the compute_move_range call
 		# right under it, which is essentially all of plan()'s time (docs/performance.md).
-		var leader_field := _path_hops(leader_destination, board, member, leash)
+		var leader_field := RulesService.path_hops(leader_destination, board, member, leash)
 
 		var reach := RulesService.compute_move_range(member, board, leader_destination)
 		var here: Vector2i = member.movement.cell
@@ -57,7 +54,7 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		# can stop the moment it has covered them. It used to cross the whole board to answer a
 		# couple of dozen queries, once per member.
 		var target: Vector2i = here + displacement
-		var to_target := _path_hops(target, board, member, -1, candidates)
+		var to_target := RulesService.path_hops(target, board, member, -1, candidates)
 
 		var best := _best_candidate(candidates, to_target, here)
 		taken[best] = true
@@ -79,7 +76,7 @@ static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_destinati
 	for cell in reach.reachable.keys():
 		if taken.has(cell):
 			continue
-		if leader_field.get(cell, UNREACHABLE) > leash:
+		if leader_field.get(cell, RulesService.UNREACHABLE) > leash:
 			continue
 		if allowed_cells != null and not allowed_cells.has(cell):
 			continue
@@ -87,7 +84,7 @@ static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_destinati
 
 	if not taken.has(here) \
 		and GridUtils.manhattan_distance(here, leader_destination) <= squad.get_max_squad_range() \
-		and leader_field.get(here, UNREACHABLE) <= leash:
+		and leader_field.get(here, RulesService.UNREACHABLE) <= leash:
 		if allowed_cells == null or allowed_cells.has(here):
 			candidates[here] = 0
 	return candidates
@@ -100,7 +97,7 @@ static func _best_candidate(candidates: Dictionary, to_target: Dictionary, here:
 	var best_to_target := 0
 	var best_cost := 0
 	for cell in candidates.keys():
-		var d: int = to_target.get(cell, UNREACHABLE)
+		var d: int = to_target.get(cell, RulesService.UNREACHABLE)
 		var cost: int = candidates[cell]
 		if not have_best \
 			or d < best_to_target \
@@ -111,51 +108,6 @@ static func _best_candidate(candidates: Dictionary, to_target: Dictionary, here:
 			best_to_target = d
 			best_cost = cost
 	return best
-
-# Hop-distance (BFS over cells `unit` can traverse) from `source` -> { cell: hops }. Unweighted by
-# design — formation cares about how terrain CONNECTS, not move-cost.
-#
-# Takes the unit because traversal is per-unit (#115): a Waterwalker's connected region includes
-# water. Asks RulesService.can_traverse and NOT movement_cost — occupancy blocks a move but is not
-# terrain, and letting an enemy body sever this field would change formations near any enemy.
-#
-# Neither caller needs the whole field, so both stop early: `max_depth` past N hops, `until` once
-# every cell in that set has a distance. Both only skip work whose answer was already going to be
-# discarded, so the plan is unchanged. Why that holds: docs/performance.md → Invariants.
-static func _path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}) -> Dictionary:
-	var dist := { source: 0 }
-
-	var pending := 0
-	for cell in until:
-		if not dist.has(cell):
-			pending += 1
-	if not until.is_empty() and pending == 0:
-		return dist
-
-	var bounds := board.grid.get_used_rect()   # hoisted: this used to be re-fetched per neighbour
-	var queue: Array[Vector2i] = [source]
-	var head := 0
-	while head < queue.size():
-		var cell: Vector2i = queue[head]
-		head += 1
-		var d: int = dist[cell] + 1
-		if max_depth >= 0 and d > max_depth:
-			break   # the queue is in nondecreasing distance order, so nothing after this is nearer
-		for dir in NEIGHBOURS:
-			var next: Vector2i = cell + dir
-			if dist.has(next):
-				continue
-			if not bounds.has_point(next):
-				continue
-			if not RulesService.can_traverse(next, unit, board):
-				continue
-			dist[next] = d
-			if not until.is_empty() and until.has(next):
-				pending -= 1
-				if pending == 0:
-					return dist
-			queue.append(next)
-	return dist
 
 static func _cell_before(a: Vector2i, b: Vector2i) -> bool:
 	# Row-major tie-break so the solver is fully deterministic.

@@ -64,7 +64,7 @@ func test_waterwalk_water_step_costs_the_same_as_any_other_tile() -> void:
 func test_can_traverse_is_the_per_unit_terrain_answer() -> void:
 	# #115 gave the unit-level question ONE home. BoardContext.is_walkable answers the cell-only
 	# form ("may a unit stand here", #109); can_traverse is the per-unit layer on top, and both
-	# movement_cost and GroupMoveSolver._path_hops now read it instead of each deciding separately.
+	# movement_cost and path_hops now read it instead of each deciding separately.
 	var board := _board()
 	BoardBuilder.paint_cell(board.grid, Vector2i(1, 0), BoardBuilder.WATER_ATLAS)
 	var plain := _spawn(board, Vector2i(0, 0), false)

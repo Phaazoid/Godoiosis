@@ -36,37 +36,25 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-Certain elemental damage, stuff that doesn't damage through blunt force, should ignore defense.  So, fire, shock, could ignore defense, whereas pelting someone with blocks of earth or ice shards would still be blocked by defense.  
+Targetting allies is currently broken with the action queue, only discovered now because heal action is the first action you'd want to target units with
 
-During AI turns, the actions the AI takes need to be more clear.  Each action can be queued quickly, but there needs to be more of a pause between each action, so the player watching can understand what is going on.  And on this same seam, there should be a battle log the player can review.  We can adapt the action queue into one.  You should be able to scroll back and view the action queue of the AI's previous turn.  That UI will need some designing, though.  
+Heal action was made to target units.  If I target a friendly in my squad who has not moved, then move that unit, the heal action is not canceled, it just sits in the action queue targetting nothing, when it should get canceled.  
 
+Downed enemy units should not block movement
 
+Heal also needs to be able to target self - if Manahattan range is set to 0.  Can use this as a way to let any manhattan range attack target self.  Will probably not often be used, but the option is nice. Target self probably also deserves it's own tag, on top of that, though.  
 
-Just going to copy/paste a convo with codev about pushing into pits/weight
+There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage
 
-"Phaazoid [឵឵឵み],  — 11:43 AM
-hmm for Iosis
-
-obviously if a unit is shoved off a cliff that's insta death
-
-but like, what if they're just pushed into a water tile
-
-Right now I don't have water tiles normally walkable.
-
-Not allowing units to be shoved onto those tiles, treating them like walls, seems weird.  But normal water tiles probably shouldn't be insta death either. 
-
-Maybe we separate shallow and deep water?  Shallow water has a high move cost (3, as opposed to mud's 2?), so being shoved into it is very annoying? Deep water, maybe they have like a turn to be rescued by another unit before they just drown?
-c3potheds — 11:54 AM
-Maybe the weight they carry affects whether they can swim
-Phaazoid [឵឵឵み],  — 11:54 AM
-I was also just thinking this could be a way to make weight mean something
-could have a weight/push level thing, where like, the weakest tier 1 wind could only work on units of up to a certain weight
-weight could potentially determine how many tiles a unit gets knocked back, too.
-
-could be a tradeoff between like, heavier units can't move as far, but lighter units are more susceptible to getting shoved around."
-
+When attacking into a squad with a healer, that healer should be able to heal their team mates if they are in range.  
 
 ## 🗂 Dispersed (log)
+
+- Non-blunt elemental damage (fire, shock) ignores DEF; thrown earth/ice still blocked → elemental-system.md (Deferred layers — **captured, fork deliberately unpicked** at your call: per-element / elemental-damage-only / per-attack flag, plus the note that damage is one number with no physical-elemental split) + stats.md DEF cross-ref (2026-07-29)
+- AI turns resolve too fast to follow — a pause between each action → **issue [#118](https://github.com/Phaazoid/Godoiosis/issues/118)** (sub-issue of #44; grounded in `OrderExecutor._execute_action_sequence`, with the test-suite constraint that the beat must be a zeroable tunable) + visual-clarity.md (2026-07-29)
+- Battle log adapted from the action queue, scroll back through past turns → **issue [#119](https://github.com/Phaazoid/Godoiosis/issues/119)** (sub-issue of #44; carries the *share the widget, never the data source* rule + the two things a log must show that no queue row ever did — post-BREAK reality and the non-order events) + visual-clarity.md (2026-07-29)
+- Shove into water: shallow (high move cost) vs deep (drown clock with a rescue window) → **[#116](https://github.com/Phaazoid/Godoiosis/issues/116) comment** (the fork it had parked, now with a candidate) + terrain.md *Water — shallow vs deep* (captured; flags that `Unit.downed_turns_remaining` + `RescueAction` may already BE the drown clock) (2026-07-29)
+- Weight means something: push tiers gate what a shove can move, weight sets knockback distance, heavy-slow vs light-shovable → **issue [#120](https://github.com/Phaazoid/Godoiosis/issues/120)** (the first concrete answer to CLAUDE.md's wire-it-or-cut-it) + stats.md Weight & Open forks (incl. the STR-anchors-shoves collision) + CLAUDE.md debt entry (2026-07-29)
 
 - Scenario dev tab: Save As / Update / Load as three separated verbs (no retyping a saved scenario's name to overwrite it) → **issue #99** (spec + full walkthrough; Update targets the dropdown selection, not `last_loaded_path`) (2026-07-28)
 - Kinetic Mace: using Blowback disables main attacks → **issue #102** (root-caused: `can_fire_default_attack()` reads the live `active_attack`, not the default — a fired Blowback leaves a stale unfireable pick that removes Attack *and* Weapon Action for the rest of the battle) (2026-07-28)

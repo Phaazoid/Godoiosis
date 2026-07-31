@@ -32,3 +32,11 @@ func status_text() -> String:
 	if revved_turns_remaining > 0:
 		return "Revved — %d turn(s) left (ignores DEF)" % revved_turns_remaining
 	return "Not revved"
+
+# Battle-state seam (#87). The remaining COUNT rides along, not just "is it revved" — reloading
+# must not silently refresh the timer, which is the whole cost side of the ability.
+func capture_battle_state() -> Dictionary:
+	return {"rev": revved_turns_remaining}
+
+func apply_battle_state(state: Dictionary) -> void:
+	revved_turns_remaining = clampi(int(state.get("rev", 0)), 0, REV_DURATION_TURNS)

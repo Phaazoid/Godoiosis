@@ -25,9 +25,25 @@ class_name ScenarioUnitEntry
 @export var worn_armor_index := -1   # into inventory; -1 = unarmored. Mirrors equipped_index (#65).
 @export var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
 @export var aura: Dictionary[Elemental.Element, int] = {}
+@export var affinity: Array[Elemental.Element] = []
+@export var is_alkahest_affine := false
+@export var affinity_saved := false   # sentinel: empty affinity is a LEGAL value, can't double as "unsaved"
 @export var limb_states: Dictionary[UnitInstance.LimbSlot, UnitInstance.LimbState] = {}
 @export var limb_prosthetic_stats: Dictionary[UnitInstance.LimbSlot, int] = {}   # placeholder fittings (no real item)
 @export var limb_prosthetic_items: Dictionary[UnitInstance.LimbSlot, int] = {}   # index into inventory; re-linked on load
+
+# --- Battle-scoped state (#87): a save is a true mid-battle snapshot, captured explicitly
+# (not @export'd on Unit/WeaponInstance, so a mission boundary still resets for free). ---
+@export var weapon_battle_states: Dictionary[int, Dictionary] = {}   # inventory index -> that weapon's own keys
+@export var element_states: Array[Elemental.State] = []
+@export var stat_effects: Array[StatEffect] = []
+@export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
+@export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
+@export var in_crisis := false
+@export var crisis_offered_pending := false
+@export var crisis_surge_pending := false
+@export var rally_count := 0
+@export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
 
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_equippable()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
@@ -40,6 +56,9 @@ func capture_unit_state(unit: Unit) -> void:
 	current_will = inst.current_will
 	weapon_proficiency = inst.weapon_proficiency.duplicate()
 	aura = inst.aura.duplicate()
+	affinity = inst.affinity.duplicate()
+	is_alkahest_affine = inst.is_alkahest_affine
+	affinity_saved = true
 
 	var sources: Array[EquippableData] = []   # pre-copy identities, for the index lookups below
 	inventory = []
@@ -74,11 +93,33 @@ func capture_unit_state(unit: Unit) -> void:
 		if fitting.prosthetic_item == null:
 			limb_prosthetic_stats[slot] = fitting.prosthetic_stat
 			continue
+		limb_prosthetic_items[slot] = sources.find(fitting.prosthetic_item)
 		for i in sources.size():
 			var carried := sources[i] as WeaponInstance
 			if carried != null and carried.template == fitting.prosthetic_item:
 				limb_prosthetic_items[slot] = i
 				break
+
+	# By inventory INDEX, like the prosthetic re-link -- two of one family must stay distinct.
+	weapon_battle_states = {}
+	for i in sources.size():
+		var weapon := sources[i] as WeaponInstance
+		if weapon == null:
+			continue
+		var weapon_state = weapon.capture_battle_state()
+		if not weapon_state.is_empty():
+			weapon_battle_states[i] = weapon_state
+
+	element_states = unit.element_states.duplicate()
+	stat_effects = []
+	for effect in unit.stat_effects:
+		stat_effects.append(effect.duplicate(true))
+	lifecycle_state = unit.lifecycle_state
+	downed_turns_remaining = unit.downed_turns_remaining
+	in_crisis = unit.in_crisis
+	crisis_offered_pending = unit.crisis_offered_pending
+	crisis_surge_pending = unit.crisis_surge_pending
+	rally_count = unit.rally_count
 
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
 # rebuilds stats/limbs/aura and refills HP+Will), deliberately overriding that reset.
@@ -93,8 +134,16 @@ func apply_unit_state(unit: Unit) -> void:
 
 	inst.weapon_proficiency = weapon_proficiency.duplicate()   # empty = all DEFAULT, saved or not
 
+	# Affinity before aura: it's the gate aura's legality is judged against.
+	if affinity_saved:
+		inst.affinity = affinity.duplicate()
+		inst.is_alkahest_affine = is_alkahest_affine
+
 	if not aura.is_empty():
 		inst.aura = aura.duplicate()   # whole-dict: the seeded pools + growth/tax, saved together
+
+	# Before gear (settling enforces wear gates) and before HP (a +CON effect moves the max).
+	unit.restore_stat_effects(stat_effects)
 
 	for i in inventory.size():
 		if inventory[i] == null:
@@ -111,6 +160,14 @@ func apply_unit_state(unit: Unit) -> void:
 	else:
 		unit.worn_armor = null
 
+	# After the inventory exists, since the index IS the identity.
+	for i: int in weapon_battle_states:
+		if i < 0 or i >= unit.inventory.size():
+			continue
+		var weapon := unit.inventory[i] as WeaponInstance
+		if weapon != null:
+			weapon.apply_battle_state(weapon_battle_states[i])
+
 	for slot in limb_states:
 		var fitting: UnitInstance.LimbFitting = inst.limbs[slot]
 		fitting.state = limb_states[slot]
@@ -120,7 +177,14 @@ func apply_unit_state(unit: Unit) -> void:
 		if idx >= 0 and idx < unit.inventory.size():
 			var carried := unit.inventory[idx] as WeaponInstance
 			if carried != null:
-				fitting.prosthetic_item = carried.template   # re-link: the carried copy's SHARED template, never a fork
+				fitting.prosthetic_item = carried   # re-link: the exact carried instance, by index
+
+	unit.element_states = element_states.duplicate()
+	unit.in_crisis = in_crisis
+	unit.crisis_offered_pending = crisis_offered_pending
+	unit.crisis_surge_pending = crisis_surge_pending
+	unit.rally_count = rally_count
+	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a

@@ -135,5 +135,12 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 		for member in members[squad_id]:
 			board.squad_manager.join_squad(member, leader.squad)
 
+	# has_acted after the rebuild, same order ScenarioManager.apply_scenario uses (#87). Mirrored
+	# here so the two loaders cannot disagree about whether a spent squad reloads spent.
+	for unit in spawned:
+		var entry: ScenarioUnitEntry = entry_by_unit[unit]
+		if entry.is_leader and entry.squad_has_acted:
+			board.squad_manager.set_has_acted(unit.squad, true)
+
 	board.turn_manager.set_active_faction(scenario.active_faction)
 	return spawned

@@ -57,8 +57,20 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var base := _source_base_damage(action)
 	outcome.base_damage = base
 
+	# A heal short-circuits here: reinterprets `base` as HP restored, skips every hurt-only stage below.
+	if action.fired_attack != null and action.fired_attack.heals:
+		var heal_hypo: _Hypo = _hypo_for(target, hypo)
+		var heal_amount := maxi(0, base)
+		outcome.hp_before = heal_hypo.hp   # BEFORE the clamp below eats the overheal
+		heal_hypo.hp = mini(heal_hypo.hp + heal_amount, target.get_max_hp())
+		outcome.heal_amount = heal_amount
+		outcome.target_hp_after = heal_hypo.hp
+		action.resolved = outcome
+		return
+
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
 	var target_hypo: _Hypo = _hypo_for(target, hypo)
+	outcome.hp_before = target_hypo.hp   # threaded pre-hit HP (R4), not the live board value
 	var incoming := _source_elements(action)
 	var elements := _surviving_elements(incoming, target)
 	var fully_insulated := not incoming.is_empty() and elements.is_empty()

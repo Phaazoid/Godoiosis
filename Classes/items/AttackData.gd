@@ -19,6 +19,6 @@ extends Resource
 # from the attacker, stopping at the first wall/unit/edge. 0 = no displacement (every attack
 # today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
-
+@export var heals := false   # EITHER damage OR heal, never both; reinterprets base damage as HP restored
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH

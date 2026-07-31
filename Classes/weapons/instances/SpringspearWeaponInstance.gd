@@ -26,3 +26,11 @@ func status_text() -> String:
 
 func reload_label() -> String:
 	return "Spring Load"
+
+# Battle-state seam (#87). The default matches make()'s: an entry that never saved this reads back
+# as a loaded spear, so a pre-#87 scenario loads exactly as it always did.
+func capture_battle_state() -> Dictionary:
+	return {"ready": ready}
+
+func apply_battle_state(state: Dictionary) -> void:
+	ready = bool(state.get("ready", true))

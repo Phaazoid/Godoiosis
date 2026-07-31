@@ -19,7 +19,8 @@ const PERMANENT := -1
 @export var modifiers: Dictionary[Stats.Stat, int] = {}
 @export var duration: int = PERMANENT                      # in the owner's turns; PERMANENT = until retired
 
-var turns_remaining: int = PERMANENT                        # live countdown, seeded on apply
+# Live countdown, seeded on apply. @export so a mid-battle save can restore it mid-count (#87).
+@export var turns_remaining: int = PERMANENT
 
 static func make(source: String, mods: Dictionary[Stats.Stat, int], turns: int = PERMANENT) -> StatEffect:
 	var effect := StatEffect.new()
