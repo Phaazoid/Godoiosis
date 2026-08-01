@@ -6,7 +6,7 @@
 >
 > **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan (`Squad.gd` — `get_max_squad_range()`, `max_size()`). Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is **join-time only**, in the `can_squad_up`/`can_join_squad` predicates — direct `join_squad` (scenario load) stays permissive and `push_warning`s on an overfull squad rather than ejecting anyone. Leader-death overflow (`check_reassign_leader`) detaches newest-members-first when the successor's capacity is smaller (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Tests: `tests/squad/test_squad_shape.gd` (8 cases). **Feel-tested + issue closed 2026-07-16** — both constants read fine in play; `SQUAD_RANGE`/`MEMBER_LDR_COST` remain one-line changes if later play says otherwise.
 
-**Canon checked through #117 (2026-07-29).**
+**Canon checked through #124 (2026-07-31).**
 
 ## Purpose
 
@@ -57,6 +57,8 @@ Counters are **derived**: recomputed from the current plan whenever it changes, 
 - **C6.** Weaponless units cannot counter. A unit's counter reach is its weapon pattern from its *projected* position, with free rotation (no facing persistence on the board — revisit if facing becomes a mechanic).
 - **C7.** Bystander parties never counter: only the attacked party responds, and only against the attacking party. Reaction mechanics beyond that (overwatch, intercepts) would be separate named systems.
 
+> **Captured idea, 2026-07-31 (scratchpad):** *"when attacking into a squad with a healer, that healer should be able to heal their team mates if they are in range."* That is a **second derived reaction** — same derive → show → replay shape as a counter, healing instead of hitting — and C1–C7 above is the contract the first one already lives under. So it owes an explicit answer to *"does it extend C1–C7, or is it one of the separate named systems C7 reserves?"* before anything is built; an undeclared second reaction system is exactly the Law #4 hazard. Written up with its player-side twin ("act after counters") in [jobs.md](jobs.md) → *Captured idea — reactive healing*, since both need the same post-counter stage.
+
 ## Execution model
 
 1. **Moves** — all squad moves execute in parallel (the squad repositions as one).
@@ -67,7 +69,7 @@ Counters are **derived**: recomputed from the current plan whenever it changes, 
 ## AoE / volley semantics
 
 - One AoE order resolves at queue time into one `AttackAction` per victim ("volley"), all sharing the `volley` array; the first is primary (plays the lunge), the rest are `is_secondary_hit`.
-- Victims are gathered by **projected destination** over the pattern's affected cells: enemies always; non-enemies only when the weapon's `hits_allies` is true; never the attacker itself.
+- Victims are gathered by **projected destination** over the pattern's affected cells: enemies always; non-enemies only when the weapon's `hits_allies` is true; never the attacker itself. *(That last clause is what [#123](https://github.com/Phaazoid/Godoiosis/issues/123) amends: a `hits_self` flag beside `hits_allies` would make the attacker a legal victim of its own attack when the content asks for it — self-heals today, self-splash AoE later. Geometry is already there: `min_range = 0` on a `ManhattanRangePattern` already makes the caster's own cell selectable, so eligibility is the whole change and it lands in `RulesService.is_attack_victim` alone.)*
 - Counters key off each victim-action individually, so C1–C7 apply unchanged to AoE.
 
 ## Display model
@@ -78,7 +80,7 @@ The queue UI renders `ActionQueueDisplayEntry` lists built by `ActionQueueDispla
 
 - ~~LDR redesign~~ — **BUILT 2026-07-14, feel-tested + CLOSED 2026-07-16 ([#63](https://github.com/Phaazoid/Godoiosis/issues/63)):** `MEMBER_LDR_COST = 2` capacity budget + static `SQUAD_RANGE = 3` (see banner; I5/I6/V3 updated in place). **Still open:** per-member familiarity costs (the future discount lever — combat synergy + cost-reduction ride on familiarity, not LDR, once built) — no issue filed yet, this doc is the only record.
 - **UI gap ([#44](https://github.com/Phaazoid/Godoiosis/issues/44)):** current/max squad size (`Squad.max_size()`) isn't shown anywhere yet — the capacity cap is invisible until a join silently refuses. Queued for the hover panel + inspect popup.
-- AoE victim lists don't re-resolve when moves are re-planned after the volley is queued (fix belongs in `validate_squad_plan`).
+- ~~AoE victim lists don't re-resolve when moves are re-planned after the volley is queued~~ — **CLOSED.** Two halves, landing years apart in effort terms. Victims themselves have been derived rather than stored since #15 (`resolve_plan` expands each stored *aim* into a fresh volley from current projected positions every pass), which is why the entry was already stale as written. The missing half was that nothing *told the player* when a re-plan emptied an aim: `SquadPlanValidator._revalidate_unit_attacks` (2026-07-31) now invalidates a queued order whose `AttackData.targets` is UNIT-only and whose footprint holds no eligible victim. A MAP/BOTH attack is exempt — bare ground is a legal target for it (#47/#50).
 - ~~Death handling undesigned~~ — **superseded by the #33 lifecycle build (2026-06-21→25):** a would-be-fatal hit now downs (`Unit.LifecycleState`), squad ejection defers to after the resolution pass (`OrderExecutor._downed_pending`, moved off `game.gd` in the 2026-07-26 split — **and it did not actually run in the game until 2026-07-29**, because `Unit.went_downed` was never connected; see the correction in [will-and-death.md](will-and-death.md) *Implementation status*), counters skip mid-pass-downed actors, and rescue/countdown govern the aftermath — see [will-and-death.md](will-and-death.md) *Implementation status*. Still open squad-side: leader-down feel (leadership reassigns via I5) and squad tactics *around* downed allies (defend-the-body play).
 - `choose_counter_target` policy (C3) is a placeholder awaiting feel-testing.
 - Squad-formation eligibility (`can_join_squad`, `can_squad_up`, and the `can_*_any_squad` sweeps) lives in `SquadManager` — migrated out of `game.gd` in #22; both predicates share `_formation_basics_ok` since 2026-07-26.

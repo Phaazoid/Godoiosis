@@ -2,7 +2,7 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill); co-dev pass 2026-07-11 — verdict: BUILD TO TEST; descoped 2026-07-20 (#61) to the load-bearing minimum for ability-balance testing.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
-**Canon checked through #116 (2026-07-29).**
+**Canon checked through #124 (2026-07-31).**
 
 **#61 DESCOPED 2026-07-20:** #58 (2026-07-16) had built a fuller model — certify-once qualification, a 1-main+2-sub linked trio, stat ceilings, job-driven MOV base — but none of it had earned its keep against a playtest yet, and it stood between the actual open question (do abilities feel good?) and testing it. Stripped to the load-bearing minimum: **a job is `{id, display_name, stat_nudges, ability_pool}` — no cap on how many a unit holds, no certification step, abilities are live the instant a job is assigned.** The removed material is preserved below (*Parked*), not deleted from thought — it's shelved pending a playtest verdict on whether jobs are even the right vehicle for it. **#61 also shipped the actual keystone this whole system exists to test: a working ability chassis** — see *The ability chassis* below.
 
@@ -32,6 +32,30 @@
    - **Waterwalk** (Movement) — ignores water's impassability. Gated in **`RulesService.can_traverse`**, which is the single home for the per-unit traversal question as of #115 (it was `movement_cost`, and the *other* readers of that question — the Group Move cohesion field especially — bypassed it, so the ability quietly stopped working whenever a Scout moved with its squad). One deliberate exception remains, declared at the call site: a shove does **not** consult it, so a Waterwalker is not knocked back onto water — see [#116](https://github.com/Phaazoid/Godoiosis/issues/116), where what a shove into water *should* do is an open question.
    - Fortitude, Rally-enhancers, and Guard redirects remain named follow-ups, not built.
 5. **Dispatch is explicit and boring, not a generic effects engine**: each seed ability's mechanic is a hardcoded check (`UnitInstance.has_live_ability("iron_will")` etc.) at its one relevant hook — the resolver, the action layer, the counter layer, or the movement layer. `AbilityData` itself stays identity-only (no effects payload); a future content pass would need to decide whether that changes.
+
+### Captured idea — reactive healing, and the phase it would need (2026-07-31, scratchpad)
+
+**Captured, not decided.** Two scratchpad ideas that arrived separately and turn out to be **one seam**, which is why they are written down together rather than picked off one at a time (Law #4 — the second answer always looks like it solves a different problem):
+
+> There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage.
+
+> When attacking into a squad with a healer, that healer should be able to heal their team mates if they are in range.
+
+Both want **a heal that resolves after the counter phase**, and they differ only in *who authors it*:
+
+- **The first is player-authored.** A queued heal is an ordinary `AttackAction` carrying `AttackData.heals`, so it resolves in the **attack** phase — always *before* the counters whose damage it is meant to cover. The ability would be a **plan-ordering** knob: this unit's main action defers past the counter phase.
+- **The second is derived.** A defender's healer reacting *during your turn* is the counter's exact shape — [resolution-pipeline.md](resolution-pipeline.md)'s *derive → show → replay* — and the defender is not taking a turn, so nothing can be queued.
+
+They meet at the same place: **a reaction stage after counters.** Build either one first and it should open that stage, not a private hook, or the second one arrives and finds the door already taken by something that only fits the first.
+
+Constraints this already inherits, none of them new:
+
+- **A reaction is a standing policy, never a prompt** (chassis rule 3 above). "Heal the most-damaged ally in range" is a deterministic policy; "the defender chooses" is not. Crisis stays the game's only mid-resolution prompt (R9).
+- **It must be previewable, or it is a Law #2 break.** The queue has to show the reactive heal the same way it already shows a derived counter, and for the same reason. That is what makes the counter the template rather than merely an analogy.
+- **The derived half collides with C1–C7** ([squad-system.md](squad-system.md) *Counter-attack rules*), which already governs the game's one derived-reaction system: once per plan (C1), once per attacking squad's plan (C4), bystander parties never (C7). A reactive heal either **extends that contract** or declares itself a separate named system — C7 explicitly reserves that second option for overwatch/intercepts. Deciding which is the first thing this idea owes, and it is a design call, not a build detail.
+- **`heals` is already a whole-attack property** (`AttackData.heals`, built 2026-07-30) — an attack is EITHER damage OR a heal, so a reactive heal is content pointing at the same flag, not a new payload type.
+
+Open, deliberately unpicked: whether the player-side "act after counters" is an ability at all or just a queue-ordering affordance available to anyone; whether a defender's healer needs line-of-sight/range beyond the carving's own pattern; and whether a reaction heal spends anything (aura, a once-per-plan budget) the way a counter spends readiness.
 
 ## Enemies & legibility
 
