@@ -58,23 +58,23 @@ func get_squad_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
 	
+# One order per action-type per unit, plus one MAIN action per unit. Volley siblings are one order
+# spread across several actions, so they never displace each other.
+func displaces(existing: BaseAction, incoming: BaseAction) -> bool:
+	if existing.actor != incoming.actor:
+		return false
+	var same_type := existing.action_type == incoming.action_type
+	var main_conflict := incoming.is_main_action() and existing.is_main_action()
+	if not same_type and not main_conflict:
+		return false
+	return not _is_volley_sibling(existing, incoming)
+
 func _queue_action(action: BaseAction):
 	var was_empty = action_queue.is_empty()
 
-	#Enforce one order of each type per unit. A volley is one order
-	#spread across multiple actions, so volley siblings don't replace each other.
 	for existing_action in action_queue.duplicate():
-		if existing_action.actor != action.actor:
-			continue
-		# Replace a same-type order, AND enforce one main action per unit — attack, rescue,
-		# etc. contend for one slot. A volley is one order across siblings, so exempt those.
-		var same_type = existing_action.action_type == action.action_type
-		var main_conflict = action.is_main_action() and existing_action.is_main_action()
-		if not same_type and not main_conflict:
-			continue
-		if _is_volley_sibling(existing_action, action):
-			continue
-		_remove_action(existing_action)
+		if displaces(existing_action, action):
+			_remove_action(existing_action)
 
 	action_queue.append(action)
 	action_queued.emit(self, action)

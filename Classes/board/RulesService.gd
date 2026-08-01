@@ -132,24 +132,34 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 
 static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData) -> Array[Unit]:
 	var victims: Array[Unit] = []
-	# Friendly fire is a property of the ATTACK BEING FIRED, not of whatever the attacker last
-	# aimed with (#102). A counter fires main, which may not splash even when a live pick would.
-	var hits_allies := attack != null and attack.hits_allies
-
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
 		# discard if it's moving away -> else who's moving in) reconciled the forward and reverse
 		# answers by hand, and could not see a knocked-back unit at all.
 		var unit := board.projected_unit_at_cell(cell)
-		if unit == null or unit == attacker or victims.has(unit):
+		if unit == null or victims.has(unit):
 			continue
-
-		if can_target(attacker, unit):
+		if is_attack_victim(attacker, unit, attack):
 			victims.append(unit)
-		elif hits_allies:
-			victims.append(unit)
-
 	return victims
+
+# Which cells in `reach` have something to hit? The MARKER's question, and deliberately NOT the
+# gate's: a MAP attack may legally aim at bare ground, but marking every cell distinguishes nothing
+# and the marker tile REPLACES the range fill under it. A mark means a victim is there, full stop.
+static func cells_with_targets(unit: Unit, origin: Vector2i, reach: Array[Vector2i], attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	var marked: Array[Vector2i] = []
+	for cell in reach:
+		if not gather_attack_victims(unit, Reach.get_affected_cells_from(unit, origin, cell, attack), board, attack).is_empty():
+			marked.append(cell)
+	return marked
+
+# Would this attack hit that unit if it ended up in the footprint? Split out of the gather so
+# SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
+# ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).
+static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
+	if unit == null or unit == attacker or not is_instance_valid(unit):
+		return false
+	return can_target(attacker, unit) or (attack != null and attack.hits_allies)
 
 # Hostility gate: never yourself, and only a faction you're at war with. Was
 # CombatComponent.can_attack, which took the attacker as a parameter despite being an instance

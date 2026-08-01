@@ -117,17 +117,17 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 		leave_squad(newest)
 
 func validate_squad_plan(squad: Squad) -> bool:
-	return SquadPlanValidator.validate(squad, squad.action_queue)
+	return SquadPlanValidator.validate(squad, squad.action_queue, _all_units())
 
-# Validate a HYPOTHETICAL queue: the hover preview asks "what if this unit moved here instead?",
-# so the candidate action replaces the actor's same-type order in a throwaway copy of the list.
+# Validate a HYPOTHETICAL queue — the hover preview's "what if it moved here?" and the queue-time
+# gate's "what if this were queued?". Displacement uses the squad's own rule, not a copy of it.
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
 	var actions := squad.action_queue.duplicate()
 	for action in actions.duplicate():
-		if action.actor == preview_action.actor and action.action_type == preview_action.action_type:
+		if squad.displaces(action, preview_action):
 			actions.erase(action)
 	actions.append(preview_action)
-	return SquadPlanValidator.validate(squad, actions)
+	return SquadPlanValidator.validate(squad, actions, _all_units())
 
 # Same question BoardContext.projected_unit_at_cell answers, over squad membership rather than a
 # board snapshot — one rule (Unit.projected_unit_at), two unit sets. #105 retired the old move-order
@@ -184,6 +184,11 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	if action.actor != null and not action.actor_can_perform():
 		return false
 
+	# Plan-context requirement: invalid is a state you fall into, never one you choose. Batched
+	# orders skip it -- a formation is one decision, judged whole by queue_group_move.
+	if not batching and not _candidate_would_be_valid(squad, action):
+		return false
+
 	active_squad = squad
 	squad._queue_action(action)
 	if batching:
@@ -192,6 +197,16 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 	overlay_manager.redraw_planned_paths()
 
 	return true
+
+# Would this order be legal if queued right now? Reads the CANDIDATE's flag, not validate's return
+# value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
+func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
+	validate_squad_plan_preview(squad, action)
+	if action.is_valid:
+		return true
+	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
+	validate_squad_plan(squad)
+	return false
 
 func set_has_acted(squad: Squad, acted: bool) -> void:
 	squad._set_has_acted(acted)
@@ -496,7 +511,7 @@ func _all_units() -> Array[Unit]:
 # The formation solver itself lives in GroupMoveSolver (split out 2026-07-26). This is the
 # COMMITTING half: same plan, queued through the Law #3 chokepoint and drawn on the board.
 
-func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> void:
+func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> bool:
 	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells)
 
 	# One player action, so one fan-out. Note `batching` also covers the hold-position moves that
@@ -506,18 +521,32 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 	for move in moves:
 		if queue_action(squad, move):
 			queued.append(move)
-		overlay_manager.show_planned_path(move.actor, move)
-		if move.is_valid:
-			overlay_manager.show_projected_unit(move.actor, move.destination)
 	batching = false
 
 	validate_squad_plan(squad)
+
+	# All or nothing (#103). Scope is every MOVE in the queue, not just this batch's: a member the
+	# solver could place NOWHERE has no move here at all -- it keeps the hold order it already had,
+	# and that is the order cohesion refuses. A broken attack or rescue still isn't the formation's
+	# fault. All-hold is legal by construction.
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.MOVE and not action.is_valid:
+			for member in squad.get_members():
+				cancel_move_for_unit(member)
+			overlay_manager.redraw_planned_paths()
+			overlay_manager.redraw_projected_units()
+			return false
+
+	for move in queued:
+		overlay_manager.show_planned_path(move.actor, move)
+		overlay_manager.show_projected_unit(move.actor, move.destination)
 	overlay_manager.redraw_planned_paths()
 	overlay_manager.redraw_projected_units()
 	# Re-emit for the last order so listeners do their squad-level repaint exactly once. Reusing
 	# the existing signal keeps the batch invisible to everyone downstream.
 	if not queued.is_empty():
 		squad_action_queued.emit(squad, queued[queued.size() - 1])
+	return true
 
 func _register_squad_signals(squad: Squad):
 	if not squad.action_cancelled.is_connected(_on_squad_action_cancelled):

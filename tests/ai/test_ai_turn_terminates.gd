@@ -86,9 +86,11 @@ func _jam_board() -> Dictionary:
 	return {"leader": leader, "member": member, "squad": leader.squad}
 
 
-# A squad holding an invalid plan built by hand, so the GUARD can be tested without depending on
-# any archetype's movement taste. The leader retreats (a valid move, so it gets a real ghost); the
-# member charges the other way and lands 9 cells from the leader — far outside cohesion.
+# A squad holding an invalid plan, so the GUARD can be tested without depending on any archetype's
+# movement taste. ORDER IS THE MECHANISM, and it is the only way to reach this state now that
+# queue_action refuses an order that would land invalid: the member's hold is legal while the leader
+# stands beside it, and the leader's retreat is what strands it outside cohesion afterwards. That is
+# #103's own root cause — a stranded member keeping the hold-position order it was given.
 func _hand_built_invalid_plan() -> Dictionary:
 	_paint_corridor(12)
 	var leader := _spawn(Team.Faction.PLAYER, Vector2i(5, 0))
@@ -96,10 +98,18 @@ func _hand_built_invalid_plan() -> Dictionary:
 	await await_idle_frame()
 	game.squad_manager.join_squad(member, leader.squad)
 
-	_queue_move(leader, Vector2i(1, 0))
-	_queue_move(member, Vector2i(10, 0))
-	game.squad_manager.validate_squad_plan(leader.squad)
+	_strand_member_behind(leader, member)
 	return {"leader": leader, "member": member, "squad": leader.squad}
+
+
+# Queue the member's hold FIRST (legal — it is standing next to the leader), then the leader's
+# retreat, which pulls cohesion off the member and flips its hold to invalid.
+func _strand_member_behind(leader: Unit, member: Unit) -> void:
+	var hold := MoveAction.new()
+	hold.init_hold_position(member, GridUtils.get_terrain_icon_at_cell(game.grid, member.movement.cell))
+	assert_bool(game.squad_manager.queue_action(member.squad, hold)).is_true()
+	_queue_move(leader, Vector2i(1, 0))
+	game.squad_manager.validate_squad_plan(leader.squad)
 
 
 func _queue_move(unit: Unit, destination: Vector2i) -> void:
@@ -181,9 +191,7 @@ func test_hotseat_enemy_squad_keeps_its_refused_plan() -> void:
 	var member := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
 	await await_idle_frame()
 	game.squad_manager.join_squad(member, leader.squad)
-	_queue_move(leader, Vector2i(1, 0))
-	_queue_move(member, Vector2i(10, 0))
-	game.squad_manager.validate_squad_plan(leader.squad)
+	_strand_member_behind(leader, member)
 	game.ai_controller.set_faction_ai_enabled(Team.Faction.ENEMY, false)
 
 	await game.order_executor.execute_orders(leader)

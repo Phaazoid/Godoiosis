@@ -12,7 +12,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 
 	var destination := AITactics.best_attack_destination(leader, enemy, board)
 	if destination != leader.movement.cell:
-		AITactics.queue_group_move_if_coherent(squad, destination, board, squad_manager)
+		squad_manager.queue_group_move(squad, destination, board)
 
 	for member in squad.get_members():
 		AITactics.queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))

@@ -254,6 +254,10 @@ func test_a_later_aim_hits_the_cell_an_earlier_shove_lands_on() -> void:
 	var board := BoardContext.new(b.grid, _units_of(b), b.squad_manager, b.terrain_states)
 
 	b.squad_manager.queue_action(hero.squad, AttackAction.declare(hero, Vector2i(0, 0), Vector2i(1, 0)))
+	# Resolve BETWEEN the two orders, as the game does: queueing emits squad_action_queued, game.gd
+	# refreshes, and that resolve is what publishes the shove. The queue-time gate reads projected
+	# knockback, so with no resolve first it sees bare ground on the landing cell and refuses.
+	b.squad_manager.resolve_plan(hero.squad, board)
 	b.squad_manager.queue_action(ally.squad, AttackAction.declare(ally, Vector2i(2, 1), Vector2i(2, 0)))
 
 	var plan: ResolvedPlan = b.squad_manager.resolve_plan(hero.squad, board)
@@ -299,6 +303,7 @@ func test_each_shove_records_its_own_start_cell() -> void:
 	var board := BoardContext.new(b.grid, _units_of(b), b.squad_manager, b.terrain_states)
 
 	b.squad_manager.queue_action(hero.squad, AttackAction.declare(hero, Vector2i(0, 0), Vector2i(1, 0)))
+	b.squad_manager.resolve_plan(hero.squad, board)   # publishes the first shove; see the aim-chaining test above
 	b.squad_manager.queue_action(ally.squad, AttackAction.declare(ally, Vector2i(2, 1), Vector2i(2, 0)))
 
 	var plan: ResolvedPlan = b.squad_manager.resolve_plan(hero.squad, board)

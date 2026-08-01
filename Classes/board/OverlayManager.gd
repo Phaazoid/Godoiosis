@@ -133,6 +133,14 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 			squad_overlay.erase_cell(cell)
 			squadrange_overlay.erase_cell(cell)
 
+# Two atlas tiles on ONE layer: the full set, then the subset worth acting on drawn over it. Same
+# layer on purpose -- they are one piece of information, and clearing one without the other lies.
+func show_tiered_overlay(type: int, cells: Array, marked: Array, atlas_coord: Vector2i, marked_atlas: Vector2i) -> void:
+	var layer = overlay_map[type]
+	layer.clear()
+	draw_cells(layer, cells, atlas_coord)
+	draw_cells(layer, marked, marked_atlas)
+
 # PATROL only -- capture zones are objective info, not an authoring overlay.
 func set_zone_visibility(shown: bool) -> void:
 	zone_overlay.visible = shown

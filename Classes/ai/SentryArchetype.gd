@@ -23,7 +23,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	if intruder != null:
 		var destination := AITactics.best_attack_destination(leader, intruder, board, allowed)
 		if destination != leader.movement.cell:
-			AITactics.queue_group_move_if_coherent(squad, destination, board, squad_manager, allowed)
+			squad_manager.queue_group_move(squad, destination, board, allowed)
 		for member in squad.get_members():
 			AITactics.queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
 		return
@@ -31,7 +31,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 	if leader.movement.cell != squad.home_cell:
 		var destination := AITactics.closest_reachable_cell_to(leader, squad.home_cell, board, allowed)
 		if destination != leader.movement.cell:
-			AITactics.queue_group_move_if_coherent(squad, destination, board, squad_manager, allowed)
+			squad_manager.queue_group_move(squad, destination, board, allowed)
 			
 static func _zone_set(squad: Squad, board: BoardContext) -> Dictionary:
 	var cells := {}

@@ -210,14 +210,13 @@ func _click_idle(cell: Vector2i) -> void:
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
 	var moverange := compute_move_range(unit)
-	# squad_unreachable cells are clickable too — they queue, then validation flags them.
+	# Physical reach is the click's business; whether the SQUAD permits landing there is queue_action's.
 	if moverange.reachable.keys().has(cell) or moverange.squad_unreachable.keys().has(cell):
 		var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, cell)
 		var move := MoveAction.new()
 		move.init(unit, path, GridUtils.get_terrain_icon_at_cell(grid, path.back()))
-		squad_manager.queue_action(unit.squad, move)
-		overlay_manager.show_planned_path(unit, move)
-		if move.is_valid:
+		if squad_manager.queue_action(unit.squad, move):
+			overlay_manager.show_planned_path(unit, move)
 			overlay_manager.show_projected_unit(unit, move.destination)
 	exit_current_mode()
 
@@ -357,7 +356,14 @@ func enter_group_move_mode(unit: Unit):
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()), OverlayManager.ATLAS_COORDS)
+	var origin: Vector2i = unit.get_projected_destination()
+	var aiming: AttackData = unit.get_fired_attack()
+	var reach: Array[Vector2i] = Reach.get_all_attack_cells_from(unit, origin, aiming)
+	# Reach says how far the weapon goes; the marker says which of those cells holds a target. The
+	# marker tile replaces the fill on its own cell, so marking everything would erase the range.
+	overlay_manager.show_tiered_overlay(OverlayManager.OverlayType.ATTACK, reach,
+		RulesService.cells_with_targets(unit, origin, reach, aiming, _board()),
+		OverlayManager.ATLAS_COORDS, OverlayManager.TARGET_ATLAS_COORDS)
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
@@ -520,6 +526,9 @@ func refresh_action_queue(squad: Squad):
 	# ONE resolve feeds both the queue rows and the board preview — they used to resolve
 	# independently, doubling every refresh (docs/performance.md).
 	var plan := squad_manager.resolve_plan(squad, _board())
+	# Re-validate AFTER the resolve: the whiff check reads projected knockback, which this resolve
+	# just published. Converges immediately -- no move rule reads knockback, so nothing feeds back.
+	squad_manager.validate_squad_plan(squad)
 	squad_action_queue_control.show_display_entries(ActionQueueDisplayEntry.build_for(squad, plan))
 	_preview_plan_effects(plan)
 	var can_execute: bool = (squad_manager.active_squad == squad

@@ -16,7 +16,7 @@ class_name SquadPlanValidator
 # BaseAction.actor_can_perform at queue time. This is the separate, plan-CONTEXT layer: leader
 # range, destination conflicts, and adjacency that a re-planned move can silently break.
 
-static func validate(squad: Squad, actions: Array[BaseAction]) -> bool:
+static func validate(squad: Squad, actions: Array[BaseAction], units: Array[Unit]) -> bool:
 	for action in actions:
 		action.reset_validation()
 
@@ -28,6 +28,11 @@ static func validate(squad: Squad, actions: Array[BaseAction]) -> bool:
 		_run_pass(squad, actions)
 		if actions.map(func(a): return a.is_valid) == before:
 			break
+
+	# OUTSIDE the loop, deliberately. Attack validity is a LEAF -- no other clause reads it, and
+	# resolve_plan expands aims without consulting is_valid -- so running it out here lets it read
+	# SETTLED move validity instead of the loop's own half-finished output.
+	_revalidate_unit_attacks(actions, units)
 
 	for action in actions:
 		if not action.is_valid:
@@ -145,6 +150,39 @@ static func _revalidate_captures(actions: Array[BaseAction]) -> void:
 		var capture := action as CaptureAction
 		if projected_cell_for(capture.actor, actions) != capture.cell:
 			capture.add_validation_error("No longer standing on the capture point")
+
+# An attack aims at a CELL and derives its victims at resolve time (#47/#15), so a re-planned move
+# can leave it swinging at bare ground. `targets` decides whether that is a whiff: a MAP or BOTH
+# attack still deposits terrain effects (#50), a UNIT-only one does nothing. A null stamp is bare
+# fists -- unit-only by definition.
+static func _revalidate_unit_attacks(actions: Array[BaseAction], units: Array[Unit]) -> void:
+	for action in actions:
+		if not (action is AttackAction):
+			continue
+		var attack := action as AttackAction
+		if attack.fired_attack != null and attack.fired_attack.hits_map():
+			continue
+		if _projected_victim_for(attack, actions, units) == null:
+			attack.add_validation_error("Nothing left to hit on that cell")
+
+# gather_attack_victims' question asked without a board: same eligibility rule
+# (RulesService.is_attack_victim), positions from Unit.projected_cell. Both axes are TRUE here,
+# unlike projected_cell_for above, and each for its own reason:
+#   require_valid = true  -- a destination that will not happen is not a target; an aim resting on
+#                            a refused move is just choosing invalid one level down.
+#   use_knockback = true  -- you must be able to aim where a shove will PUT someone (#105).
+# Only safe because this runs outside the fixed point and nothing reads attack validity back.
+static func _projected_victim_for(attack: AttackAction, actions: Array[BaseAction], units: Array[Unit]) -> Unit:
+	var origin := Unit.projected_cell(attack.actor, actions, true, true)
+	var footprint := Reach.get_affected_cells_from(attack.actor, origin, attack.target_cell, attack.fired_attack)
+	for unit in units:
+		if not is_instance_valid(unit):
+			continue
+		if not footprint.has(Unit.projected_cell(unit, actions, true, true)):
+			continue
+		if RulesService.is_attack_victim(attack.actor, unit, attack.fired_attack):
+			return unit
+	return null
 
 static func _actor_ends_adjacent_to(action: BaseAction, target: Unit, actions: Array[BaseAction]) -> bool:
 	var actor_cell := projected_cell_for(action.actor, actions)
