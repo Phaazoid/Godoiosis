@@ -143,16 +143,6 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 			victims.append(unit)
 	return victims
 
-# Which cells in `reach` have something to hit? The MARKER's question, and deliberately NOT the
-# gate's: a MAP attack may legally aim at bare ground, but marking every cell distinguishes nothing
-# and the marker tile REPLACES the range fill under it. A mark means a victim is there, full stop.
-static func cells_with_targets(unit: Unit, origin: Vector2i, reach: Array[Vector2i], attack: AttackData, board: BoardContext) -> Array[Vector2i]:
-	var marked: Array[Vector2i] = []
-	for cell in reach:
-		if not gather_attack_victims(unit, Reach.get_affected_cells_from(unit, origin, cell, attack), board, attack).is_empty():
-			marked.append(cell)
-	return marked
-
 # Would this attack hit that unit if it ended up in the footprint? Split out of the gather so
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).

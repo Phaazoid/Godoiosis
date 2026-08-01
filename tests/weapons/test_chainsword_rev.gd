@@ -56,32 +56,8 @@ func test_re_rev_refreshes_the_full_duration() -> void:
 	assert_int(w.revved_turns_remaining).is_equal(ChainswordWeaponInstance.REV_DURATION_TURNS)
 
 
-func test_rev_state_does_not_survive_a_copy() -> void:
-	# Battle-scoped: copy_equippable() hands back a fresh weapon, so a new mission starts un-revved.
-	var w := _chainsword()
-	w.rev()
-	var fresh := w.copy_equippable() as ChainswordWeaponInstance
-	assert_bool(fresh.is_revved()).is_false()
-
-
-func test_two_chainswords_rev_independently() -> void:
-	# The whole point of state-on-the-instance (the #73 bug this seam fixes): one revving must
-	# not leak onto the other one in the same inventory.
-	var a := _chainsword()
-	var b := _chainsword()
-	a.rev()
-	assert_bool(a.is_revved()).is_true()
-	assert_bool(b.is_revved()).is_false()
-
-
-func test_a_non_chainsword_family_never_revs_or_pierces() -> void:
-	# Base WeaponInstance's no-op rev surface: every other family is completely unaffected.
-	var t := WeaponData.new()
-	t.weapon_type = WeaponData.WeaponType.SPRINGSPEAR
-	t.main_attack = WeaponAttackData.new()
-	var w := WeaponInstance.make(t)
-	assert_bool(w.can_rev()).is_false()
-	assert_bool(w.ignores_def()).is_false()
-	w.rev()        # no-op on the base class
-	w.tick_rev()   # no-op on the base class
-	assert_bool(w.ignores_def()).is_false()
+# The battle-scoped reset on copy, independence between two chainswords, and "no other family
+# revs" are all BASE-CLASS properties rather than Chainsword ones. They moved to
+# tests/weapons/test_weapon_family_seam.gd (2026-08-01), which checks them across all seven
+# families off one declared table. What stays here is the rev mechanic itself: the countdown, the
+# refresh, and the DEF pierce.

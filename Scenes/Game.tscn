@@ -1,4 +1,4 @@
-[gd_scene format=4 uid="uid://b1qp1sxn6wnsi"]
+[gd_scene format=4 uid="uid://cpjb265bomn6i"]
 
 [ext_resource type="Script" uid="uid://w2uqgp6gxmcn" path="res://game.gd" id="1_e2o6t"]
 [ext_resource type="Script" uid="uid://djobys843dl6i" path="res://Classes/flow/TurnManager.gd" id="3_i6g32"]
@@ -99,11 +99,11 @@ z_as_relative = false
 tile_set = SubResource("TileSet_rku1e")
 
 [node name="AttackOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=1813122488]
-z_index = 5
+z_index = 3
 tile_set = SubResource("TileSet_ldgsr")
 
 [node name="HoverOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=449281543]
-z_index = 5
+z_index = 3
 tile_set = SubResource("TileSet_rfjv2")
 
 [node name="SquadOverlay" type="TileMapLayer" parent="OverlayManager" unique_id=807764723]

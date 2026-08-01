@@ -143,6 +143,8 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var attacker: Unit = game.selected_unit
 
 	var preview_cells: Array[Vector2i] = []
+	var victims: Array[Unit] = []
+	var pulse_tiles := false
 	if attacker != null:
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
@@ -150,8 +152,15 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		# Point: the hovered cell itself must be in range.
 		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
 			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming)
+			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
+			# to ask and answers as UNIT.
+			pulse_tiles = aiming != null and aiming.hits_map()
+			if aiming == null or aiming.hits_units():
+				var board: BoardContext = game._board()
+				victims = RulesService.gather_attack_victims(attacker, preview_cells, board, aiming)
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
+	game.overlay_manager.set_target_pulse(victims, pulse_tiles)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())
 
 func _hover_choosing_move(cell: Vector2i) -> void:
@@ -232,11 +241,12 @@ func _on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit) -> void:
 # ==============================================================================
 
 # Every pick mode reads the same way: nothing previewed means the aim is illegal.
+# Currently disabled while working out how targeting is presented
 func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:
 	if valid:
-		game.cursor_controller.set_state(CursorController.CursorState.VALID)
+		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	else:
-		game.cursor_controller.set_state(CursorController.CursorState.INVALID)
+		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	game.cursor_controller.set_cursor_pos(cell)
 
 func _show_hover_panel(hovered: Unit) -> void:

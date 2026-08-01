@@ -356,14 +356,10 @@ func enter_group_move_mode(unit: Unit):
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
-	var origin: Vector2i = unit.get_projected_destination()
-	var aiming: AttackData = unit.get_fired_attack()
-	var reach: Array[Vector2i] = Reach.get_all_attack_cells_from(unit, origin, aiming)
-	# Reach says how far the weapon goes; the marker says which of those cells holds a target. The
-	# marker tile replaces the fill on its own cell, so marking everything would erase the range.
-	overlay_manager.show_tiered_overlay(OverlayManager.OverlayType.ATTACK, reach,
-		RulesService.cells_with_targets(unit, origin, reach, aiming, _board()),
-		OverlayManager.ATLAS_COORDS, OverlayManager.TARGET_ATLAS_COORDS)
+	# The reach layer is the whole range and NEVER changes. What an aim will actually affect is
+	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
+	# range underneath it, which is exactly what wiped whole ForwardWide lanes.
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()), OverlayManager.ATLAS_COORDS)
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
@@ -383,6 +379,7 @@ func set_dev_mode(active: bool):
 func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
+	overlay_manager.clear_target_pulse()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null

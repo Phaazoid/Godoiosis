@@ -136,27 +136,7 @@ func test_family_content_wires_the_charge_economy() -> void:
 	assert_int(spenders).is_equal(1)
 
 
-func test_charge_does_not_survive_a_copy() -> void:
-	# Battle-scoped: a fresh mission (copy_equippable) starts uncharged.
-	var m := _mace()
-	m.consume_readiness_for(_builder())
-	var fresh := m.copy_equippable() as KineticMaceWeaponInstance
-	assert_int(fresh.charge).is_equal(0)
-
-
-func test_two_maces_charge_independently() -> void:
-	var a := _mace()
-	var b := _mace()
-	a.consume_readiness_for(_builder())
-	assert_int(a.charge).is_equal(1)
-	assert_int(b.charge).is_equal(0)
-
-
-func test_a_non_mace_family_has_no_charge_economy() -> void:
-	# Base WeaponInstance: the readiness surface is a no-op, so authored flags do nothing here.
-	var t := WeaponData.new()
-	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
-	t.main_attack = WeaponAttackData.new()
-	var w := WeaponInstance.make(t)
-	assert_bool(w.is_attack_fireable(_blowback())).is_true()
-	w.consume_readiness_for(_builder())
+# The copy reset, independence between two maces, and "no other family has a charge economy" are
+# BASE-CLASS properties, not the mace's. They moved to tests/weapons/test_weapon_family_seam.gd
+# (2026-08-01), which asserts them over every family from one table rather than per-family here.
+# What stays is the charge economy itself — above all #108's decoupling from `knockback`.

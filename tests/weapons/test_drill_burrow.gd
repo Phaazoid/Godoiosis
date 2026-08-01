@@ -37,20 +37,10 @@ func test_drill_can_burrow() -> void:
 	assert_bool(_weapon(WeaponData.WeaponType.DRILL).can_burrow()).is_true()
 
 
-func test_every_other_family_cannot_burrow() -> void:
-	# The base-class no-op holds for all six siblings — a family without the mechanic pays nothing.
-	for kind: WeaponData.WeaponType in [
-			WeaponData.WeaponType.CHAINSWORD, WeaponData.WeaponType.SPRINGSPEAR,
-			WeaponData.WeaponType.CARBINE, WeaponData.WeaponType.KINETIC_MACE,
-			WeaponData.WeaponType.CHEMICAL_SPITTER, WeaponData.WeaponType.PROSTHETIC]:
-		assert_bool(_weapon(kind).can_burrow()).is_false()
-
-
-func test_burrow_carries_no_battle_state_across_a_copy() -> void:
-	# Nothing to reset: the capability is a property of the family, not a per-battle counter.
-	var drill := _weapon(WeaponData.WeaponType.DRILL)
-	var fresh := drill.copy_equippable() as WeaponInstance
-	assert_bool(fresh.can_burrow()).is_true()
+# "Every other family cannot burrow" and "burrow carries no battle state across a copy" are
+# BASE-CLASS properties. They moved to tests/weapons/test_weapon_family_seam.gd (2026-08-01), whose
+# verb matrix covers can_burrow for all seven families at once — including the ones this
+# hand-written list would have missed had an eighth been added.
 
 
 # --- the Unit delegator + menu gate ---

@@ -86,22 +86,10 @@ func test_an_attack_that_does_not_require_readiness_fires_on_empty() -> void:
 	melee.display_name = "Bayonet"
 	assert_bool(w.is_attack_fireable(melee)).is_true()
 
-func test_two_carbines_track_their_magazines_independently() -> void:
-	# The bug the whole subclass seam exists to prevent (#73), re-pinned for a counter.
-	var a := _carbine()
-	var b := _carbine()
-	_fire(a, CarbineWeaponInstance.MAGAZINE_SIZE)
-	assert_int(a.shots_remaining).is_equal(0)
-	assert_int(b.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE)
-
-func test_a_copied_carbine_starts_loaded() -> void:
-	# Battle-scoped: shots_remaining is not @export'ed, so copy_equippable/make hand back a fresh
-	# magazine every mission — the same reset trick SpringspearWeaponInstance.ready uses.
-	var w := _carbine()
-	_fire(w, CarbineWeaponInstance.MAGAZINE_SIZE)
-	var copy := w.copy_equippable() as CarbineWeaponInstance
-	assert_int(copy.shots_remaining).is_equal(CarbineWeaponInstance.MAGAZINE_SIZE)
-	assert_object(copy.template).is_same(w.template)   # template stays shared
+# Instance independence and the battle-scoped reset on copy are BASE-CLASS properties, not the
+# Carbine's — they moved to tests/weapons/test_weapon_family_seam.gd (2026-08-01), which asserts
+# them over every family instead of the four that happened to have their own suite. Don't re-add a
+# carbine-shaped copy here.
 
 # --- status readout (#44: the player must SEE the state their decisions turn on) ---
 

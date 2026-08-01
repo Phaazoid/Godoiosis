@@ -14,11 +14,10 @@ func _instance_of(type: WeaponData.WeaponType) -> WeaponInstance:
 	return WeaponInstance.make(template)
 
 
-func test_a_stateless_family_reports_nothing() -> void:
-	# The base default: families with no signature mechanic pay nothing for this seam, and the
-	# tooltip has no empty "Status:" line to render.
-	var drill := _instance_of(WeaponData.WeaponType.DRILL)
-	assert_str(drill.status_text()).is_equal("")
+# The scope rule — a family reports status text EXACTLY when it has battle state — is a base-class
+# property covering all seven families, and lives in tests/weapons/test_weapon_family_seam.gd
+# (2026-08-01) alongside the rest of the seam. So does per-instance independence. What stays here is
+# what no generic test can check: that each family's string actually tracks the state it claims to.
 
 
 func test_chainsword_status_tracks_the_rev_timer() -> void:
@@ -70,15 +69,6 @@ func test_springspear_status_tracks_readiness() -> void:
 
 	assert_str(loaded).is_not_equal(spent)
 	assert_str(spent.to_lower()).contains("spring load")   # names the fix, not just the problem
-
-
-func test_status_is_per_instance_not_per_family() -> void:
-	# Two spears in one inventory track independently (#73) -- the readout must too, or the
-	# tooltip would lie about whichever one you're hovering.
-	var first := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringspearWeaponInstance
-	var second := _instance_of(WeaponData.WeaponType.SPRINGSPEAR) as SpringspearWeaponInstance
-	first.ready = false
-	assert_str(first.status_text()).is_not_equal(second.status_text())
 
 
 func test_status_text_never_reaches_the_rules() -> void:

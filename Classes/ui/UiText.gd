@@ -8,8 +8,11 @@ extends Object
 # Why it exists: Godot's built-in tooltip is a Label with autowrap OFF, and autowrap is a property
 # rather than a theme item, so there is no global way to switch it on. A long line runs off the
 # right edge of the screen instead of wrapping (found by feel-test 2026-07-29). So every tooltip
-# in Classes/ui/ routes its text through wrap() -- pinned by tests/law/test_tooltip_wrapping.gd,
-# since this layer has no runtime coverage (#114) and the rule would otherwise rot silently.
+# in Classes/ui/ routes its text through wrap() -- pinned at RUNTIME by
+# tests/ui/test_tooltip_rendering.gd, which populates the real inspect panel and checks that every
+# rendered tooltip is already in wrapped form. (That suite replaced a source-scanning one on
+# 2026-08-01; the claim that this layer had no runtime coverage because the game scene segfaults
+# under the runner was false -- see tests/ui/test_game_scene_smoke.gd and #114.)
 #
 # Scope is game UI only. Classes/dev/ tooltips are short one-liners in their own OS window.
 

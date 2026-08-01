@@ -22,3 +22,6 @@ extends Resource
 @export var heals := false   # EITHER damage OR heal, never both; reinterprets base damage as HP restored
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
+	
+func hits_units() -> bool:
+	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH

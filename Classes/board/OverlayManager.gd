@@ -53,6 +53,9 @@ const ICON_Z_INDEX = 15
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
+const HOVER_MODULATE := Color(1, 1, 0)                  # the aim-footprint fill
+const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
+
 
 enum OverlayType {
 	MOVE,
@@ -89,6 +92,9 @@ var zone_layer_map := {}
 # the shoved unit where it lands. Same "resolve the plan, show it pending" rail as the terrain
 # preview; its own sprite list so a plan change clears and redraws it cleanly.
 var knockback_hidden_units: Array[Unit] = []   # shoved units whose real sprite we hid behind a ghost
+var _pulsing_units: Array[Unit] = []
+var _tile_pulse: Tween = null
+
 
 
 # Called when the node enters the scene tree for the first time.
@@ -105,7 +111,7 @@ func _ready() -> void:
 	
 	move_overlay.modulate = Color(1, 1, 0, .5)
 	attack_overlay.modulate = Color(1, 0, 0, .5)
-	hover_overlay.modulate = Color(1, 1, 0)
+	hover_overlay.modulate = HOVER_MODULATE
 	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
@@ -133,14 +139,6 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 			squad_overlay.erase_cell(cell)
 			squadrange_overlay.erase_cell(cell)
 
-# Two atlas tiles on ONE layer: the full set, then the subset worth acting on drawn over it. Same
-# layer on purpose -- they are one piece of information, and clearing one without the other lies.
-func show_tiered_overlay(type: int, cells: Array, marked: Array, atlas_coord: Vector2i, marked_atlas: Vector2i) -> void:
-	var layer = overlay_map[type]
-	layer.clear()
-	draw_cells(layer, cells, atlas_coord)
-	draw_cells(layer, marked, marked_atlas)
-
 # PATROL only -- capture zones are objective info, not an authoring overlay.
 func set_zone_visibility(shown: bool) -> void:
 	zone_overlay.visible = shown
@@ -158,6 +156,31 @@ func redraw_zones(zones: ZoneManager, hidden: Array[String] = []) -> void:
 		if layer == null:
 			continue
 		draw_cells(layer, zones.cells_in(name), ATLAS_COORDS)
+
+# The aim's live feedback: what the CURRENT aim would affect pulses, while the red reach layer never
+# changes. WHICH channel pulses is the attack's own `targets` -- units, tiles or both -- so the kind
+# of attack being aimed reads at a glance. Diffed against the previous set, not restarted: this runs
+# on every hover change, and killing a tween per mouse-move strobes.
+func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
+	for unit in _pulsing_units:
+		if is_instance_valid(unit) and not units.has(unit):
+			unit.visuals.stop_pulse()
+	for unit in units:
+		if is_instance_valid(unit) and not _pulsing_units.has(unit):
+			unit.visuals.start_pulse()
+	_pulsing_units = units.duplicate()
+
+	if pulse_tiles and _tile_pulse == null:
+		_tile_pulse = Pulse.start(self, hover_overlay, HOVER_MODULATE, HOVER_PULSE_MODULATE)
+	elif not pulse_tiles and _tile_pulse != null:
+		Pulse.stop(_tile_pulse, hover_overlay, HOVER_MODULATE)
+		_tile_pulse = null
+
+# The typed local is load-bearing: a bare [] literal passed to an Array[Unit] parameter fails at
+# RUNTIME, not parse time (CLAUDE.md "Sharp edges").
+func clear_target_pulse() -> void:
+	var none: Array[Unit] = []
+	set_target_pulse(none, false)
 
 func show_hover_move_path(move: MoveAction):
 	clear_hover_move_path()

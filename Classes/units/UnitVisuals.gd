@@ -5,6 +5,10 @@ class_name UnitVisuals
 
 var visual_tween: Tween
 const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
+const TARGET_PULSE_MODULATE := Color(1.6, 1.6, 1.6)   # peak of the aim-target pulse
+
+var pulse_tween: Tween
+
 
 var base_position: Vector2
 var base_modulate: Color
@@ -24,14 +28,27 @@ func _ready():
 	# capture the scene's pre-assignment value.
 	base_z_index = Unit.BASE_SPRITE_INDEX
 
+# Looping, unlike play_invalid_flash: it runs as long as an aim covers this unit, so every other
+# writer of sprite.modulate has to yield while it lives.
+func start_pulse() -> void:
+	if sprite == null or pulse_tween != null:
+		return
+	pulse_tween = Pulse.start(self, sprite, base_modulate, TARGET_PULSE_MODULATE)
+
+func stop_pulse() -> void:
+	if pulse_tween == null:
+		return
+	Pulse.stop(pulse_tween, sprite, base_modulate)
+	pulse_tween = null
 
 func reset_visuals():
 	if sprite == null:
 		return
-		
+
+	stop_pulse()
 	if visual_tween:
 		visual_tween.kill()
-		
+
 	sprite.position = base_position
 	sprite.modulate = base_modulate
 	sprite.scale = base_scale
@@ -69,12 +86,10 @@ func set_hovered(value: bool):
 func set_highlighted(value: bool) -> void:
 	if sprite == null:
 		return
-	if value:
-		sprite.modulate = HIGHLIGHT_MODULATE
-		set_hovered(true)       # also bumps z_index so the unit reads on top
-	else:
-		sprite.modulate = base_modulate
-		set_hovered(false)
+	# A live target-pulse owns modulate; hovering a pulsing unit must not stomp it.
+	if pulse_tween == null:
+		sprite.modulate = HIGHLIGHT_MODULATE if value else base_modulate
+	set_hovered(value)
 
 func set_projected(value: bool):
 	if sprite == null:

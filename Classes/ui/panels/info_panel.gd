@@ -3,8 +3,10 @@ extends VBoxContainer
 # The stats body of the inspect panel ("StatsSection" in UnitInfoPanel.tscn): HP/Will bars,
 # limb readout, derived-stat grid (effective stats, MOV/WT/DEF/LDR/squad) and the live-ability
 # list, all with breakdown tooltips (#68, absorbing #66's display scope). Skeleton rows live
-# in the scene; per-unit rows are generated here. Tooltip text builders are static so
-# tests/ui/test_info_panel_text.gd can cover them headless.
+# in the scene; per-unit rows are generated here. Tooltip text builders are static, which lets
+# tests/ui/test_info_panel_text.gd assert what each line states without standing up a panel;
+# tests/ui/test_tooltip_rendering.gd covers the other half -- that this panel feeds them the
+# inspected unit's own numbers -- against a real populated scene.
 
 const DIM_COLOR := Color(0.6, 0.62, 0.6)
 const NATURAL_COLOR := Color(0.75, 0.78, 0.75)
