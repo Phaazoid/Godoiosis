@@ -36,19 +36,16 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-Targetting allies is currently broken with the action queue, only discovered now because heal action is the first action you'd want to target units with
-
-Heal action was made to target units.  If I target a friendly in my squad who has not moved, then move that unit, the heal action is not canceled, it just sits in the action queue targetting nothing, when it should get canceled.  
-
-Downed enemy units should not block movement
-
-Heal also needs to be able to target self - if Manahattan range is set to 0.  Can use this as a way to let any manhattan range attack target self.  Will probably not often be used, but the option is nice. Target self probably also deserves it's own tag, on top of that, though.  
-
-There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage
-
-When attacking into a squad with a healer, that healer should be able to heal their team mates if they are in range.  
-
 ## 🗂 Dispersed (log)
+
+- Downed enemy units should not block movement → **issue [#122](https://github.com/Phaazoid/Godoiosis/issues/122)** (measured the asymmetry: a downed *ally* is already walk-through-able since #103's ejection wire, a downed *enemy* is not, because `movement_cost` refuses on faction alone; "step over, don't stand on" falls out free from the `reachable` filter, and the shove question is left unpicked) + terrain.md occupancy doctrine (2026-07-31)
+- Heal should be able to target self — Manhattan range 0, plus a target-self tag → **issue [#123](https://github.com/Phaazoid/Godoiosis/issues/123)** (`Heal.tres` *already* authors `min_range = 0`, so the cell is already selectable and already queueable — the only blocker is `RulesService.is_attack_victim` refusing `unit == attacker` before it reads the attack; `hits_self` extends the `hits_allies` axis rather than adding a seam) + squad-system.md victim rule (2026-07-31)
+- An ability to act after counters, so a healer can heal a friendly who just took damage → jobs.md *Captured idea — reactive healing* (**one seam with the entry below**, deliberately written up together) + resolution-pipeline.md Deferred (a reaction stage past counters; R7 doesn't forbid it, and the heal branch already writes through the shared hypo) (2026-07-31)
+- A defending squad's healer should heal teammates when you attack into it → jobs.md *Captured idea — reactive healing* (the **derived** half: same derive→show→replay shape as a counter) + squad-system.md C7 (flags the fork it owes: extend C1–C7, or be one of the separate named systems C7 reserves) (2026-07-31)
+- Rescue an ally who goes down in the same pass (queue the attack and the pickup together) → **issue [#124](https://github.com/Phaazoid/Godoiosis/issues/124)** (execution already supports it — side channels run after counters, before ejection; all three blockers are plan-time, and `ResolvedOutcome.lethality` is the prediction it should read rather than a new one) + will-and-death.md rescue section (2026-07-31)
+
+- *(logged retroactively 2026-07-31 — these two were cleared from the Inbox by the session that fixed them, before reaching this log)* Targeting allies is broken with the action queue, found via the heal action → tiered attack overlay (`OverlayManager.show_tiered_overlay` + `RulesService.cells_with_targets`: reach fill, with a distinct marker on cells that actually hold a victim) (2026-07-31)
+- *(logged retroactively 2026-07-31)* A queued heal on a squadmate who then moves isn't cancelled — it sits in the queue targeting nothing → `SquadPlanValidator._revalidate_unit_attacks` + the re-validate-after-resolve hop in `game.refresh_action_queue`; recorded in squad-system.md *Known gaps* as the closing half of the AoE re-resolution entry (2026-07-31)
 
 - Non-blunt elemental damage (fire, shock) ignores DEF; thrown earth/ice still blocked → elemental-system.md (Deferred layers — **captured, fork deliberately unpicked** at your call: per-element / elemental-damage-only / per-attack flag, plus the note that damage is one number with no physical-elemental split) + stats.md DEF cross-ref (2026-07-29)
 - AI turns resolve too fast to follow — a pause between each action → **issue [#118](https://github.com/Phaazoid/Godoiosis/issues/118)** (sub-issue of #44; grounded in `OrderExecutor._execute_action_sequence`, with the test-suite constraint that the beat must be a zeroable tunable) + visual-clarity.md (2026-07-29)
