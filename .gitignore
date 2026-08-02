@@ -28,3 +28,8 @@ Thumbs.db
 
 # Play API interactive bridge runtime files (#46 M3)
 /playrun/
+
+# Report-a-bug dumps (#128) - transient playtest artifacts. The .gdignore is tracked so the
+# Godot editor never tries to import the screenshots that land here.
+/bug-reports/*
+!/bug-reports/.gdignore

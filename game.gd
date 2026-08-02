@@ -66,6 +66,7 @@ var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
 var mission_controller: MissionController
 var order_executor: OrderExecutor
+var bug_reporter: BugReporter
 
 # ==============================================================================
 #  Lifecycle
@@ -120,6 +121,10 @@ func _build_collaborators() -> void:
 	hover_presenter.game = self
 	add_child(hover_presenter)
 
+	bug_reporter = BugReporter.new()
+	bug_reporter.game = self
+	add_child(bug_reporter)
+
 func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.round_completed.connect(_on_round_completed)
@@ -148,6 +153,8 @@ func _input(event: InputEvent) -> void:
 			set_dev_mode(true)
 		else:
 			set_dev_mode(game_state != GameState.DEV_MODE)
+	if event.is_action_pressed("dev_report_bug"):
+		bug_reporter.report(GameState.keys()[game_state])
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
