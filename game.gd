@@ -523,9 +523,9 @@ func refresh_action_queue(squad: Squad):
 	# ONE resolve feeds both the queue rows and the board preview — they used to resolve
 	# independently, doubling every refresh (docs/performance.md).
 	var plan := squad_manager.resolve_plan(squad, _board())
-	# Re-validate AFTER the resolve: the whiff check reads projected knockback, which this resolve
-	# just published. Converges immediately -- no move rule reads knockback, so nothing feeds back.
-	squad_manager.validate_squad_plan(squad)
+	# Re-validate AFTER the resolve and WITH the plan: the resolve that expanded each aim is what
+	# knows whether it still hits anyone, in the order the aims land.
+	squad_manager.validate_squad_plan(squad, plan)
 	squad_action_queue_control.show_display_entries(ActionQueueDisplayEntry.build_for(squad, plan))
 	_preview_plan_effects(plan)
 	var can_execute: bool = (squad_manager.active_squad == squad

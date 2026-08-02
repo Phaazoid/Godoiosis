@@ -16,10 +16,13 @@ var target_cell: Vector2i
 var target_texture: Texture2D
 var target_name := "Target"
 var is_secondary_hit := false
+# The stored aim this was derived from (resolve_plan); null on the aim itself and on counters.
+# Read by the whiff clause and the queue row's tint.
+var source_aim: AttackAction = null
 var volley: Array[AttackAction] = []
- # the specific attack chosen to fire — a carving (rune) or a WeaponAttackData; null = the weapon's main attack 
- # (#30, generalized #72)
-var fired_attack: AttackData = null  
+# The attack chosen to fire — a carving or a WeaponAttackData. Null means NO attack (bare fists),
+# not the weapon's main: since #102 that fallback is gone (#30, #72).
+var fired_attack: AttackData = null
 
 var preview_sprites: Array[Node2D] = []
 
@@ -95,6 +98,13 @@ func execute():
 func get_action_icon() -> Texture2D:
 	var lethal := _lethality_icon()
 	return lethal if lethal != null else ATTACK_ICON
+
+# A derived row shows its AIM's validity: the panel's ATTACK rows are the resolver's copies, whose
+# own is_valid is always the default true, so a refused aim could never render red.
+func get_ui_modulate() -> Color:
+	if source_aim != null:
+		return source_aim.get_ui_modulate()
+	return super()
 
 func _lethality_icon() -> Texture2D:
 	if resolved != null:

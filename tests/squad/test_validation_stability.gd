@@ -49,7 +49,7 @@ func _validity_for(squad: Squad, specs: Array) -> Dictionary:
 		var move := MoveAction.new()
 		move.init(spec[1], [spec[2]], null)   # one-cell path => destination = that cell
 		actions.append(move)
-	SquadPlanValidator.validate(squad, actions, squad.get_members())
+	SquadPlanValidator.validate(squad, actions)
 	var by_label := {}
 	for i in specs.size():
 		by_label[specs[i][0]] = actions[i].is_valid

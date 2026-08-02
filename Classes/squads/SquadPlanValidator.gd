@@ -16,7 +16,7 @@ class_name SquadPlanValidator
 # BaseAction.actor_can_perform at queue time. This is the separate, plan-CONTEXT layer: leader
 # range, destination conflicts, and adjacency that a re-planned move can silently break.
 
-static func validate(squad: Squad, actions: Array[BaseAction], units: Array[Unit]) -> bool:
+static func validate(squad: Squad, actions: Array[BaseAction], plan: ResolvedPlan = null) -> bool:
 	for action in actions:
 		action.reset_validation()
 
@@ -32,7 +32,12 @@ static func validate(squad: Squad, actions: Array[BaseAction], units: Array[Unit
 	# OUTSIDE the loop, deliberately. Attack validity is a LEAF -- no other clause reads it, and
 	# resolve_plan expands aims without consulting is_valid -- so running it out here lets it read
 	# SETTLED move validity instead of the loop's own half-finished output.
-	_revalidate_unit_attacks(actions, units)
+	#
+	# And only WITH a plan (2026-08-02): a shove puts its target on a SEQUENCE of cells, and only
+	# the resolve loop walks that sequence in order. Judged against the settled end state, an aim
+	# hunted its victim on the cell its own shove had just cleared. No plan = attacks untouched.
+	if plan != null:
+		_revalidate_unit_attacks(actions, plan)
 
 	for action in actions:
 		if not action.is_valid:
@@ -151,38 +156,48 @@ static func _revalidate_captures(actions: Array[BaseAction]) -> void:
 		if projected_cell_for(capture.actor, actions) != capture.cell:
 			capture.add_validation_error("No longer standing on the capture point")
 
-# An attack aims at a CELL and derives its victims at resolve time (#47/#15), so a re-planned move
-# can leave it swinging at bare ground. `targets` decides whether that is a whiff: a MAP or BOTH
-# attack still deposits terrain effects (#50), a UNIT-only one does nothing. A null stamp is bare
-# fists -- unit-only by definition.
-static func _revalidate_unit_attacks(actions: Array[BaseAction], units: Array[Unit]) -> void:
+# Whiff POLICY, the single copy: `targets` decides whether an empty footprint matters -- MAP/BOTH
+# still deposits on bare ground (#47/#50), UNIT-only does nothing, null is bare fists. It TAKES the
+# positional fact so its two sources (the plan, or the candidate predictor below) share one policy.
+static func aim_whiffs(aim: AttackAction, found_a_target: bool) -> bool:
+	if aim.fired_attack != null and aim.fired_attack.hits_map():
+		return false
+	return not found_a_target
+
+# Source 1 -- a stored aim: read the plan. resolve_plan stamps source_aim on every action it derives.
+static func _revalidate_unit_attacks(actions: Array[BaseAction], plan: ResolvedPlan) -> void:
 	for action in actions:
 		if not (action is AttackAction):
 			continue
-		var attack := action as AttackAction
-		if attack.fired_attack != null and attack.fired_attack.hits_map():
-			continue
-		if _projected_victim_for(attack, actions, units) == null:
-			attack.add_validation_error("Nothing left to hit on that cell")
+		var aim := action as AttackAction
+		if aim_whiffs(aim, _plan_found_a_target(plan, aim)):
+			aim.add_validation_error("Nothing left to hit on that cell")
 
-# gather_attack_victims' question asked without a board: same eligibility rule
-# (RulesService.is_attack_victim), positions from Unit.projected_cell. Both axes are TRUE here,
-# unlike projected_cell_for above, and each for its own reason:
-#   require_valid = true  -- a destination that will not happen is not a target; an aim resting on
-#                            a refused move is just choosing invalid one level down.
-#   use_knockback = true  -- you must be able to aim where a shove will PUT someone (#105).
-# Only safe because this runs outside the fixed point and nothing reads attack validity back.
-static func _projected_victim_for(attack: AttackAction, actions: Array[BaseAction], units: Array[Unit]) -> Unit:
-	var origin := Unit.projected_cell(attack.actor, actions, true, true)
-	var footprint := Reach.get_affected_cells_from(attack.actor, origin, attack.target_cell, attack.fired_attack)
+static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
+	for resolved_attack in plan.attacks:
+		if resolved_attack.source_aim == aim and resolved_attack.target != null:
+			return true
+	return false
+
+# Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an
+# order the resolver has never seen. Correct because the published knockback is the ALREADY-QUEUED
+# aims' shoves, exactly the prefix a new aim lands after. NEVER ask it about a stored aim -- that
+# same knockback then includes the aim's OWN shove.
+#
+# gather_attack_victims without a board: same eligibility rule (RulesService.is_attack_victim),
+# positions from Unit.projected_cell with both axes TRUE, unlike projected_cell_for above --
+# a refused move moves nobody, and you must be able to aim where a shove will land (#105).
+static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], units: Array[Unit]) -> bool:
+	var origin := Unit.projected_cell(aim.actor, actions, true, true)
+	var footprint := Reach.get_affected_cells_from(aim.actor, origin, aim.target_cell, aim.fired_attack)
 	for unit in units:
 		if not is_instance_valid(unit):
 			continue
 		if not footprint.has(Unit.projected_cell(unit, actions, true, true)):
 			continue
-		if RulesService.is_attack_victim(attack.actor, unit, attack.fired_attack):
-			return unit
-	return null
+		if RulesService.is_attack_victim(aim.actor, unit, aim.fired_attack):
+			return true
+	return false
 
 static func _actor_ends_adjacent_to(action: BaseAction, target: Unit, actions: Array[BaseAction]) -> bool:
 	var actor_cell := projected_cell_for(action.actor, actions)

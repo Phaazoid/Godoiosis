@@ -334,14 +334,17 @@ func preview() -> Dictionary:
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
-	squad_manager.validate_squad_plan(squad)
+	# Resolve BEFORE validating, and hand the plan over (2026-08-02): "does this aim still hit
+	# anyone" is the resolve's answer, and a validate with no plan leaves attacks unjudged. Also
+	# collapses the double resolve this function used to do.
+	var plan := squad_manager.resolve_plan(squad, _board())
+	squad_manager.validate_squad_plan(squad, plan)
 	if squad_manager.squad_has_invalid_actions(squad):
 		var errs: Array[String] = []
 		for action in squad.action_queue:
 			if not action.is_valid:
 				errs.append("%s: %s" % [handle_for(action.actor), ", ".join(action.validation_errors)])
 		return {"ok": false, "error": "plan has invalid actions", "invalid": errs}
-	var plan := squad_manager.resolve_plan(squad, _board())
 	return {"ok": true, "plan": _describe_plan(squad, plan)}
 
 func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
@@ -394,11 +397,13 @@ func execute() -> Dictionary:
 	var squad := squad_manager.active_squad
 	if squad == null:
 		return {"ok": false, "error": "no squad has queued orders"}
-	squad_manager.validate_squad_plan(squad)
+	var plan := squad_manager.resolve_plan(squad, _board())   # resolve BEFORE moving (projected positions)
+	# ...and before validating, so the whiff clause has the plan to read (2026-08-02). Same order
+	# the game uses in refresh_action_queue.
+	squad_manager.validate_squad_plan(squad, plan)
 	if squad_manager.squad_has_invalid_actions(squad):
 		return {"ok": false, "error": "plan has invalid actions; fix before executing"}
 
-	var plan := squad_manager.resolve_plan(squad, _board())   # resolve BEFORE moving (projected positions)
 	var events: Array[String] = []
 
 	# 1) moves — teleport, the headless stand-in for tweened MoveAction.execute()

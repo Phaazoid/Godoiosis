@@ -116,18 +116,22 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 			break
 		leave_squad(newest)
 
-func validate_squad_plan(squad: Squad) -> bool:
-	return SquadPlanValidator.validate(squad, squad.action_queue, _all_units())
+func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
+	return SquadPlanValidator.validate(squad, squad.action_queue, plan)
 
 # Validate a HYPOTHETICAL queue — the hover preview's "what if it moved here?" and the queue-time
-# gate's "what if this were queued?". Displacement uses the squad's own rule, not a copy of it.
+# gate's "what if this were queued?". No plan: nothing has resolved this candidate.
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
-	var actions := squad.action_queue.duplicate()
+	return SquadPlanValidator.validate(squad, _hypothetical_actions(squad, preview_action))
+
+# The queue as it WOULD be with `preview_action` in it; displacement uses the squad's own rule.
+func _hypothetical_actions(squad: Squad, preview_action: BaseAction) -> Array[BaseAction]:
+	var actions: Array[BaseAction] = squad.action_queue.duplicate()
 	for action in actions.duplicate():
 		if squad.displaces(action, preview_action):
 			actions.erase(action)
 	actions.append(preview_action)
-	return SquadPlanValidator.validate(squad, actions, _all_units())
+	return actions
 
 # Same question BoardContext.projected_unit_at_cell answers, over squad membership rather than a
 # board snapshot — one rule (Unit.projected_unit_at), two unit sets. #105 retired the old move-order
@@ -202,10 +206,22 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
-	if action.is_valid:
+	if action.is_valid and _candidate_aim_connects(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
+	return false
+
+# The whiff half of the gate: only a CANDIDATE may be asked this -- a stored aim's answer comes
+# from the resolve. Non-attack candidates pass straight through.
+func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
+	if not (action is AttackAction):
+		return true
+	var aim := action as AttackAction
+	var found := SquadPlanValidator.aim_finds_a_target(aim, _hypothetical_actions(squad, action), _all_units())
+	if not SquadPlanValidator.aim_whiffs(aim, found):
+		return true
+	aim.add_validation_error("Nothing to hit on that cell")
 	return false
 
 func set_has_acted(squad: Squad, acted: bool) -> void:
@@ -383,6 +399,11 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			group.append(cell_attack)
 		else:
 			group = AttackAction.create_volley(aim.actor, origin, aim.target_cell, victims, aim.fired_attack)
+
+		# Back-link every derived action to the order that produced it -- read by the whiff clause
+		# and the queue row's tint. One place, so a new expansion branch can't forget it.
+		for atk in group:
+			atk.source_aim = aim
 		plan.attacks.append_array(group)
 
 		# Resolve THIS aim, then publish its shoves as projected positions — so the next aim's
