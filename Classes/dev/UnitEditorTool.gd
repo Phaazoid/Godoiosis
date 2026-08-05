@@ -308,7 +308,7 @@ func _add_inventory_section():
 		if current_item != null and not matched:
 			# Held item has no catalog match (e.g. a scenario-authored one-off weapon, #80) --
 			# say so instead of leaving the picker stuck on a misleading "(empty)".
-			var held_name: String = current_item.item_name
+			var held_name: String = current_item.display_name
 			if current_item is WeaponInstance:
 				held_name = current_item.shown_name()
 			var held_label := Label.new()
@@ -349,7 +349,7 @@ func _entry_matches(entry, item) -> bool:
 	if entry is WeaponData and item is WeaponInstance:
 		return item.template == entry
 	if item is Item and entry is Item:
-		return entry.item_name == item.item_name and item.item_name != ""
+		return entry.display_name == item.display_name and item.display_name != ""
 	return false
 
 func _on_slot_picked(index: int, opt_index: int):

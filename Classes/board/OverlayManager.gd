@@ -240,8 +240,8 @@ func show_knockback_preview(shoves: Array) -> void:
 		# through to PATH_ERROR. Same helper the resolver picks the shove direction with.
 		var dir := GridUtils.cardinal_direction_i_between(from, to)
 		# arrow: start tile where the shove began, arrowhead on the landing cell (move atlases)
-		knockback_preview_sprites.append(_create_arrow_sprite(from, _get_start_atlas(dir), true))
-		knockback_preview_sprites.append(_create_arrow_sprite(to, _get_arrowhead_atlas(dir), true))
+		knockback_preview_sprites.append(_create_arrow_sprite(from, _get_start_atlas(dir), Color.WHITE))
+		knockback_preview_sprites.append(_create_arrow_sprite(to, _get_arrowhead_atlas(dir), Color.WHITE))
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
 	# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
@@ -394,40 +394,41 @@ func draw_cells(layer: TileMapLayer, cells: Array, atlas_coord: Vector2i):
 		
 func is_valid_cell(cell: Vector2i) -> bool:
 	return move_overlay.get_used_rect().has_point(cell)
-	
+
 func draw_path_arrows(move: MoveAction):
 	var path: Array[Vector2i] = move.get_move_path()
-	
+	var tint := _arrow_modulate(move)
+
 	if move.is_hold_position:
 		if not move.is_valid:
-			var sprite := _create_arrow_sprite(move.destination, PATH_ERROR, false)
+			var sprite := _create_arrow_sprite(move.destination, PATH_ERROR, tint)
 			move.add_preview_sprite(sprite)
 		return
-	
+
 	if path.is_empty():
 		return
-	
+
 	if path.size() == 1:
-		var sprite := _create_arrow_sprite(path[0], PATH_ERROR, move.is_valid)
+		var sprite := _create_arrow_sprite(path[0], PATH_ERROR, tint)
 		move.add_preview_sprite(sprite)
 		return
-		
+
 	for i in range(path.size()):
 		var current := path[i]
 		var texture: Texture2D
-		
+
 		#Start tile
 		if i == 0:
 			var next := path[i + 1]
 			var dir := next - current
 			texture = _get_start_atlas(dir)
-		
+
 		#End tile / arrowhead
 		elif i == path.size() - 1:
 			var previous := path[i - 1]
 			var dir := current - previous
 			texture = _get_arrowhead_atlas(dir)
-			
+
 		#Middle tiles
 		else:
 			var previous := path[i - 1]
@@ -435,8 +436,8 @@ func draw_path_arrows(move: MoveAction):
 			var dir_to_prev := previous - current
 			var dir_to_next := next - current
 			texture = _get_path_segment_atlas(dir_to_prev, dir_to_next)
-			
-		var sprite := _create_arrow_sprite(current, texture, move.is_valid)
+
+		var sprite := _create_arrow_sprite(current, texture, tint)
 		move.add_preview_sprite(sprite)
 
 func _get_arrowhead_atlas(dir: Vector2i) -> Texture2D:
@@ -490,20 +491,24 @@ func _get_path_segment_atlas(from_dir: Vector2i, to_dir: Vector2i) -> Texture2D:
 func _dirs_match(a: Vector2i, b: Vector2i, dir1: Vector2i, dir2: Vector2i) -> bool:
 	return (a == dir1 and b == dir2) or (a == dir2 and b == dir1)
 	
-func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, valid: bool) -> Sprite2D:
+# Arrow tint, worst-first: refused, following-but-falling-behind (Case 1), keeping formation.
+# Separate from _create_arrow_sprite because the knockback preview draws the same arrows for a
+# shove, which has no MoveAction to ask.
+func _arrow_modulate(move: MoveAction) -> Color:
+	if not move.is_valid:
+		return Color(1, .25, .25, .85)
+	if move.is_trailing:
+		return Color(.4, 1, .45, .9)
+	return Color.WHITE
+
+func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, tint: Color) -> Sprite2D:
 	var sprite := Sprite2D.new()
 	sprite.texture = texture
 	sprite.z_index = MoveAction.ARROW_BASE_Z_INDEX
 	sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
-	
-	if valid:
-		sprite.modulate = Color.WHITE
-	else:
-		sprite.modulate = Color(1, .25, .25, .85)
-		
+	sprite.modulate = tint
 	arrow_icon_overlay.add_child(sprite)
 	return sprite
-	
 	
 func on_hovered_unit_changed(previous_unit: Unit, new_unit: Unit):
 	if previous_unit != null and is_instance_valid(previous_unit):

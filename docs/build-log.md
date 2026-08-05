@@ -86,7 +86,7 @@ Behaviour changes worth knowing: a unit shoved **out** of a later blast's footpr
 
 **BUILT 2026-07-29.** #99 asked for the Scenario tab; the dev extended it to *every* tab with a save/load, so Scenario, Item Editor and Attack Editor now read identically: `[dropdown][Load][Update]` over `[name…][Save As]`, with **Update targeting the dropdown selection** (the thing you can see — `last_loaded_path` stays the F2 reset source and is deliberately not wired to it) and **Save As refusing an existing name** (dev call, reversing the issue's parked default), which is what keeps the two write verbs from overlapping. Shared presentation lives in four `DevWidgets` statics; the Attack Editor's FAMILY_MAINS mode disables Save As, since a family main is never created from scratch.
 
-**One grammar, two implementations — a declared asymmetry, not drift.** A scenario dropdown entry *is* its path minus prefix and suffix, so `ScenarioManager.scenario_path(name)` (new, and the single formula all three call sites now share) rebuilds it exactly. An editor dropdown entry is the resource's own `display_name`/`item_name` — that is how every catalog keys its scan — and need not match the filename, so Update there writes to the entry's `resource_path` instead. Rebuilding a path from an editor name would silently miss any resource whose basename differs.
+**One grammar, two implementations — a declared asymmetry, not drift.** A scenario dropdown entry *is* its path minus prefix and suffix, so `ScenarioManager.scenario_path(name)` (new, and the single formula all three call sites now share) rebuilds it exactly. An editor dropdown entry is the resource's own `display_name` — that is how every catalog keys its scan — and need not match the filename, so Update there writes to the entry's `resource_path` instead. Rebuilding a path from an editor name would silently miss any resource whose basename differs.
 
 **Two pre-existing bugs surfaced by building it, both found by headless probe rather than by reading:**
 
@@ -172,6 +172,8 @@ Tests: `tests/rules/test_movement_cost.gd` +2 (the `can_traverse` seam, and the 
 
 The fix is small because the cleanup already existed and only needed a name. `set_has_acted(squad, true)` empties the queue via `Squad._set_has_acted`, and each `action_cancelled` hop lands in `game._on_unit_action_cancelled`, which is what takes a move's ghost and arrow down. So the tail of `execute_orders` became `_end_squad_turn(squad)` — one definition of "this squad's turn is over" — and the AI branch of the guard routes through it. Keyed on `is_ai_faction`, i.e. the ENABLED toggle, not on `!= PLAYER`: a hotseat faction with AI off is a human and must keep its plan.
 
+> **Still current, with one addition — see *Group Move's two cases* below (2026-08-04).** Defect 1's rule is unchanged: a member stranded outside cohesion still refuses the whole plan. What changed is that the PLAYER no longer meets it — those destinations are painted red before the click. The AI does not read that overlay, so everything below still describes its path exactly.
+
 *Defect 1 — the AI can author a plan it cannot execute.* `GroupMoveSolver` places a member nowhere when no cell inside the leader's NEW cohesion range is free (`if candidates.is_empty(): continue`), and that member then keeps the hold-position order `setup_hold_move_actions` gave it, standing where it was. `SquadPlanValidator._check_leader_range` checks holds too, so the stranded member reads *"Squad leader range invalidates other movement"* and the **whole** plan is refused. The reported trigger is not incidental: with one hostile left, both squads converge on the same neighbourhood, and allied bodies are exactly what makes every in-range cell unavailable (allies don't block traversal, but `compute_move_range` drops their cells as destinations).
 
 Fixed by `AITactics.queue_group_move_if_coherent` (**folded into `SquadManager.queue_group_move` on 2026-07-31 and deleted** — the queue-time gate made all-or-nothing the rule for every caller, not just the AI): commit the group move, and if the plan doesn't validate, cancel every member's move via `cancel_move_for_unit` — the player's own cancel seam — which restores the all-hold plan the squad started with. That is legal by construction (each member was already inside the leader's range, and a unit holding on its own cell cannot collide with itself), and main actions still queue from where each unit stands. **Give up the advance, not the turn.** Both moving archetypes call it; the deliberate non-fix was gating every candidate cell in `best_attack_destination` on coherence, which runs the whole formation solver ~40 times per squad per turn and belongs in a measured pass.
@@ -254,3 +256,82 @@ The cursor's green/red validity icon was retired at the same time (2026-08-01) f
 **Tests.** `test_attack_whiff_validation.gd` rebuilt to 19 cases split by source: 13 drive the candidate gate through the real `queue_action` (a refusal means the order never lands), 6 drive stored-aim revalidation through a real resolve on a `BoardBuilder` board. Falsified by reintroducing the end-state read — `test_a_single_blowback_survives_its_own_shove` fails immediately. `play/play_session.gd`'s `preview()` and `execute()` now resolve before validating (which also removed a double resolve in `preview`). Suite **929/929**.
 
 **Harness note, learned twice in one session:** gdUnit4 **aborts a suite at its first failing test**. A 19-case suite failing at case 15 prints `14 test cases | 2 failures` while the report XML says `tests="19"`. A failure count is a floor, never a total.
+
+## Group Move's two cases, and a rule repealed and restored in one day — 2026-08-04
+
+**BUILT, no issue number.** Bug report `bug-reports/2026-08-04_17-54-30`: four units in Torv's squad, click a Group Move destination, nothing happens — no order queues, the queue panel stays up showing four hold rows with no cancel Xs and no Execute, and executing anyway moves nobody. Two and three members worked.
+
+**It was never a member-count rule.** Replayed headlessly against the reported board: of the leader's 44 reachable destinations, **40 were accepted and 4 refused** — the far edge of his range in one diagonal, which happened to be the direction the enemies were in. Torv had MOV 5; Aldin trailed 3 cells behind with MOV 4, and for those four destinations `compute_move_range(Aldin, board, destination).reachable` was **empty**: not one cell inside the leader's new cohesion bubble was within Aldin's move. The other three members were clustered within 2 of each other, which is why dropping Aldin "fixed" it.
+
+**The refusal was correct; everything around it was not.** `GroupMoveSolver` placed Aldin nowhere, he kept the hold-position order `setup_hold_move_actions` gave him, `_check_leader_range` refused it, and `queue_group_move`'s all-or-nothing rollback (#103) threw the formation away. But the click had already **activated the squad** on the way in, and the rollback never called `revert_if_only_hold` — so `active_squad` stayed set behind a queue of pure holds. Measured on a fresh copy of the board: `active_squad` non-null, `only_hold_actions` true, every unit on its start cell. The dev's own framing was the sharpest description of the bug: *"it looked like a ghost order was being queued that did nothing."*
+
+**The detour, recorded because it cost three files of hand-typed code.** The first fix made the *refusal* tidy — report the unplaced member, refuse before queueing, preview nothing. The dev's answer: *"outright stopping a move because a leader can move further than one unit in the squad reads wrong to me."* So cohesion was relaxed to "outside the bubble is fine while the gap is not widening", and the solver grew a catch-up branch. That shipped, and within one play session the dev found the hole: **the relaxed rule applied to every squadmate move, not just group-move placements**, so a member could be individually ordered — and executed — well outside its leader's range. Measured: with the leader's move already queued, 12 of 40 tiles the INVALIDMOVE overlay painted red now accepted an order. Cohesion was put back strict the same day.
+
+**Where it landed: strict rule, two visible cases.** `SquadPlanValidator.cohesion_ok(squad, leader_cell, destination)` is one comparison against `SQUAD_RANGE`, applied to every move whatever authored it. Group Move splits around it:
+- **Case 1 — falls behind, stays in range.** Legal. `GroupMoveSolver` sets `MoveAction.is_trailing` when a member ends *further* from its leader than it started, and `OverlayManager._arrow_modulate` draws that path arrow **green**. Reachable with authorable stats — a sweep of every legal MOV pair × member offset found 72 of 384 combinations produce it; the mildest is a default-statline leader (MOV 4) and one DEX≤3 member (MOV 3).
+- **Case 2 — cannot reach the range at all.** Refused, and no longer silently: `GroupMoveSolver.followable_destinations` answers "can the whole squad follow there" for the entire overlay at once, so `enter_group_move_mode` paints those destinations the **same red** as a squadmate's own out-of-range tiles, and clicking one behaves identically.
+
+**Why `followable_destinations` is a sweep and not a loop over `plan()`.** The real solver costs **4.1 ms per destination** (measured), so filtering a 44-cell range that way is 176 ms on mode entry — a visible hitch, worse on a wide range. Instead it takes one `compute_move_range` per member and lets every cell that member could stand on mark the diamond of destinations it satisfies. That works only because `reachable + squad_unreachable` is now a clean standable footprint: `compute_move_range` was reordered to filter **occupancy before cohesion**, since `squad_unreachable` had been filled first and carried enemy-occupied cells — harmless while it was only a red overlay, wrong the moment it became a candidate set.
+
+**Two supporting changes that outlived the detour.** `queue_group_move`'s rollback now calls `revert_if_only_hold` — a hold-only queue must never leave a squad active, which every *other* cancel path already honoured. And `_candidate_cells` treats the cohesion **leash as a preference, not a gate**: it retries without the leash when the leash leaves nothing, because `followable_destinations` cannot see path distance and would otherwise paint a tile green that the solver then refused.
+
+**Tests.** New `tests/squad/test_squad_cohesion.gd` (8 cases) drives the real click handler on the real game scene — that fixture is required, because the hold filler and `active_squad` are both game.gd state a `board_builder` board never grows. It pins Case 1 (including that a member which *keeps up* is NOT marked trailing, or the green means nothing), Case 2 (not offered, queues nothing, panel not stranded, and — the guard that matters — the rest of the range is still offered), and the individually-ordered hole the dev found in play. Falsified against three mutants: cohesion never binding, `followable_destinations` returning everything, and `is_trailing` never set; each fails a different case. `tests/ai/test_ai_turn_terminates.gd` was rebuilt twice in one day chasing the rule and now sits back on the original: the AI does not read the overlay, so it still authors the Case 2 refusal and still has to survive it. Suite 952/952.
+
+**The methodological note.** Two mistakes, same shape. The first fix made a symptom tidy without asking whether the rule that produced it was wanted; the second relaxed a shared rule to serve one caller. The tell for both was available and ignored — I wrote "the refusal was correct" and stopped, and later wrote "cohesion constrains where a member may be sent, not where it may end up" without checking which callers that sentence had just re-authorised. **When a rule is read by more than one surface, the change has to be justified at every surface, not at the one that motivated it.**
+
+**Known loose end.** `followable_destinations` cannot see two members competing for the same bubble cell (`taken`), so in a tight corner a green tile can still be refused by the rollback. Rarer than the leash case it replaced, and it now reverts cleanly instead of stranding the squad.
+
+**Follow-up filed.** [#142](https://github.com/Phaazoid/Godoiosis/issues/142) — edit a unit's squad range from the dev tools. `SQUAD_RANGE` is a static `const`, so per-unit editing is a model change before it is a widget, and it partly reopens #63's "static, decoupled from LDR" call.
+
+**Addendum, same day — the overlay was still lying, and not rarely.** Probing the one known residue
+(two members contending for the same bubble cell) found it on an authored board: **6 of 16 green
+destinations for Castle Assault's Soldier5 squad queued nothing when clicked** — the original
+ghost-order symptom, at 37%. The cause was not infeasibility. `plan()` assigned greedily in member
+order with no backtracking, so the most-constrained member went last:
+
+```
+Soldier11 @ (3,0)  reaches (3,-2) (3,-3) (4,-2) (4,-3) (5,-2)  -> took (3,-2)
+Soldier12 @ (4,0)  reaches (3,-2) (5,-2) (3,-3) (4,-2) (5,-3)  -> took (4,-2)
+Soldier13 @ (5,0)  reaches (5,-2) (5,-3) (4,-2) (5,-4) (4,-3)  -> took (5,-2)
+Soldier14 @ (4,1)  reaches (3,-2) (5,-2)                       -> NOTHING
+```
+
+Four members, **eight distinct cells** — a formation existed; the greedy order threw it away. Three
+strategies compared on both authored boards: member order failed 6, **most-constrained-first failed
+0**, full bipartite matching (Kuhn's) also failed 0. The heuristic shipped — it is a four-line sort
+and nothing measured beats it. `plan()` was restructured so every member's options are computed
+before any placement (they have to be, to know who is constrained), which also removed the `taken`
+filter from `_candidate_cells`; moves are still **emitted in member order** so queue rows do not
+reshuffle. Verified against the recorded plan signature: `IDENTICAL -> true`.
+
+**The genuinely impossible case is separate and still needed catching.** A one-wide hallway with the
+far side plugged leaves both members able to reach exactly one bubble cell between them — no
+ordering saves that, and the tile must be red. `followable_destinations` now also requires *distinct
+reachable cells ≥ member count*. Necessary rather than sufficient (it never asks which member can
+take which), but it is the shape a corridor actually produces, and it **wrongly refused zero
+destinations** across both authored boards.
+
+**Cost** ([`docs/performance.md`](performance.md)): the click went 64.9 → 77.7 ms, because hover and
+click each run the sweep *and* `plan()`, computing `compute_move_range` per member twice. The sweep
+itself costs the same for 1 destination as for 38 — it is per-squad work. Caching the set on mode
+entry would return both to their old cost and is written up there, deliberately not built yet.
+
+**Tests.** `test_squad_cohesion.gd` grew to 11 cases with the two shapes minimised: a corridor plus
+one side cell where three members need three cells and member order strands the last (falsified by
+sorting `order` back to member order), and the collapsing hallway (falsified by dropping the union
+check). **Both bugs were invisible to every test that existed** — the suite was green at 952/952
+while a third of one squad's group-move range silently did nothing, because no fixture had ever put
+two members in competition for one cell. Suite 955/955.
+
+**Cache addendum.** The sweep is per-SQUAD work — it costs the same for one destination as for
+thirty-eight — so having hover and click each ask about their single cell meant recomputing
+`compute_move_range` per member twice, and hover went from ~7.7 to **~14.9 ms per cell change**,
+near a whole 16.7 ms frame on a fast mouse sweep. Fixed by keeping the set
+`enter_group_move_mode` already builds for the overlay: `game.group_move_followable`, built at the
+mode's single door and cleared in `exit_current_mode`, the same lifecycle as `selected_unit`.
+Measured after: hover **~8.0 ms** (46% off) and the click back to **65 ms**, its 2026-07-26 figure,
+with the plan signature `IDENTICAL` throughout. Safe only because nothing on the board can move
+while `CHOOSING_GROUP_MOVE` is up. An empty dict means "nowhere", not "unset", so there is no
+recompute-if-empty fallback — which is what caught the two callers (a test helper and the profiler)
+that had been setting `game_state` directly instead of going through the door. Numbers and the
+regression signal: [`docs/performance.md`](performance.md).

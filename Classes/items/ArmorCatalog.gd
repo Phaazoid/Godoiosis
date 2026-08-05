@@ -7,16 +7,7 @@ class_name ArmorCatalog
 const VARIANT_DIR := "res://Resources/Armor/"
 
 static func get_variants() -> Dictionary:
-	var variants := {}
-	if not DirAccess.dir_exists_absolute(VARIANT_DIR):
-		return variants
-	for file in DirAccess.get_files_at(VARIANT_DIR):
-		if not file.ends_with(".tres"):
-			continue
-		var res = load(VARIANT_DIR + file)
-		if res is ArmorData:
-			variants[res.item_name if res.item_name != "" else file.get_basename()] = res
-	return variants
+	return ResourceCatalog.by_name(VARIANT_DIR, ArmorData)
 
 # Authored armor -- for the unit editor's equip list (mirrors WeaponCatalog/RuneCatalog.get_editable).
 static func get_editable() -> Dictionary:

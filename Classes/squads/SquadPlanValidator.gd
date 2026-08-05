@@ -72,15 +72,22 @@ static func _run_pass(squad: Squad, actions: Array[BaseAction]) -> void:
 	_revalidate_intimidates(actions)
 	_revalidate_captures(actions)
 
-# A non-leader squadmate may only land inside the leader's projected cohesion range.
+# A non-leader squadmate must end inside the leader's projected cohesion range. Group Move may leave
+# a slower member SHORT of its formation slot, but never outside this bubble — a destination that
+# would is refused, and painted red before the click (GroupMoveSolver.followable_destinations).
 static func _check_leader_range(squad: Squad, actions: Array[BaseAction], move_actions: Array[MoveAction]) -> void:
-	var leader_range := squad.get_squad_range_from_cell(projected_cell_for(squad.leader, actions))
+	var leader_cell := projected_cell_for(squad.leader, actions)
 	for action in move_actions:
 		var moving_unit: Unit = action.actor
 		if moving_unit == squad.leader or not moving_unit.has_squad():
 			continue
-		if not leader_range.has(action.get_destination()):
-			action.add_validation_error("Squad leader range invalidates other movement")
+		if not cohesion_ok(squad, leader_cell, action.get_destination()):
+			action.add_validation_error("Too far from the squad leader")
+
+# The single copy of "may this squadmate end here?" — read by the validator and by the solver's
+# followable_destinations sweep, so the red tiles and the refusal cannot drift apart.
+static func cohesion_ok(squad: Squad, leader_cell: Vector2i, destination: Vector2i) -> bool:
+	return GridUtils.manhattan_distance(destination, leader_cell) <= squad.get_max_squad_range()
 
 # Two members can't land on the same cell, and a cell only frees up if its current occupant has a
 # VALID move away. An invalid move (out of leader range) or a hold means they stay put.

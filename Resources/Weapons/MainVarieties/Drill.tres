@@ -8,6 +8,6 @@
 script = ExtResource("1_6y7d4")
 main_attack = ExtResource("2_main")
 weapon_type = 2
-item_name = "Drill"
+display_name = "Drill"
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

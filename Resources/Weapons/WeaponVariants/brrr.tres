@@ -7,4 +7,4 @@
 [resource]
 script = ExtResource("1_4n163")
 template = ExtResource("3_ym0bg")
-item_name = "Gun"
+display_name = "Gun"

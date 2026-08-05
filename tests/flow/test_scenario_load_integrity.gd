@@ -78,7 +78,7 @@ func test_inventory_weapons_resolve_main_attack() -> void:
 				if weapon.template == null:
 					problems.append("%s: inventory[%d] template did not resolve" % [_entry_label(path, i, entry), j])
 				elif weapon.template.main_attack == null:
-					problems.append("%s: template '%s' has no main_attack" % [_entry_label(path, i, entry), weapon.template.item_name])
+					problems.append("%s: template '%s' has no main_attack" % [_entry_label(path, i, entry), weapon.template.display_name])
 	assert_array(problems).is_empty()
 
 
@@ -98,7 +98,7 @@ func test_inventory_weapon_families_are_mapped() -> void:
 				if weapon == null or weapon.template == null:
 					continue  # reported by test_inventory_weapons_resolve_main_attack
 				if WeaponInstance.make(weapon.template) == null:
-					problems.append("%s: weapon_type unmapped for template '%s'" % [_entry_label(path, i, entry), weapon.template.item_name])
+					problems.append("%s: weapon_type unmapped for template '%s'" % [_entry_label(path, i, entry), weapon.template.display_name])
 	assert_array(problems).is_empty()
 
 

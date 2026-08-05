@@ -28,7 +28,7 @@
 [sub_resource type="Resource" id="Resource_0jp17"]
 script = ExtResource("4_3nkwa")
 template = ExtResource("6_23pvm")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_fr5a2"]
 script = ExtResource("11_ybhc6")
@@ -76,7 +76,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_ng2b5"]
 script = ExtResource("12_typhl")
 template = ExtResource("13_5k6y4")
-item_name = "Smasher"
+display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_vupvb"]
 script = ExtResource("11_ybhc6")
@@ -125,7 +125,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_hjx60"]
 script = ExtResource("12_typhl")
 template = ExtResource("13_5k6y4")
-item_name = "Smasher"
+display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_a0psv"]
 script = ExtResource("11_ybhc6")
@@ -173,7 +173,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_5c0il"]
 script = ExtResource("4_3nkwa")
 template = ExtResource("6_23pvm")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_kes3f"]
 script = ExtResource("11_ybhc6")
@@ -222,7 +222,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_x3031"]
 script = ExtResource("4_3nkwa")
 template = ExtResource("6_23pvm")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_8axsl"]
 script = ExtResource("11_ybhc6")
@@ -271,7 +271,7 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_3i87w"]
 script = ExtResource("20_lvivd")
 template = ExtResource("21_255me")
-item_name = "vroom"
+display_name = "vroom"
 
 [sub_resource type="Resource" id="Resource_4lvrv"]
 script = ExtResource("11_ybhc6")

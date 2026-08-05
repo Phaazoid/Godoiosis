@@ -87,6 +87,17 @@ func _run() -> void:
 	GroupMoveSolver.plan(squad, dest, board)
 	_stamp("GroupMoveSolver.plan (whole squad)", Time.get_ticks_usec() - t)
 
+	# The overlay/click feasibility sweep (2026-08-04). Cost is per SQUAD, not per destination —
+	# that is the whole reason it is not a plan() per cell.
+	var all_destinations: Array = game.get_move_range(reach, leader)
+	t = Time.get_ticks_usec()
+	GroupMoveSolver.followable_destinations(squad, board, all_destinations)
+	_stamp("followable_destinations (%d cells)" % all_destinations.size(), Time.get_ticks_usec() - t)
+
+	t = Time.get_ticks_usec()
+	GroupMoveSolver.followable_destinations(squad, board, [dest])
+	_stamp("followable_destinations (1 cell)", Time.get_ticks_usec() - t)
+
 	t = Time.get_ticks_usec()
 	sm.resolve_plan(squad, board)
 	_stamp("resolve_plan", Time.get_ticks_usec() - t)
@@ -95,10 +106,36 @@ func _run() -> void:
 	game.refresh_action_queue(squad)
 	_stamp("refresh_action_queue", Time.get_ticks_usec() - t)
 
+	# HOVER is what game.group_move_followable buys. The sweep is per-SQUAD work, so a single-cell
+	# query costs nearly what the whole range does, and hover used to pay it on every cell change.
+	# The second stamp is that avoided cost — if it ever approaches the first, the cache stopped
+	# being read. Averaged over a sample, warmed first: the sprite churn in show_hover_move_paths is
+	# part of the real cost, and one cell is one sample.
+	print("\nHOVER — per cell change, averaged over %d destinations" % mini(12, all_destinations.size()))
+	game.selected_unit = leader
+	game.enter_group_move_mode(leader)   # builds game.group_move_followable, which hover reads
+	var sample: Array = all_destinations.slice(0, mini(12, all_destinations.size()))
+	for c in sample:
+		game.hover_presenter._hover_choosing_group_move(c)   # warm
+
+	t = Time.get_ticks_usec()
+	for c in sample:
+		game.hover_presenter._hover_choosing_group_move(c)
+	var hover_total: int = Time.get_ticks_usec() - t
+
+	t = Time.get_ticks_usec()
+	for c in sample:
+		GroupMoveSolver.followable_destinations(squad, board, [c])
+	var sweep_total: int = Time.get_ticks_usec() - t
+
+	_stamp("hover, per cell change", hover_total / sample.size())
+	_stamp("  cost AVOIDED by the mode-entry cache", sweep_total / sample.size())
+	game.overlay_manager.clear_hover_move_path()
+
 	print("\nTHE ACTUAL CLICK")
-	game.game_state = game.GameState.CHOOSING_GROUP_MOVE
 	game.last_clicked_cell = leader.movement.cell
 	game.selected_unit = leader   # the click handlers read the stored selection, not the cell
+	game.enter_group_move_mode(leader)   # the cache the click reads is built here, not by the click
 	t = Time.get_ticks_usec()
 	game._click_choosing_group_move(dest)
 	_stamp("_click_choosing_group_move TOTAL", Time.get_ticks_usec() - t)

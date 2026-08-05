@@ -3,7 +3,7 @@ extends EquippableData
 
 # A physical weapon a unit carries: a direct ref to its shared TEMPLATE (family base or
 # prototype) + this item's own fitted mods — the only per-weapon state (weapons.md).
-# item_name (inherited) is this weapon's custom pet name; "" falls back to the template's.
+# display_name (inherited) is this weapon's custom pet name; "" falls back to the template's.
 # NEVER duplicate(true) one — that deep-copies the shared template and severs live sync.
 # Create via make(), copy via copy_equippable().
 
@@ -86,7 +86,7 @@ func apply_battle_state(_state: Dictionary) -> void:
 # them as ExtResource refs in saved files.
 func copy_equippable() -> EquippableData:
 	var w := make(template)
-	w.item_name = item_name
+	w.display_name = display_name
 	w.icon = icon
 	w.description = description
 	w.limb_kind = limb_kind
@@ -95,9 +95,9 @@ func copy_equippable() -> EquippableData:
 	w.space_3 = space_3.duplicate()
 	return w
 func shown_name() -> String:
-	if item_name != "":
-		return item_name
-	return template.item_name if template != null else ""
+	if display_name != "":
+		return display_name
+	return template.display_name if template != null else ""
 
 func space(index: int) -> Array[WeaponModData]:
 	match index:

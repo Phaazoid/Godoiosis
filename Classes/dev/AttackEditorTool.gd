@@ -167,7 +167,7 @@ func populate():
 		Mode.WEAPON_ATTACK:
 			DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name"])
 		Mode.FAMILY_MAINS:
-			var family_label := current_template.item_name if current_template != null and current_template.item_name != "" else "?"
+			var family_label := current_template.display_name if current_template != null and current_template.display_name != "" else "?"
 			DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
 			DevWidgets.build_resource_editor(editor_container, current, populate, ["display_name"])
 

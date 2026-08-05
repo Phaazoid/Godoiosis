@@ -7,6 +7,6 @@
 [resource]
 script = ExtResource("1_armor")
 granted_abilities = Array[ExtResource("2_ability")]([ExtResource("3_insulation")])
-item_name = "Insulated Weave"
+display_name = "Insulated Weave"
 description = "Vulcanized cloth over a dead-air lattice. It stops nothing with mass -- no plate, no bracing -- but current finds no road through it, and the storm simply goes around."
 metadata/_custom_type_script = "uid://dj0617uewvdny"

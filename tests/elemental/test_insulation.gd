@@ -43,7 +43,7 @@ func _ability(id: Abilities.Id) -> AbilityData:
 # test failure rather than silently inert armor that would make its case pass for the wrong reason.
 func _insulated_against(element: Elemental.Element) -> ArmorData:
 	var weave := ArmorData.new()
-	weave.item_name = "Test Weave"
+	weave.display_name = "Test Weave"
 	weave.granted_abilities = [_ability(Abilities.INSULATION[element])]
 	return weave
 
@@ -52,7 +52,7 @@ func _insulated_against(element: Elemental.Element) -> ArmorData:
 # insulation that protects you, not merely wearing something that grants an ability."
 func _armor_granting(id: Abilities.Id) -> ArmorData:
 	var armor := ArmorData.new()
-	armor.item_name = "Test Armor"
+	armor.display_name = "Test Armor"
 	armor.granted_abilities = [_ability(id)]
 	return armor
 

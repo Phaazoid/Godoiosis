@@ -137,3 +137,67 @@ gain. Revisit if a handcrafted level ever fields enough units to show up in a fr
 Scaling note: after the BFS bounds, the per-member walk is proportional to *candidate count*, not
 map size, so a bigger map barely moves this. What scales is **squad size** — a 10-member squad
 costs roughly double, not eight times.
+
+---
+
+## 2026-08-04 — the Group Move feasibility sweep
+
+Group Move gained a second question — *"can the whole squad follow to that cell?"* — so unfollowable
+destinations get painted red instead of accepting a click that quietly does nothing. Measured on the
+same board and destination as the 2026-07-26 run:
+
+| Call | Cost |
+|---|---|
+| `GroupMoveSolver.plan` (5 members) | 7.7 ms |
+| `followable_destinations`, **38 destinations** | 7.5 ms |
+| `followable_destinations`, **1 destination** | 6.8 ms |
+| **Whole click** | **77.7 ms** (was 64.9) |
+
+**The shape that matters: the sweep costs the same for one destination as for thirty-eight.** It is
+one `compute_move_range` per member (~1 ms each) plus a dilation over that member's standable
+footprint; the destination count barely enters. That is the whole reason it is not a `plan()` per
+cell, which would be 4–6 ms *each* — 176 ms to filter a 44-cell range, a visible hitch on mode entry.
+
+**Plan signature unchanged.** The same run verifies the solver's new most-constrained-first
+assignment order against the recorded baseline: `IDENTICAL -> true`. The ordering fixes formations
+that were previously dropped (6 of 16 destinations for one Castle Assault squad) without altering
+any formation that already worked.
+
+**Where the +12.8 ms went.** `_click_choosing_group_move` and `_hover_choosing_group_move` each call
+`followable_destinations` for their single cell *and* `plan()`, so the per-member
+`compute_move_range` runs **twice**.
+
+**FIXED the same day by `game.group_move_followable`**, a mode-entry cache. `enter_group_move_mode`
+already swept the whole range to paint the overlay; the set is now kept and both the hover and the
+click read it instead of re-sweeping their one cell. Three runs before and after, 12-destination
+sample, warmed:
+
+| per hover cell-change | before | after |
+|---|---|---|
+| run 1 | 15.05 ms | **7.77 ms** |
+| run 2 | 14.99 ms | **8.17 ms** |
+| run 3 | 14.75 ms | **8.06 ms** |
+| whole click | ~76.5 ms | **65.1 / 68.0 / 72.3 ms** |
+
+**~6.9 ms per cell change, 46%** — and the number that mattered was never the percentage but which
+side of the 16.7 ms frame budget hover lands on. At ~14.9 ms a fast mouse sweep spent a near-whole
+frame per cell on top of everything else that frame did; at ~8.0 ms it is half a budget. The click
+is back to its 2026-07-26 figure (64.9 ms). Mode entry is unchanged — the sweep it already ran
+*became* the cache build. Plan signature `IDENTICAL -> true` throughout.
+
+What remains in the ~8.0 ms is `plan()` itself, and it is irreducible: it depends on the hovered
+cell and it IS the formation preview.
+
+**Why the cache is safe, and the one thing that would break it:** nothing on the board can move
+while `CHOOSING_GROUP_MOVE` is up — no order is queued, no unit relocates — so the set cannot go
+stale within the mode. It is built at the mode's single door (`enter_group_move_mode`, one
+production caller) and cleared in `exit_current_mode`, the same lifecycle as `selected_unit` and
+`last_clicked_cell`. **An empty dict means "the squad can follow nowhere", not "unset"**, so there is
+deliberately no recompute-if-empty fallback: a caller that skips the door must fail visibly rather
+than silently pay the cost back. The profiler's second hover stamp is that avoided cost — if it ever
+climbs back toward the first, something stopped reading the cache.
+
+A cheaper half-measure, if the cache looks like too much: flip `followable_destinations`' inner loop
+to iterate *destinations × diamond* rather than *standable cells × diamond*. Same answer, and the
+single-cell query stops paying for the whole footprint — worth ~2.6 ms of the 6.8. It does not touch
+the duplicated `compute_move_range`, which is the real cost.

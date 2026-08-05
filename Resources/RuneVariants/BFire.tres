@@ -28,4 +28,4 @@ metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 script = ExtResource("4_xxknw")
 inscriptions = Array[ExtResource("1_dnvr0")]([SubResource("Resource_8k4mw")])
 temper = 1
-item_name = "BFire"
+display_name = "BFire"

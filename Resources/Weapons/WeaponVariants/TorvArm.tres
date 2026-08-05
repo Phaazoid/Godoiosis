@@ -7,4 +7,4 @@
 [resource]
 script = ExtResource("1_qtbnd")
 template = ExtResource("3_0esve")
-item_name = "TorvArm"
+display_name = "TorvArm"

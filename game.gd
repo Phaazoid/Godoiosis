@@ -47,12 +47,12 @@ enum GameState {
 
 var game_state: GameState = GameState.IDLE
 var last_clicked_cell: Vector2i = GridUtils.NO_CELL
-# The unit whose menu is open — set once at selection, never re-derived from a cell. Read by
-# HoverPresenter. Looking it back up needs a pointer resolver and a cell that agrees with it;
-# both drift (#107). Cleared in exit_current_mode() beside last_clicked_cell, and NOT in
-# clear_selection() — that runs on every menu PICK (ActionMenuController fires `cancelled`
-# before `action_selected`), so clearing there wipes the selection on the way INTO a mode.
+# Set once at selection, never re-derived from a cell (#107). Cleared in exit_current_mode, NOT in
+# clear_selection — that runs on every menu PICK, i.e. on the way INTO a mode.
 var selected_unit: Unit = null
+# Destinations the whole squad can follow to; built by enter_group_move_mode, cleared on exit.
+# EMPTY means "nowhere", not "unset", so there is no recompute-if-empty fallback.
+var group_move_followable: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
 var _target_pick_callback: Callable           # func(picked: Unit) -> void
 
@@ -229,7 +229,9 @@ func _click_choosing_move(cell: Vector2i) -> void:
 
 func _click_choosing_group_move(cell: Vector2i) -> void:
 	var leader := selected_unit
-	if compute_move_range(leader).reachable.keys().has(cell):
+	# The two questions the overlay painted, in the same order: can the leader get there, and can the
+	# squad follow. A red tile is clickable and does nothing, exactly like a squadmate's own.
+	if compute_move_range(leader).reachable.keys().has(cell) and group_move_followable.has(cell):
 		squad_manager.queue_group_move(leader.squad, cell, _board())
 	exit_current_mode()
 
@@ -358,8 +360,20 @@ func enter_group_move_mode(unit: Unit):
 	game_state = GameState.CHOOSING_GROUP_MOVE
 	if unit.has_squad():
 		draw_squad_leader_range(unit.squad, unit.squad.leader.get_projected_destination())
-	# Pick the squad's destination from the leader's own reachable tiles.
-	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, get_move_range(compute_move_range(unit), unit), OverlayManager.ATLAS_COORDS)
+	# The SQUAD's range, not the leader's: what the slowest member cannot follow into cohesion gets
+	# the same red as a squadmate's own out-of-range tiles. Swept once here — per-SQUAD work, the
+	# same cost for one destination as for forty — and the hover and click read the result.
+	var destinations := get_move_range(compute_move_range(unit), unit)
+	group_move_followable = GroupMoveSolver.followable_destinations(unit.squad, _board(), destinations)
+	var green: Array[Vector2i] = []
+	var red: Array[Vector2i] = []
+	for cell in destinations:
+		if group_move_followable.has(cell):
+			green.append(cell)
+		else:
+			red.append(cell)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
@@ -390,6 +404,7 @@ func exit_current_mode():
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
+	group_move_followable = {}
 	clear_selection()
 	if squad_manager.active_squad != null:
 		squad_manager.validate_squad_plan(squad_manager.active_squad)

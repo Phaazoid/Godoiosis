@@ -133,11 +133,17 @@ func _hover_picking_target(cell: Vector2i) -> void:
 func _hover_choosing_group_move(cell: Vector2i) -> void:
 	var leader: Unit = game.selected_unit
 	game.overlay_manager.clear_hover_move_path()
+	if leader == null:
+		_set_cursor_for_preview(cell, false)
+		return
 
-	var reachable: bool = leader != null and game.compute_move_range(leader).reachable.keys().has(cell)
-	if reachable:
+	# Reads what enter_group_move_mode computed: per hovered cell it cost 6.8 ms of a 16.7 ms frame
+	# (docs/performance.md). Same two questions, same order, as game._click_choosing_group_move.
+	var followable: bool = game.compute_move_range(leader).reachable.keys().has(cell) \
+		and game.group_move_followable.has(cell)
+	if followable:
 		game.overlay_manager.show_hover_move_paths(GroupMoveSolver.plan(leader.squad, cell, game._board()))
-	_set_cursor_for_preview(cell, reachable)
+	_set_cursor_for_preview(cell, followable)
 
 func _hover_attack_targeting(cell: Vector2i) -> void:
 	var attacker: Unit = game.selected_unit

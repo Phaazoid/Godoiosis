@@ -4,7 +4,8 @@ class_name Item
 # Base vocabulary for anything a unit can hold. Weight lives here, not on the equippable
 # subclasses: anything that can sit in an inventory can weigh something.
 
-@export var item_name: String
+# Was `item_name` until #141; renamed so all four content roots agree on one field name.
+@export var display_name: String
 @export var icon: Texture2D
 @export var description: String
 

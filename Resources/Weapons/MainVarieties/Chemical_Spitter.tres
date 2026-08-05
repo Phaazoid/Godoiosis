@@ -8,6 +8,6 @@
 script = ExtResource("1_iwbgy")
 main_attack = ExtResource("2_main")
 weapon_type = 6
-item_name = "Chemical Spitter"
+display_name = "Chemical Spitter"
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

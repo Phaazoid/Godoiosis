@@ -13,7 +13,7 @@ scaling_blend = Dictionary[int, int]({
 4: 40,
 5: 60
 })
-item_name = "Carbine"
+display_name = "Carbine"
 icon = ExtResource("3_icon")
 description = "Gun"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

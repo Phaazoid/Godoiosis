@@ -10,14 +10,5 @@ const REACTION_DIR := "res://Resources/Reactions/"
 
 static func get_all() -> Array[ElementalReaction]:
 	var reactions: Array[ElementalReaction] = []
-	if not DirAccess.dir_exists_absolute(REACTION_DIR):
-		return reactions
-	var files := DirAccess.get_files_at(REACTION_DIR)
-	files.sort()
-	for file in files:
-		if not file.ends_with(".tres"):
-			continue
-		var res = load(REACTION_DIR + file)
-		if res is ElementalReaction:
-			reactions.append(res)
+	reactions.assign(ResourceCatalog.load_all(REACTION_DIR, ElementalReaction))
 	return reactions

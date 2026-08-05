@@ -176,9 +176,8 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 		return
 	for sub in DirAccess.get_directories_at(dir):
 		_collect_scenarios(dir.path_join(sub), paths)
-	for file in DirAccess.get_files_at(dir):
-		if file.ends_with(".tres"):
-			paths.append(dir.path_join(file))
+	for file in ResourceDir.files_with_extension(dir, ".tres"):
+		paths.append(dir.path_join(file))
 
 func _unhandled_input(event):
 	if event.is_action_pressed("dev_reset_scenario"):

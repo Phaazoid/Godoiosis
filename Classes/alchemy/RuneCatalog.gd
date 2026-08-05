@@ -15,20 +15,15 @@ static func base_runes() -> Dictionary:
 		bases["Rune - %s" % RuneData.Size.keys()[size].capitalize()] = rune
 	return bases
 
-# Saved authored runes, scanned from disk (mirrors WeaponCatalog.get_saved).
 static func get_variants() -> Dictionary:
 	var variants := {}
-	if not DirAccess.dir_exists_absolute(VARIANT_DIR):
-		return variants
-	for file in DirAccess.get_files_at(VARIANT_DIR):
-		if not file.ends_with(".tres"):
+	var candidates := ResourceCatalog.by_name(VARIANT_DIR, RuneData)
+	for name in candidates:
+		var rune: RuneData = candidates[name]
+		if not rune.is_legal():
+			push_error("%s: illegal under the two-knob rune rules — refused" % name)
 			continue
-		var res = load(VARIANT_DIR + file)
-		if res is RuneData:
-			if not res.is_legal():
-				push_error("%s: illegal under the two-knob rune rules — refused" % file)
-				continue
-			variants[res.item_name if res.item_name != "" else file.get_basename()] = res
+		variants[name] = rune
 	return variants
 
 # Authored runes — for the unit editor's equip list.

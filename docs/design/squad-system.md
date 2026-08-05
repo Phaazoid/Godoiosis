@@ -6,7 +6,7 @@
 >
 > **Numbers RATIFIED 2026-07-14** (dev + Claude, validated against the authored roster — avg squad ~2.7, spread loner→four): capacity = leader + `floor(effective LDR / MEMBER_LDR_COST)` members with **`MEMBER_LDR_COST = 2`** (rungs: eLDR 0–1 loner · 2–3 pair · 4–5 trio [the default statline] · 6–7 four · 8–9 five · 10–11 six); range = **`SQUAD_RANGE = 3`**, static Manhattan (`Squad.gd` — `get_max_squad_range()`, `max_size()`). Both are playtest-tunable named constants; effective LDR = base + PER band (built in #55). Enforcement is **join-time only**, in the `can_squad_up`/`can_join_squad` predicates — direct `join_squad` (scenario load) stays permissive and `push_warning`s on an overfull squad rather than ejecting anyone. Leader-death overflow (`check_reassign_leader`) detaches newest-members-first when the successor's capacity is smaller (deterministic, Law #1). Budget-not-cap framing is deliberate: familiarity later discounts per-member cost; jobs mint big-LDR exception captains. Tests: `tests/squad/test_squad_shape.gd` (8 cases). **Feel-tested + issue closed 2026-07-16** — both constants read fine in play; `SQUAD_RANGE`/`MEMBER_LDR_COST` remain one-line changes if later play says otherwise.
 
-**Canon checked through #126 (2026-08-02).**
+**Canon checked through #142 (2026-08-04).**
 
 ## Purpose
 
@@ -35,7 +35,7 @@ Numbered for test coverage. Violating any of these is a bug, full stop.
 - The queue contains **player-authored orders only**. Derived actions (counters) are never stored in it (see Counter rules).
 - **One order per action-type per unit.** Queuing a new move/attack for a unit replaces its previous one — *except* volley siblings (one AoE order = several `AttackAction`s sharing a `volley` array; `_is_volley_sibling` exempts them from replacement; a *new* attack order still sweeps the entire old volley).
 - Members without an explicit move get a **hold move** (`init_hold_position`) when the squad becomes active, so every member has a stance in the plan.
-- Cancelling all of a unit's actions must leave no residue: if only hold moves remain in the squad's queue afterward, the queue clears entirely and the squad deactivates.
+- Cancelling all of a unit's actions must leave no residue: if only hold moves remain in the squad's queue afterward, the queue clears entirely and the squad deactivates. **This binds every path that cancels, including a refused batch** — `queue_group_move`'s all-or-nothing rollback missed it until 2026-08-04, and the squad it stranded read as a stuck game: the queue panel open on nothing but hold rows, no cancel Xs, an Execute that moved nobody.
 
 ## Validation rules (`validate_squad_plan`)
 
@@ -43,7 +43,13 @@ Run on every queue change; actions carry `is_valid` + error strings rather than 
 
 - **V1.** Two units may not plan moves to the same destination.
 - **V2.** A move may not target a cell occupied by a squadmate who isn't moving away.
-- **V3.** Non-leader moves must land inside the squad's *static* range of the leader's **projected** cell (the leader's own planned destination counts, not their current cell — range itself no longer derives from LDR, banner).
+- **V3.** Non-leader moves must land inside the squad's *static* range of the leader's **projected** cell (the leader's own planned destination counts, not their current cell — range itself no longer derives from LDR, banner). `SquadPlanValidator.cohesion_ok` is the single copy of this test, and it is **strict for every move whatever authored it** — an individually ordered one, a Group Move placement, or the hold-position filler alike. A leader therefore cannot walk out of range of its own squadmates, by group move or alone.
+
+  **Group Move splits into two outcomes around V3** (2026-08-04, after the rule was briefly relaxed and put back the same day):
+  - **Case 1 — falls behind, stays in range.** The leader outruns a member, so it can't hold its formation offset, but it still lands inside the bubble. Legal. `MoveAction.is_trailing` marks it (set by `GroupMoveSolver` when the member ends *further* from the leader than it started) and `OverlayManager._arrow_modulate` draws its path arrow **green**.
+  - **Case 2 — cannot reach the bubble at all.** Refused. `GroupMoveSolver.followable_destinations` answers this for the whole overlay at once, so `enter_group_move_mode` paints those destinations the **same red** a squadmate's own out-of-range tiles get, and clicking one behaves identically: nothing queues.
+
+  The overlay and the refusal must agree, because the failure they replaced was a click that *looked* like it queued a ghost order — the tile was green, the plan was authored, V3 refused it, the rollback undid it, and the squad was left `active` behind a queue of hold rows with no cancel Xs and no Execute. Pinned by `tests/squad/test_squad_cohesion.gd`; story in [`docs/build-log.md`](../build-log.md).
 
 ## Counter-attack rules
 

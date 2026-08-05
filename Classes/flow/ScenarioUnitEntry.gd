@@ -65,7 +65,7 @@ func capture_unit_state(unit: Unit) -> void:
 	for item in unit.inventory:
 		var equippable := item as EquippableData
 		if item != null and equippable == null:
-			push_warning("Scenario save: '%s' is not equippable — dropped" % item.item_name)
+			push_warning("Scenario save: '%s' is not equippable — dropped" % item.display_name)
 		if equippable == null:
 			continue
 		sources.append(equippable)
@@ -149,7 +149,7 @@ func apply_unit_state(unit: Unit) -> void:
 		if inventory[i] == null:
 			continue
 		if not unit.add_item(inventory[i].copy_equippable()):
-			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].item_name)
+			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
 	# add_item auto-equips the first equippable; the save's explicit choice wins either way:
 	if equipped_index >= 0:
 		unit.equip_weapon_from_inventory(equipped_index)

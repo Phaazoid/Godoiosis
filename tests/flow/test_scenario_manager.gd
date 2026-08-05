@@ -180,7 +180,7 @@ func test_fixture_style_direct_equip_is_captured() -> void:
 
 func _plate() -> ArmorData:
 	var armor := ArmorData.new()
-	armor.item_name = "Plate"
+	armor.display_name = "Plate"
 	armor.def_power = 6
 	armor.flat_def = 1
 	armor.stat_minimums[Stats.Stat.CON] = 6
@@ -202,7 +202,7 @@ func test_worn_armor_round_trips() -> void:
 	entry.apply_unit_state(b)
 
 	assert_object(b.worn_armor).is_not_null()
-	assert_str(b.worn_armor.item_name).is_equal("Plate")
+	assert_str(b.worn_armor.display_name).is_equal("Plate")
 	assert_int(b.worn_armor.def_power).is_equal(6)
 	# every field of the model rides along -- gates and granted abilities are as persistent as DEF
 	assert_int(b.worn_armor.flat_def).is_equal(1)

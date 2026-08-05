@@ -15,7 +15,7 @@
 [sub_resource type="Resource" id="Resource_80mtm"]
 script = ExtResource("3_dbnlj")
 template = ExtResource("5_gbwx6")
-item_name = "Smasher"
+display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_mbji1"]
 script = ExtResource("10_2v58y")

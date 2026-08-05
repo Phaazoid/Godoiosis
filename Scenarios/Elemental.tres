@@ -37,7 +37,7 @@ script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_3ci5y")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Shock Rod"
+display_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_3ci5y_inst"]
@@ -77,7 +77,7 @@ script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_u6n6d")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Shock Rod"
+display_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_u6n6d_inst"]
@@ -215,7 +215,7 @@ script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_ix2xb")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Water Staff"
+display_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_ix2xb_inst"]
@@ -256,7 +256,7 @@ script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_w25rl")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Water Staff"
+display_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_w25rl_inst"]
@@ -299,7 +299,7 @@ attack_pattern = SubResource("Resource_crm60")
 script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_y8fi4")
 weapon_type = 1
-item_name = "ForwardWide3"
+display_name = "ForwardWide3"
 icon = ExtResource("16_4osyr")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -346,7 +346,7 @@ attack_pattern = SubResource("Resource_ckg3f")
 script = ExtResource("3_prdh4")
 main_attack = SubResource("AtkData_migrated_Resource_vollj")
 weapon_type = 1
-item_name = "ForwardWide3"
+display_name = "ForwardWide3"
 icon = ExtResource("16_4osyr")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

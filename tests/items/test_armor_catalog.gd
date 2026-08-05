@@ -78,14 +78,14 @@ func test_every_entry_is_armor_data() -> void:
 		assert_object(armors[name]).is_instanceof(ArmorData)
 
 
-func test_entries_are_keyed_by_item_name() -> void:
+func test_entries_are_keyed_by_display_name() -> void:
 	# The catalog's keying rule, and the reason a piece can be renamed without breaking this suite:
-	# the key IS the authored item_name (filename only as a fallback for unnamed content).
+	# the key IS the authored display_name (filename only as a fallback for unnamed content).
 	var armors := _armors()
 	for name: String in armors:
 		var piece: ArmorData = armors[name]
-		if piece.item_name != "":
-			assert_str(name).is_equal(piece.item_name)
+		if piece.display_name != "":
+			assert_str(name).is_equal(piece.display_name)
 
 
 func test_get_variants_returns_a_map_rather_than_null() -> void:

@@ -6,6 +6,9 @@ var destination: Vector2i
 var destination_texture: Texture2D
 var preview: Array[Sprite2D] = []
 var is_hold_position := false
+# Case 1 feedback: this member ended FURTHER from its leader than it started — following, but
+# falling behind. Set by GroupMoveSolver; the only thing that reads it is the arrow's colour.
+var is_trailing := false
 
 const GENERIC_TILE := preload("res://Art/Icons/BoardIcons/GenericTileIcon.png")
 const MOVE_ICON := preload("res://Art/Icons/ActionIcons/MoveActionIcon.png")

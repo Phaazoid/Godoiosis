@@ -92,23 +92,23 @@ func _on_update_pressed():
 		push_warning("%s has no file on disk to update" % target)
 		return
 	if DevWidgets.save_over(current_item, path):
-		_refresh_variant_list(current_item.item_name)
+		_refresh_variant_list(current_item.display_name)
 
 func _on_save_as_pressed():
 	if current_item == null:
 		return
-	var item_name := name_input.text.strip_edges()
-	if item_name == "":
+	var entered_name := name_input.text.strip_edges()
+	if entered_name == "":
 		push_warning("Item needs a name to save")
 		return
 	var dir := RuneCatalog.VARIANT_DIR if current_item is RuneData else WeaponCatalog.SAVED_DIR
-	var path := dir + item_name + ".tres"
+	var path := dir + entered_name + ".tres"
 	if DevWidgets.refuse_existing_file(path, "item"):
 		return
-	current_item.item_name = item_name
+	current_item.display_name = entered_name
 	if DevWidgets.save_over(current_item, path):
 		name_input.text = ""
-		_refresh_variant_list(item_name)
+		_refresh_variant_list(entered_name)
 
 func populate():
 	for child in editor_container.get_children():
@@ -117,13 +117,13 @@ func populate():
 	if current_item == null:
 		return
 	var edited := current_item
-	DevWidgets.add_lineedit(editor_container, "Item name", edited.item_name, func(s: String): edited.item_name = s)
+	DevWidgets.add_lineedit(editor_container, "Item name", edited.display_name, func(s: String): edited.display_name = s)
 	if current_item is RuneData:
 		_populate_rune_editor(current_item)
 	elif current_item is WeaponInstance:
 		_populate_weapon_editor(current_item)
 	else:
-		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "item_name"])
+		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "display_name"])
 
 # A rune is a size + a capacity-bounded list of inscribed carvings. We only choose WHICH carvings
 # to inscribe (authored in the Attack Editor tab); inscribe() enforces the capacity budget.
@@ -193,7 +193,7 @@ func _populate_weapon_editor(weapon: WeaponInstance) -> void:
 	if template == null:
 		DevWidgets.add_label(editor_container, "(no template)")
 		return
-	DevWidgets.add_label(editor_container, "Family: %s" % (template.item_name if template.item_name != "" else WeaponData.WeaponType.keys()[template.weapon_type]))
+	DevWidgets.add_label(editor_container, "Family: %s" % (template.display_name if template.display_name != "" else WeaponData.WeaponType.keys()[template.weapon_type]))
 	DevWidgets.add_label(editor_container, "Weight: %d" % weapon.get_effective_weight())
 
 	if template.weapon_type == WeaponData.WeaponType.PROSTHETIC:

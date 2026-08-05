@@ -9,14 +9,14 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 
 func _vest(def_power: int = 2) -> ArmorData:
 	var armor := ArmorData.new()
-	armor.item_name = "Test Vest"
+	armor.display_name = "Test Vest"
 	armor.def_power = def_power
 	return armor
 
 
 func _gated_plate() -> ArmorData:
 	var armor := ArmorData.new()
-	armor.item_name = "Test Plate"
+	armor.display_name = "Test Plate"
 	armor.def_power = 6
 	armor.stat_minimums[Stats.Stat.CON] = 8
 	return armor

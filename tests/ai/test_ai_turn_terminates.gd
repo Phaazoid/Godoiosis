@@ -9,10 +9,15 @@
 #
 # Two defects, tested separately because either alone is enough to hang the game:
 #   1. Rushdown/Sentry can queue a group move whose formation strands a member outside the
-#      leader's NEW cohesion range. SquadPlanValidator._check_leader_range reads the
-#      hold-position order such a member keeps (SquadManager.setup_hold_move_actions) and
-#      refuses the WHOLE plan.
+#      leader's NEW cohesion range, and SquadPlanValidator._check_leader_range refuses the WHOLE
+#      plan (SquadManager.setup_hold_move_actions gives such a member a hold, and holds are judged
+#      too). Cohesion was briefly relaxed here on 2026-08-04 and put back the same day — a leader
+#      may leave a member SHORT of its formation slot, never outside the bubble.
 #   2. Whatever the plan turns out to be, an AI pass must reach the terminal state.
+#
+# The player never meets defect 1 any more: GroupMoveSolver.followable_destinations paints those
+# destinations red before the click (tests/squad/test_squad_cohesion.gd). The AI does not read that
+# overlay, so it still authors the refusal and still has to survive it.
 #
 # Why the game scene and not the headless board: the hold-position filler is queued by game.gd's
 # squad_became_active handler, so a board built by play/board_builder.gd never grows the orders
@@ -62,14 +67,14 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
-# The minimised repro: one Rushdown squad whose leader can charge a distant enemy while its
-# member has nowhere legal to follow. The three allied NON-squadmates are the jam — allied bodies
-# do not block traversal, but RulesService.compute_move_range drops their cells as DESTINATIONS,
-# which is the "both squads converged on the last hostile" state boiled down to a corridor.
+# The minimised repro: one Rushdown squad whose leader can charge a distant enemy its member cannot
+# keep up with. The three allied NON-squadmates are the jam — allied bodies do not block traversal,
+# but RulesService.compute_move_range drops their cells as DESTINATIONS, which is the "both squads
+# converged on the last hostile" state boiled down to a corridor.
 #
-# Geometry (SQUAD_RANGE 3, MOV 4): the leader's best attack destination is (5,0); every cell the
-# member could reach within 3 of it is either taken by the leader or occupied by a blocker, so the
-# solver places it nowhere and it keeps a hold order at (0,0) — 5 away, out of cohesion.
+# Geometry (SQUAD_RANGE 3, MOV 4): the leader's best attack destination is (5,0), and no cell within
+# 3 of it is free for the member — every one is either the leader's own target or a blocker's. So
+# the member can be placed nowhere legal, and the destination is refused for the whole squad.
 func _jam_board() -> Dictionary:
 	_paint_corridor(10)
 	var leader := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
@@ -77,20 +82,19 @@ func _jam_board() -> Dictionary:
 	for x in [2, 3, 4]:
 		# HOLD, so the jam is STABLE: these never reposition and the corridor never clears.
 		_spawn(Team.Faction.PLAYER, Vector2i(x, 0)).squad.archetype = AIArchetype.Type.HOLD
-	_spawn(Team.Faction.ENEMY, Vector2i(9, 0)).squad.archetype = AIArchetype.Type.HOLD
+	var enemy := _spawn(Team.Faction.ENEMY, Vector2i(9, 0))
+	enemy.squad.archetype = AIArchetype.Type.HOLD
 	await await_idle_frame()
 
 	game.squad_manager.join_squad(member, leader.squad)
 	leader.squad.archetype = AIArchetype.Type.RUSHDOWN
 	game.ai_controller.set_faction_ai_enabled(Team.Faction.PLAYER, true)
-	return {"leader": leader, "member": member, "squad": leader.squad}
+	return {"leader": leader, "member": member, "squad": leader.squad, "enemy": enemy}
 
 
 # A squad holding an invalid plan, so the GUARD can be tested without depending on any archetype's
 # movement taste. ORDER IS THE MECHANISM, and it is the only way to reach this state now that
-# queue_action refuses an order that would land invalid: the member's hold is legal while the leader
-# stands beside it, and the leader's retreat is what strands it outside cohesion afterwards. That is
-# #103's own root cause — a stranded member keeping the hold-position order it was given.
+# queue_action refuses an order that would land invalid.
 func _hand_built_invalid_plan() -> Dictionary:
 	_paint_corridor(12)
 	var leader := _spawn(Team.Faction.PLAYER, Vector2i(5, 0))
@@ -102,12 +106,12 @@ func _hand_built_invalid_plan() -> Dictionary:
 	return {"leader": leader, "member": member, "squad": leader.squad}
 
 
-# Queue the member's hold FIRST (legal — it is standing next to the leader), then the leader's
-# retreat, which pulls cohesion off the member and flips its hold to invalid.
+# Queue the member's step away from the leader FIRST — legal while the two stand adjacent, since it
+# lands 2 from the leader's projected cell — then the leader's retreat, which puts that same cell 6
+# away and flips it to invalid. A hold would do just as well (it is #103's own shape, covered in
+# test_squad_cohesion.gd); an ordered move is used here so the fixture depends on no filler.
 func _strand_member_behind(leader: Unit, member: Unit) -> void:
-	var hold := MoveAction.new()
-	hold.init_hold_position(member, GridUtils.get_terrain_icon_at_cell(game.grid, member.movement.cell))
-	assert_bool(game.squad_manager.queue_action(member.squad, hold)).is_true()
+	_queue_move(member, member.movement.cell + Vector2i.RIGHT)
 	_queue_move(leader, Vector2i(1, 0))
 	game.squad_manager.validate_squad_plan(leader.squad)
 
@@ -204,6 +208,14 @@ func test_hotseat_enemy_squad_keeps_its_refused_plan() -> void:
 #  Defect 1 — the AI must not author a plan it cannot run.
 # ==============================================================================
 
+# Giving up the ADVANCE, not the turn: nobody is ordered outside cohesion, and the leader does not
+# charge off alone. Cohesion is strict again as of 2026-08-04 — a member the leader cannot bring
+# with it refuses the destination — so what this pins is that the refusal costs the squad its step
+# and nothing else. Note the shape changed with revert_if_only_hold: a rolled-back group move now
+# CLEARS the queue rather than leaving all-holds, so "no advance" means no real move exists at all.
+#
+# The player-facing half of the same rule (the destination is painted red before the click) lives in
+# tests/squad/test_squad_cohesion.gd; the AI does not consult that overlay and just gets refused.
 func test_rushdown_gives_up_the_advance_rather_than_stranding_a_member() -> void:
 	var board: Dictionary = await _jam_board()
 	var squad: Squad = board.squad
@@ -213,12 +225,19 @@ func test_rushdown_gives_up_the_advance_rather_than_stranding_a_member() -> void
 
 	assert_bool(game.squad_manager.squad_has_invalid_actions(squad)) \
 		.override_failure_message("Rushdown authored a plan the validator refuses").is_false()
-	# Giving up the ADVANCE, not the turn: nobody is ordered anywhere out of cohesion, and the
-	# leader's own order collapses back to holding rather than charging off alone.
-	var leader_move := _move_for(board.leader)
-	assert_object(leader_move).is_not_null()
-	assert_bool(leader_move.is_hold_position) \
-		.override_failure_message("the leader kept an advance its squad cannot follow").is_true()
+
+	for action in squad.action_queue:
+		if action.action_type != BaseAction.ActionType.MOVE:
+			continue
+		assert_bool(action.is_hold_position) \
+			.override_failure_message("%s kept an advance its squad cannot follow" % action.actor.get_unit_name()) \
+			.is_true()
+
+	# The premise, or the assertion above passes on a board where nothing was ever infeasible.
+	var charge: Vector2i = AITactics.best_attack_destination(board.leader, board.enemy, game._board())
+	assert_int(RulesService.compute_move_range(board.member, game._board(), charge).reachable.size()) \
+		.override_failure_message("fixture: the member CAN follow — this jam no longer jams") \
+		.is_equal(0)
 
 
 func test_ai_turn_from_a_jam_terminates_every_turn() -> void:

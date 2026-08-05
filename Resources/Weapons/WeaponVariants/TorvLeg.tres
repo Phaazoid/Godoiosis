@@ -8,4 +8,4 @@
 script = ExtResource("1_doore")
 template = ExtResource("3_dmny2")
 limb_kind = 1
-item_name = "TorvLeg"
+display_name = "TorvLeg"

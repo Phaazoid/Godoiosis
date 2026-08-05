@@ -9,6 +9,6 @@ flat_def = 1
 stat_minimums = Dictionary[int, int]({
 6: 8
 })
-item_name = "Bulwark Plate"
+display_name = "Bulwark Plate"
 description = "Layered slab plating. Only a powerful frame can carry it -- and the stronger the frame, the more of it bites. The plate's own bulk turns aside a little no matter who wears it."
 metadata/_custom_type_script = "uid://dj0617uewvdny"

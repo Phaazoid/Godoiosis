@@ -7,15 +7,11 @@ const CARVING_DIR := "res://Resources/TransmutationData/"
 
 static func get_all() -> Dictionary:
 	var carvings := {}
-	if not DirAccess.dir_exists_absolute(CARVING_DIR):
-		return carvings
-	for file in DirAccess.get_files_at(CARVING_DIR):
-		if not file.ends_with(".tres"):
+	var candidates := ResourceCatalog.by_name(CARVING_DIR, TransmutationData)
+	for name in candidates:
+		var carving: TransmutationData = candidates[name]
+		if not carving.is_legal():
+			push_error("%s: illegal carving (bad sigils or over the max circle cap) — refused" % name)
 			continue
-		var res = load(CARVING_DIR + file)
-		if res is TransmutationData:
-			if not res.is_legal():
-				push_error("%s: illegal carving (bad sigils or over the max circle cap) — refused" % file)
-				continue
-			carvings[res.display_name if res.display_name != "" else file.get_basename()] = res
+		carvings[name] = carving
 	return carvings

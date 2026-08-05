@@ -23,4 +23,4 @@ heals = true
 script = ExtResource("3_6wj7n")
 inscriptions = Array[ExtResource("1_pjh4y")]([SubResource("Resource_1nd64")])
 temper = 7
-item_name = "Heal Stone"
+display_name = "Heal Stone"

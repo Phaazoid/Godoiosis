@@ -48,7 +48,7 @@ func _down(unit: Unit) -> void:
 
 func _plate() -> ArmorData:
 	var armor := ArmorData.new()
-	armor.item_name = "Plate"
+	armor.display_name = "Plate"
 	armor.def_power = 6
 	armor.stat_minimums[Stats.Stat.CON] = 6
 	return armor

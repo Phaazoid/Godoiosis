@@ -38,6 +38,8 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 🗂 Dispersed (log)
 
+- Group Move hover feedback: the arrow trail of a member who can't fully follow turns green → **BUILT same day** (`MoveAction.is_trailing` + `OverlayManager._arrow_modulate`; the missing per-arrow colour channel got added when Case 1 / Case 2 split, so the idea landed as part of the fix rather than as later work) (2026-08-04)
+
 - AI won't move when a downed unit blocks the closer attack position → **issue [#127](https://github.com/Phaazoid/Godoiosis/issues/127)** (filed as reported, deliberately un-investigated at your call; cross-refs #122 as unconfirmed overlap) (2026-08-02)
 - Report-a-bug hotkey: dump the game state in-game for Claude to analyze → **issue [#128](https://github.com/Phaazoid/Godoiosis/issues/128)** (filed as requested; the what-goes-in-the-dump design is the open half) (2026-08-02)
 - Make an attack's target kind legible (colour the pick-list text and/or the glowing tiles by unit/cell/both) → **[#44](https://github.com/Phaazoid/Godoiosis/issues/44) comment** (visual clarity umbrella; presentation on top of the existing `AttackData.targets` fork, colours unpicked) (2026-08-02)

@@ -24,14 +24,9 @@ static func refresh() -> void:
 
 static func _scan() -> Dictionary:
 	var jobs := {}
-	if not DirAccess.dir_exists_absolute(JOB_DIR):
-		return jobs
-	for file in DirAccess.get_files_at(JOB_DIR):
-		if not file.ends_with(".tres"):
-			continue
-		var res = load(JOB_DIR + file)
-		if res is JobData and res.id != "":
-			jobs[res.id] = res
+	for job: JobData in ResourceCatalog.load_all(JOB_DIR, JobData):
+		if job.id != "":
+			jobs[job.id] = job
 	return jobs
 
 static func get_job(id: String) -> JobData:

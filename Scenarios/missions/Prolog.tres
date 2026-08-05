@@ -37,7 +37,7 @@
 [sub_resource type="Resource" id="Resource_ek4ng"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_oubbh"]
 script = ExtResource("12_n2wbw")
@@ -111,7 +111,7 @@ metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 script = ExtResource("15_scq70")
 inscriptions = Array[ExtResource("13_51bis")]([SubResource("Resource_o0q4p")])
 temper = 1
-item_name = "BFire"
+display_name = "BFire"
 
 [sub_resource type="Resource" id="Resource_djkgj"]
 script = ExtResource("12_n2wbw")
@@ -185,7 +185,7 @@ heals = true
 script = ExtResource("15_scq70")
 inscriptions = Array[ExtResource("13_51bis")]([SubResource("Resource_utgfc")])
 temper = 7
-item_name = "Heal Stone"
+display_name = "Heal Stone"
 
 [sub_resource type="Resource" id="Resource_rv7wm"]
 script = ExtResource("12_n2wbw")
@@ -238,18 +238,18 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_ym04e"]
 script = ExtResource("23_n3m7a")
 template = ExtResource("24_ek4ng")
-item_name = "Smasher"
+display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_wfyk0"]
 script = ExtResource("24_0m3h6")
 template = ExtResource("25_ayygx")
-item_name = "TorvArm"
+display_name = "TorvArm"
 
 [sub_resource type="Resource" id="Resource_dw62q"]
 script = ExtResource("24_0m3h6")
 template = ExtResource("25_ayygx")
 limb_kind = 1
-item_name = "TorvLeg"
+display_name = "TorvLeg"
 
 [sub_resource type="Resource" id="Resource_ronww"]
 script = ExtResource("12_n2wbw")
@@ -307,7 +307,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_68ohh"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_fgy5v"]
 script = ExtResource("12_n2wbw")
@@ -363,7 +363,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_7u1b0"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_igeaa"]
 script = ExtResource("12_n2wbw")
@@ -419,7 +419,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_p5auv"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_n8wy1"]
 script = ExtResource("12_n2wbw")
@@ -475,7 +475,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_vxmuu"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_7nq6r"]
 script = ExtResource("12_n2wbw")
@@ -531,7 +531,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_6j8bl"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_61n1m"]
 script = ExtResource("12_n2wbw")
@@ -587,7 +587,7 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 [sub_resource type="Resource" id="Resource_7xl6f"]
 script = ExtResource("4_sox22")
 template = ExtResource("6_cgh5e")
-item_name = "Chainsword"
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_4ibpw"]
 script = ExtResource("12_n2wbw")

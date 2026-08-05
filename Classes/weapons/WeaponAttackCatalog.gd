@@ -14,23 +14,11 @@ const MAIN_DIR := "res://Resources/WeaponAttacks/MainAttacks/"
 const PROTOTYPE_MAIN_DIR := "res://Resources/WeaponAttacks/MainAttacks/Prototypes/"
 
 static func get_library() -> Dictionary:
-	return _scan(LIBRARY_DIR)
+	return ResourceCatalog.by_name(LIBRARY_DIR, WeaponAttackData)
 
 static func get_mains() -> Dictionary:
-	var mains := _scan(MAIN_DIR)
-	var proto := _scan(PROTOTYPE_MAIN_DIR)
+	var mains := ResourceCatalog.by_name(MAIN_DIR, WeaponAttackData)
+	var proto := ResourceCatalog.by_name(PROTOTYPE_MAIN_DIR, WeaponAttackData)
 	for k in proto:
 		mains[k] = proto[k]
 	return mains
-
-static func _scan(dir: String) -> Dictionary:
-	var found := {}
-	if not DirAccess.dir_exists_absolute(dir):
-		return found
-	for file in DirAccess.get_files_at(dir):
-		if not file.ends_with(".tres"):
-			continue
-		var res = load(dir + file)
-		if res is WeaponAttackData:
-			found[res.display_name if res.display_name != "" else file.get_basename()] = res
-	return found

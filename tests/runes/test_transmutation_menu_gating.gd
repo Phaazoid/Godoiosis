@@ -43,7 +43,7 @@ func _alchemist(aura: Dictionary[Elemental.Element, int]) -> Unit:
 func _rune_with(carvings: Array[TransmutationData], size: RuneData.Size = RuneData.Size.LARGE) -> RuneData:
 	var rune := RuneData.new()
 	rune.size = size
-	rune.item_name = "Test Rune"
+	rune.display_name = "Test Rune"
 	for c in carvings:
 		rune.inscribe(c)
 	return rune

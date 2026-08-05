@@ -145,7 +145,7 @@ func _refresh_stats():
 	var armor_name := ""
 	var armor_power := 0
 	if unit.worn_armor != null:
-		armor_name = unit.worn_armor.item_name
+		armor_name = unit.worn_armor.display_name
 		armor_power = unit.worn_armor.def_power
 	# One shared breakdown (the resolver sums the same call). Yellow = a temporary source is
 	# contributing — terrain you're standing on, not gear you own.
@@ -180,7 +180,7 @@ func _stat_sources(stat: Stats.Stat) -> Array[String]:
 			lines.append(effect_source_text(effect.source_name, delta, effect.turns_remaining))
 	var gear_delta := unit.get_effective_stat(stat) - unit.get_body_stat(stat)
 	if gear_delta != 0 and unit.worn_armor != null:
-		lines.append("%s %+d" % [unit.worn_armor.item_name, gear_delta])
+		lines.append("%s %+d" % [unit.worn_armor.display_name, gear_delta])
 	return lines
 
 # How much of `stat` is currently on loan — drives the temporary tint above.

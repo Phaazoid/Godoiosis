@@ -546,14 +546,16 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 
 	validate_squad_plan(squad)
 
-	# All or nothing (#103). Scope is every MOVE in the queue, not just this batch's: a member the
-	# solver could place NOWHERE has no move here at all -- it keeps the hold order it already had,
-	# and that is the order cohesion refuses. A broken attack or rescue still isn't the formation's
-	# fault. All-hold is legal by construction.
+	# All or nothing (#103) -- a rare BACKSTOP since cohesion stopped refusing an outrun member, so
+	# what reaches here is a destination CONFLICT. Scope is every MOVE in the queue, not just this
+	# batch's; all-hold is legal by construction.
 	for action in squad.action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE and not action.is_valid:
 			for member in squad.get_members():
 				cancel_move_for_unit(member)
+			# A hold-only queue is not an activation -- otherwise the squad stays `active` behind an
+			# open panel with no X and no Execute.
+			revert_if_only_hold(squad)
 			overlay_manager.redraw_planned_paths()
 			overlay_manager.redraw_projected_units()
 			return false

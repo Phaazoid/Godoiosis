@@ -40,7 +40,7 @@ script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_j5i3j")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Shock Rod"
+display_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_j5i3j_inst"]
@@ -80,7 +80,7 @@ script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_3f5s2")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Shock Rod"
+display_name = "Shock Rod"
 
 
 [sub_resource type="Resource" id="Resource_3f5s2_inst"]
@@ -218,7 +218,7 @@ script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_rskt5")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Water Staff"
+display_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_rskt5_inst"]
@@ -259,7 +259,7 @@ script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_yb65v")
 weapon_type = 5
 icon = ExtResource("wicon_5")
-item_name = "Water Staff"
+display_name = "Water Staff"
 
 
 [sub_resource type="Resource" id="Resource_yb65v_inst"]
@@ -302,7 +302,7 @@ attack_pattern = SubResource("Resource_o684d")
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_a2ak8")
 weapon_type = 1
-item_name = "ForwardWide3"
+display_name = "ForwardWide3"
 icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -349,7 +349,7 @@ attack_pattern = SubResource("Resource_5s6kq")
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_w0pi4")
 weapon_type = 1
-item_name = "ForwardWide3"
+display_name = "ForwardWide3"
 icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -397,7 +397,7 @@ attack_pattern = SubResource("Resource_102aw")
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_5verf")
 weapon_type = 1
-item_name = "Chainsword"
+display_name = "Chainsword"
 icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -443,7 +443,7 @@ attack_pattern = SubResource("Resource_ema0g")
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_sda2p")
 weapon_type = 1
-item_name = "Chainsword"
+display_name = "Chainsword"
 icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -490,7 +490,7 @@ attack_pattern = SubResource("Resource_kqiwn")
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_8gmk8")
 weapon_type = 1
-item_name = "Chainsword"
+display_name = "Chainsword"
 icon = ExtResource("18_v38pn")
 description = "Vroom Vroom"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

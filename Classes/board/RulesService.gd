@@ -101,14 +101,16 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 	for cell in cost_so_far.keys():
 		var other_unit := board.unit_at_cell(cell)
 
-		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_squad_range():
-			squad_unreachable[cell] = cost_so_far[cell]
-			continue
-
+		# Occupancy FIRST: GroupMoveSolver reads squad_unreachable as its catch-up set, so that
+		# bucket must not carry cells nobody can stand on. It used to be filled before these two.
 		if other_unit != null and not unit.squad.get_members().has(other_unit):
 			continue
 
 		if other_unit == unit:
+			continue
+
+		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_squad_range():
+			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 
 		reachable[cell] = cost_so_far[cell]

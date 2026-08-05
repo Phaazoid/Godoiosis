@@ -34,7 +34,7 @@
 [sub_resource type="Resource" id="Resource_68rxj"]
 script = ExtResource("3_844rf")
 template = ExtResource("5_cq8re")
-item_name = "BOWW"
+display_name = "BOWW"
 
 [sub_resource type="Resource" id="Resource_ke62a"]
 script = ExtResource("10_ipn13")
@@ -65,7 +65,7 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_krbih"]
 script = ExtResource("11_a675q")
 template = ExtResource("12_0s2lf")
-item_name = "Smasher"
+display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_bhs3c"]
 script = ExtResource("10_ipn13")
@@ -96,7 +96,7 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_i3dhd"]
 script = ExtResource("16_8bmux")
 template = ExtResource("17_cloww")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_3dop0"]
 script = ExtResource("10_ipn13")
@@ -127,7 +127,7 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_hsny0"]
 script = ExtResource("16_8bmux")
 template = ExtResource("17_cloww")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_ecc1n"]
 script = ExtResource("10_ipn13")
@@ -157,7 +157,7 @@ squad_id = 3
 [sub_resource type="Resource" id="Resource_tvtcq"]
 script = ExtResource("16_8bmux")
 template = ExtResource("17_cloww")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_bj6sg"]
 script = ExtResource("10_ipn13")
@@ -189,7 +189,7 @@ is_leader = true
 [sub_resource type="Resource" id="Resource_78hie"]
 script = ExtResource("16_8bmux")
 template = ExtResource("17_cloww")
-item_name = "Springy"
+display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_uprqx"]
 script = ExtResource("10_ipn13")

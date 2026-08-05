@@ -206,11 +206,11 @@ func test_the_def_row_names_the_worn_armor() -> void:
 
 	var found := false
 	for entry in _rendered_tooltips():
-		if str(entry[1]).contains(unit.worn_armor.item_name):
+		if str(entry[1]).contains(unit.worn_armor.display_name):
 			found = true
 	assert_bool(found).override_failure_message(
 		"No rendered tooltip names the worn armor (%s) -- the DEF row is not reading worn_armor."
-		% unit.worn_armor.item_name).is_true()
+		% unit.worn_armor.display_name).is_true()
 
 
 func test_a_gear_granted_ability_reaches_the_readout() -> void:

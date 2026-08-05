@@ -208,12 +208,12 @@ func _tooltip_for(item) -> String:
 		if status != "":
 			lines.append(status)
 	elif item is ArmorData:
-		lines.append(item.item_name)
+		lines.append(item.display_name)
 		var mech: String = item.mechanical_text(unit)
 		if mech != "":
 			lines.append(mech)
 	else:
-		lines.append(item.item_name)
+		lines.append(item.display_name)
 	if item.description != "":
 		lines.append("")
 		lines.append(item.description)
@@ -232,7 +232,7 @@ func _refresh():
 			var item = unit.inventory[i]
 			icon.texture = item.icon
 
-			var display_name = item.item_name
+			var display_name = item.display_name
 			if item is WeaponInstance:
 				display_name = item.shown_name()
 				if icon.texture == null and item.template != null:

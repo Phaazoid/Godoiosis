@@ -1,6 +1,9 @@
 extends VBoxContainer
 class_name SpawnTool
 
+# The dev overlay's unit spawner tab: authors a UnitData from its own fields (name, faction,
+# stats, sprite, starting weapon) and hands it to game.spawn_unit on a dev-mode click.
+
 @onready var faction_group := ButtonGroup.new()
 
 var game
@@ -124,9 +127,15 @@ func try_spawn_at(cell: Vector2i) -> void:
 		error_message = ""
 
 func _on_weapon_dropdown_item_selected(index: int):
+	if index < 0 or index >= _spawnable.size():
+		selected_weapon = null
+		return
 	selected_weapon = _spawnable[_spawnable.keys()[index]]
 
 func _on_sprite_dropdown_item_selected(index: int) -> void:
+	if index < 0 or index >= sprite_catalog.size():
+		selected_sprite = {}
+		return
 	var key = sprite_catalog.keys()[index]
 	selected_sprite = sprite_catalog[key]
 
@@ -135,9 +144,7 @@ func _on_unit_name_input_text_changed(new_text: String) -> void:
 
 func _build_sprite_catalog() -> void:
 	const SPRITE_DIR := "res://Art/Units/MapSprites/"
-	for file in DirAccess.get_files_at(SPRITE_DIR):
-		if not file.ends_with(".png"):
-			continue
+	for file in ResourceDir.files_with_extension(SPRITE_DIR, ".png"):
 		if file.ends_with("_Moving.png"):
 			continue
 		if file.ends_with("_Downed.png"):

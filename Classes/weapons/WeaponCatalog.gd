@@ -18,25 +18,13 @@ const PROTOTYPE_DIR := "res://Resources/Weapons/Prototypes/"
 const SAVED_DIR := "res://Resources/Weapons/WeaponVariants/"
 
 static func get_family_bases() -> Dictionary:
-	return _scan(MAIN_VARIETIES_DIR, WeaponData)
+	return ResourceCatalog.by_name(MAIN_VARIETIES_DIR, WeaponData)
 
 static func get_prototypes() -> Dictionary:
-	return _scan(PROTOTYPE_DIR, WeaponData)
+	return ResourceCatalog.by_name(PROTOTYPE_DIR, WeaponData)
 
 static func get_saved() -> Dictionary:
-	return _scan(SAVED_DIR, WeaponInstance)
-
-static func _scan(dir: String, type) -> Dictionary:
-	var found := {}
-	if not DirAccess.dir_exists_absolute(dir):
-		return found
-	for file in DirAccess.get_files_at(dir):
-		if not file.ends_with(".tres"):
-			continue
-		var res = load(dir + file)
-		if is_instance_of(res, type):
-			found[res.item_name if res.item_name != "" else file.get_basename()] = res
-	return found
+	return ResourceCatalog.by_name(SAVED_DIR, WeaponInstance)
 
 # All templates a new weapon can start from — for the fitting tool.
 static func get_templates() -> Dictionary:

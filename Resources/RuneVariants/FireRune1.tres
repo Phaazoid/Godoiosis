@@ -29,5 +29,5 @@ script = ExtResource("2_m0he7")
 size = 1
 inscriptions = Array[ExtResource("1_f57nc")]([SubResource("Resource_pixcq")])
 temper = 1
-item_name = "fiya"
+display_name = "fiya"
 metadata/_custom_type_script = "uid://ckrp1phgirys0"
