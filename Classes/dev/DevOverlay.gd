@@ -16,6 +16,9 @@ class_name DevOverlay
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 
 func _ready() -> void:
+	if not DevTools.enabled():
+		queue_free()   # a demo build constructs no dev tools (#132)
+		return
 	scenario_tool.init(scenario_manager, game)
 	spawn.init(game)
 	unit_editor.init(game)

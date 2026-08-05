@@ -180,14 +180,15 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 		paths.append(dir.path_join(file))
 
 func _unhandled_input(event):
-	if event.is_action_pressed("dev_reset_scenario"):
+	if event.is_action_pressed("dev_reset_scenario") and DevTools.enabled():
 		reload_current()
 
 func clear_board():
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager)
-	game.dev_overlay.unit_editor.edit_unit(null)
+	if game.dev_overlay != null:
+		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()
 	squad_manager.clear_all_squads()
 	game.clear_selection()

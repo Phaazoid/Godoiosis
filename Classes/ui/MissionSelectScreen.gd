@@ -14,14 +14,16 @@ class_name MissionSelectScreen
 # Signal-based rather than awaited (unlike CrisisPrompt/MissionEndBanner): this screen outlives
 # any single choice -- MissionController reopens it every time a mission ends.
 #
-# SIZING: uses set_anchors_and_offsets_preset, not set_anchors_preset. This screen is built
-# during game._ready(), before the SubViewport container has computed a size, so anchors alone
-# leave it 0x0 -- the background covers nothing and CenterContainer centres on the origin.
+# SIZING: uses set_anchors_and_offsets_preset, not set_anchors_preset. A code-built Control added
+# under the CanvasLayer stays 0x0 with anchors alone -- the background covers nothing and
+# CenterContainer centres on the origin. Measured 2026-08-04 (#132): this is NOT specific to
+# building during _ready() as this note used to claim; it hits any such Control at any time.
 # Z_INDEX: HoverInfoPanelControl.tscn sets z_index = 2, which beats sibling order, so a
 # full-screen takeover has to out-rank it explicitly.
 
 signal mission_chosen(path: String)
 signal sandbox_chosen
+signal quit_chosen
 
 const MENU_Z := 100
 const BUTTON_WIDTH := 360
@@ -106,6 +108,15 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	sandbox.modulate = Color(0.72, 0.72, 0.78)
 	sandbox.pressed.connect(func(): sandbox_chosen.emit())
 	column.add_child(sandbox)
+
+	column.add_child(HSeparator.new())
+
+	var quit := Button.new()
+	quit.text = "Quit Game"
+	quit.custom_minimum_size = Vector2(BUTTON_WIDTH, 44)
+	quit.modulate = Color(0.85, 0.6, 0.6)
+	quit.pressed.connect(func(): quit_chosen.emit())
+	column.add_child(quit)
 
 func _add_section(parent: Control, text: String) -> void:
 	var label := Label.new()

@@ -23,7 +23,7 @@ extends Node2D
 @onready var ui_layer: CanvasLayer = $UILayer
 @onready var unit_info_panel: Control = $UILayer/UnitInfoPanelControl
 @onready var hover_info_panel: Control = $UILayer/HoverInfoPanelControl
-@onready var dev_overlay: DevOverlay = get_node("/root/Main/DevOverlay")
+@onready var dev_overlay: DevOverlay = _find_dev_overlay()
 @onready var overlay_manager: OverlayManager = $OverlayManager
 @onready var squad_manager: SquadManager = $SquadManager
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
@@ -88,6 +88,12 @@ func _ready() -> void:
 	game_state = GameState.MENU
 	mission_controller.open_mission_select.call_deferred()
 
+# Null in a demo build. DevTools decides, so this never depends on when the overlay frees itself.
+func _find_dev_overlay() -> DevOverlay:
+	if not DevTools.enabled():
+		return null
+	return get_node_or_null("/root/Main/DevOverlay")
+
 func _build_collaborators() -> void:
 	dev_controller = DevController.new()
 	dev_controller.game = self
@@ -147,7 +153,7 @@ func _wire_signals() -> void:
 # ==============================================================================
 
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_dev_overlay"):
+	if event.is_action_pressed("toggle_dev_overlay") and dev_overlay != null:
 		if not dev_overlay.visible:
 			dev_overlay.show_beside()
 			set_dev_mode(true)
@@ -155,9 +161,11 @@ func _input(event: InputEvent) -> void:
 			set_dev_mode(game_state != GameState.DEV_MODE)
 	if event.is_action_pressed("dev_report_bug"):
 		bug_reporter.report(GameState.keys()[game_state])
+	if event.is_action_pressed("ui_cancel") and not _board_locked_for_player():
+		_open_pause_menu()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if game_state == GameState.DEV_MODE and dev_overlay.tile_brush.brush_active:
+	if game_state == GameState.DEV_MODE and dev_overlay != null and dev_overlay.tile_brush.brush_active:
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
 			dev_controller.handle_tile_brush(event)
 			return
@@ -173,10 +181,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			_on_right_click()
 
 	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE:
-		if game_state == GameState.DEV_MODE:
+		if game_state == GameState.DEV_MODE and dev_overlay != null:
 			dev_overlay.spawn.try_spawn_at(hover_presenter.last_hovered_cell)
 		else:
 			camera_controller.center_on_position(get_global_mouse_position())
+
+# Esc during play. MENU locks the board while the card is up; the prior state is restored on
+# Resume so an in-progress aim survives the pause.
+func _open_pause_menu() -> void:
+	var prior: GameState = game_state
+	game_state = GameState.MENU
+	var choice: PauseMenu.Choice = await PauseMenu.show_menu(ui_layer, mission_controller.can_restart())
+	match choice:
+		PauseMenu.Choice.RESTART:
+			game_state = GameState.IDLE
+			mission_controller.restart_mission()
+		PauseMenu.Choice.QUIT:
+			get_tree().quit()
+		_:
+			game_state = prior
 
 # One handler per mode, mirroring HoverPresenter's branches. Each is responsible for leaving
 # the mode it handles (exit_current_mode), so the dispatcher stays a plain table.
@@ -241,7 +264,7 @@ func _click_dev_mode(cell: Vector2i) -> void:
 		return
 	# The pointer resolver, matching _hover_dev_mode -- the editor opens on the sprite you clicked.
 	var clicked := unit_at_pointer(cell)
-	if clicked != null:
+	if clicked != null and dev_overlay != null:
 		dev_overlay.unit_editor.edit_unit(clicked)
 
 func _click_attack_targeting(cell: Vector2i) -> void:
@@ -395,7 +418,8 @@ func set_dev_mode(active: bool):
 	exit_current_mode()
 	if active:
 		game_state = GameState.DEV_MODE
-	dev_overlay.sync_dev_mode_button(active)
+	if dev_overlay != null:
+		dev_overlay.sync_dev_mode_button(active)
 
 func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:

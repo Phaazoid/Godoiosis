@@ -83,6 +83,7 @@ func open_mission_select() -> void:
 	_select_screen = MissionSelectScreen.open(game.ui_layer, missions, others)
 	_select_screen.mission_chosen.connect(_on_mission_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
+	_select_screen.quit_chosen.connect(func(): game.get_tree().quit())
 
 func _close_mission_select() -> void:
 	if is_instance_valid(_select_screen):
@@ -106,6 +107,15 @@ func _begin_turn() -> void:
 	var faction: Team.Faction = game.turn_manager.active_faction()
 	game.turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	game.start_faction_turn(faction)
+
+# The one answer to "start this mission over" -- the end-of-mission Retry and the pause menu's
+# Restart both land here. False on a Sandbox board: there is no file to reload.
+func can_restart() -> bool:
+	return game.scenario_manager.last_loaded_path != ""
+
+func restart_mission() -> void:
+	game.scenario_manager.reload_current()
+	_begin_turn()
 
 # ==============================================================================
 #  The capture objective (slice 3)
@@ -205,16 +215,14 @@ func _end_mission() -> void:
 	game.unit_info_panel.clear()
 	game.game_state = game.GameState.MISSION_OVER     # ... so lock the board AFTER it
 
-	var can_retry: bool = game.scenario_manager.last_loaded_path != ""
 	var victory: bool = outcome == MissionRules.Outcome.VICTORY
-	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game.ui_layer, victory, can_retry)
+	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game.ui_layer, victory, can_restart())
 
 	_ending = false
 	game.game_state = game.GameState.IDLE
 	match choice:
 		MissionEndBanner.Choice.RETRY:
-			game.scenario_manager.reload_current()
-			_begin_turn()
+			restart_mission()
 		MissionEndBanner.Choice.MISSION_SELECT:
 			open_mission_select()
 		_:
