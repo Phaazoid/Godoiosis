@@ -12,6 +12,7 @@ border_width_bottom = 2
 border_color = Color(0, 0, 0, 1)
 
 [node name="HoverInfoPanelControl" type="Control" unique_id=98776626]
+visible = false
 z_index = 2
 layout_mode = 3
 anchors_preset = 0
