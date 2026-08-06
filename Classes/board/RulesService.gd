@@ -124,7 +124,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 		if other_unit == unit:
 			continue
 
-		if not unit.is_leader() and GridUtils.manhattan_distance(cell, leader_pos) > unit.squad.get_max_squad_range():
+		if not unit.is_leader() and not SquadCohesion.in_range(unit.squad, leader_pos, cell):
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 
@@ -235,8 +235,9 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 # default form). What the AI's approach picker needs is the opposite: an estimate of the route it
 # will actually walk, so a standing enemy really does have to be gone around. Both are the same
 # question -- hop distance under a traversal rule -- so the rule is a PARAMETER each caller states,
-# not a second BFS. `nearest_enemy` must NOT pass true: it routes TO enemy cells, so blocking on
-# them would read every enemy as UNREACHABLE.
+# not a second BFS. The trap to know: passing true while routing TO enemy cells reads every enemy as
+# UNREACHABLE, since an active enemy blocks passage. That is why AI target selection routes to each
+# enemy's standable FIRING CELLS instead of its square -- see AITactics._approach_distances.
 #
 # No caller needs the whole field, so both stopping rules exist: `max_depth` past N hops, `until`
 # once every cell in that set has a distance. Both only skip work whose answer was already going to

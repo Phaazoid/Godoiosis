@@ -347,6 +347,25 @@ func test_nearest_enemy_is_nearest_by_route() -> void:
 	assert_object(AITactics.nearest_enemy(leader, _context(board))).is_same(open_side)
 
 
+func test_nearest_enemy_measures_to_a_firing_position_not_to_the_target_itself() -> void:
+	# #127 follow-up: target selection has to answer the same question the approach picker does.
+	# `boxed` is nearer by every raw measure -- 4 hops to its own square, against 5 for `open` --
+	# but both its firing cells are held by bodies and its other two neighbours are wall/off-board,
+	# so there is nowhere to actually fight it from. Measuring to the SQUARE picks it and then the
+	# approach discovers the truth; measuring to a firing position never picks it at all.
+	var board: Dictionary = _corridor_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 5))
+	var _boxed: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(4, 5))
+	var open: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(3, 3))
+	# The leader's OWN downed allies: passable (a body is stepped over, #122) but never standable,
+	# which is exactly the gap between the two metrics.
+	for cell in [Vector2i(3, 5), Vector2i(5, 5)]:
+		var body: Unit = _spawn(board, Team.Faction.ENEMY, cell)
+		body.lifecycle_state = Unit.LifecycleState.DOWNED
+
+	assert_object(AITactics.nearest_enemy(leader, _context(board))).is_same(open)
+
+
 func test_nearest_enemy_falls_back_to_distance_when_nothing_is_reachable() -> void:
 	# Both enemies are sealed away, so route ranks them equally (UNREACHABLE) and distance decides:
 	# an unreachable board must still produce a target, or Rushdown returns without acting at all.

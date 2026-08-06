@@ -787,7 +787,7 @@ func draw_squad_leader_range(squad: Squad, cell: Vector2i):
 
 func draw_create_squad(unit: Unit):
 	var cells: Array[Vector2i] = []
-	for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.squad.get_max_squad_range()):
+	for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination()):
 		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)
@@ -800,7 +800,7 @@ func draw_joinable_squads(joining_unit: Unit):
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if squad_manager.can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			for cell in GridUtils.cells_within_manhattan_range(unit.get_projected_destination(), unit.squad.get_max_squad_range()):
+			for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination()):
 				if get_unit_at_cell(cell) == null:
 					cells.append(cell)
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)

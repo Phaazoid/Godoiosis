@@ -100,7 +100,7 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 	squad.leader = newLeader 
 
 	for member in squad.members.duplicate():
-		if not GridUtils.validate_member_distance(member):
+		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member.movement.cell):
 			leave_squad(member)
 
 	# Capacity overflow (#63): the new leader may command less than the old one.
@@ -493,7 +493,7 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 # Shared by both formation checks: in range of the leader, room in the squad, same faction, not
 # already a member, and neither side has spent its turn.
 func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
-	if GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell) > squad.get_max_squad_range():
+	if not SquadCohesion.in_range(squad, squad.leader.movement.cell, unit.movement.cell):
 		return false
 	if squad.members.size() >= squad.max_size():
 		return false

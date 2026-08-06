@@ -25,6 +25,9 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
 	moves.append(leader_move)
 
+	# The one PATH-distance cohesion measure in the codebase, and the `* 2` is the tell: path
+	# distance always exceeds Manhattan, so the leash needed doubling to mean the same thing.
+	# #151 makes cohesion path-based everywhere and subsumes this -- see _candidate_cells' retry.
 	var leash: int = squad.get_max_squad_range() * 2
 	var followers: Array[Unit] = []
 	var candidates := {}   # Unit -> {cell: move cost}
@@ -117,7 +120,7 @@ static func followable_destinations(squad: Squad, board: BoardContext, leader_de
 
 		var satisfied := {}
 		for cell in standable.keys():
-			for destination in GridUtils.cells_within_manhattan_range(cell, squad.get_max_squad_range()):
+			for destination in SquadCohesion.cells(squad, cell):
 				if not followable.has(destination) or cell == destination:
 					continue   # the leader stands on `destination`; no member may take it
 				satisfied[destination] = true

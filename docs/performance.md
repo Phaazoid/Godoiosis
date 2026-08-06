@@ -108,8 +108,13 @@ parameter each caller states rather than a second BFS to hand-copy.
 **Which side each caller takes, and why it is not negotiable per-caller:**
 - `GroupMoveSolver` (cohesion, ×2) — **blind**, for the #115 reason above. The pin calls the default
   form, so flipping the default goes red.
-- `AITactics.nearest_enemy` — **blind**. It routes *to* enemy cells, so blocking on them would score
-  every enemy `UNREACHABLE` and collapse target selection to the raw-distance tie-break.
+- `AITactics.nearest_enemy` (via `_approach_distances`) — **aware**, but only because it stopped
+  routing to enemy *squares*. Routing to a square with occupancy on scores every enemy `UNREACHABLE`
+  (an active enemy blocks passage) and collapses selection to the raw-distance tie-break; routing to
+  each enemy's standable **firing cells** is what makes the honest metric usable here. Still one BFS
+  for all enemies — the `until` set is the union of every firing cell. Keeping it blind was the
+  original #127 answer and was wrong for a subtler reason: it made target selection and the approach
+  picker disagree about which enemy was closest.
 - `AITactics._best_approach` (**both** approach callers — attack *and* Sentry's walk home) — **aware**,
   unconditionally. This half is deliberately NOT keyed off the attack-specific `route_target`: keying
   it there welded two unrelated questions to one flag and left `closest_reachable_cell_to` unable to

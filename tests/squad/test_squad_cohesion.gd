@@ -263,6 +263,35 @@ func test_editing_the_leaders_coh_moves_the_cohesion_gate() -> void:
 		.override_failure_message("the widened gate has no upper edge").is_false()
 
 
+# The two FORMS of the cohesion rule must accept the same set. `in_range` decides (validator, solver,
+# squad-up gates) and `cells` draws and iterates (the SQUADRANGE overlay, the squad-up overlays, the
+# solver's dilation) -- so a disagreement means the board paints a tile the validator refuses, or a
+# recruit shows as joinable and then isn't. They were nine hand-rolled copies before the #151 prep
+# consolidated them onto SquadCohesion; this is what stops them drifting apart again, and it is the
+# thing most likely to break when the metric goes path-based.
+func test_the_drawn_bubble_and_the_enforced_bubble_are_the_same_set() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var leader_cell := Vector2i(6, 6)
+
+	var drawn := {}
+	for cell in SquadCohesion.cells(squad, leader_cell):
+		drawn[cell] = true
+
+	# Sweep a window comfortably wider than the bubble, so both an omission and an over-draw fail.
+	var reach := squad.get_max_squad_range()
+	var margin := reach + 2
+	var checked := 0
+	for x in range(leader_cell.x - margin, leader_cell.x + margin + 1):
+		for y in range(leader_cell.y - margin, leader_cell.y + margin + 1):
+			var cell := Vector2i(x, y)
+			checked += 1
+			assert_bool(drawn.has(cell)) \
+				.override_failure_message("drawn/enforced disagree at %s" % cell) \
+				.is_equal(SquadCohesion.in_range(squad, leader_cell, cell))
+	assert_int(checked).is_greater(reach * reach)   # the sweep really covered the bubble and past it
+
+
 # ------------------------------------------------------------------------------
 #  Assignment contention — the overlay must not promise a formation the solver drops
 # ------------------------------------------------------------------------------

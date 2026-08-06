@@ -84,10 +84,12 @@ static func _check_leader_range(squad: Squad, actions: Array[BaseAction], move_a
 		if not cohesion_ok(squad, leader_cell, action.get_destination()):
 			action.add_validation_error("Too far from the squad leader")
 
-# The single copy of "may this squadmate end here?" — read by the validator and by the solver's
-# followable_destinations sweep, so the red tiles and the refusal cannot drift apart.
+# "May this squadmate end here?" — the PLAN-side name for the cohesion leash, kept because the
+# validator is where the refusal happens. The rule itself now lives in SquadCohesion, which every
+# other surface asks too (it used to be nine hand-rolled copies); this is a delegator so the two
+# cannot drift and so the metric swap in #151 is one edit there rather than eleven.
 static func cohesion_ok(squad: Squad, leader_cell: Vector2i, destination: Vector2i) -> bool:
-	return GridUtils.manhattan_distance(destination, leader_cell) <= squad.get_max_squad_range()
+	return SquadCohesion.in_range(squad, leader_cell, destination)
 
 # Two members can't land on the same cell, and a cell only frees up if its current occupant has a
 # VALID move away. An invalid move (out of leader range) or a hold means they stay put.

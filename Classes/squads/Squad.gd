@@ -59,7 +59,7 @@ func max_size() -> int:
 	return 1 + maxi(0, leader.get_effective_ldr() / MEMBER_LDR_COST)
 
 func get_squad_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
-	return GridUtils.cells_within_manhattan_range(cell, get_max_squad_range())
+	return SquadCohesion.cells(self, cell)
 	
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
