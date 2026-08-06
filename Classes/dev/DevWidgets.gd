@@ -163,6 +163,14 @@ static func refresh_update_button(button: Button, target: String, noun: String) 
 	else:
 		button.tooltip_text = "Overwrite %s" % target
 
+# Delete follows Update's own doctrine -- no confirmation dialog, the tooltip names the victim.
+static func refresh_delete_button(button: Button, target: String, noun: String) -> void:
+	button.disabled = target == ""
+	if target == "":
+		button.tooltip_text = "Pick a saved %s to delete" % noun
+	else:
+		button.tooltip_text = "Delete %s" % target
+
 # Save As creates, Update overwrites. Refusing a taken name is what keeps them non-overlapping.
 static func refuse_existing_file(path: String, noun: String) -> bool:
 	if not FileAccess.file_exists(path):
@@ -178,5 +186,19 @@ static func save_over(resource: Resource, path: String) -> bool:
 	var err := ResourceSaver.save(resource, path)
 	if err != OK:
 		push_error("Failed to save %s (error %s)" % [path, err])
+		return false
+	return true
+
+# Removes a saved entry from disk. The catalogs that list these entries (WeaponCatalog,
+# RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) all re-scan disk per
+# call rather than caching, so a caller's own dropdown refresh is enough to drop the deleted
+# entry -- no separate cache to invalidate.
+static func delete_saved_file(path: String, noun: String) -> bool:
+	if path == "":
+		push_warning("No %s file on disk to delete" % noun)
+		return false
+	var err := DirAccess.remove_absolute(path)
+	if err != OK:
+		push_error("Failed to delete %s (error %s)" % [path, err])
 		return false
 	return true

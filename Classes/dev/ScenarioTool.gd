@@ -4,6 +4,7 @@ class_name ScenarioTool
 @onready var scenario_name_input: LineEdit = %ScenarioNameInput
 @onready var scenario_dropdown: OptionButton = %ScenarioDropdown
 @onready var update_button: Button = %UpdateScenarioButton
+@onready var delete_button: Button = %DeleteScenarioButton
 @onready var ai_toggle_list: VBoxContainer = %AIToggleList
 @onready var objective_list: VBoxContainer = %ObjectiveList
 @onready var squad_list: VBoxContainer = %SquadList
@@ -62,6 +63,7 @@ func refresh_on_show() -> void:
 
 func _refresh_update_button() -> void:
 	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(scenario_dropdown), "scenario")
+	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(scenario_dropdown), "scenario")
 
 func _build_ai_toggles():
 	for child in ai_toggle_list.get_children():
@@ -147,6 +149,13 @@ func _on_update_pressed() -> void:
 	scenario_manager.save_scenario(target)
 	refresh_dropdown(target)
 	refresh_loaded_label()
+
+func _on_delete_pressed() -> void:
+	var target := DevWidgets.selected_name(scenario_dropdown)
+	if target == "":
+		return
+	if DevWidgets.delete_saved_file(ScenarioManager.scenario_path(target), "scenario"):
+		refresh_dropdown()
 
 func _on_save_as_pressed() -> void:
 	var entered := scenario_name_input.text.strip_edges()

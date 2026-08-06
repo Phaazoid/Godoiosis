@@ -6,6 +6,7 @@ class_name AttackEditorTool
 @onready var name_input: LineEdit = %CarvingNameInput
 @onready var new_button: Button = %NewButton
 @onready var update_button: Button = %UpdateAttackButton
+@onready var delete_button: Button = %DeleteAttackButton
 @onready var save_as_button: Button = %SaveAsAttackButton
 
 # Authors TransmutationData carvings, WeaponAttackData weapon attacks, AND edits an established
@@ -76,12 +77,16 @@ func _refresh_list(select_name := ""):
 			break
 	_refresh_buttons()
 
-# FAMILY_MAINS has no Save As: a main is always tied to an existing family, never created from
-# scratch, and its Update overwrites the attack's own file rather than a chosen name.
+# FAMILY_MAINS has no Save As and no Delete: a main is always tied to an existing family, never
+# created from scratch or removed as its own file -- its Update overwrites the attack's own file
+# rather than a chosen name.
 func _refresh_buttons():
 	var noun := "family" if _mode == Mode.FAMILY_MAINS else "attack"
 	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), noun)
+	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(load_dropdown), noun)
 	save_as_button.disabled = _mode == Mode.FAMILY_MAINS
+	if _mode == Mode.FAMILY_MAINS:
+		delete_button.disabled = true
 
 func _load_selected():
 	var target := DevWidgets.selected_name(load_dropdown)
@@ -131,6 +136,15 @@ func _on_update_pressed():
 		return
 	if DevWidgets.save_over(current, path):
 		_refresh_list(current.display_name)
+
+func _on_delete_pressed():
+	if _mode == Mode.FAMILY_MAINS:
+		return
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "":
+		return
+	if DevWidgets.delete_saved_file(_items[target].resource_path, "attack"):
+		_refresh_list()
 
 func _on_save_as_pressed():
 	if current == null or _mode == Mode.FAMILY_MAINS:

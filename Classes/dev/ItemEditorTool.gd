@@ -6,6 +6,7 @@ class_name ItemEditorTool
 @onready var load_dropdown: OptionButton = %ItemLoadDropdown
 @onready var name_input: LineEdit = %ItemNameInput
 @onready var update_button: Button = %UpdateItemButton
+@onready var delete_button: Button = %DeleteItemButton
 
 # Authors either a WeaponData or a RuneData (the equip slot takes both). The type dropdown
 # lists weapon bases + prototypes + rune sizes; the field area renders the weapon reflectively
@@ -54,6 +55,7 @@ func _refresh_variant_list(select_name := ""):
 
 func _refresh_update_button():
 	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), "item")
+	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(load_dropdown), "item")
 
 func _rebase_on_type(index: int):
 	var bases := _base_catalog()
@@ -93,6 +95,13 @@ func _on_update_pressed():
 		return
 	if DevWidgets.save_over(current_item, path):
 		_refresh_variant_list(current_item.display_name)
+
+func _on_delete_pressed():
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "":
+		return
+	if DevWidgets.delete_saved_file(_variants[target].resource_path, "item"):
+		_refresh_variant_list()
 
 func _on_save_as_pressed():
 	if current_item == null:
