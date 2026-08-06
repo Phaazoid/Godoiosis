@@ -105,7 +105,7 @@ func _show_action_popup(index: int):
 		
 
 	var popup := PanelContainer.new()
-	popup.z_index = 10
+	popup.z_index = UiLayers.INVENTORY_POPUP
 	var vbox := VBoxContainer.new()
 	popup.add_child(vbox)
 

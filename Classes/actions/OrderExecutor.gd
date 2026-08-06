@@ -209,4 +209,4 @@ func _offer_crisis(unit: Unit) -> bool:
 	# faction keeps the live prompt, except when AI-driven (dev toggle) -- nothing to block on.
 	if unit.get_faction() != Team.Faction.PLAYER or game.ai_controller.is_ai_faction(unit.get_faction()):
 		return AIArchetype.accepts_crisis(unit.squad.archetype)
-	return await CrisisPrompt.show_prompt(game.ui_layer, unit.get_unit_name())
+	return await CrisisPrompt.show_prompt(game, unit.get_unit_name())

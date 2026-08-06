@@ -80,7 +80,7 @@ func open_mission_select() -> void:
 	for path in game.scenario_manager.get_saved_scenarios():
 		if not missions.has(path):
 			others.append(path)   # root playtest saves + fixtures/ -- selectable during development
-	_select_screen = MissionSelectScreen.open(game.ui_layer, missions, others)
+	_select_screen = MissionSelectScreen.open(game, missions, others)
 	_select_screen.mission_chosen.connect(_on_mission_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
 	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
@@ -231,7 +231,7 @@ func _end_mission() -> void:
 	game.game_state = game.GameState.MISSION_OVER     # ... so lock the board AFTER it
 
 	var victory: bool = outcome == MissionRules.Outcome.VICTORY
-	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game.ui_layer, victory, can_restart())
+	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart())
 
 	_ending = false
 	game.game_state = game.GameState.IDLE

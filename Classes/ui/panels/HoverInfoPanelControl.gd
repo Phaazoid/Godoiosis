@@ -9,6 +9,12 @@ class_name HoverInfoPanelControl
 const MARGIN := 8
 
 @onready var hover_panel: Panel = $HoverPanel
+
+# Set here rather than in the .tscn so UiLayers is the single answer for the whole UI stack --
+# the scene used to author a bare 2, which agreed with the rest of the order only by luck.
+func _ready() -> void:
+	z_index = UiLayers.HOVER_PANEL
+
 @onready var hover_gridcontainer = $HoverPanel/HoverInfoGridContainer
 
 var current_unit: Unit

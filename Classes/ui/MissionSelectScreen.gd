@@ -1,4 +1,4 @@
-extends Control
+extends ModalCard
 class_name MissionSelectScreen
 
 # The game's front door (#96 slice 2) -- the first thing that appears, replacing the hardcoded
@@ -14,39 +14,42 @@ class_name MissionSelectScreen
 # Signal-based rather than awaited (unlike CrisisPrompt/MissionEndBanner): this screen outlives
 # any single choice -- MissionController reopens it every time a mission ends.
 #
-# SIZING: uses set_anchors_and_offsets_preset, not set_anchors_preset. A code-built Control added
-# under the CanvasLayer stays 0x0 with anchors alone -- the background covers nothing and
-# CenterContainer centres on the origin. Measured 2026-08-04 (#132): this is NOT specific to
-# building during _ready() as this note used to claim; it hits any such Control at any time.
-# Z_INDEX: HoverInfoPanelControl.tscn sets z_index = 2, which beats sibling order, so a
-# full-screen takeover has to out-rank it explicitly.
+# The ModalCard surface that is NOT a card: a full-screen takeover, so it is UNFRAMED (no panel or
+# margin, the content column sits straight in the centre) and it does NOT claim ModalLock -- it is
+# not a modal, and a Game left DISABLED behind it would never run the mission picked next
+# (pinned by test_return_to_title_lands_on_the_menu_with_the_game_thawed).
 
 signal mission_chosen(path: String)
 signal sandbox_chosen
 signal feedback_chosen
 signal quit_chosen
 
-const MENU_Z := 100
 const BUTTON_WIDTH := 360
+const LIST_ROW_HEIGHT := 40
 
-static func open(parent: Node, mission_paths: Array[String], other_paths: Array[String]) -> MissionSelectScreen:
+func _init() -> void:
+	claims_modal_lock = false
+	framed = false
+	# OPAQUE, and that is LOAD-BEARING rather than styling: MissionController.abandon_mission
+	# deliberately leaves the abandoned board standing and relies on this to hide it.
+	backdrop_color = Color(0.06, 0.06, 0.09)
+	card_z_index = UiLayers.MENU_SCREEN
+	content_alignment = BoxContainer.ALIGNMENT_BEGIN
+	content_separation = 10
+	title_font_size = 36
+	button_size = Vector2(BUTTON_WIDTH, 44)
+
+# Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does -- one
+# construction convention across every ModalCard, even the one that does not lock.
+static func open(game_node: Node, mission_paths: Array[String], other_paths: Array[String]) -> MissionSelectScreen:
 	var screen := MissionSelectScreen.new()
-	parent.add_child(screen)
+	game_node.ui_layer.add_child(screen)
 	screen._build(mission_paths, other_paths)
 	return screen
 
-func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
-	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	mouse_filter = Control.MOUSE_FILTER_STOP
-	z_index = MENU_Z
-
-	var bg := ColorRect.new()
-	bg.color = Color(0.06, 0.06, 0.09)   # opaque: at boot there is no board behind this yet
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	bg.mouse_filter = Control.MOUSE_FILTER_STOP
-	add_child(bg)
-
-	# Branding
+# Branding sits between the backdrop and the content column -- which is exactly what the base's
+# _build_branding step is for; adding it after _build_chrome would draw it over the menu.
+func _build_branding() -> void:
 	var logo := TextureRect.new()
 	logo.texture = preload("res://Art/UI/Logo.png")
 	logo.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
@@ -54,20 +57,9 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never eat a click meant for a button
 	add_child(logo)
 
-	var center := CenterContainer.new()
-	center.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	center.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(center)
-
-	var column := VBoxContainer.new()
-	column.add_theme_constant_override("separation", 10)
-	center.add_child(column)
-
-	var title := Label.new()
-	title.text = "SELECT MISSION"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_size_override("font_size", 36)
-	column.add_child(title)
+func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
+	var column := _build_chrome()
+	_build_title(column, "SELECT MISSION")
 
 	# The list scrolls: scenarios + fixtures accumulate, and an unbounded column would run off
 	# the viewport with no way to reach the bottom entries.
@@ -90,42 +82,27 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	else:
 		_add_section(list, "MISSIONS")
 		for path in mission_paths:
-			list.add_child(_board_button(path, Color(1, 1, 1)))
+			_add_board_button(list, path, Color(1, 1, 1))
 
 	# Everything outside missions/ -- root playtest saves and fixtures/. Dimmer, and below the
 	# missions, but selectable: during development these ARE the content.
 	if not other_paths.is_empty():
 		_add_section(list, "SCENARIOS & FIXTURES")
 		for path in other_paths:
-			list.add_child(_board_button(path, Color(0.72, 0.72, 0.78)))
+			_add_board_button(list, path, Color(0.72, 0.72, 0.78))
 
 	column.add_child(HSeparator.new())
 
 	# Dev scaffolding, deliberately last: TestBoard is no longer the boot path, but it is still
 	# the fastest way onto a board with units on it.
-	var sandbox := Button.new()
-	sandbox.text = "Sandbox (Test Board)"
-	sandbox.custom_minimum_size = Vector2(BUTTON_WIDTH, 44)
-	sandbox.modulate = Color(0.72, 0.72, 0.78)
-	sandbox.pressed.connect(func(): sandbox_chosen.emit())
-	column.add_child(sandbox)
+	_add_button(column, "Sandbox (Test Board)", func(): sandbox_chosen.emit(), Color(0.72, 0.72, 0.78))
 
 	column.add_child(HSeparator.new())
 
 	# Someone who bounces off this screen without ever starting a mission still has something to
 	# tell us, and it is the one thing a mid-battle pause menu can never collect (#131).
-	var feedback := Button.new()
-	feedback.text = "Send Feedback"
-	feedback.custom_minimum_size = Vector2(BUTTON_WIDTH, 44)
-	feedback.pressed.connect(func(): feedback_chosen.emit())
-	column.add_child(feedback)
-
-	var quit := Button.new()
-	quit.text = "Quit Game"
-	quit.custom_minimum_size = Vector2(BUTTON_WIDTH, 44)
-	quit.modulate = Color(0.85, 0.6, 0.6)
-	quit.pressed.connect(func(): quit_chosen.emit())
-	column.add_child(quit)
+	_add_button(column, "Send Feedback", func(): feedback_chosen.emit())
+	_add_button(column, "Quit Game", func(): quit_chosen.emit(), Color(0.85, 0.6, 0.6))
 
 func _add_section(parent: Control, text: String) -> void:
 	var label := Label.new()
@@ -136,11 +113,8 @@ func _add_section(parent: Control, text: String) -> void:
 
 # Label = the path the dev typed when saving, minus the Scenarios/ root and the extension --
 # so "missions/Camp" reads as "Camp" and "fixtures/SquadJoinLeave" keeps its folder.
-func _board_button(path: String, tint: Color) -> Button:
-	var button := Button.new()
+func _add_board_button(parent: Container, path: String, tint: Color) -> void:
 	var label := path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres")
-	button.text = label.trim_prefix("missions/")
-	button.custom_minimum_size = Vector2(BUTTON_WIDTH, 40)
-	button.modulate = tint
-	button.pressed.connect(func(): mission_chosen.emit(path))
-	return button
+	var button := _add_button(parent, label.trim_prefix("missions/"),
+		func(): mission_chosen.emit(path), tint)
+	button.custom_minimum_size.y = LIST_ROW_HEIGHT   # list rows sit tighter than the action buttons
