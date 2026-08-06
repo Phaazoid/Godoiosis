@@ -28,6 +28,13 @@ const GRASS_ATLAS := Vector2i(5, 0)
 const DEX_SLOW := 0     # MOV 3
 const DEX_FAST := 10    # MOV 6
 
+# The leash every _squad() board is built around, DECLARED rather than inherited from
+# Stats.STAT_DEFAULTS[COH]. These boards are geometry — which cells fall in and out of the bubble IS
+# the thing under test — so a production default moving must not quietly turn a Case 2 board into a
+# Case 1 board or make an out-of-range order legal. It did exactly that when the default went 3 -> 4
+# (2026-08-06), and the same fixtures had been one point away from silent all along.
+const FIXTURE_COH := 3
+
 var _main: Node
 var game: Node2D
 
@@ -62,6 +69,7 @@ func _squad(leader_dex: int, member_dex: int, member_offset: Vector2i) -> Dictio
 	var member: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.DEX: member_dex}, Team.Faction.PLAYER), member_offset)
 	assert_object(leader).is_not_null()
 	assert_object(member).is_not_null()
+	leader.unit_instance.stats[Stats.Stat.COH] = FIXTURE_COH
 	await await_idle_frame()
 	game.squad_manager.join_squad(member, leader.squad)
 	# The MOV premise belongs to each test, not here — one of them wants an EQUAL pair.
@@ -150,6 +158,7 @@ func _case_two() -> Dictionary:
 	# the member's move, so the whole squad cannot go there.
 	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
 	board["destination"] = Vector2i(0, -6)
+
 	assert_int(board.leader.get_mov()).override_failure_message("fixture: the leader cannot outrun anyone") \
 		.is_greater(board.member.get_mov())
 	assert_int(RulesService.compute_move_range(board.member, game._board(), board.destination).reachable.size()) \
@@ -314,7 +323,16 @@ func _contention_board() -> Dictionary:
 		game.grid.set_cell(Vector2i(0, y), GRASS_SOURCE, GRASS_ATLAS)
 	game.grid.set_cell(Vector2i(1, -2), GRASS_SOURCE, GRASS_ATLAS)
 
+	var destination := Vector2i(0, -4)
+	var far_slot := Vector2i(0, -1)   # the ONE cell the furthest member can both reach and legally hold
+
 	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 6}, Team.Faction.PLAYER), Vector2i.ZERO)
+	# DECLARED, not inherited: the board only demonstrates contention while the far member has exactly
+	# one slot, which is true iff the leash reaches from the destination to far_slot and no further.
+	# It rode on Stats.STAT_DEFAULTS[COH] being 3 until that moved to 4 and (0,0) became a second
+	# option (2026-08-06). Derived from the geometry above, so moving either cell re-derives it.
+	leader.unit_instance.stats[Stats.Stat.COH] = GridUtils.manhattan_distance(destination, far_slot)
+
 	var members: Array[Unit] = []
 	for y in [1, 2, 3]:
 		members.append(game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(0, y)))
@@ -323,7 +341,7 @@ func _contention_board() -> Dictionary:
 	for member in members:
 		game.squad_manager.join_squad(member, leader.squad)
 
-	var board: Dictionary = {"leader": leader, "squad": leader.squad, "destination": Vector2i(0, -4),
+	var board: Dictionary = {"leader": leader, "squad": leader.squad, "destination": destination,
 		"near": members[0], "mid": members[1], "far": members[2]}
 
 	# The premise: the far member has exactly one option, and three distinct cells exist for three
@@ -406,6 +424,13 @@ func test_a_corridor_that_collapses_the_squad_onto_one_cell_is_refused() -> void
 
 	var squad: Squad = leader.squad
 	var destination := Vector2i(8, 0)
+	# The single cell both slow members collapse onto — the leader's own, which it vacates. DECLARED
+	# rather than inherited from Stats.STAT_DEFAULTS[COH]: the corridor only collapses while the
+	# leash reaches from the destination back to exactly this cell and no further, which quietly
+	# stopped being true when the default moved 3 -> 4 (2026-08-06).
+	var collapse_cell := Vector2i(5, 0)
+	leader.unit_instance.stats[Stats.Stat.COH] = GridUtils.manhattan_distance(destination, collapse_cell)
+
 	assert_bool(RulesService.compute_move_range(leader, game._board()).reachable.has(destination)) \
 		.override_failure_message("fixture: the leader cannot reach the destination at all").is_true()
 

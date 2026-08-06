@@ -72,17 +72,27 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 # but RulesService.compute_move_range drops their cells as DESTINATIONS, which is the "both squads
 # converged on the last hostile" state boiled down to a corridor.
 #
-# Geometry (COH 3, MOV 4): the leader's best attack destination is (5,0), and no cell within
-# 3 of it is free for the member — every one is either the leader's own target or a blocker's. So
-# the member can be placed nowhere legal, and the destination is refused for the whole squad.
+# The fixture SIZES ITSELF to the leader's real MOV and DECLARES the leash it needs, rather than
+# inheriting whatever Stats.STAT_DEFAULTS[COH] happens to be — it silently assumed 3 until the
+# default moved to 4 and the jam stopped jamming (2026-08-06).
+#
+# Why the leash must be MOV-1 and not merely "small": the leader VACATES its own cell, which sits
+# exactly MOV from the charge. So while COH >= MOV the member can always follow into it and no jam
+# of this shape can exist at all. The charge has to outrun the leader's own footprint.
+#
+# Derived geometry: leader (1,0) charges to (1+MOV, 0). The bubble around that reaches back to x=2,
+# the member (MOV, from x=0) reaches forward to x=MOV, so blockers fill exactly that overlap and the
+# member's only remaining cell is the leader's vacated (1,0) — one step outside the bubble.
 func _jam_board() -> Dictionary:
-	_paint_corridor(10)
+	_paint_corridor(20)
 	var leader := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	var member := _spawn(Team.Faction.PLAYER, Vector2i(0, 0))
-	for x in [2, 3, 4]:
+	var mov := leader.get_mov()
+	leader.unit_instance.stats[Stats.Stat.COH] = mov - 1
+	for x in range(2, mov + 1):
 		# HOLD, so the jam is STABLE: these never reposition and the corridor never clears.
 		_spawn(Team.Faction.PLAYER, Vector2i(x, 0)).squad.archetype = AIArchetype.Type.HOLD
-	var enemy := _spawn(Team.Faction.ENEMY, Vector2i(9, 0))
+	var enemy := _spawn(Team.Faction.ENEMY, Vector2i(19, 0))
 	enemy.squad.archetype = AIArchetype.Type.HOLD
 	await await_idle_frame()
 
@@ -110,9 +120,16 @@ func _hand_built_invalid_plan() -> Dictionary:
 # lands 2 from the leader's projected cell — then the leader's retreat, which puts that same cell 6
 # away and flips it to invalid. A hold would do just as well (it is #103's own shape, covered in
 # test_squad_cohesion.gd); an ordered move is used here so the fixture depends on no filler.
-func _strand_member_behind(leader: Unit, member: Unit) -> void:
-	_queue_move(member, member.movement.cell + Vector2i.RIGHT)
-	_queue_move(leader, Vector2i(1, 0))
+# Also DECLARES the squad's leash, because this is the helper that opens the separation: the plan is
+# only INVALID while COH falls short of the gap these two moves create. Both callers build that gap
+# here, so deriving it here is what stops either of them going quietly VALID when
+# Stats.STAT_DEFAULTS[COH] moves — which it did on 2026-08-06 (3 -> 4), and would have again.
+func _strand_member_behind(leader: Unit, member: Unit, leader_destination := Vector2i(1, 0)) -> void:
+	var member_destination: Vector2i = member.movement.cell + Vector2i.RIGHT
+	leader.unit_instance.stats[Stats.Stat.COH] = \
+		GridUtils.manhattan_distance(leader_destination, member_destination) - 1
+	_queue_move(member, member_destination)
+	_queue_move(leader, leader_destination)
 	game.squad_manager.validate_squad_plan(leader.squad)
 
 
