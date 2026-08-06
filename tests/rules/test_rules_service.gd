@@ -49,3 +49,36 @@ func test_gather_victims_includes_allies_when_weapon_hits_allies() -> void:
 	var victims := RulesService.gather_attack_victims(attacker, [Vector2i(0, 1)], _board(), attacker.get_fired_attack())
 
 	assert_array(victims).contains([ally])
+
+# --- self as a victim (#123) — a third category on the same axis as hits_allies ---
+
+func test_attacker_is_not_a_victim_of_itself_by_default() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var attack := attacker.get_fired_attack()
+
+	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_false()
+
+func test_attacker_is_a_victim_of_itself_when_hits_self() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var attack := attacker.get_fired_attack()
+	attack.hits_self = true
+
+	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_true()
+
+# hits_self and hits_allies are independent flags on the same predicate -- neither implies the
+# other, which is what lets Heal (both true) differ from a plain self-buff (hits_self only) or an
+# ally-splash weapon (hits_allies only, self still refused).
+func test_hits_self_and_hits_allies_are_independent() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1))
+	var attack := attacker.get_fired_attack()
+
+	attack.hits_self = true
+	attack.hits_allies = false
+	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_true()
+	assert_bool(RulesService.is_attack_victim(attacker, ally, attack)).is_false()
+
+	attack.hits_self = false
+	attack.hits_allies = true
+	assert_bool(RulesService.is_attack_victim(attacker, attacker, attack)).is_false()
+	assert_bool(RulesService.is_attack_victim(attacker, ally, attack)).is_true()

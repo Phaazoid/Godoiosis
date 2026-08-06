@@ -56,6 +56,13 @@ const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaqu
 const HOVER_MODULATE := Color(1, 1, 0)                  # the aim-footprint fill
 const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
 
+# The reach layer's fill (#123 follow-up): red reads as hostile, so a healing pick paints green
+# instead. Decided from the attack's own `heals` flag -- the one question, one answer this already
+# is (resolution-pipeline.md) -- not a new axis. Only the constant reach fill is heal-aware; the
+# MAP-footprint hover-pulse channel below is untouched since no heal in the game targets MAP yet.
+const ATTACK_MODULATE := Color(1, 0, 0, .5)
+const HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
+
 
 enum OverlayType {
 	MOVE,
@@ -110,7 +117,7 @@ func _ready() -> void:
 	}
 	
 	move_overlay.modulate = Color(1, 1, 0, .5)
-	attack_overlay.modulate = Color(1, 0, 0, .5)
+	attack_overlay.modulate = ATTACK_MODULATE
 	hover_overlay.modulate = HOVER_MODULATE
 	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
@@ -126,6 +133,14 @@ func _ready() -> void:
 		ZoneManager.Kind.CAPTURE: capture_overlay,
 		ZoneManager.Kind.EXTRACTION: extraction_overlay,
 	}
+
+# What color the reach layer should paint with for this attack -- red for damage, green for a
+# heal. A null attack (bare fists) reads as the default/damage color.
+static func attack_reach_color(attack: AttackData) -> Color:
+	return HEAL_ATTACK_MODULATE if attack != null and attack.heals else ATTACK_MODULATE
+
+func set_attack_reach_color(attack: AttackData) -> void:
+	attack_overlay.modulate = attack_reach_color(attack)
 
 func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]

@@ -429,10 +429,14 @@ func enter_group_move_mode(unit: Unit):
 
 func enter_attack_mode(unit: Unit):
 	game_state = GameState.ATTACK_TARGETING
+	var aiming := unit.get_fired_attack()
 	# The reach layer is the whole range and NEVER changes. What an aim will actually affect is
 	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
-	# range underneath it, which is exactly what wiped whole ForwardWide lanes.
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), unit.get_fired_attack()), OverlayManager.ATLAS_COORDS)
+	# range underneath it, which is exactly what wiped whole ForwardWide lanes. Its COLOR does
+	# change (#123 follow-up) -- green for a heal, red otherwise -- which is a paint choice, not a
+	# cell-membership one, so it doesn't touch that invariant.
+	overlay_manager.set_attack_reach_color(aiming)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), aiming), OverlayManager.ATLAS_COORDS)
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays

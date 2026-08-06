@@ -57,6 +57,25 @@ func test_heal_restores_hp_instead_of_removing_it() -> void:
 	assert_int(attack.resolved.target_hp_after).is_equal(max_hp - 2)
 
 
+# A caster aiming Heal at their own cell (#123) -- legal only because `hits_self` is set, the
+# same eligibility gate RulesService.is_attack_victim applies to gather_attack_victims/
+# aim_finds_a_target. This proves the flag actually restores HP end to end through the resolver,
+# not just that the predicate returns true.
+func test_self_aimed_heal_with_hits_self_restores_the_casters_own_hp() -> void:
+	var caster := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4, Stats.Stat.MHP: 20})
+	var max_hp := caster.get_max_hp()
+	caster.set_current_hp(max_hp - 12)
+
+	var attack := _heal_attack(caster, caster, 6)   # base 10 (power 6 + STR 4)
+	attack.fired_attack.hits_self = true
+	var plan := ResolvedPlan.new()
+	plan.attacks.append(attack)
+	PlanResolver.resolve(plan)
+
+	assert_int(attack.resolved.heal_amount).is_equal(10)
+	assert_int(attack.resolved.target_hp_after).is_equal(max_hp - 2)
+
+
 func test_heal_caps_at_max_hp_no_overheal() -> void:
 	var healer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 40})
 	var target := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))

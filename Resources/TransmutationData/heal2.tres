@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="TransmutationData" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_f1qh4"]
+[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="2_fa0vc"]
+
+[sub_resource type="Resource" id="Resource_f1qh4"]
+script = ExtResource("1_f1qh4")
+max_range = 2
+min_range = 0
+
+[resource]
+script = ExtResource("2_fa0vc")
+sigils = Array[int]([7])
+display_name = "heal2"
+power = 6
+attack_pattern = SubResource("Resource_f1qh4")
+hits_allies = true
+hits_self = true
+heals = true

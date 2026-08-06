@@ -122,6 +122,25 @@ func test_the_reach_and_aim_layers_sit_below_units() -> void:
 	assert_int(game.overlay_manager.hover_overlay.z_index).is_less(Unit.BASE_SPRITE_INDEX)
 
 
+# The reach layer's FILL never changes (above); its COLOR does -- red for damage, green for a heal
+# (#123 follow-up), keyed off the fired attack's own `heals` flag.
+func test_reach_layer_is_red_for_a_damaging_attack() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+
+	game.enter_attack_mode(attacker)
+
+	assert_that(game.overlay_manager.attack_overlay.modulate).is_equal(OverlayManager.ATTACK_MODULATE)
+
+
+func test_reach_layer_is_green_for_a_healing_attack() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	attacker.get_equipped_weapon().template.main_attack.heals = true
+
+	game.enter_attack_mode(attacker)
+
+	assert_that(game.overlay_manager.attack_overlay.modulate).is_equal(OverlayManager.HEAL_ATTACK_MODULATE)
+
+
 # ==============================================================================
 #  Which channel pulses is the attack's `targets`
 # ==============================================================================

@@ -13,6 +13,7 @@ extends Resource
 @export var attack_pattern: AttackPattern
 @export var can_counter := true
 @export var hits_allies := false
+@export var hits_self := false
 @export var targets: EquippableData.TargetMode = EquippableData.TargetMode.UNIT
 @export var knockback: int = 0
 # Deterministic shove (#84, Kinetic Mace): tiles this attack pushes its target directly away

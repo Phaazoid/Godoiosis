@@ -149,8 +149,10 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).
 static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
-	if unit == null or unit == attacker or not is_instance_valid(unit):
+	if unit == null or not is_instance_valid(unit):
 		return false
+	if unit == attacker:
+		return attack != null and attack.hits_self
 	return can_target(attacker, unit) or (attack != null and attack.hits_allies)
 
 # Hostility gate: never yourself, and only a faction you're at war with. Was
