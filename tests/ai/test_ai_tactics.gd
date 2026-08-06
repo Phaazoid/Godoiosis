@@ -240,6 +240,82 @@ func test_rushdown_closes_the_whole_distance_over_multiple_turns() -> void:
 	assert_bool(reached).is_true()
 
 
+# A 13x6 board: a corridor at y=5 the whole width, a wall at y=4 with two gaps far apart --
+# (1,4) near the leader's start, (10,4) far to the east:
+#
+#   x     0 1 2 3 4 5 6 7 8 9 10 11 12
+#   y=0-3 . . . . . . . . . . .  .  .        <- open room, both gaps let onto it
+#   y=4   . _ . . . . . . . . _  .  .        <- wall row; _ = the two gaps
+#   y=5   . . . . . E! . . . . .  .  .        <- corridor; L starts at (0,5), enemy at (6,5)
+#
+# The enemy itself blocks the corridor (an active unit always has for movement_cost) -- its west
+# neighbour (5,5) and east neighbour (7,5) are NOT connected except by the whole loop through one
+# of the two gaps. A downed body on (5,5) is close to L by raw hop count (path_hops walks straight
+# through it, occupancy-blind) but a genuine dead end; (7,5) is real, reachable, and far.
+func _corridor_board() -> Dictionary:
+	var board: Dictionary = _build_board(Rect2i(0, 0, 13, 6))
+	var grid: TileMapLayer = board.grid
+	for x in range(0, 13):
+		if x != 1 and x != 10:
+			grid.erase_cell(Vector2i(x, 4))
+	return board
+
+
+func test_rushdown_routes_around_a_downed_body_blocking_the_nearest_attack_cell() -> void:
+	# #127: (5,5) is enemy's nearest attack-adjacent cell by raw hop count, but a downed unit --
+	# not leader's squadmate, so never standable -- occupies it, and the enemy's own body (blocking
+	# the corridor, same as any active unit always has) means (5,5) and the real attack cell (7,5)
+	# are connected only by the long loop through (10,4). RulesService.path_hops is occupancy-blind
+	# (has to be, for the cohesion field elsewhere), so the raw hop metric reads (5,5)'s
+	# neighbourhood as close to goal regardless -- without filtering the route target to a
+	# STANDABLE attack cell first, the leader camps beside the body and never takes the loop.
+	var board: Dictionary = _corridor_board()
+	var leader: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 5))
+	var enemy: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(6, 5))
+	var body: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(5, 5))   # leader's own faction, own solo squad
+	body.lifecycle_state = Unit.LifecycleState.DOWNED
+
+	var reached := false
+	var stalled := false
+	for _turn in range(20):
+		var dest: Vector2i = AITactics.best_attack_destination(leader, enemy, _context(board))
+		if dest == leader.movement.cell:
+			stalled = true   # the reported bug (#127): a turn that decides to go nowhere, forever
+			break
+		leader.movement.set_cell(dest)
+		if Reach.get_all_attack_cells_from(leader, dest, leader.get_fired_attack()).has(enemy.movement.cell):
+			reached = true
+			break
+
+	assert_bool(stalled).is_false()
+	assert_bool(reached).is_true()
+	assert_that(leader.movement.cell).is_equal(Vector2i(7, 5))   # the real attack cell, not the body's
+
+
+func test_walking_home_routes_around_a_body_holding_the_corridor() -> void:
+	# #127's other half: the occupancy-aware hop metric is NOT attack-specific. A sentry walking back
+	# to a post on the far side of a held corridor has the identical shape -- blind hops walk straight
+	# through the blocker, so the dead-end approach reads shortest and the unit camps in it forever.
+	# Pinned separately from the attack case because they reach the fix through different callers.
+	var board: Dictionary = _corridor_board()
+	var unit: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(0, 5))
+	_spawn(board, Team.Faction.PLAYER, Vector2i(6, 5))   # active enemy: holds the corridor shut
+	var post := Vector2i(12, 5)
+
+	var stalled := false
+	for _turn in range(20):
+		var dest: Vector2i = AITactics.closest_reachable_cell_to(unit, post, _context(board))
+		if dest == unit.movement.cell:
+			stalled = true
+			break
+		unit.movement.set_cell(dest)
+		if dest == post:
+			break
+
+	assert_bool(stalled).is_false()
+	assert_that(unit.movement.cell).is_equal(post)   # went the long way round and actually got home
+
+
 func test_best_attack_destination_still_closes_in_when_the_target_is_sealed_off() -> void:
 	# No route at all: every candidate scores UNREACHABLE, so the ladder falls through to straight-
 	# line distance and the squad crowds the nearest shore -- the old behaviour, deliberately kept.

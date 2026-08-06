@@ -43,12 +43,27 @@ static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> in
 	if data.has_custom_data("move_cost"):
 		cost += data.get_custom_data("move_cost")
 
-	var other := board.unit_at_cell(cell)
-	if other != null:
-		if Team.is_enemy(unit.get_faction(), other.get_faction()):
-			return CANNOT_WALK_TILE
+	if blocks_passage(unit, board.unit_at_cell(cell)):
+		return CANNOT_WALK_TILE
 
 	return cost
+
+# The two occupancy questions, split because they have DIFFERENT answers and both already existed
+# inline (#127 pulled them out so AITactics can ask them instead of re-deriving them; each still has
+# exactly one definition). Both take the occupant rather than a cell -- the callers have already
+# paid for the unit_at_cell scan, which is linear.
+#
+# May `mover` PASS THROUGH a cell holding `occupant` (null = empty)? Only a still-standing enemy
+# stops you: a downed body is stepped over (#122), and any ally is squeezed past.
+static func blocks_passage(mover: Unit, occupant: Unit) -> bool:
+	if occupant == null:
+		return false
+	return Team.is_enemy(mover.get_faction(), occupant.get_faction()) and not occupant.is_downed()
+
+# May `mover` STAND on it? Stricter: only a squadmate's cell is shareable, because squads rotate
+# through each other on purpose. This is compute_move_range's destination filter.
+static func is_standable_for(mover: Unit, occupant: Unit) -> bool:
+	return occupant == null or mover.squad.get_members().has(occupant)
 
 static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = null) -> Dictionary:
 	var start := unit.movement.cell
@@ -103,7 +118,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 
 		# Occupancy FIRST: GroupMoveSolver reads squad_unreachable as its catch-up set, so that
 		# bucket must not carry cells nobody can stand on. It used to be filled before these two.
-		if other_unit != null and not unit.squad.get_members().has(other_unit):
+		if not is_standable_for(unit, other_unit):
 			continue
 
 		if other_unit == unit:
@@ -214,10 +229,19 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 # moves every turn. Letting an enemy body sever this field would change formations near any enemy,
 # and would make a pursuing squad route around the very unit it is chasing.
 #
+# `block_on_occupancy` (#127) is the opt-in exception, and the DEFAULT IS LOAD-BEARING: cohesion
+# must keep the terrain-only field for the reason directly above (docs/performance.md states this
+# as a rule; pinned by test_an_enemy_body_does_not_sever_the_cohesion_field, which calls the
+# default form). What the AI's approach picker needs is the opposite: an estimate of the route it
+# will actually walk, so a standing enemy really does have to be gone around. Both are the same
+# question -- hop distance under a traversal rule -- so the rule is a PARAMETER each caller states,
+# not a second BFS. `nearest_enemy` must NOT pass true: it routes TO enemy cells, so blocking on
+# them would read every enemy as UNREACHABLE.
+#
 # No caller needs the whole field, so both stopping rules exist: `max_depth` past N hops, `until`
 # once every cell in that set has a distance. Both only skip work whose answer was already going to
 # be discarded, so results are unchanged. Why that holds: docs/performance.md -> Invariants.
-static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}) -> Dictionary:
+static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_depth: int = -1, until: Dictionary = {}, block_on_occupancy: bool = false) -> Dictionary:
 	var dist := { source: 0 }
 
 	var pending := 0
@@ -243,6 +267,8 @@ static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_dep
 			if not bounds.has_point(next):
 				continue
 			if not can_traverse(next, unit, board):
+				continue
+			if block_on_occupancy and blocks_passage(unit, board.unit_at_cell(next)):
 				continue
 			dist[next] = d
 			if not until.is_empty() and until.has(next):

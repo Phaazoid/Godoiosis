@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #141 (2026-08-04).**
+**Canon checked through #148 (2026-08-06).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -56,6 +56,7 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 ## Known v1 approximations (accepted at ratification)
 
 - **Destination planning reads the default pick** — `best_attack_destination` hoists one `leader.get_fired_attack()` and evaluates every cell against it, rather than per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
+  - Corrected 2026-08-06 by [#127](https://github.com/Phaazoid/Godoiosis/issues/127), which is worth knowing because the failure was *silent and permanent*: the approach ranked candidate cells by hops toward **the enemy's own square**, and `path_hops` is deliberately occupancy-blind, so a downed body parked on the one adjacent firing cell in a corridor read as the shortest way in. The unit walked up to the corpse and stopped — every turn, forever, because a dead end is stable. Two halves were both required, and each was falsified alone: the route now targets the nearest **standable** firing cell (`_nearest_standable_attack_cell`), *and* the ranking walk opts into occupancy (`path_hops(…, block_on_occupancy = true)`) so it stops imagining it can cut straight through the bodies in the way. Retargeting alone still stalled. The generalizable shape: **when a metric and the thing it measures disagree about what is passable, fixing the target does not fix the measure.** Note the two halves have **different scopes**, which is the part worth copying: the retarget is attack-specific (a firing position is not the target's own square), but the honest metric is not — it is unconditional in `_best_approach`, so **Sentry's walk home got the same fix**. Scoping it to the attack case would have meant gating it on the retarget parameter, i.e. one flag answering two unrelated questions, and `closest_reachable_cell_to` could never have reached it. A sentry stalls identically against an enemy holding a corridor; pinned by `test_walking_home_routes_around_a_body_holding_the_corridor`.
 - **Counters aren't scored** — the throwaway plan resolves the AI's own volley only; walking into counter range costs nothing in the score.
 - **Movement never seeks rescue/intimidate targets** — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Squad-level coordination** — members choose independently in member order; no focus-fire or combined-arms reasoning.
