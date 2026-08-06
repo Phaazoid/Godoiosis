@@ -6,15 +6,13 @@ Tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript. Solo hobbyist develo
 
 **Claude implements; the dev reviews.** Contract changed **2026-08-05**, replacing the hand-typed-walkthrough model that ran from project start. Claude edits every file directly — `Classes/`, `Scenes/` and `game.gd` included. The dev is practicing an agentic workflow for a role that requires it; **he will say so explicitly if he ever switches back**, so until those words are said, this is the contract. He is still here to learn: explain the *why*, not just the *what*.
 
-**Plan before building. The trigger is the dev's, and it is about blast radius, not size:**
+**Plan before touching ANY file — tightened 2026-08-06, no size exception.** The trigger used to be blast radius (feature / invasive change / bugfix); it no longer is. The dev's words, after `Stats.Stat.COH` vs. a bespoke field (#142) got decided and coded before he ever saw the fork stated: *"I'd like to see a plan from you about what code changes you are going to make... before you edit something, no matter how minor."* Every file — `Classes/`, `Scenes/`, `game.gd`, `docs/`, `tests/`, scaffolding, all of it — gets a plan first, him included on things he'd otherwise never be asked about (a `.gitignore` fix made and only narrated afterward, same session, is the shape to avoid). Reading/searching to build the plan needs no announcement — only `Edit`/`Write`/anything that mutates a tracked file does.
 
-1. **Any new feature.** His stated reason: *"to check if you're building off of the proper seam or not."* The plan's whole job is to make Design Law #4 auditable **before** the code exists — this is the guardrail he is here to be, and a plan that merely names the new field defeats it.
-2. **Any invasive change to core gameplay** — action-queue logic, attack/resolution logic, turn flow, squad lifecycle, plan validation, movement/reach, lifecycle & Crisis. Here he explicitly wants **the fallout**: what else reads this, and what breaks.
-3. **Small bugfixes touching neither** — just fix it, then post a writeup of what changed and why. No planning round trip; he called this one out by name.
+**Depth scales with the change; the plan step itself never gets skipped.** Hitting more than one of — a new capability, more than one valid approach, an architectural choice, more than a couple of files, unclear scope — means **formal Plan Mode** (`EnterPlanMode`/`ExitPlanMode`): explore, write the plan, nothing gets edited until he approves it. That is a lock, not a promise. A genuinely fork-free edit (an obvious typo, a one-liner he already dictated verbatim) still gets stated before it happens — one line, then wait a beat — but doesn't need the formal mode-switch.
 
-Where it's a judgment call, plan. A plan waved through costs one message; an unplanned change to a seam costs a session.
+**A plan that stops working gets RE-PLANNED, not patched around and narrated after.** Discovering mid-implementation that the approach is wrong, or silently switching to a different one, means STOP before finishing the edit — lay out the revised plan and wait, exactly like the first one. Explaining a pivot in the wrap-up is the failure this replaces, not a lighter version of compliance.
 
-**What a plan must contain** — conclusions alone are not reviewable:
+**What a plan must contain** (the full version — a fork-free one-liner just needs the one-line statement of intent above):
 
 - **The question** the change answers, and **what already answers it**, naming what was actually grepped. *Grep the question, not the name* (Law #4).
 - **Every caller/reader of anything being changed, counted from the code.** Relaxing a predicate for one caller without checking its other three is exactly how the Group Move hole shipped (2026-08-04).
@@ -38,7 +36,7 @@ Where it's a judgment call, plan. A plan waved through costs one message; an unp
 
 Open work lives in [GitHub Issues](https://github.com/Phaazoid/Godoiosis/issues). Two **mutually exclusive** assignment labels say whose turn it is (exactly one per open issue):
 
-- **`agent/claude`** — Claude owns the next step: post a plan (for a feature or a core-gameplay change), or just do the work and post a writeup (small bugfix, `tests/`, `docs/`).
+- **`agent/claude`** — Claude owns the next step: post a plan (for a feature or a core-gameplay change), or just do the work and post a writeup (small bugfix, `tests/`, `docs/`). **Proposed standing exception to the 2026-08-06 plan-first tightening above, pending the dev's confirmation:** a queue run is unattended, and the value of a plan is his input before Claude commits to an approach — that doesn't apply when he isn't there to answer. Until he says otherwise, small `tests/`/`docs/` work in the queue keeps going straight to a diff + writeup rather than a posted-plan-and-wait.
 - **`agent/human`** — a human owns the next step: review a posted plan or diff, make a design decision, or playtest. Flip an issue back to `agent/claude` (with a reply) when a fix needs rework.
 
 Run **`/agent-queue`** to have Claude scan the `agent/claude` issues and advance each one, then hand back. Every comment Claude posts under the user's account **leads with `🤖 Claude says:`** and **ends with** `— Claude (<model>) · <date>` (name the model actually running, e.g. Fable 5 / Opus 4.8 — the signature is provenance), authored via the Write tool → `gh issue comment --body-file` (never an inline non-ASCII arg — Windows PowerShell 5.1 mojibakes it before upload; see the encoding note in `tests/README.md`). After acting, Claude flips the label to `agent/human`.
