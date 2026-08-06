@@ -75,6 +75,10 @@ func execute_orders(unit):
 		var batch: Array = side_channel.get(type, [])
 		await _execute_action_sequence(batch)
 	_process_downed_pending()
+	# Loss-of-contact ejection (#151), right after downed ejection and for the same reason: the
+	# pass has settled, and a member a shove displaced out of its leader's path-bubble is no
+	# longer commandable. The plan could not have authored this -- the validator refuses it.
+	game.squad_manager.enforce_contact()
 	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
 	# squad-validity guard below -- a squad that wiped itself must not skip the check.
 	game.mission_controller.check()

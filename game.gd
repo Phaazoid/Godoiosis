@@ -135,6 +135,10 @@ func _wire_signals() -> void:
 	turn_manager.turn_started.connect(_on_turn_started)
 	turn_manager.round_completed.connect(_on_round_completed)
 
+	# Cohesion reads live terrain (#151): _board builds a FRESH BoardContext per call, so a melted
+	# ice tile is seen by the very next validation. Never hand it a stored board.
+	squad_manager.board_source = _board
+
 	squad_manager.squad_action_cancelled.connect(_on_unit_action_cancelled)
 	squad_manager.squad_action_queued.connect(_on_unit_action_queued)
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
@@ -322,6 +326,9 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	_run_turn_start_ticks(faction)
+	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
+	# (#151) -- the other way a squad splits without any move having authored it.
+	squad_manager.enforce_contact()
 	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
 	# happens outside a resolution pass (#96).
 	mission_controller.check()
@@ -782,12 +789,25 @@ func _on_unit_died(unit: Unit):
 #  Board visuals
 # ==============================================================================
 
+# The UNION of the members' path-bubbles (#151): cohesion is per-member (a Waterwalker's crosses
+# water), and the overlay must show every cell SOME member may hold or it lies about the rule. For
+# a uniform squad the union collapses to one field, drawn the same way move range is.
 func draw_squad_leader_range(squad: Squad, cell: Vector2i):
-	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, squad.get_squad_range_from_cell(cell), OverlayManager.ATLAS_COORDS)
+	var board := _board()
+	var union := {}
+	for member in squad.get_members():
+		for c in SquadCohesion.field(squad, cell, member, board):
+			union[c] = true
+	var cells: Array[Vector2i] = []
+	for c in union:
+		cells.append(c)
+	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUADRANGE, cells, OverlayManager.ATLAS_COORDS)
 
 func draw_create_squad(unit: Unit):
 	var cells: Array[Vector2i] = []
-	for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination()):
+	# Subject = the forming leader; the per-RECRUIT gate is can_squad_up below, which asks the
+	# recruit's own path. The bubble is where a squad could stand, the icons are who may join.
+	for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination(), unit, _board()):
 		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)
@@ -800,7 +820,8 @@ func draw_joinable_squads(joining_unit: Unit):
 	var cells: Array[Vector2i] = []
 	for unit in units_root.get_children():
 		if squad_manager.can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination()):
+			# Subject = the JOINER: these are cells it would stand on, so its own traversal decides.
+			for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination(), joining_unit, _board()):
 				if get_unit_at_cell(cell) == null:
 					cells.append(cell)
 			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)

@@ -113,6 +113,12 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 	else:
 		leader_pos = unit.movement.cell   # unused for leaders (filter below is gated on not is_leader)
 
+	# One cohesion field for the whole filter loop (#151) -- bounded at COH, so cheaper than the
+	# search above it. Leaders skip it entirely; the filter below is gated on not is_leader.
+	var coh_field := {}
+	if not unit.is_leader():
+		coh_field = SquadCohesion.field(unit.squad, leader_pos, unit, board)
+
 	for cell in cost_so_far.keys():
 		var other_unit := board.unit_at_cell(cell)
 
@@ -124,7 +130,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 		if other_unit == unit:
 			continue
 
-		if not unit.is_leader() and not SquadCohesion.in_range(unit.squad, leader_pos, cell):
+		if not unit.is_leader() and not coh_field.has(cell):
 			squad_unreachable[cell] = cost_so_far[cell]
 			continue
 

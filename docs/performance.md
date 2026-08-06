@@ -130,6 +130,16 @@ same loop (~1 ms per member, essentially all of `plan`'s time). The plan signatu
 on all four runs, which is the part that matters: Castle Assault has no Waterwalkers, so any
 signature change would have meant ordinary formations moved.
 
+**#151 (path-based cohesion) changed the field's SHAPE, not its cost class — and the costs it added
+are un-measured.** The solver's leader field is now bounded at COH (was COH×2, so it *shrank*);
+`SquadPlanValidator._check_leader_range` computes one bounded field per qualifying move per pass
+(new — the Manhattan compare was O(1)); `compute_move_range` adds one bounded field per non-leader
+call; `followable_destinations`' Manhattan dilation became one bounded walk per standable cell.
+Every walk is `max_depth = COH` (~41 cells at COH 4), the shape measured above as inside noise, and
+the full suite's wall clock did not move (60.5s at 1012 cases) — but nobody has profiled a real
+Castle Assault click since the swap. If Group Move hover ever feels sluggish, profile
+`followable_destinations` first (most walks), then the validator's fixed point (most repeated).
+
 **`_path_hops`' two stopping rules only skip work whose answer was already discarded.**
 - `max_depth` — the caller only compares the result against a threshold, so a cell beyond the bound
   is absent, and an absent read is `UNREACHABLE`, which fails the same comparison a real larger

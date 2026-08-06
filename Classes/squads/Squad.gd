@@ -58,9 +58,6 @@ func max_size() -> int:
 	# Capacity budget (squad-system.md, ratified 2026-07-14): leader + floor(eLDR / cost).
 	return 1 + maxi(0, leader.get_effective_ldr() / MEMBER_LDR_COST)
 
-func get_squad_range_from_cell(cell: Vector2i) -> Array[Vector2i]:
-	return SquadCohesion.cells(self, cell)
-	
 func get_actions() -> Array[BaseAction]:
 	return action_queue.duplicate()
 	

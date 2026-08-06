@@ -20,8 +20,10 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const F := preload("res://tests/support/job_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const WATER_ATLAS := Vector2i(5, 6)   # walkable=false (Waterwalk-only) in TestTiles.tres
 
 # MOV is 4 + Stats.dex_mov_band: DEX 0-3 -> 3 | 4-5 -> 4 | 6-8 -> 5 | 9+ -> 6. Named rather than
 # inlined so a band retune fails the assertion in _squad(), not silently the whole file.
@@ -239,24 +241,118 @@ func test_a_leader_may_not_strand_a_member_by_moving_alone() -> void:
 #  The rule itself
 # ------------------------------------------------------------------------------
 
-func test_cohesion_ok_is_the_leader_range_and_nothing_else() -> void:
+func test_cohesion_is_the_leader_range_on_open_ground() -> void:
+	# On unobstructed ground, path distance == Manhattan distance, so the leash edge sits exactly
+	# where it always did. The wall test below is where the two metrics part company.
 	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
 	var squad: Squad = board.squad
+	var member: Unit = board.member
 	var leader_cell := Vector2i.ZERO
 
 	var reach := squad.get_max_squad_range()
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, reach))).is_true()
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, reach + 1))).is_false()
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, reach), game._board())).is_true()
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, reach + 1), game._board())).is_false()
 	# Closing the gap from outside is NOT an exemption — that allowance was the bug above.
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, 9))).is_false()
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, 9), game._board())).is_false()
+
+
+# THE RULE (#151): walls block cohesion. A cell Manhattan-adjacent to the leader but on the far
+# side of solid rock is NOT in the squad — you cannot order someone through a wall you can't see
+# or hear through. Falsify by reverting SquadCohesion.field to the Manhattan form: this goes red
+# while the open-ground test above stays green.
+func test_a_wall_blocks_cohesion() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var member: Unit = board.member
+	var leader_cell := Vector2i.ZERO
+
+	# A wall column just right of the leader, tall enough that no path within COH rounds it.
+	var reach := squad.get_max_squad_range()
+	for y in range(-(reach + 1), reach + 2):
+		game.grid.erase_cell(Vector2i(1, y))
+
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(2, 0), game._board())) \
+		.override_failure_message("a cell Manhattan-2 away THROUGH A WALL counted as in the squad").is_false()
+	# The same side as the leader is unaffected.
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, 2), game._board())).is_true()
+
+
+# PER-MEMBER (#151, the #115 shape in cohesion form): traversal is per-unit, so a Waterwalker's
+# bubble crosses water its plain squadmate's does not. One rule, two subjects, two answers.
+func test_a_waterwalkers_cohesion_bubble_crosses_water() -> void:
+	var scout: JobData = JobCatalog.get_job("scout")
+	var snap: Dictionary = F.snapshot(scout)
+	var ability := AbilityData.new()
+	ability.id = Abilities.Id.WATERWALK
+	scout.ability_pool = [ability]
+
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var plain: Unit = board.member
+	var walker: Unit = board.leader   # any unit serves as the walking SUBJECT; squad only sets COH
+	walker.unit_instance.add_job("scout")
+	var leader_cell := Vector2i.ZERO
+
+	# A water column just right of the leader, too tall to round within COH.
+	var reach := squad.get_max_squad_range()
+	for y in range(-(reach + 1), reach + 2):
+		game.grid.set_cell(Vector2i(1, y), GRASS_SOURCE, WATER_ATLAS)
+
+	var across := Vector2i(2, 0)
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, plain, across, game._board())) \
+		.override_failure_message("water counted as squad-transparent for a plain member").is_false()
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, walker, across, game._board())) \
+		.override_failure_message("a Waterwalker's bubble stopped at the shore").is_true()
+
+	F.restore(scout, snap)
+
+
+# ------------------------------------------------------------------------------
+#  Loss-of-contact ejection (#151's backstop)
+# ------------------------------------------------------------------------------
+
+# Movement can no longer AUTHOR a split (the validator refuses it), but displacement nobody chose
+# still can: a shove around a corner, ice melting under a formation. A member out of path-contact
+# with its leader leaves into a solo squad at the next settle point.
+func test_a_member_out_of_contact_is_ejected_to_a_solo_squad() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var member: Unit = board.member
+	var reach := squad.get_max_squad_range()
+
+	member.movement.set_cell(Vector2i(0, reach + 4))   # displaced, as a shove or a melt would
+	game.squad_manager.enforce_contact()
+
+	assert_bool(squad.get_members().has(member)) \
+		.override_failure_message("an out-of-contact member stayed in the squad").is_false()
+	assert_bool(member.is_leader()) \
+		.override_failure_message("the ejected member did not land in a solo squad").is_true()
+
+
+# THE WIRE: enforce_contact must actually fire when a pass settles — a backstop nobody calls is
+# the #103 lesson again. Any squad's execution sweeps EVERY squad, which is the point: the split
+# member's own squad can't execute (its plan reads invalid), so someone else's pass heals it.
+func test_a_resolution_pass_ejects_an_out_of_contact_member() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var member: Unit = board.member
+	var bystander: Unit = game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(6, 0))
+	var reach := squad.get_max_squad_range()
+
+	member.movement.set_cell(Vector2i(0, reach + 4))
+	await game.order_executor.execute_orders(bystander)
+
+	assert_bool(squad.get_members().has(member)) \
+		.override_failure_message("the settle sweep did not run on pass end").is_false()
 
 
 # THE WIRE (#142): editing COH must move the GATE, not just the getter. A getter returning 5 while
-# cohesion_ok still compares against a hardcoded 3 would pass every assertion above — the fixture's
-# leader sits at the default, so only a non-default COH can tell the two apart.
+# the gate still walks to a hardcoded 3 would pass every assertion above — the fixture's
+# leader sits at FIXTURE_COH, so only a non-default COH can tell the two apart.
 func test_editing_the_leaders_coh_moves_the_cohesion_gate() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
 	var squad: Squad = board.squad
+	var member: Unit = board.member
 	var leader_cell := Vector2i.ZERO
 	var leader: Unit = board.leader
 	var was := squad.get_max_squad_range()
@@ -266,9 +362,9 @@ func test_editing_the_leaders_coh_moves_the_cohesion_gate() -> void:
 
 	assert_int(squad.get_max_squad_range()).is_equal(was + 2)
 	# The tile that was one step too far is now legal, and the new edge+1 is not.
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, was + 1))) \
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, was + 1), game._board())) \
 		.override_failure_message("a widened COH did not reach the gate").is_true()
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, was + 3))) \
+	assert_bool(SquadCohesion.in_range(squad, leader_cell, member, Vector2i(0, was + 3), game._board())) \
 		.override_failure_message("the widened gate has no upper edge").is_false()
 
 
@@ -281,10 +377,16 @@ func test_editing_the_leaders_coh_moves_the_cohesion_gate() -> void:
 func test_the_drawn_bubble_and_the_enforced_bubble_are_the_same_set() -> void:
 	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
 	var squad: Squad = board.squad
+	var member: Unit = board.member
 	var leader_cell := Vector2i(6, 6)
 
+	# A wall segment inside the sweep window, so the invariant is checked where the path metric
+	# actually bends -- on open ground the two forms could agree by accident of both being diamonds.
+	for y in range(4, 9):
+		game.grid.erase_cell(Vector2i(8, y))
+
 	var drawn := {}
-	for cell in SquadCohesion.cells(squad, leader_cell):
+	for cell in SquadCohesion.cells(squad, leader_cell, member, game._board()):
 		drawn[cell] = true
 
 	# Sweep a window comfortably wider than the bubble, so both an omission and an over-draw fail.
@@ -297,7 +399,7 @@ func test_the_drawn_bubble_and_the_enforced_bubble_are_the_same_set() -> void:
 			checked += 1
 			assert_bool(drawn.has(cell)) \
 				.override_failure_message("drawn/enforced disagree at %s" % cell) \
-				.is_equal(SquadCohesion.in_range(squad, leader_cell, cell))
+				.is_equal(SquadCohesion.in_range(squad, leader_cell, member, cell, game._board()))
 	assert_int(checked).is_greater(reach * reach)   # the sweep really covered the bubble and past it
 
 
