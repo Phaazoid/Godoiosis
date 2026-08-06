@@ -1,7 +1,7 @@
 # Squad cohesion: how far a squadmate may end from its leader, and what Group Move does when the
 # leader outruns one (built 2026-08-04, from bug-reports/2026-08-04_17-54-30).
 #
-# The rule is strict — a squadmate must end inside the leader's projected SQUAD_RANGE bubble — and
+# The rule is strict — a squadmate must end inside the leader's projected COH bubble (#142) — and
 # Group Move splits into two outcomes around it:
 #   Case 1  the member falls BEHIND but still lands inside the bubble. Legal; its arrow draws green
 #           (MoveAction.is_trailing).
@@ -122,7 +122,7 @@ func test_a_member_that_falls_behind_but_stays_in_range_is_legal() -> void:
 	var now := GridUtils.manhattan_distance(member_move.get_destination(), destination)
 	assert_int(now).override_failure_message("the member kept up — this is not Case 1").is_greater(was)
 	assert_int(now).override_failure_message("the member fell OUT of range — this is Case 2") \
-		.is_less_equal(Squad.SQUAD_RANGE)
+		.is_less_equal(board.squad.get_max_squad_range())
 	assert_bool(member_move.is_trailing) \
 		.override_failure_message("falling behind did not mark the arrow").is_true()
 
@@ -146,7 +146,7 @@ func test_a_member_that_keeps_up_is_not_marked_as_trailing() -> void:
 # ------------------------------------------------------------------------------
 
 func _case_two() -> Dictionary:
-	# MOV 6 leader, MOV 3 member three tiles behind: nothing within SQUAD_RANGE of (0,-6) is inside
+	# MOV 6 leader, MOV 3 member three tiles behind: nothing within the leader's COH of (0,-6) is inside
 	# the member's move, so the whole squad cannot go there.
 	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
 	board["destination"] = Vector2i(0, -6)
@@ -208,7 +208,7 @@ func test_a_member_cannot_be_individually_ordered_outside_the_leader_range() -> 
 		.override_failure_message("the leader's own move was refused").is_true()
 
 	# (0,1) closes the gap to the leader's projected cell from 9 to 7 — still far outside
-	# SQUAD_RANGE, and exactly the move the relaxed rule wrongly accepted.
+	# the leader's COH, and exactly the move the relaxed rule wrongly accepted.
 	assert_bool(_order_move(board.member, Vector2i(0, 1))) \
 		.override_failure_message("a squadmate was ordered outside its leader's range").is_false()
 
@@ -235,10 +235,32 @@ func test_cohesion_ok_is_the_leader_range_and_nothing_else() -> void:
 	var squad: Squad = board.squad
 	var leader_cell := Vector2i.ZERO
 
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, Squad.SQUAD_RANGE))).is_true()
-	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, Squad.SQUAD_RANGE + 1))).is_false()
+	var reach := squad.get_max_squad_range()
+	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, reach))).is_true()
+	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, reach + 1))).is_false()
 	# Closing the gap from outside is NOT an exemption — that allowance was the bug above.
 	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, 9))).is_false()
+
+
+# THE WIRE (#142): editing COH must move the GATE, not just the getter. A getter returning 5 while
+# cohesion_ok still compares against a hardcoded 3 would pass every assertion above — the fixture's
+# leader sits at the default, so only a non-default COH can tell the two apart.
+func test_editing_the_leaders_coh_moves_the_cohesion_gate() -> void:
+	var board: Dictionary = await _squad(DEX_FAST, DEX_SLOW, Vector2i(0, 3))
+	var squad: Squad = board.squad
+	var leader_cell := Vector2i.ZERO
+	var leader: Unit = board.leader
+	var was := squad.get_max_squad_range()
+
+	# Exactly what UnitEditorTool._apply does on Save.
+	leader.unit_instance.stats[Stats.Stat.COH] = was + 2
+
+	assert_int(squad.get_max_squad_range()).is_equal(was + 2)
+	# The tile that was one step too far is now legal, and the new edge+1 is not.
+	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, was + 1))) \
+		.override_failure_message("a widened COH did not reach the gate").is_true()
+	assert_bool(SquadPlanValidator.cohesion_ok(squad, leader_cell, Vector2i(0, was + 3))) \
+		.override_failure_message("the widened gate has no upper edge").is_false()
 
 
 # ------------------------------------------------------------------------------

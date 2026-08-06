@@ -1,8 +1,11 @@
-# Squad shape (#63): static cohesion range + the LDR capacity budget
+# Squad shape (#63): the cohesion range + the LDR capacity budget
 # (squad-system.md banner, numbers ratified 2026-07-14). Range is decoupled from LDR
 # entirely; capacity = leader + floor(effective LDR / MEMBER_LDR_COST); the hard gate
 # lives in the can_* predicates ONLY — direct join_squad stays permissive so scenario
 # loads grandfather overfull authored squads.
+#
+# Range stopped being a static const in #142 — it is the LEADER's COH stat, so it is per-unit
+# and job/gear/effect-modifiable. #63's actual call survives: COH is still decoupled from LDR.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -17,11 +20,38 @@ func before_test() -> void:
 func _leader_with_ldr(ldr: int, cell: Vector2i) -> Unit:
 	return H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.LDR: ldr})
 
-func test_squad_range_is_static_regardless_of_ldr() -> void:
+func test_squad_range_is_independent_of_ldr() -> void:
+	# #63's invariant, unchanged by #142: LDR buys capacity, never leash length.
 	var low := _leader_with_ldr(1, Vector2i(0, 0))
 	var high := _leader_with_ldr(9, Vector2i(8, 0))
-	assert_int(low.squad.get_max_squad_range()).is_equal(Squad.SQUAD_RANGE)
-	assert_int(high.squad.get_max_squad_range()).is_equal(Squad.SQUAD_RANGE)
+	assert_int(low.squad.get_max_squad_range()).is_equal(Stats.STAT_DEFAULTS[Stats.Stat.COH])
+	assert_int(high.squad.get_max_squad_range()).is_equal(Stats.STAT_DEFAULTS[Stats.Stat.COH])
+
+func test_squad_range_is_the_leaders_coh() -> void:
+	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.COH: 6})
+	assert_int(leader.squad.get_max_squad_range()).is_equal(6)
+
+func test_a_members_coh_does_not_widen_the_squad() -> void:
+	# Leader-derived, not max-of-members: a long-leashed recruit under a short-leashed captain
+	# is held to the captain's bubble.
+	var leader := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 5, Stats.Stat.COH: 2})
+	var member := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.COH: 9})
+	_sm.join_squad(member, leader.squad)
+	assert_int(leader.squad.get_max_squad_range()).is_equal(2)
+	assert_int(member.squad.get_max_squad_range()).is_equal(2)   # same squad, same answer
+
+func test_squad_range_follows_leader_reassignment() -> void:
+	# The leash is re-derived from whoever leads now — the same way max_size() already was.
+	var captain := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.LDR: 8, Stats.Stat.COH: 7})
+	var heir := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3, Stats.Stat.COH: 4})
+	_sm.join_squad(heir, captain.squad)
+	var squad := captain.squad
+	assert_int(squad.get_max_squad_range()).is_equal(7)
+
+	_sm.leave_squad(captain)
+
+	assert_object(squad.leader).is_same(heir)
+	assert_int(squad.get_max_squad_range()).is_equal(4)
 
 func test_max_size_follows_the_ratified_rungs() -> void:
 	# eLDR 0-1 loner · 2-3 pair · 4-5 trio · 6-7 four · 8-9 five · 10-11 six (PER 5 -> band 0).

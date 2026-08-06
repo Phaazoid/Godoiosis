@@ -9,7 +9,8 @@ class_name Stats
 # (UnitData.base_stats / WeaponData.scaling_blend keys). Reordering or deleting
 # a value silently corrupts existing resources — always add new stats at the END.
 # Roster + rationale: docs/design/stats.md. Input stats: STR/DEX/PER/CON. Capacity: MHP/WIL/LDR.
-enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON }
+# Squad: COH.
+enum Stat { MHP, STR, LDR, WIL, DEX, PER, CON, COH }
 
 const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	Stat.MHP: 20,
@@ -19,6 +20,10 @@ const STAT_DEFAULTS: Dictionary[Stat, int] = {
 	Stat.DEX: 5,
 	Stat.PER: 5,
 	Stat.CON: 5,
+	# Cohesion radius: how far a squadmate may stand from its LEADER, Manhattan (#142). Read off
+	# the leader only — Squad.get_max_squad_range() is the single reader. Still decoupled from LDR
+	# (#63): LDR buys squad capacity, COH buys leash length, and no band feeds either into the other.
+	Stat.COH: 3,   # playtest-tunable
 }
 
 const CON_DEF_FACTOR := 0.2   # playtest-tunable: CON 5 wears armor at its printed value

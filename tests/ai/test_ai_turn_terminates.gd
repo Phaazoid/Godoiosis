@@ -72,7 +72,7 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 # but RulesService.compute_move_range drops their cells as DESTINATIONS, which is the "both squads
 # converged on the last hostile" state boiled down to a corridor.
 #
-# Geometry (SQUAD_RANGE 3, MOV 4): the leader's best attack destination is (5,0), and no cell within
+# Geometry (COH 3, MOV 4): the leader's best attack destination is (5,0), and no cell within
 # 3 of it is free for the member — every one is either the leader's own target or a blocker's. So
 # the member can be placed nowhere legal, and the destination is refused for the whole squad.
 func _jam_board() -> Dictionary:

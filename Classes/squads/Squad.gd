@@ -1,9 +1,12 @@
 extends Node
 class_name Squad
 
+# One squad: its leader, its members, and its shared action queue. Squads are CHURNED, not
+# persistent — leaving a squad destroys one and builds another, and every solo unit sits in a
+# 1-member squad of its own, so nothing durable may live here (see get_max_squad_range).
+# SquadManager is the only owner of the lifecycle; this class owns the queue.
 
 const NO_HOME := GridUtils.NO_CELL   # no sentry post assigned
-const SQUAD_RANGE := 3        # playtest-tunable: static cohesion radius (Manhattan), decoupled from LDR (#63)
 const MEMBER_LDR_COST := 2    # playtest-tunable: effective-LDR budget per member beyond the leader; familiarity discounts later
 
 var leader: Unit
@@ -45,8 +48,11 @@ func has_any_queued_actions() -> bool:
 	return not action_queue.is_empty()
 
 
+# The leash every cohesion check measures against — the LEADER's COH, never a member's, the same
+# shape as max_size() reading the leader's effective LDR. Leader-derived on purpose: squads churn
+# (leave_squad destroys and rebuilds one), units persist, so a leader swap re-derives this for free.
 func get_max_squad_range() -> int:
-	return SQUAD_RANGE
+	return leader.get_effective_stat(Stats.Stat.COH)
 
 func max_size() -> int:
 	# Capacity budget (squad-system.md, ratified 2026-07-14): leader + floor(eLDR / cost).
