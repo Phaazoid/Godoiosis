@@ -33,3 +33,7 @@ Thumbs.db
 # Godot editor never tries to import the screenshots that land here.
 /bug-reports/*
 !/bug-reports/.gdignore
+
+# Wrangler CLI local cache (#131 report-worker) - not build output, and wrangler-account.json
+# carries the Cloudflare account id + owner email, which a public repo should not publish.
+tools/report-worker/.wrangler/

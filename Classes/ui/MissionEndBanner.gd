@@ -30,7 +30,7 @@ func _build(victory: bool, can_retry: bool) -> void:
 
 	var dim := ColorRect.new()
 	dim.color = Color(0, 0, 0, 0.7)
-	dim.set_anchors_pset_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(dim)
 

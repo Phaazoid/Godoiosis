@@ -1,59 +1,173 @@
 extends Node
 class_name BugReporter
 
-# Dev-only report-a-bug dump (#128): one keypress writes the live board, the queued plan and the
-# tail of the engine log to res://bug-reports/<stamp>/, turning a playtest bug into a reproducible
-# artifact. Built in game._build_collaborators with a `game` back-ref (the DevController pattern).
+# The report system (#128, made player-facing by #131): one keypress or one card writes the live
+# board, the queued plan, the player's own note and the tail of the engine log to
+# user://reports/<stamp>/, then ships it to the intake endpoint. Built in
+# game._build_collaborators with a `game` back-ref (the DevController pattern).
+#
+# user:// and not res://: res:// is read-only once exported, so the whole feature was inert in a
+# build. Reports also stay outside Scenarios/, so Mission Select and #9's folder scan never see one.
 #
 # It owns NO state and adds no new seam: the board is ScenarioManager.capture_scenario (#87), the
-# plan is ActionQueueDisplayEntry.build_for (what the queue panel draws). board.tres is
-# authoritative; report.md is a read-only projection of it plus what a scenario doesn't carry.
+# plan is ActionQueueDisplayEntry.build_for (what the queue panel draws), and the transport is
+# ReportUploader, which never looks inside a report. board.tres is authoritative; report.md is a
+# read-only projection of it plus what a scenario doesn't carry.
+#
+# Kind is the ONLY fork between a bug and a feedback note -- same folder, same files, same transport,
+# same code path. Only the prompt and the label differ. That is the whole of what #131 item 6 asks
+# for: what has to be distinct is the QUESTION, not the plumbing, and two transports for one act
+# would be a second seam for a fact one field already carries.
 
-const REPORT_DIR := "res://bug-reports/"
+enum Kind { BUG, FEEDBACK }
+
+const REPORT_DIR := "user://reports/"
 const LOG_TAIL_LINES := 80
+
+# Discord caps a message at 2000 characters, and the untruncated note is in report.md regardless.
+const NOTE_IN_MESSAGE := 400
 
 var game   # untyped back-ref: game.gd has no class_name
 
-# state_name is PASSED, not looked up -- game.gd owns the GameState enum.
-func report(state_name: String) -> void:
+var _uploader: ReportUploader
+var _card: ReportPanel
+
+func _ready() -> void:
+	# It drives the whole exchange from behind a modal, so it outlives the freeze the modal sets.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+	_uploader = ReportUploader.new()
+	add_child(_uploader)
+
+func upload_configured() -> bool:
+	return _uploader != null and _uploader.is_configured()
+
+# The ONE path from "the player wants to say something" to a filed report. All four entry points
+# call this and nothing else, because the frame has to be grabbed BEFORE the card covers the
+# screen -- four callers each having to remember that is how you get three that do and one that
+# doesn't. state_name is passed for the same reason report() takes it: game.gd owns GameState.
+func open_card(state_name: String, default_kind: Kind, frame: Image = null) -> void:
+	if is_instance_valid(_card):
+		return   # already collecting; a second Esc must not stack a second card
+
+	# A caller that already had something on screen grabs its own frame earlier and passes it in
+	# (the pause menu does). Everyone else is opening the card over a clean board.
+	if frame == null:
+		frame = await capture_frame()
+	var units: Array[Unit] = game._all_units()
+	_card = ReportPanel.open(game, default_kind, not units.is_empty(), upload_configured())
+
+	var submitted: bool = await _card.finished
+	if not submitted:
+		_close_card()
+		return
+
+	var kind := _card.selected_kind()
+	var note := _card.note_text()
+	_card.show_sending()
+	var result: Dictionary = await report(state_name, kind, note, frame)
+
+	# The upload can outlive its card: returning to mission select frees the whole ui_layer.
+	if not is_instance_valid(_card):
+		_card = null
+		return
+	_card.show_outcome(result["dir"], result["sent"])
+	await _card.dismissed
+	_close_card()
+
+func _close_card() -> void:
+	if is_instance_valid(_card):
+		_card.queue_free()
+	_card = null
+
+# state_name is PASSED, not looked up -- game.gd owns the GameState enum. `frame` is passed for the
+# same reason plus a sharper one: with four entry points the screenshot has to be grabbed BEFORE
+# whatever card is about to cover the screen, so the MOMENT belongs to the caller. Pass null only
+# from a path with nothing on top of the board (F3), and this grabs one itself.
+#
+# Returns {"dir": String, "sent": bool}. An empty dir means the write itself failed; `sent` false
+# with a real dir means it is safely on disk and the player should be pointed at it.
+func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dictionary:
 	var stamp := Time.get_datetime_string_from_system().replace(":", "-").replace("T", "_")
 	var dir := REPORT_DIR + stamp + "/"
 	DirAccess.make_dir_recursive_absolute(dir)
 
-	var scenario: ScenarioData = game.scenario_manager.capture_scenario("bug-report-" + stamp)
-	var board_path := dir + "board.tres"
-	scenario.take_over_path(board_path)   # whoever writes a path claims it
-	var err := ResourceSaver.save(scenario, board_path)
-	if err != OK:
-		push_error("Bug report: could not write board.tres (error %s)" % err)
+	var units: Array[Unit] = game._all_units()
+
+	# No units means no board worth snapshotting -- feedback sent from the mission select screen.
+	if not units.is_empty():
+		var scenario: ScenarioData = game.scenario_manager.capture_scenario("report-" + stamp)
+		var board_path := dir + "board.tres"
+		scenario.take_over_path(board_path)   # whoever writes a path claims it
+		var save_err := ResourceSaver.save(scenario, board_path)
+		if save_err != OK:
+			push_error("Report: could not write board.tres (error %s)" % save_err)
 
 	var squad := _plan_squad()
 	var plan: ResolvedPlan = null
 	if squad != null:
 		# Resolve only, never validate: a dump READS state, it must not rewrite is_valid flags.
 		plan = game.squad_manager.resolve_plan(squad, game._board())
-	var units: Array[Unit] = game._all_units()
 
 	var md := FileAccess.open(dir + "report.md", FileAccess.WRITE)
 	if md == null:
-		push_error("Bug report: could not write report.md")
-		return
-	md.store_string(build_report_text(stamp, state_name, squad, plan, units, _log_tail()))
+		push_error("Report: could not write report.md")
+		return {"dir": "", "sent": false}
+	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail()))
 	md.close()
 
-	await RenderingServer.frame_post_draw   # the viewport texture is only valid after a draw
-	var image = game.get_viewport().get_texture().get_image()
-	image.save_png(dir + "board.png")
+	if frame == null:
+		frame = await capture_frame()
+	# A report without its screenshot is still worth having, and ReportUploader already skips a
+	# file that isn't there -- so an unsized viewport degrades the report instead of killing it.
+	if frame != null and not frame.is_empty():
+		frame.save_png(dir + "board.png")
 
-	print("Bug report written to %s" % dir)
+	print("Report written to %s" % ProjectSettings.globalize_path(dir))
+	var sent: bool = await _uploader.submit(dir, build_summary(stamp, state_name, kind, note))
+	return {"dir": dir, "sent": sent}
+
+# The viewport texture is only valid after a draw, so this always costs a frame. Callers grab it
+# BEFORE opening a card -- a screenshot taken with the report panel already up is a picture of the
+# report panel, which is precisely the thing nobody is complaining about.
+func capture_frame() -> Image:
+	# A headless run never draws, so awaiting frame_post_draw there waits FOREVER -- not a slow
+	# report, a hung one, and the caller is mid-await with a card on screen. A report with no
+	# screenshot is already a supported outcome, so say so immediately instead.
+	if DisplayServer.get_name() == "headless":
+		return null
+	await RenderingServer.frame_post_draw
+	# Explicitly typed: `game` has no class_name, so everything reached through it is Variant and
+	# := cannot infer (CLAUDE.md, the untyped back-ref rule).
+	var texture: ViewportTexture = game.get_viewport().get_texture()
+	if texture == null:
+		return null
+	return texture.get_image()
+
+# The Discord message body, derived from the same four facts report() writes into report.md so the
+# channel and the attachment can never disagree. The note is truncated HERE only -- the full text
+# is always in report.md, which is attached to the same message.
+static func build_summary(stamp: String, state_name: String, kind: Kind, note: String) -> String:
+	var trimmed := note.strip_edges()
+	if trimmed == "":
+		trimmed = "(nothing typed)"
+	elif trimmed.length() > NOTE_IN_MESSAGE:
+		trimmed = trimmed.substr(0, NOTE_IN_MESSAGE) + " ... (full text in report.md)"
+	return "**%s** - state `%s` - %s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, trimmed]
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
-static func build_report_text(stamp: String, state_name: String, squad: Squad,
-		plan: ResolvedPlan, units: Array[Unit], log_tail: String) -> String:
-	var out := "# Bug report %s\n\n" % stamp
+static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
+		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String) -> String:
+	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
+
+	out += "## What they wrote\n\n"
+	out += "%s\n\n" % ("(nothing typed)" if note.strip_edges() == "" else note.strip_edges())
+
 	out += "Game state: **%s**\n\n" % state_name
-	out += "`board.tres` is the authoritative snapshot. Everything below is a read-only "
-	out += "projection of it, plus what a scenario deliberately does not carry.\n\n"
+	if units.is_empty():
+		out += "No units on the board -- sent from a menu, so there is no `board.tres` beside this.\n\n"
+	else:
+		out += "`board.tres` is the authoritative snapshot. Everything below is a read-only "
+		out += "projection of it, plus what a scenario deliberately does not carry.\n\n"
 
 	out += "## Queued plan\n"
 	if squad == null or plan == null:

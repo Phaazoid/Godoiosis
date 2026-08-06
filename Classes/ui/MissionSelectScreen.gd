@@ -23,6 +23,7 @@ class_name MissionSelectScreen
 
 signal mission_chosen(path: String)
 signal sandbox_chosen
+signal feedback_chosen
 signal quit_chosen
 
 const MENU_Z := 100
@@ -110,6 +111,14 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	column.add_child(sandbox)
 
 	column.add_child(HSeparator.new())
+
+	# Someone who bounces off this screen without ever starting a mission still has something to
+	# tell us, and it is the one thing a mid-battle pause menu can never collect (#131).
+	var feedback := Button.new()
+	feedback.text = "Send Feedback"
+	feedback.custom_minimum_size = Vector2(BUTTON_WIDTH, 44)
+	feedback.pressed.connect(func(): feedback_chosen.emit())
+	column.add_child(feedback)
 
 	var quit := Button.new()
 	quit.text = "Quit Game"

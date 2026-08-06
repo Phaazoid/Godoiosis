@@ -160,9 +160,20 @@ func _input(event: InputEvent) -> void:
 		else:
 			set_dev_mode(game_state != GameState.DEV_MODE)
 	if event.is_action_pressed("dev_report_bug"):
-		bug_reporter.report(GameState.keys()[game_state])
-	if event.is_action_pressed("ui_cancel") and not _board_locked_for_player():
-		_open_pause_menu()
+		# The dev's zero-friction path: no card, no note, and nothing covering the board, so it is
+		# the one caller that can let report() grab its own frame.
+		bug_reporter.report(GameState.keys()[game_state], BugReporter.Kind.BUG, "", null)
+	# The modal check is belt-and-braces since #131: a modal pauses the tree, and a paused node
+	# receives no input at all, so this handler is already silent while one is up. Kept because it
+	# states the intent at the gate rather than relying on a consequence of the pause.
+	if event.is_action_pressed("ui_cancel") and not ModalLock.any_open(get_tree()):
+		if _board_locked_for_player():
+			# A locked board is an AI turn, a finished mission, or the menu -- exactly the moments
+			# a stranger most wants to complain, and the ones the pause menu cannot serve. Esc
+			# still reaches the report card there; it just cannot reach Resume or Restart.
+			open_report_card(BugReporter.Kind.BUG)
+		else:
+			_open_pause_menu()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if game_state == GameState.DEV_MODE and dev_overlay != null and dev_overlay.tile_brush.brush_active:
@@ -191,15 +202,33 @@ func _unhandled_input(event: InputEvent) -> void:
 func _open_pause_menu() -> void:
 	var prior: GameState = game_state
 	game_state = GameState.MENU
-	var choice: PauseMenu.Choice = await PauseMenu.show_menu(ui_layer, mission_controller.can_restart())
+	# Grabbed here, before the card draws: a report opened FROM the pause menu wants a picture of
+	# the board, not of the pause menu. Locking first means the extra frame is not interactive.
+	var frame: Image = await bug_reporter.capture_frame()
+	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart())
 	match choice:
 		PauseMenu.Choice.RESTART:
 			game_state = GameState.IDLE
 			mission_controller.restart_mission()
+		PauseMenu.Choice.TITLE:
+			mission_controller.abandon_mission()
 		PauseMenu.Choice.QUIT:
 			get_tree().quit()
+		PauseMenu.Choice.REPORT:
+			# The state named is the one from BEFORE the pause, not MENU: a report should say what
+			# the player was doing when they reached for it.
+			await bug_reporter.open_card(GameState.keys()[prior], BugReporter.Kind.BUG, frame)
+			# Restore before reopening, or the second card captures MENU as its prior and Resume
+			# leaves the board locked for good.
+			game_state = prior
+			_open_pause_menu()   # back to the menu they came from, not straight into the board
 		_:
 			game_state = prior
+
+# game.gd owns the GameState enum, so it is the one place that can name the current state for a
+# report. Every surface that is not the pause menu comes through here (#131).
+func open_report_card(default_kind: BugReporter.Kind) -> void:
+	bug_reporter.open_card(GameState.keys()[game_state], default_kind)
 
 # One handler per mode, mirroring HoverPresenter's branches. Each is responsible for leaving
 # the mode it handles (exit_current_mode), so the dispatcher stays a plain table.

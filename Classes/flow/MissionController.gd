@@ -83,6 +83,8 @@ func open_mission_select() -> void:
 	_select_screen = MissionSelectScreen.open(game.ui_layer, missions, others)
 	_select_screen.mission_chosen.connect(_on_mission_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
+	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
+	_select_screen.feedback_chosen.connect(func(): game.open_report_card(BugReporter.Kind.FEEDBACK))
 	_select_screen.quit_chosen.connect(func(): game.get_tree().quit())
 
 func _close_mission_select() -> void:
@@ -116,6 +118,19 @@ func can_restart() -> bool:
 func restart_mission() -> void:
 	game.scenario_manager.reload_current()
 	_begin_turn()
+
+# Leaving a mission the player has not finished. Deliberately the SAME handoff _end_mission makes
+# for its Mission Select choice, minus the outcome -- tidy the HUD, then hand to the menu. The
+# abandoned board is left standing on purpose: MissionSelectScreen's background is opaque, and the
+# next mission routes through load_scenario -> clear_board() like every other entry does.
+func abandon_mission() -> void:
+	# exit_current_mode, not clear_selection: only the former nulls the STORED game.selected_unit
+	# (#107), and walking away from a board must not leave a reference into it -- the next
+	# load_scenario frees those Unit nodes. clear_selection sets game_state = IDLE on the way ...
+	game.exit_current_mode()
+	game.refresh_action_queue(null)
+	game.unit_info_panel.clear()
+	open_mission_select()                  # ... and this sets MENU, so the order matters
 
 # ==============================================================================
 #  The capture objective (slice 3)

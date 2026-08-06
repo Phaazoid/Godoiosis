@@ -1,6 +1,11 @@
 # Report-a-bug dump guard (#128, 2026-08-02). BugReporter.build_report_text is pure + static so
 # the whole report can be pinned without a game scene -- the same capture/save split #87 made.
 #
+# #131 grew the signature by a Kind and a note; every case here passes BUG with no note, because
+# what this file guards is the BODY of a report and neither of those changes it. The note, the
+# kind heading and the menu-side "no board" branch are pinned in tests/ui/test_report_flow.gd,
+# beside the wire that carries them.
+#
 # Every case here is falsified against a bug this feature actually shipped and had to have found
 # by eye, or against a doctrine call that has an obvious-looking wrong "fix":
 #   * the units loop silently stopped emitting rows (the section header printed, zero rows under
@@ -45,7 +50,7 @@ func test_a_solo_squad_is_named_for_its_leader() -> void:
 	var context := BoardContext.new(board.grid, [hero], manager)
 	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
 	var units: Array[Unit] = [hero]
-	var text := BugReporter.build_report_text("stamp", "IDLE", hero.squad, plan, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",hero.squad, plan, units, "log")
 
 	# A solo squad exists but was never named -- the fallback is what keeps this line meaningful.
 	assert_str(text).contains("Squad: Hero's squad")
@@ -63,14 +68,14 @@ func test_a_named_squad_keeps_its_name() -> void:
 	var context := BoardContext.new(board.grid, [hero, mate], manager)
 	var plan: ResolvedPlan = manager.resolve_plan(hero.squad, context)
 	var units: Array[Unit] = [hero, mate]
-	var text := BugReporter.build_report_text("stamp", "IDLE", hero.squad, plan, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",hero.squad, plan, units, "log")
 
 	assert_str(text).contains("Squad: Vanguard")
 	assert_str(text).not_contains("Hero's squad")
 
 func test_no_queued_orders_says_so() -> void:
 	var no_units: Array[Unit] = []
-	var text := BugReporter.build_report_text("stamp", "IDLE", null, null, no_units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",null, null, no_units, "log")
 
 	assert_str(text).contains("(no squad has queued orders)")
 	assert_str(text).contains("Game state: **IDLE**")
@@ -86,7 +91,7 @@ func test_every_unit_gets_a_row() -> void:
 	var foe: Unit = BoardBuilder.spawn(board, _data("Foe", ENEMY), Vector2i(1, 0))
 
 	var units: Array[Unit] = [hero, mate, foe]
-	var text := BugReporter.build_report_text("stamp", "IDLE", null, null, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",null, null, units, "log")
 	var section := _units_section(text)
 
 	# The COUNT is the point: the loop once computed its squad note and appended nothing, which
@@ -103,7 +108,7 @@ func test_the_row_counter_can_see_an_empty_section() -> void:
 	# header over zero rows -- the same shape an empty unit list makes. If _row_count could not
 	# tell that from a populated section, that test would have stayed green straight through it.
 	var no_units: Array[Unit] = []
-	var text := BugReporter.build_report_text("stamp", "IDLE", null, null, no_units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",null, null, no_units, "log")
 
 	assert_str(text).contains("## Units")
 	assert_int(_row_count(_units_section(text))).is_equal(0)
@@ -116,7 +121,7 @@ func test_a_unit_row_carries_its_live_hp() -> void:
 	hero.take_damage(3)
 
 	var units: Array[Unit] = [hero]
-	var text := BugReporter.build_report_text("stamp", "IDLE", null, null, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",null, null, units, "log")
 
 	assert_str(text).contains("HP %d/%d" % [hero.get_current_hp(), hero.get_max_hp()])
 
@@ -138,7 +143,7 @@ func test_an_attack_row_carries_its_resolved_numbers() -> void:
 	assert_int(plan.attacks.size()).is_equal(1)
 
 	var units: Array[Unit] = [hero, foe]
-	var text := BugReporter.build_report_text("stamp", "IDLE", hero.squad, plan, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",hero.squad, plan, units, "log")
 
 	# Read the numbers back off the plan rather than hardcoding them: this pins the WIRING to
 	# action.resolved, not the balance values, which are content and free to move.
@@ -171,7 +176,7 @@ func test_a_fatal_hit_reports_raw_hp_not_the_panels_clamp() -> void:
 	assert_int(resolved.lethality).is_not_equal(ResolvedOutcome.Lethality.NONE)
 
 	var units: Array[Unit] = [hero, foe]
-	var text := BugReporter.build_report_text("stamp", "IDLE", hero.squad, plan, units, "log")
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "",hero.squad, plan, units, "log")
 
 	# The RAW number, and the lethality name that gives it meaning. The queue panel would show
 	# this same hit clamped to 0 or 1 -- deliberately not copied here.

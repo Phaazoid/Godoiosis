@@ -4,19 +4,26 @@ class_name PauseMenu
 # The in-play pause card (#132): the only way a demo player can restart a botched mission or
 # leave the game. MissionEndBanner's shape -- Control-based, awaited, one Choice out.
 
-enum Choice { RESUME, RESTART, QUIT }
+enum Choice { RESUME, RESTART, TITLE, REPORT, QUIT }
 
 signal chosen(choice: Choice)
 
-static func show_menu(parent: Node, can_restart: bool) -> Choice:
+# Takes the Game node rather than a parent: ModalLock needs it (it is what gets frozen), and
+# deriving the parent from it removes any chance of a modal being built outside ui_layer.
+static func show_menu(game_node: Node, can_restart: bool) -> Choice:
 	var menu := PauseMenu.new()
-	parent.add_child(menu)
-	menu._build(can_restart)
+	game_node.ui_layer.add_child(menu)
+	menu._build(can_restart, game_node)
 	var choice: Choice = await menu.chosen
 	menu.queue_free()
 	return choice
 
-func _build(can_restart: bool) -> void:
+func _build(can_restart: bool, game_node: Node) -> void:
+	# Freezes the game subtree and marks this as the open modal (#131). Two jobs, one call: it stops
+	# the board moving behind the card, and it stops game._input opening a report card on top of
+	# this one -- the Esc gate is relaxed while the board is locked, and MENU counts as locked.
+	ModalLock.claim(self, game_node)
+
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	mouse_filter = Control.MOUSE_FILTER_STOP   # eat stray clicks meant for the board behind
 
@@ -65,6 +72,22 @@ func _build(can_restart: bool) -> void:
 		restart.custom_minimum_size = Vector2(220, 44)
 		restart.pressed.connect(func(): chosen.emit(Choice.RESTART))
 		vbox.add_child(restart)
+
+	# Always offered, unlike Restart: a Sandbox board has no file to reload but the way out of it
+	# is the same. Before this the only route back to the title was finishing a mission.
+	var title_row := Button.new()
+	title_row.text = "Return to Title"
+	title_row.custom_minimum_size = Vector2(220, 44)
+	title_row.pressed.connect(func(): chosen.emit(Choice.TITLE))
+	vbox.add_child(title_row)
+
+	# The demo's report affordance (#131). F3 is correct for the developer and invisible to
+	# a stranger, so it needs a row somebody can find without being told it exists.
+	var report := Button.new()
+	report.text = "Report a Bug / Feedback"
+	report.custom_minimum_size = Vector2(220, 44)
+	report.pressed.connect(func(): chosen.emit(Choice.REPORT))
+	vbox.add_child(report)
 
 	var quit := Button.new()
 	quit.text = "Quit Game"

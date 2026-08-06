@@ -1,0 +1,6 @@
+name = "iosis-reports"
+main = "src/index.js"
+compatibility_date = "2026-08-05"
+
+# DISCORD_WEBHOOK is a SECRET, not a var -- set it with `wrangler secret put`, never in this file.
+# This file is committed; secrets are not.
