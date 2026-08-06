@@ -4,21 +4,42 @@ Tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript. Solo hobbyist develo
 
 ## Collaboration contract (read first)
 
-- **The user types all gameplay code themselves** (`Classes/`, `Scenes/`, `game.gd`). Guide with complete code blocks and file/line anchors; never edit those files directly unless explicitly asked. The user is here to learn — explain the *why*, not just the *what*.
-- **Deliver every change as a typed code block.** Prose-described steps ("then update the click handler to...") reliably fail to get implemented. If the user must type it, write it out fully. **A partial block inside a loop or `match` arm is the same failure in miniature** (#128, 2026-08-02): "replace its `squad_note` block with…" read as *replace the loop body*, and the `out +=` line that did the actual work went with it — the section rendered empty, costing a full round trip to find. When patching *inside* an enclosing structure, post the **whole enclosing block** (the entire `for`, the entire function) and say what it replaces, top and bottom. Never describe a sub-block in prose and expect the boundary to be inferred. **The unit is the WHOLE FUNCTION, always — never a subset of one, and never a boundary stated in prose** (2026-08-04, #132, the second self-inflicted break in one session). Posting `clear_board()`'s first eleven lines with "the `for unit in units_root...` loop after it is unchanged — leave it in place" deleted that loop: **scenario loads stopped clearing the board at all**, and the full 955-case suite stayed green because nothing asserted that `clear_board` actually clears. The reasoning that produced it — *"this line isn't inside a nested block, so a partial function is safe"* — is the trap; nesting is irrelevant, a partial function is never safe. If a function is too long to repost, that is a signal to split the function, not the block.
-- **Anchor a block by file + function name, in the prose *outside* it — never as a comment line inside the block, and never by line number** (dev, 2026-07-29). Anything inside the fence gets typed into the file verbatim, so a `# line 196, _click_idle` marker lands in the source as a stray comment. Line numbers are also stale on arrival: several edits to one file shift every anchor below the first one, so they can be wrong before the walkthrough is even posted. Function names survive. **One heading, one file — never group two files under a shared heading** (2026-08-04, #141): a section headed ``ArmorCatalog.gd / WeaponModCatalog.gd`` with two code blocks under it put *both* blocks in the first file, so one file gained a stray function referencing a const it doesn't own and the other was never updated at all. Two parse errors, and the walkthrough looked fine. The blast radius is the same as the partial-block failure above and the fix is the same shape: every block gets its own heading naming exactly one file.
-- Claude MAY directly create/edit: `CLAUDE.md`, `docs/`, `tests/`, `play/` (the headless Play API — confirmed 2026-07-16 as already Claude's domain, not user-typed gameplay code), GitHub issue text, and other non-gameplay scaffolding (standing exception granted 2026-06-12).
-- **Standing exception (2026-07-16):** when a walkthrough touches a `Classes/`/`Scenes/`/`game.gd` file that has no top-of-file description comment (what the file/class IS and its place in the architecture), Claude adds that comment directly instead of asking the user to type it. Everything else in the file stays hand-typed. Start-of-session sweep target: any file touched by the issue in progress.
-- **Standing exception (2026-07-16): `.tscn` scenes and saved scenarios.** If a code change breaks an existing `.tscn` file or a saved scenario `.tres` (`Scenarios/*.tres`), Claude has full permission to edit it directly to keep it working — current scene/scenario content is disposable placeholder, and a clean codebase (no legacy-compat branches carried for their sake) matters more than preserving them untouched. Doesn't extend to gameplay `.gd` code in `Classes/`/`game.gd`, which stays hand-typed regardless.
-- **Standing exception (2026-07-16): comments in `Classes/`/`game.gd`.** Claude may edit comments directly (stale references, renamed symbols, drifted explanations) even in files whose code stays hand-typed — comments aren't code. Actual logic in these files is still the user's to type.
-- After walkthroughs land, *verify by reading the actual files* before debugging from theory — transcription drift is the most common failure mode.
+**Claude implements; the dev reviews.** Contract changed **2026-08-05**, replacing the hand-typed-walkthrough model that ran from project start. Claude edits every file directly — `Classes/`, `Scenes/` and `game.gd` included. The dev is practicing an agentic workflow for a role that requires it; **he will say so explicitly if he ever switches back**, so until those words are said, this is the contract. He is still here to learn: explain the *why*, not just the *what*.
+
+**Plan before building. The trigger is the dev's, and it is about blast radius, not size:**
+
+1. **Any new feature.** His stated reason: *"to check if you're building off of the proper seam or not."* The plan's whole job is to make Design Law #4 auditable **before** the code exists — this is the guardrail he is here to be, and a plan that merely names the new field defeats it.
+2. **Any invasive change to core gameplay** — action-queue logic, attack/resolution logic, turn flow, squad lifecycle, plan validation, movement/reach, lifecycle & Crisis. Here he explicitly wants **the fallout**: what else reads this, and what breaks.
+3. **Small bugfixes touching neither** — just fix it, then post a writeup of what changed and why. No planning round trip; he called this one out by name.
+
+Where it's a judgment call, plan. A plan waved through costs one message; an unplanned change to a seam costs a session.
+
+**What a plan must contain** — conclusions alone are not reviewable:
+
+- **The question** the change answers, and **what already answers it**, naming what was actually grepped. *Grep the question, not the name* (Law #4).
+- **Every caller/reader of anything being changed, counted from the code.** Relaxing a predicate for one caller without checking its other three is exactly how the Group Move hole shipped (2026-08-04).
+- **Files touched** and what each change is.
+- **How it will be verified** — decided before building, not after.
+- **The riskiest assumption**: what would make this plan wrong.
+
+**Review surface = the plan + the diff.** A summary of a change is not evidence of the change. Keep the unit of work to **one reviewable diff**; never chain several tasks' worth of edits before he has seen any of them. Commit points are review points.
+
+**Report verification honestly** — what ran, what passed, and what was *not* checked. **The suite is not the gate:** 6 of 7 cases passed against the build that bricked the pause menu (#131), and 955 green cases sat on top of a `clear_board` that had stopped clearing the board (#132). Anything touching UI, input, or ordering needs the game actually launched. A new regression test does not count until it has been **falsified** — proven to fail with its own bug reintroduced.
+
+**Retired with the old contract (2026-08-05).** These existed *solely* because a human retyped Claude's output, and that whole failure class is now gone — do not re-derive them from this file's git history: the whole-function code-block law (#128/#132), file+function prose anchoring, one-heading-one-file (#141), and "verify by reading the real file after a walkthrough — transcription drift is the top failure mode." Likewise the standing exceptions that carved narrow write permission out of the old rule (2026-06-12 scaffolding, 2026-07-16 header comments / `.tscn` / comments, 2026-08-05 bug-reporting) are **absorbed, not revoked** — everything they permitted is now simply permitted.
+
+**Still live, unchanged by the switch:**
+
+- **Content is disposable; cleanliness is not.** `.tscn` scenes and saved `Scenarios/*.tres` are placeholder — fix them to match the code rather than carrying a legacy-compat branch for their sake.
+- **File header comments.** Any `Classes/`/`Scenes/`/`game.gd` file touched that lacks a top-of-file description comment (what the file/class IS and its place in the architecture) gets one added.
+- **Terse comments in source.** Rationale goes in chat, `docs/`, and issue text — never walkthrough prose in a `.gd` file.
 
 ## GitHub issue workflow (Claude ↔ human handoff)
 
 Open work lives in [GitHub Issues](https://github.com/Phaazoid/Godoiosis/issues). Two **mutually exclusive** assignment labels say whose turn it is (exactly one per open issue):
 
-- **`agent/claude`** — Claude owns the next step: draft/revise a fix walkthrough, or (for `tests/` & `docs/`) just do the work directly.
-- **`agent/human`** — a human owns the next step: type a posted walkthrough, make a design decision, or test. Flip an issue back to `agent/claude` (with a reply) when a fix needs rework.
+- **`agent/claude`** — Claude owns the next step: post a plan (for a feature or a core-gameplay change), or just do the work and post a writeup (small bugfix, `tests/`, `docs/`).
+- **`agent/human`** — a human owns the next step: review a posted plan or diff, make a design decision, or playtest. Flip an issue back to `agent/claude` (with a reply) when a fix needs rework.
 
 Run **`/agent-queue`** to have Claude scan the `agent/claude` issues and advance each one, then hand back. Every comment Claude posts under the user's account **leads with `🤖 Claude says:`** and **ends with** `— Claude (<model>) · <date>` (name the model actually running, e.g. Fable 5 / Opus 4.8 — the signature is provenance), authored via the Write tool → `gh issue comment --body-file` (never an inline non-ASCII arg — Windows PowerShell 5.1 mojibakes it before upload; see the encoding note in `tests/README.md`). After acting, Claude flips the label to `agent/human`.
 

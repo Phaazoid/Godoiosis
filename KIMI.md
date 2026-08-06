@@ -10,14 +10,9 @@ My (Kimi's) own memory for this project. Created 2026-07-29. Companion to `CLAUD
 
 ## Collaboration contract (as it applies to me — confirm with owner)
 
-The owner's contract with Claude (from CLAUDE.md), which I assume applies to me too **unless the owner says otherwise**:
+**Read CLAUDE.md's *Collaboration contract* section — don't work from a copy.** This file used to restate those rules, which made it a second answer to one question (Law #4) and it duly went stale: **the contract changed on 2026-08-05** and every rule copied here was wrong within a week. Claude now writes gameplay code directly, plans first for features and core-gameplay changes, and posts a writeup for small bugfixes; the hand-typed-walkthrough rules are retired.
 
-1. **The owner types all gameplay code themselves** (`Classes/`, `Scenes/`, `game.gd`). Guide with complete, typed-out code blocks; explain the *why*. Never edit those files directly unless explicitly asked.
-2. Anchor code blocks by **file + function name in prose outside the fence** — never by line number, never as comments inside the block.
-3. Directly editable by an agent: `CLAUDE.md` (Claude only), `docs/`, `tests/`, `play/` (headless Play API), GitHub issue text, non-gameplay scaffolding. Plus standing exceptions: top-of-file description comments in gameplay files; `.tscn` scenes and `Scenarios/*.tres` may be fixed directly; comment-only edits in gameplay files.
-4. After walkthroughs land, verify by reading actual files (transcription drift is the #1 failure mode).
-
-**Open question for owner:** how should work be split between Claude and me? (e.g. me on tests/docs/analysis vs gameplay walkthroughs, or second-opinion reviews.)
+**Open question for owner — do NOT assume the answer:** the 2026-08-05 change granted *Claude* write authority over `Classes/`/`Scenes/`/`game.gd`. Whether it extends to me is unresolved. Until the owner says so, treat gameplay code as off-limits and ask. The older question also still stands: how should work split between Claude and me (tests/docs/analysis vs. second-opinion reviews)?
 
 ## Design laws (non-negotiable)
 

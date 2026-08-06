@@ -25,7 +25,7 @@ Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.cl
 
 | Command | What it does |
 |---------|--------------|
-| `/agent-queue` | Scan the open GitHub issues labeled `agent/claude` and advance each one a step — draft a fix walkthrough, do `tests/`/`docs/` work directly, or flag a decision — then flip it to `agent/human`. Add issue numbers (e.g. `/agent-queue 23 25`) to work only those. |
+| `/agent-queue` | Scan the open GitHub issues labeled `agent/claude` and advance each one a step — post a plan (feature / core-gameplay change), fix it and write it up (small bugfix, `tests/`, `docs/`), or flag a decision — then flip it to `agent/human`. Add issue numbers (e.g. `/agent-queue 23 25`) to work only those. |
 | `/scratchpad-sweep` | Read [`docs/SCRATCHPAD.md`](SCRATCHPAD.md), file each **Inbox** idea into the right design doc / a proposed issue / the defer pile, log where it went, and leave the Inbox empty. Add an area or idea (e.g. `/scratchpad-sweep weapons`) to sweep just those. |
 
 ## Notes
