@@ -26,28 +26,39 @@ Every main action type must land in exactly one of the two, for every archetype 
 
 Candidate builders live in `AITactics` (one per type, each mirroring `MainActionMenu`'s gate for that verb); an undeclared builder is a loud `push_error`, never a silent skip.
 
-### Ratified tables (dev calls, 2026-07-22)
+### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06)
 
-| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY |
-|---|---|---|---|---|---|
-| **Rushdown** | 1 | never | 2 | never | never |
-| **Hold** | 1 | 2 | 3 | 4 | never |
-| **Sentry** | 1 | 2 | 3 | 4 | never |
+| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY | REV |
+|---|---|---|---|---|---|---|
+| **Rushdown** | 1 | never | 2 | never | never | 3 |
+| **Hold** | 1 | 2 | 3 | 4 | never | never |
+| **Sentry** | 1 | 2 | 3 | 4 | never | never |
 
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
 - Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.
 - RALLY is NEVER everywhere for now: early rallies burn the strong falloff steps (6/4/2…) while idling. Revisit with real Will-awareness — this is a deliberately parked knob, not an oversight.
+- **REV is Rushdown-only, added 2026-08-06 (AI generalization sweep, finding #3).** It had been
+  `NEVER` for every archetype with no builder at all (unreachable even if declared — the
+  `queue_main_action` match had no arm for it). `AITactics._try_rev` now mirrors `_try_reload`
+  exactly (`Unit.can_rev_weapon()`/`rev_weapon()`, same shape as the reload pair), and Rushdown
+  tries it last, after ATTACK and RELOAD. Hold/Sentry keep REV `NEVER` — undecided for them, not
+  ruled out.
 
 ## Shared engage plumbing
 
 `AITactics.engage(squad, target, board, squad_manager, allowed = null)` is the one place "fight
 this target" is defined: destination pick (`best_attack_destination`) → conditional group move
-→ every member tries a main action (`queue_main_action`). Rushdown's whole turn and Sentry's
-intruder branch both call it. It had been hand-duplicated between the two files since #29 —
-flagged by the #127 handoff (2026-08-06) as the shape that let that fix's destination-picker
-half reach both archetypes for free, since it landed one layer down in `AITactics` rather than
-in either archetype file; extracted the same day. `HoldArchetype` never moves, so it has no
-engage step.
+→ every member tries a main action. Rushdown's whole turn and Sentry's intruder branch both call
+it. It had been hand-duplicated between the two files since #29 — flagged by the #127 handoff
+(2026-08-06) as the shape that let that fix's destination-picker half reach both archetypes for
+free, since it landed one layer down in `AITactics` rather than in either archetype file;
+extracted the same day.
+
+The per-member "everybody tries a main action" step is itself `AITactics.queue_main_actions_for_squad(squad, board, squad_manager)`
+— `engage()`'s tail, the whole of `HoldArchetype`'s turn, and (since finding #3, same day)
+Rushdown's own no-enemy branch, which used to `return` above it and skip fallback main actions
+(Reload/Rev) entirely whenever the squad's own `nearest_enemy` search found nothing on the whole
+board. `HoldArchetype` never moves, so it has no destination/move step, only this one.
 
 ## Attack scoring (ratified, flagged evolvable)
 

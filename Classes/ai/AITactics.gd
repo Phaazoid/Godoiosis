@@ -116,6 +116,8 @@ static func queue_main_action(unit: Unit, board: BoardContext, squad_manager: Sq
 				queued = _try_intimidate(unit, board, squad_manager)
 			BaseAction.ActionType.RELOAD:
 				queued = _try_reload(unit, squad_manager)
+			BaseAction.ActionType.REV:
+				queued = _try_rev(unit, squad_manager)
 			_:
 				push_error("No AI builder for ActionType %s" % BaseAction.ActionType.keys()[t])
 		if queued:
@@ -254,6 +256,13 @@ static func _try_reload(unit: Unit, squad_manager: SquadManager) -> bool:
 	action.init(unit)
 	return squad_manager.queue_action(unit.squad, action)
 
+static func _try_rev(unit: Unit, squad_manager: SquadManager) -> bool:
+	if not unit.can_rev_weapon():
+		return false
+	var action := RevAction.new()
+	action.init(unit)
+	return squad_manager.queue_action(unit.squad, action)
+
 # Where the leader should stand to fight `enemy`: a cell it can already attack from, else the cell
 # furthest along the ROUTE to it. The route targets the nearest STANDABLE firing position, not
 # enemy.movement.cell itself (#127) -- see _nearest_standable_attack_cell for why that distinction
@@ -272,6 +281,13 @@ static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manage
 	var destination := best_attack_destination(leader, target, board, allowed)
 	if destination != leader.movement.cell:
 		squad_manager.queue_group_move(squad, destination, board, allowed)
+	queue_main_actions_for_squad(squad, board, squad_manager)
+
+
+# Every member tries a main action, in the squad's own archetype-priority order. The tail of
+# engage() and the whole of HoldArchetype's turn -- and, since finding #3, Rushdown's no-target
+# branch too -- so it earns its own name rather than being hand-copied a third time.
+static func queue_main_actions_for_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
 	for member in squad.get_members():
 		queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
 
