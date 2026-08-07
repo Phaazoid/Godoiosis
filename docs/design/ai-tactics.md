@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #141 (2026-08-04).**
+**Canon checked through #151 (2026-08-06).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -26,17 +26,39 @@ Every main action type must land in exactly one of the two, for every archetype 
 
 Candidate builders live in `AITactics` (one per type, each mirroring `MainActionMenu`'s gate for that verb); an undeclared builder is a loud `push_error`, never a silent skip.
 
-### Ratified tables (dev calls, 2026-07-22)
+### Ratified tables (dev calls, 2026-07-22; REV column added 2026-08-06)
 
-| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY |
-|---|---|---|---|---|---|
-| **Rushdown** | 1 | never | 2 | never | never |
-| **Hold** | 1 | 2 | 3 | 4 | never |
-| **Sentry** | 1 | 2 | 3 | 4 | never |
+| | ATTACK | RESCUE | RELOAD | INTIMIDATE | RALLY | REV |
+|---|---|---|---|---|---|---|
+| **Rushdown** | 1 | never | 2 | never | never | 3 |
+| **Hold** | 1 | 2 | 3 | 4 | never | never |
+| **Sentry** | 1 | 2 | 3 | 4 | never | never |
 
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
 - Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.
 - RALLY is NEVER everywhere for now: early rallies burn the strong falloff steps (6/4/2…) while idling. Revisit with real Will-awareness — this is a deliberately parked knob, not an oversight.
+- **REV is Rushdown-only, added 2026-08-06 (AI generalization sweep, finding #3).** It had been
+  `NEVER` for every archetype with no builder at all (unreachable even if declared — the
+  `queue_main_action` match had no arm for it). `AITactics._try_rev` now mirrors `_try_reload`
+  exactly (`Unit.can_rev_weapon()`/`rev_weapon()`, same shape as the reload pair), and Rushdown
+  tries it last, after ATTACK and RELOAD. Hold/Sentry keep REV `NEVER` — undecided for them, not
+  ruled out.
+
+## Shared engage plumbing
+
+`AITactics.engage(squad, target, board, squad_manager, allowed = null)` is the one place "fight
+this target" is defined: destination pick (`best_attack_destination`) → conditional group move
+→ every member tries a main action. Rushdown's whole turn and Sentry's intruder branch both call
+it. It had been hand-duplicated between the two files since #29 — flagged by the #127 handoff
+(2026-08-06) as the shape that let that fix's destination-picker half reach both archetypes for
+free, since it landed one layer down in `AITactics` rather than in either archetype file;
+extracted the same day.
+
+The per-member "everybody tries a main action" step is itself `AITactics.queue_main_actions_for_squad(squad, board, squad_manager)`
+— `engage()`'s tail, the whole of `HoldArchetype`'s turn, and (since finding #3, same day)
+Rushdown's own no-enemy branch, which used to `return` above it and skip fallback main actions
+(Reload/Rev) entirely whenever the squad's own `nearest_enemy` search found nothing on the whole
+board. `HoldArchetype` never moves, so it has no destination/move step, only this one.
 
 ## Attack scoring (ratified, flagged evolvable)
 
@@ -56,6 +78,8 @@ Target-state awareness ships "minimal": lethality tiers (via the resolver's own 
 ## Known v1 approximations (accepted at ratification)
 
 - **Destination planning reads the default pick** — `best_attack_destination` hoists one `leader.get_fired_attack()` and evaluates every cell against it, rather than per-candidate-attack. Cells × attacks × enemies was judged not worth it yet.
+  - Corrected 2026-08-06 by [#127](https://github.com/Phaazoid/Godoiosis/issues/127), which is worth knowing because the failure was *silent and permanent*: the approach ranked candidate cells by hops toward **the enemy's own square**, and `path_hops` is deliberately occupancy-blind, so a downed body parked on the one adjacent firing cell in a corridor read as the shortest way in. The unit walked up to the corpse and stopped — every turn, forever, because a dead end is stable. Two halves were both required, and each was falsified alone: the route now targets the nearest **standable** firing cell (`_nearest_standable_attack_cell`), *and* the ranking walk opts into occupancy (`path_hops(…, block_on_occupancy = true)`) so it stops imagining it can cut straight through the bodies in the way. Retargeting alone still stalled. The generalizable shape: **when a metric and the thing it measures disagree about what is passable, fixing the target does not fix the measure.** Note the two halves have **different scopes**, which is the part worth copying: the retarget is attack-specific (a firing position is not the target's own square), but the honest metric is not — it is unconditional in `_best_approach`, so **Sentry's walk home got the same fix**. Scoping it to the attack case would have meant gating it on the retarget parameter, i.e. one flag answering two unrelated questions, and `closest_reachable_cell_to` could never have reached it. A sentry stalls identically against an enemy holding a corridor; pinned by `test_walking_home_routes_around_a_body_holding_the_corridor`.
+  - **Target selection was then brought onto the same metric (same day, same sweep).** Fixing the approach alone left `nearest_enemy` measuring occupancy-*blind* while the approach measured aware — two answers to "how far is that enemy", so the AI could pick a target it would only then discover was the long way round. Both now measure to a **standable firing cell** rather than the target's own square, via one shared `_standable_attack_cells`. Note the detail that makes it possible at all: an active enemy blocks passage, so an occupancy-aware walk *to enemy squares* scores every enemy UNREACHABLE — routing to firing cells is what lets target selection use the honest metric. Still one BFS for all enemies (the `until` set is the union). Pinned by `test_nearest_enemy_measures_to_a_firing_position_not_to_the_target_itself`, and **the whole rest of the suite passes with the old metric restored** — which is why this went unnoticed.
 - **Counters aren't scored** — the throwaway plan resolves the AI's own volley only; walking into counter range costs nothing in the score.
 - **Movement never seeks rescue/intimidate targets** — fallback verbs fire from wherever attack-driven movement landed the unit.
 - **Squad-level coordination** — members choose independently in member order; no focus-fire or combined-arms reasoning.

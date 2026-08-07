@@ -25,7 +25,6 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		GridUtils.get_terrain_icon_at_cell(board.grid, leader_destination))
 	moves.append(leader_move)
 
-	var leash: int = squad.get_max_squad_range() * 2
 	var followers: Array[Unit] = []
 	var candidates := {}   # Unit -> {cell: move cost}
 	var to_target := {}    # Unit -> {cell: hops from its ideal offset cell}
@@ -35,13 +34,16 @@ static func plan(squad: Squad, leader_destination: Vector2i, board: BoardContext
 		if member == leader:
 			continue
 
-		# Cohesion leash from the leader's new cell, bounded AT it since nothing reads a larger value.
-		# Per-member (#115): one shared field rejected a Waterwalker's own near-shore water cells.
-		var leader_field := RulesService.path_hops(leader_destination, board, member, leash)
+		# The member's own cohesion bubble around the leader's new cell (#151) -- THE rule, the same
+		# field the validator refuses against, so the solver can no longer place a member the
+		# validator then rejects. Per-member (#115): one shared field rejected a Waterwalker's own
+		# near-shore water cells. This retires the old `COH * 2` path-leash-as-preference and its
+		# drop-the-leash retry: with cohesion itself path-based, the preference IS the rule.
+		var leader_field := SquadCohesion.field(squad, leader_destination, member, board)
 		var reach := RulesService.compute_move_range(member, board, leader_destination)
 		var here: Vector2i = member.movement.cell
 
-		var options := _candidate_cells(reach, here, leader_destination, leader_field, leash, squad, allowed_cells)
+		var options := _candidate_cells(reach, here, leader_field, allowed_cells)
 		if options.is_empty():
 			continue
 		followers.append(member)
@@ -117,7 +119,10 @@ static func followable_destinations(squad: Squad, board: BoardContext, leader_de
 
 		var satisfied := {}
 		for cell in standable.keys():
-			for destination in GridUtils.cells_within_manhattan_range(cell, squad.get_max_squad_range()):
+			# This member's path-bubble around `cell` (#151): the set of leader destinations this
+			# cell satisfies. Path distance over terrain is symmetric, so the field reads the same
+			# from either end -- one bounded walk per standable cell replaces the Manhattan dilation.
+			for destination in SquadCohesion.field(squad, cell, member, board):
 				if not followable.has(destination) or cell == destination:
 					continue   # the leader stands on `destination`; no member may take it
 				satisfied[destination] = true
@@ -139,31 +144,22 @@ static func followable_destinations(squad: Squad, board: BoardContext, leader_de
 	return followable
 
 # Every cell this member may legally end on -> its move cost. Staying put counts at cost 0 when it
-# clears the leash and the allow-list on its own. If nothing inside the leader's new bubble is
-# within MOV, the LEASH drops rather than the move — it is a preference against splitting the squad
-# around a wall, and followable_destinations cannot see path distance to agree with it.
-static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_destination: Vector2i,
-		leader_field: Dictionary, leash: int, squad: Squad, allowed_cells) -> Dictionary:
-	var candidates := _cells_within(reach, here, leader_destination, leader_field, leash, squad, allowed_cells)
-	if not candidates.is_empty():
-		return candidates
-	return _cells_within(reach, here, leader_destination, leader_field, RulesService.UNREACHABLE, squad, allowed_cells)
-
+# clears the bubble and the allow-list on its own. `leader_field` IS the cohesion rule (#151), so
+# there is no separate leash to drop any more: a member with no candidate genuinely cannot follow,
+# and the destination is the validator's to refuse -- solver and validator read the same field.
+#
 # No `taken` filter: options are computed for every member BEFORE any of them is placed, because
 # ordering the assignment by how constrained a member is means knowing that first.
-static func _cells_within(reach: Dictionary, here: Vector2i, leader_destination: Vector2i,
-		leader_field: Dictionary, leash: int, squad: Squad, allowed_cells) -> Dictionary:
+static func _candidate_cells(reach: Dictionary, here: Vector2i, leader_field: Dictionary, allowed_cells) -> Dictionary:
 	var candidates := {}
 	for cell in reach.reachable.keys():
-		if leader_field.get(cell, RulesService.UNREACHABLE) > leash:
+		if not leader_field.has(cell):
 			continue
 		if allowed_cells != null and not allowed_cells.has(cell):
 			continue
 		candidates[cell] = reach.reachable[cell]
 
-	if (allowed_cells == null or allowed_cells.has(here)) \
-		and SquadPlanValidator.cohesion_ok(squad, leader_destination, here) \
-		and leader_field.get(here, RulesService.UNREACHABLE) <= leash:
+	if (allowed_cells == null or allowed_cells.has(here)) and leader_field.has(here):
 		candidates[here] = 0
 	return candidates
 

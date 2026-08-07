@@ -22,6 +22,13 @@ var active_squad: Squad = null
 # fan-out runs once at the end instead. Every order still passes queue_action's gates (Law #3).
 # ONLY safe while a batch stays synchronous — docs/performance.md has the invariants.
 var batching := false
+
+# The live board the cohesion rule reads (#151) -- a Callable returning a FRESH BoardContext, never
+# a stored one: terrain state changes mid-battle (FROZEN water melts), and a cached board would
+# validate against a world that no longer exists. Wired once per bootstrap: game._ready -> _board,
+# play/board_builder -> its own builder, tests/support/squad_fixtures.make_manager -> the fixture's.
+var board_source: Callable
+
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var grid: TileMapLayer = $"../Grid"
 
@@ -86,6 +93,24 @@ func leave_squad(unit: Unit):
 	_detach_from_current_squad(unit)
 	create_squad(unit)
 
+# #151's loss-of-contact backstop: a member whose SETTLED position cannot path to its leader within
+# COH leaves into a solo squad -- you cannot command what you cannot see or hear. Movement can no
+# longer author a split (the validator refuses it), so what reaches here is displacement the plan
+# didn't choose: a shove around a corner, ice melting under a formation. Called at the two points
+# board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution pass
+# and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed ejection.
+func enforce_contact() -> void:
+	var board: BoardContext = board_source.call()
+	for squad in squads.duplicate():
+		if not is_instance_valid(squad) or squad.members.size() <= 1:
+			continue
+		var leader_cell: Vector2i = squad.leader.movement.cell
+		for member in squad.members.duplicate():
+			if member == squad.leader:
+				continue
+			if not SquadCohesion.in_range(squad, leader_cell, member, member.movement.cell, board):
+				leave_squad(member)
+
 func check_reassign_leader(squad: Squad, unit: Unit):
 	if squad.members.is_empty():
 		return
@@ -99,8 +124,9 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 			newLeader = member
 	squad.leader = newLeader 
 
+	var board: BoardContext = board_source.call()
 	for member in squad.members.duplicate():
-		if not GridUtils.validate_member_distance(member):
+		if not SquadCohesion.in_range(squad, squad.leader.movement.cell, member, member.movement.cell, board):
 			leave_squad(member)
 
 	# Capacity overflow (#63): the new leader may command less than the old one.
@@ -117,12 +143,12 @@ func check_reassign_leader(squad: Squad, unit: Unit):
 		leave_squad(newest)
 
 func validate_squad_plan(squad: Squad, plan: ResolvedPlan = null) -> bool:
-	return SquadPlanValidator.validate(squad, squad.action_queue, plan)
+	return SquadPlanValidator.validate(squad, squad.action_queue, board_source.call(), plan)
 
 # Validate a HYPOTHETICAL queue — the hover preview's "what if it moved here?" and the queue-time
 # gate's "what if this were queued?". No plan: nothing has resolved this candidate.
 func validate_squad_plan_preview(squad: Squad, preview_action: BaseAction) -> bool:
-	return SquadPlanValidator.validate(squad, _hypothetical_actions(squad, preview_action))
+	return SquadPlanValidator.validate(squad, _hypothetical_actions(squad, preview_action), board_source.call())
 
 # The queue as it WOULD be with `preview_action` in it; displacement uses the squad's own rule.
 func _hypothetical_actions(squad: Squad, preview_action: BaseAction) -> Array[BaseAction]:
@@ -493,7 +519,7 @@ func can_join_any_squad(joining_unit: Unit) -> bool:
 # Shared by both formation checks: in range of the leader, room in the squad, same faction, not
 # already a member, and neither side has spent its turn.
 func _formation_basics_ok(unit: Unit, squad: Squad) -> bool:
-	if GridUtils.manhattan_distance(unit.movement.cell, squad.leader.movement.cell) > squad.get_max_squad_range():
+	if not SquadCohesion.in_range(squad, squad.leader.movement.cell, unit, unit.movement.cell, board_source.call()):
 		return false
 	if squad.members.size() >= squad.max_size():
 		return false

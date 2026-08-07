@@ -9,7 +9,8 @@
 #     enters the tree, or _ready() push_errors and skips building unit_instance.
 #   * Unit._ready() only wires movement to a grid if setup() was called first, so
 #     we DON'T call setup() — we set `movement.cell` directly (a plain field).
-#     No TileMapLayer / grid node is needed anywhere in these tests.
+#     The grid DOES carry a real TileSet + painted grass since #151 (see PAINTED_EXTENT):
+#     path-based cohesion walks terrain, so validation needs real walkable cells.
 #   * A pattern-less weapon makes Reach fall back to Manhattan range 1,
 #     so counter reach is trivial and grid-free: distance <= 1 can hit, >= 2 cannot.
 #   * SquadManager is stood up IN the SceneTree (see make_manager) so the Squad
@@ -124,12 +125,22 @@ static func spawn_solo(
 #   * gdUnit4 frees the entire subtree at teardown via the GameRoot registration.
 # Siblings are named to match the manager's @onready paths ($"../OverlayManager",
 # $"../Grid"); the OverlayManager also resolves its own children + $"../Grid".
+# The painted extent of make_manager's grid: open grass, generously past every cell the Tier-2
+# suites place units on. Real terrain became a REQUIREMENT with #151 -- cohesion is a path walk, so
+# a bare TileSet-less grid reads every cell unwalkable and every multi-member move goes invalid.
+# Open ground keeps path distance == Manhattan distance, so the suites' geometry semantics held.
+const PAINTED_EXTENT := 16
+
 static func make_manager(suite: GdUnitTestSuite) -> SquadManager:
 	var root := Node.new()
 	root.name = "GameRoot"
 
 	var grid := TileMapLayer.new()
 	grid.name = "Grid"
+	grid.tile_set = load("res://Resources/TestTiles.tres")
+	for x in range(-PAINTED_EXTENT, PAINTED_EXTENT + 1):
+		for y in range(-PAINTED_EXTENT, PAINTED_EXTENT + 1):
+			grid.set_cell(Vector2i(x, y), 0, Vector2i(5, 0))   # BoardBuilder's grass: walkable, cost 1
 	root.add_child(grid)
 
 	var overlay := OverlayManager.new()
@@ -143,6 +154,9 @@ static func make_manager(suite: GdUnitTestSuite) -> SquadManager:
 	var manager := SquadManager.new()
 	manager.name = "SquadManager"
 	root.add_child(manager)
+	# Cohesion reads live terrain (#151): fresh context per call, same shape as game._board.
+	manager.board_source = func() -> BoardContext:
+		return BoardContext.new(grid, manager._all_units(), manager)
 
 	suite.auto_free(root)
 	suite.add_child(root)   # enters tree -> every @onready resolves cleanly

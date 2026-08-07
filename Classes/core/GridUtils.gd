@@ -69,13 +69,6 @@ static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Text
 		return TERRAIN_ICONS[kind]
 	return ERROR_ICON
 	
-static func validate_member_distance(unit: Unit) -> bool:
-	var dist = manhattan_distance(unit.movement.cell, unit.squad.leader.movement.cell)
-	if dist > unit.squad.get_max_squad_range():
-		return false
-	else:
-		return true
-
 # Blended Manhattan/Chebyshev range (#25). `integral` = Manhattan reach; `and_a_half`
 # bevels in the diagonal corners of that ring (Chebyshev <= integral AND Manhattan
 # <= integral + 1): {1, true} = all 8 neighbours, {2, true} = next ring with corners

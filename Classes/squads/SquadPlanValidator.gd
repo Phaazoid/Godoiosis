@@ -16,7 +16,10 @@ class_name SquadPlanValidator
 # BaseAction.actor_can_perform at queue time. This is the separate, plan-CONTEXT layer: leader
 # range, destination conflicts, and adjacency that a re-planned move can silently break.
 
-static func validate(squad: Squad, actions: Array[BaseAction], plan: ResolvedPlan = null) -> bool:
+# `board` (#151): cohesion is path distance, so the validator reads terrain. Taken as a PARAMETER,
+# not looked up -- SquadManager.board_source resolves it fresh per validate, so a mid-battle terrain
+# change (FROZEN melting) is seen by the very next validation and never by a stale cache.
+static func validate(squad: Squad, actions: Array[BaseAction], board: BoardContext, plan: ResolvedPlan = null) -> bool:
 	for action in actions:
 		action.reset_validation()
 
@@ -25,7 +28,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], plan: ResolvedPla
 	var max_passes := squad.get_members().size() + 1
 	for _i in range(max_passes):
 		var before := actions.map(func(a): return a.is_valid)
-		_run_pass(squad, actions)
+		_run_pass(squad, actions, board)
 		if actions.map(func(a): return a.is_valid) == before:
 			break
 
@@ -54,7 +57,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], plan: ResolvedPla
 static func projected_cell_for(unit: Unit, actions: Array[BaseAction]) -> Vector2i:
 	return Unit.projected_cell(unit, actions, false, false)
 
-static func _run_pass(squad: Squad, actions: Array[BaseAction]) -> void:
+static func _run_pass(squad: Squad, actions: Array[BaseAction], board: BoardContext) -> void:
 	for action in actions:
 		action.clear_validation_messages()
 
@@ -66,28 +69,24 @@ static func _run_pass(squad: Squad, actions: Array[BaseAction]) -> void:
 			move_actions.append(action as MoveAction)
 
 	# Leader-range validity must resolve BEFORE the occupancy check, which trusts is_valid.
-	_check_leader_range(squad, actions, move_actions)
+	_check_leader_range(squad, actions, move_actions, board)
 	_check_destination_conflicts(squad, actions, move_actions)
 	_revalidate_rescues(actions)
 	_revalidate_intimidates(actions)
 	_revalidate_captures(actions)
 
-# A non-leader squadmate must end inside the leader's projected cohesion range. Group Move may leave
+# A non-leader squadmate must end inside the leader's projected cohesion range -- SquadCohesion's
+# path-based bubble since #151, asked per member because traversal is per-unit. Group Move may leave
 # a slower member SHORT of its formation slot, but never outside this bubble — a destination that
 # would is refused, and painted red before the click (GroupMoveSolver.followable_destinations).
-static func _check_leader_range(squad: Squad, actions: Array[BaseAction], move_actions: Array[MoveAction]) -> void:
+static func _check_leader_range(squad: Squad, actions: Array[BaseAction], move_actions: Array[MoveAction], board: BoardContext) -> void:
 	var leader_cell := projected_cell_for(squad.leader, actions)
 	for action in move_actions:
 		var moving_unit: Unit = action.actor
 		if moving_unit == squad.leader or not moving_unit.has_squad():
 			continue
-		if not cohesion_ok(squad, leader_cell, action.get_destination()):
+		if not SquadCohesion.in_range(squad, leader_cell, moving_unit, action.get_destination(), board):
 			action.add_validation_error("Too far from the squad leader")
-
-# The single copy of "may this squadmate end here?" — read by the validator and by the solver's
-# followable_destinations sweep, so the red tiles and the refusal cannot drift apart.
-static func cohesion_ok(squad: Squad, leader_cell: Vector2i, destination: Vector2i) -> bool:
-	return GridUtils.manhattan_distance(destination, leader_cell) <= squad.get_max_squad_range()
 
 # Two members can't land on the same cell, and a cell only frees up if its current occupant has a
 # VALID move away. An invalid move (out of leader range) or a hold means they stay put.

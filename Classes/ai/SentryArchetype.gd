@@ -21,11 +21,7 @@ static func take_squad_turn(squad: Squad, board: BoardContext, squad_manager: Sq
 
 	var intruder := AITactics.nearest_enemy(leader, board, zone_set)
 	if intruder != null:
-		var destination := AITactics.best_attack_destination(leader, intruder, board, allowed)
-		if destination != leader.movement.cell:
-			squad_manager.queue_group_move(squad, destination, board, allowed)
-		for member in squad.get_members():
-			AITactics.queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
+		AITactics.engage(squad, intruder, board, squad_manager, allowed)
 		return
 
 	if leader.movement.cell != squad.home_cell:

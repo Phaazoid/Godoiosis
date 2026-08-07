@@ -43,7 +43,7 @@ static func resolve(t: Type) -> Callable:
 # test_ai_action_coverage.gd: a new verb can't silently skip the AI -- declare a stance
 # (even NEVER) or the suite goes red.
 const MAIN_ACTION_PRIORITY := {
-	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD],
+	Type.RUSHDOWN: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV],
 	Type.HOLD: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
 			BaseAction.ActionType.RELOAD, BaseAction.ActionType.INTIMIDATE],
 	Type.SENTRY: [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RESCUE,
@@ -57,7 +57,7 @@ const MAIN_ACTION_PRIORITY := {
 # only when non-player factions get objectives of their own.
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.RALLY,
-			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
+			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.BURROW,
 			BaseAction.ActionType.CAPTURE],
 	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
 			BaseAction.ActionType.CAPTURE],

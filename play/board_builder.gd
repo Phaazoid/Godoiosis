@@ -57,6 +57,16 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	terrain_states.name = "TerrainStateManager"
 	root.add_child(terrain_states)
 
+	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
+	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
+	# lambda captures what exists at creation.
+	squad_manager.board_source = func() -> BoardContext:
+		var units: Array[Unit] = []
+		for child in units_root.get_children():
+			if child is Unit:
+				units.append(child)
+		return BoardContext.new(grid, units, squad_manager, terrain_states)
+
 	return {
 		"root": root,
 		"grid": grid,

@@ -30,7 +30,7 @@ var _sm: SquadManager
 func before_test() -> void:
 	_sm = H.make_manager(self)
 
-# Equip `healer` with a heal-authored weapon, the way the #122 reactive-heal work does.
+# Equip `healer` with a heal-authored weapon, the way the #148 reactive-heal work does.
 func _make_healer(healer: Unit) -> void:
 	var weapon := H.make_weapon(4)
 	weapon.template.main_attack.heals = true

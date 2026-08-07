@@ -91,6 +91,34 @@ func test_can_traverse_ignores_occupancy() -> void:
 	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
 
 
+func test_active_enemy_still_blocks_movement() -> void:
+	# #122: only the DOWNED half of the asymmetry changes. An active enemy occupant must keep
+	# refusing traversal exactly as before.
+	var board := _board()
+	var mover := _spawn(board, Vector2i(0, 0), false)
+	var blocker := BoardBuilder.spawn(board, H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(1, 0))
+	var units: Array[Unit] = [mover, blocker]
+	var context := BoardContext.new(board.grid, units, board.squad_manager)
+
+	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
+
+func test_downed_enemy_is_traversable_but_not_reachable() -> void:
+	# #122: a downed enemy body stops blocking a PATH through its cell (matching a downed ally
+	# today), but compute_move_range's destination filter -- unchanged -- still refuses standing
+	# on it. The second assertion is the one that matters: falsify by reverting the fix and the
+	# first assertion should go red while this one stays green.
+	var board := _board()
+	var mover := _spawn(board, Vector2i(0, 0), false)
+	var blocker := BoardBuilder.spawn(board, H.make_unit_data({}, Team.Faction.ENEMY), Vector2i(1, 0))
+	blocker.lifecycle_state = Unit.LifecycleState.DOWNED
+	var units: Array[Unit] = [mover, blocker]
+	var context := BoardContext.new(board.grid, units, board.squad_manager)
+
+	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_less(RulesService.CANNOT_WALK_TILE)
+
+	var result := RulesService.compute_move_range(mover, context)
+	assert_bool(result.reachable.has(Vector2i(1, 0))).is_false()
+
 func test_waterwalk_move_range_stays_within_mov_budget_across_water() -> void:
 	var board := _board()
 	for x in range(1, 10):

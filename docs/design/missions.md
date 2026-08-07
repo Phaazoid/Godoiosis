@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #120 (2026-07-30).**
+**Canon checked through #151 (2026-08-06).**
 
 ## What a mission is
 
@@ -138,7 +138,9 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 
 `CAPTURE` sits in `AIArchetype.MAIN_ACTION_NEVER` for all three archetypes, and `tests/law/test_ai_action_coverage.gd` forced that to be an explicit decision.
 
-**This is not the Rev/Burrow drift.** There is nothing for an AI faction to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s "defend a point".
+**This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow remains the
+live example — nobody has written it a scored builder yet). There is nothing for an AI faction
+to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s "defend a point".
 
 ## Known gaps
 

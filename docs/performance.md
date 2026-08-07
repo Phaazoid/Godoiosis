@@ -90,13 +90,37 @@ a batch. Don't: `game._on_unit_action_queued` does one cheap per-*unit* job — 
 sprite for the projected ghost — and skipping it would leave every member but the last rendered
 twice. Only the expensive squad-level repaint (`game._repaint_squad_plan`) is coalesced.
 
-**`_path_hops` must ask `RulesService.can_traverse`, not `movement_cost`** (#115, 2026-07-29). It
+**The COHESION field must ask `RulesService.can_traverse`, not `movement_cost`** (#115, 2026-07-29). It
 takes a unit now, because traversal is per-unit — a Waterwalker's connected region includes water,
 and building one shared field from the bare cell predicate silently un-did the ability for any unit
 moving with its squad. Routing it through `movement_cost` instead is the obvious-looking
 simplification and is **wrong**: that adds the enemy-occupancy rule, which would let a single enemy
 body sever the cohesion field and change formations near any enemy. Occupancy blocks a move; it is
 not terrain, and it moves every turn. Pinned by `test_an_enemy_body_does_not_sever_the_cohesion_field`.
+
+**…but occupancy-awareness is now an OPT-IN parameter, and the default is the load-bearing half**
+(`path_hops(…, block_on_occupancy := false)`, #127, 2026-08-06). The paragraph above is a rule about
+the *cohesion caller*, not about the function: the AI's approach picker needs the opposite answer,
+because it is estimating the route a unit will actually walk, where a standing enemy genuinely must
+be gone around. Both are one question — hop distance under a traversal rule — so the rule is a
+parameter each caller states rather than a second BFS to hand-copy.
+
+**Which side each caller takes, and why it is not negotiable per-caller:**
+- `GroupMoveSolver` (cohesion, ×2) — **blind**, for the #115 reason above. The pin calls the default
+  form, so flipping the default goes red.
+- `AITactics.nearest_enemy` (via `_approach_distances`) — **aware**, but only because it stopped
+  routing to enemy *squares*. Routing to a square with occupancy on scores every enemy `UNREACHABLE`
+  (an active enemy blocks passage) and collapses selection to the raw-distance tie-break; routing to
+  each enemy's standable **firing cells** is what makes the honest metric usable here. Still one BFS
+  for all enemies — the `until` set is the union of every firing cell. Keeping it blind was the
+  original #127 answer and was wrong for a subtler reason: it made target selection and the approach
+  picker disagree about which enemy was closest.
+- `AITactics._best_approach` (**both** approach callers — attack *and* Sentry's walk home) — **aware**,
+  unconditionally. This half is deliberately NOT keyed off the attack-specific `route_target`: keying
+  it there welded two unrelated questions to one flag and left `closest_reachable_cell_to` unable to
+  reach the fix. A sentry walking home through a corridor an enemy is holding stalls in exactly the
+  same way, and is pinned separately by
+  `test_walking_home_routes_around_a_body_holding_the_corridor`.
 
 **The cohesion (leash) field is computed per member, and that is not a regression to "fix".** It was
 one shared call before #115. Cost of the change, measured over four runs against a single-run 5.75 ms
@@ -105,6 +129,16 @@ depth-bounded walks are far cheaper than the `compute_move_range` call sitting b
 same loop (~1 ms per member, essentially all of `plan`'s time). The plan signature was **IDENTICAL**
 on all four runs, which is the part that matters: Castle Assault has no Waterwalkers, so any
 signature change would have meant ordinary formations moved.
+
+**#151 (path-based cohesion) changed the field's SHAPE, not its cost class — and the costs it added
+are un-measured.** The solver's leader field is now bounded at COH (was COH×2, so it *shrank*);
+`SquadPlanValidator._check_leader_range` computes one bounded field per qualifying move per pass
+(new — the Manhattan compare was O(1)); `compute_move_range` adds one bounded field per non-leader
+call; `followable_destinations`' Manhattan dilation became one bounded walk per standable cell.
+Every walk is `max_depth = COH` (~41 cells at COH 4), the shape measured above as inside noise, and
+the full suite's wall clock did not move (60.5s at 1012 cases) — but nobody has profiled a real
+Castle Assault click since the swap. If Group Move hover ever feels sluggish, profile
+`followable_destinations` first (most walks), then the validator's fixed point (most repeated).
 
 **`_path_hops`' two stopping rules only skip work whose answer was already discarded.**
 - `max_depth` — the caller only compares the result against a threshold, so a cell beyond the bound

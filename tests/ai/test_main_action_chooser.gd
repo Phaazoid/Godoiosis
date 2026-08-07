@@ -189,6 +189,26 @@ func test_sprung_weapon_falls_through_to_reload() -> void:
 	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.RELOAD)
 
 
+func test_rev_capable_weapon_revs_when_nothing_else_applies() -> void:
+	# Chainsword can always rev (#84) -- H.make_weapon()'s default family. No target on the
+	# board and nothing to reload: REV is the only candidate left in the walk (finding #3).
+	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0))
+
+	var units: Array[Unit] = [attacker]
+	var priority: Array = [BaseAction.ActionType.ATTACK, BaseAction.ActionType.RELOAD, BaseAction.ActionType.REV]
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, priority)).is_true()
+	assert_int(attacker.squad.action_queue.size()).is_equal(1)
+	assert_int(attacker.squad.action_queue[0].action_type).is_equal(BaseAction.ActionType.REV)
+
+
+func test_non_rev_weapon_declines_rev() -> void:
+	var attacker: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {}, false)   # unarmed
+
+	var units: Array[Unit] = [attacker]
+	assert_bool(AITactics.queue_main_action(attacker, _board(units), _sm, [BaseAction.ActionType.REV])).is_false()
+	assert_array(attacker.squad.action_queue).is_empty()
+
+
 func test_priority_order_is_respected_when_both_are_buildable() -> void:
 	var unit: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 1))
 	var fallen: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))
