@@ -156,17 +156,9 @@ func _wire_signals() -> void:
 #  Input
 # ==============================================================================
 
+# Dev keys (F1/F2/F3) are NOT here -- they live on DevController, which is exempt from the modal
+# freeze. A dev key added back here would silently die whenever a card is up.
 func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("toggle_dev_overlay") and dev_overlay != null:
-		if not dev_overlay.visible:
-			dev_overlay.show_beside()
-			set_dev_mode(true)
-		else:
-			set_dev_mode(game_state != GameState.DEV_MODE)
-	if event.is_action_pressed("dev_report_bug"):
-		# The dev's zero-friction path: no card, no note, and nothing covering the board, so it is
-		# the one caller that can let report() grab its own frame.
-		bug_reporter.report(GameState.keys()[game_state], BugReporter.Kind.BUG, "", null)
 	# The modal check is belt-and-braces since #131: a modal pauses the tree, and a paused node
 	# receives no input at all, so this handler is already silent while one is up. Kept because it
 	# states the intent at the gate rather than relying on a consequence of the pause.

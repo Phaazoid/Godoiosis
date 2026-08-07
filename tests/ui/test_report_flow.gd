@@ -297,6 +297,57 @@ func test_the_uploader_outlives_the_pause_it_runs_behind() -> void:
 	assert_int(uploader.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
 
 
+func test_dev_controls_outlive_the_modal_lock() -> void:
+	# Dev controls are a layer ABOVE the lock. The boundary was drawn before dev affordances were
+	# in scope, so every dev key sat under the freeze. can_process() is the delivery precondition
+	# for _input, so assert it in the same breath as the loops that MUST stay frozen.
+	# Falsify by deleting DevController's _ready: this goes red, every other freeze case stays green.
+	var dev: DevController = game.dev_controller
+	assert_int(dev.process_mode).is_equal(Node.PROCESS_MODE_ALWAYS)
+
+	game.open_report_card(BugReporter.Kind.BUG)
+	await _frames(4)
+	assert_bool(game.can_process()).is_false()
+	assert_bool(game.camera_controller.can_process()).is_false()
+	assert_bool(dev.can_process()).is_true()
+
+	var card: Node = _first_modal_of(ReportPanel)
+	card.finished.emit(false)
+	await _frames(4)
+
+
+func test_the_report_hotkey_fires_behind_a_modal() -> void:
+	# The reported symptom itself: F3 did nothing while a menu was up. Real InputEvents are never
+	# delivered headless, so the event goes to _input directly -- that is the handler either way,
+	# and can_process above is what pins the delivery half.
+	assert_bool(DevTools.enabled()).is_true()   # the gate; without this the case passes vacuously
+	var before: int = _report_dirs().size()
+
+	game._open_pause_menu()
+	await _frames(4)
+	assert_object(_first_modal_of(PauseMenu)).is_not_null()   # the board really is locked
+
+	var press := InputEventAction.new()
+	press.action = "dev_report_bug"
+	press.pressed = true
+	game.dev_controller._input(press)
+	await _frames(4)
+
+	var after: Array[String] = _report_dirs()
+	assert_int(after.size()).is_equal(before + 1)
+	for dir: String in after:
+		_written.append("user://reports/".path_join(dir))
+
+
+func _report_dirs() -> Array[String]:
+	var access := DirAccess.open("user://reports")
+	if access == null:
+		return []
+	var dirs: Array[String] = []
+	dirs.assign(access.get_directories())
+	return dirs
+
+
 func test_a_headless_run_never_uploads() -> void:
 	# Falsify by deleting the headless check in ReportUploader.is_configured(): this goes red, and
 	# in the version that ships it would instead post a report to Discord for every test that

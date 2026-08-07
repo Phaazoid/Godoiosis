@@ -4,7 +4,7 @@ class_name DevController
 # Dev-only board manipulation, pulled out of game.gd (#22): unit move/duplicate arming,
 # tile-brush paint/erase, and map resize. Holds a back-ref to the Game coordinator for the
 # board primitives it needs. Isolating this keeps the shipping coordinator clean and the dev
-# glue strippable.
+# glue strippable. Also the one home for the dev KEYS (F1/F2/F3, #154) -- see _input.
 
 enum PendingAction { NONE, MOVE, DUPLICATE }
 
@@ -13,6 +13,38 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 var _pending_action: PendingAction = PendingAction.NONE
 var _pending_unit: Unit = null
 var _brush_painting := false
+
+# --- dev keys ---
+
+# The dev layer sits ABOVE the game rules: ALWAYS keeps these keys alive while ModalLock has the
+# Game subtree DISABLED. A freeze stops callbacks, not method calls, so the frozen collaborators
+# below still answer.
+func _ready() -> void:
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
+func _input(event: InputEvent) -> void:
+	if not DevTools.enabled():
+		return
+	if event.is_action_pressed("toggle_dev_overlay"):
+		_toggle_dev_overlay()
+	elif event.is_action_pressed("dev_reset_scenario"):
+		game.scenario_manager.reload_current()
+	elif event.is_action_pressed("dev_report_bug"):
+		# The zero-friction path: no card, no note, nothing covering the board, so it is the one
+		# caller that lets report() grab its own frame.
+		var state_name: String = game.GameState.keys()[game.game_state]
+		var reporter: BugReporter = game.bug_reporter
+		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
+
+func _toggle_dev_overlay() -> void:
+	var overlay: DevOverlay = game.dev_overlay
+	if overlay == null:
+		return
+	if not overlay.visible:
+		overlay.show_beside()
+		game.set_dev_mode(true)
+	else:
+		game.set_dev_mode(game.game_state != game.GameState.DEV_MODE)
 
 # --- unit move / duplicate ---
 

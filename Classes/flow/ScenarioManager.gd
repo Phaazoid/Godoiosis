@@ -183,10 +183,6 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 	for file in ResourceDir.files_with_extension(dir, ".tres"):
 		paths.append(dir.path_join(file))
 
-func _unhandled_input(event):
-	if event.is_action_pressed("dev_reset_scenario") and DevTools.enabled():
-		reload_current()
-
 func clear_board():
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
 	# Same seam for AI control (#150): spawn_sandbox() lands here with no ScenarioData, so without

@@ -235,6 +235,49 @@ func test_attack_targeting_queues_an_attack_order() -> void:
 
 
 # ------------------------------------------------------------------------------
+#  Dev keys -- DevController owns them, and a mistyped action fires for nobody
+# ------------------------------------------------------------------------------
+
+# Real InputEvents are not delivered headless (gdUnit4 warns about it every run), so dev keys go
+# to _input directly -- the same trick the click tests use for _on_left_click.
+func _dev_key(action: String) -> InputEventAction:
+	var press := InputEventAction.new()
+	press.action = action
+	press.pressed = true
+	return press
+
+
+func test_the_dev_overlay_hotkey_toggles_dev_mode() -> void:
+	assert_bool(DevTools.enabled()).is_true()   # the gate on all three keys
+	assert_object(game.dev_overlay).is_not_null()
+	assert_bool(game.dev_overlay.visible).is_false()
+
+	game.dev_controller._input(_dev_key("toggle_dev_overlay"))
+	assert_bool(game.dev_overlay.visible).is_true()
+	assert_int(game.game_state).is_equal(game.GameState.DEV_MODE)
+
+	# Second press leaves the overlay up and drops back out of DEV_MODE.
+	game.dev_controller._input(_dev_key("toggle_dev_overlay"))
+	assert_int(game.game_state).is_equal(game.GameState.IDLE)
+
+
+func test_the_reset_hotkey_rebuilds_the_board() -> void:
+	# F2 moved file AND callback (_unhandled_input -> _input), so it is the key most likely to have
+	# been silently dropped. The sandbox clears last_loaded_path, which would make reload a no-op,
+	# so load a real fixture first -- otherwise this passes without reloading anything.
+	game.scenario_manager.load_scenario("res://Scenarios/fixtures/SquadJoinLeave.tres")
+	await await_idle_frame()
+	var before: Unit = _first_player_unit()
+	assert_object(before).is_not_null()
+
+	game.dev_controller._input(_dev_key("dev_reset_scenario"))
+	await await_idle_frame()
+	# clear_board frees every unit, so the old instance going invalid IS the reload.
+	assert_bool(is_instance_valid(before)).is_false()
+	assert_object(_first_player_unit()).is_not_null()
+
+
+# ------------------------------------------------------------------------------
 #  Selection lifecycle -- the selection must never outlive its unit (#149)
 # ------------------------------------------------------------------------------
 

@@ -26,6 +26,11 @@ class_name ModalLock
 # themselves, and BugReporter + ReportUploader, since an upload is in flight WHILE the card is up
 # and HTTPRequest emits request_completed from its own internal process. DevOverlay needs nothing:
 # it is a sibling of GameContainer, outside Game entirely.
+#
+# DEV CONTROLS ARE A LAYER ABOVE THIS LOCK (#154), and DevController is the in-Game exemption: it holds
+# every dev key (F1/F2/F3) and is ALWAYS, so they still fire behind a card. A dev key added to
+# game.gd instead would die silently whenever a modal is up. Board manipulation (dev spawn, tile
+# brush) deliberately stays frozen -- it is not worth editing what the card is covering.
 
 const GROUP := "modal"
 
