@@ -186,6 +186,52 @@ func test_a_fresh_board_is_not_contested() -> void:
 
 
 # ==============================================================================
+#  Who the computer plays (#150)
+# ==============================================================================
+
+func test_ai_factions_survive_a_round_trip() -> void:
+	# Before #150 the flags were session-only, so a board could not say who the computer played --
+	# which is why an authored mission handed the player its own enemies.
+	var controller: AIController = game.ai_controller
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	controller.set_faction_ai_enabled(Team.Faction.ENEMY, true)
+
+	_round_trip()
+
+	assert_bool(controller.is_ai_faction(Team.Faction.ENEMY)).is_true()
+	assert_bool(controller.is_ai_faction(Team.Faction.PLAYER)).is_false()
+
+
+func test_loading_a_board_that_declares_no_ai_turns_a_live_faction_OFF() -> void:
+	# The apply must REPLACE the set, not merge into it. Merged, a faction ticked on the previous
+	# board stays AI-controlled on the next one -- and the flag decides three things beyond whose
+	# turn it is (concede-vs-hand-back on an invalid plan, and the Crisis prompt), so the leak would
+	# not read as "the AI moved", it would read as the player's own prompt silently not appearing.
+	var controller: AIController = game.ai_controller
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var snapshot: ScenarioData = sm.capture_scenario("__no_ai")   # captured while everything is manual
+	assert_array(snapshot.ai_factions).is_empty()
+
+	controller.set_faction_ai_enabled(Team.Faction.ENEMY, true)
+	sm.apply_scenario(snapshot)
+
+	assert_bool(controller.is_ai_faction(Team.Faction.ENEMY)).is_false()
+
+
+func test_a_squads_archetype_survives_a_round_trip() -> void:
+	# The other half of #150. It was already captured (on the leader's entry) and already applied,
+	# but nothing in tests/ asserted it -- so the half that worked was as unpinned as the half
+	# that didn't.
+	var leader := _spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	leader.squad.archetype = AIArchetype.Type.SENTRY
+
+	_round_trip()
+
+	assert_that(_unit_at(Vector2i(4, 4)).squad.archetype).is_equal(AIArchetype.Type.SENTRY)
+
+
+# ==============================================================================
 #  Unit battle state, through the REAL loader
 # ==============================================================================
 

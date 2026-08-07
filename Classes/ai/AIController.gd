@@ -6,10 +6,10 @@ class_name AIController
 # archetype plans, then reuses OrderExecutor.execute_orders (the same path the player's
 # Execute button takes) so a bot turn resolves identically to a human one.
 #
-# Two independent layers. ENABLED is per-faction and session-only (Dev Overlay -> Scenario
-# tab checkboxes) -- a kill switch that always reverts a faction to manual control, never
-# persisted. ARCHETYPE (AIArchetype.Type) is per-squad and persists WITH the scenario
-# (Squad.archetype, saved via ScenarioUnitEntry.squad_archetype on the leader's entry).
+# Two independent layers, and since #150 both are BOARD CONTENT. ENABLED is per-faction,
+# carried by ScenarioData.ai_factions and applied on every load -- the Dev Overlay -> Scenario
+# tab checkboxes are the live override, no longer the only source. ARCHETYPE (AIArchetype.Type)
+# is per-squad (Squad.archetype, saved via ScenarioUnitEntry.squad_archetype on the leader's).
 
 var game   # the Game coordinator; set by game._ready()
 
@@ -24,6 +24,22 @@ func set_faction_ai_enabled(faction: Team.Faction, enabled: bool) -> void:
 
 func is_ai_faction(faction: Team.Faction) -> bool:
 	return is_faction_ai_enabled(faction)
+
+# The enabled set, in Team.all_factions() order -- deterministic, so re-saving an unchanged
+# board produces no spurious .tres churn.
+func ai_factions() -> Array[Team.Faction]:
+	var result: Array[Team.Faction] = []
+	for faction in Team.all_factions():
+		if is_faction_ai_enabled(faction):
+			result.append(faction)
+	return result
+
+# REPLACES the whole set, never adds to it (#150): an unlisted faction falls back to
+# DEFAULT_ENABLED, so one board's flags cannot leak into the next board loaded.
+func set_ai_factions(factions: Array[Team.Faction]) -> void:
+	_enabled.clear()
+	for faction in factions:
+		_enabled[faction] = true
 
 func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 	for squad in game.squad_manager.squads.duplicate():

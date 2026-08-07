@@ -1,6 +1,11 @@
 extends Resource
 class_name ScenarioData
 
+# The saved board: terrain, units, squads, whose turn it is, who the computer plays, and the
+# mission layer (objectives + zones + progress). There is ONE board resource -- a "mission" is
+# just one of these saved under Scenarios/missions/ (missions.md). ScenarioManager's
+# capture_scenario/apply_scenario are its writer and reader; ScenarioUnitEntry is the per-unit half.
+
 @export var scenario_name := ""
 @export var unit_entries: Array[ScenarioUnitEntry] = []
 @export var tile_data: PackedByteArray
@@ -13,6 +18,12 @@ class_name ScenarioData
 									 # that one is authoritative (missions.md; MissionController
 									 # reads an unpainted declared objective as PENDING, never NONE).
 @export var objectives: Array[MissionRules.Objective] = []   # empty = plain rout map
+
+# Which factions the computer plays on this board (#150). Empty = every faction is manual, which
+# is the hotseat/dev-scratch default; an authored mission lists its ENEMY here or the player is
+# handed both sides. Applied exhaustively on load via AIController.set_ai_factions, so a board
+# that declares nothing actively turns the last board's flags OFF.
+@export var ai_factions: Array[Team.Faction] = []
 
 # --- Mission-scoped battle state (#87), the board-wide half of a mid-battle snapshot. ---
 @export var captured_zones: Array[String] = []   # CAPTURE zones already claimed

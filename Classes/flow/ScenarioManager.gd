@@ -63,6 +63,7 @@ func capture_scenario(scenario_name: String) -> ScenarioData:
 	scenario.terrain_states = game.terrain_states.to_state_dict()
 	scenario.zones = game.zone_manager.to_dict()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
+	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.captured_zones = game.mission_controller.captured_zone_names()
 	scenario.contested = game.mission_controller.is_contested()
 
@@ -105,6 +106,9 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	game.zone_manager.load_dict(scenario.zones)
 	game.mission_controller.set_objectives(scenario.objectives)
 	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested)
+	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
+	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
+	game.ai_controller.set_ai_factions(scenario.ai_factions)
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -185,6 +189,11 @@ func _unhandled_input(event):
 
 func clear_board():
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
+	# Same seam for AI control (#150): spawn_sandbox() lands here with no ScenarioData, so without
+	# this it would inherit the last mission's flags. A typed local, not a bare [] -- `game` is
+	# untyped, and a literal passed through it is not coerced to the typed parameter.
+	var no_ai_factions: Array[Team.Faction] = []
+	game.ai_controller.set_ai_factions(no_ai_factions)
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager)
 	if game.dev_overlay != null:

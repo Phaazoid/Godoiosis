@@ -13,6 +13,7 @@ class_name ScenarioTool
 var scenario_manager: ScenarioManager
 var game
 var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
+var _ai_boxes: Dictionary[Team.Faction, CheckBox] = {}
 var _objective_warning: Label
 
 const NO_ZONE_LABEL := "(no zone)"
@@ -59,6 +60,7 @@ func refresh_loaded_label() -> void:
 func refresh_on_show() -> void:
 	refresh_squads()
 	refresh_objectives()
+	refresh_ai_toggles()
 	refresh_loaded_label()
 
 func _refresh_update_button() -> void:
@@ -68,6 +70,7 @@ func _refresh_update_button() -> void:
 func _build_ai_toggles():
 	for child in ai_toggle_list.get_children():
 		child.queue_free()
+	_ai_boxes.clear()
 	for faction in Team.all_factions():
 		var box := CheckBox.new()
 		box.text = Team.faction_name(faction)
@@ -75,6 +78,15 @@ func _build_ai_toggles():
 		box.tooltip_text = "AI-controlled at this faction's turn"
 		box.toggled.connect(func(pressed): game.ai_controller.set_faction_ai_enabled(faction, pressed))
 		ai_toggle_list.add_child(box)
+		_ai_boxes[faction] = box
+
+# The flags are board content since #150, so a load changes them without this tab's involvement.
+# set_pressed_no_signal, never button_pressed: the latter fires `toggled`, and a refresh that
+# writes back into AIController would author state instead of displaying it.
+func refresh_ai_toggles() -> void:
+	for faction in _ai_boxes:
+		var enabled: bool = game.ai_controller.is_faction_ai_enabled(faction)
+		_ai_boxes[faction].set_pressed_no_signal(enabled)
 
 # Public so DevOverlay can call it on tab-switch -- squads form/rename outside this tab
 # (Unit Editor, actual play), so the list needs to be rebuilt each time it's shown.
@@ -138,6 +150,7 @@ func _on_load_pressed() -> void:
 	scenario_manager.load_scenario(ScenarioManager.scenario_path(target))
 	refresh_squads()
 	refresh_objectives()
+	refresh_ai_toggles()
 	refresh_dropdown(target)
 	refresh_loaded_label()
 

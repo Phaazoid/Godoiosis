@@ -1,5 +1,6 @@
 # AIController toggles + the group-move zone clamp (#29). The toggle contract backs the
-# Crisis auto-yes gate and the dev-console checkboxes: default OFF, per-faction, session-only.
+# Crisis auto-yes gate and the dev-console checkboxes: default OFF, per-faction, and since #150
+# carried by ScenarioData.ai_factions -- so the set is REPLACED on every load, never merged.
 # The clamp contract backs the Sentry leash: no squadmate may be assigned a cell outside
 # `allowed_cells`, and a member parked on a dis-allowed cell must step back inside.
 extends GdUnitTestSuite
@@ -42,6 +43,28 @@ func test_toggle_is_per_faction() -> void:
 
 	controller.set_faction_ai_enabled(Team.Faction.ENEMY, false)
 	assert_bool(controller.is_ai_faction(Team.Faction.ENEMY)).is_false()
+
+
+func test_set_ai_factions_replaces_the_set_rather_than_adding_to_it() -> void:
+	# #150: the flags now arrive from a board, so applying one must UN-set whatever the last board
+	# left on. An additive implementation leaks AI control across every scenario load.
+	var controller: AIController = auto_free(AIController.new())
+	controller.set_faction_ai_enabled(Team.Faction.ENEMY, true)
+
+	var only_ally: Array[Team.Faction] = [Team.Faction.ALLY]
+	controller.set_ai_factions(only_ally)
+
+	assert_bool(controller.is_ai_faction(Team.Faction.ALLY)).is_true()
+	assert_bool(controller.is_ai_faction(Team.Faction.ENEMY)).is_false()
+
+
+func test_ai_factions_reads_back_the_toggles_in_enum_order() -> void:
+	# Deterministic order keeps a re-save of an unchanged board from churning its .tres.
+	var controller: AIController = auto_free(AIController.new())
+	controller.set_faction_ai_enabled(Team.Faction.ALLY, true)
+	controller.set_faction_ai_enabled(Team.Faction.ENEMY, true)
+
+	assert_array(controller.ai_factions()).contains_exactly([Team.Faction.ENEMY, Team.Faction.ALLY])
 
 
 func test_archetype_resolution_falls_back_to_default() -> void:
