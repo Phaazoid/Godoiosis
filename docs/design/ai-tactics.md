@@ -1,6 +1,6 @@
 # AI Tactics — the archetype layer's integration contract
 
-**Canon checked through #148 (2026-08-06).**
+**Canon checked through #151 (2026-08-06).**
 
 **Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again.
 
@@ -37,6 +37,17 @@ Candidate builders live in `AITactics` (one per type, each mirroring `MainAction
 - Intimidation/rescue on Hold+Sentry only — defenders recover their own and menace what they can't hit; Rushdown stays pure aggression.
 - Rescue before Reload: a returned unit now beats rearming for later. (The verb was `SPRING_LOAD` when these tables were ratified; it went generic as `RELOAD` in #84 when the Carbine wanted the same order — same slot, same priority, one more family using it.) Intimidate last: menace only when nothing better exists.
 - RALLY is NEVER everywhere for now: early rallies burn the strong falloff steps (6/4/2…) while idling. Revisit with real Will-awareness — this is a deliberately parked knob, not an oversight.
+
+## Shared engage plumbing
+
+`AITactics.engage(squad, target, board, squad_manager, allowed = null)` is the one place "fight
+this target" is defined: destination pick (`best_attack_destination`) → conditional group move
+→ every member tries a main action (`queue_main_action`). Rushdown's whole turn and Sentry's
+intruder branch both call it. It had been hand-duplicated between the two files since #29 —
+flagged by the #127 handoff (2026-08-06) as the shape that let that fix's destination-picker
+half reach both archetypes for free, since it landed one layer down in `AITactics` rather than
+in either archetype file; extracted the same day. `HoldArchetype` never moves, so it has no
+engage step.
 
 ## Attack scoring (ratified, flagged evolvable)
 

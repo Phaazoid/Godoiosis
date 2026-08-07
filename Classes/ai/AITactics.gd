@@ -264,6 +264,18 @@ static func best_attack_destination(leader: Unit, enemy: Unit, board: BoardConte
 	return _best_approach(leader, enemy.movement.cell, board, allowed, true, route_target)
 
 
+# Fights `target`: destination pick -> conditional group move -> every member tries a main
+# action. The shared shape behind Rushdown's whole turn and Sentry's intruder branch -- was
+# hand-duplicated in both files with no third caller (AI generalization sweep, finding #2).
+static func engage(squad: Squad, target: Unit, board: BoardContext, squad_manager: SquadManager, allowed = null) -> void:
+	var leader := squad.get_leader()
+	var destination := best_attack_destination(leader, target, board, allowed)
+	if destination != leader.movement.cell:
+		squad_manager.queue_group_move(squad, destination, board, allowed)
+	for member in squad.get_members():
+		queue_main_action(member, board, squad_manager, AIArchetype.main_action_priority(squad.archetype))
+
+
 # Reachable cell that best approaches `goal_cell` -- Sentry's walk back to its post. Same walk with
 # no attack term: a post is a place, not a target.
 static func closest_reachable_cell_to(unit: Unit, goal_cell: Vector2i, board: BoardContext, allowed = null) -> Vector2i:
