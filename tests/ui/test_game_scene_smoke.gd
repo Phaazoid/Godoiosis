@@ -232,3 +232,52 @@ func test_attack_targeting_queues_an_attack_order() -> void:
 		if action.actor == attacker and action is AttackAction:
 			queued += 1
 	assert_int(queued).is_equal(1)
+
+
+# ------------------------------------------------------------------------------
+#  Selection lifecycle -- the selection must never outlive its unit (#149)
+# ------------------------------------------------------------------------------
+
+func test_selection_released_when_selected_unit_dies() -> void:
+	# The selection is STORED (#107) and nothing released it when its unit was freed.
+	var unit := _first_player_unit()
+	game._on_left_click(unit.movement.cell)
+	assert_object(game.selected_unit).is_same(unit)
+
+	unit.die()
+	await await_idle_frame()
+	# Asserted separately so a failure says WHICH half broke: queue_free is deferred, and
+	# without the frame above the reference is still valid and the case proves nothing.
+	assert_bool(is_instance_valid(unit)).is_false()
+	# The TYPED read is the whole assertion -- a dangling reference compares `== null` as true
+	# (measured), so an untyped check here cannot see the bug. Only resolving the ObjectID to
+	# type-check it raises "Trying to assign invalid previously freed instance", which is the
+	# production crash shape.
+	var still_selected: Unit = game.selected_unit
+	assert_object(still_selected).is_null()
+
+
+func test_bug_report_plan_squad_survives_a_dead_selection() -> void:
+	# The reported #149 crash: F3 during an AI turn read the dangling selection. The null
+	# active_squad is a PRECONDITION -- with one set, _plan_squad returns before it ever looks.
+	var unit := _first_player_unit()
+	game._on_left_click(unit.movement.cell)
+	assert_object(game.squad_manager.active_squad).is_null()
+
+	unit.die()
+	await await_idle_frame()
+	var reporter: BugReporter = game.bug_reporter
+	assert_object(reporter._plan_squad()).is_null()
+
+
+func test_selection_released_when_the_board_is_cleared() -> void:
+	# clear_board() frees every unit with a bare queue_free -- no unit_died -- so it needs its
+	# own release. In play that is: select a unit, Esc, Restart, F3.
+	var unit := _first_player_unit()
+	game._on_left_click(unit.movement.cell)
+	assert_object(game.selected_unit).is_same(unit)
+
+	game.scenario_manager.clear_board()
+	await await_idle_frame()
+	var still_selected: Unit = game.selected_unit   # typed on purpose -- see the case above
+	assert_object(still_selected).is_null()

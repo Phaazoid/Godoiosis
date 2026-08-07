@@ -200,7 +200,8 @@ func clear_board():
 		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()
 	squad_manager.clear_all_squads()
-	game.clear_selection()
+	# Not clear_selection: only this nulls selected_unit, which the frees below would strand (#149).
+	game.exit_current_mode()
 	game.refresh_action_queue(null)
 	overlay_manager.clear_all_planned_paths()
 	overlay_manager.clear_all_projected_sprites()

@@ -781,6 +781,9 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	return unit
 
 func _on_unit_died(unit: Unit):
+	# The selection is stored (#107) and die() frees the node -- release it or every reader dangles.
+	if unit == selected_unit:
+		selected_unit = null
 	overlay_manager.handle_unit_death(unit)
 	squad_manager.handle_unit_death(unit)
 	refresh_action_queue(squad_manager.active_squad)
