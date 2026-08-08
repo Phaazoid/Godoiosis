@@ -10,7 +10,7 @@
 
 ## Quick hits — single-decision scale
 
-*(empty — A5/A6/A7/A8 all knocked off 2026-07-05; see Done)*
+16. **Should same-pass rescue exist at all?** ([#124](https://github.com/Phaazoid/Godoiosis/issues/124), reframed 2026-08-07 — was a build ticket, now a should-we.) Queue an attack you know draws a fatal counter, and queue an ally to pick the body up in the same plan. Execution already supports it; the whole cost is plan-time and fully scoped in #124's comments, so this session decides *whether*, not *how*. **Rider — a yes is not a quick hit:** it makes the queue preview an order whose precondition is a *prediction* rather than a fact (the first one), and it re-prices what a down is worth, which is the same budget [#116](https://github.com/Phaazoid/Godoiosis/issues/116) / [#120](https://github.com/Phaazoid/Godoiosis/issues/120) and the Crisis gambit are measured against. Decide alongside [#155](https://github.com/Phaazoid/Godoiosis/issues/155) (BREAK effects), which it surfaced. Source: [will-and-death.md](will-and-death.md) Generation.
 
 ## Parked — real sessions with prerequisites
 
