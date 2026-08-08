@@ -153,7 +153,7 @@ static func reconstruct_path(came_from: Dictionary, start: Vector2i, goal: Vecto
 	path.push_front(start)
 	return path
 
-static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData) -> Array[Unit]:
+static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i], board: BoardContext, attack: AttackData, allies_only := false) -> Array[Unit]:
 	var victims: Array[Unit] = []
 	for cell in affected_cells:
 		# One question, one lookup (#105): who ENDS UP here. The old dance (physical occupant ->
@@ -162,18 +162,25 @@ static func gather_attack_victims(attacker: Unit, affected_cells: Array[Vector2i
 		var unit := board.projected_unit_at_cell(cell)
 		if unit == null or victims.has(unit):
 			continue
-		if is_attack_victim(attacker, unit, attack):
+		if is_attack_victim(attacker, unit, attack, allies_only):
 			victims.append(unit)
 	return victims
 
 # Would this attack hit that unit if it ended up in the footprint? Split out of the gather so
 # SquadPlanValidator asks the identical question with no board. Friendly fire is a property of the
 # ATTACK BEING FIRED, not of whatever the attacker last aimed with (#102).
-static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData) -> bool:
+#
+# allies_only is an OPT-IN each caller states, the path_hops(block_on_occupancy) shape from #127 --
+# and the default is the load-bearing half. Aiming a heal at an enemy stays legal on purpose (dev,
+# #148): it is a niche the player may want. What is never legal is a DERIVED reaction heal landing
+# on the attacker, so SquadManager's reaction expansion is the one caller that passes true.
+static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData, allies_only := false) -> bool:
 	if unit == null or not is_instance_valid(unit):
 		return false
 	if unit == attacker:
 		return attack != null and attack.hits_self
+	if allies_only and can_target(attacker, unit):
+		return false
 	return can_target(attacker, unit) or (attack != null and attack.hits_allies)
 
 # Hostility gate: never yourself, and only a faction you're at war with. Was

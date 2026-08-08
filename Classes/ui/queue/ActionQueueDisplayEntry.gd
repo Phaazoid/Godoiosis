@@ -38,7 +38,7 @@ static func action_row(action_ref: BaseAction, indent := 0) -> ActionQueueDispla
 	entry.indent_level = indent
 	return entry
 
-# Section order: MOVE -> ATTACK -> each side-channel verb in registry order -> COUNTER.
+# Section order: MOVE -> ATTACK -> each side-channel verb in registry order -> REACTION.
 static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisplayEntry]:
 	var entries: Array[ActionQueueDisplayEntry] = []
 
@@ -60,13 +60,14 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		_add_section(entries, BaseAction.ActionType.keys()[type], side_channel.get(type, []))
 
-	# Counters last, in their own section — derived, not stored (Law #2). A skipped counter
-	# (the counterer went down/dead this pass) is hidden.
-	var live_counters: Array[BaseAction] = []
-	for counter in plan.counters:
-		if not counter.resolved.skipped:
-			live_counters.append(counter)
-	_add_section(entries, "COUNTER", live_counters)
+	# Reactions last, in their own section — derived, not stored (Law #2). A skipped one (the
+	# reactor went down/dead this pass) is hidden. Headed REACTION rather than COUNTER since #148:
+	# the section holds both kinds, and a heal row reading "Alia heals Bern" under COUNTER lies.
+	var live_reactions: Array[BaseAction] = []
+	for reaction in plan.counters:
+		if not reaction.resolved.skipped:
+			live_reactions.append(reaction)
+	_add_section(entries, "REACTION", live_reactions)
 
 	return entries
 

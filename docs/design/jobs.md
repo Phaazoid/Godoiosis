@@ -2,7 +2,7 @@
 
 **Status: RATIFIED DIRECTION (2026-07-06 grill); co-dev pass 2026-07-11 — verdict: BUILD TO TEST; descoped 2026-07-20 (#61) to the load-bearing minimum for ability-balance testing.** The hypothesis on trial: *jobs as the system that ties together units having abilities + slight stat variations.* "Even in a classless society, people have jobs." Supersedes the captured ideas in [progression.md](progression.md) (the *pre-grill stances* section records the inputs). Distinct from the **Bounty Board** (mission contracts — [philosophy.md](philosophy.md)).
 
-**Canon checked through #124 (2026-07-31).**
+**Canon checked through #155 (2026-08-07).**
 
 **#61 DESCOPED 2026-07-20:** #58 (2026-07-16) had built a fuller model — certify-once qualification, a 1-main+2-sub linked trio, stat ceilings, job-driven MOV base — but none of it had earned its keep against a playtest yet, and it stood between the actual open question (do abilities feel good?) and testing it. Stripped to the load-bearing minimum: **a job is `{id, display_name, stat_nudges, ability_pool}` — no cap on how many a unit holds, no certification step, abilities are live the instant a job is assigned.** The removed material is preserved below (*Parked*), not deleted from thought — it's shelved pending a playtest verdict on whether jobs are even the right vehicle for it. **#61 also shipped the actual keystone this whole system exists to test: a working ability chassis** — see *The ability chassis* below.
 
@@ -33,9 +33,9 @@
    - Fortitude, Rally-enhancers, and Guard redirects remain named follow-ups, not built.
 5. **Dispatch is explicit and boring, not a generic effects engine**: each seed ability's mechanic is a hardcoded check (`UnitInstance.has_live_ability("iron_will")` etc.) at its one relevant hook — the resolver, the action layer, the counter layer, or the movement layer. `AbilityData` itself stays identity-only (no effects payload); a future content pass would need to decide whether that changes.
 
-### Captured idea — reactive healing, and the phase it would need (2026-07-31, scratchpad)
+### Reactive healing, and the phase it would need (2026-07-31 capture; derived half BUILT 2026-08-07)
 
-**Captured, not decided.** Two scratchpad ideas that arrived separately and turn out to be **one seam**, which is why they are written down together rather than picked off one at a time (Law #4 — the second answer always looks like it solves a different problem):
+**The DERIVED half is built — [#148](https://github.com/Phaazoid/Godoiosis/issues/148). The player-authored half is still captured-not-decided.** Two scratchpad ideas that arrived separately and turn out to be **one seam**, which is why they were written down together rather than picked off one at a time (Law #4 — the second answer always looks like it solves a different problem):
 
 > There should be an ability that lets you act after counters so that healers can heal after a friendly takes damage.
 
@@ -46,16 +46,18 @@ Both want **a heal that resolves after the counter phase**, and they differ only
 - **The first is player-authored.** A queued heal is an ordinary `AttackAction` carrying `AttackData.heals`, so it resolves in the **attack** phase — always *before* the counters whose damage it is meant to cover. The ability would be a **plan-ordering** knob: this unit's main action defers past the counter phase.
 - **The second is derived.** A defender's healer reacting *during your turn* is the counter's exact shape — [resolution-pipeline.md](resolution-pipeline.md)'s *derive → show → replay* — and the defender is not taking a turn, so nothing can be queued.
 
-They meet at the same place: **a reaction stage after counters.** Build either one first and it should open that stage, not a private hook, or the second one arrives and finds the door already taken by something that only fits the first.
+They looked like they met at the same place — **a reaction stage after counters** — and the warning was: build either one first and it should open that stage, not a private hook, or the second arrives and finds the door taken by something that only fits the first.
 
-Constraints this already inherits, none of them new:
+**How that resolved when the derived half was built (#148, 2026-08-07).** The warning was right about the *hook* and wrong about the *stage*. The heal/damage fork went into the shared reaction derivation (`SquadManager.calculate_reactions_for_squad`), not into a private branch of `choose_counter_target` — that part held. But the derived half turned out not to need the stage at all: healing reactions are emitted after the damaging ones into the same list, which `resolve_counters` walks in order, so the heal already lands after the only damage the defending squad can take in that phase. **The two halves also cannot share a container even in principle** — the player-authored one is a *stored order that defers*, and `plan.counters` is derived-only (Law #2 / R5) — so what they'd share is a phase slot, not code. That stage costs the same to build later, so it stayed deferred rather than being paid for early.
 
-- **A reaction is a standing policy, never a prompt** (chassis rule 3 above). "Heal the most-damaged ally in range" is a deterministic policy; "the defender chooses" is not. Crisis stays the game's only mid-resolution prompt (R9).
-- **It must be previewable, or it is a Law #2 break.** The queue has to show the reactive heal the same way it already shows a derived counter, and for the same reason. That is what makes the counter the template rather than merely an analogy.
-- **The derived half collides with C1–C7** ([squad-system.md](squad-system.md) *Counter-attack rules*), which already governs the game's one derived-reaction system: once per plan (C1), once per attacking squad's plan (C4), bystander parties never (C7). A reactive heal either **extends that contract** or declares itself a separate named system — C7 explicitly reserves that second option for overwatch/intercepts. Deciding which is the first thing this idea owes, and it is a design call, not a build detail.
-- **`heals` is already a whole-attack property** (`AttackData.heals`, built 2026-07-30) — an attack is EITHER damage OR a heal, so a reactive heal is content pointing at the same flag, not a new payload type.
+Constraints this inherited, and how each landed:
 
-Open, deliberately unpicked: whether the player-side "act after counters" is an ability at all or just a queue-ordering affordance available to anyone; whether a defender's healer needs line-of-sight/range beyond the carving's own pattern; and whether a reaction heal spends anything (aura, a once-per-plan budget) the way a counter spends readiness.
+- **A reaction is a standing policy, never a prompt** (chassis rule 3 above). Held: C9's "not full, not downed, lowest HP, ties by board order" is deterministic; Crisis stays the game's only mid-resolution prompt (R9).
+- **It must be previewable, or it is a Law #2 break.** Held: a reaction heal is an ordinary derived row in the queue's REACTION section, `heal_amount` and all, pinned by a preview-equals-execution case.
+- **The derived half collides with C1–C7** ([squad-system.md](squad-system.md) *Reaction rules*). **Resolved: it EXTENDS them, via targeting only** — C1/C4/C7 are untouched, and C8–C10 fork the candidate set, the faction gate and the ordering. The separate-named-system option C7 reserves was not taken. Note the ticket's own premise was wrong here: it claimed a C7 override was needed for a healer squadmate to react, but C1 already covers every unit in the defending party.
+- **`heals` is already a whole-attack property** (`AttackData.heals`, built 2026-07-30) — an attack is EITHER damage OR a heal, so a reactive heal is content pointing at the same flag, not a new payload type. Held: no new `ActionType`, no new action class, no `ResolvedPlan` field. The kind is *read* off the flag everywhere it matters.
+
+Still open, deliberately: whether the player-side "act after counters" is an ability at all or just a queue-ordering affordance available to anyone. Two of the old open questions were answered by #148 landing rather than by deciding them — a defending healer needs **no LoS beyond its own pattern** (no LoS layer exists to consult), and a reaction heal **spends exactly what a counter spends** (its main's readiness, via `AttackAction.execute`'s existing hook) and nothing new. And one is now the standing gap: **nothing prices reactive healing.** A healing weapon reacts strictly more often than a damaging one, because it needs a hurt ally rather than an enemy in reach.
 
 ## Enemies & legibility
 

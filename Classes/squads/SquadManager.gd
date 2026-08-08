@@ -4,9 +4,10 @@ class_name SquadManager
 # The only owner of squad lifecycle (create/destroy/join/leave — member removal funnels through
 # Squad._erase_member(), the sole `members.erase` caller) and the queue/plan-resolution entry
 # point: queue_action validates + stores player orders, resolve_plan expands the queue into a
-# fresh ResolvedPlan each pass (attacks -> derived counters), and calculate_counterattacks_for_
-# squad is where counter-attack existence gets derived, never stored. See docs/design/
-# squad-system.md and docs/design/resolution-pipeline.md.
+# fresh ResolvedPlan each pass (attacks -> derived reactions), and calculate_reactions_for_squad
+# is where reaction existence gets derived, never stored — a counter-attack or, when the source
+# heals, a reactive heal on the defender's own side (#148). See docs/design/squad-system.md and
+# docs/design/resolution-pipeline.md.
 #
 # Three tenants moved out 2026-07-26 — this file had become the second dumping ground after
 # game.gd, and two of its sections were literally labelled "migrated from game.gd":
@@ -360,8 +361,72 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) 
 			return member
 	return null
 
-func calculate_counterattacks_for_squad(attacking_squad: Squad, attacks: Array[AttackAction]) -> Array[CounterAttackAction]:
-	var counters: Array[CounterAttackAction] = []
+# C8 -- a reaction's KIND is its source's AttackData.heals, and the two kinds aim opposite ways.
+# A damaging source picks from the attacking party (above, unchanged); a healing one turns inward
+# and can never pick an enemy. Forked off the same flag the resolver, the executor and the reach
+# overlay already read, rather than a second way to ask "is this a heal" (#148).
+func _choose_reaction_target(reacting_unit: Unit, attacking_party: Array[Unit], hypo: Dictionary) -> Unit:
+	if _reaction_heals(reacting_unit):
+		return choose_reaction_heal_target(reacting_unit, hypo)
+	return choose_counter_target(reacting_unit, attacking_party)
+
+func _reaction_heals(reacting_unit: Unit) -> bool:
+	var source := reacting_unit.get_counter_attack()
+	return source != null and source.heals
+
+# C9 -- the ally a reactive heal lands on. Two rules that must stay separate: "below max HP" is a
+# FILTER, "lowest HP" is the sort. Collapsed into one, a full 19/19 unit outranks a hurt 20/23 one,
+# which is the exact thing the dev ruled out. Ties fall to _all_units order, the same first-in-
+# order tie-break choose_counter_target uses (Law #1).
+func choose_reaction_heal_target(healer: Unit, hypo: Dictionary = {}) -> Unit:
+	var best: Unit = null
+	var best_hp := 0
+	for candidate in _all_units():
+		if not can_reaction_heal(healer, candidate, hypo):
+			continue
+		var hp := PlanResolver.projected_hp(candidate, hypo)
+		if best == null or hp < best_hp:
+			best = candidate
+			best_hp = hp
+	return best
+
+# May this healer's reaction land on that unit? Everything HP-shaped is read off the threaded
+# hypothetical, because the attacks have already resolved into it and not onto the board -- read
+# live, the healer would pick whoever was hurt BEFORE the swing and skip the squadmate who just
+# took it. A DOWNED ally is excluded outright (dev call, #148): a heal moves HP but never lifts
+# lifecycle_state, so healing a body would silently eat the squad's whole reaction.
+func can_reaction_heal(healer: Unit, candidate: Unit, hypo: Dictionary = {}) -> bool:
+	if healer == null or candidate == null:
+		return false
+	if not is_instance_valid(healer) or not is_instance_valid(candidate):
+		return false
+	if not healer.attack_source_can_counter():
+		return false
+	var source := healer.get_counter_attack()
+	if source == null or not source.heals:
+		return false
+	# hits_self/hits_allies still decide who a heal may touch; allies_only strips the enemies an
+	# ordinary aim is allowed to splash. Without it the reaction tops up the attacker (C8).
+	if not RulesService.is_attack_victim(healer, candidate, source, true):
+		return false
+	if PlanResolver.projected_lifecycle(candidate, hypo) != Unit.LifecycleState.ACTIVE:
+		return false
+	if PlanResolver.projected_hp(candidate, hypo) >= candidate.get_max_hp():
+		return false
+	# Same reach test can_counter applies, judged by the attack that will actually fire (#102).
+	return Reach.can_hit_cell_from(healer, healer.get_projected_destination(), candidate.get_projected_destination(), source)
+
+# Every reaction the defending parties get, in RESOLUTION ORDER: damaging ones first, healing ones
+# after (C10). That ordering is the whole reason #148 needed no separate post-counter stage --
+# PlanResolver.resolve_counters walks this list in order, so a reactive heal already lands after
+# any counter that ally-splashed its own squad.
+#
+# ONE walk, ONE ledger. C1 (a unit reacts once per plan) and C4 (a party responds once per
+# attacking squad's plan) are bookkeeping, and a second sweep for heals would have to keep its own
+# copy of it -- two answers to "has this party reacted yet", free to drift (Law #4).
+func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], hypo: Dictionary = {}) -> Array[CounterAttackAction]:
+	var strikes: Array[CounterAttackAction] = []
+	var heals: Array[CounterAttackAction] = []
 	var defender_groups_that_countered := {} # {Squad : bool}
 	var attacking_units = attacking_squad.get_members()
 
@@ -375,18 +440,22 @@ func calculate_counterattacks_for_squad(attacking_squad: Squad, attacks: Array[A
 		if defender_groups_that_countered.has(defender_squad):
 			continue
 
-		for countering_unit in defender.squad.get_members():
-			var counter_target := choose_counter_target(countering_unit, attacking_units)
-			if counter_target == null:
+		for reacting_unit in defender.squad.get_members():
+			var reaction_target := _choose_reaction_target(reacting_unit, attacking_units, hypo)
+			if reaction_target == null:
 				continue
-				
-			var counter := CounterAttackAction.new()
-			counter.init_counter(countering_unit, counter_target, countering_unit.get_projected_destination(), attack)
-			counters.append(counter)
+
+			var reaction := CounterAttackAction.new()
+			reaction.init_counter(reacting_unit, reaction_target, reacting_unit.get_projected_destination(), attack)
+			if _reaction_heals(reacting_unit):
+				heals.append(reaction)
+			else:
+				strikes.append(reaction)
 
 		defender_groups_that_countered[defender_squad] = true
 
-	return counters
+	strikes.append_array(heals)
+	return strikes
 	
 func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
@@ -440,18 +509,23 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
 				atk.target.set_projected_knockback(atk.resolved.knockback_to)
 
-	# Counters are derived as single-target "aims" (who counters whom). Expand each into its
-	# own volley from the counterer's projected cell — the same AoE + friendly-fire gather the
-	# attack loop above uses — so an AoE counter splashes everyone in the blast, not just its
-	# chosen target. (Parallels the #15 "derive victims, don't store" rule for attacks.)
-	for aim in calculate_counterattacks_for_squad(squad, plan.attacks):
+	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
+	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
+	# gather the attack loop above uses — so an AoE counter splashes everyone in the blast, not
+	# just its chosen target. (Parallels the #15 "derive victims, don't store" rule for attacks.)
+	for aim in calculate_reactions_for_squad(squad, plan.attacks, hypo):
 		var c_origin := aim.actor.get_projected_destination()
 		var c_aim_cell := aim.target.get_projected_destination()
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what
 		# create_counter_volley stamps below (#102).
 		var c_attack := aim.actor.get_counter_attack()
+		# A reaction HEAL's splash is ally-only (C8). Without this the target pick is correct and
+		# the volley still tops the attacker up, because an enemy in the footprint is an ordinary
+		# victim -- #148's bug one layer down from where it was reported. A player-AIMED heal keeps
+		# its enemy splash; that is agency, and only the derived reaction is restricted (dev call).
+		var healing := c_attack != null and c_attack.heals
 		var c_affected := Reach.get_affected_cells_from(aim.actor, c_origin, c_aim_cell, c_attack)
-		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack)
+		var c_victims := RulesService.gather_attack_victims(aim.actor, c_affected, board, c_attack, healing)
 		for ctr in CounterAttackAction.create_counter_volley(aim.actor, c_origin, c_victims, aim.source_attack):
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.

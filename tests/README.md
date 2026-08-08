@@ -208,7 +208,8 @@ The hard part of Tier-2 was standing up real `Unit`/`SquadManager` nodes cheaply
 
 | suite | asserts | spec |
 |---|---|---|
-| `squad/test_counters.gd` | C1–C7 via `can_counter` / `choose_counter_target` / `calculate_counterattacks_for_squad` | Counter rules |
+| `squad/test_counters.gd` | C1–C7 via `can_counter` / `choose_counter_target` / `calculate_reactions_for_squad` | Reaction rules |
+| `squad/test_reaction_heal.gd` | C8–C10 (#148) — a healer's reaction heals its own side, never the attacker; below-max is a filter and lowest-HP the sort; downed allies skipped; every HP read off the threaded hypo; heals ordered after strikes | Reaction rules |
 | `squad/test_invariants.gd` | I1–I7 lifecycle (create/join/leave/detach/reassign/disband) | squad-system.md Invariants |
 | `squad/test_volley.gd` | one `AttackAction` per victim, shared `volley`, primary vs secondary | AoE / volley |
 

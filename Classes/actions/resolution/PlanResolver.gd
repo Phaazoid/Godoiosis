@@ -266,6 +266,26 @@ static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 		return true
 	return hypo[counterer].hp > 0
 
+# --- Reading the threaded hypothetical from outside the pass (R4) ---
+# A derivation that runs MID-pass -- SquadManager's reaction targeting, after the attacks have
+# resolved -- must judge a unit by what this pass has already done to it, not by the live board:
+# damage lives only in the hypo until execution. A unit nothing has touched yet has no hypo entry
+# at all, and its live value IS its projected one. Read-only on purpose: unlike _hypo_for, these
+# never seed an entry, so asking a question cannot alter the pass.
+static func projected_hp(unit: Unit, hypo: Dictionary) -> int:
+	if unit == null or not is_instance_valid(unit):
+		return 0
+	if not hypo.has(unit):
+		return unit.get_current_hp()
+	return (hypo[unit] as _Hypo).hp
+
+static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleState:
+	if unit == null or not is_instance_valid(unit):
+		return Unit.LifecycleState.DEAD
+	if not hypo.has(unit):
+		return unit.lifecycle_state
+	return (hypo[unit] as _Hypo).lifecycle
+
 static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 	if not hypo.has(unit):
 		var h := _Hypo.new()

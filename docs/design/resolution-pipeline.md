@@ -4,7 +4,7 @@
 
 > **Locked 2026-06-18 (#5):** R1–R8 ratified, plus three clarifications folded in for Will's sake — **R4** threads HP (+ a Will slot), not element-states-only; **R7** counter *derivation* reads the threaded hypothetical (liveness-ready); **R8** the `ResolvedOutcome` is the single source of truth for damage (`AttackAction` stops computing it). Deferred (not locked): volley / simultaneous-hit ordering within one AoE — revisit when tile states or multi-hit-same-target arrive. This doc sits *above* the counter rules in [squad-system.md](squad-system.md) and the [elemental](elemental-system.md) / [will-and-death](will-and-death.md) designs: it defines the single seam all three plug into. The **contract (R1–R8)** is what's being locked; class names are illustrative.
 
-**Canon checked through #124 (2026-07-31).**
+**Canon checked through #155 (2026-08-07).**
 
 > **Amendment 2026-07-28 (#105) — attacks are expanded and resolved one aim at a time.** `SquadManager.resolve_plan` used to expand *every* stored aim into a volley and only then resolve the batch. A knockback shove (#84) only becomes a projected position once its own attack has resolved, so that ordering put **every victim lookup strictly before every shove**: aiming at a landing cell found nobody, and a unit shoved *out* of a later blast was still hit by it. Each aim is now expanded, resolved (`PlanResolver.resolve_attack_group`) and its shoves published before the next is expanded. The pass is unchanged in every other respect — same order, same shared hypothetical, same cell-effect sequence — and R1–R9 are untouched; this is the ordering the contract always implied.
 
@@ -16,7 +16,7 @@ Three systems are the **same operation** wearing different hats:
 
 | system | status | derives… |
 |---|---|---|
-| **Counter-attacks** | built (`SquadManager.calculate_counterattacks_for_squad`) | who counters whom, from the plan |
+| **Reactions** (counters, and reactive heals since #148) | built (`SquadManager.calculate_reactions_for_squad`) | who reacts to whom, and with which kind, from the plan |
 | **Elemental reactions** | built, Phase 2 ([elemental-system.md](elemental-system.md), E1–E8) | reacted damage + state changes, from the plan |
 | **Will / death outcomes** | built, Phase 3 (#33, #56, #57 — [will-and-death.md](will-and-death.md)) | downed / maim / overkill / Crisis, from the plan |
 
@@ -26,7 +26,7 @@ All three: a consequence **derived from the ordered plan at queue time → surfa
 
 The counter implementation is the working prototype of the whole idea:
 
-- `SquadManager.calculate_counterattacks_for_squad()` walks `action_queue`, derives `CounterAttackAction`s, and **returns** them — never stores them in the queue.
+- `SquadManager.calculate_reactions_for_squad()` walks `action_queue`, derives `CounterAttackAction`s, and **returns** them — never stores them in the queue.
 - `SquadManager.get_display_entries_for_squad()` calls it so the **preview** shows the derived counters.
 - Execution instantiates counters fresh from the plan.
 
@@ -42,7 +42,7 @@ Conceptual stages, applied per attack in queued order while a **hypothetical cop
 2. **Base damage** — originally the math inside `AttackAction.create()` (`weapon.power + scaling_stat`, or `STR` unarmed); per R8 this moved into the pipeline (elemental E1) and has moved again since — `PlanResolver._source_base_damage` now reads whichever `AttackData` the order stamped (`AttackAction.fired_attack`: a carving, a specific `WeaponAttackData`, or null = the weapon's main), scaled by `scaling_blend` + active mods (#59, #72), or bare `STR` unarmed.
 3. **Elemental** — read the target's hypothetical states, match an `ElementalReaction`, modify damage, write state add/remove. (Phase 2.)
 4. **Will / death** — read the *now-final* damage, pick the rung: downed / maim / overkill-kill / Crisis. (Phase 3.)
-5. **Counters** — counter *existence* is derived from the attack plan as `calculate_counterattacks_for_squad` does today, **but read from the threaded hypothetical** (projected positions + liveness), not live state; each counter is itself an attack and **re-enters stages 2–4** (so a counter can complete a combo — elemental E7 — and can down/kill). A counter-er killed earlier in the pass is not derived (liveness is always-true until Phase 3's Will stage).
+5. **Counters** — counter *existence* is derived from the attack plan as `calculate_reactions_for_squad` does today, **but read from the threaded hypothetical** (projected positions + liveness), not live state; each counter is itself an attack and **re-enters stages 2–4** (so a counter can complete a combo — elemental E7 — and can down/kill). A counter-er killed earlier in the pass is not derived (liveness is always-true until Phase 3's Will stage).
 
 ## The forced ordering (the insight neither downstream doc states)
 
@@ -85,7 +85,11 @@ R1–R8 **subsume the elemental E-invariants** (E1–E8 are this contract scoped
 
 **Deferred (not locked — revisit when relevant):** volley / simultaneous-hit ordering *within* one AoE. v1 volleys hit distinct targets with separate state stores, so sibling pass-order is moot now; revisit when tile states or multi-hit-same-target arrive (do volley siblings resolve sequentially against threaded state, or all against one pre-volley snapshot?).
 
-**Deferred — a reaction stage AFTER counters (captured 2026-07-31, scratchpad).** Two ideas want the same thing: a healer who can act *after* the counter phase (so the heal covers the damage the counter just did), and a defending squad's healer who reacts to being attacked at all. Today a queued heal is an ordinary `AttackAction` carrying `AttackData.heals`, so it resolves in the **attack** stage — structurally always too early for either. Nothing about R7 forbids a stage past counters: the stage order it fixes is *within a hit* (position → base damage → elemental → Will/death), and counters "re-entering stages 2–4" is precedent for a later phase re-entering them too. What such a stage would owe: derivation from the plan and a queue preview like any counter (**R3/R5**, and the reason the counter is the template rather than an analogy); determinism, since a reaction is a standing policy and never a prompt ([jobs.md](jobs.md) chassis rule 3 — Crisis stays the only mid-resolution prompt, R9); and threading into the **shared hypothetical** so a heal lands on the HP the counter actually left (**R4** — `_resolve_one`'s heal branch already writes through the hypo, so this half is free). Full write-up, including the C1–C7 collision on the derived half: [jobs.md](jobs.md) → *Captured idea — reactive healing*.
+**A reaction stage AFTER counters — HALF BUILT, half still deferred (captured 2026-07-31; the derived half shipped as [#148](https://github.com/Phaazoid/Godoiosis/issues/148), 2026-08-07).** Two ideas wanted the same thing: a healer who can act *after* the counter phase (so the heal covers the damage the counter just did), and a defending squad's healer who reacts to being attacked at all. Today a queued heal is an ordinary `AttackAction` carrying `AttackData.heals`, so it resolves in the **attack** stage — structurally always too early for either. Nothing about R7 forbids a stage past counters: the stage order it fixes is *within a hit* (position → base damage → elemental → Will/death), and counters "re-entering stages 2–4" is precedent for a later phase re-entering them too.
+
+> **The DERIVED half needed no new stage, and that is the finding worth keeping.** A defending squad's reactive heal is emitted *after* the damaging reactions into the same `plan.counters` list, and `resolve_counters` walks that list in order — so it already lands after the only damage the defending squad can take in that phase (a counter's own `hits_allies` splash). Everything the stage would have owed was owed anyway and is met where it stands: derived and previewed like any counter (**R3/R5**), deterministic (no prompt — [jobs.md](jobs.md) chassis rule 3, R9), and threaded through the **shared hypothetical** (**R4**) — the last one twice over, because #148's target *choice* also reads the hypo (`PlanResolver.projected_hp`/`projected_lifecycle`) rather than the live board, or the healer would patch whoever was hurt before this pass's swing. Rules: [squad-system.md](squad-system.md) → *Reactive healing*, C8–C10.
+>
+> **The PLAYER-AUTHORED half still owes the real stage**, and is the whole reason it stays on the books: it is a *stored order that defers past counters*, and `plan.counters` is derived-only (Law #2 / R5), so it cannot ride the list above. Building the stage costs the same then as it would have now — which is exactly why #148 did not pay for it early (dev, 2026-08-07).
 
 ## Where it lives
 

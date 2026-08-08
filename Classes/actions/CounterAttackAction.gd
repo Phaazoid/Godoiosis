@@ -1,11 +1,16 @@
 extends AttackAction
 class_name CounterAttackAction
 
-# A counter-attack — derived fresh from the attack plan each resolve pass, never stored as a
-# player order (Law #2; see SquadManager.calculate_counterattacks_for_squad / create_counter_
-# volley). Fires whatever Unit.get_counter_attack() decides: a weapon ALWAYS counters with its
-# main attack regardless of any live pick, while a rune counters with whatever it would currently
-# fire (#30/#72).
+# A REACTION — derived fresh from the attack plan each resolve pass, never stored as a player
+# order (Law #2; see SquadManager.calculate_reactions_for_squad / create_counter_volley). Fires
+# whatever Unit.get_counter_attack() decides: a weapon ALWAYS counters with its main attack
+# regardless of any live pick, while a rune counters with whatever it would currently fire
+# (#30/#72).
+#
+# One class, two kinds, forked off the source's AttackData.heals (#148): a damaging source strikes
+# the attacking party, a healing one heals the defender's own side. Nothing else about the action
+# differs, so the kind is READ from the flag everywhere rather than stored — the same fork
+# PlanResolver._resolve_one, AttackAction.execute and OverlayManager.attack_reach_color make.
 
 var source_attack: AttackAction
 
@@ -19,6 +24,8 @@ func init_counter(counter_unit: Unit, target_unit: Unit, attack_origin: Vector2i
 	source_attack = source
 
 func get_description() -> String:
+	if fired_attack != null and fired_attack.heals:
+		return "%s heals %s" % [actor.get_unit_name(), get_target_name()]
 	return "%s counters %s" % [actor.get_unit_name(), get_target_name()]
 
 func get_action_icon() -> Texture2D:

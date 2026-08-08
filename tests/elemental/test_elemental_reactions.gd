@@ -161,10 +161,10 @@ func test_e7_counter_can_complete_a_combo() -> void:
 
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
-	# calculate_counterattacks_for_squad returns unstamped "aims" (who counters whom); resolve_plan
+	# calculate_reactions_for_squad returns unstamped "aims" (who counters whom); resolve_plan
 	# feeds them to create_counter_volley, which is what stamps get_counter_attack(). This test
 	# short-circuits that expansion, so it has to stamp them itself (#102).
-	plan.counters = _sm.calculate_counterattacks_for_squad(p.squad, plan.attacks)
+	plan.counters = _sm.calculate_reactions_for_squad(p.squad, plan.attacks)
 	for c in plan.counters:
 		c.fired_attack = c.actor.get_counter_attack()
 	var reactions: Array[ElementalReaction] = [_shock_electrocute(5)]
