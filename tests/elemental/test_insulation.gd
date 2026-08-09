@@ -243,22 +243,44 @@ func test_an_unblocked_bolt_still_finishes_a_downed_unit() -> void:
 	assert_int(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
 
 
-func test_a_zero_damage_physical_hit_still_finishes_a_downed_unit() -> void:
-	# The narrowness check. Insulation exempts a TURNED-ASIDE attack, not every harmless one:
-	# stats.md's "a 0-damage hit is still a hit" must survive this feature intact.
+func test_a_zero_damage_hit_still_ARRIVES_where_a_turned_aside_one_never_did() -> void:
+	# The narrowness check. Insulation exempts a TURNED-ASIDE attack, not every harmless one — and
+	# REWRITTEN 2026-08-08 (#126) because the fact it used to lean on was repealed: a 0-damage hit no
+	# longer finishes a downed unit, so "it still kills the body" can't tell the two apart any more.
+	#
+	# What still separates them is arrival. A 0-damage hit LANDED — it deposits, it triggers on-hit
+	# effects, and it SHOVES. A turned-aside one never arrived, so PlanResolver's insulation branch
+	# returns before the displacement stage and it does none of that. Both halves asserted here,
+	# because either alone passes against the bug where insulation swallows an ordinary weak swing.
 	var weakling: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 0}, true, 0)
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 50})
 	foe.worn_armor = _insulated_against(Elemental.Element.SHOCK)
-	foe.lifecycle_state = Unit.LifecycleState.DOWNED
-
-	var plan := ResolvedPlan.new()
-	var atk := _attack(weakling, foe)
-	plan.attacks.append(atk)
+	var board := _sm.board_source.call() as BoardContext
 	var no_reactions: Array[ElementalReaction] = []
-	PlanResolver.resolve(plan, no_reactions)
 
-	assert_int(atk.resolved.damage).is_equal(0)
-	assert_int(atk.resolved.lethality).is_equal(ResolvedOutcome.Lethality.KILLED)
+	# The physical swing: 0 damage, but it arrived — so it moves the target.
+	var swing := _attack(weakling, foe)
+	swing.fired_attack.knockback = 1
+	var swing_plan := ResolvedPlan.new()
+	swing_plan.attacks.append(swing)
+	PlanResolver.resolve(swing_plan, no_reactions, board)
+
+	assert_int(swing.resolved.damage).is_equal(0)
+	assert_bool(swing.resolved.knockback_applied).is_true()
+
+	# The blocked bolt: identical 0 on the sheet, and it displaces nobody.
+	foe.movement.cell = Vector2i(1, 0)
+	var alch: Unit = _alchemist({ Elemental.Element.FIRE: 4 })
+	var bolt := H.stamped_attack(alch, foe)
+	var carving := _lightning_bolt(5)
+	carving.knockback = 1
+	bolt.fired_attack = carving
+	var bolt_plan := ResolvedPlan.new()
+	bolt_plan.attacks.append(bolt)
+	PlanResolver.resolve(bolt_plan, no_reactions, board)
+
+	assert_int(bolt.resolved.damage).is_equal(0)
+	assert_bool(bolt.resolved.knockback_applied).is_false()
 
 
 func test_a_blocked_bolt_leaves_a_living_target_untouched() -> void:

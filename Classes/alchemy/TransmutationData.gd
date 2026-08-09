@@ -36,7 +36,11 @@ func cost() -> int:
 
 # Aura scaling: power + the wielder's aura summed over sigils — repeats weight it, so
 # 2 Fire scales twice off fire aura. A leeway-covered (0-aura) element adds nothing.
+# A utility carving (#126) skips the scaling entirely: aura still GATES channeling, it just
+# never adds damage to a damageless effect.
 func base_damage(wielder: Unit) -> int:
+	if deals_no_damage:
+		return 0
 	var scaling := 0
 	for e in sigils:
 		scaling += wielder.get_element_aura(e)

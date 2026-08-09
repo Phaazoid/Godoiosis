@@ -205,6 +205,8 @@ func scaling_contribution(wielder: Unit, mods: Array[WeaponModData]) -> int:
 func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 	if template == null or attack == null:
 		return 0
+	if attack.deals_no_damage:
+		return 0   # utility attack (#126): the stat blend never sneaks damage into a damageless effect
 	var mods := active_modules(wielder)
 	var eff_power := attack.power
 	for mod in mods:

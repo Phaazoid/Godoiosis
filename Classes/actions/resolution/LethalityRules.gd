@@ -59,7 +59,7 @@ static func accepts_crisis_by_stance(unit: Unit) -> bool:
 
 # The ladder itself:
 #   already DEAD        -> no-op (NONE)
-#   already DOWNED      -> any hit kills (Fork 3: downed-attack = kill)
+#   already DOWNED      -> any DAMAGING hit kills (Fork 3: downed-attack = kill)
 #   damage < hp         -> survivable (NONE)
 #   overkill > ceiling  -> KILLED
 #   would-be-down       -> CRISIS if full-Will + stance accepts (deterministic, R9),
@@ -80,7 +80,13 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 	if s.lifecycle == Unit.LifecycleState.DEAD:
 		return ResolvedOutcome.Lethality.NONE
 	if s.lifecycle == Unit.LifecycleState.DOWNED:
-		return ResolvedOutcome.Lethality.KILLED
+		# A hit that deals nothing cannot finish a body (#126) — that is what makes a 0-damage shove
+		# REPOSITION a downed unit instead of executing it (PlanResolver._resolve_knockback skips a
+		# KILLED target). Amends the 0-damage rider (stats.md): a 0-damage hit still COUNTS as a hit
+		# — states, deposits and on-hit effects all still fire — it just no longer finishes.
+		# Keyed on the damage number, not on the attack, because both callers already hold it and
+		# neither holds the attack: Unit.take_damage(0) reaches the same answer with no new argument.
+		return ResolvedOutcome.Lethality.KILLED if damage > 0 else ResolvedOutcome.Lethality.NONE
 	if damage < s.hp:
 		return ResolvedOutcome.Lethality.NONE
 	if damage - s.hp > OVERKILL_CEILING:

@@ -21,6 +21,10 @@ extends Resource
 # today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
 @export var heals := false   # EITHER damage OR heal, never both; reinterprets base damage as HP restored
+# A pure-utility attack (#126): SCALING is suppressed, so neither aura nor a weapon's stat blend can
+# sneak damage into a damageless effect. Only the attack's own contribution — an elemental reaction's
+# damage_bonus still lands, deliberately (dev, 2026-08-08). Mutually exclusive with `heals`.
+@export var deals_no_damage := false
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
 	

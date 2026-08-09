@@ -115,10 +115,11 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# Insulation (a granted PASSIVE ability, #90 — from gear today, from any source the kit knows
 	# tomorrow): an attack whose damage IS elemental -- a rune carving,
 	# which scales off the wielder's AURA rather than their body -- is TURNED ASIDE ENTIRELY when
-	# the armor blocks every element it carries. Deliberately NOT modelled as a 0-damage hit: those
-	# still COUNT as hits and still finish a downed unit (stats.md's 0-damage rule). The bolt never
-	# arrived -- so it can't kill, can't shove, and triggers nothing on-hit. A weapon merely TAGGED
-	# with a blocked element skips this branch and still lands its swing: insulation, not a shield.
+	# the armor blocks every element it carries. Deliberately NOT modelled as a 0-damage hit: a
+	# 0-damage hit still ARRIVES (states, deposits, on-hit effects, and since #126 a shove -- the
+	# early return below is what keeps this one from displacing anybody). The bolt never arrived,
+	# so it does none of that. A weapon merely TAGGED with a blocked element skips this branch and
+	# still lands its swing: insulation, not a shield.
 	if fully_insulated and action.fired_attack is TransmutationData:
 		outcome.damage = 0
 		outcome.lethality = ResolvedOutcome.Lethality.NONE

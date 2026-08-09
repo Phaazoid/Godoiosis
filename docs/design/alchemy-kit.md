@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #116 (2026-07-29).**
+**Canon checked through #155 (2026-08-08).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -116,10 +116,16 @@ TransmutationData (the carving)
                                   #   (DEF only stops harm — a heal was never harm to begin with).
                                   #   Basics only: no overheal, no status/terrain effect riding on
                                   #   it yet — see the still-PROPOSED line below.
+  deals_no_damage: bool           # inherited from AttackData — BUILT (2026-08-08, #126): a PURE
+                                  #   UTILITY carving. base_damage() returns 0 and the Σ aura term
+                                  #   is skipped entirely. Mutually exclusive with `heals`.
+
   — materia_band                 # DEFERRED — some carvings will require fuel; not modeled yet
   — effect / timing / damage-type # status | terrain-mod | instant vs EoT — still PROPOSED (the
                                   #   heal/damage fork above is the one slice of this that's built)
 ```
+
+> **Pure-utility carvings — scaling only scales attacks that do damage (dev, 2026-08-08, [#126](https://github.com/Phaazoid/Godoiosis/issues/126)).** Aura keeps both its jobs on an ordinary carving (it *gates* channeling and it *scales* damage), but on one flagged `deals_no_damage` it only gates. Without that split a damageless carving is unauthorable, and specifically the wind one is: `can_channel` REQUIRES aura in the temper element, so the alchemist who can fire an AIR carving is exactly the one whose aura would sneak damage into it — a shove that hurts, fired only by people good at shoving. First content: **Gust** (`Resources/TransmutationData/Gust.tres` — 1 AIR sigil, `knockback = 2`, `hits_allies`), which repositions a downed body instead of finishing it ([will-and-death.md](will-and-death.md) → fork 3). **What the flag does NOT suppress: an elemental reaction's `damage_bonus`.** That is not part of the carving — it is what the world did with the element it carried — so a Quickened fire carving (FIRE + QUICKENING → SHOCK) gusted into a WET body still electrocutes it for the authored +5, and a downed body it lands on dies. Deliberate, and the player's job to avoid. Note the shove is always **directly away from the caster** — there is no pull, so "drag them out of the fire" is really "get to the far side and blow them clear."
 
 **Same element, different carving = different attack.** A simple fire carving is a plain **fireball** (front-loaded damage, point/short range). A more complex fire carving is an **AoE fire-wall** (less up-front damage + range, more DoT, more tiles affected) — same element, more sigils (bigger `cost()`), different `attack_pattern`. *Combining* elements opens new reactions: **Aether + Water → "Soul Dew"** (an AoE splash with a lesser healing quality — Aether is the life/stability element); **Aether + Earth → "Stone Armor"** (an enchantment: heavier but tougher armor). *(Names/effects are illustrative, not a build list.)*
 
