@@ -24,7 +24,7 @@
 
 1. **Four-slot taxonomy as classification**: every ability is **Action / Reaction / Passive / Movement** (`AbilityData.kind`), regardless of source (job today; gear/story are future sources, same taxonomy).
 2. **No loadout screen, no tier split** — every ability in every held job's pool is live, full stop. (The old main-tier/sub-tier split is parked with the trio it depended on.)
-3. **Reactions are standing policies, never mid-pass prompts.** Taunt is a resolver-read rule, computed and previewed like a counter-attack — no job ability ever pauses resolution; Crisis stays the game's only mid-resolution prompt (R9, [resolution-pipeline.md](resolution-pipeline.md)).
+3. **Reactions are standing policies, never mid-pass prompts.** Taunt is a resolver-read rule, computed and previewed like a counter-attack — no job ability ever pauses resolution. *(2026-08-09: the rule is now ABSOLUTE — Crisis, the one carved-out exception this line used to grant, is being re-homed as an equipped ability living under this same rule, [#158](https://github.com/Phaazoid/Godoiosis/issues/158); nothing prompts mid-resolution, R9 [resolution-pipeline.md](resolution-pipeline.md).)*
 4. **Seed set — one proven ability per lane** (content breadth was explicitly not the goal; one honest example per lane was):
    - **Iron Will** (Passive) — a deterministic per-hit damage cap on the holder, composed with the 0-damage floor (#55) inside `PlanResolver`'s shared preview/execution seam.
    - **Intimidation** (Action) — a plannable main-action Will-drain, a `BaseAction` subclass mirroring `RallyAction`. Ships as a Rally-style side-channel action (bypasses `PlanResolver`): its preview shows the drain amount accurately but doesn't thread into the same-pass maim-cliff prediction the way a queued attack does — flagged as a known gap, not a silent one.
@@ -52,7 +52,7 @@ They looked like they met at the same place — **a reaction stage after counter
 
 Constraints this inherited, and how each landed:
 
-- **A reaction is a standing policy, never a prompt** (chassis rule 3 above). Held: C9's "not full, not downed, lowest HP, ties by board order" is deterministic; Crisis stays the game's only mid-resolution prompt (R9).
+- **A reaction is a standing policy, never a prompt** (chassis rule 3 above). Held: C9's "not full, not downed, lowest HP, ties by board order" is deterministic; and as of 2026-08-09 the rule has no exception left — the Crisis carve-out is repealed with the BREAK doctrine, [#158](https://github.com/Phaazoid/Godoiosis/issues/158).
 - **It must be previewable, or it is a Law #2 break.** Held: a reaction heal is an ordinary derived row in the queue's REACTION section, `heal_amount` and all, pinned by a preview-equals-execution case.
 - **The derived half collides with C1–C7** ([squad-system.md](squad-system.md) *Reaction rules*). **Resolved: it EXTENDS them, via targeting only** — C1/C4/C7 are untouched, and C8–C10 fork the candidate set, the faction gate and the ordering. The separate-named-system option C7 reserves was not taken. Note the ticket's own premise was wrong here: it claimed a C7 override was needed for a healer squadmate to react, but C1 already covers every unit in the defending party.
 - **`heals` is already a whole-attack property** (`AttackData.heals`, built 2026-07-30) — an attack is EITHER damage OR a heal, so a reactive heal is content pointing at the same flag, not a new payload type. Held: no new `ActionType`, no new action class, no `ResolvedPlan` field. The kind is *read* off the flag everywhere it matters.

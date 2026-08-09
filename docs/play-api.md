@@ -196,7 +196,9 @@ Play API becomes the verification lane for missions.
 - Does `PlaySession` live in `Classes/` (gameplay-adjacent) or a new `tools/`/`play/` dir?
 - Per-command id transport details / timeout + error envelope.
 
-## BREAK doctrine hooks (R9, 2026-07-05 — see [resolution-pipeline.md](design/resolution-pipeline.md))
+## ~~BREAK doctrine hooks~~ — REPEALED 2026-08-09 (was: R9, 2026-07-05 — see [resolution-pipeline.md](design/resolution-pipeline.md))
 
-- `execute()`'s event log gains **BREAK entries** (divergence point, cause class, re-resolved suffix) — no re-planning verbs needed, since orders stand after a BREAK.
-- A **player-side choice-point** (Crisis) in a headless run needs one small verb: the host writes an "awaiting choice" envelope (`choice_id`, the offer, the two branches' previews) and blocks; the driver answers with `answer(choice_id, accept: bool)`. That is the *only* mid-execution input the bridge will ever need under R9's orders-stand aftermath.
+The BREAK doctrine is repealed ([#155](https://github.com/Phaazoid/Godoiosis/issues/155)) and Crisis — the only player-side choice-point — becomes a deterministic equipped ability ([#158](https://github.com/Phaazoid/Godoiosis/issues/158)), so **neither hook below will ever be built**. Kept as the record of what the repeal saved:
+
+- ~~`execute()`'s event log gains **BREAK entries**~~ — plans no longer diverge; the event log stays a replay of the previewed plan.
+- ~~The `answer(choice_id, accept: bool)` verb for a player-side choice-point~~ — with no mid-execution choice anywhere in the game, **the bridge needs zero mid-execution input, permanently**. A headless driver authors a plan, calls `execute()`, and reads results; nothing ever blocks on it mid-pass.

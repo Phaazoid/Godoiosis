@@ -41,6 +41,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 	# hunted its victim on the cell its own shove had just cleared. No plan = attacks untouched.
 	if plan != null:
 		_revalidate_unit_attacks(actions, plan)
+		_revalidate_rescue_targets(actions, plan)
 
 	for action in actions:
 		if not action.is_valid:
@@ -124,17 +125,17 @@ static func _unit_has_valid_move_away_from(unit: Unit, cell: Vector2i, actions: 
 			return true
 	return false
 
-# The rescuer must still END its projected move adjacent to a still-downed ally. Mirrors the AoE
-# re-derivation debt: a move re-planned away from the body invalidates the rescue, and a target
-# someone else rescued first drops out too.
+# The rescuer must still END its projected move adjacent to the target. ADJACENCY ONLY since #124:
+# the lifecycle half (is the target down, or predicted to be by the side channel?) needs the
+# resolve, so it lives in _revalidate_rescue_targets below, outside the loop with the attacks.
 static func _revalidate_rescues(actions: Array[BaseAction]) -> void:
 	for action in actions:
 		if not (action is RescueAction):
 			continue
 		var rescue := action as RescueAction
 		var target: Unit = rescue.target
-		if target == null or not is_instance_valid(target) or not target.is_downed():
-			rescue.add_validation_error("Rescue target is no longer down")
+		if target == null or not is_instance_valid(target):
+			rescue.add_validation_error("Rescue target is gone")
 			continue
 		if not _actor_ends_adjacent_to(rescue, target, actions):
 			rescue.add_validation_error("Rescuer no longer adjacent to the downed ally")
@@ -184,6 +185,19 @@ static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 		if resolved_attack.source_aim == aim and resolved_attack.target != null:
 			return true
 	return false
+
+# The lifecycle half of rescue validity (#124) -- plan-armed and outside the loop for the attack
+# clause's reasons: it is a LEAF (nothing reads it back), and its answer belongs to the resolve --
+# a target may legally not be down YET, provided this pass's own hits put it down before the side
+# channel runs. A cancelled attack un-predicts the down on the next resolve and the rescue falls
+# into red, still queued (one-way validity). No plan = rescues untouched, same as attacks.
+static func _revalidate_rescue_targets(actions: Array[BaseAction], plan: ResolvedPlan) -> void:
+	for action in actions:
+		if not (action is RescueAction):
+			continue
+		var rescue := action as RescueAction
+		if not RulesService.is_rescueable(rescue.target, plan):
+			rescue.add_validation_error("Rescue target won't be down")
 
 # Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an
 # order the resolver has never seen. Correct because the published knockback is the ALREADY-QUEUED

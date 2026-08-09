@@ -143,6 +143,45 @@ func test_clicking_the_vacated_cell_queues_nothing() -> void:
 		.override_failure_message("a rescue was queued against a cell the body has left").is_null()
 
 
+# #124: the same sequence against a target that is still STANDING -- an ally the current plan
+# predicts will drop this pass. The row must appear, the pick overlay must mark the ally's cell,
+# and the click must queue a valid rescue, all through the production surfaces. A version of this
+# asserting only on is_valid could not see a menu that never offers the row (#126's lesson).
+func test_a_predicted_down_squadmate_is_offered_and_queues() -> void:
+	# LDR 10: the fixture default (3) feeds two members at MEMBER_LDR_COST 2 each.
+	var attacker: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(1, 0))
+	attacker.equipped_weapon = H.make_weapon()
+	var victim := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var rescuer := _spawn(Team.Faction.PLAYER, Vector2i(3, 0))
+	var _bystander := _spawn(Team.Faction.ENEMY, Vector2i(7, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(victim, attacker.squad)
+	game.squad_manager.join_squad(rescuer, attacker.squad)
+
+	victim.take_damage(victim.get_current_hp() - 1)   # bloodied: the queued hit is a would-be-down
+	(attacker.equipped_weapon as WeaponInstance).template.main_attack.hits_allies = true
+	var aim := AttackAction.create(attacker, Vector2i(1, 0), null, Vector2i(2, 0))
+	aim.fired_attack = attacker.get_fired_attack()
+	assert_bool(game.squad_manager.queue_action(attacker.squad, aim)) \
+		.override_failure_message("fixture failed to queue the friendly-fire attack").is_true()
+	game.refresh_action_queue(attacker.squad)   # resolve -> the stored plan the menu and gate read
+
+	assert_array(game.main_action_menu.populate(rescuer)) \
+		.override_failure_message("no Rescue row for a predicted down (#124)").contains([MainActionMenu.RESCUE])
+
+	game.main_action_menu.on_pressed(MainActionMenu.RESCUE, rescuer)
+	assert_array(game.target_pick_cells) \
+		.override_failure_message("the pick overlay does not mark the predicted-down ally") \
+		.contains([Vector2i(2, 0)])
+
+	game._click_picking_target(Vector2i(2, 0))
+
+	var rescue := _queued_rescue(rescuer.squad)
+	assert_object(rescue).override_failure_message("the click queued nothing").is_not_null()
+	assert_object(rescue.target).is_same(victim)
+	assert_bool(rescue.is_valid).is_true()
+
+
 # The shove's arrow trail draws EVERY cell it crosses, not just its two ends. Blowback pushes one tile,
 # so from and to are adjacent and the two-sprite version looked complete; Gust pushes two and left the
 # middle blank. Counted on the overlay the real refresh built.

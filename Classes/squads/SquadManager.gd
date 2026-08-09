@@ -30,6 +30,14 @@ var batching := false
 # play/board_builder -> its own builder, tests/support/squad_fixtures.make_manager -> the fixture's.
 var board_source: Callable
 
+# The last resolve, kept for candidate gating and the rescue candidate list (#124). Derived data,
+# never read back by the resolver itself; read only through resolved_plan_for, which guards squad
+# identity. Freshness rides the synchronous queue -> repaint -> resolve chain, the same guarantee
+# published knockback leans on -- a caller that queues twice with no resolve between (headless
+# drivers, tests) judges the second order against the first's prefix, exactly like an aim.
+var _last_resolved_plan: ResolvedPlan = null
+var _last_resolved_squad: Squad = null
+
 @onready var overlay_manager: OverlayManager = $"../OverlayManager"
 @onready var grid: TileMapLayer = $"../Grid"
 
@@ -233,7 +241,7 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 # value -- that is whole-plan validity, and an already-broken row would refuse a legal order.
 func _candidate_would_be_valid(squad: Squad, action: BaseAction) -> bool:
 	validate_squad_plan_preview(squad, action)
-	if action.is_valid and _candidate_aim_connects(squad, action):
+	if action.is_valid and _candidate_aim_connects(squad, action) and _candidate_rescue_target_ok(squad, action):
 		return true
 	# Refused: keep its validation_errors for the caller, and undo the probe's stamps on the real queue.
 	validate_squad_plan(squad)
@@ -249,6 +257,20 @@ func _candidate_aim_connects(squad: Squad, action: BaseAction) -> bool:
 	if not SquadPlanValidator.aim_whiffs(aim, found):
 		return true
 	aim.add_validation_error("Nothing to hit on that cell")
+	return false
+
+# The rescue half of the gate (#124), the whiff clause's sibling: a candidate rescue may target a
+# unit that is down OR one this squad's already-resolved plan predicts will be down by the side
+# channel. The stored resolve is the right witness for a candidate -- it covers exactly the queued
+# prefix the rescue lands after, and a rescue changes no lethality, so the prefix IS the pass.
+# Non-rescue candidates pass straight through.
+func _candidate_rescue_target_ok(squad: Squad, action: BaseAction) -> bool:
+	if not (action is RescueAction):
+		return true
+	var rescue := action as RescueAction
+	if RulesService.is_rescueable(rescue.target, resolved_plan_for(squad)):
+		return true
+	rescue.add_validation_error("Rescue target won't be down")
 	return false
 
 func set_has_acted(squad: Squad, acted: bool) -> void:
@@ -459,7 +481,7 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 	
 func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var plan := ResolvedPlan.new()
-	var hypo: Dictionary = {}
+	var hypo: Dictionary = plan.hypo   # threaded here, kept on the plan for end-of-pass reads (#124)
 	var reactions := ReactionCatalog.get_all()
 	var terrain_reactions := TerrainReactionCatalog.get_all()
 
@@ -543,7 +565,20 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			cover.states_added.append(Terrain.TileState.COVER)
 			plan.cell_effects.append(cover)
 
+	_last_resolved_plan = plan
+	_last_resolved_squad = squad
 	return plan
+
+# The most recent resolve for THIS squad, or null. The gate's rescue clause and the menu's
+# candidate list read it the way the whiff clause reads published knockback (#124): a candidate
+# is judged against the ALREADY-QUEUED prefix, and the last resolve is exactly that prefix —
+# every queue change re-resolves synchronously (game.refresh_action_queue), so it cannot be
+# stale for the squad being commanded. Callers that never resolved (AI builders, bare test
+# fixtures) get null and fall back to live-board rules.
+func resolved_plan_for(squad: Squad) -> ResolvedPlan:
+	if squad != null and is_instance_valid(squad) and _last_resolved_squad == squad:
+		return _last_resolved_plan
+	return null
 
 
 # A dead unit leaves the board entirely, so it just detaches.
