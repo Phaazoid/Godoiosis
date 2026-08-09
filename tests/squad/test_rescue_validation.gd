@@ -4,6 +4,13 @@
 # invalid-action gate then blocks execution. Mirrors the AoE victim re-derivation debt.
 #
 # Validation is pure logic (no overlay redraw), so it's safe in this node harness.
+#
+# EXTENDED 2026-08-08 (#126). A downed body can now be SHOVED by a damageless attack, which makes
+# "where is the target?" a question with two different answers mid-plan. Three sites used to read the
+# live one — the candidate query, the validator's adjacency test, and execute() (which had no test at
+# all) — and each is wrong in the same direction: it refuses the rescue aimed where the body lands and
+# accepts the one aimed at the cell it just cleared. The shove cases below drive a REAL resolve, because
+# that is what publishes the projected knockback; hand-stamping it would skip the thing being tested.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -66,3 +73,79 @@ func test_rescue_invalidated_when_target_is_no_longer_down() -> void:
 	_sm.validate_squad_plan(rescuer.squad)
 
 	assert_bool(rescue.is_valid).is_false()
+
+# ---- #126: the body moves, and the rescue has to follow it ----
+
+# A Gust: damageless, so it repositions a downed unit instead of finishing it, and ally-hitting, so
+# the volley gather picks a friendly body up at all. No pattern -> Reach's adjacency fallback affects
+# exactly the aimed cell.
+func _gust(distance: int) -> TransmutationData:
+	var carving := TransmutationData.new()
+	carving.sigils.assign([Elemental.Element.AIR])
+	carving.deals_no_damage = true
+	carving.hits_allies = true
+	carving.knockback = distance
+	return carving
+
+# Shove `ally` two cells directly away from a caster standing at the origin, through the real
+# resolve that publishes the landing cell. Returns once the projection is live.
+func _shove_the_body(ally: Unit) -> void:
+	var caster := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var aim := AttackAction.create(caster, caster.movement.cell, null, ally.movement.cell)
+	aim.fired_attack = _gust(2)
+	caster.squad._queue_action(aim)
+	_sm.resolve_plan(caster.squad, _sm.board_source.call())
+
+func test_a_rescue_follows_a_shoved_body() -> void:
+	var ally := _downed_ally(Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(4, 0))   # beside the LANDING cell (3, 0)
+	var rescue := _queue_rescue(rescuer, ally)
+
+	_shove_the_body(ally)
+	_sm.validate_squad_plan(rescuer.squad)
+
+	assert_vector(ally.get_projected_destination()).is_equal(Vector2i(3, 0))
+	assert_bool(rescue.is_valid).is_true()
+
+func test_a_rescue_aimed_at_the_cell_the_body_vacates_is_refused() -> void:
+	var ally := _downed_ally(Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 1))   # beside where the body STARTED
+	var rescue := _queue_rescue(rescuer, ally)
+
+	_shove_the_body(ally)
+	_sm.validate_squad_plan(rescuer.squad)
+
+	assert_bool(rescue.is_valid).is_false()
+
+# The same rule one layer earlier: the menu must OFFER the body where it will land, or the legal
+# rescue can never be authored in the first place (queue_action's gate reads the same validity).
+func test_the_candidate_query_offers_the_body_at_its_landing_cell() -> void:
+	var ally := _downed_ally(Vector2i(1, 0))
+	var by_landing := H.spawn_solo(self, _sm, PLAYER, Vector2i(4, 0))
+	var by_vacated := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 1))
+
+	_shove_the_body(ally)
+
+	assert_array(RulesService.adjacent_downed_allies(by_landing, _sm.board_source.call())).contains([ally])
+	assert_array(RulesService.adjacent_downed_allies(by_vacated, _sm.board_source.call())).is_empty()
+
+# execute()'s own guard — a Law #2 backstop, and the only one there is once the pass is running.
+# Before #126 this revived at any range, because the validator's stamp was the sole check and it is
+# computed before a single order runs.
+func test_rescue_does_not_revive_a_body_it_is_no_longer_beside() -> void:
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var ally := _downed_ally(Vector2i(3, 0))
+	var rescue := _queue_rescue(rescuer, ally)
+
+	rescue.execute()
+
+	assert_bool(ally.is_downed()).is_true()
+
+func test_rescue_revives_a_body_it_is_still_beside() -> void:
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	var ally := _downed_ally(Vector2i(1, 0))
+	var rescue := _queue_rescue(rescuer, ally)
+
+	rescue.execute()
+
+	assert_bool(ally.is_downed()).is_false()

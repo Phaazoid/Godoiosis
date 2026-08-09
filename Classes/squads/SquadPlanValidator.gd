@@ -205,6 +205,18 @@ static func aim_finds_a_target(aim: AttackAction, actions: Array[BaseAction], un
 			return true
 	return false
 
+# The two sides are projected DIFFERENTLY, and the asymmetry is the point (#126).
+#
+# The ACTOR is inside the plan under validation, so it gets projected_cell_for's two load-bearing
+# falses. The TARGET is not — a rescue target is a body in its own solo squad, an intimidate victim
+# an enemy in its own — so its cell is a board FACT, read exactly the way board.projected_unit_at_cell
+# and the board preview read it. That is what makes rescue follow a shoved body: both verbs execute
+# in the side channel, AFTER attacks and counters have landed every shove, so the end-of-pass cell is
+# the one they meet the target on. Reading target.movement.cell instead was correct only while downed
+# units could not move.
+#
+# Not a fixed-point hazard: this reads another squad's settled validity plus a knockback published
+# before validate ran, both constant across the loop, so rescue validity stays the leaf it was.
 static func _actor_ends_adjacent_to(action: BaseAction, target: Unit, actions: Array[BaseAction]) -> bool:
 	var actor_cell := projected_cell_for(action.actor, actions)
-	return GridUtils.cells_within_manhattan_range(actor_cell, 1).has(target.movement.cell)
+	return GridUtils.cells_within_manhattan_range(actor_cell, 1).has(target.get_projected_destination())

@@ -13,10 +13,21 @@ func init(rescuer: Unit, downed_ally: Unit) -> void:
 func execute() -> void:
 	begin_execution()
 	if target != null and is_instance_valid(target) and target.is_downed():
-		target.revive()
-		target.squad.has_acted = true   # spent the turn it's rescued — no actions; resets next turn.
-										 # (Future: Will could buy back movement/attack here.)
+		if _still_adjacent():
+			target.revive()
+			target.squad.has_acted = true   # spent the turn it's rescued — no actions; resets next turn.
+											 # (Future: Will could buy back movement/attack here.)
+		else:
+			push_warning("Rescue fizzled: %s is no longer beside %s" % [actor.get_unit_name(), target.get_unit_name()])
 	finish_execution()
+
+# A Law #2 BACKSTOP, not a rule (#126). The validator's stamp is the only other guard and it is
+# computed before the pass runs, so a mid-pass shove is exactly what could separate the two between
+# the stamp and the act. By the time the side channel runs, moves, attacks and counters have all
+# landed, so both cells are final. If this ever fires, preview and execution disagreed — hence the
+# warning rather than a silent no-op.
+func _still_adjacent() -> bool:
+	return GridUtils.manhattan_distance(actor.movement.cell, target.movement.cell) <= 1
 
 func actor_can_perform() -> bool:
 	return actor.can_rescue_carry()   # verb lock (will-and-death.md limb model)

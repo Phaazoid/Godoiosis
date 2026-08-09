@@ -254,9 +254,14 @@ func show_knockback_preview(shoves: Array) -> void:
 		# start cell) makes to - from a vector the arrow atlas has no texture for, so it fell
 		# through to PATH_ERROR. Same helper the resolver picks the shove direction with.
 		var dir := GridUtils.cardinal_direction_i_between(from, to)
-		# arrow: start tile where the shove began, arrowhead on the landing cell (move atlases)
-		knockback_preview_sprites.append(_create_arrow_sprite(from, _get_start_atlas(dir), Color.WHITE))
-		knockback_preview_sprites.append(_create_arrow_sprite(to, _get_arrowhead_atlas(dir), Color.WHITE))
+		# The WHOLE trail, cell by cell, through the same texture pick a planned move uses (#126).
+		# This used to draw two sprites -- start and arrowhead -- which is complete only when they are
+		# adjacent, so Blowback (1 tile) looked right and every longer shove left its middle blank.
+		# Stepping `dir` is not a second source for the cells: a shove is a straight cardinal line by
+		# construction (_resolve_knockback walks one direction and stops at the first blocked cell),
+		# so from + to + dir cannot describe a different path than the resolver walked.
+		for sprite in _draw_arrow_trail(_shove_path(from, to, dir), Color.WHITE):
+			knockback_preview_sprites.append(sprite)
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
 	# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
@@ -272,6 +277,18 @@ func show_knockback_preview(shoves: Array) -> void:
 		ghost.offset = Vector2i(0, -8)
 		projected_unit_overlay.add_child(ghost)
 		knockback_preview_sprites.append(ghost)
+
+# Every cell a shove crosses, `from` and `to` inclusive. A zero/undecidable direction yields just the
+# start, which _draw_arrow_trail renders as PATH_ERROR -- a malformed shove is visible, never a hang.
+func _shove_path(from: Vector2i, to: Vector2i, dir: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = [from]
+	if dir == Vector2i.ZERO:
+		return cells
+	var cursor := from
+	while cursor != to:
+		cursor += dir
+		cells.append(cursor)
+	return cells
 
 func clear_knockback_preview() -> void:
 	for unit in knockback_hidden_units:
@@ -411,49 +428,46 @@ func is_valid_cell(cell: Vector2i) -> bool:
 	return move_overlay.get_used_rect().has_point(cell)
 
 func draw_path_arrows(move: MoveAction):
-	var path: Array[Vector2i] = move.get_move_path()
 	var tint := _arrow_modulate(move)
 
+	# Hold-position is move-specific semantics, so it stays out of the shared trail: there is no
+	# path to draw, only an error marker when the hold itself is refused.
 	if move.is_hold_position:
 		if not move.is_valid:
-			var sprite := _create_arrow_sprite(move.destination, PATH_ERROR, tint)
-			move.add_preview_sprite(sprite)
+			move.add_preview_sprite(_create_arrow_sprite(move.destination, PATH_ERROR, tint))
 		return
 
+	for sprite in _draw_arrow_trail(move.get_move_path(), tint):
+		move.add_preview_sprite(sprite)
+
+# ONE arrow trail, drawn cell by cell -- the seam for ANY effect that walks a unit along a path
+# (#126 follow-up; planned moves and knockback shoves are the two callers today). Returns the
+# sprites rather than tracking them, because lifetime differs per caller -- a move's arrows die
+# with its MoveAction, a shove's with clear_knockback_preview -- so ownership stays the caller's.
+# An empty path draws nothing; a single-cell path draws PATH_ERROR (a trail that goes nowhere is
+# a bug worth seeing, and the texture pick below needs a neighbour to aim at).
+func _draw_arrow_trail(path: Array[Vector2i], tint: Color) -> Array[Sprite2D]:
+	var sprites: Array[Sprite2D] = []
 	if path.is_empty():
-		return
-
+		return sprites
 	if path.size() == 1:
-		var sprite := _create_arrow_sprite(path[0], PATH_ERROR, tint)
-		move.add_preview_sprite(sprite)
-		return
-
+		sprites.append(_create_arrow_sprite(path[0], PATH_ERROR, tint))
+		return sprites
 	for i in range(path.size()):
-		var current := path[i]
-		var texture: Texture2D
+		sprites.append(_create_arrow_sprite(path[i], _path_arrow_texture(path, i), tint))
+	return sprites
 
-		#Start tile
-		if i == 0:
-			var next := path[i + 1]
-			var dir := next - current
-			texture = _get_start_atlas(dir)
-
-		#End tile / arrowhead
-		elif i == path.size() - 1:
-			var previous := path[i - 1]
-			var dir := current - previous
-			texture = _get_arrowhead_atlas(dir)
-
-		#Middle tiles
-		else:
-			var previous := path[i - 1]
-			var next := path[i + 1]
-			var dir_to_prev := previous - current
-			var dir_to_next := next - current
-			texture = _get_path_segment_atlas(dir_to_prev, dir_to_next)
-
-		var sprite := _create_arrow_sprite(current, texture, tint)
-		move.add_preview_sprite(sprite)
+# Which arrow tile belongs at path[i]: start / segment / arrowhead. Split from the trail drawer
+# above only because the two answer different questions (texture vs sprites); every caller should
+# go through _draw_arrow_trail. Corners are legal -- _get_path_segment_atlas knows them -- so the
+# trail is not limited to straight lines; non-CARDINAL steps fall to PATH_ERROR (an atlas limit).
+func _path_arrow_texture(path: Array[Vector2i], i: int) -> Texture2D:
+	var current := path[i]
+	if i == 0:
+		return _get_start_atlas(path[i + 1] - current)
+	if i == path.size() - 1:
+		return _get_arrowhead_atlas(current - path[i - 1])
+	return _get_path_segment_atlas(path[i - 1] - current, path[i + 1] - current)
 
 func _get_arrowhead_atlas(dir: Vector2i) -> Texture2D:
 	match dir:

@@ -307,7 +307,10 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 
 func _click_picking_target(cell: Vector2i) -> void:
-	var picked := get_unit_at_cell(cell)
+	# unit_at_pointer, not get_unit_at_cell (#126): this is a POINTER question, and the board draws one
+	# sprite per unit at its PROJECTED cell. The last click handler that still resolved against the live
+	# board -- which made a rescue aimed at a shoved body's landing cell hit nothing at all.
+	var picked := unit_at_pointer(cell)
 	if target_pick_cells.has(cell) and picked != null:
 		_target_pick_callback.call(picked)
 	exit_current_mode()
@@ -887,8 +890,11 @@ func get_move_range(result: Dictionary, unit: Unit) -> Array[Vector2i]:
 		cells.append(cell)
 	return cells
 
+# Where a set of units' SPRITES are -- projected, not live (#126), so the target-pick overlay marks the
+# tile the player can actually see and click. Both no-plan callers (squad-up, join-squad) are gated on an
+# empty queue, so projected == live for them; rescue and intimidate are the two that needed it.
 func _unit_cells(units: Array[Unit]) -> Array[Vector2i]:
 	var cells: Array[Vector2i] = []
 	for unit in units:
-		cells.append(unit.movement.cell)
+		cells.append(unit.get_projected_destination())
 	return cells
