@@ -199,16 +199,42 @@ static func can_target(attacker: Unit, target: Unit) -> bool:
 # which was correct only by accident — a downed unit could not move. A 0-damage shove can now
 # reposition one, and half-projecting it gets the answer exactly backwards: the menu offers the body
 # on the cell it is about to vacate, and refuses the rescue aimed where it will actually land.
-static func adjacent_downed_allies(unit: Unit, board: BoardContext) -> Array[Unit]:
+# With a plan (#124), "downed" widens to "downed BY THE TIME THE RESCUE RUNS": an active squadmate
+# the pass predicts will drop to a counter is a legal pickup, because rescues execute in the side
+# channel after every hit has landed. Plan-less callers (the AI's builder) keep the live rule.
+static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: ResolvedPlan = null) -> Array[Unit]:
 	var result: Array[Unit] = []
 	var origin := unit.get_projected_destination()
 	for cell in GridUtils.cells_within_manhattan_range(origin, 1):
 		if cell == origin:
 			continue
 		var other := board.projected_unit_at_cell(cell)
-		if other != null and other != unit and other.is_downed() and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+		if other != null and other != unit and is_rescueable(other, plan) and not Team.is_enemy(unit.get_faction(), other.get_faction()):
 			result.append(other)
 	return result
+
+# The LIFECYCLE half of "may this unit be picked up?" -- one seam for the menu's candidate list,
+# the queue-time gate and the validator (#124). With a plan the question is asked of the pass's END
+# state (the resolver's threaded hypo): a body nothing touches stays DOWNED, a squadmate the plan
+# predicts will drop reads DOWNED by then, and a body a later hit finishes reads DEAD and drops out.
+# (A predicted MAIM is a down too -- the resolver threads it as the same lifecycle.) Without a plan,
+# the live board answers, exactly as before #124.
+static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
+	if target == null or not is_instance_valid(target):
+		return false
+	if plan == null:
+		return target.is_downed()
+	if PlanResolver.projected_lifecycle(target, plan.hypo) != Unit.LifecycleState.DOWNED:
+		return false
+	if target.is_downed():
+		return true   # already a body -- no prompt can fire on it
+	# INTERIM until #158 deletes the live Crisis prompt: a PLAYER unit whose predicted down would
+	# fire the offer is not a legal target -- the plan cannot promise a down the player may refuse
+	# at execution. Non-player factions decide by stance and already preview CRISIS (not DOWNED)
+	# when they accept, so the DOWNED filter above covers them with no special case.
+	if target.get_faction() == Team.Faction.PLAYER and target.is_crisis_eligible():
+		return false
+	return true
 
 # Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
 # adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a

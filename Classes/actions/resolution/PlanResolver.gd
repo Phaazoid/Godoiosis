@@ -10,9 +10,10 @@ const INSULATED_POPUP := "Insulated!"
 # (R8). Reads a snapshot, mutates no live state, contains no RNG (R2).
 
 static func resolve(plan: ResolvedPlan, reactions: Array[ElementalReaction] = ReactionCatalog.get_all(), board: BoardContext = null, terrain_reactions: Array[TerrainReaction] = []) -> void:
-	var hypo: Dictionary = {}   # Unit -> _Hypo, shared across both phases so counter liveness sees the attacks
-	resolve_attacks(plan, hypo, reactions, board, terrain_reactions)
-	resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+	# plan.hypo (Unit -> _Hypo) is shared across both phases so counter liveness sees the attacks,
+	# and lives on the plan so end-of-pass state stays readable after the pass (#124).
+	resolve_attacks(plan, plan.hypo, reactions, board, terrain_reactions)
+	resolve_counters(plan, plan.hypo, reactions, board, terrain_reactions)
 
 # Phase 1: the ordered attacks. Split out so SquadManager.resolve_plan can reflect knockback shoves
 # into projected positions BEFORE deriving counters (#84 approach B) — a counter is judged from

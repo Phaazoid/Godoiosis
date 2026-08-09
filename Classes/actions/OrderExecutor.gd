@@ -189,6 +189,12 @@ func _process_downed_pending() -> void:
 			continue   # finished off later in the same pass -- the death path already cleaned it up
 		game.overlay_manager.handle_unit_death(unit)   # clear its planning overlays (not its board presence)
 		game.squad_manager.handle_unit_downed(unit)    # eject into a solo squad -- safe now, execution is over
+		# A unit standing again at sweep time was rescued in the SAME pass (#124) -- Crisis accepts
+		# were erased from the list above. It is still ejected (the rule stands either way), and it
+		# is still SPENT the turn it's rescued -- but its solo squad only exists as of the eject, so
+		# the mark lands here rather than in RescueAction.execute.
+		if unit.is_active():
+			unit.squad.has_acted = true
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
 

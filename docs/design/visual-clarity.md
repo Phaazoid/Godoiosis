@@ -21,10 +21,11 @@ plus the running order of the queue-UX checklist. Update it as items land.
    - **Mute / desaturate** = "this is inactive or out of focus" (e.g. non-active squad icons).
    - **Color-code** = validity (valid vs invalid target/cursor), reusing
      `CursorController.CursorState.VALID/INVALID`.
-   - **BREAK banner** (full-screen flash, 2026-07-05) = "the plan diverged — the resolver re-entered"
-     (resolution-pipeline R9). Fires on every BREAK, *both sides* — your trap shattering the enemy's
-     turn earns the same moment. Reserved exclusively for R9 BREAKs; never reuse it for mere emphasis,
-     or the signal dies.
+   - ~~**BREAK banner**~~ — **RETIRED 2026-08-09 with the BREAK doctrine's repeal** (resolution-pipeline
+     R9, [#155](https://github.com/Phaazoid/Godoiosis/issues/155)/[#158](https://github.com/Phaazoid/Godoiosis/issues/158)):
+     plans no longer diverge, so the moment this motif marked cannot occur. Never built. The full-screen
+     flash is now an unclaimed motif — if a future meaning wants it, it still must be reserved for
+     exactly one thing, or the signal dies.
    Don't let two motifs collide (e.g. don't also *flash* something that's merely highlighted).
 
 3. **Most important info first, at a glance.** A row should read left-to-right in priority order:
@@ -97,11 +98,12 @@ you read it *afterwards*. Both are #44 children.
   cheap; handing the log a squad and a plan and calling `build_for` is Law #4 with the sign flipped —
   one code path answering both "what will happen" and "what did happen".
 
-  Two things a log must show that **no queue row ever did**: post-**BREAK** reality (R9 is the one
-  place execution legitimately diverges from the preview — the banner tells you it happened, a log is
-  where you'd learn what changed), and every event that isn't a player order at all — end-of-phase
-  burn damage, Crisis outcomes, expiring downed clocks, squad ejections, terrain deposits. Those are
-  precisely the events players miss, and they are invisible to the queue by construction.
+  What a log must show that **no queue row ever did** *(halved 2026-08-09: the other half was
+  post-BREAK reality, and the BREAK repeal — resolution-pipeline R9 — means execution never diverges
+  from the preview, so there is no post-divergence state to report)*: every event that isn't a player
+  order at all — end-of-phase burn damage, Crisis outcomes, expiring downed clocks, squad ejections,
+  terrain deposits. Those are precisely the events players miss, and they are invisible to the queue
+  by construction.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

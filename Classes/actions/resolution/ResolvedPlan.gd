@@ -11,3 +11,9 @@ var counters: Array[CounterAttackAction] = []
 
 # Terrain consequences derived this pass (#50). Empty unless the resolver ran with a board.
 var cell_effects: Array[ResolvedCellEffect] = []
+
+# The threaded hypothetical the pass resolved through (Unit -> PlanResolver._Hypo), kept on the
+# plan instead of dying as a resolver local (#124): "what state does this pass LEAVE a unit in?"
+# is a question the resolver already answered, and re-deriving it from outcomes would be a second
+# ladder. Read through PlanResolver.projected_hp / projected_lifecycle, never written after the pass.
+var hypo: Dictionary = {}

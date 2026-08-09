@@ -15,10 +15,21 @@ func execute() -> void:
 	if target != null and is_instance_valid(target) and target.is_downed():
 		if _still_adjacent():
 			target.revive()
-			target.squad.has_acted = true   # spent the turn it's rescued — no actions; resets next turn.
-											 # (Future: Will could buy back movement/attack here.)
+			# Spent the turn it's rescued — no actions; resets next turn. (Future: Will could buy
+			# back movement/attack here.) A SAME-PASS rescue (#124) reaches here before the ejection
+			# sweep has built the target's solo squad — target.squad is still the ACTING squad, and
+			# marking it would spend the whole squad early — so OrderExecutor._process_downed_pending
+			# marks that case after it ejects.
+			if target.squad != actor.squad:
+				target.squad.has_acted = true
 		else:
 			push_warning("Rescue fizzled: %s is no longer beside %s" % [actor.get_unit_name(), target.get_unit_name()])
+	elif target != null and is_instance_valid(target):
+		# The queue previewed a pickup and there is nothing to pick up — the lethality prediction
+		# was wrong, or two rescues raced one body. Either way preview and execution disagreed,
+		# and since the BREAK repeal (#155, 2026-08-09) that is a bug by definition, never a
+		# quiet fizzle.
+		push_error("Rescue executed against a target that is not down: %s -> %s" % [actor.get_unit_name(), target.get_unit_name()])
 	finish_execution()
 
 # A Law #2 BACKSTOP, not a rule (#126). The validator's stamp is the only other guard and it is

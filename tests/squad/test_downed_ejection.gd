@@ -139,3 +139,53 @@ func test_a_downed_leader_hands_off_the_squad() -> void:
 	assert_object(member.squad.leader) \
 		.override_failure_message("the squad is still led by a downed unit").is_not_same(leader)
 	assert_bool(member.squad.get_members().has(leader)).is_false()
+
+
+# #124: a rescue queued in the SAME pass as the down it answers, as the WHOLE sequence -- authored
+# through the production gate against a target that is still STANDING, the attack drops it mid-pass,
+# the side channel picks it up, and the sweep still ejects it (revive does NOT re-enlist) and spends
+# its turn. Falsified by forcing RulesService.is_rescueable to ignore the plan: the rescue can then
+# never be authored and the queued assert goes red.
+func test_a_same_pass_rescue_revives_ejects_and_spends() -> void:
+	# LDR 10: the fixture default (3) feeds two members at MEMBER_LDR_COST 2 each.
+	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(1, 0))
+	leader.equipped_weapon = H.make_weapon()
+	var victim := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var rescuer := _spawn(Team.Faction.PLAYER, Vector2i(3, 0))
+	var _bystander := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(victim, leader.squad)
+	game.squad_manager.join_squad(rescuer, leader.squad)
+	assert_int(leader.squad.get_members().size()) \
+		.override_failure_message("fixture failed to build the three-member squad").is_equal(3)
+
+	victim.take_damage(victim.get_current_hp() - 1)   # bloodied: the NEXT hit is a would-be-down
+	assert_bool(victim.is_active()).is_true()
+
+	(leader.equipped_weapon as WeaponInstance).template.main_attack.hits_allies = true
+	var aim := AttackAction.create(leader, Vector2i(1, 0), null, Vector2i(2, 0))
+	aim.fired_attack = leader.get_fired_attack()
+	assert_bool(game.squad_manager.queue_action(leader.squad, aim)) \
+		.override_failure_message("fixture failed to queue the friendly-fire attack").is_true()
+	game.refresh_action_queue(leader.squad)   # the real path: resolve -> store the plan the gate reads
+
+	game.queue_rescue(rescuer, victim)
+	var rescue: RescueAction = null
+	for action in leader.squad.action_queue:
+		if action is RescueAction:
+			rescue = action as RescueAction
+	assert_object(rescue) \
+		.override_failure_message("the gate refused a rescue against a predicted down (#124)").is_not_null()
+	assert_bool(rescue.is_valid).is_true()
+
+	var old_squad: Squad = leader.squad
+	await game.order_executor.execute_orders(leader)
+
+	assert_bool(victim.is_active()) \
+		.override_failure_message("the same-pass rescue never revived the victim").is_true()
+	assert_bool(old_squad.get_members().has(victim)) \
+		.override_failure_message("revived mid-pass but never ejected -- revive must not re-enlist").is_false()
+	assert_bool(victim.squad.has_acted) \
+		.override_failure_message("a rescued unit is SPENT the turn it is rescued").is_true()
+	assert_int(game.order_executor._downed_pending.size()) \
+		.override_failure_message("_downed_pending did not drain").is_equal(0)

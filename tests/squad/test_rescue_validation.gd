@@ -61,7 +61,10 @@ func test_rescue_invalidated_when_a_move_leaves_the_ally() -> void:
 
 	assert_bool(rescue.is_valid).is_false()
 
-# If the target is picked up first (no longer downed), the queued rescue invalidates.
+# If the target is picked up first (no longer downed), the queued rescue invalidates. PLAN-ARMED
+# since #124: the lifecycle half of rescue validity moved out of the fixed-point loop beside the
+# attack whiff clause, so it only runs when a resolve is handed in -- which is what every in-game
+# validate does (game.refresh_action_queue).
 func test_rescue_invalidated_when_target_is_no_longer_down() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var ally := _downed_ally(Vector2i(1, 0))
@@ -70,7 +73,8 @@ func test_rescue_invalidated_when_target_is_no_longer_down() -> void:
 	ally.revive()
 	assert_bool(ally.is_downed()).is_false()
 
-	_sm.validate_squad_plan(rescuer.squad)
+	var plan: ResolvedPlan = _sm.resolve_plan(rescuer.squad, _sm.board_source.call())
+	_sm.validate_squad_plan(rescuer.squad, plan)
 
 	assert_bool(rescue.is_valid).is_false()
 
@@ -149,3 +153,93 @@ func test_rescue_revives_a_body_it_is_still_beside() -> void:
 	rescue.execute()
 
 	assert_bool(ally.is_downed()).is_false()
+
+# ---- #124: rescuing a PREDICTED down -- the target is still standing when the order is authored ----
+
+# An ally one hit from dropping, plus a squad (attacker + rescuer) whose plan delivers that hit.
+# The attacker's exact-lethality doesn't matter: the victim sits at 1 HP, so any damaging hit is a
+# would-be-down and the fixture weapon's overkill (power 3 - 1 = 2) is far under the ceiling.
+func _bloodied_ally(cell: Vector2i, overrides: Dictionary = {}) -> Unit:
+	var ally := H.spawn_solo(self, _sm, PLAYER, cell, overrides)
+	ally.take_damage(ally.get_current_hp() - 1)
+	assert_bool(ally.is_active()).override_failure_message("fixture downed the ally too early").is_true()
+	return ally
+
+# Queue the attacker's friendly-fire aim at the victim's cell, stamped the way declare() stamps.
+func _lethal_aim(attacker: Unit, victim: Unit) -> AttackAction:
+	(attacker.equipped_weapon as WeaponInstance).template.main_attack.hits_allies = true
+	var aim := AttackAction.create(attacker, attacker.movement.cell, null, victim.movement.cell)
+	aim.fired_attack = attacker.get_fired_attack()
+	attacker.squad._queue_action(aim)
+	return aim
+
+func test_a_rescue_against_a_predicted_down_validates() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
+	_sm.join_squad(rescuer, attacker.squad)
+	var victim := _bloodied_ally(Vector2i(2, 0))
+
+	_lethal_aim(attacker, victim)
+	var rescue := _queue_rescue(rescuer, victim)
+	var plan: ResolvedPlan = _sm.resolve_plan(attacker.squad, _sm.board_source.call())
+
+	assert_that(PlanResolver.projected_lifecycle(victim, plan.hypo)) \
+		.override_failure_message("fixture's aim does not predict a DOWN") \
+		.is_equal(Unit.LifecycleState.DOWNED)
+
+	_sm.validate_squad_plan(attacker.squad, plan)
+
+	assert_bool(rescue.is_valid) \
+		.override_failure_message("a rescue against a predicted down must validate (#124)").is_true()
+
+# The propagation half of #124: cancel the attack and the down is no longer predicted, so the
+# rescue FALLS into red -- still queued, never deleted (strict queueing's one-way validity).
+func test_cancelling_the_attack_reddens_the_rescue_but_keeps_it_queued() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
+	_sm.join_squad(rescuer, attacker.squad)
+	var victim := _bloodied_ally(Vector2i(2, 0))
+
+	var aim := _lethal_aim(attacker, victim)
+	var rescue := _queue_rescue(rescuer, victim)
+	_sm.validate_squad_plan(attacker.squad, _sm.resolve_plan(attacker.squad, _sm.board_source.call()))
+	assert_bool(rescue.is_valid).is_true()
+
+	attacker.squad._remove_action(aim)
+	_sm.validate_squad_plan(attacker.squad, _sm.resolve_plan(attacker.squad, _sm.board_source.call()))
+
+	assert_bool(rescue.is_valid) \
+		.override_failure_message("the rescue's precondition is gone and the row stayed green").is_false()
+	assert_bool(attacker.squad.action_queue.has(rescue)) \
+		.override_failure_message("an invalidated order must stay queued in red, never be deleted").is_true()
+
+# The candidate list one layer earlier: with the plan, a STANDING ally the pass will drop is
+# offered; without one (the AI's builder, a bare fixture), the live rule holds and it is not.
+func test_the_candidate_query_offers_a_predicted_down_ally() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
+	_sm.join_squad(rescuer, attacker.squad)
+	var victim := _bloodied_ally(Vector2i(2, 0))
+
+	_lethal_aim(attacker, victim)
+	var plan: ResolvedPlan = _sm.resolve_plan(attacker.squad, _sm.board_source.call())
+
+	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call(), plan)).contains([victim])
+	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call())).is_empty()
+
+# INTERIM until #158 deletes the live Crisis prompt (delete this case with it): a full-Will PLAYER
+# ally previews DOWNED, but at execution the prompt could stand it back up -- so the plan cannot
+# promise the down, and the ally is not offered.
+func test_a_crisis_eligible_ally_is_not_offered_while_the_prompt_lives() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
+	_sm.join_squad(rescuer, attacker.squad)
+	var victim := _bloodied_ally(Vector2i(2, 0), {Stats.Stat.WIL: 20})
+	assert_bool(victim.is_crisis_eligible()).override_failure_message("fixture: WIL 20 should be eligible").is_true()
+
+	_lethal_aim(attacker, victim)
+	var plan: ResolvedPlan = _sm.resolve_plan(attacker.squad, _sm.board_source.call())
+
+	assert_that(PlanResolver.projected_lifecycle(victim, plan.hypo)).is_equal(Unit.LifecycleState.DOWNED)
+	assert_bool(RulesService.is_rescueable(victim, plan)).is_false()
+	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call(), plan)).is_empty()

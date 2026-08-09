@@ -198,7 +198,7 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():
 		options.append(ATTACK)
 
-	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board()).is_empty() and unit.can_rescue_carry():
+	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
 		options.append(RESCUE)
 
 	if _can_take_main_action(unit) and unit.can_rally():
@@ -275,7 +275,9 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 		EXECUTE_ORDERS:
 			game.order_executor.execute_orders(unit)
 		RESCUE:
-			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board()), func(target: Unit): game.queue_rescue(unit, target))
+			# Same query as the populate gate above, plan included -- a predicted-down squadmate
+			# (#124) must be pickable exactly where the row said it would be.
+			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)), func(target: Unit): game.queue_rescue(unit, target))
 		RALLY:
 			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
 		ABILITY_ACTION:
