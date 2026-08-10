@@ -39,6 +39,10 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# clear_board() and spawn_unit()'s refusal paths remove_child then queue_free, so their nodes
+	# are parentless for one frame BY DESIGN. gdUnit4 samples orphans after this hook; without the
+	# frame they count as leaks. A real leak survives the frame and still reports.
+	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
 

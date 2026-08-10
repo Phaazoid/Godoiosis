@@ -38,6 +38,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# _round_trip() -> apply_scenario() -> clear_board(), which leaves units parentless for one
+	# frame by design. gdUnit4 samples orphans after this hook. A real leak still reports.
+	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
 
