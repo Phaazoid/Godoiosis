@@ -159,8 +159,8 @@ func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
 	if target == "":
 		return
-	# Subfolder names round-trip untouched: save_scenario make_dir_recursive's the base dir.
-	scenario_manager.save_scenario(target)
+	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
+	scenario_manager.save_scenario(target, status_label)
 	refresh_dropdown(target)
 	refresh_loaded_label()
 
@@ -184,7 +184,7 @@ func _on_save_as_pressed() -> void:
 		return
 	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
 		return
-	scenario_manager.save_scenario(entered)
+	scenario_manager.save_scenario(entered, status_label)
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()

@@ -191,6 +191,17 @@ static func refuse_illegal_name(name: String, noun: String, status_label: Label 
 			if status_label != null:
 				status_label.text = msg
 			return true
+	if allow_slash:
+		# A permitted '/' still has to spell an honest subfolder: '..' escapes the save root
+		# entirely, and an empty/'.' segment (foo//bar, a trailing '/') degenerates the filename.
+		# Either way the file lands where no catalog scan looks -- the #168 symptom, one level up.
+		for segment in name.split("/"):
+			if segment.strip_edges() in ["", ".", ".."]:
+				var msg := "%s names can't use '%s' as a folder segment" % [noun.capitalize(), segment]
+				push_warning(msg)
+				if status_label != null:
+					status_label.text = msg
+				return true
 	return false
 
 # Save As creates, Update overwrites. Refusing a taken name is what keeps them non-overlapping.
