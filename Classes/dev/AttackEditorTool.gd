@@ -8,6 +8,7 @@ class_name AttackEditorTool
 @onready var update_button: Button = %UpdateAttackButton
 @onready var delete_button: Button = %DeleteAttackButton
 @onready var save_as_button: Button = %SaveAsAttackButton
+@onready var status_label: Label = %AttackStatusLabel
 
 # Authors TransmutationData carvings, WeaponAttackData weapon attacks, AND edits an established
 # family's/prototype's MAIN attack in place — three modes, one form (#30 / #72; folded from a
@@ -126,15 +127,19 @@ func _on_update_pressed():
 	if _mode == Mode.FAMILY_MAINS:
 		# The main is edited LIVE, never duplicated, so it already knows its own file.
 		if current.resource_path == "":
-			push_warning("%s's main attack has no saved file yet -- author it in Weapon Attack mode first" % target)
+			var msg := "%s's main attack has no saved file yet -- author it in Weapon Attack mode first" % target
+			push_warning(msg)
+			status_label.text = msg
 			return
-		DevWidgets.save_over(current, current.resource_path)
+		DevWidgets.save_over(current, current.resource_path, status_label)
 		return
 	var path: String = _items[target].resource_path
 	if path == "":
-		push_warning("%s has no file on disk to update" % target)
+		var msg := "%s has no file on disk to update" % target
+		push_warning(msg)
+		status_label.text = msg
 		return
-	if DevWidgets.save_over(current, path):
+	if DevWidgets.save_over(current, path, status_label):
 		_refresh_list(current.display_name)
 
 func _on_delete_pressed():
@@ -143,7 +148,7 @@ func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
-	if DevWidgets.delete_saved_file(_items[target].resource_path, "attack"):
+	if DevWidgets.delete_saved_file(_items[target].resource_path, "attack", status_label):
 		_refresh_list()
 
 func _on_save_as_pressed():
@@ -151,14 +156,18 @@ func _on_save_as_pressed():
 		return
 	var chosen_name := name_input.text.strip_edges()
 	if chosen_name == "":
-		push_warning("Needs a name to save")
+		var msg := "Needs a name to save"
+		push_warning(msg)
+		status_label.text = msg
+		return
+	if DevWidgets.refuse_illegal_name(chosen_name, "attack", status_label):
 		return
 	var dir := TransmutationCatalog.CARVING_DIR if _mode == Mode.TRANSMUTATION else WeaponAttackCatalog.LIBRARY_DIR
 	var path := dir + chosen_name + ".tres"
-	if DevWidgets.refuse_existing_file(path, "attack"):
+	if DevWidgets.refuse_existing_file(path, "attack", status_label):
 		return
 	current.display_name = chosen_name
-	if DevWidgets.save_over(current, path):
+	if DevWidgets.save_over(current, path, status_label):
 		name_input.text = ""
 		_refresh_list(chosen_name)
 

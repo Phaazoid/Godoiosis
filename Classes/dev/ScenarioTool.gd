@@ -9,6 +9,7 @@ class_name ScenarioTool
 @onready var objective_list: VBoxContainer = %ObjectiveList
 @onready var squad_list: VBoxContainer = %SquadList
 @onready var loaded_label: Label = %LoadedScenarioLabel
+@onready var status_label: Label = %ScenarioStatusLabel
 
 var scenario_manager: ScenarioManager
 var game
@@ -158,8 +159,8 @@ func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
 	if target == "":
 		return
-	# Subfolder names round-trip untouched: save_scenario make_dir_recursive's the base dir.
-	scenario_manager.save_scenario(target)
+	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
+	scenario_manager.save_scenario(target, status_label)
 	refresh_dropdown(target)
 	refresh_loaded_label()
 
@@ -167,17 +168,23 @@ func _on_delete_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
 	if target == "":
 		return
-	if DevWidgets.delete_saved_file(ScenarioManager.scenario_path(target), "scenario"):
+	if DevWidgets.delete_saved_file(ScenarioManager.scenario_path(target), "scenario", status_label):
 		refresh_dropdown()
 
 func _on_save_as_pressed() -> void:
 	var entered := scenario_name_input.text.strip_edges()
 	if entered == "":
-		push_warning("Scenario needs a name")
+		var msg := "Scenario needs a name"
+		push_warning(msg)
+		status_label.text = msg
 		return
-	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario"):
+	# allow_slash: Scenarios/fixtures/-style subfolder names are a real feature here, unlike
+	# Item/Attack's flat catalogs (#168).
+	if DevWidgets.refuse_illegal_name(entered, "scenario", status_label, true):
 		return
-	scenario_manager.save_scenario(entered)
+	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
+		return
+	scenario_manager.save_scenario(entered, status_label)
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()

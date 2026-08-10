@@ -7,6 +7,7 @@ class_name ItemEditorTool
 @onready var name_input: LineEdit = %ItemNameInput
 @onready var update_button: Button = %UpdateItemButton
 @onready var delete_button: Button = %DeleteItemButton
+@onready var status_label: Label = %ItemStatusLabel
 
 # Authors either a WeaponData or a RuneData (the equip slot takes both). The type dropdown
 # lists weapon bases + prototypes + rune sizes; the field area renders the weapon reflectively
@@ -91,16 +92,18 @@ func _on_update_pressed():
 	# path rebuilt from it would miss any file whose basename differs.
 	var path: String = _variants[target].resource_path
 	if path == "":
-		push_warning("%s has no file on disk to update" % target)
+		var msg := "%s has no file on disk to update" % target
+		push_warning(msg)
+		status_label.text = msg
 		return
-	if DevWidgets.save_over(current_item, path):
+	if DevWidgets.save_over(current_item, path, status_label):
 		_refresh_variant_list(current_item.display_name)
 
 func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
-	if DevWidgets.delete_saved_file(_variants[target].resource_path, "item"):
+	if DevWidgets.delete_saved_file(_variants[target].resource_path, "item", status_label):
 		_refresh_variant_list()
 
 func _on_save_as_pressed():
@@ -108,14 +111,18 @@ func _on_save_as_pressed():
 		return
 	var entered_name := name_input.text.strip_edges()
 	if entered_name == "":
-		push_warning("Item needs a name to save")
+		var msg := "Item needs a name to save"
+		push_warning(msg)
+		status_label.text = msg
+		return
+	if DevWidgets.refuse_illegal_name(entered_name, "item", status_label):
 		return
 	var dir := RuneCatalog.VARIANT_DIR if current_item is RuneData else WeaponCatalog.SAVED_DIR
 	var path := dir + entered_name + ".tres"
-	if DevWidgets.refuse_existing_file(path, "item"):
+	if DevWidgets.refuse_existing_file(path, "item", status_label):
 		return
 	current_item.display_name = entered_name
-	if DevWidgets.save_over(current_item, path):
+	if DevWidgets.save_over(current_item, path, status_label):
 		name_input.text = ""
 		_refresh_variant_list(entered_name)
 

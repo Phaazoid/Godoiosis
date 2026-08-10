@@ -36,23 +36,17 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 		result.append(entry)
 	return result
 
-func save_scenario(scenario_name: String):
+# The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
+# the error path (mirrored into status_label when given, #168) all live there, not here.
+func save_scenario(scenario_name: String, status_label: Label = null):
 	if scenario_name.strip_edges() == "":
 		push_warning("Scenario needs a name")
 		return
 
 	var scenario := capture_scenario(scenario_name)
 	var path := scenario_path(scenario_name)
-	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	# load() serves the resource cache -- without this, re-saving a loaded scenario leaves Load
-	# and the F2 reset replaying the stale board.
-	scenario.take_over_path(path)
-	var err := ResourceSaver.save(scenario, path)
-	if err != OK:
-		push_error("Failed to save scenario: error %s" % err)
-		return
-
-	last_loaded_path = path
+	if DevWidgets.save_over(scenario, path, status_label):
+		last_loaded_path = path
 
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
 func capture_scenario(scenario_name: String) -> ScenarioData:
