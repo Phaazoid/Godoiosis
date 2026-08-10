@@ -52,14 +52,18 @@ func _attack(attacker: Unit, target: Unit) -> AttackAction:
 func test_def_subtracts_from_damage() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
-	target.worn_armor = _make_armor(4)   # DEF 4 at CON 5 (armor_def(4,5) == 4)
+	target.worn_armor = _make_armor(4)
 
 	var attack := _attack(attacker, target)   # base 10 (power 6 + STR 4)
 	var plan := ResolvedPlan.new()
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan)
 
-	assert_int(attack.resolved.damage).is_equal(6)   # 10 - 4 DEF
+	# Expected DEF through the readout seam, never a literal (2026-08-10 sweep): the armor term
+	# rides CON_DEF_FACTOR, which is playtest-tunable. Readout == subtraction is this file's own
+	# doctrine (see the header + test_def_breakdown_total_is_what_the_resolver_subtracts).
+	assert_int(attack.resolved.damage).is_equal(10 - target.get_effective_def())
+	assert_int(target.get_effective_def()).is_greater(0)   # premise: the piece pays out at all
 
 
 func test_naked_target_takes_full_damage() -> void:
@@ -92,6 +96,9 @@ func test_def_never_drives_damage_below_zero() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4})
 	var target := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 20, Stats.Stat.CON: 5})
 	target.worn_armor = _make_armor(40)   # DEF far above the incoming hit
+	# The premise stated rather than assumed: if a factor retune ever drops this below the base 10,
+	# this fails HERE as a fixture problem, not below as a phantom mechanism bug.
+	assert_int(target.get_effective_def()).is_greater_equal(10)
 
 	var attack := _attack(attacker, target)
 	var plan := ResolvedPlan.new()
@@ -128,7 +135,7 @@ func test_cover_stacks_with_armor() -> void:
 	plan.attacks.append(attack)
 	PlanResolver.resolve(plan, ReactionCatalog.get_all(), board)
 
-	assert_int(attack.resolved.damage).is_equal(10 - 4 - Terrain.COVER_DEF)
+	assert_int(attack.resolved.damage).is_equal(10 - target.get_effective_def() - Terrain.COVER_DEF)
 
 
 func test_cover_only_shelters_the_covered_cell() -> void:
@@ -170,10 +177,14 @@ func test_def_breakdown_itemizes_armor_and_cover() -> void:
 	target.worn_armor = _make_armor(4)
 	var board := _board_with_cover(Vector2i(1, 0))
 
+	# The armor term derived independently through the stat doctrine (Stats.armor_def), so this
+	# case genuinely cross-checks the breakdown rather than echoing get_effective_def back at
+	# itself -- and no literal rides CON_DEF_FACTOR (playtest-tunable, 2026-08-10 sweep).
+	var armor_term: int = Stats.armor_def(4, target.get_effective_stat(Stats.Stat.CON))
 	var def := RulesService.def_breakdown(target, Vector2i(1, 0), board)
-	assert_int(def["armor"]).is_equal(4)
+	assert_int(def["armor"]).is_equal(armor_term)
 	assert_int(def["cover"]).is_equal(Terrain.COVER_DEF)
-	assert_int(def["total"]).is_equal(4 + Terrain.COVER_DEF)
+	assert_int(def["total"]).is_equal(armor_term + Terrain.COVER_DEF)
 
 
 func test_def_breakdown_without_a_board_is_armor_only() -> void:
@@ -183,7 +194,7 @@ func test_def_breakdown_without_a_board_is_armor_only() -> void:
 
 	var def := RulesService.def_breakdown(target, Vector2i(1, 0), null)
 	assert_int(def["cover"]).is_equal(0)
-	assert_int(def["total"]).is_equal(4)
+	assert_int(def["total"]).is_equal(Stats.armor_def(4, target.get_effective_stat(Stats.Stat.CON)))
 
 
 func test_def_breakdown_total_is_what_the_resolver_subtracts() -> void:

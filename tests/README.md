@@ -89,6 +89,12 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 
 7. **Run it:** `powershell -File tests\run_tests.ps1 res://tests/<your-folder>`. On a large run, redirect to a file and search it (`... *> out.txt`) rather than trusting a truncated terminal capture. Always re-run after fixing a failure — see the truncation gotcha below.
 
+8. **The tuning razor (dev rule, 2026-08-10 — #118 and the sweep that followed): a test may not break when a NAMED tunable constant moves; it may break when a function body changes.** *"I don't want any tests that test what these values are, only that they work."* In practice:
+   - **Never hard-code a knob's current value** into an expectation, an input whose *meaning* is its position relative to a threshold, or a tick/loop count. Read the constant (`Squad.MEMBER_LDR_COST`, `Stats.DEX_MOV_MID_MAX + 1`, `TerrainStateManager.STATE_DURATIONS[state]`), derive the expectation from it, or assert a relationship (`is_greater`, before-vs-after) instead of a number. `contains(str(CONST))` is the pattern for status strings.
+   - **A fixture that inherits a tunable default is a trap** — author the knob-dependent input explicitly (the cohesion suite's `FIXTURE_COH`), or derive it (`2 * Squad.MEMBER_LDR_COST`). Where a case's premise depends on a knob relationship, **assert the premise** so a retune fails loudly as a fixture problem, not silently as a phantom mechanism bug.
+   - **What stays literal:** values in function *bodies* (band rung heights, the MOV floor of 1) — retuning those means editing the mechanism, where a red test is ordinary regression semantics — and authored fixture content a test constructs itself.
+   - Verified by **retune matrix** (2026-08-10): `CON_DEF_FACTOR`, `STATE_DURATIONS`, `MEMBER_LDR_COST`, and the band thresholds were each moved and the full suite stayed green. `JOBLESS_MOV_BASE` is the known exception: the AI/cohesion **board-geometry fixtures** are authored relative to global mobility (what's "out of reach" at MOV 4 isn't at MOV 6), so a mobility retune legitimately demands a fixture pass — the same pass the game's real scenario boards would need.
+
 ## Gotchas (learned the hard way — don't re-discover)
 
 - **Use the `_console.exe`** Godot build on Windows, or you capture no stdout.

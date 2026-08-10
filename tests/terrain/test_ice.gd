@@ -120,10 +120,12 @@ func test_a_tileset_that_omits_the_walkable_flag_reads_unwalkable() -> void:
 	var board := BoardContext.new(grid, no_units, null)
 	assert_bool(board.is_walkable(Vector2i.ZERO)).is_false()
 
-func test_frozen_melts_after_three_ticks() -> void:
+func test_frozen_melts_after_its_authored_duration() -> void:
+	# Tick count off STATE_DURATIONS, not a literal (2026-08-10 sweep): the duration is a tuning
+	# dial. Walk to the last authored tick, assert the ice held, then one more melts it.
 	var tsm := _frozen_store()
-	tsm.tick_states()
-	tsm.tick_states()
+	for _i in range(TerrainStateManager.STATE_DURATIONS[Terrain.TileState.FROZEN] - 1):
+		tsm.tick_states()
 	assert_bool(tsm.has_state(WATER_CELL, Terrain.TileState.FROZEN)).is_true()
 	tsm.tick_states()
 	assert_bool(tsm.has_state(WATER_CELL, Terrain.TileState.FROZEN)).is_false()

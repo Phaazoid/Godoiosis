@@ -7,6 +7,13 @@ extends GdUnitTestSuite
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 
+# What a worn piece pays out on this unit's body, through the stat doctrine -- never a literal
+# (2026-08-10 sweep: the payout rides CON_DEF_FACTOR, which is playtest-tunable; this file's
+# cases are about the SLOT mechanics, so a factor retune must not touch them).
+func _payout(def_power: int, unit: Unit) -> int:
+	return Stats.armor_def(def_power, unit.get_effective_stat(Stats.Stat.CON))
+
+
 func _vest(def_power: int = 2) -> ArmorData:
 	var armor := ArmorData.new()
 	armor.display_name = "Test Vest"
@@ -77,7 +84,8 @@ func test_a_unit_wears_armor_and_wields_a_weapon_at_once() -> void:
 
 	assert_object(unit.get_equipped_weapon()).is_same(weapon)
 	assert_object(unit.worn_armor).is_same(unit.inventory[1])
-	assert_int(unit.get_effective_def()).is_equal(2)
+	assert_int(unit.get_effective_def()).is_equal(_payout(2, unit))
+	assert_int(unit.get_effective_def()).is_greater(0)   # premise: the vest pays out at all
 
 
 # --- the gate lives at the one chokepoint ---
@@ -123,7 +131,7 @@ func test_tossing_worn_armor_stops_granting_def() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	unit.add_item(_vest())
 	unit.wear_armor(0)
-	assert_int(unit.get_effective_def()).is_equal(2)
+	assert_int(unit.get_effective_def()).is_equal(_payout(2, unit))
 
 	unit.remove_item(0)
 	assert_object(unit.worn_armor).is_null()
@@ -139,7 +147,7 @@ func test_tossing_a_weapon_leaves_worn_armor_alone() -> void:
 
 	unit.remove_item(0)
 	assert_object(unit.worn_armor).is_not_null()
-	assert_int(unit.get_effective_def()).is_equal(2)
+	assert_int(unit.get_effective_def()).is_equal(_payout(2, unit))
 
 
 func test_swapping_armor_replaces_rather_than_stacks() -> void:
@@ -150,4 +158,4 @@ func test_swapping_armor_replaces_rather_than_stacks() -> void:
 	unit.wear_armor(1)
 
 	assert_object(unit.worn_armor).is_same(unit.inventory[1])
-	assert_int(unit.get_effective_def()).is_equal(4)   # the second piece only, never 2 + 4
+	assert_int(unit.get_effective_def()).is_equal(_payout(4, unit))   # the second piece only, never both

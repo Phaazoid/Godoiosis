@@ -42,18 +42,23 @@ func test_gear_is_derived_and_stores_nothing() -> void:
 
 
 func test_a_dex_tax_can_cost_a_point_of_mov() -> void:
-	# DEX 6 sits one point into the high MOV rung (dex_mov_band: 6-8 = +1), so a -1 tax drops
-	# the wearer back to the mid rung. The tax reaching a DERIVED readout is the whole point.
-	var nimble: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 6})
+	# DEX authored one point past the rung threshold (2026-08-10 sweep -- the threshold is
+	# playtest-tunable, so the POSITION is authored, never the number), so a -1 tax drops the
+	# wearer back a rung. The tax reaching a DERIVED readout is the whole point.
+	var nimble: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0),
+		{Stats.Stat.DEX: Stats.DEX_MOV_MID_MAX + 1})
 	var before := nimble.get_mov()
 	nimble.worn_armor = _taxing_armor(Stats.Stat.DEX, -1)
 	assert_int(nimble.get_mov()).is_equal(before - 1)
 
 
 func test_a_dex_tax_inside_a_band_costs_no_mov() -> void:
-	# Bands are coarse ON PURPOSE (stats.md) -- default DEX 5 taxed to 4 stays in the same rung,
+	# Bands are coarse ON PURPOSE (stats.md) -- a top-of-rung DEX taxed one stays in its rung,
 	# so the same armor is free for one unit and costly for another. That jaggedness is a goal.
-	var average: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.DEX: 5})
+	# Premise: the rung really is at least two wide, or this case is measuring nothing.
+	assert_int(Stats.dex_mov_band(Stats.DEX_MOV_MID_MAX - 1)).is_equal(Stats.dex_mov_band(Stats.DEX_MOV_MID_MAX))
+	var average: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0),
+		{Stats.Stat.DEX: Stats.DEX_MOV_MID_MAX})
 	var before := average.get_mov()
 	average.worn_armor = _taxing_armor(Stats.Stat.DEX, -1)
 	assert_int(average.get_mov()).is_equal(before)
@@ -85,7 +90,10 @@ func test_gear_tax_composes_with_a_temporary_effect() -> void:
 func test_a_taxing_armor_still_pays_its_def() -> void:
 	var unit: Unit = H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 5, Stats.Stat.DEX: 6})
 	unit.worn_armor = _taxing_armor(Stats.Stat.DEX, -1, 4)
-	assert_int(unit.get_effective_def()).is_equal(4)
+	# Expected DEF via the doctrine function (2026-08-10 sweep -- CON_DEF_FACTOR is playtest-
+	# tunable); this case's own claim is only that the tax doesn't eat the payout.
+	assert_int(unit.get_effective_def()).is_equal(Stats.armor_def(4, unit.get_effective_stat(Stats.Stat.CON)))
+	assert_int(unit.get_effective_def()).is_greater(0)
 	assert_int(unit.get_effective_stat(Stats.Stat.DEX)).is_equal(5)
 
 

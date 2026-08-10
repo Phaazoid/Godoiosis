@@ -18,13 +18,17 @@ func test_naked_unit_has_zero_def_regardless_of_con() -> void:
 	assert_int(unit.get_effective_def()).is_equal(0)
 
 func test_worn_armor_scales_with_con() -> void:
+	# The Unit-side wiring: the worn piece and the wearer's CON reach get_effective_def through
+	# Stats.armor_def. Expected via that same doctrine function, never a literal (2026-08-10
+	# sweep: CON_DEF_FACTOR is playtest-tunable), and the scaling claim itself is the comparison.
 	var average := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 5})
 	average.worn_armor = _make_armor(10)
-	assert_int(average.get_effective_def()).is_equal(10)   # printed value on the default body
+	assert_int(average.get_effective_def()).is_equal(Stats.armor_def(10, 5))
 
 	var sturdy := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(1, 0), {Stats.Stat.CON: 8})
 	sturdy.worn_armor = _make_armor(10)
-	assert_int(sturdy.get_effective_def()).is_equal(16)
+	assert_int(sturdy.get_effective_def()).is_equal(Stats.armor_def(10, 8))
+	assert_int(sturdy.get_effective_def()).is_greater(average.get_effective_def())
 
 func test_flat_def_does_not_scale_with_con() -> void:
 	# The un-scaled term: identical on every body, so a CON-gated piece can pay out without
@@ -38,9 +42,11 @@ func test_flat_def_does_not_scale_with_con() -> void:
 	assert_int(sturdy.get_effective_def()).is_equal(3)
 
 func test_flat_and_scaled_terms_sum() -> void:
+	# flat + scaled, expected off the scaled term alone (2026-08-10 sweep: no literal may ride
+	# CON_DEF_FACTOR) -- the claim is the SUM, so only the +2 is this case's own.
 	var unit := H.spawn_unit(self, Team.Faction.ENEMY, Vector2i(0, 0), {Stats.Stat.CON: 5})
 	unit.worn_armor = _make_armor(10, {}, 2)
-	assert_int(unit.get_effective_def()).is_equal(12)
+	assert_int(unit.get_effective_def()).is_equal(Stats.armor_def(10, 5) + 2)
 
 func test_zero_con_still_earns_the_flat_term_only() -> void:
 	# The "multiplier with no base" doctrine holds for the SCALED half: CON 0 zeroes it
