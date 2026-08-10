@@ -342,7 +342,7 @@ func _on_turn_started(faction: Team.Faction):
 
 func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.BETWEEN_TURNS
-	await get_tree().create_timer(1.0).timeout #later make small waits between each enemy movement.
+	await Pacing.beat(self, Pacing.TURN_HANDOFF)
 	game_state = GameState.IDLE
 	squad_manager.reset_faction_actions(faction)
 

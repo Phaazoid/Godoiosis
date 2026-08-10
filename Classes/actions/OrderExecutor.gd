@@ -67,13 +67,18 @@ func execute_orders(unit):
 				side_channel[action.action_type] = []
 			side_channel[action.action_type].append(action)
 
+	# One beat for the whole pass (#118). Keyed on the SAME is_ai_faction read the concede above
+	# makes, so a hotseat faction with AI off is a human and paces like one: an AI plan is being
+	# read for the first time, a player's was authored by the person watching it.
+	var beat: float = Pacing.AI_ACTION if game.ai_controller.is_ai_faction(squad.leader.get_faction()) else Pacing.PLAYER_ACTION
+
 	await _execute_action_phase_parallel(move_actions)
-	await _execute_action_sequence(plan.attacks)
+	await _execute_action_sequence(plan.attacks, beat)
 	_apply_cell_effects(plan.cell_effects)
-	await _execute_action_sequence(plan.counters)
+	await _execute_action_sequence(plan.counters, beat)
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
-		await _execute_action_sequence(batch)
+		await _execute_action_sequence(batch, beat)
 	_process_downed_pending()
 	# Loss-of-contact ejection (#151), right after downed ejection and for the same reason: the
 	# pass has settled, and a member a shove displaced out of its leader's path-bubble is no
@@ -136,11 +141,16 @@ func _execute_action_phase_parallel(actions: Array):
 
 		await get_tree().process_frame
 
-func _execute_action_sequence(actions: Array):
+# The beat lands BEFORE each action, never after: that also spaces this phase off the previous one
+# (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
+# leaves no trailing pause before the squad's turn ends. An empty batch returns above, so a phase
+# with nothing in it costs nothing.
+func _execute_action_sequence(actions: Array, beat: float = 0.0):
 	if actions.is_empty():
 		return
 
 	for action in actions:
+		await Pacing.beat(self, beat)
 		action.begin_execution()
 		action.execute()
 
