@@ -171,34 +171,74 @@ static func refresh_delete_button(button: Button, target: String, noun: String) 
 	else:
 		button.tooltip_text = "Delete %s" % target
 
+# Filenames illegal on Windows -- refuse rather than sanitize (a silently renamed file is the same
+# surprise one step later, and every catalog keys on the exact name). '/' is a separate question
+# from the caller (#168): it's a real path separator Godot honors everywhere, and the item/attack
+# catalogs scan their save folders FLAT (ResourceDir), so a '/' there wouldn't fail -- it would
+# silently land the file in a subfolder no scan ever looks in. Scenarios are the opposite:
+# ScenarioManager._collect_scenarios recurses, and Scenarios/fixtures/-style names are a real,
+# working feature -- allow_slash is how a scenario name opts out of the ban the other two need.
+const ILLEGAL_NAME_CHARS := ["\\", ":", "*", "?", "\"", "<", ">", "|"]
+
+static func refuse_illegal_name(name: String, noun: String, status_label: Label = null, allow_slash := false) -> bool:
+	var banned := ILLEGAL_NAME_CHARS.duplicate()
+	if not allow_slash:
+		banned.append("/")
+	for c in banned:
+		if name.contains(c):
+			var msg := "%s names can't contain '%s'" % [noun.capitalize(), c]
+			push_warning(msg)
+			if status_label != null:
+				status_label.text = msg
+			return true
+	return false
+
 # Save As creates, Update overwrites. Refusing a taken name is what keeps them non-overlapping.
-static func refuse_existing_file(path: String, noun: String) -> bool:
+# status_label mirrors the same message into the tool window (#168) -- push_warning alone only
+# reaches the editor's Output panel, invisible in the running game where these tools actually live.
+static func refuse_existing_file(path: String, noun: String, status_label: Label = null) -> bool:
 	if not FileAccess.file_exists(path):
 		return false
-	push_warning("That %s already exists (%s) -- load it and press Update to overwrite" % [noun, path])
+	var msg := "That %s already exists (%s) -- load it and press Update to overwrite" % [noun, path]
+	push_warning(msg)
+	if status_label != null:
+		status_label.text = msg
 	return true
 
 # load() serves the resource cache: without claiming the path first, a re-save leaves every later
 # load() returning the stale object. No-op when the resource already owns the path.
-static func save_over(resource: Resource, path: String) -> bool:
+static func save_over(resource: Resource, path: String, status_label: Label = null) -> bool:
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	resource.take_over_path(path)
 	var err := ResourceSaver.save(resource, path)
 	if err != OK:
-		push_error("Failed to save %s (error %s)" % [path, err])
+		var msg := "Failed to save %s (error %s)" % [path, err]
+		push_error(msg)
+		if status_label != null:
+			status_label.text = msg
 		return false
+	if status_label != null:
+		status_label.text = ""   # clears a stale refusal now that a save actually landed
 	return true
 
 # Removes a saved entry from disk. The catalogs that list these entries (WeaponCatalog,
 # RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) all re-scan disk per
 # call rather than caching, so a caller's own dropdown refresh is enough to drop the deleted
 # entry -- no separate cache to invalidate.
-static func delete_saved_file(path: String, noun: String) -> bool:
+static func delete_saved_file(path: String, noun: String, status_label: Label = null) -> bool:
 	if path == "":
-		push_warning("No %s file on disk to delete" % noun)
+		var msg := "No %s file on disk to delete" % noun
+		push_warning(msg)
+		if status_label != null:
+			status_label.text = msg
 		return false
 	var err := DirAccess.remove_absolute(path)
 	if err != OK:
-		push_error("Failed to delete %s (error %s)" % [path, err])
+		var msg := "Failed to delete %s (error %s)" % [path, err]
+		push_error(msg)
+		if status_label != null:
+			status_label.text = msg
 		return false
+	if status_label != null:
+		status_label.text = ""
 	return true
