@@ -129,3 +129,9 @@ func channelable(wielder: Unit) -> Array[TransmutationData]:
 		if t.can_channel(wielder, temper):
 			result.append(t)
 	return result
+
+# The equip gate (#157): at least ONE channelable carving, never "all" — a one-of-three rune is
+# good gear. No affinity exemption (dev call 2026-08-10): a dead rune is carryable, not wieldable,
+# and a blank rune fails for everyone. Scenario load bypasses this — a save is authoritative.
+func can_equip(wielder: Unit) -> bool:
+	return not channelable(wielder).is_empty()

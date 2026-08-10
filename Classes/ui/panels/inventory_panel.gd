@@ -128,9 +128,14 @@ func _show_action_popup(index: int):
 		if item == unit.get_equipped_weapon():
 			equip_btn.text = "Unequip"
 			equip_btn.pressed.connect(_do_unequip.bind(index))
-		else:
+		elif item.can_equip(unit):
 			equip_btn.text = "Equip"
 			equip_btn.pressed.connect(_do_equip.bind(index))
+		else:
+			# The gate, shown rather than silently swallowed — armor's precedent above (#157).
+			# Only a rune can refuse today, so the reason is the rune's.
+			equip_btn.text = "Equip — can't channel"
+			equip_btn.disabled = true
 		vbox.add_child(equip_btn)
 
 	if not (item is WeaponInstance and unit.unit_instance.is_installed_prosthetic(item.template)):

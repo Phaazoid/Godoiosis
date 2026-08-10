@@ -24,6 +24,13 @@ enum TargetMode { UNIT, MAP, BOTH }
 func copy_equippable() -> EquippableData:
 	return duplicate(true)
 
+# May this unit equip this? Default = yes; each kind states its own disqualifier — armor reads
+# the wearer's BODY stats, a rune reads aura+affinity (#157). Enforced at the equip doors and
+# re-enforced at Unit._enforce_gear_gates, so "no" here also means "comes off when it becomes no".
+# Deliberately NOT the two-handed wield lock — that is a firing question (Unit.can_wield_equipped).
+func can_equip(_wielder: Unit) -> bool:
+	return true
+
 # --- Attack-source surface ---
 # Every default here is the INERT answer, so a kind that can't fire (armor) needs no override.
 

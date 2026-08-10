@@ -126,8 +126,9 @@ func add_item(item: Item) -> bool:
 			# too, but it fills a different slot -- auto-equipping it here would "arm" a unit with
 			# a vest and shadow the real weapon they pick up next. Armor is never auto-worn: the
 			# wear gate makes silent auto-wear ambiguous, so wearing is always an explicit act.
+			# Routed through the one gated door (#157): a dead rune lands carried, not equipped.
 			if equipped_weapon == null and item is EquippableData and not item is ArmorData:
-				equipped_weapon = item
+				set_equipped_weapon(item)
 
 			return true
 
@@ -223,10 +224,13 @@ func _settle_stat_change() -> void:
 	stats_changed.emit()
 
 # Gear you no longer qualify for comes OFF (#112). It stays in inventory — you're carrying it, just
-# not wearing it. Triggered by a buff lapsing, a debuff, or a maim.
+# not wearing it. Triggered by a buff lapsing, a debuff, or a maim. Two parallel clauses that can't
+# cascade: armor's gate reads body stats, a rune's reads aura+affinity (#157) — neither reads gear.
 func _enforce_gear_gates() -> void:
 	if worn_armor != null and not worn_armor.can_equip(self):
 		worn_armor = null
+	if equipped_weapon != null and not equipped_weapon.can_equip(self):
+		equipped_weapon = null
 
 func _on_instance_died():
 	die()
@@ -542,6 +546,9 @@ func get_equipped_weapon() -> EquippableData:
 func has_equipped_weapon() -> bool:
 	return equipped_weapon != null
 
+# THE door into the weapon slot (#157): equip_weapon_from_inventory and add_item's auto-equip
+# both route through here, so the equip gate has exactly one home. Scenario load deliberately
+# does not — a save is authoritative (ScenarioUnitEntry.apply_unit_state).
 func set_equipped_weapon(weapon: EquippableData) -> bool:
 	if weapon == null:
 		equipped_weapon = null
@@ -552,6 +559,9 @@ func set_equipped_weapon(weapon: EquippableData) -> bool:
 
 	if weapon is ArmorData:
 		return false   # armor fills its OWN slot -- wear_armor() is the door, same as the other two
+
+	if not weapon.can_equip(self):
+		return false   # a rune with nothing channelable is carryable, never wieldable (#157)
 
 	equipped_weapon = weapon
 	return true
@@ -577,11 +587,7 @@ func equip_weapon_from_inventory(index: int) -> bool:
 	if not item is EquippableData:
 		return false
 
-	if item is ArmorData:
-		return false   # armor fills the armor slot -- use wear_armor()
-
-	equipped_weapon = item
-	return true
+	return set_equipped_weapon(item)   # armor refusal + the equip gate live at the one door (#157)
 
 func unequip_weapon():
 	equipped_weapon = null
