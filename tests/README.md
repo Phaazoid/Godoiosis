@@ -23,7 +23,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 
 `-a` is repeatable (`GdUnitTestCIRunner.add_test_suite` appends), which is what makes multi-area runs work.
 
-`run_tests.ps1` runs Godot headless against gdUnit4 and returns the suite's exit code. It defaults to `C:\Godot\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe`; override with `$env:GODOT_BIN`. The raw command it runs:
+`run_tests.ps1` runs Godot headless against gdUnit4 and returns the suite's exit code. It defaults to `C:\Godot\Godot_v4.7.1-stable_win64\Godot_v4.7.1-stable_win64_console.exe`; override with `$env:GODOT_BIN`. The raw command it runs:
 
 ```
 <godot-console-exe> --path . --headless -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd -a res://tests --ignoreHeadlessMode

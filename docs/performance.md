@@ -17,7 +17,7 @@ is being repeated far more often than anyone intended — usually via a signal f
 ## How to re-measure
 
 ```bash
-"C:/Godot/Godot_v4.6-stable_win64.exe/Godot_v4.6-stable_win64_console.exe" --headless --path "C:/Iosis/Godoiosis" --script res://tools/profile_group_move.gd
+"C:/Godot/Godot_v4.7.1-stable_win64/Godot_v4.7.1-stable_win64_console.exe" --headless --path "C:/Iosis/Godoiosis" --script res://tools/profile_group_move.gd
 ```
 
 `tools/profile_group_move.gd` boots the real `Main.tscn`, loads Castle Assault, and times the
