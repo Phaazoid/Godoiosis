@@ -4,7 +4,7 @@ My (Kimi's) own memory for this project. Created 2026-07-29. Companion to `CLAUD
 
 ## What this is
 
-- **Iosis**: tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript, solo hobbyist dev (the owner, "Dmanz" / GitHub `Phaazoid`).
+- **Iosis**: tactical RPG (Fire Emblem-influenced), Godot 4.7, GDScript, solo hobbyist dev (the owner, "Dmanz" / GitHub `Phaazoid`).
 - Repo root: `C:\Iosis\Godoiosis` (git repo, GitHub: Phaazoid/Godoiosis). Work is tracked in GitHub Issues with `agent/claude` / `agent/human` labels.
 - `CLAUDE.md` (~71 KB) is the single canon doc: collaboration contract, design laws, architecture map, sharp edges, known debt. `docs/build-log.md` has build history; `docs/design/` has design docs with "Canon checked through #NN" markers; `docs/SCRATCHPAD.md` is the idea inbox.
 

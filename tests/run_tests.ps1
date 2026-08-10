@@ -27,9 +27,9 @@ $Tiers = @{
 }
 
 $bin = $env:GODOT_BIN
-if (-not $bin) { $bin = "C:\Godot\Godot_v4.6-stable_win64.exe\Godot_v4.6-stable_win64_console.exe" }
+if (-not $bin) { $bin = "C:\Godot\Godot_v4.7.1-stable_win64\Godot_v4.7.1-stable_win64_console.exe" }
 if (-not (Test-Path $bin)) {
-	Write-Error "Godot not found at '$bin'. Set `$env:GODOT_BIN to your Godot 4.6 console exe."
+	Write-Error "Godot not found at '$bin'. Set `$env:GODOT_BIN to your Godot 4.7 console exe."
 	exit 1
 }
 

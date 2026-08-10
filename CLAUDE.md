@@ -1,6 +1,6 @@
 # Iosis — Project Guide
 
-Tactical RPG (Fire Emblem-influenced), Godot 4.6, GDScript. Solo hobbyist developer.
+Tactical RPG (Fire Emblem-influenced), Godot 4.7, GDScript. Solo hobbyist developer.
 
 ## Collaboration contract (read first)
 
