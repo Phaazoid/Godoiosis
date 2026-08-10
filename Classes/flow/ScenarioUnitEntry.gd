@@ -148,11 +148,14 @@ func apply_unit_state(unit: Unit) -> void:
 			continue
 		if not unit.add_item(inventory[i].copy_equippable()):
 			push_warning("Scenario load: inventory full — dropped '%s'" % inventory[i].display_name)
-	# add_item auto-equips the first equippable; the save's explicit choice wins either way:
-	if equipped_index >= 0:
-		unit.equip_weapon_from_inventory(equipped_index)
-	else:
-		unit.unequip_weapon()
+	# add_item auto-equips the first equippable; the save's explicit choice wins either way.
+	# Direct assign, never the gated door (#157) — a save is authoritative, same as the armor
+	# slot below: re-gating would strip a rune off a unit whose aura drifted after saving.
+	unit.unequip_weapon()
+	if equipped_index >= 0 and equipped_index < unit.inventory.size():
+		var chosen := unit.inventory[equipped_index] as EquippableData
+		if chosen != null and not chosen is ArmorData:
+			unit.equipped_weapon = chosen
 	if worn_armor_index >= 0 and worn_armor_index < unit.inventory.size():
 		unit.worn_armor = unit.inventory[worn_armor_index] as ArmorData
 	else:

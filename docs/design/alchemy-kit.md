@@ -6,7 +6,7 @@
 
 Supersedes the wiki's **tiered rune tree** and the **stale top half of `Alchemy.docx`** (one-rune-per-element, aura-from-casting — the dev confirmed that section is an old layer), plus all **crit / hit / avo / AP / random-level-up** framing (Law #1; `Stats Overview.docx` is otherwise pre-determinism-era). Empty wiki stubs: `Alcahest & elemental affinities.docx`, `Rune Combination Psuedocode.docx`.
 
-**Canon checked through #155 (2026-08-08).**
+**Canon checked through #166 (2026-08-10).**
 
 Tags: **[LOCKED]** · **[PROPOSED]** (awaiting sign-off) · **[WORKSHOP]** (actively being designed) · **[OPEN]** (fork).
 
@@ -75,6 +75,7 @@ Mechanically: **capacity** is a rune's total sigil budget across every carving i
 - **Trained leeway:** real aura in the temper element = the brute-force budget for the array's *other* elements, breadth and depth alike, point for point. 1 fire aura → 1F+1X and no more; higher training brute-forces more — which is why a fire-leaning alchemist wants a rune loaded with **fire-based combos**.
 - **Strain:** every brute-forced point costs recoil HP (superlinear; numbers open); **carried materia can absorb strain** (fuel substitutes for talent). Deterministic + previewed (Law #2).
 - **0 aura = cannot channel at all** — the Rebecca rule (runes are inert rock in her hands; canon story beat). The old "0-aura unit can still channel any single-element carving" doctrine is **dead, reversed at the 2026-07-04 grill.**
+- **The equip gate — BUILT 2026-08-10 ([#157](https://github.com/Phaazoid/Godoiosis/issues/157), dev call out of #126's playtest):** a rune the wielder can channel **nothing** from cannot be *equipped* — refused at every equip door (`EquippableData.can_equip`, the armor wear-gate's sibling; `Unit.set_equipped_weapon` is the one door) — and is **forcibly unequipped to inventory** the moment it goes dead mid-battle (the maim aura-tax path; rides the same `Unit._enforce_gear_gates` settle pass that strips under-gated armor, as a parallel clause — armor's gate reads the body, this one reads aura+affinity, neither reads gear, so no cascade). The threshold is **at least one channelable carving, never "all"** — a one-of-three rune is good gear and still equips. **No affinity exemption** (fork decided 2026-08-10): a no-affinity unit can *carry* a rune (loot, weight, hand-overs) but never wield one — "inert rock in her hands" now means the inventory, not the equip slot — and a blank rune refuses everyone. **Scenario load bypasses the gate** — a save is authoritative (#89's armor precedent). The complementary menu readout (a partial rune's un-channelable carvings listed-but-greyed) is [#166](https://github.com/Phaazoid/Godoiosis/issues/166).
 
 Full model + rationale: [transmutation-model-proposal.md](transmutation-model-proposal.md) → *Temper & channeling*.
 
