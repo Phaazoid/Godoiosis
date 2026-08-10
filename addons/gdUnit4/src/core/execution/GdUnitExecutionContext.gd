@@ -86,6 +86,10 @@ func dispose_sub_contexts() -> void:
 	_sub_context.clear()
 
 
+func last_sub_context() -> GdUnitExecutionContext:
+	return null if _sub_context.is_empty() else _sub_context[-1]
+
+
 func terminate() -> void:
 	if test_case:
 		test_case.do_terminate()
@@ -175,7 +179,7 @@ func set_error(error: GdUnitError) -> void:
 
 
 func last_error() -> GdUnitError:
-	if _report_collector.reports().is_empty():
+	if  _last_error != null:
 		return _last_error
 
 	var last_report: GdUnitReport = _report_collector.reports()[-1]
@@ -269,10 +273,13 @@ func gc(gc_orphan_check: GC_ORPHANS_CHECK = GC_ORPHANS_CHECK.NONE) -> void:
 	GdUnitThreadManager.get_current_context().clear_assert()
 	await _memory_observer.gc()
 	orphan_monitor_stop()
+	if _orphan_monitor.orphans_count() > 0:
+		# Give the engine time to free resources otherwies we do orphan false detection
+		await test_suite.get_tree().process_frame
 
 	match(gc_orphan_check):
 		GC_ORPHANS_CHECK.SUITE_HOOK_AFTER:
-			report_ophans(0, """
+			report_ophans(-1, """
 		func before() -> void:
 			collect_orphan_node_details())
 
@@ -280,7 +287,7 @@ func gc(gc_orphan_check: GC_ORPHANS_CHECK = GC_ORPHANS_CHECK.NONE) -> void:
 			collect_orphan_node_details())""")
 
 		GC_ORPHANS_CHECK.TEST_HOOK_AFTER:
-			report_ophans(0, """
+			report_ophans(-1, """
 		func before_test() -> void:
 			collect_orphan_node_details()
 

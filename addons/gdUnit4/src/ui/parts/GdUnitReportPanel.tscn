@@ -1,6 +1,6 @@
 [gd_scene format=3 uid="uid://dga8nhaxnyr53"]
 
-[ext_resource type="Script" uid="uid://3136ajystwpy" path="res://addons/gdUnit4/src/ui/parts/GdUnitReportPanel.gd" id="1_w8qy0"]
+[ext_resource type="Script" path="res://addons/gdUnit4/src/ui/parts/GdUnitReportPanel.gd" id="1_w8qy0"]
 
 [node name="report" type="Panel" unique_id=1075065511]
 clip_contents = true

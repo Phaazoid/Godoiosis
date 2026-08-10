@@ -27,6 +27,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# See test_game_scene_smoke.gd's after_test: clear_board() leaves units parentless for one
+	# frame by design, and gdUnit4 samples orphans after this hook. A real leak still reports.
+	await await_idle_frame()
 	remove_child(_main)
 	_main.free()
 
