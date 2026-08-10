@@ -231,6 +231,20 @@ func populate_unit_editor(unit):
 	dup_button.pressed.connect(func(): _arm_duplicate())
 	unit_editor_container.add_child(dup_button)
 
+	var down_button := Button.new()
+	down_button.text = "Down Unit"
+	down_button.tooltip_text = "Straight to downed — skips the ladder, so no Will spend, no maim, no Crisis"
+	down_button.disabled = not unit.is_active()
+	down_button.pressed.connect(func(): _down_unit(unit))
+	unit_editor_container.add_child(down_button)
+
+	var revive_button := Button.new()
+	revive_button.text = "Revive Unit"
+	revive_button.tooltip_text = "Stand a downed unit back up at 1 HP — the same call a rescue makes"
+	revive_button.disabled = not unit.is_downed()
+	revive_button.pressed.connect(func(): _revive_unit(unit))
+	unit_editor_container.add_child(revive_button)
+
 func _stage_stat(stat: Stats.Stat, value: int) -> void:
 	_stats[stat] = value
 	_touch()
@@ -541,6 +555,31 @@ func _delete_unit(unit: Unit):
 	editing_unit = null
 	_dirty = false
 	populate_unit_editor(null)
+
+# Ejection is DEFERRED to the end of a resolution pass (#103), and a button press has no pass to
+# defer to -- so drain the queue went_downed just filled. That is the same drain execute_orders
+# runs, not a third copy of what settling a down means.
+func _down_unit(unit: Unit) -> void:
+	if game == null or not is_instance_valid(unit) or not unit.is_active():
+		return
+	unit.force_down()
+	game.order_executor._process_downed_pending()
+	_resync(unit)
+
+func _revive_unit(unit: Unit) -> void:
+	if game == null or not is_instance_valid(unit) or not unit.is_downed():
+		return
+	unit.revive()   # the same call RescueAction makes; the body keeps its solo squad
+	game.refresh_action_queue(game.squad_manager.active_squad)   # a rescue aimed here just went invalid
+	_resync(unit)
+
+# The unit moved underneath the staged buffer, so re-read it -- the trade Revert already makes.
+# Skipping it would leave the panel showing pre-down HP, and a later Save would write it back.
+func _resync(unit: Unit) -> void:
+	if _dirty:
+		push_warning("Unit editor: discarded unsaved changes to %s" % unit.get_unit_name())
+	_capture(unit)
+	populate_unit_editor(unit)
 
 func _arm_move() -> void:
 	if game != null and is_instance_valid(editing_unit):

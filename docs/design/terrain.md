@@ -62,7 +62,8 @@ The candidate dissolves the fork instead of picking a side — **two water tiles
 - **Check the down clock before building a second one (Law #4).** `Unit.downed_turns_remaining`
   already starts at 3, already ticks per turn, and `RescueAction` is already the rescue verb — a
   drowning unit may simply *be* a downed unit with a shorter clock. The one genuinely new thing is a
-  down with **no damage dealt**; `_go_downed` is currently only reachable through `take_damage`.
+  down with **no damage dealt**; from GAMEPLAY, `_go_downed` is still only reachable through
+  `take_damage` (`Unit.force_down`, the dev editor's Down button, is a deliberate bypass — [#156](https://github.com/Phaazoid/Godoiosis/issues/156)).
 - **WET is orthogonal and shouldn't wait.** `Elemental.State.WET` exists and is the FIRE/ICE
   combinatrix hook; elemental-system.md already captures *"stepping on a river tile sets WET."*
   Shallow water applying it on entry is independent of the shove question.

@@ -383,15 +383,26 @@ func heal(amount: int) -> void:
 	# take_damage's sibling: same HP door, no lethality check, clamp handles overheal.
 	set_current_hp(get_current_hp() + amount)
 
-func _go_downed():
+# The downed STATE. Its PRICE is the one opt-out: spend_will_for_down is the only source of a
+# maim-on-down, so skipping it is the whole of what a costless down means.
+func _go_downed(pay_will_cost := true):
 	lifecycle_state = LifecycleState.DOWNED
 	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
-	unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
-	_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
+	if pay_will_cost:
+		unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
+		_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
 	downed_turns_remaining = 3
 	_show_downed_sprite(true)
 	went_downed.emit(self)
 	downed_countdown_changed.emit(downed_turns_remaining)
+
+# Dev bypass (#156), the inverse of revive(): straight into DOWNED with none of the ladder's
+# consequences — no Will spend, no maim, no Crisis however the unit is armed. take_damage stays the
+# only rule-governed way down. The guard keeps a second press from reseeding a downed unit's clock.
+func force_down() -> void:
+	if lifecycle_state != LifecycleState.ACTIVE:
+		return
+	_go_downed(false)
 
 func tick_downed_countdown():
 	if lifecycle_state != LifecycleState.DOWNED:
