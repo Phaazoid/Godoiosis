@@ -18,19 +18,10 @@ static var _implementations := {
 	Type.SENTRY: Callable(SentryArchetype, "take_squad_turn"),
 }
 
-# Crisis stance per archetype (will-and-death.md "AI Crisis policy", grilled 2026-07-04):
-# declared at authoring time, deterministic — the resolver predicts enemy Crisis EXACTLY
-# (R9: never a BREAK). true = always accept when eligible; false = never take the gambit.
-# The balance lever is authored enemy WIL, not code.
-const CRISIS_STANCES := {
-	Type.RUSHDOWN: true,
-	Type.HOLD: false,
-	Type.SENTRY: false,
-}
-
-static func accepts_crisis(t: Type) -> bool:
-	var key: Type = t if t != Type.FACTION_DEFAULT else DEFAULT
-	return CRISIS_STANCES[key]
+# (The per-archetype Crisis stance table lived here until #158: with Crisis an equipped ability
+# that always fires past the will gate, there is no accept/decline left to answer. An enemy gets
+# Crisis by carrying the ability — author it onto the units that should have it; the balance lever
+# is still authored WIL.)
 
 # FACTION_DEFAULT resolves to DEFAULT -- it's a sentinel, not an implementation of its own.
 static func resolve(t: Type) -> Callable:

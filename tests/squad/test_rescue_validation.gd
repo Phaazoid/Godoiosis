@@ -227,19 +227,20 @@ func test_the_candidate_query_offers_a_predicted_down_ally() -> void:
 	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call(), plan)).contains([victim])
 	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call())).is_empty()
 
-# INTERIM until #158 deletes the live Crisis prompt (delete this case with it): a full-Will PLAYER
-# ally previews DOWNED, but at execution the prompt could stand it back up -- so the plan cannot
-# promise the down, and the ally is not offered.
-func test_a_crisis_eligible_ally_is_not_offered_while_the_prompt_lives() -> void:
+# The #158 successor to the old interim clause: a Crisis-ARMED full-Will ally predicts CRISIS --
+# it stands back up, so it was never going to be a body -- and falls out of candidacy through the
+# ordinary DOWNED filter, no special case anywhere. (Until #158, an is_crisis_eligible carve-out
+# in is_rescueable did this job for the live prompt.)
+func test_a_crisis_armed_ally_is_not_offered_because_it_stands_back_up() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(3, 0))
 	_sm.join_squad(rescuer, attacker.squad)
 	var victim := _bloodied_ally(Vector2i(2, 0), {Stats.Stat.WIL: 20})
-	assert_bool(victim.is_crisis_eligible()).override_failure_message("fixture: WIL 20 should be eligible").is_true()
+	victim.unit_instance.jobs.append("berserker")   # arms Abilities.Id.CRISIS via the job pool
 
 	_lethal_aim(attacker, victim)
 	var plan: ResolvedPlan = _sm.resolve_plan(attacker.squad, _sm.board_source.call())
 
-	assert_that(PlanResolver.projected_lifecycle(victim, plan.hypo)).is_equal(Unit.LifecycleState.DOWNED)
+	assert_that(PlanResolver.projected_lifecycle(victim, plan.hypo)).is_equal(Unit.LifecycleState.ACTIVE)
 	assert_bool(RulesService.is_rescueable(victim, plan)).is_false()
 	assert_array(RulesService.adjacent_downed_allies(rescuer, _sm.board_source.call(), plan)).is_empty()

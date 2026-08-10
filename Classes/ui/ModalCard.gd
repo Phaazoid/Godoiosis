@@ -2,7 +2,8 @@ extends Control
 class_name ModalCard
 
 # The shared base for every full-screen UI surface the game puts over the board: the pause card,
-# the end-of-mission card, the Crisis offer, the report card, and the mission-select takeover.
+# the end-of-mission card, the report card, and the mission-select takeover. (The Crisis offer
+# was a tenant until #158 removed the prompt from the game.)
 # "Card" is this project's own word for these (BugReporter.open_card, "the report card", "the
 # in-play pause card") -- it was ChoiceModal until ReportPanel, a FORM rather than a choice, moved
 # onto it. NOT the in-world ActionMenuController (a positioned context menu on its own CanvasLayer,

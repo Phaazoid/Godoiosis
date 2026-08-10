@@ -217,24 +217,15 @@ static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: Resolv
 # the queue-time gate and the validator (#124). With a plan the question is asked of the pass's END
 # state (the resolver's threaded hypo): a body nothing touches stays DOWNED, a squadmate the plan
 # predicts will drop reads DOWNED by then, and a body a later hit finishes reads DEAD and drops out.
-# (A predicted MAIM is a down too -- the resolver threads it as the same lifecycle.) Without a plan,
-# the live board answers, exactly as before #124.
+# (A predicted MAIM is a down too -- the resolver threads it as the same lifecycle. A Crisis-armed
+# ally at the gate predicts CRISIS and so is never a candidate -- it stands back up, #158.)
+# Without a plan, the live board answers, exactly as before #124.
 static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 	if target == null or not is_instance_valid(target):
 		return false
 	if plan == null:
 		return target.is_downed()
-	if PlanResolver.projected_lifecycle(target, plan.hypo) != Unit.LifecycleState.DOWNED:
-		return false
-	if target.is_downed():
-		return true   # already a body -- no prompt can fire on it
-	# INTERIM until #158 deletes the live Crisis prompt: a PLAYER unit whose predicted down would
-	# fire the offer is not a legal target -- the plan cannot promise a down the player may refuse
-	# at execution. Non-player factions decide by stance and already preview CRISIS (not DOWNED)
-	# when they accept, so the DOWNED filter above covers them with no special case.
-	if target.get_faction() == Team.Faction.PLAYER and target.is_crisis_eligible():
-		return false
-	return true
+	return PlanResolver.projected_lifecycle(target, plan.hypo) == Unit.LifecycleState.DOWNED
 
 # Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
 # adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a

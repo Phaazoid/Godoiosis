@@ -40,7 +40,6 @@ class_name ScenarioUnitEntry
 @export var lifecycle_state: Unit.LifecycleState = Unit.LifecycleState.ACTIVE   # DEAD never saves: a corpse is absent, not stored
 @export var downed_turns_remaining := -1   # -1 = not counting, same sentinel Unit uses
 @export var in_crisis := false
-@export var crisis_offered_pending := false
 @export var crisis_surge_pending := false
 @export var rally_count := 0
 @export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
@@ -117,7 +116,6 @@ func capture_unit_state(unit: Unit) -> void:
 	lifecycle_state = unit.lifecycle_state
 	downed_turns_remaining = unit.downed_turns_remaining
 	in_crisis = unit.in_crisis
-	crisis_offered_pending = unit.crisis_offered_pending
 	crisis_surge_pending = unit.crisis_surge_pending
 	rally_count = unit.rally_count
 
@@ -181,7 +179,6 @@ func apply_unit_state(unit: Unit) -> void:
 
 	unit.element_states = element_states.duplicate()
 	unit.in_crisis = in_crisis
-	unit.crisis_offered_pending = crisis_offered_pending
 	unit.crisis_surge_pending = crisis_surge_pending
 	unit.rally_count = rally_count
 	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)

@@ -13,7 +13,7 @@ class_name LethalityRules
 # agreed by inspection and nothing else.
 #
 # This class names the rung. It decides nothing about how a rung is PAID: Unit still owns
-# execution (HP, lifecycle, the Will spend, the Crisis offer) and PlanResolver still owns threading
+# execution (HP, lifecycle, the Will spend, entering Crisis) and PlanResolver still owns threading
 # the consequence into the next hit's hypothetical.
 
 # Overkill ceiling: a hit exceeding remaining HP by more than this kills outright (rung 3 — so
@@ -34,7 +34,7 @@ class Situation:
 	var will: int = 0
 	var in_crisis: bool = false
 	var can_maim: bool = false               # a limb remains to take; false = already fully maimed
-	var crisis_stance_accepts: bool = false  # this controller takes the gambit without being asked
+	var crisis_armed: bool = false           # holds the Crisis ability (#158) — the gambit fires itself
 
 # The live, execution-time reading of a unit. start_hp == hp because at execution there is no
 # "earlier in the pass" — this hit IS the pass.
@@ -46,23 +46,23 @@ static func situation_for(unit: Unit) -> Situation:
 	s.will = unit.unit_instance.get_current_will()
 	s.in_crisis = unit.in_crisis
 	s.can_maim = unit.unit_instance.next_maim_slot() != -1
-	s.crisis_stance_accepts = accepts_crisis_by_stance(unit)
+	s.crisis_armed = crisis_armed_for(unit)
 	return s
 
-# Does this unit's controller take the Crisis gambit without being asked? The PLAYER faction keeps
-# the live prompt (OrderExecutor._offer_crisis), so it never PREVIEWS crisis; everyone else answers
-# from a fixed per-archetype table, and that determinism is what makes the preview honest (R9).
-static func accepts_crisis_by_stance(unit: Unit) -> bool:
-	if unit.get_faction() == Team.Faction.PLAYER:
-		return false
-	return unit.squad != null and AIArchetype.accepts_crisis(unit.squad.archetype)
+# Is the gambit ARMED on this unit? One kit read, faction-blind (#158): holding the Crisis ability
+# — from the Berserker job, or any source the kit knows — means a full-Will would-be-down ALWAYS
+# becomes Crisis. Equipping the source IS the acceptance; there is no prompt, no stance table, and
+# the player previews their own Crisis like anyone else's. (Replaced accepts_crisis_by_stance,
+# whose PLAYER-always-false fork existed only to keep the live prompt unpredicted.)
+static func crisis_armed_for(unit: Unit) -> bool:
+	return unit.has_live_ability(Abilities.Id.CRISIS)
 
 # The ladder itself:
 #   already DEAD        -> no-op (NONE)
 #   already DOWNED      -> any DAMAGING hit kills (Fork 3: downed-attack = kill)
 #   damage < hp         -> survivable (NONE)
 #   overkill > ceiling  -> KILLED
-#   would-be-down       -> CRISIS if full-Will + stance accepts (deterministic, R9),
+#   would-be-down       -> CRISIS if full-Will + the Crisis ability is held (deterministic, #158),
 #                          else MAIMED if Will can't pay and a limb remains, else DOWNED
 #
 # Crisis-in-progress is special (dev call 2026-06-26): it never downs/maims (a would-be-down is
@@ -91,8 +91,8 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 		return ResolvedOutcome.Lethality.NONE
 	if damage - s.hp > OVERKILL_CEILING:
 		return ResolvedOutcome.Lethality.KILLED
-	if s.will >= CRISIS_WILL_GATE and s.crisis_stance_accepts:
-		return ResolvedOutcome.Lethality.CRISIS   # stands back up surged — stances are deterministic
+	if s.will >= CRISIS_WILL_GATE and s.crisis_armed:
+		return ResolvedOutcome.Lethality.CRISIS   # stands back up surged — the armed gambit is deterministic
 	if s.will < UnitInstance.DOWN_WILL_COST:
 		return ResolvedOutcome.Lethality.MAIMED if s.can_maim else ResolvedOutcome.Lethality.DOWNED
 	return ResolvedOutcome.Lethality.DOWNED

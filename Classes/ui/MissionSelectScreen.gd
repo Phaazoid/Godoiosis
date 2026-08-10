@@ -11,7 +11,7 @@ class_name MissionSelectScreen
 # difference, and objectives (slices 3-4) land on ScenarioData directly rather than in a wrapper
 # resource -- a mission and its board are 1:1, so a wrapper would be an extra hop, not a split.
 #
-# Signal-based rather than awaited (unlike CrisisPrompt/MissionEndBanner): this screen outlives
+# Signal-based rather than awaited (unlike MissionEndBanner): this screen outlives
 # any single choice -- MissionController reopens it every time a mission ends.
 #
 # The ModalCard surface that is NOT a card: a full-screen takeover, so it is UNFRAMED (no panel or

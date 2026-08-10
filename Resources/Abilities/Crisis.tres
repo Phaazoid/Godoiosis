@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_crisis"]
+
+[resource]
+script = ExtResource("1_crisis")
+id = 6
+display_name = "Crisis"
+kind = 1
+description = "At full Will, a would-be-down becomes Crisis: rise surged, Will locks at 0, and there is no safety net for the rest of the battle"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

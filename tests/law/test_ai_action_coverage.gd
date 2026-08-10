@@ -53,14 +53,14 @@ func test_tables_contain_no_foreign_entries() -> void:
 				.is_true()
 
 
-func test_crisis_and_implementation_registries_cover_every_archetype() -> void:
-	# The pre-#78 per-archetype declarations, held to the same completeness standard.
+func test_implementation_registry_covers_every_archetype() -> void:
+	# The pre-#78 per-archetype declaration, held to the same completeness standard. (The Crisis
+	# stance table was covered here too, until #158 deleted the table with the question it answered.)
 	for t in _archetypes():
-		assert_bool(AIArchetype.CRISIS_STANCES.has(t)).is_true()
 		assert_bool(AIArchetype.resolve(t).is_valid()).is_true()
 
 
 func test_faction_default_resolves_to_the_default_archetypes_priority() -> void:
-	# FACTION_DEFAULT is a sentinel -- same resolution rule as accepts_crisis/resolve.
+	# FACTION_DEFAULT is a sentinel -- same resolution rule as resolve().
 	assert_array(AIArchetype.main_action_priority(AIArchetype.Type.FACTION_DEFAULT)) \
 		.is_equal(AIArchetype.MAIN_ACTION_PRIORITY[AIArchetype.DEFAULT])
