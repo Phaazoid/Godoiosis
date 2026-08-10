@@ -20,9 +20,9 @@
 # (WeaponData's default scaling_blend is 100% STR), the same arithmetic tests/law/test_healing.gd
 # uses — so the fixture's power-3 weapon on STR 5 lands 8.
 #
-# Defenders are PLAYER on purpose: LethalityRules.accepts_crisis_by_stance short-circuits false
-# for the player faction, so a would-be-down in the R7 case is a plain DOWNED rather than an
-# archetype-driven CRISIS that stands the unit back up at revive HP.
+# No fixture unit holds the Crisis ability (#158), so a would-be-down in the R7 case is a plain
+# DOWNED rather than a CRISIS that stands the unit back up at revive HP. (This comment used to
+# lean on the player-faction stance short-circuit; the ability read replaced it.)
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")

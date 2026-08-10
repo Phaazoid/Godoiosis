@@ -19,8 +19,8 @@ class_name OrderExecutor
 var game   # the Game coordinator (Node2D); set by game._ready()
 
 # Units downed mid-execution. Squad ejection is DEFERRED to the end of the pass -- restructuring
-# squads while execute_orders sat mid-await was buggy. The Crisis OFFER is deliberately NOT
-# deferred; see _offer_pending_crisis.
+# squads while execute_orders sat mid-await was buggy. (A Crisis unit never lands here since #158:
+# take_damage carries that rung out directly and the unit never goes DOWNED.)
 var _downed_pending: Array[Unit] = []
 
 # ==============================================================================
@@ -147,8 +147,6 @@ func _execute_action_sequence(actions: Array):
 		while not action.execution_complete:
 			await get_tree().process_frame
 
-		await _offer_pending_crisis()   # live Crisis interrupt: fire the instant a unit drops, before the next hit
-
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them. Burning-only for now; generalizes as more tile states land.
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
@@ -161,17 +159,16 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # ==============================================================================
 
 # End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
-# through take_damage so downs/kills apply, then the crisis-offer + eject the attack pass uses.
+# through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	for cell in game.terrain_states.cells_with(Terrain.TileState.BURNING):
 		var unit: Unit = game.get_unit_at_cell(cell)
 		if unit != null and unit.is_active() and unit.get_faction() == faction:
 			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
-	await _offer_pending_crisis()
 	_process_downed_pending()
 
 # ==============================================================================
-#  Downed units + Crisis
+#  Downed units
 # ==============================================================================
 
 func on_unit_downed(unit: Unit) -> void:
@@ -197,26 +194,3 @@ func _process_downed_pending() -> void:
 			unit.squad.has_acted = true
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
-
-func _offer_pending_crisis() -> void:
-	# Crisis is a LIVE interrupt (will-and-death.md): the offer must fire the moment a unit goes
-	# down -- BEFORE a later hit in the same pass kills the downed unit. We poll between hits here
-	# (the sequence loop is already async) instead of awaiting inside the synchronous take_damage
-	# path, and instead of the old end-of-pass offer (which never fired when a follow-up counter
-	# finished the unit first). Squad ejection stays deferred to _process_downed_pending.
-	for unit in _downed_pending.duplicate():
-		if not is_instance_valid(unit) or unit.is_queued_for_deletion():
-			continue
-		if unit.crisis_offered_pending:
-			unit.crisis_offered_pending = false
-			if await _offer_crisis(unit):
-				unit.enter_crisis()
-				_downed_pending.erase(unit)   # back on its feet -- not ejected at pass end
-
-func _offer_crisis(unit: Unit) -> bool:
-	# Non-player factions decide by archetype stance -- deterministic, so the player's queue
-	# previewed this exact outcome (Law #2; R9: enemy Crisis is never a BREAK). The PLAYER
-	# faction keeps the live prompt, except when AI-driven (dev toggle) -- nothing to block on.
-	if unit.get_faction() != Team.Faction.PLAYER or game.ai_controller.is_ai_faction(unit.get_faction()):
-		return AIArchetype.accepts_crisis(unit.squad.archetype)
-	return await CrisisPrompt.show_prompt(game, unit.get_unit_name())

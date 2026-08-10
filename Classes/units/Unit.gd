@@ -67,18 +67,13 @@ var lifecycle_state: LifecycleState = LifecycleState.ACTIVE
 # (OVERKILL_CEILING, CRISIS_WILL_GATE) live in one shared place. Unit owns only what happens
 # NEXT: take_damage carries the named rung out.
 
-# --- Crisis Mode (opt-in gambit; will-and-death.md, #33). Offered as a live interrupt when a
-# FULL-Will unit would go down: accept -> up at low HP with a one-turn scaling-stat surge, but
-# Will locks at 0 and there is no safety net (a would-be-down is death) for the rest of the
-# battle. All of this is battle-scoped, so it lives here on the transient Unit. ---
-const CRISIS_REVIVE_HP := 5                            # HP the unit stands back up with (placeholder)
-const CRISIS_SURGE := 5                                # +this to each scaling stat for the surge turn (placeholder)
-const CRISIS_SURGE_STATS: Array[Stats.Stat] = [Stats.Stat.STR, Stats.Stat.DEX, Stats.Stat.PER]  # "scaling stats" (assumption)
-const CRISIS_SURGE_SOURCE := "Crisis"                  # the StatEffect this unit's surge is filed under
-const CRISIS_SURGE_TURNS := 3                          # playtest-tunable: a gambit this costly should feel powerful (2026-07-28)
-
+# --- Crisis Mode (will-and-death.md; an equipped ability since #158). A FULL-Will unit holding
+# the Crisis ability answers a would-be-down by standing straight back up surged — deterministic,
+# previewed, no prompt (the gambit's acceptance happened at loadout). Will locks at 0 and there is
+# no safety net (a would-be-down is death) for the rest of the battle. The arming read and the
+# gambit's tuning live with the ability roster (Abilities.CRISIS_*); the battle-scoped STATE
+# lives here on the transient Unit. ---
 var in_crisis: bool = false              # afflicted (skull icon, Will locked, die-on-down) for the battle
-var crisis_offered_pending: bool = false # this down qualified for the offer (set at down-time, read post-pass)
 var crisis_surge_pending: bool = false   # apply the surge at this unit's next turn start
 
 # Turns remaining before a downed unit dies without rescue. Starts at 3 when
@@ -374,10 +369,14 @@ func take_damage(damage: int):
 				die()                                # Fork 3 / the Crisis gambit: no safety net left
 			else:
 				unit_instance.apply_damage(damage, get_max_hp())   # HP -> 0 -> died -> _on_instance_died -> die()
+		ResolvedOutcome.Lethality.CRISIS:
+			# The armed gambit (#158): stand straight back up, never DOWNED — no went_downed, no
+			# ejection queueing, no Will down-spend. Exactly what the resolver's hypo threads for
+			# this rung, which is what keeps preview and execution one thing with no offer step.
+			enter_crisis()
 		_:
-			# DOWNED, MAIMED and CRISIS are all the same execution: go down. spend_will_for_down
-			# picks clean-vs-maimed, and the Crisis offer is settled after the pass by
-			# OrderExecutor._offer_pending_crisis reading crisis_offered_pending.
+			# DOWNED and MAIMED are the same execution: go down. spend_will_for_down picks
+			# clean-vs-maimed.
 			_go_downed()
 
 func heal(amount: int) -> void:
@@ -385,7 +384,6 @@ func heal(amount: int) -> void:
 	set_current_hp(get_current_hp() + amount)
 
 func _go_downed():
-	crisis_offered_pending = is_crisis_eligible()  # capture BEFORE spend — eligibility reads FULL Will
 	lifecycle_state = LifecycleState.DOWNED
 	set_current_hp(1)  # clings at 1 HP (stub) — stays >0, so no death emission
 	unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
@@ -618,22 +616,16 @@ func rally() -> void:
 	unit_instance.set_current_will(unit_instance.get_current_will() + amount)
 	rally_count += 1
 	
-func is_crisis_eligible() -> bool:
-	# Crisis gates on a FULL Will pool (will-and-death.md) — an identity gate, faction-agnostic
-	# since #57. Eligibility is universal; the DECISION differs by controller (live prompt vs
-	# archetype stance — see OrderExecutor._offer_crisis).
-	return not in_crisis \
-		and unit_instance.get_current_will() >= LethalityRules.CRISIS_WILL_GATE
-
 func enter_crisis():
-	# Player accepted the live offer (OrderExecutor._process_downed_pending). The unit went DOWNED during the
-	# pass; reverse that into the gambit: up at CRISIS_REVIVE_HP, Will locked at 0, surge primed for
-	# next turn, no safety net for the rest of the battle.
+	# The armed gambit fires (take_damage's CRISIS rung, #158): up at CRISIS_REVIVE_HP, Will locked
+	# at 0, surge primed for next turn, no safety net for the rest of the battle. Called on a unit
+	# that never went DOWNED, so the lifecycle/clock/sprite resets are usually no-ops — kept because
+	# they make this function total over any state it could ever be reached from.
 	in_crisis = true
 	lifecycle_state = LifecycleState.ACTIVE
 	downed_turns_remaining = -1
 	_show_downed_sprite(false)
-	set_current_hp(CRISIS_REVIVE_HP)
+	set_current_hp(Abilities.CRISIS_REVIVE_HP)
 	unit_instance.set_current_will(0)                         # locked: can_rally() refuses while in_crisis
 	crisis_surge_pending = true
 
@@ -647,9 +639,9 @@ func advance_crisis_surge():
 		return
 	crisis_surge_pending = false
 	var mods: Dictionary[Stats.Stat, int] = {}
-	for stat in CRISIS_SURGE_STATS:
-		mods[stat] = CRISIS_SURGE
-	apply_stat_effect(StatEffect.make(CRISIS_SURGE_SOURCE, mods, CRISIS_SURGE_TURNS))
+	for stat in Abilities.CRISIS_SURGE_STATS:
+		mods[stat] = Abilities.CRISIS_SURGE
+	apply_stat_effect(StatEffect.make(Abilities.CRISIS_SURGE_SOURCE, mods, Abilities.CRISIS_SURGE_TURNS))
 
 func get_element_aura(element: Elemental.Element) -> int:
 	if unit_instance == null:

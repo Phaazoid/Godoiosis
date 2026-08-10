@@ -208,9 +208,9 @@ func test_ai_factions_survive_a_round_trip() -> void:
 
 func test_loading_a_board_that_declares_no_ai_turns_a_live_faction_OFF() -> void:
 	# The apply must REPLACE the set, not merge into it. Merged, a faction ticked on the previous
-	# board stays AI-controlled on the next one -- and the flag decides three things beyond whose
-	# turn it is (concede-vs-hand-back on an invalid plan, and the Crisis prompt), so the leak would
-	# not read as "the AI moved", it would read as the player's own prompt silently not appearing.
+	# board stays AI-controlled on the next one -- and the flag also decides concede-vs-hand-back
+	# on an invalid plan (#103), so the leak would not read as "the AI moved", it would read as a
+	# squad silently conceding turns. (It used to gate the Crisis prompt too, until #158.)
 	var controller: AIController = game.ai_controller
 	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	var snapshot: ScenarioData = sm.capture_scenario("__no_ai")   # captured while everything is manual

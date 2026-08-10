@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="JobData" format=3]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_ability"]
+[ext_resource type="Script" uid="uid://crvojjncxspaf" path="res://Classes/jobs/JobData.gd" id="2_job"]
+[ext_resource type="Resource" path="res://Resources/Abilities/Crisis.tres" id="3_crisis"]
+
+[resource]
+script = ExtResource("2_job")
+id = "berserker"
+display_name = "Berserker"
+ability_pool = Array[ExtResource("1_ability")]([ExtResource("3_crisis")])
+metadata/_custom_type_script = "uid://crvojjncxspaf"

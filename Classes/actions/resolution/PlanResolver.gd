@@ -159,7 +159,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 
 	target_hypo.hp -= outcome.damage
 	if outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
-		target_hypo.hp = Unit.CRISIS_REVIVE_HP                # stood back up mid-pass (enter_crisis)
+		target_hypo.hp = Abilities.CRISIS_REVIVE_HP           # stood back up mid-pass (enter_crisis)
 	outcome.target_hp_after = target_hypo.hp
 
 	# Displacement stage (#84): a knockback attack shoves the target directly away from the
@@ -299,7 +299,7 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
 		h.can_maim = unit.unit_instance.next_maim_slot() != -1
-		h.crisis_stance_accepts = LethalityRules.accepts_crisis_by_stance(unit)
+		h.crisis_armed = LethalityRules.crisis_armed_for(unit)
 		hypo[unit] = h
 	return hypo[unit]
 

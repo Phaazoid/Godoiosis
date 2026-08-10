@@ -1,7 +1,8 @@
 # The ModalCard base's contract, pinned ONCE for every surface built on it rather than once per
-# surface (#143 + its follow-up). The bug this replaces hit PauseMenu, MissionEndBanner and
-# CrisisPrompt identically because they hand-built the same chrome: set_anchors_preset instead of
-# set_anchors_and_offsets_preset left every one of them at (0,0) in the top-left corner.
+# surface (#143 + its follow-up). The bug this replaces hit PauseMenu, MissionEndBanner and the
+# old CrisisPrompt (removed by #158) identically because they hand-built the same chrome:
+# set_anchors_preset instead of set_anchors_and_offsets_preset left every one of them at (0,0)
+# in the top-left corner.
 #
 # Three things are asserted here, and each is falsified against its own bug (see the header of each
 # section): SIZING, the ModalLock FREEZE each surface declares, and the UiLayers Z-ORDER.
@@ -117,22 +118,6 @@ func test_mission_end_banner_fills_the_viewport_and_locks_the_board() -> void:
 
 	banner.chosen.emit(MissionEndBanner.Choice.STAY)
 	banner.queue_free()
-	await _frames(4)
-	assert_bool(game.can_process()).is_true()
-
-
-func test_crisis_prompt_fills_the_viewport_and_locks_the_board() -> void:
-	var prompt := CrisisPrompt.new()
-	game.ui_layer.add_child(prompt)
-	prompt._build("Test Unit", game)
-	await _frames(4)
-
-	_assert_chrome(prompt, UiLayers.MODAL_CARD)
-	assert_bool(ModalLock.any_open(get_tree())).is_true()
-	assert_bool(game.can_process()).is_false()
-
-	prompt.chosen.emit(false)
-	prompt.queue_free()
 	await _frames(4)
 	assert_bool(game.can_process()).is_true()
 

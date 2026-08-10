@@ -47,7 +47,7 @@ Rule: **every beat gets a saved scenario** (`.tres`) that stages the shot — lo
 |---|---|---|
 | Fire/ice loop | Paint water → freeze → squad crosses ice → melt it behind them (#50 feel-test doubles as first capture) | TODO |
 | Preview never lies | Side-by-side plan vs execution; queue icon flipping sword → Down/Ded/Maim on a lethal plan | TODO |
-| Crisis Mode | High-Will unit about to drop stands back up surged, safety net gone — being redesigned from a prompt into an equipped berserker-style ability ([#158](https://github.com/Phaazoid/Godoiosis/issues/158)) | TODO |
+| Crisis Mode | A Berserker at full Will refuses to drop — stands back up surged, safety net gone for the battle. An equipped ability, fully previewed ([#158](https://github.com/Phaazoid/Godoiosis/issues/158)) | TODO |
 | Rescue race | Ally downed, 3-turn countdown ticking, squadmate spends main action to revive | TODO |
 | Volley | One AoE order fanning into simultaneous hits on multiple victims | TODO |
 | Sentry zone | Paint zone → lure enemy in → AI squad engages, leashed to zone → returns to post | TODO |

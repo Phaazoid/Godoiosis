@@ -10,8 +10,9 @@
 #   * `_process_downed_pending` — no ejection, so a downed unit stays a squad member. That is the
 #     reported symptom: `RulesService.compute_move_range` drops cells held by NON-squadmates, so an
 #     unejected downed ally's tile stays a legal destination and units walk onto the body.
-#   * `_offer_pending_crisis` — it iterates `_downed_pending`, so the Crisis prompt can never fire.
-#     (Not asserted here; Crisis needs an authored WIL-20 unit, and this suite is about ejection.)
+#   * the old `_offer_pending_crisis` — it iterated `_downed_pending`, so the Crisis prompt could
+#     never fire. (That whole path is gone since #158; Crisis now enters directly in take_damage,
+#     and the case pinning it lives at the bottom of this suite.)
 #
 # Note what this suite does NOT test: "is standing on a downed unit legal?" is answered *indirectly*,
 # through squad membership, as a side effect of ejection ordering — nothing anywhere asks "is this
@@ -189,3 +190,33 @@ func test_a_same_pass_rescue_revives_ejects_and_spends() -> void:
 		.override_failure_message("a rescued unit is SPENT the turn it is rescued").is_true()
 	assert_int(game.order_executor._downed_pending.size()) \
 		.override_failure_message("_downed_pending did not drain").is_equal(0)
+
+
+# #158, through the REAL executor: an armed berserker dropped mid-pass enters Crisis inside the
+# hit itself -- no prompt, no poll, no down -- and is therefore NEVER ejected: it keeps its squad,
+# which is the observable difference between the gambit and a down-then-rescue. Falsified by
+# reverting take_damage's CRISIS arm: the unit downs, gets ejected, and the membership assert reds.
+func test_an_armed_squadmate_enters_crisis_mid_pass_and_keeps_its_squad() -> void:
+	var leader: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.LDR: 10}, Team.Faction.PLAYER), Vector2i(1, 0))
+	leader.equipped_weapon = H.make_weapon()
+	var victim: Unit = game.spawn_unit(H.make_unit_data({Stats.Stat.WIL: 20}, Team.Faction.PLAYER), Vector2i(2, 0))
+	victim.unit_instance.jobs.append("berserker")
+	var _bystander := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(victim, leader.squad)
+
+	victim.take_damage(victim.get_current_hp() - 1)   # bloodied: the queued hit is a would-be-down
+	(leader.equipped_weapon as WeaponInstance).template.main_attack.hits_allies = true
+	var aim := AttackAction.create(leader, Vector2i(1, 0), null, Vector2i(2, 0))
+	aim.fired_attack = leader.get_fired_attack()
+	assert_bool(game.squad_manager.queue_action(leader.squad, aim)) \
+		.override_failure_message("fixture failed to queue the friendly-fire attack").is_true()
+
+	await game.order_executor.execute_orders(leader)
+
+	assert_bool(victim.in_crisis).override_failure_message("the armed gambit never fired").is_true()
+	assert_bool(victim.is_active()).is_true()
+	assert_int(victim.get_current_hp()).is_equal(Abilities.CRISIS_REVIVE_HP)
+	assert_bool(leader.squad.get_members().has(victim)) \
+		.override_failure_message("a Crisis unit must keep its squad -- it never went down").is_true()
+	assert_int(game.order_executor._downed_pending.size()).is_equal(0)

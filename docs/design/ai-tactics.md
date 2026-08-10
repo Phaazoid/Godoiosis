@@ -2,7 +2,7 @@
 
 **Canon checked through #151 (2026-08-06).**
 
-**Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is slated for removal — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) makes Crisis a deterministic equipped ability, so `CRISIS_STANCES`/`accepts_crisis` lose the question they answer.)*
+**Status: BUILT 2026-07-22, #78 CLOSED 2026-07-23 (commit `239555b`)** — ratified and hand-typed the same day; full suite 444/444 green. Feel iteration continues through ordinary playtesting (the v1 approximations below are the watch-list). The #29-era archetype layer (Rushdown/Hold/Sentry, painted zones, Crisis stances — see CLAUDE.md's architecture map) is the substrate; this doc covers the #78 rebuild of *how the AI decides*, and the standing contract that keeps it from rotting again. *(2026-08-09: the Crisis-stance piece of that substrate is GONE — [#158](https://github.com/Phaazoid/Godoiosis/issues/158) made Crisis a deterministic equipped ability, deleting `CRISIS_STANCES`/`accepts_crisis` with the accept/decline question they answered; enemy Crisis access is authored content now.)*
 
 ## The doctrine: the AI is a player, all the way down
 
@@ -17,7 +17,7 @@ Law #3 ("AI issues orders exclusively through `SquadManager.queue_action`") was 
 
 ## The policy registry (the one place per-archetype behavior lives)
 
-`AIArchetype` declares, per archetype (same idiom as `CRISIS_STANCES`):
+`AIArchetype` declares, per archetype (the idiom the now-deleted `CRISIS_STANCES` table also used, until #158):
 
 - `MAIN_ACTION_PRIORITY` — an ordered try-list over `BaseAction.MAIN_ACTION_TYPES`; `AITactics.queue_main_action` walks it and the first type that yields a buildable candidate wins.
 - `MAIN_ACTION_NEVER` — the explicit opt-outs.

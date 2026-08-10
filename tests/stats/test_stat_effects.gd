@@ -1,14 +1,14 @@
-# The ONE seam for temporary stat modifiers (#112): StatEffect, its storage on Unit, the
+﻿# The ONE seam for temporary stat modifiers (#112): StatEffect, its storage on Unit, the
 # body-vs-effective split that wear gates read, forced unequip when a gate stops passing, and the
 # faction-turn-start expiry tick.
 #
-# It replaced UnitInstance.stat_modifiers — a stateful add/subtract bag whose only user was the
+# It replaced UnitInstance.stat_modifiers â€” a stateful add/subtract bag whose only user was the
 # Crisis surge via a hand-balanced +5/-5 pair. That pair is the shape this file exists to prevent:
 # a source is now RETIRED, never subtracted, so an effect cannot leak.
 #
 # The two rules most worth not breaking:
 #   * gates read get_body_stat (base -> limb -> jobs -> effects) and NEVER gear. That is what keeps
-#     forced unequip to a single pass — removing a piece can't change another piece's answer.
+#     forced unequip to a single pass â€” removing a piece can't change another piece's answer.
 #   * expiry ticks at the owning faction's TURN START, so a 3-turn effect covers three of THIS
 #     unit's turns rather than three passes of everyone.
 extends GdUnitTestSuite
@@ -42,7 +42,7 @@ func test_an_effect_shifts_the_effective_stat() -> void:
 
 
 func test_retiring_the_source_removes_the_contribution() -> void:
-	# Removal retires a SOURCE, never subtracts a delta — the leak shape the old +5/-5 Crisis pair
+	# Removal retires a SOURCE, never subtracts a delta â€” the leak shape the old +5/-5 Crisis pair
 	# had. Anything that forgets to remove leaves an effect, not a corrupted number.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.STR: 5}, false)
 	unit.apply_stat_effect(_effect({Stats.Stat.STR: 3}, StatEffect.PERMANENT, "Tonic"))
@@ -139,7 +139,7 @@ func test_a_buff_can_unlock_a_gated_armor() -> void:
 func test_gates_still_ignore_the_wearers_own_gear() -> void:
 	# The half of the doctrine that did NOT change: a piece's own tax must not move its own gate,
 	# or equip legality becomes swap-order-dependent. It is also what stops forced unequip from
-	# cascading — see the two tests below.
+	# cascading â€” see the two tests below.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.CON: 5}, false)
 	var heavy := _gated_armor(Stats.Stat.CON, 8)
 	unit.worn_armor = _armor({Stats.Stat.CON: 5})
@@ -205,7 +205,7 @@ func test_authored_bulwark_plate_needs_a_buff_and_loses_it_with_one() -> void:
 
 func test_a_buff_can_knock_off_a_ceiling_gated_harness() -> void:
 	# The inverted case, and the one that shows why gates are two-sided: Ballast Harness demands
-	# DEX <= 4, so a DEX BUFF — normally a gift — tangles the wearer out of their own armour.
+	# DEX <= 4, so a DEX BUFF â€” normally a gift â€” tangles the wearer out of their own armour.
 	var harness: ArmorData = ArmorCatalog.get_editable()["Ballast Harness"]
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.DEX: 4}, false)
 	unit.inventory[0] = harness
@@ -274,7 +274,7 @@ func test_a_permanent_effect_never_expires() -> void:
 # --- Crisis, migrated onto the seam ---
 
 func test_crisis_surge_applies_on_the_next_turn_start() -> void:
-	# Primed on ENTRY, applied at the NEXT turn start — the entry pass stays "survives standing"
+	# Primed on ENTRY, applied at the NEXT turn start â€” the entry pass stays "survives standing"
 	# only (will-and-death.md ripple containment). That timing did not change with #112.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.STR: 5}, false)
 	unit.enter_crisis()
@@ -282,13 +282,13 @@ func test_crisis_surge_applies_on_the_next_turn_start() -> void:
 
 	unit.advance_crisis_surge()
 
-	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(5 + Unit.CRISIS_SURGE)
-	assert_bool(unit.has_stat_effect_from(Unit.CRISIS_SURGE_SOURCE)).is_true()
+	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(5 + Abilities.CRISIS_SURGE)
+	assert_bool(unit.has_stat_effect_from(Abilities.CRISIS_SURGE_SOURCE)).is_true()
 
 
 func test_crisis_surge_runs_for_three_turns() -> void:
 	# Raised from 1 turn to 3 on 2026-07-28 (dev): a gambit this costly should feel powerful.
-	# Ticks in the same order game._run_turn_start_ticks uses — tick FIRST, then advance, so the
+	# Ticks in the same order game._run_turn_start_ticks uses â€” tick FIRST, then advance, so the
 	# turn the surge lands on is not immediately spent.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {Stats.Stat.STR: 5}, false)
 	unit.enter_crisis()
@@ -310,7 +310,7 @@ func test_the_surge_cannot_leak() -> void:
 	unit.enter_crisis()
 	unit.advance_crisis_surge()
 	unit.advance_crisis_surge()   # a second call must not stack a second surge
-	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(5 + Unit.CRISIS_SURGE)
+	assert_int(unit.get_effective_stat(Stats.Stat.STR)).is_equal(5 + Abilities.CRISIS_SURGE)
 
 	for turn in 4:
 		unit.tick_stat_effects()
@@ -345,7 +345,7 @@ func test_stats_changed_does_not_fire_when_nothing_changed() -> void:
 
 
 func test_wearing_and_removing_armor_fires_stats_changed() -> void:
-	# Gear is derived, not stored, but it still MOVES the effective stat — so it settles through
+	# Gear is derived, not stored, but it still MOVES the effective stat â€” so it settles through
 	# the same hook. Before #112 the inspect panel never repainted its stat grid on an armour swap.
 	var unit: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	unit.inventory[0] = _armor({Stats.Stat.DEX: -1})

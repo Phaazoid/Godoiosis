@@ -272,19 +272,18 @@ func test_an_active_unit_reloads_active_with_no_downed_sprite() -> void:
 
 
 func test_crisis_flags_and_rally_count_round_trip() -> void:
-	# All four are battle-long commitments: in_crisis locks Will at 0 and removes the safety net,
+	# All three are battle-long commitments: in_crisis locks Will at 0 and removes the safety net,
 	# crisis_surge_pending spans a turn boundary, and rally_count is the diminishing-returns
 	# counter. Reloading any of them clean hands back a gambit the player already spent.
+	# (crisis_offered_pending left this list with #158 -- no offer exists to be pending.)
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	a.in_crisis = true
-	a.crisis_offered_pending = true
 	a.crisis_surge_pending = true
 	a.rally_count = 2
 
 	var loaded := _round_trip(a)
 
 	assert_bool(loaded.in_crisis).is_true()
-	assert_bool(loaded.crisis_offered_pending).is_true()
 	assert_bool(loaded.crisis_surge_pending).is_true()
 	assert_int(loaded.rally_count).is_equal(2)
 	assert_bool(loaded.can_rally()).is_false()   # and the rules downstream read the restored state
@@ -395,7 +394,6 @@ func test_new_entry_battle_state_defaults_read_as_unsaved() -> void:
 	assert_int(entry.lifecycle_state).is_equal(Unit.LifecycleState.ACTIVE)
 	assert_int(entry.downed_turns_remaining).is_equal(-1)
 	assert_bool(entry.in_crisis).is_false()
-	assert_bool(entry.crisis_offered_pending).is_false()
 	assert_bool(entry.crisis_surge_pending).is_false()
 	assert_int(entry.rally_count).is_equal(0)
 	assert_bool(entry.squad_has_acted).is_false()

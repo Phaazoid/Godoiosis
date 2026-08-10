@@ -112,4 +112,10 @@ enemy attack-range on hover during player turn; real HP/Will bars on panels; squ
 cursor color-coding; muted squad icons when another squad is active; simultaneous-movement
 legibility (needs design first — the umbrella's core problem).
 
+**A unit IN CRISIS must read as unmistakable at board glance (dev, 2026-08-09 — filed with
+[#158](https://github.com/Phaazoid/Godoiosis/issues/158)'s ability re-homing):** the skull in the
+hover states-row is the only marker today, and a battle-long no-safety-net state deserves more —
+**the map sprite itself should reflect Crisis** (art-gated; needs a sprite/tint/overlay treatment
+per unit or a generic one). "It should be very obvious a unit is in crisis mode."
+
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
