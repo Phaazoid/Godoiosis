@@ -217,6 +217,25 @@ func _tooltip_for(item) -> String:
 		var mech: String = item.mechanical_text(unit)
 		if mech != "":
 			lines.append(mech)
+	elif item is RuneData:
+		# What a decision actually turns on (#167): temper + capacity headline, then one line per
+		# inscribed carving -- readout only, composed from #166's attack_detail/attack_block_reason
+		# pair (the same detail-then-reason order the Transmutation submenu's rows already use).
+		lines.append(item.display_name)
+		var temper_text := "Untempered" if item.temper == Elemental.Element.NONE \
+			else "%s temper" % Elemental.display_name(item.temper)
+		lines.append("%s  ·  %s  ·  %d/%d capacity" % [
+			RuneData.Size.keys()[item.size].capitalize(), temper_text,
+			item.used_capacity(), item.capacity()])
+		for t in item.inscriptions:
+			lines.append("")
+			lines.append(t.display_name)
+			var detail: String = item.attack_detail(unit, t)
+			if detail != "":
+				lines.append(detail)
+			var reason: String = item.attack_block_reason(unit, t)
+			if reason != "":
+				lines.append(reason)
 	else:
 		lines.append(item.display_name)
 	if item.description != "":
