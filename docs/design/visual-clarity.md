@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #167 (2026-08-10).**
+**Canon checked through #172 (2026-08-10).**
 
 ## Principles
 
@@ -86,12 +86,49 @@ From the scratchpad, @Phaazoid's note about AI turns being unreadable. One obser
 because they solve different halves: **pacing** helps you read a turn *as it happens*, a **log** lets
 you read it *afterwards*. Both are #44 children.
 
-- **[#118](https://github.com/Phaazoid/Godoiosis/issues/118) — a beat between actions.**
-  `OrderExecutor._execute_action_sequence` advances the instant an action reports
-  `execution_complete`, so an AI squad's whole plan resolves at animation speed with nothing to
-  separate one hit from the next. Cheap and needs no design; the one real constraint is that the
-  suite awaits this same path, so the pause has to be a tunable a test can zero rather than a literal
-  at the await site.
+- **[#118](https://github.com/Phaazoid/Godoiosis/issues/118) — a beat between actions. BUILT
+  2026-08-10.** The filed half was right but was only half the problem: an AI turn read *backwards*.
+  `OrderExecutor._execute_action_sequence` advanced the instant an action reported
+  `execution_complete` (a lunge is 0.18s, so a three-unit swing phase was ~0.5s) and the AI's plan
+  went from queued to resolving with no frame in between — while the one part that already had a
+  pace, `CameraController.pan_to`, spent **2.0s per squad** gliding. So the fix both adds time and
+  takes it away; the dev's words were *"parts are too fast, but others are too slow."*
+
+  **`Classes/core/Pacing.gd` is the one seam — a tuning table, not a system**, in the shape of
+  `UiLayers`: five constants with exactly one reader each (`AI_SQUAD_PAN`, `AI_PLAN_READ`,
+  `AI_ACTION`, `PLAYER_ACTION`, `TURN_HANDOFF`), plus `beat(host, seconds)`, which every pause routes
+  through. The two pre-existing numbers moved onto it rather than being duplicated — the pan's
+  default arg, and `game.start_faction_turn`'s hardcoded `create_timer(1.0)`, whose TODO read
+  *"later make small waits between each enemy movement"*, i.e. this ticket.
+
+  Three decisions worth keeping:
+  - **The beat lands BEFORE each action, never after.** That spaces a phase off the previous one for
+    free — the parallel move phase, then each side-channel batch — so there is no separate
+    between-phases pause to keep in sync, and no trailing pause before the squad's turn ends. An
+    empty batch returns early, so a phase with nothing in it costs nothing.
+  - **AI and player are two values off one read.** `execute_orders` keys on the same
+    `is_ai_faction` call its invalid-plan concede already makes (#103), so a hotseat faction with AI
+    off is a *human* and paces like one. `PLAYER_ACTION` is **0.0** by dev call (2026-08-10): an AI
+    plan is being read for the first time, a player's was authored by the person watching it.
+  - **`AI_PLAN_READ` is skipped when the squad only holds position.** Queueing repaints the queue
+    panel, arrows, ghosts and target markers synchronously, so the pause buys a real readout — but a
+    squad with nothing to do would just add dead air per squad, which is the complaint being fixed.
+
+  **The headless escape in `beat()` is a safety property, not a convenience** (same gate
+  `ReportUploader.is_configured` and `BugReporter.capture_frame` use): `execute_orders` is awaited
+  directly by nine test call sites, so a literal timer at an await site would put real wall clock on
+  every case that resolves a plan. `pan_to` got the same escape and snaps instead of tweening —
+  `tests/ai` went **19.0s → 7.5s** on that alone. `play/play_session.gd` is untouched and stays at
+  zero unconditionally; it is the synchronous mirror by design.
+
+  **What the suite pins, and what it cannot.** `tests/core/test_pacing.gd` asserts exactly one thing
+  — a beat costs a headless run **zero frames** — measured in frames rather than seconds so there is
+  no duration threshold to hard-code and **no assertion anywhere about what any of the five numbers
+  are** (dev, 2026-08-10: tuning by feel must never turn the suite red). Falsified against its own
+  bug: delete the headless check and it waits the full 30s and goes red. It cannot see that the
+  beats are *wired in* — they are zero headless by construction — which is the `went_downed` shape
+  (#103): the gate for that, and for the five numbers themselves, is watching an AI turn, never a
+  green run.
 - **[#119](https://github.com/Phaazoid/Godoiosis/issues/119) — a reviewable battle log.** Nothing
   like it exists yet. The principle this doc contributes: **share the widget, never the data
   source.** The queue is a *live derived preview* rebuilt from the plan on every change

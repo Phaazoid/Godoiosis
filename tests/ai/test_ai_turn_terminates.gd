@@ -264,9 +264,10 @@ func test_ai_turn_from_a_jam_terminates_every_turn() -> void:
 	# Three turns, because #103's signature was STABILITY: the state a refused pass left behind
 	# regenerated the same refused pass, identically, forever. One turn cannot see that.
 	#
-	# The blockers are marked acted each turn, which is both what the reported scenario looked like
-	# (the other squads had already moved) and what keeps this affordable: AIController pans the
-	# camera to every squad it plans for, 2 real seconds each, and an already-acted squad is skipped.
+	# The blockers are marked acted each turn, which is what the reported scenario looked like (the
+	# other squads had already moved). It used to be load-bearing for RUNTIME too -- AIController
+	# pans the camera to every squad it plans for, and that pan cost 2 real seconds each -- but
+	# since #118 the pan and the plan-read beat are both free headless, so this is fidelity only.
 	for turn in range(3):
 		for s in game.squad_manager.squads:
 			game.squad_manager.set_has_acted(s, s != squad)

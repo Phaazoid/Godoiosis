@@ -131,9 +131,17 @@ func follow(unit: Unit) -> void:
 # Smoothly pans from wherever the camera currently is to `unit`'s position over a FIXED
 # duration (not fixed speed) -- a short hop and a cross-map jump read at the same pace,
 # giving the player a consistent beat to reorient before the next squad acts. Switches to
-# continuous follow() once the pan lands.
-func pan_to(unit: Unit, duration: float = 2.0) -> void:
+# continuous follow() once the pan lands. The duration is Pacing's (#118); fixed-vs-speed is
+# the design, the number is a knob.
+func pan_to(unit: Unit, duration: float = Pacing.AI_SQUAD_PAN) -> void:
 	follow_unit = null
+	# Nobody is watching a headless run, and the glide is awaited once per AI squad -- tweening it
+	# there is pure suite wall clock. Land on the destination and hand over to follow() exactly as
+	# the tweened path does.
+	if DisplayServer.get_name() == "headless":
+		_apply_pan_position(unit.global_position)
+		follow(unit)
+		return
 	_panning = true
 	var start := global_position
 	var dest: Vector2 = unit.global_position

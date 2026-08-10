@@ -56,6 +56,11 @@ func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
 		for member in squad.get_members():
 			member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
 		AIArchetype.resolve(squad.archetype).call(squad, board, game.squad_manager)
+		# The plan is on screen now -- queueing repaints the queue panel, path arrows, ghosts and
+		# target markers synchronously -- so hold before resolving it (#118). Skipped when the squad
+		# only holds position: there is nothing to read, and dead air per squad is the complaint.
+		if not game.squad_manager.only_hold_actions(squad):
+			await Pacing.beat(self, Pacing.AI_PLAN_READ)
 		await game.order_executor.execute_orders(squad.get_leader())
 
 	if game.mission_controller.is_over():
