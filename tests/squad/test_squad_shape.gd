@@ -53,21 +53,31 @@ func test_squad_range_follows_leader_reassignment() -> void:
 	assert_object(squad.leader).is_same(heir)
 	assert_int(squad.get_max_squad_range()).is_equal(4)
 
-func test_max_size_follows_the_ratified_rungs() -> void:
-	# eLDR 0-1 loner · 2-3 pair · 4-5 trio · 6-7 four · 8-9 five · 10-11 six (PER 5 -> band 0).
-	assert_int(_leader_with_ldr(1, Vector2i(0, 0)).squad.max_size()).is_equal(1)
-	assert_int(_leader_with_ldr(3, Vector2i(4, 0)).squad.max_size()).is_equal(2)
-	assert_int(_leader_with_ldr(5, Vector2i(8, 0)).squad.max_size()).is_equal(3)
-	assert_int(_leader_with_ldr(7, Vector2i(12, 0)).squad.max_size()).is_equal(4)
-	assert_int(_leader_with_ldr(9, Vector2i(16, 0)).squad.max_size()).is_equal(5)
-	assert_int(_leader_with_ldr(11, Vector2i(20, 0)).squad.max_size()).is_equal(6)
+func test_max_size_follows_the_capacity_rungs() -> void:
+	# capacity = leader + floor(eLDR / MEMBER_LDR_COST), probed across six rungs. Expected values
+	# derive from the constant (2026-08-10 sweep -- MEMBER_LDR_COST is playtest-tunable, and the
+	# same symbolic form test_derived_stat_chain already uses): the shape being pinned is that
+	# capacity STEPS with LDR, at whatever the cost is that day. Default PER -> band 0.
+	for ldr in [1, 3, 5, 7, 9, 11]:
+		var leader := _leader_with_ldr(ldr, Vector2i(ldr * 2, 0))
+		assert_int(leader.squad.max_size()) \
+			.override_failure_message("capacity at LDR %d does not follow the ladder" % ldr) \
+			.is_equal(1 + ldr / Squad.MEMBER_LDR_COST)
 
 func test_per_band_shifts_capacity_across_rung_boundaries() -> void:
-	# The PER shadow with teeth: LDR 5 + PER 9 -> eLDR 6 -> four; LDR 4 + PER 2 -> eLDR 3 -> pair.
-	var sharp := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 4), {Stats.Stat.LDR: 5, Stats.Stat.PER: 9})
-	assert_int(sharp.squad.max_size()).is_equal(4)
-	var dull := H.spawn_solo(self, _sm, ENEMY, Vector2i(4, 4), {Stats.Stat.LDR: 4, Stats.Stat.PER: 2})
-	assert_int(dull.squad.max_size()).is_equal(2)
+	# The PER shadow with teeth: a band edge in PER moves eLDR, and eLDR moves capacity. Expected
+	# derives from the band + the cost, so it pins the WIRE (PER reaches capacity), not the numbers.
+	var high_per: int = Stats.BAND_MID_MAX + 2
+	var sharp := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 4), {Stats.Stat.LDR: 5, Stats.Stat.PER: high_per})
+	assert_int(sharp.squad.max_size()) \
+		.is_equal(1 + (5 + Stats.per_ldr_band(high_per)) / Squad.MEMBER_LDR_COST)
+	# The guaranteed-visible direction: LDR sitting exactly on a rung multiple, dull PER dragging
+	# eLDR one below it. floor((2c-1)/c) < 2 for every cost >= 1, so this drop survives ANY retune;
+	# the upward twin does not (a +1 shift only crosses a boundary at some costs), hence this side.
+	var rung_ldr: int = 2 * Squad.MEMBER_LDR_COST
+	var plain := _leader_with_ldr(rung_ldr, Vector2i(8, 4))
+	var dull := H.spawn_solo(self, _sm, ENEMY, Vector2i(12, 4), {Stats.Stat.LDR: rung_ldr, Stats.Stat.PER: 0})
+	assert_int(dull.squad.max_size()).is_less(plain.squad.max_size())
 
 func test_negative_effective_ldr_clamps_to_loner() -> void:
 	# LDR 0 + PER 2 -> eLDR -1; capacity floors at "just yourself", never negative.
@@ -75,8 +85,10 @@ func test_negative_effective_ldr_clamps_to_loner() -> void:
 	assert_int(husk.squad.max_size()).is_equal(1)
 
 func test_join_predicate_refuses_at_capacity() -> void:
-	# eLDR 4 leader -> trio cap. Fill it via direct joins; the PREDICATE refuses the fourth.
-	var leader := _leader_with_ldr(4, Vector2i(0, 0))
+	# Capacity authored AS two-members-beyond-the-leader (LDR = 2 x the cost), so the fill below
+	# and the refusal stay aligned with the knob at any retune (2026-08-10 sweep). The PREDICATE
+	# refuses the member past capacity; direct joins stay permissive.
+	var leader := _leader_with_ldr(2 * Squad.MEMBER_LDR_COST, Vector2i(0, 0))
 	var m1 := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var m2 := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 1))
 	var late := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0))
@@ -86,8 +98,9 @@ func test_join_predicate_refuses_at_capacity() -> void:
 	assert_bool(_sm.can_join_squad(late, leader.squad)).is_false() # 3/3 -> full
 
 func test_loner_cannot_form_a_squad() -> void:
-	# The ratified 0-1 rung: capacity 0 members means the create option greys out entirely.
-	var loner := _leader_with_ldr(1, Vector2i(0, 0))
+	# The bottom rung: capacity 0 members means the create option greys out entirely. LDR authored
+	# one short of the first member's cost, so the rung holds at any retune.
+	var loner := _leader_with_ldr(Squad.MEMBER_LDR_COST - 1, Vector2i(0, 0))
 	var buddy := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	assert_bool(_sm.can_squad_up(buddy, loner.squad)).is_false()
 	assert_bool(_sm.can_create_any_squad(loner)).is_false()
