@@ -3,8 +3,9 @@ extends GdUnitTestSuite
 # Aura-scaled transmutations + the rune container (docs/design/alchemy-kit.md), now on the
 # sigil/flourish anatomy (docs/design/transmutation-model-proposal.md):
 #   - sigils: repeats = weight; cost capacity, scale off aura, grant flourish slots
-#   - channeling: temper + trained leeway + strain (#60) -- floors = weight, the temper
-#     element is never brute-forced, real temper aura is the leeway budget for the rest
+#   - channeling: anchor + wildcards (dev 2026-08-10, replacing #60's temper/leeway/strain
+#     model) -- real aura in one of the carving's elements, total deficit covered by the
+#     universal +1 OR spare temper aura, never both
 #   - flourishes: slot-capped shaping marks; opposites reject; derive exotics (ICE/SHOCK)
 # FIRING through the resolver is covered in tests/runes/test_rune_firing.gd.
 
@@ -46,75 +47,82 @@ func test_repeated_sigils_weight_the_scaling() -> void:
 	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.EARTH], 5)
 	assert_int(t.base_damage(u)).is_equal(13)   # 5 + 3 + 3 + 2
 
-# --- channeling gate: temper + trained leeway + strain (#60, transmutation-model-proposal.md) ---
+# --- channeling gate: anchor + wildcards (dev 2026-08-10, replacing the 2026-07-04 temper/
+# trained-leeway/strain model — repeal record in transmutation-model-proposal.md). One case per
+# row of the plan's worked-examples table. NB the dev's own two illustration carvings were
+# 4-sigil arithmetic sketches, which the circle caps make un-authorable; the pins below use
+# the legal 3-sigil fixtures that isolate the same two rules (spare accounting, no stacking). ---
 
-func test_rebecca_rule_empty_affinity_blocks_everything() -> void:
+func test_rebecca_no_aura_anywhere_channels_nothing() -> void:
 	var u: Unit = _alchemist({})   # no aura, no affinity
 	assert_bool(_carving([Elemental.Element.FIRE]).can_channel(u, Elemental.Element.FIRE)).is_false()
 
-func test_rebecca_rule_blocks_even_with_stray_aura() -> void:
-	# Data-integrity edge case: aura present but affinity explicitly cleared -- the gate must
-	# not be routable around just by having numbers sitting in the aura dict.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 5 })
-	u.unit_instance.affinity = []
-	assert_bool(_carving([Elemental.Element.FIRE]).can_channel(u, Elemental.Element.FIRE)).is_false()
+# (The old stray-aura-outside-affinity case left with the ladder's has_any_affinity branch: the
+# anchor reads AURA, and "aura never exists outside affinity" is the SEEDING seam's invariant —
+# UnitInstance.initialize() drops out-of-affinity aura loudly, the dev editor erases it on an
+# affinity untoggle. One question, one owner.)
 
-func test_temper_element_can_never_be_brute_forced() -> void:
-	# 3-Fire (Athanor-tier) demands TRUE fire-3 -- no amount of leeway substitutes for depth.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 2 })
-	var athanor: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.FIRE])
-	assert_bool(athanor.can_channel(u, Elemental.Element.FIRE)).is_false()
+func test_the_anchor_needs_aura_in_one_of_the_carvings_own_elements() -> void:
+	# Water-5 is real training, but this carving touches none of it — wildcards never anchor.
+	var u: Unit = _alchemist({ Elemental.Element.WATER: 5 })
+	var pair: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.AIR])
+	assert_bool(pair.can_channel(u, Elemental.Element.FIRE)).is_false()
 
-func test_earned_temper_channels_free() -> void:
+func test_a_maim_taxed_pool_at_zero_loses_the_anchor() -> void:
+	# Affinity (the birthright) persists at aura 0; the anchor reads the POINT, so it's gone.
+	var u: Unit = _alchemist({ Elemental.Element.AIR: 0 })
+	assert_bool(_carving([Elemental.Element.AIR]).can_channel(u, Elemental.Element.AIR)).is_false()
+
+func test_the_motivating_case_one_shared_element_plus_the_free_wildcard() -> void:
+	# Aldin: aether-1 only, [1 Air, 1 Aether] — anchor on aether, deficit 1 <= pool A's
+	# universal +1, on ANY rune (here air-tempered, where his aether gives pool B nothing).
+	var u: Unit = _alchemist({ Elemental.Element.AETHER: 1 })
+	var wind: TransmutationData = _carving([Elemental.Element.AIR, Elemental.Element.AETHER])
+	assert_bool(wind.can_channel(u, Elemental.Element.AIR)).is_true()
+	assert_int(wind.total_deficit(u)).is_equal(1)
+
+func test_a_fully_covered_carving_spends_no_wildcards() -> void:
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
-	assert_bool(_carving([Elemental.Element.FIRE]).can_channel(u, Elemental.Element.FIRE)).is_true()
-	assert_int(_carving([Elemental.Element.FIRE]).strain_cost(u, Elemental.Element.FIRE)).is_equal(0)
-
-func test_repeated_temper_sigils_never_count_as_forced() -> void:
-	# 2 Fire is temper DEPTH, not breadth -- forced_points only counts OTHER elements.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 2 })
-	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE])
+	var t: TransmutationData = _carving([Elemental.Element.FIRE])
 	assert_bool(t.can_channel(u, Elemental.Element.FIRE)).is_true()
-	assert_int(t.strain_cost(u, Elemental.Element.FIRE)).is_equal(0)
+	assert_int(t.total_deficit(u)).is_equal(0)
 
-func test_trained_temper_buys_leeway_on_a_partner_element() -> void:
-	# 1 fire aura -> leeway budget 1 -> 1F+1W forces exactly 1 point, priced in strain.
+func test_the_free_wildcard_covers_one_point_of_depth_too() -> void:
+	# "3-Fire demands true fire-3" is repealed: fire-1 channels 2-Fire via pool A. Depth and
+	# breadth are one currency now — but only one point of it on an unmatched rune.
 	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
-	var pair: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.WATER])
-	assert_bool(pair.can_channel(u, Elemental.Element.FIRE)).is_true()
-	assert_int(pair.strain_cost(u, Elemental.Element.FIRE)).is_equal(1)
+	assert_bool(_carving([Elemental.Element.FIRE, Elemental.Element.FIRE]).can_channel(u, Elemental.Element.FIRE)).is_true()
+	var athanor: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.FIRE])
+	assert_bool(athanor.can_channel(u, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
-func test_leeway_budget_is_exhausted_by_a_wider_array() -> void:
-	# fire-1 budget = 1 forced point; 1F+1W+1A forces 2 -> over budget, can't channel at all.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
-	var triple: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.WATER, Elemental.Element.AIR])
+func test_spare_temper_aura_is_the_second_pool() -> void:
+	# Dev's example: Air-3, [1A 1F 1W] — on the air rune spare 3-1 = 2 covers the deficit 2;
+	# on a fire rune (their fire is 0) only the universal +1 remains, and it refuses.
+	var u: Unit = _alchemist({ Elemental.Element.AIR: 3 })
+	var triple: TransmutationData = _carving([Elemental.Element.AIR, Elemental.Element.FIRE, Elemental.Element.WATER])
+	assert_bool(triple.can_channel(u, Elemental.Element.AIR)).is_true()
 	assert_bool(triple.can_channel(u, Elemental.Element.FIRE)).is_false()
 
-func test_deeper_temper_training_buys_more_leeway() -> void:
-	# fire-3 -> budget 3 -> the same triple a fire-1 alchemist can't reach is affordable.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 3 })
-	var triple: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.WATER, Elemental.Element.AIR])
-	assert_bool(triple.can_channel(u, Elemental.Element.FIRE)).is_true()
-	assert_int(triple.forced_points(u, Elemental.Element.FIRE)).is_equal(2)
-	assert_int(triple.strain_cost(u, Elemental.Element.FIRE)).is_equal(3)   # STRAIN_BY_FORCED[2]
+func test_the_pools_never_stack_and_the_pool_is_the_SPARE() -> void:
+	# Air-2, same triple, air rune: deficit 2, spare = 2-1 = 1, capacity = max(1, 1) = 1 ->
+	# refused. This one fixture kills BOTH wrong models: stacked pools (1 + spare = 2) would
+	# channel it, and a full-aura pool (max(1, 2) = 2) would channel it. Falsified against each.
+	var u: Unit = _alchemist({ Elemental.Element.AIR: 2 })
+	var triple: TransmutationData = _carving([Elemental.Element.AIR, Elemental.Element.FIRE, Elemental.Element.WATER])
+	assert_bool(triple.can_channel(u, Elemental.Element.AIR)).is_false()
+	assert_int(triple.total_deficit(u)).is_equal(2)
+	assert_int(triple.wildcard_capacity(u, Elemental.Element.AIR)).is_equal(1)
 
-func test_repeated_off_temper_sigils_weight_the_forced_count() -> void:
-	# 2 Water forces 2 points against a fire-1 leeway budget -- over budget.
-	var u: Unit = _alchemist({ Elemental.Element.FIRE: 1 })
-	var t: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.WATER, Elemental.Element.WATER])
-	assert_bool(t.can_channel(u, Elemental.Element.FIRE)).is_false()
-	assert_int(t.forced_points(u, Elemental.Element.FIRE)).is_equal(2)
-
-func test_isaac_alkahest_breadth_one_everywhere_transcends_nothing() -> void:
-	# Universal breadth, trained depth (alchemy-kit.md Special cases): aura-1 in every element
-	# channels any weight-1-temper carving strain-free, but never brute-forces past its own 1.
+func test_isaac_alkahest_breadth_now_carries_one_point_of_depth() -> void:
+	# Universal breadth, trained depth — amended 2026-08-10: pool A hands Isaac +1 depth in
+	# every element (2-Fire channels at fire-1), but only the one point (Athanor still refused).
 	var isaac: Unit = _alchemist({
 		Elemental.Element.FIRE: 1, Elemental.Element.WATER: 1, Elemental.Element.EARTH: 1,
 		Elemental.Element.AIR: 1, Elemental.Element.AETHER: 1,
 	})
-	assert_bool(_carving([Elemental.Element.FIRE]).can_channel(isaac, Elemental.Element.FIRE)).is_true()
+	assert_bool(_carving([Elemental.Element.FIRE, Elemental.Element.FIRE]).can_channel(isaac, Elemental.Element.FIRE)).is_true()
 	var athanor: TransmutationData = _carving([Elemental.Element.FIRE, Elemental.Element.FIRE, Elemental.Element.FIRE])
-	assert_bool(athanor.can_channel(isaac, Elemental.Element.FIRE)).is_false()   # depth is still trained
+	assert_bool(athanor.can_channel(isaac, Elemental.Element.FIRE)).is_false()   # deficit 2 > capacity 1
 
 # --- rune capacity ---
 

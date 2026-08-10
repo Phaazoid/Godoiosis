@@ -193,7 +193,7 @@ func _populate_sigils(carving: TransmutationData):
 		var element: Elemental.Element = e
 		var on_weight := func(v):
 			_set_sigil_weight(carving, element, int(v))
-		DevWidgets.add_spinbox(editor_container, Elemental.Element.keys()[element].capitalize(), carving.sigils.count(element), on_weight)
+		DevWidgets.add_spinbox(editor_container, Elemental.display_name(element), carving.sigils.count(element), on_weight)
 	DevWidgets.add_label(editor_container, "Cost %d | Tier %d | Flourish slots %d" % [carving.cost(), carving.tier(), carving.flourish_slots()])
 	DevWidgets.add_label(editor_container, "Resolves to: %s" % _tags_label(carving))
 
@@ -251,5 +251,5 @@ func _tags_label(carving: TransmutationData) -> String:
 		return "(nothing — add a sigil)"
 	var names := []
 	for e in carving.get_elements():
-		names.append(Elemental.Element.keys()[e].capitalize())
+		names.append(Elemental.display_name(e))
 	return ", ".join(names)

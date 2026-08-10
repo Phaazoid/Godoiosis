@@ -717,12 +717,17 @@ func get_transmutation_choices() -> Array[AttackData]:
 		return []
 	return equipped_weapon.choice_attacks(self)
 
-# Any channelable carving at all opens the category — deliberately NOT "2 or more". With one
-# carving this duplicates what Attack fires, and that's accepted: the submenu is a READOUT as
-# much as a picker (hover descriptions, unqualified carvings shown blotted out — see
-# visual-clarity.md), so it earns its row even at one entry. Dev call 2026-07-29.
+# Does the category have anything ACTIONABLE right now? Exactly has_weapon_actions()'s rule and
+# exactly its loop: a carving you can't pay for still LISTS (greyed) inside the submenu, but it
+# must not light up the row on its own (#166 — get_transmutation_choices became the full
+# catalogue). Any ONE channelable carving is enough — deliberately NOT "2 or more": with one
+# carving this duplicates what Attack fires, and that's accepted, because the submenu is a READOUT
+# as much as a picker. Dev call 2026-07-29.
 func has_transmutations() -> bool:
-	return not get_transmutation_choices().is_empty()
+	for atk in get_transmutation_choices():
+		if is_attack_fireable(atk):
+			return true
+	return false
 
 # What a COUNTER fires — deliberately separate from get_fired_attack(), because the two kinds
 # diverge on whether the live pick counts: a rune counters with whatever it would currently fire
@@ -741,13 +746,27 @@ func attack_source_can_counter() -> bool:
 	var atk := get_counter_attack()
 	return atk != null and atk.can_counter and is_attack_fireable(atk)
 
-# Readiness seam (#73) — delegates entirely to the equipped WeaponInstance; Unit carries no
-# readiness state of its own (two weapons in inventory must track independently).
+# Why this unit can't fire this attack right now, in the equipped source's own words — "" when it
+# can. Asked of the EQUIPPABLE, which owns its economy: a weapon answers readiness, a rune answers
+# aura (#166). An empty slot and a null attack both answer "" — see is_attack_fireable below.
+func attack_block_reason(attack: AttackData) -> String:
+	if attack == null or equipped_weapon == null:
+		return ""
+	return equipped_weapon.attack_block_reason(self, attack)
+
+# What this attack does for this unit, for hover readouts. Same delegation, different question.
+func attack_detail(attack: AttackData) -> String:
+	if attack == null or equipped_weapon == null:
+		return ""
+	return equipped_weapon.attack_detail(self, attack)
+
+# Readiness seam (#73), widened to aura by #166 — and DERIVED from the reason above rather than
+# re-asking, so a greyed menu row and a refused order can never disagree about what is fireable.
+# Note it now answers false for an unchannelable carving, which it could not before: the rune's
+# list was pre-filtered, so the question never reached here. That makes the queue-time gate
+# (AttackAction.actor_can_perform) refuse one too, which is the correct reading of strict queueing.
 func is_attack_fireable(attack: AttackData) -> bool:
-	if not (attack is WeaponAttackData):
-		return true
-	var weapon := get_equipped_weapon() as WeaponInstance
-	return weapon == null or weapon.is_attack_fireable(attack as WeaponAttackData)
+	return attack_block_reason(attack).is_empty()
 
 func has_any_fireable_attack() -> bool:
 	for a in get_selectable_attacks():

@@ -27,6 +27,16 @@ extends Resource
 @export var deals_no_damage := false
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
-	
+
 func hits_units() -> bool:
 	return targets == EquippableData.TargetMode.UNIT or targets == EquippableData.TargetMode.BOTH
+
+# How a readout PHRASES this attack's payload. The number stays per-kind (a carving scales off
+# aura, a weapon attack off its weapon — #72 keeps damage math off this base), but the three-state
+# question damages/heals/neither is answered HERE, so the two kinds can never word it differently.
+func payload_text(amount: int) -> String:
+	if deals_no_damage:
+		return "No damage"
+	if heals:
+		return "Heals %d" % amount
+	return "Damage %d" % amount

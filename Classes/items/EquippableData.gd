@@ -58,6 +58,22 @@ func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
 func choice_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
 
+# --- Explaining an attack (#166) ---
+# Why a menu row is greyed, and what the row does — both asked of the SOURCE, because only it knows
+# its own economy (a weapon's readiness, a rune's aura). Keeping them here is what lets the menu
+# LIST everything a unit owns and disable what it can't use, instead of hiding it: a menu can only
+# grey what it can explain. Inert defaults, so a kind with no economy needs no override.
+
+# "" = fireable. Unit.is_attack_fireable is DERIVED from this, so the refusal and its explanation
+# are one answer — never a boolean here and a reason string somewhere else (Law #4).
+func attack_block_reason(_wielder: Unit, _attack: AttackData) -> String:
+	return ""
+
+# What this attack does for this wielder, for the hover readout. Per-kind because the payload
+# number is (a carving scales off aura, a weapon attack off its weapon — #72).
+func attack_detail(_wielder: Unit, _attack: AttackData) -> String:
+	return ""
+
 # --- Weapon-verb surface (#73/#84, promoted here from WeaponInstance 2026-07-27) ---
 # The self-abilities the Weapon Action menu can offer. Same shape and same reasoning as the
 # attack surface above: every default is the INERT answer, so Unit asks whatever is in the slot

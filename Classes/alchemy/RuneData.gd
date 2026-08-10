@@ -7,10 +7,13 @@ extends EquippableData
 #
 # Size = TWO knobs (transmutation-model-proposal.md, grilled 2026-07-04): CIRCLE_CAP bounds the
 # raw sigil count of any ONE inscribed carving; CAPACITY bounds the summed sigil count across
-# ALL carvings. Channeling a held carving needs the wielder's AURA: floors = sigil weight, the temper
-# element is never brute-forced, and trained temper aura is the leeway budget for the rest,
-# priced in strain (TransmutationData.can_channel). RUNE_LEEWAY is dead (2026-07-04 grill):
-# leeway is TRAINED, not stone-granted.
+# ALL carvings. Channeling a held carving = anchor + wildcards (dev, 2026-08-10 — see
+# TransmutationData.channel_block_reason): real aura in one of the CARVING's elements, and the
+# total deficit covered by the rune's universal +1 wildcard OR the wielder's spare temper aura,
+# never both. The temper's only channel-side role is keying that second pool — its GATE role is
+# inscription-time only (_fits_temper), which was the original intent the 2026-07-04 model drifted
+# from. (That model's trained-leeway/strain rules are repealed; record in
+# transmutation-model-proposal.md -> Temper & channeling.)
 #
 # Equippable (inherits the EquippableData slot surface). FIRING a chosen inscription through
 # the resolver is the next slice; the inherited single-attack fields stay dormant until then.
@@ -100,6 +103,9 @@ func is_legal() -> bool:
 # A rune fires whichever inscribed carving it can currently channel; an aura-dry rune offers
 # nothing, which is the honest bare-fist fallback.
 
+# FILTERED on purpose, and deliberately no longer the same list as choice_attacks (#166): this is
+# "what could actually fire", the list the AI probes and has_any_fireable_attack scans. The
+# catalogue the menu draws is choice_attacks. Don't collapse them back together.
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	for t in channelable(wielder):
@@ -112,11 +118,16 @@ func default_attack(wielder: Unit) -> AttackData:
 		return null
 	return fireable[0]
 
-# Every carving the wielder can currently channel — aura-filtered, so an unaffordable one is
-# absent rather than listed-and-disabled. That differs from a weapon's unfireable secondary on
-# purpose (see #88 follow-up); it falls out of channelable() already being the gate.
-func choice_attacks(wielder: Unit) -> Array[AttackData]:
-	return selectable_attacks(wielder)
+# EVERY carving inscribed on this rune — the catalogue, not the affordable subset (#166,
+# reversing #88's aura-filtered version). An unchannelable carving is LISTED and greyed with a
+# reason, the same law _attack_entry has always applied to a weapon's unfireable secondary, which
+# is why WeaponInstance.secondary_attacks likewise returns all of them. Whether a carving can be
+# paid for is asked per entry, by attack_block_reason.
+func choice_attacks(_wielder: Unit) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	for t in inscriptions:
+		result.append(t)
+	return result
 
 # A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
 # A weapon deliberately does NOT; see WeaponInstance.counter_attack.
@@ -129,6 +140,18 @@ func channelable(wielder: Unit) -> Array[TransmutationData]:
 		if t.can_channel(wielder, temper):
 			result.append(t)
 	return result
+
+# --- Explaining a carving (#166, EquippableData surface) ---
+# Both delegate to the carving with this rune's TEMPER, which the carving cannot know on its own —
+# channeling is a property of the pairing, not of either half.
+
+func attack_block_reason(wielder: Unit, attack: AttackData) -> String:
+	var carving := attack as TransmutationData
+	return carving.channel_block_reason(wielder, temper) if carving != null else ""
+
+func attack_detail(wielder: Unit, attack: AttackData) -> String:
+	var carving := attack as TransmutationData
+	return carving.mechanical_text(wielder, temper) if carving != null else ""
 
 # The equip gate (#157): at least ONE channelable carving, never "all" — a one-of-three rune is
 # good gear. No affinity exemption (dev call 2026-08-10): a dead rune is carryable, not wieldable,

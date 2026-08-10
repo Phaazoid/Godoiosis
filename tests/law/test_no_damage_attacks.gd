@@ -2,10 +2,11 @@
 # effect stays damageless no matter how good its wielder is at it.
 #
 # The flag exists because a wind transmutation cannot otherwise reach 0 damage. A carving's damage is
-# `power + aura summed over its sigils`, and `can_channel` REQUIRES aura in the temper element — so
-# the alchemist who can actually fire an AIR carving is exactly the one whose aura would sneak damage
-# into it. Same hazard one layer over: a `power = 0` weapon attack still collects the family's stat
-# blend.
+# `power + aura summed over its sigils`, and channeling anchors on real aura in one of the carving's
+# elements (the 2026-08-10 wildcard model; it REQUIRED temper aura before that) — so the alchemists
+# who fire an AIR carving mostly ARE the ones whose aura would sneak damage into it, and even a
+# wildcard-anchored outsider scales off whatever relevant aura they do hold. Same hazard one layer
+# over: a `power = 0` weapon attack still collects the family's stat blend.
 #
 # What the flag does NOT do (dev, 2026-08-08): suppress an elemental reaction's damage_bonus. That
 # bonus is not part of the original transmutation — it is what the WORLD did with the element the
