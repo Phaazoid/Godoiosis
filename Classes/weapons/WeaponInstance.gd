@@ -16,6 +16,10 @@ extends EquippableData
 @export var space_2: Array[WeaponModData] = []
 @export var space_3: Array[WeaponModData] = []
 
+# Fallback wording for a readiness refusal, used only when the family has no status_text of its
+# own. Lives here rather than in the menu (#166): the menu renders reasons, it doesn't know them.
+const NOT_READY_TEXT := "Not ready — reload the weapon first"
+
 static func make(p_template: WeaponData) -> WeaponInstance:
 	var w := _instance_for(p_template.weapon_type)
 	if w == null:
@@ -171,6 +175,24 @@ func available_attacks(_wielder: Unit) -> Array[WeaponAttackData]:
 	if template == null:
 		return []
 	return template.attacks()
+
+# --- Explaining an attack (#166, EquippableData surface) ---
+
+# The family already says this in its own words, so REUSE status_text rather than authoring a
+# second set of strings: "Spent — needs Spring Load", "Ammo 0/2 — needs Reload". The constant is
+# only the fallback for a family with a readiness rule but nothing to say about it.
+func attack_block_reason(_wielder: Unit, attack: AttackData) -> String:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null or is_attack_fireable(weapon_attack):
+		return ""
+	var status := status_text()
+	return status if status != "" else NOT_READY_TEXT
+
+func attack_detail(wielder: Unit, attack: AttackData) -> String:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return ""
+	return weapon_attack.payload_text(base_damage(wielder, weapon_attack))
 
 # ALL fitted modules count, active or not -- mass is physical, not capability-gated. The
 # instance's own weight rides on top of the family's, so a one-off heavier copy is authorable.

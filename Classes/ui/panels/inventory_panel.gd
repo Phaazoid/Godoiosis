@@ -259,7 +259,7 @@ func _refresh():
 				var slot_main: WeaponAttackData = item.default_attack(unit) as WeaponAttackData
 				var elems: Array[Elemental.Element] = item.get_elements(unit, slot_main)
 				if not elems.is_empty():
-					display_name += "  [%s]" % Elemental.Element.keys()[elems[0]].capitalize()
+					display_name += "  [%s]" % Elemental.display_name(elems[0])
 
 			name_label.text = display_name
 			slot.tooltip_text = UiText.wrap(_tooltip_for(item))

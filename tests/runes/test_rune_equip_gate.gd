@@ -77,13 +77,15 @@ func test_exactly_enough_aura_equips() -> void:
 	assert_bool(u.equip_weapon_from_inventory(0)).is_true()
 	assert_object(u.get_equipped_weapon()).is_same(rune)
 
-# The partial case the gate's threshold exists for: one channelable carving of three is good gear.
-func test_one_channelable_carving_of_three_equips() -> void:
+# The partial case the gate's threshold exists for: one channelable carving of two is good gear.
+# (Was one-of-three until the 2026-08-10 wildcard model made the [FIRE, FIRE] middle carving
+# channelable at fire-1; a second dead carving no longer fits a LARGE rune's capacity beside
+# these two, so the pair carries the premise.)
+func test_one_channelable_carving_of_two_equips() -> void:
 	var u: Unit = _alchemist({ FIRE: 1 }, [FIRE])
 	var carvings: Array[TransmutationData] = [
-		_carving([FIRE]),                  # needs FIRE 1 — channelable
-		_carving([FIRE, FIRE]),            # needs FIRE 2 — not
-		_carving([FIRE, FIRE, FIRE]),      # needs FIRE 3 — not
+		_carving([FIRE]),                  # deficit 0 — channelable
+		_carving([FIRE, FIRE, FIRE]),      # deficit 2 past the wildcard — not
 	]
 	var rune: RuneData = _rune(carvings)
 	assert_int(rune.channelable(u).size()).override_failure_message("premise: exactly one carving channelable").is_equal(1)

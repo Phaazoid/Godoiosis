@@ -74,9 +74,10 @@ func test_a_weapon_offers_no_transmutations() -> void:
 
 # --- a rune fills it ---
 
-func test_a_rune_offers_every_channelable_carving() -> void:
+func test_a_rune_offers_every_carving() -> void:
 	# ALL of them, not "all but the default": a rune has no authored main, so its carvings are
 	# interchangeable equals and hiding whichever one happens to sort first would be arbitrary.
+	# Since #166 "all" means the whole catalogue, channelable or not — see the aura-dry case below.
 	var alch := _alchemist({ Elemental.Element.FIRE: 4 })
 	_wielding(alch, _rune_with([_carving(Elemental.Element.FIRE), _carving(Elemental.Element.FIRE, 6)]))
 	assert_int(alch.get_transmutation_choices().size()).is_equal(2)
@@ -94,14 +95,14 @@ func test_the_category_opens_for_a_SINGLE_carving() -> void:
 	assert_bool(alch.has_transmutations()).is_true()
 
 
-func test_an_aura_dry_wielder_gets_no_category() -> void:
-	# choice_attacks routes through the aura-filtered channelable(), so a carving you cannot pay
-	# for is ABSENT rather than listed-and-disabled. That differs from a weapon's unfireable
-	# secondary, and closing the gap is the open visual-clarity item — recorded here so a future
-	# change to blotted-out entries updates this expectation on purpose, not by accident.
+func test_an_aura_dry_wielder_gets_no_category_but_still_sees_the_carvings() -> void:
+	# UPDATED BY #166, which is the change the previous version of this case asked to be told about:
+	# choice_attacks is now the CATALOGUE, so the carving is LISTED (the menu greys it with a
+	# reason) — but the category itself still needs something ACTIONABLE to open, exactly as
+	# has_weapon_actions() requires. Row closed, contents intact.
 	var broke: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {}, false)
 	_wielding(broke, _rune_with([_carving(Elemental.Element.FIRE)]))
-	assert_array(broke.get_transmutation_choices()).is_empty()
+	assert_int(broke.get_transmutation_choices().size()).is_equal(1)
 	assert_bool(broke.has_transmutations()).is_false()
 
 

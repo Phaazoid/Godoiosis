@@ -46,37 +46,81 @@ func base_damage(wielder: Unit) -> int:
 		scaling += wielder.get_element_aura(e)
 	return power + scaling
 
-# --- Channeling: temper + trained leeway (transmutation-model-proposal.md, grilled 2026-07-04) ---
-# Floors = WEIGHT: channeling needs real aura >= each element's sigil weight. The rune's
-# temper element is EARNED, never brute-forced. Real aura in the temper element is the leeway
-# budget for every OTHER element's deficit — breadth and depth alike, point for point — and
-# every forced point costs strain: recoil HP, a COST not damage (will-and-death.md).
+# --- Channeling: anchor + wildcards (dev, 2026-08-10 — REPLACES the 2026-07-04 temper/leeway
+# model; repeal record in transmutation-model-proposal.md -> Temper & channeling) ---
+# The temper no longer gates channeling AT ALL — it clamps what can be INSCRIBED (RuneData) and
+# keys pool B below, nothing else. Lore: runestone is alkahest fallout, tunable to any element.
+# Two rules:
+#   ANCHOR    — real aura >= 1 in at least one of THIS CARVING's elements. Wildcards never
+#               substitute. (Subsumes the Rebecca rule per-carving; a maim-taxed pool at 0
+#               loses the anchor.)
+#   COVERAGE  — total deficit <= wildcard capacity. Two pools that NEVER stack, so capacity is
+#               whichever is better: every rune grants +1 (pool A); a rune tempered in an
+#               element you hold grants your SPARE temper aura instead (pool B) — spare, not
+#               all, so a carving's own temper sigils are measured against capacity first.
+# No strain, no HP price, nothing spent — aura is a stat measured against, never a resource
+# (fork 3). The old strain math (recoil HP per forced point) left the system entirely; it is
+# preserved in the "strain as a job ability" issue if it ever returns as a job passive.
 
-const STRAIN_BY_FORCED: Array[int] = [0, 1, 3, 6]   # playtest-tunable; superlinear. Index = forced
-													 # points; a legal carving can't force more than 3.
-
-# Brute-forced points: summed aura deficit across NON-temper elements. A temper deficit is
-# not forceable — that's can_channel's hard floor, never a strain purchase.
-func forced_points(wielder: Unit, temper: Elemental.Element) -> int:
-	var forced := 0
+# Summed aura shortfall across ALL the carving's elements — what wildcards must cover.
+func total_deficit(wielder: Unit) -> int:
+	var deficit := 0
 	for e in distinct_elements():
-		if e == temper:
-			continue
-		forced += maxi(0, sigils.count(e) - wielder.get_element_aura(e))
-	return forced
+		deficit += maxi(0, sigils.count(e) - wielder.get_element_aura(e))
+	return deficit
+
+# max(pool A, pool B): the universal +1, or spare temper aura on a matching rune — never both.
+func wildcard_capacity(wielder: Unit, temper: Elemental.Element) -> int:
+	var spare := wielder.get_element_aura(temper) - sigils.count(temper)
+	return maxi(1, spare)
+
+# THE channeling ladder, and the only one (#166). It answers WHY rather than just whether, so the
+# menu can grey a carving and say what it needs — the boolean below is derived from it, which is
+# what stops the refusal and its explanation from ever drifting apart (Law #4; #108's lesson that a
+# seam unable to say what content needs grows a second one). "" = channelable.
+#
+# Every refusal branch builds its string only on the way out, so the success path — the one that
+# runs inside queue-time gating and the AI's candidate probe — allocates nothing.
+func channel_block_reason(wielder: Unit, temper: Elemental.Element) -> String:
+	var anchored := false
+	for e in distinct_elements():
+		if wielder.get_element_aura(e) >= 1:
+			anchored = true
+			break
+	if not anchored:
+		return "Needs aura in %s" % _element_list_text()
+	var deficit := total_deficit(wielder)
+	var capacity := wildcard_capacity(wielder, temper)
+	if deficit > capacity:
+		return "Needs %d wildcard%s (have %d)" % [deficit, "" if deficit == 1 else "s", capacity]
+	return ""
 
 func can_channel(wielder: Unit, temper: Elemental.Element) -> bool:
-	if not wielder.has_any_affinity():
-		return false   # the Rebecca rule: runes are inert rock in her hands
-	if wielder.get_element_aura(temper) < sigils.count(temper):
-		return false   # temper depth is trained, full stop
-	return forced_points(wielder, temper) <= wielder.get_element_aura(temper)
+	return channel_block_reason(wielder, temper).is_empty()
 
-# Recoil HP to channel this carving — 0 when real aura covers everything. Affordability
-# (can the caster pay without hitting 0?) is the menu/resolver's job (A7), not here.
-# Materia seam: carried materia will absorb strain when the materia pass lands.
-func strain_cost(wielder:Unit, temper: Elemental.Element) -> int:
-	return STRAIN_BY_FORCED[mini(forced_points(wielder, temper), STRAIN_BY_FORCED.size() - 1)]
+# "Fire or Earth" — the anchor refusal names what would open the carving.
+func _element_list_text() -> String:
+	var names: Array[String] = []
+	for e in distinct_elements():
+		names.append(Elemental.display_name(e))
+	return " or ".join(names)
+
+# The recipe in words ("Fire 2, Earth 1") — repeats are weight, so the count IS the number shown.
+func sigil_text() -> String:
+	var parts: Array[String] = []
+	for e in distinct_elements():
+		parts.append("%s %d" % [Elemental.display_name(e), sigils.count(e)])
+	return ", ".join(parts)
+
+# What this carving DOES for this wielder, for the menu's hover readout (#166) — the carving's
+# answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because
+# both numbers depend on them: damage scales off their aura, wildcards off their gaps.
+func mechanical_text(wielder: Unit, _temper: Elemental.Element) -> String:
+	var parts: Array[String] = [sigil_text(), payload_text(base_damage(wielder))]
+	var deficit := total_deficit(wielder)
+	if deficit > 0:
+		parts.append("Wildcards %d" % deficit)
+	return "  ·  ".join(parts)
 
 # Sigil count sets how many flourishes fit: 1 -> 1, 2 -> 3, 3 -> 5.
 func flourish_slots() -> int:

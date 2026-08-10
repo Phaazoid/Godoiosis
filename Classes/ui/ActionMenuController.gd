@@ -53,9 +53,14 @@ func populate(items: Array, action_data: Dictionary) -> void:
 		var button := Button.new()
 		button.text = action_data[item].name
 		button.focus_mode = Control.FOCUS_NONE
+		# A tooltip is independent of being disabled (#166): an ENABLED row carries the hover
+		# readout for what it does, a disabled one carries why it's greyed. Wrapped either way —
+		# Godot tooltips don't autowrap, see UiText.
+		var tooltip: String = action_data[item].get("tooltip", "")
+		if tooltip != "":
+			button.tooltip_text = UiText.wrap(tooltip)
 		if action_data[item].get("disabled", false):
 			button.disabled = true
-			button.tooltip_text = UiText.wrap(action_data[item].get("tooltip", ""))
 		else:
 			button.pressed.connect(_on_button_pressed.bind(item))
 		_button_box.add_child(button)

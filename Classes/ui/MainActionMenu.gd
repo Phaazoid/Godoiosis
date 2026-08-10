@@ -72,8 +72,6 @@ const ACTION_DATA := {
 	ENDTURN: {"name": "End Turn"},
 }
 
-const NOT_READY_TOOLTIP := "Not ready — reload the weapon first"
-
 # ==============================================================================
 #  Opening menus
 # ==============================================================================
@@ -149,14 +147,27 @@ func _open_menu(unit: Unit, items: Array, data: Dictionary, pos: Vector2i, on_se
 	controller.populate(items, data)
 	controller.setpos(pos)
 
-# One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84)
-# stays LISTED but disabled — the menu shows an unready attack, it never hides it.
-func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
-	var entry := {"name": attack.display_name}
-	if not unit.is_attack_fireable(attack):
+# ONE menu row, and the catalogue law in one place (#166): an option the unit OWNS is listed
+# whether or not it can be used right now, and a greyed row always says why. A non-empty
+# `blocked_reason` disables the row AND explains it; `detail` is the hover readout for what the row
+# does. Every menu builder here goes through this — the reasons themselves belong to the data layer
+# (EquippableData.attack_block_reason), never to this file.
+func _entry(name: String, blocked_reason: String = "", detail: String = "") -> Dictionary:
+	var entry := {"name": name}
+	var lines: Array[String] = []
+	if detail != "":
+		lines.append(detail)
+	if blocked_reason != "":
 		entry["disabled"] = true
-		entry["tooltip"] = NOT_READY_TOOLTIP
+		lines.append(blocked_reason)
+	if not lines.is_empty():
+		entry["tooltip"] = "\n".join(lines)
 	return entry
+
+# One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
+# unchannelable carving, #166) stays LISTED but disabled — the menu shows it, it never hides it.
+func _attack_entry(unit: Unit, attack: AttackData) -> Dictionary:
+	return _entry(attack.display_name, unit.attack_block_reason(attack), unit.attack_detail(attack))
 
 # ActionMenuController emits `cancelled` before `action_selected` even on a PICK, which is what
 # pins the clear-then-act order (see its header). Both effects the old game.gd wired as two

@@ -35,3 +35,9 @@ const SIGIL_ELEMENTS: Array[Element] = [
 
 static func is_sigil_element(e: Element) -> bool:
 	return SIGIL_ELEMENTS.has(e)
+
+# What the PLAYER calls this element ("Fire"). Three UI sites hand-rolled the same
+# keys()[e].capitalize() before this existed. Dev readouts that deliberately show the raw
+# enum key keep doing so — this is the player-facing spelling, not a general stringifier.
+static func display_name(e: Element) -> String:
+	return Element.keys()[e].capitalize()
