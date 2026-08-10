@@ -37,7 +37,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 >
 > **Observation, 2026-07-27 (Unit.gd review session):** three consecutive full runs measured **19.5s / 19.9s / 20.9s** at 610–612 cases, hours after the 158s reading above and on the same machine. The session had just run `godot --headless --import` (to register a new `class_name`), and the speed persisted across later runs that did *not* re-import — a data point for the `.godot`-cache suspect. **The 153–158s figures above stand**: the slow behaviour keeps recurring and the fast state has not been shown to last. Treat this as "try an import pass before you accept a 2.5-minute loop", not as a new baseline.
 
-**Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below.
+**Exit codes (from gdUnit4's `report_exit_code`):** `0` = clean pass · `100` = test failures **or** caught engine errors (e.g. a `push_error`/runtime error during a test) · `101` = passed but **orphan nodes** were detected. Treat anything non-zero as "fix it" — see orphan-node hygiene below. **And note `0` can lie too**: gdUnit4 reports it when zero tests ran, which is why the runner has a separate zero-cases guard (next block).
 
 > **The runner reports gdUnit4's verdict, not the process exit code** (changed 2026-07-29, [#93](https://github.com/Phaazoid/Godoiosis/issues/93)). Godot can die with an access violation *while tearing the engine down* — after every test has run and been counted — which made a clean pass report failure. `run_tests.ps1` now parses gdUnit4's own `Exit code: N` line and exits with that, printing a loud yellow NOTE when the process disagreed. This is strictly **more** truthful than trusting the process, in both directions:
 >
@@ -48,8 +48,24 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 > | real test failure | 100 | **100** | the failures themselves |
 > | real failure + teardown crash | `-1073741819` | **100** | the failures themselves |
 > | crash *before* gdUnit4 reports | non-zero | **non-zero** | red "never reported a verdict" |
+> | **suite fails to LOAD** (parse error in a class it uses) | 105 | **non-zero** | red "ZERO test cases executed" |
 >
-> The last row is the safety property: a run that dies mid-flight produces no verdict line, and **no verdict is treated as failure** — the fix cannot swallow a genuine crash. Verified against all four cases, including a deliberate `OS.crash()` mid-suite.
+> The last two rows are the safety properties, and they are two different doors into the same room. A run that dies mid-flight produces no verdict line, and **no verdict is treated as failure**. A run whose suites never loaded produces a verdict of `0` that is *honest but meaningless* — nothing failed because nothing ran — so **zero executed cases is also treated as failure** ([#146](https://github.com/Phaazoid/Godoiosis/issues/146), fixed 2026-08-09). Together they mean the #93 override can only ever apply when its own premise holds: that every test really did run and get counted.
+>
+> **Why cases-executed and not the segfault exit code:** a #93 teardown crash happens *after* reporting, so it always prints `Executed test cases : (N/N)` with N > 0; a load failure never gets there. That discriminator is platform-independent, which matters because CI has to make the same call in bash.
+>
+> **Falsifying these guards** — do this rather than trusting the table, it is how #146 was found in the first place:
+>
+> ```
+> # 1. break a production class some suite depends on
+> #    append this line to Classes/ui/ModalCard.gd:   func _x( -> void:
+> powershell -File tests\run_tests.ps1 res://tests/ui/test_modal_card_scaffold.gd
+> #    -> MUST exit non-zero. Before #146 it exited 0 with "No test cases found" + "Exit code: 0".
+> # 2. put it back
+> git checkout -- Classes/ui/ModalCard.gd
+> ```
+>
+> Note a parse error in a **test** file behaves differently and was always caught: the run dies before any verdict is printed, so the no-verdict guard fires. The hole was specifically *test file fine, production dependency broken*.
 >
 > **CI carries the same logic** (`.github/workflows/tests.yml`), because it invokes Godot directly rather than through this script. The full-tree run happens not to trigger the crash today, but that masking is incidental — it depends on how many suites are loaded and shifts whenever anyone adds one. Keep the two in step: if you change the verdict rule here, change it there.
 

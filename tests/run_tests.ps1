@@ -101,6 +101,28 @@ if ($null -eq $verdict) {
 	exit $procCode
 }
 
+# ...AND THE VERDICT ONLY MEANS ANYTHING IF TESTS ACTUALLY RAN (#146). A suite that fails to
+# LOAD -- a parse error in a production class it depends on -- takes zero tests with it, and
+# gdUnit4 then honestly reports "No test cases found" + "Exit code: 0", because nothing failed:
+# nothing ran. The override above would discard the real non-zero process exit and call that a
+# clean pass, which is how a broken `Unit`/`SquadManager`/`game.gd` could redden nothing at all.
+#
+# The #93 override's whole premise is "every test already ran and was counted" -- so REQUIRE
+# that rather than assume it. Cases-executed is the discriminator because a #93 teardown crash
+# happens AFTER reporting (so N > 0), while a load failure never gets there (no line, or 0).
+# Chosen over matching the segfault exit code because this has to hold in bash for CI too.
+$casesRan = $null
+foreach ($line in $transcript) {
+	if ($line -match 'Executed test cases\s*:\s*\((\d+)/(\d+)\)') { $casesRan = [int]$Matches[1] }
+}
+
+if ($null -eq $casesRan -or $casesRan -eq 0) {
+	Write-Host ("Elapsed {0:N1}s  (gdUnit4 verdict {1}; process exit {2})" -f $sw.Elapsed.TotalSeconds, $verdict, $procCode) -ForegroundColor Cyan
+	Write-Error "ZERO test cases executed -- a suite failed to load, or the target matched nothing. Treating as FAILURE (#146)."
+	if ($procCode -eq 0) { exit 1 }
+	exit $procCode
+}
+
 if ($procCode -ne $verdict) {
 	Write-Host ("Elapsed {0:N1}s  (gdUnit4 verdict {1}; process exited {2})" -f $sw.Elapsed.TotalSeconds, $verdict, $procCode) -ForegroundColor Cyan
 	Write-Host "NOTE: the engine crashed while shutting down, after all tests had run and been counted (#93)." -ForegroundColor Yellow

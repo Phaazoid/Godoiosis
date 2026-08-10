@@ -60,6 +60,20 @@ jobs:
             exit "$proc"
           fi
 
+          # ...AND THE VERDICT ONLY MEANS ANYTHING IF TESTS ACTUALLY RAN (#146). A suite that
+          # fails to LOAD runs zero tests, and gdUnit4 honestly reports "Exit code: 0" because
+          # nothing failed -- nothing ran. Without this, a parse error in a widely-depended-on
+          # production class drops every suite that touches it and CI still goes green.
+          # Mirrors the same guard in tests/run_tests.ps1 -- keep the two in step.
+          cases=$(grep -oE 'Executed test cases[[:space:]]*:[[:space:]]*\([0-9]+/[0-9]+\)' gdunit.log \
+                  | tail -1 | grep -oE '\([0-9]+' | grep -oE '[0-9]+' || true)
+
+          if [ -z "$cases" ] || [ "$cases" -eq 0 ]; then
+            echo "::error::ZERO test cases executed -- a suite failed to load, or the target matched nothing (#146)."
+            if [ "$proc" -eq 0 ]; then exit 1; fi
+            exit "$proc"
+          fi
+
           if [ "$proc" -ne "$verdict" ]; then
             echo "::warning::Engine crashed during shutdown after all tests ran and were counted (issue #93). Results are unaffected; reporting gdUnit4's verdict ($verdict), not the process exit ($proc)."
           fi
