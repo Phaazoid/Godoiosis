@@ -356,17 +356,19 @@ static func _resolve_cell_effects(action: AttackAction, board: BoardContext, ter
 # resolved deposit, or null when no reaction fires there.
 static func _resolve_cell_effect_at(cell: Vector2i, elements: Array[Elemental.Element], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> ResolvedCellEffect:
 	var kind := board.terrain_kind_at(cell)
+	var held: Array[Terrain.TileState] = []
+	if board.terrain_states != null:
+		held = board.terrain_states.states_at(cell)
 	var effect := ResolvedCellEffect.new()
 	effect.cell = cell
 	var fired := false
 	for reaction in terrain_reactions:
 		if not elements.has(reaction.incoming_element):
 			continue
-		if reaction.required_kind != Terrain.Kind.NONE and reaction.required_kind != kind:
+		# The kind/state gate is the reaction's own predicate — shared with the tile hover card's
+		# interaction list (#135), so the card can never promise a deposit this filter refuses.
+		if not reaction.applies_to_tile(kind, held):
 			continue
-		if reaction.required_tile_state != Terrain.TileState.NONE:
-			if board.terrain_states == null or not board.terrain_states.has_state(cell, reaction.required_tile_state):
-				continue
 		for s in reaction.add_tile_states:
 			if not effect.states_added.has(s):
 				effect.states_added.append(s)

@@ -116,7 +116,8 @@ func sigil_text() -> String:
 # answer to the role ArmorData.mechanical_text plays for a worn piece. Itemized per wielder because
 # both numbers depend on them: damage scales off their aura, wildcards off their gaps.
 func mechanical_text(wielder: Unit, _temper: Elemental.Element) -> String:
-	var parts: Array[String] = [sigil_text(), payload_text(base_damage(wielder))]
+	var parts: Array[String] = [sigil_text(),
+		"%s %s" % [payload_text(base_damage(wielder)), targets_text()]]
 	var deficit := total_deficit(wielder)
 	if deficit > 0:
 		parts.append("Wildcards %d" % deficit)

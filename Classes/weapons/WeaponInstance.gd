@@ -192,7 +192,8 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return ""
-	return weapon_attack.payload_text(base_damage(wielder, weapon_attack))
+	return "%s %s" % [weapon_attack.payload_text(base_damage(wielder, weapon_attack)),
+		weapon_attack.targets_text()]
 
 # ALL fitted modules count, active or not -- mass is physical, not capability-gated. The
 # instance's own weight rides on top of the family's, so a one-off heavier copy is authorable.

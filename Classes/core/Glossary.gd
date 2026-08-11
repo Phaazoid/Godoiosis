@@ -20,8 +20,8 @@ enum Term {
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
 	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF,
-	# Actions (one per MainActionMenu.ACTION_DATA row)
-	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
+	# Actions (one per MainActionMenu.ACTION_DATA row, plus ATTACK_TARGETING — the channel axis)
+	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	# Elemental
@@ -143,6 +143,25 @@ static func _terrain_reaction_line(r: TerrainReaction) -> String:
 	for state: Terrain.TileState in r.remove_tile_states:
 		effects.append("clears %s" % Terrain.tile_state_display_name(state))
 	return _assemble_line(trigger, effects, r.popup)
+
+# The interactions that can touch ONE tile — the tile hover card's list (#135 round 2). The
+# kind/state gate is TerrainReaction.applies_to_tile, the same predicate the resolver's deposit
+# filter runs, so the card can never list a reaction the resolver would refuse. Arrow form for
+# the card's narrow column; the glossary page keeps the full sentences.
+static func terrain_reactions_for(kind: Terrain.Kind, states: Array[Terrain.TileState]) -> Array[String]:
+	var lines: Array[String] = []
+	for reaction in TerrainReactionCatalog.get_all():
+		if not reaction.applies_to_tile(kind, states):
+			continue
+		var effects: Array[String] = []
+		for state: Terrain.TileState in reaction.add_tile_states:
+			effects.append("sets %s" % Terrain.tile_state_display_name(state))
+		for state: Terrain.TileState in reaction.remove_tile_states:
+			effects.append("clears %s" % Terrain.tile_state_display_name(state))
+		if effects.is_empty():
+			continue
+		lines.append("%s → %s" % [Elemental.display_name(reaction.incoming_element), ", ".join(effects)])
+	return lines
 
 static func _assemble_line(trigger: String, effects: Array[String], popup: String) -> String:
 	var line: String = trigger
@@ -266,6 +285,13 @@ static func _build_entries() -> Dictionary:
 		"short": "Fire the equipped weapon's main attack.",
 		"long": "Aims and queues the equipped weapon's main attack. Each unit gets one main action "
 			+ "per turn — attack, rescue, rally and the other mains are exclusive."}
+	e[Term.ATTACK_TARGETING] = {"category": Category.ACTIONS, "title": "Attack Targeting",
+		"short": "Every attack strikes units, tiles, or both — its readout says which in parentheses.",
+		"long": "Every attack's hover readout ends with its targeting channel. (unit): hits whoever "
+			+ "stands in the affected cells — the ground is untouched. (tile): changes the ground "
+			+ "itself (setting it burning, freezing water) and never touches units directly. "
+			+ "(unit/tile): does both at once. Tile-targeting is how attacks and the terrain "
+			+ "interact — see the Terrain and Elemental pages."}
 	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon Action",
 		"short": "The equipped weapon's other attacks and its self-verbs: reload, rev, burrow.",
 		"long": "Everything the equipped weapon can do beyond its main attack: alternative attacks, "

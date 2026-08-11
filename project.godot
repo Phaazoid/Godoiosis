@@ -24,6 +24,10 @@ window/subwindows/embed_subwindows=false
 
 enabled=PackedStringArray("res://addons/AsepriteWizard/plugin.cfg", "res://addons/gdUnit4/plugin.cfg")
 
+[gui]
+
+timers/tooltip_delay_sec=1.0
+
 [input]
 
 toggle_dev_overlay={

@@ -1,16 +1,18 @@
-# The tile hover readout (#135), on the real scene: hovering a cell that is anything other
-# than ordinary ground shows a readout block; ordinary ground shows nothing; a unit standing
-# on a notable tile shows BOTH halves of the stack. Driven through the real hover path
-# (HoverPresenter.update_hover_visuals), because the composition, the panel and the parking
-# only meet there — same lesson as every suite in this folder.
+# The tile hover card (#135, rebuilt round 2), on the real scene: EVERY real tile shows a card
+# (icon + kind header), states join as content with their live clocks, a unit standing there
+# stacks both halves, and the interactions list is filtered through the resolver's own predicate
+# (TerrainReaction.applies_to_tile) so the card never promises a deposit the resolver refuses.
+# Driven through the real hover path (HoverPresenter.update_hover_visuals), because composition,
+# panel and parking only meet there.
 #
-# Fixture is test_menu_catalogue_rows.gd's: the real game scene, a row of grass.
+# Fixture is test_menu_catalogue_rows.gd's: the real game scene, a row of grass + one water cell.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
+const WATER_ATLAS := Vector2i(5, 6)
 
 var _main: Node
 var game: Node2D
@@ -26,6 +28,7 @@ func before_test() -> void:
 	game.game_state = game.GameState.IDLE
 	for x in range(8):
 		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
+	game.grid.set_cell(Vector2i(0, 1), GRASS_SOURCE, WATER_ATLAS)
 	await await_idle_frame()
 
 
@@ -50,29 +53,37 @@ func _tile_block_text() -> String:
 	return "\n".join(parts)
 
 
-func test_a_burning_tile_explains_itself_on_hover() -> void:
+func _tile_header_text() -> String:
+	return game.hover_info_panel._tile_header.text
+
+
+func test_every_tile_shows_a_card_with_its_kind() -> void:
+	# Round 2 flip: plain grass now shows the card — the trigger is "a real tile", not "a
+	# notable one" (dev: "it should trigger on every tile").
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
+	await await_idle_frame()
+
+	assert_bool(game.hover_info_panel.visible) \
+		.override_failure_message("plain grass shows no tile card — the every-tile trigger is gone").is_true()
+	assert_bool(game.hover_info_panel._tile_panel.visible).is_true()
+	assert_str(_tile_header_text()).is_equal(Terrain.kind_display_name(Terrain.Kind.GRASS))
+	assert_object(game.hover_info_panel._tile_icon.texture) \
+		.override_failure_message("the tile card has no kind picture").is_not_null()
+	# And the unit half stays down — nobody is standing there.
+	assert_bool(game.hover_info_panel.hover_panel.visible).is_false()
+
+
+func test_a_burning_tile_works_the_state_into_the_card() -> void:
 	var cell := Vector2i(3, 0)
 	_set_tile_state(cell, Terrain.TileState.BURNING)
 	game.hover_presenter.update_hover_visuals(cell)
 	await await_idle_frame()
 
-	assert_bool(game.hover_info_panel.visible) \
-		.override_failure_message("hovering a burning tile showed no card at all").is_true()
-	assert_bool(game.hover_info_panel._tile_panel.visible) \
-		.override_failure_message("the card is up but the tile block is not").is_true()
+	assert_bool(game.hover_info_panel._tile_panel.visible).is_true()
+	assert_str(_tile_header_text()).is_equal(Terrain.kind_display_name(Terrain.Kind.GRASS))
 	assert_str(_tile_block_text()) \
-		.override_failure_message("the tile block never names Burning: '%s'" % _tile_block_text()) \
+		.override_failure_message("the card never names Burning: '%s'" % _tile_block_text()) \
 		.contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
-	# The unit half must NOT be up — nobody is standing there.
-	assert_bool(game.hover_info_panel.hover_panel.visible).is_false()
-
-
-func test_ordinary_ground_shows_nothing() -> void:
-	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
-	await await_idle_frame()
-	assert_bool(game.hover_info_panel.visible) \
-		.override_failure_message("plain grass grew a hover card — 'anything other than normal' is the spec") \
-		.is_false()
 
 
 func test_a_unit_on_a_burning_tile_shows_both_halves() -> void:
@@ -86,9 +97,9 @@ func test_a_unit_on_a_burning_tile_shows_both_halves() -> void:
 
 	assert_bool(game.hover_info_panel.visible).is_true()
 	assert_bool(game.hover_info_panel.hover_panel.visible) \
-		.override_failure_message("the unit half vanished when the tile block joined it").is_true()
+		.override_failure_message("the unit half vanished when the tile card joined it").is_true()
 	assert_bool(game.hover_info_panel._tile_panel.visible) \
-		.override_failure_message("the tile block vanished under a standing unit").is_true()
+		.override_failure_message("the tile card vanished under a standing unit").is_true()
 	assert_str(_tile_block_text()).contains(Terrain.tile_state_display_name(Terrain.TileState.BURNING))
 
 
@@ -104,3 +115,30 @@ func test_a_permanent_blaze_shows_no_countdown() -> void:
 	assert_str(_tile_block_text()) \
 		.override_failure_message("a permanent Blaze rendered a turns-left clock: '%s'" % _tile_block_text()) \
 		.not_contains("left.")
+
+
+func test_the_interactions_list_matches_the_catalog() -> void:
+	# Expectation derived FROM the authored catalog, never pinned prose: every reaction whose
+	# own applies_to_tile passes for a bare water tile must be named on water's card (ice ->
+	# frozen is the authored one today), and none of the refused ones may leak on.
+	var cell := Vector2i(0, 1)
+	assert_int(game._board().terrain_kind_at(cell)) \
+		.override_failure_message("fixture assumption broke: the painted cell is not WATER") \
+		.is_equal(Terrain.Kind.WATER)
+
+	var expected: Array[TerrainReaction] = []
+	for reaction: TerrainReaction in TerrainReactionCatalog.get_all():
+		if reaction.applies_to_tile(Terrain.Kind.WATER, [] as Array[Terrain.TileState]):
+			expected.append(reaction)
+	assert_int(expected.size()) \
+		.override_failure_message("no authored reaction touches bare water — this case is vacuous; point it at a kind the catalog covers") \
+		.is_greater(0)
+
+	game.hover_presenter.update_hover_visuals(cell)
+	await await_idle_frame()
+	var text := _tile_block_text()
+	for reaction: TerrainReaction in expected:
+		assert_str(text) \
+			.override_failure_message("water's card never names %s — the interactions list is not rendering: '%s'"
+				% [Elemental.display_name(reaction.incoming_element), text]) \
+			.contains(Elemental.display_name(reaction.incoming_element))

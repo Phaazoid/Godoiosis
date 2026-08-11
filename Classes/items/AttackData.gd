@@ -40,3 +40,11 @@ func payload_text(amount: int) -> String:
 	if heals:
 		return "Heals %d" % amount
 	return "Damage %d" % amount
+
+# The targeting channel's readout token (#135 round 2) — same one-spelling rule as payload_text,
+# deliberately its own function: payload and targeting are different questions. Concise parens by
+# dev call ("(unit)" / "(tile)" / "(unit/tile)"); Glossary's ATTACK_TARGETING entry explains them.
+func targets_text() -> String:
+	if targets == EquippableData.TargetMode.BOTH:
+		return "(unit/tile)"
+	return "(tile)" if targets == EquippableData.TargetMode.MAP else "(unit)"

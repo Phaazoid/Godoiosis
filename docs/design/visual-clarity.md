@@ -46,12 +46,16 @@ plus the running order of the queue-UX checklist. Update it as items land.
    policy in [transmutation-model-proposal.md](transmutation-model-proposal.md).)
 
    *Progress ([#135](https://github.com/Phaazoid/Godoiosis/issues/135), 2026-08-11):* the
-   unit-state and tile halves are BUILT — state icons (hover card + inspect bar) and any hovered
-   tile that is anything other than ordinary ground now explain themselves in place, all reading
-   `Glossary.short` (`Classes/core/Glossary.gd`, the one term registry), and the Glossary page's
-   interaction list is composed from the authored reaction catalogs so it cannot drift from the
-   resolver. Still open here: the rune "reacts-with" list — #167's inventory tooltip shows
-   recipe/payload/strain, not reactions.
+   unit-state and tile halves are BUILT — state icons (hover card + inspect bar) explain
+   themselves in place, and **every real tile carries a hover card** (playtest round 2: icon +
+   kind header, states with live clocks, and which elements can touch it — filtered through
+   `TerrainReaction.applies_to_tile`, the resolver's own deposit gate), all reading
+   `Glossary.short` (`Classes/core/Glossary.gd`, the one term registry). Every attack row's
+   readout ends with its targeting channel — `(unit)` / `(tile)` / `(unit/tile)`, one spelling
+   on `AttackData.targets_text`. The global tooltip delay went 0.5 → 1.0s the same round (the
+   note `project.godot` cannot carry: dev, *"most people know what attack and move mean"* — the
+   readouts stay, they just stop popping up mid-flow). Still open here: the rune "reacts-with"
+   list — #167's inventory tooltip shows recipe/payload/strain, not reactions.
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
