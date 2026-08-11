@@ -1,6 +1,12 @@
 extends Control
 class_name SquadActionQueueControl
 
+# The action-queue panel: renders a squad's plan as sectioned rows (via ActionQueueDisplayEntry)
+# with drag-reorder for attacks and the Execute button. Layout invariant (#160): the scene ROOT
+# is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
+# BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
+# an editor resave quietly restore absolute offsets.
+
 @onready var sections_box: VBoxContainer = $BackgroundPanel/MarginContainer/VBox/OuterScroll/SectionsBox
 @onready var execute_button: Button = $BackgroundPanel/MarginContainer/VBox/ExecuteButton
 
