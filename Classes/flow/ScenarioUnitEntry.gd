@@ -7,6 +7,12 @@ class_name ScenarioUnitEntry
 # and writes back on load.
 
 @export var unit_data: UnitData
+# The reference/snapshot fork (#177) — affinity_saved's pattern widened to the whole state block.
+# TRUE (the default, so every pre-#177 save reads as the snapshot it is): the fields below are a
+# captured snapshot and apply_unit_state replays them. FALSE: this entry is a REFERENCE — unit_data
+# points at a standalone character file, nothing below was captured, and the loader must NOT call
+# apply_unit_state (the spawn's own initialize + starting kit are the whole answer).
+@export var state_saved := true
 @export var cell: Vector2i
 @export var squad_id := -1   #entries sharing an id form one squad; -1 = solo
 @export var is_leader := false
@@ -142,6 +148,13 @@ func apply_unit_state(unit: Unit) -> void:
 
 	# Before gear (settling enforces wear gates) and before HP (a +CON effect moves the max).
 	unit.restore_stat_effects(stat_effects)
+
+	# A snapshot is authoritative over whatever the spawn seeded (#177): _seed_starting_kit may
+	# have already granted a character's kit, and appending the save's copies on top would double
+	# it. Direct clears, not remove_item — the limb loop below rebuilds every fitting anyway.
+	unit.inventory.fill(null)
+	unit.unequip_weapon()
+	unit.worn_armor = null
 
 	for i in inventory.size():
 		if inventory[i] == null:

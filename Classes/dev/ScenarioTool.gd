@@ -1,6 +1,10 @@
 extends VBoxContainer
 class_name ScenarioTool
 
+# Dev-overlay tab for scenario authoring: Save As / Update / Load / Delete over Scenarios/,
+# per-faction AI toggles (#150), squad archetype/zone rows, mission objectives (#96), and the
+# authored-save checkbox (#177 — cast units save as references to their character files).
+
 @onready var scenario_name_input: LineEdit = %ScenarioNameInput
 @onready var scenario_dropdown: OptionButton = %ScenarioDropdown
 @onready var update_button: Button = %UpdateScenarioButton
@@ -16,6 +20,10 @@ var game
 var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
 var _ai_boxes: Dictionary[Team.Faction, CheckBox] = {}
 var _objective_warning: Label
+# Authored vs snapshot (#177). ON: cast units (spawned from character files) save as references
+# and re-read their files on every load. OFF: the exact #87 mid-battle snapshot, cast included.
+# Ad-hoc units snapshot fully either way.
+var authored_save := true
 
 const NO_ZONE_LABEL := "(no zone)"
 
@@ -27,6 +35,9 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 	refresh_squads()
 	_build_objectives()
 	refresh_loaded_label()
+	DevWidgets.add_checkbox(self, "Authored save — cast units re-read their character files",
+		authored_save, func(pressed: bool): authored_save = pressed)
+	move_child(get_child(get_child_count() - 1), 0)
 
 # select_name is a dropdown-relative name ("fixtures/Foo"), not a path. Load and Save As hand it
 # whatever they just touched; the empty default re-selects what was already showing, so a rebuild
@@ -160,7 +171,7 @@ func _on_update_pressed() -> void:
 	if target == "":
 		return
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
-	scenario_manager.save_scenario(target, status_label)
+	scenario_manager.save_scenario(target, status_label, authored_save)
 	refresh_dropdown(target)
 	refresh_loaded_label()
 
@@ -184,7 +195,7 @@ func _on_save_as_pressed() -> void:
 		return
 	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
 		return
-	scenario_manager.save_scenario(entered, status_label)
+	scenario_manager.save_scenario(entered, status_label, authored_save)
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()
