@@ -57,7 +57,7 @@ func refresh_dropdown(select_name := "") -> void:
 
 	scenario_dropdown.clear()
 	for path in scenario_manager.get_saved_scenarios():
-		scenario_dropdown.add_item(path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres"))
+		scenario_dropdown.add_item(ScenarioManager.display_name(path))
 
 	# add_item auto-selects index 0 -- force "nothing picked" unless the name really matched,
 	# or a deleted scenario leaves Update aimed at whatever sorts first.
@@ -74,7 +74,7 @@ func refresh_loaded_label() -> void:
 	if path == "":
 		loaded_label.text = "Loaded: (unsaved board)"
 		return
-	loaded_label.text = "Loaded: %s" % path.trim_prefix(ScenarioManager.SCENARIO_DIR).trim_suffix(".tres")
+	loaded_label.text = "Loaded: %s" % ScenarioManager.display_name(path)
 
 # Called on tab-switch: a mission loaded from the boot screen, or an F2 reset, changes the board
 # without going through this tab.
@@ -83,10 +83,27 @@ func refresh_on_show() -> void:
 	refresh_objectives()
 	refresh_ai_toggles()
 	refresh_loaded_label()
+	# Aim the dropdown at the loaded scenario (dev ask 2026-08-11): with the load-gate it is the
+	# only target Update can act on, so finding it by hand every visit was pure friction. Nothing
+	# loaded leaves the selection alone; refresh_dropdown re-evaluates the Update button either way.
+	if scenario_manager.last_loaded_path != "":
+		refresh_dropdown(ScenarioManager.display_name(scenario_manager.last_loaded_path))
+	else:
+		_refresh_update_button()
 
 func _refresh_update_button() -> void:
-	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(scenario_dropdown), "scenario")
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(scenario_dropdown), "scenario", _update_block_reason())
 	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(scenario_dropdown), "scenario")
+
+# "" = allowed. Update only writes the LOADED board back over its own file (dev call 2026-08-11);
+# aiming it anywhere else is how missions/Prolog got destroyed.
+func _update_block_reason() -> String:
+	var target := DevWidgets.selected_name(scenario_dropdown)
+	if target == "":
+		return ""
+	if ScenarioManager.scenario_path(target) != scenario_manager.last_loaded_path:
+		return "Load '%s' before updating it -- Update saves the loaded board back over its own file" % target
+	return ""
 
 func _build_ai_toggles():
 	for child in ai_toggle_list.get_children():
@@ -179,6 +196,11 @@ func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
 	if target == "":
 		return
+	# The handler is the real gate -- the disabled button is only its surface (#166 shape).
+	var reason := _update_block_reason()
+	if reason != "":
+		status_label.text = reason
+		return
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
 	scenario_manager.save_scenario(target, status_label, authored_save)
 	refresh_dropdown(target)
@@ -188,6 +210,9 @@ func _on_delete_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
 	if target == "":
 		return
+	DevWidgets.confirm_delete(self, "scenario '%s'" % target, func(): _delete_confirmed(target))
+
+func _delete_confirmed(target: String) -> void:
 	if DevWidgets.delete_saved_file(ScenarioManager.scenario_path(target), "scenario", status_label):
 		refresh_dropdown()
 
