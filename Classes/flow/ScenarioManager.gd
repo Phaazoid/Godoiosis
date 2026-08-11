@@ -3,7 +3,8 @@ class_name ScenarioManager
 
 # Owns scenario save/load and the board-reset flow (dev_reset_scenario): serializes every
 # live unit into a ScenarioUnitEntry/ScenarioData, and rebuilds the board from a saved one.
-# Since #87 a save is a true mid-battle snapshot, battle-scoped layer included.
+# Since #87 a save is a true mid-battle snapshot, battle-scoped layer included. Player save
+# slots (#144) live here too: same capture/apply pair, wrapped in a SaveGame under user://.
 
 const SCENARIO_DIR := "res://Scenarios/"
 
@@ -14,6 +15,26 @@ const MISSION_DIR := SCENARIO_DIR + "missions/"
 
 static func scenario_path(scenario_name: String) -> String:
 	return SCENARIO_DIR + scenario_name + ".tres"
+
+# Player save slots (#144). user://, never Scenarios/ -- res:// is read-only once exported, and
+# anything under Scenarios/ is picked up by Mission Select's scan and #9's integrity suite.
+const SLOT_COUNT := 3
+const DEFAULT_SAVE_DIR := "user://saves/"
+# Injectable for TESTS ONLY -- suites redirect it so falsification runs never touch real slots.
+static var save_dir := DEFAULT_SAVE_DIR
+
+static func slot_path(slot: int) -> String:
+	return save_dir + "slot_%d.tres" % slot
+
+static func slot_exists(slot: int) -> bool:
+	return FileAccess.file_exists(slot_path(slot))
+
+# Statics so UI can gate rows (the pause menu's Load, the title's Load Game) without a manager ref.
+static func any_save_exists() -> bool:
+	for slot in range(1, SLOT_COUNT + 1):
+		if slot_exists(slot):
+			return true
+	return false
 
 # The inverse: a saved path's dropdown-relative name ("missions/Prolog"). One spelling for the
 # trim -- the Scenario tab's list, its Loaded label, and its auto-aim all read this.
@@ -52,6 +73,32 @@ func save_scenario(scenario_name: String, status_label: Label = null, authored :
 	var path := scenario_path(scenario_name)
 	if DevWidgets.save_over(scenario, path, status_label):
 		last_loaded_path = path
+
+# A player save (#144): a FULL snapshot -- authored stays false, the #177 reference mode captures
+# no state -- wrapped with its origin mission so Restart-after-resume returns to the mission start.
+# Refuses on a board with no loaded mission (Save is only offered there, but the handler is the
+# real gate -- the disabled row is only its surface).
+func save_to_slot(slot: int) -> bool:
+	if last_loaded_path == "":
+		push_warning("No mission loaded -- nothing to save")
+		return false
+	var save := SaveGame.new()
+	save.scenario = capture_scenario(display_name(last_loaded_path), false)
+	save.mission_path = last_loaded_path
+	save.saved_at = int(Time.get_unix_time_from_system())
+	save.version = Build.version()
+	return DevWidgets.save_over(save, slot_path(slot))
+
+# null on empty or unreadable -- callers grey the row rather than crash (#166 shape).
+func load_slot(slot: int) -> SaveGame:
+	var path := slot_path(slot)
+	if not FileAccess.file_exists(path):
+		return null
+	var save := load(path) as SaveGame
+	if save == null or save.scenario == null:
+		push_error("Save slot %d is unreadable at %s" % [slot, path])
+		return null
+	return save
 
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
 # authored (#177): cast units — those spawned from a standalone character file — save as a

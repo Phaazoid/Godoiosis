@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #134 (2026-08-11).**
+**Canon checked through #144 (2026-08-11).**
 
 ## What a mission is
 
@@ -132,6 +132,17 @@ The game boots into `MissionSelectScreen`, not a board. `TestBoard` was retired 
 - **Missions** are scenarios under `Scenarios/missions/` — the folder convention `Scenarios/fixtures/` already set. `save_scenario` already creates directories, so saving a scenario named `missions/Camp` needs no new code.
 - **Scenarios & fixtures** (everything outside `missions/`) are listed below the missions and are selectable — during development these *are* the content.
 - A board arriving from the menu has nobody's turn *started* (`load_scenario` only restores whose turn it *was*), so `MissionController._begin_turn` fires the banner and `start_faction_turn`. Without it a mission saved on an AI faction's turn would sit there doing nothing, because `turn_started` only ever fires from `TurnManager.end_turn`.
+- **A turn HANDOFF resets actions; a menu arrival trusts the file ([#144](https://github.com/Phaazoid/Godoiosis/issues/144)).** `reset_faction_actions` fires from `game._on_turn_started`, not from `start_faction_turn` — the menu paths call the latter, and a resumed save's restored `Squad.has_acted` must survive the arrival. It lived inside `start_faction_turn` until #144, which meant every menu-driven load silently handed acted squads their actions back; nobody saw it because only the dev-overlay Load (which skips `_begin_turn`) had ever loaded a mid-battle snapshot. Pinned both directions by `tests/flow/test_turn_handoff_reset.gd`.
+
+## Player save slots (#144)
+
+The [#87](https://github.com/Phaazoid/Godoiosis/issues/87) snapshot got its player doors on 2026-08-11: **Save Game** / **Load Game** rows on the pause menu, and a **Load Game** row on the title screen (shown only when a slot is filled). Three fixed slots at `user://saves/slot_N.tres` — `user://` because `res://` is read-only once exported, and anything under `Scenarios/` becomes a selectable board via the folder scan and #9's suite (the `BugReporter` precedent, and the same pin shape guards it in `tests/flow/test_save_slots.gd`).
+
+- A slot is a `SaveGame` resource: the full `ScenarioData` snapshot (**`authored = false`** — the #177 reference mode records nothing for cast units, which is exactly wrong for resume) plus `mission_path`, `saved_at`, and `Build.version()`.
+- **Resume aims `last_loaded_path` at the ORIGIN mission**, so Restart and F2 return to the mission start and no dev tool can ever point Update at a slot.
+- Save rides Restart's gate (missions only — a sandbox save would have no origin). Whole-campaign saving (mission-to-mission carryover) is deliberately out of scope here; it needs [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s mission boundary and is filed separately.
+- The queued action plan is still deliberately unsaved (#87's exclusion); the save screen says so to the player.
+- The UI is `SaveLoadScreen` (one card, SAVE/LOAD modes) + `ConfirmCard` (the player-facing, in-viewport twin of `DevWidgets.confirm_delete`) for overwrite and lost-progress confirms.
 
 The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded from disk), **Mission Select**, and **Stay** — which unlocks the finished board for inspection with the dev tools while leaving the mission over and the turn cycle stopped.
 

@@ -207,11 +207,28 @@ func _open_pause_menu() -> void:
 	# Grabbed here, before the card draws: a report opened FROM the pause menu wants a picture of
 	# the board, not of the pause menu. Locking first means the extra frame is not interactive.
 	var frame: Image = await bug_reporter.capture_frame()
-	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart())
+	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart(),
+		ScenarioManager.any_save_exists())
 	match choice:
 		PauseMenu.Choice.RESTART:
 			game_state = GameState.IDLE
 			mission_controller.restart_mission()
+		PauseMenu.Choice.SAVE_GAME:
+			var _saved: int = await SaveLoadScreen.show_screen(self, SaveLoadScreen.Mode.SAVE)
+			# Same restore-before-reopen rule as GLOSSARY/REPORT below.
+			game_state = prior
+			_open_pause_menu()
+		PauseMenu.Choice.LOAD_GAME:
+			# confirm_load: unlike the title screen, loading here discards live progress.
+			var slot: int = await SaveLoadScreen.show_screen(self, SaveLoadScreen.Mode.LOAD, true)
+			if slot >= 0:
+				# The RESTART shape. Belt-and-braces: resume_from_slot's own clear_board ->
+				# exit_current_mode re-derives the state either way, synchronously.
+				game_state = GameState.IDLE
+				mission_controller.resume_from_slot(slot)
+			else:
+				game_state = prior
+				_open_pause_menu()
 		PauseMenu.Choice.TITLE:
 			mission_controller.abandon_mission()
 		PauseMenu.Choice.QUIT:
@@ -349,6 +366,9 @@ func _on_turn_started(faction: Team.Faction):
 	if not board.faction_has_active_units(faction) and board.has_active_units():
 		turn_manager.end_turn(board.present_factions())
 		return
+	# A turn HANDOFF resets actions; a menu arrival trusts the file (#144). Keep this out of
+	# start_faction_turn -- the menu paths call it, and a resumed save's has_acted must survive.
+	squad_manager.reset_faction_actions(faction)
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
@@ -356,7 +376,6 @@ func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.BETWEEN_TURNS
 	await Pacing.beat(self, Pacing.TURN_HANDOFF)
 	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
-	squad_manager.reset_faction_actions(faction)
 
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
