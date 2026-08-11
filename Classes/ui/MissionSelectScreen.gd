@@ -57,6 +57,14 @@ func _build_branding() -> void:
 	logo.position = Vector2(24, 24)
 	logo.mouse_filter = Control.MOUSE_FILTER_IGNORE   # never eat a click meant for a button
 	add_child(logo)
+	# The build stamp (#134) -- the title screen names the build, same one-source read as the HUD.
+	var version := Label.new()
+	version.text = "v" + Build.version()
+	version.add_theme_font_size_override("font_size", 12)
+	version.add_theme_color_override("font_color", Color(1, 1, 1, 0.5))
+	version.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(version)
+	version.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, 12)
 
 func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	var column := _build_chrome()

@@ -266,6 +266,7 @@ func _on_objective_toggled(objective: MissionRules.Objective, pressed: bool) -> 
 	else:
 		game.mission_controller.objectives.erase(objective)
 	_refresh_objective_warning()
+	game.refresh_mission_status()   # this write bypasses set_objectives, so refresh here (#134)
 
 # The guard you asked for: an objective ticked with no matching zone painted makes the mission
 # unwinnable. Far cheaper to say so at authoring time than to find out mid-playtest.

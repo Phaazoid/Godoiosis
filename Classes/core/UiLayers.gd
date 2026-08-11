@@ -14,6 +14,7 @@ class_name UiLayers
 # TileMapLayer in-world sorting, sharing nothing but the property name. Merging the two lists would
 # be Law #4 run in reverse -- one answer covering two genuinely different questions.
 
+const MISSION_STATUS := 1     # the always-on objectives/version corner (Scenes/MissionStatusPanel.tscn)
 const HOVER_PANEL := 2        # the compact hover card (Scenes/HoverInfoPanelControl.tscn)
 const INVENTORY_POPUP := 10   # the in-panel item action popup (inventory_panel.gd)
 const MENU_SCREEN := 100      # a full-screen takeover -- MissionSelectScreen

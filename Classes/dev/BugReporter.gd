@@ -152,7 +152,9 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 		trimmed = "(nothing typed)"
 	elif trimmed.length() > NOTE_IN_MESSAGE:
 		trimmed = trimmed.substr(0, NOTE_IN_MESSAGE) + " ... (full text in report.md)"
-	return "**%s** - state `%s` - %s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, trimmed]
+	# The version appears in the channel line too -- a second RENDER of Build.version()'s one fact
+	# (declared, Law #4), so reports can be matched to builds without opening the attachment.
+	return "**%s** - state `%s` - %s - v%s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, Build.version(), trimmed]
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
@@ -163,6 +165,7 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 	out += "%s\n\n" % ("(nothing typed)" if note.strip_edges() == "" else note.strip_edges())
 
 	out += "Game state: **%s**\n\n" % state_name
+	out += "Build: **%s**\n\n" % Build.version()
 	if units.is_empty():
 		out += "No units on the board -- sent from a menu, so there is no `board.tres` beside this.\n\n"
 	else:

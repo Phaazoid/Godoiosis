@@ -27,6 +27,7 @@ extends Node2D
 @onready var overlay_manager: OverlayManager = $OverlayManager
 @onready var squad_manager: SquadManager = $SquadManager
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
+@onready var mission_status_panel: MissionStatusPanel = $UILayer/MissionStatusPanel
 @onready var cursor_controller: CursorController = $CursorController
 @onready var camera_controller: CameraController = $CameraController
 @onready var scenario_manager: ScenarioManager = $ScenarioManager
@@ -634,6 +635,15 @@ func refresh_action_queue(squad: Squad):
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.ALL_COMMITTED)
 	else:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
+
+# The mission-status HUD (#134). Called from MissionController's five write points (check, capture,
+# set_objectives, restore_progress, reset) plus the dev Scenario tab's live objective toggle — the
+# refresh_action_queue pattern, not a signal. No objectives (sandbox, cleared board) hides the panel.
+func refresh_mission_status() -> void:
+	if mission_controller.objectives.is_empty():
+		mission_status_panel.clear()
+		return
+	mission_status_panel.show_status(mission_controller, _board())
 
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).

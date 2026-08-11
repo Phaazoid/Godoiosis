@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #177 (2026-08-10).**
+**Canon checked through #134 (2026-08-11).**
 
 ## What a mission is
 
@@ -147,7 +147,7 @@ to *win* by capturing, because enemy objectives are out of #96's scope — the p
 
 - **The Play API cannot see authored objectives.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it always passes `Progress.NONE` — so headless runs evaluate every board as a rout map, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat.
 - **The end-of-mission banner's three choices are untested.** `_end_mission` awaits `MissionEndBanner.show_banner`, and a button press cannot be given headlessly, so RETRY (reload + re-begin the turn), MISSION_SELECT (back to the front door) and STAY (unlock the board, mission stays over) are verified only in play. Coverage stops at the board reaching `MISSION_OVER` with input locked. *(The rest of `MissionController` IS covered as of 2026-07-29 — `tests/flow/test_mission_controller.gd`, 31 cases on a real game scene, pinning both latches, AND-composition, whole-zone capture, extraction counting the downed, declared-but-unpainted reading PENDING, and DEFEAT beating a met objective in the same pass; falsified against seven mutations, each caught by its own test. The "game scene segfaults in the runner" belief that had blocked this was false — see [#114](https://github.com/Phaazoid/Godoiosis/issues/114).)*
-- **No mission-status UI.** Nothing on screen says what the objectives are or how far along they are — you find out by winning. This is the prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D names, and a turn clock will force it.
+- ~~**No mission-status UI.**~~ BUILT [#134](https://github.com/Phaazoid/Godoiosis/issues/134) (2026-08-11) — `MissionStatusPanel` shows every declared objective and its live progress. The prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D named is now in place.
 - **`CaptureAction`'s icon is a placeholder** (the board target marker).
 
 ## Not in scope for #96
