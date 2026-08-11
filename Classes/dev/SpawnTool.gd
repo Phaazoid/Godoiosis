@@ -25,6 +25,7 @@ var _spawnable := {}
 # resource, so provenance survives and an authored save references it. null = the form flow.
 var _characters := {}
 var selected_character: UnitData = null
+var _character_dropdown: OptionButton = null
 
 func init(p_game):
 	game = p_game
@@ -49,20 +50,26 @@ func init(p_game):
 	%OtherCheckBox.button_group = faction_group
 	
 	refresh_weapons()
-	_build_sprite_catalog()
+	sprite_catalog = build_sprite_catalog()
 	var sprite_dropdown := %SpriteDropdown
 	for sprite_name in sprite_catalog:
 		sprite_dropdown.add_item(sprite_name)
 	_on_sprite_dropdown_item_selected(sprite_dropdown.selected)
 
-	# The cast picker (#177), scanned once per session like JobCatalog. "(custom)" keeps the
-	# form flow; a character spawns from its file with the faction radio as an override.
-	_characters = UnitCatalog.get_characters()
-	var character_options: Array = [CUSTOM_LABEL]
-	character_options.append_array(_characters.keys())
-	DevWidgets.add_option(self, "Character", character_options, CUSTOM_LABEL,
-		func(label: String): selected_character = null if label == CUSTOM_LABEL else _characters[label])
-	move_child(get_child(get_child_count() - 1), 0)
+	# The cast picker (#177). "(custom)" keeps the form flow; a character spawns from its file
+	# with the faction radio as an override. Built inline rather than DevWidgets.add_option so
+	# refresh_characters() can rebuild the list -- add_option's handler closes over a snapshot
+	# of its options array, which a rebuild would silently strand (#179).
+	var character_row := HBoxContainer.new()
+	var character_label := Label.new()
+	character_label.text = "Character"
+	character_row.add_child(character_label)
+	_character_dropdown = OptionButton.new()
+	_character_dropdown.item_selected.connect(_on_character_selected)
+	character_row.add_child(_character_dropdown)
+	add_child(character_row)
+	move_child(character_row, 0)
+	refresh_characters()
 
 func refresh_weapons():
 	var dropdown := %WeaponDropdown
@@ -77,6 +84,28 @@ func refresh_weapons():
 	if new_idx >= 0:
 		dropdown.select(new_idx)
 	_on_weapon_dropdown_item_selected(dropdown.selected)
+
+# Rebuild the cast dropdown from disk, keeping the selection -- called on entering this tab, so
+# a character authored in the Character tab appears without a restart (#179). Mirrors
+# refresh_weapons; a vanished selection falls back to "(custom)".
+func refresh_characters():
+	var prev_key := ""
+	if _character_dropdown.selected > 0 and _character_dropdown.selected - 1 < _characters.size():
+		prev_key = _characters.keys()[_character_dropdown.selected - 1]
+	_character_dropdown.clear()
+	_characters = UnitCatalog.get_characters()
+	_character_dropdown.add_item(CUSTOM_LABEL)
+	for character_name in _characters:
+		_character_dropdown.add_item(character_name)
+	var new_idx: int = _characters.keys().find(prev_key)
+	_character_dropdown.select(new_idx + 1 if new_idx >= 0 else 0)
+	_on_character_selected(_character_dropdown.selected)
+
+func _on_character_selected(index: int) -> void:
+	if index <= 0 or index - 1 >= _characters.size():
+		selected_character = null
+		return
+	selected_character = _characters[_characters.keys()[index - 1]]
 
 func _validate():
 	set_selected_faction()
@@ -165,8 +194,11 @@ func _on_sprite_dropdown_item_selected(index: int) -> void:
 func _on_unit_name_input_text_changed(new_text: String) -> void:
 	unit_name = new_text
 
-func _build_sprite_catalog() -> void:
+# The idle/moving/downed sprite triples under Art/Units/MapSprites/, keyed by base name.
+# Static and shared: the Character editor's art picker reads this same scan (#179, Law #4).
+static func build_sprite_catalog() -> Dictionary:
 	const SPRITE_DIR := "res://Art/Units/MapSprites/"
+	var catalog := {}
 	for file in ResourceDir.files_with_extension(SPRITE_DIR, ".png"):
 		if file.ends_with("_Moving.png"):
 			continue
@@ -178,4 +210,5 @@ func _build_sprite_catalog() -> void:
 		var moving: Texture2D = load(moving_path) if ResourceLoader.exists(moving_path) else idle
 		var downed_path := SPRITE_DIR + sprite_name + "_Downed.png"
 		var downed: Texture2D = load(downed_path) if ResourceLoader.exists(downed_path) else null
-		sprite_catalog[sprite_name] = {"idle": idle, "moving": moving, "downed": downed}
+		catalog[sprite_name] = {"idle": idle, "moving": moving, "downed": downed}
+	return catalog
