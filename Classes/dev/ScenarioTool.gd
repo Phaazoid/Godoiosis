@@ -36,7 +36,16 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 	_build_objectives()
 	refresh_loaded_label()
 	DevWidgets.add_checkbox(self, "Authored save — cast units re-read their character files",
-		authored_save, func(pressed: bool): authored_save = pressed)
+		authored_save, func(pressed: bool): authored_save = pressed,
+		"ON (authoring mode): units spawned from a character file (Resources/Units/) save as\n"
+		+ "REFERENCES to that file — every load re-reads the character as authored, so editing\n"
+		+ "the file later updates this mission too. Their mid-battle state (HP, Will, elemental\n"
+		+ "states, weapon charge) is deliberately NOT saved. Ad-hoc units always save as full\n"
+		+ "snapshots either way.\n\n"
+		+ "OFF (snapshot mode): everything saves as an exact mid-battle snapshot, cast included —\n"
+		+ "the save replays this precise moment forever and stops following character-file edits.\n"
+		+ "Use for save-and-resume of a fight in progress.\n\n"
+		+ "Bug reports (F3) ignore this and always snapshot.")
 	move_child(get_child(get_child_count() - 1), 0)
 
 # select_name is a dropdown-relative name ("fixtures/Foo"), not a path. Load and Save As hand it
