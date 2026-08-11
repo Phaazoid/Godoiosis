@@ -91,7 +91,7 @@ func _assert_chrome(card: ModalCard, expected_z: int) -> void:
 func test_pause_menu_fills_the_viewport_locks_and_outranks_the_hover_panel() -> void:
 	var menu := PauseMenu.new()
 	game.ui_layer.add_child(menu)
-	menu._build(true, game)
+	menu._build(true, true, game)
 	await _frames(4)
 
 	_assert_chrome(menu, UiLayers.MODAL_CARD)
@@ -131,6 +131,38 @@ func test_report_panel_fills_the_viewport_and_locks_the_board() -> void:
 	assert_bool(game.can_process()).is_false()
 
 	panel.queue_free()
+	await _frames(4)
+	assert_bool(game.can_process()).is_true()
+
+
+func test_save_load_screen_fills_the_viewport_and_locks_the_board() -> void:
+	var screen := SaveLoadScreen.new()
+	game.ui_layer.add_child(screen)
+	screen._build(SaveLoadScreen.Mode.LOAD, false, game)
+	await _frames(4)
+
+	_assert_chrome(screen, UiLayers.MODAL_CARD)
+	assert_bool(ModalLock.any_open(get_tree())).is_true()
+	assert_bool(game.can_process()).is_false()
+
+	screen.finished.emit(-1)
+	screen.queue_free()
+	await _frames(4)
+	assert_bool(game.can_process()).is_true()
+
+
+func test_confirm_card_fills_the_viewport_and_locks_the_board() -> void:
+	var card := ConfirmCard.new()
+	game.ui_layer.add_child(card)
+	card._build("Really?", "Yes", "No", game)
+	await _frames(4)
+
+	_assert_chrome(card, UiLayers.MODAL_CARD)
+	assert_bool(ModalLock.any_open(get_tree())).is_true()
+	assert_bool(game.can_process()).is_false()
+
+	card.answered.emit(false)
+	card.queue_free()
 	await _frames(4)
 	assert_bool(game.can_process()).is_true()
 

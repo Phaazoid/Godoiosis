@@ -20,6 +20,7 @@ class_name MissionSelectScreen
 # (pinned by test_return_to_title_lands_on_the_menu_with_the_game_thawed).
 
 signal mission_chosen(path: String)
+signal load_game_chosen
 signal sandbox_chosen
 signal glossary_chosen
 signal feedback_chosen
@@ -101,6 +102,12 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 			_add_board_button(list, path, Color(0.72, 0.72, 0.78))
 
 	column.add_child(HSeparator.new())
+
+	# The way back into a saved battle (#144). Only offered when a slot is actually filled --
+	# unlike the pause menu's greyed row, a stranger on the title screen with no saves has
+	# nothing this row could teach.
+	if ScenarioManager.any_save_exists():
+		_add_button(column, "Load Game", func(): load_game_chosen.emit())
 
 	# Dev scaffolding, deliberately last: TestBoard is no longer the boot path, but it is still
 	# the fastest way onto a board with units on it.

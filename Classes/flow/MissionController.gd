@@ -86,6 +86,7 @@ func open_mission_select() -> void:
 			others.append(path)   # root playtest saves + fixtures/ -- selectable during development
 	_select_screen = MissionSelectScreen.open(game, missions, others)
 	_select_screen.mission_chosen.connect(_on_mission_chosen)
+	_select_screen.load_game_chosen.connect(_on_load_game_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
 	_select_screen.glossary_chosen.connect(func(): GlossaryScreen.show_screen(game))
 	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
@@ -107,6 +108,15 @@ func _on_sandbox_chosen() -> void:
 	game.spawn_sandbox()                        # also routes through clear_board() -> reset()
 	_begin_turn()
 
+# The title door into a save slot (#144). The card locks over the select screen (the Glossary-
+# over-title shape); no lost-progress confirm here -- nothing is in progress on the title.
+func _on_load_game_chosen() -> void:
+	var slot: int = await SaveLoadScreen.show_screen(game, SaveLoadScreen.Mode.LOAD)
+	if slot < 0:
+		return   # backed out; the select screen is still up
+	_close_mission_select()
+	resume_from_slot(slot)
+
 # A board arriving from the menu has nobody's turn actually STARTED -- load_scenario only
 # restores whose turn it was. Without this a mission saved on an AI faction's turn would sit
 # there doing nothing, because turn_started only ever fires from TurnManager.end_turn.
@@ -122,6 +132,19 @@ func can_restart() -> bool:
 
 func restart_mission() -> void:
 	game.scenario_manager.reload_current()
+	_begin_turn()
+
+# Player-facing resume (#144): the same two-step arrival _on_mission_chosen makes, except the
+# board comes from a save slot and last_loaded_path is aimed at the ORIGIN mission -- so Restart
+# and F2 reload the mission start, and no dev tool can ever aim Update at a slot. _begin_turn no
+# longer resets actions (a menu arrival trusts the file -- see game._on_turn_started), which is
+# what keeps the restored has_acted alive.
+func resume_from_slot(slot: int) -> void:
+	var save: SaveGame = game.scenario_manager.load_slot(slot)
+	if save == null:
+		return
+	game.scenario_manager.apply_scenario(save.scenario)
+	game.scenario_manager.last_loaded_path = save.mission_path
 	_begin_turn()
 
 # Leaving a mission the player has not finished. Deliberately the SAME handoff _end_mission makes

@@ -207,11 +207,28 @@ func _open_pause_menu() -> void:
 	# Grabbed here, before the card draws: a report opened FROM the pause menu wants a picture of
 	# the board, not of the pause menu. Locking first means the extra frame is not interactive.
 	var frame: Image = await bug_reporter.capture_frame()
-	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart())
+	var choice: PauseMenu.Choice = await PauseMenu.show_menu(self, mission_controller.can_restart(),
+		ScenarioManager.any_save_exists())
 	match choice:
 		PauseMenu.Choice.RESTART:
 			game_state = GameState.IDLE
 			mission_controller.restart_mission()
+		PauseMenu.Choice.SAVE_GAME:
+			var _saved: int = await SaveLoadScreen.show_screen(self, SaveLoadScreen.Mode.SAVE)
+			# Same restore-before-reopen rule as GLOSSARY/REPORT below.
+			game_state = prior
+			_open_pause_menu()
+		PauseMenu.Choice.LOAD_GAME:
+			# confirm_load: unlike the title screen, loading here discards live progress.
+			var slot: int = await SaveLoadScreen.show_screen(self, SaveLoadScreen.Mode.LOAD, true)
+			if slot >= 0:
+				# The RESTART shape. Belt-and-braces: resume_from_slot's own clear_board ->
+				# exit_current_mode re-derives the state either way, synchronously.
+				game_state = GameState.IDLE
+				mission_controller.resume_from_slot(slot)
+			else:
+				game_state = prior
+				_open_pause_menu()
 		PauseMenu.Choice.TITLE:
 			mission_controller.abandon_mission()
 		PauseMenu.Choice.QUIT:
