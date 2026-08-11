@@ -182,3 +182,15 @@ func test_a_fatal_hit_reports_raw_hp_not_the_panels_clamp() -> void:
 	# this same hit clamped to 0 or 1 -- deliberately not copied here.
 	assert_str(text).contains("%d raw" % resolved.target_hp_after)
 	assert_str(text).contains(ResolvedOutcome.Lethality.keys()[resolved.lethality])
+
+# ---- the build stamp (#134) ----
+
+func test_the_report_and_the_summary_name_the_build() -> void:
+	# Interpolated off Build.version(), never a pinned literal: this pins the WIRING to the one
+	# version source, not the value, which is content and free to move.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null, no_units, "log")
+	assert_str(text).contains("Build: **%s**" % Build.version())
+
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
+	assert_str(summary).contains("v%s" % Build.version())

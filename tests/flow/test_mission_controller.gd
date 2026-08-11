@@ -419,3 +419,45 @@ func test_the_ai_stands_down_once_the_mission_is_over() -> void:
 	mc.check()
 	# AIController.take_faction_turn guards on this; a mission that ended must not keep planning.
 	assert_bool(mc.is_over()).is_true()
+
+
+# ==============================================================================
+#  The count accessors (#134) — what the mission-status HUD prints
+# ==============================================================================
+
+func test_capture_counts_track_taken_over_painted() -> void:
+	_paint("North", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
+	_paint("South", ZoneManager.Kind.CAPTURE, [Vector2i(6, 6)])
+	_paint("Patrol", ZoneManager.Kind.PATROL, [Vector2i(7, 7)])   # never in the denominator
+	assert_that(mc.capture_counts()).is_equal(Vector2i(0, 2))
+	mc.capture("North")
+	assert_that(mc.capture_counts()).is_equal(Vector2i(1, 2))
+	mc.capture("South")
+	assert_that(mc.capture_counts()).is_equal(Vector2i(2, 2))
+
+
+func test_extract_counts_split_survivors_by_zone_and_count_the_downed() -> void:
+	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1), Vector2i(1, 2)])
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var downed := _spawn(Team.Faction.PLAYER, Vector2i(1, 2))
+	downed.lifecycle_state = Unit.LifecycleState.DOWNED   # in the zone: extracted, per doctrine
+	_spawn(Team.Faction.PLAYER, Vector2i(5, 5))           # a survivor still outside
+	var lost := _spawn(Team.Faction.PLAYER, Vector2i(6, 6))
+	lost.die()                                            # dead: on neither side of the fraction
+	_spawn(Team.Faction.ENEMY, Vector2i(7, 7))            # never counted
+
+	assert_that(mc.extract_counts(game._board())).is_equal(Vector2i(2, 3))
+
+
+func test_active_hostile_count_matches_the_rout_predicate() -> void:
+	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var standing := _spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	var downed := _spawn(Team.Faction.ENEMY, Vector2i(5, 5))
+	downed.lifecycle_state = Unit.LifecycleState.DOWNED   # downed counts the same as dead
+
+	assert_int(MissionRules.active_hostile_count(game._board())).is_equal(1)
+	assert_bool(MissionRules.has_active_hostiles(game._board())).is_true()
+
+	standing.die()
+	assert_int(MissionRules.active_hostile_count(game._board())).is_equal(0)
+	assert_bool(MissionRules.has_active_hostiles(game._board())).is_false()

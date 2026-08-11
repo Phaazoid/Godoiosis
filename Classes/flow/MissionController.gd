@@ -32,6 +32,8 @@ func is_over() -> bool:
 	return outcome != MissionRules.Outcome.ONGOING
 
 func check() -> void:
+	# The board has settled whether or not the mission ends -- the HUD reads the settled state (#134).
+	game.refresh_mission_status()
 	if is_over() or _ending:
 		return
 	var board: BoardContext = game._board()
@@ -51,6 +53,7 @@ func reset() -> void:
 	_ending = false
 	_captured_zones.clear()
 	objectives.clear()
+	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
 
@@ -65,6 +68,7 @@ func restore_progress(zones: Array[String], contested: bool) -> void:
 	_captured_zones.assign(zones)
 	_contested = contested
 	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
+	game.refresh_mission_status()
 
 # ==============================================================================
 #  Starting a mission (slice 2)
@@ -150,6 +154,7 @@ func capture(zone_name: String) -> void:
 		return
 	_captured_zones.append(zone_name)
 	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
+	game.refresh_mission_status()
 
 func is_zone_captured(zone_name: String) -> bool:
 	return _captured_zones.has(zone_name)
@@ -159,6 +164,7 @@ func set_objectives(list: Array[MissionRules.Objective]) -> void:
 	objectives.assign(list)
 	for objective in objectives_missing_geometry():
 		push_error("Mission objective %s is declared but no matching zone is painted — this mission cannot be won." % MissionRules.Objective.keys()[objective])
+	game.refresh_mission_status()
 
 # Declared objectives whose geometry was never painted. ROUT needs none, so it can never appear
 # here. The Scenario tab shows this live while authoring; set_objectives shouts it once on load.
@@ -176,11 +182,13 @@ func objective_progress(board: BoardContext) -> MissionRules.Progress:
 	if objectives.is_empty():
 		return MissionRules.Progress.NONE
 	for objective in objectives:
-		if _progress_for(objective, board) != MissionRules.Progress.MET:
+		if progress_for(objective, board) != MissionRules.Progress.MET:
 			return MissionRules.Progress.PENDING
 	return MissionRules.Progress.MET
 
-func _progress_for(objective: MissionRules.Objective, board: BoardContext) -> MissionRules.Progress:
+# Public since #134: the mission-status HUD reads each declared objective's own progress. The
+# rules stay here -- the HUD never re-derives them.
+func progress_for(objective: MissionRules.Objective, board: BoardContext) -> MissionRules.Progress:
 	match objective:
 		MissionRules.Objective.ROUT:
 			return MissionRules.Progress.MET if not MissionRules.has_active_hostiles(board) else MissionRules.Progress.PENDING
@@ -191,31 +199,50 @@ func _progress_for(objective: MissionRules.Objective, board: BoardContext) -> Mi
 	push_error("MissionController: no progress rule for objective %s" % MissionRules.Objective.keys()[objective])
 	return MissionRules.Progress.PENDING
 
+# (captured, total painted CAPTURE zones) -- the HUD's "1/2 zones". _capture_progress derives MET
+# from these same numbers so the count and the boolean cannot drift (#134).
+func capture_counts() -> Vector2i:
+	var targets: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE)
+	var done := 0
+	for name in targets:
+		if _captured_zones.has(name):
+			done += 1
+	return Vector2i(done, targets.size())
+
 # Unpainted geometry reads as PENDING, not MET: the mission really is unwinnable, and silently
 # dropping the objective would quietly turn a broken map into a different, playable one.
 func _capture_progress() -> MissionRules.Progress:
-	var targets: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE)
-	if targets.is_empty():
+	var counts := capture_counts()
+	if counts.y == 0:
 		return MissionRules.Progress.PENDING
-	for name in targets:
-		if not _captured_zones.has(name):
-			return MissionRules.Progress.PENDING
-	return MissionRules.Progress.MET
+	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
+
+# (surviving player units inside an extraction zone, surviving player units) -- "surviving" is
+# not-DEAD, so the DOWNED count on both sides of the fraction, per the doctrine on
+# _extract_progress below.
+func extract_counts(board: BoardContext) -> Vector2i:
+	var zones: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION)
+	var done := 0
+	var total := 0
+	for unit in board.units:
+		if not is_instance_valid(unit) or unit.get_faction() != Team.Faction.PLAYER or unit.is_dead():
+			continue
+		total += 1
+		if _in_any_zone(zones, unit.movement.cell):
+			done += 1
+	return Vector2i(done, total)
 
 # "Surviving" is not-DEAD, so a DOWNED unit inside the zone counts as extracted exactly like an
 # active one -- alive and in the zone means they get out. What blocks the objective is a living
 # unit OUTSIDE the zone, and a downed one out there cannot walk in on its own: someone has to
 # reach them with RescueAction, which revives to 1 HP and ACTIVE.
 func _extract_progress(board: BoardContext) -> MissionRules.Progress:
-	var zones: Array[String] = game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION)
-	if zones.is_empty():
+	# The zones-empty guard runs BEFORE the counts: an unpainted extraction with no player units
+	# would read 0 == 0 as MET, converting the broken map _capture_progress refuses to.
+	if game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
 		return MissionRules.Progress.PENDING
-	for unit in board.units:
-		if not is_instance_valid(unit) or unit.get_faction() != Team.Faction.PLAYER or unit.is_dead():
-			continue
-		if not _in_any_zone(zones, unit.movement.cell):
-			return MissionRules.Progress.PENDING
-	return MissionRules.Progress.MET
+	var counts := extract_counts(board)
+	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
 
 # Several extraction zones on one map are alternatives, not a set to split across.
 func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:

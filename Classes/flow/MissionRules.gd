@@ -30,10 +30,17 @@ enum Progress { NONE, PENDING, MET }
 # Is anyone hostile to the player still commandable? Downed counts the same as dead, on both
 # sides. Hostility is Team's call, not ours -- an ALLY faction fighting beside you needs no edit.
 static func has_active_hostiles(board: BoardContext) -> bool:
-	for faction in board.present_factions():
-		if Team.is_enemy(Team.Faction.PLAYER, faction) and board.faction_has_active_units(faction):
-			return true
-	return false
+	return active_hostile_count(board) > 0
+
+# How many are left -- the rout objective's "N foes remain" readout (#134). has_active_hostiles is
+# derived from this so the count and the predicate cannot drift.
+static func active_hostile_count(board: BoardContext) -> int:
+	var count := 0
+	for unit in board.units:
+		if is_instance_valid(unit) and unit.is_active() \
+				and Team.is_enemy(Team.Faction.PLAYER, unit.get_faction()):
+			count += 1
+	return count
 
 # Both sides commandable right now -- i.e. this board is a mission in progress and not a dev
 # scratchpad. MissionController latches this; see the `contested` note on evaluate().
