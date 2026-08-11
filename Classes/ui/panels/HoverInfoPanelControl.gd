@@ -26,6 +26,10 @@ var _tile_icon: TextureRect
 var _tile_header: Label
 var _tile_lines_box: VBoxContainer
 
+# The last park's inputs, kept so a late layout pass can re-run it (see _on_tile_panel_resized).
+var _park_bottom: bool = false
+var _park_left_x: int = MARGIN
+
 # Set here rather than in the .tscn so UiLayers is the single answer for the whole UI stack --
 # the scene used to author a bare 2, which agreed with the rest of the order only by luck.
 # The tile card is code-built (data-shaped UI): same stylebox as the unit card's Panel, so the
@@ -52,6 +56,12 @@ func _ready() -> void:
 	_tile_lines_box = VBoxContainer.new()
 	_tile_box.add_child(_tile_lines_box)
 	add_child(_tile_panel)
+	# Autowrapped labels report a ONE-LINE minimum height until layout hands them their width, and
+	# that can cascade across passes — so a park computed at show time can be short, and a
+	# bottom-parked card overflows the screen edge (dev report, 2026-08-11). The card re-parks
+	# whenever its real size settles; `resized` fires only on actual change, and re-parking never
+	# changes size, so this cannot loop.
+	_tile_panel.resized.connect(_on_tile_panel_resized)
 
 # One call per hover: unit card, tile card, or both, parked together. world_pos anchors the
 # top-or-bottom parking decision — the hovered unit's position, or the hovered cell's.
@@ -94,16 +104,29 @@ func _set_tile_block(icon: Texture2D, header: String, lines: Array[String]) -> v
 		label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 		label.custom_minimum_size.x = TILE_BLOCK_WIDTH
 		_tile_lines_box.add_child(label)
+	# A free-floating container grows to fit content but never shrinks back on its own — without
+	# this, a short card after a tall one keeps the tall size and parks/draws wrong (the ratchet
+	# behind the 2026-08-11 off-screen report; pinned by the bottom-park regression case).
+	_tile_panel.reset_size()
 
 func _park(world_pos: Vector2, left_x: int) -> void:
 	var screen_pos: Vector2 = get_viewport().get_canvas_transform() * world_pos
-	var y: int = MARGIN
-	if screen_pos.y <= get_viewport_rect().size.y / 2.0:
-		y = int(get_viewport_rect().size.y - _stack_height() - MARGIN)
-	position = Vector2(left_x, y)
+	_park_bottom = screen_pos.y <= get_viewport_rect().size.y / 2.0
+	_park_left_x = left_x
+	_apply_park()
 
-# Combined minimum for the tile block rather than its .size: size settles a frame after a
-# rebuild, and parking must be right on the frame the content changes.
+func _apply_park() -> void:
+	var y: int = MARGIN
+	if _park_bottom:
+		y = int(get_viewport_rect().size.y - _stack_height() - MARGIN)
+	position = Vector2(_park_left_x, y)
+
+# The tile half settled taller (or shorter) than the park estimated — land the stack again with
+# the real number. The half decision is unchanged: it depends only on the hovered position.
+func _on_tile_panel_resized() -> void:
+	if visible and _tile_panel.visible:
+		_apply_park()
+
 func _stack_height() -> float:
 	var height: float = 0.0
 	if hover_panel.visible:
@@ -111,5 +134,7 @@ func _stack_height() -> float:
 	if _tile_panel.visible:
 		if hover_panel.visible:
 			height += TILE_BLOCK_GAP
-		height += _tile_panel.get_combined_minimum_size().y
+		# The real size once layout has run, the minimum as the floor before it has — and the
+		# resized hook above re-parks when the real number arrives.
+		height += maxf(_tile_panel.size.y, _tile_panel.get_combined_minimum_size().y)
 	return height
