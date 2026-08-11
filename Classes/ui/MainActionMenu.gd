@@ -51,25 +51,27 @@ const TRANSMUTATION := 18
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
+# `term` names the row's Glossary entry (#135): its short text is the row's hover tooltip,
+# pinned complete by tests/law/test_glossary_coverage.gd.
 const ACTION_DATA := {
-	EXECUTE_ORDERS: {"name": "Execute Orders"},
-	MOVE: {"name": "Move"},
-	GROUP_MOVE: {"name": "Group Move"},
-	ATTACK: {"name": "Attack"},
-	WEAPON_ACTION: {"name": "Weapon Action"},
-	TRANSMUTATION: {"name": "Transmutation"},
-	ABILITY_ACTION: {"name": "Ability Action"},
-	RESCUE: {"name": "Rescue"},
-	RALLY: {"name": "Rally"},
-	CAPTURE: {"name": "Capture Point"},
-	SQUADUP: {"name": "Squad Up"},
-	JOINSQUAD: {"name": "Join Squad"},
-	LEAVESQUAD: {"name": "Leave Squad"},
-	DISBAND_SQUAD: {"name": "Disband Squad"},
-	WAIT: {"name": "Wait"},
-	CANCEL: {"name": "Cancel Actions"},
-	INSPECT: {"name": "Inspect"},
-	ENDTURN: {"name": "End Turn"},
+	EXECUTE_ORDERS: {"name": "Execute Orders", "term": Glossary.Term.EXECUTE_ORDERS},
+	MOVE: {"name": "Move", "term": Glossary.Term.MOVE},
+	GROUP_MOVE: {"name": "Group Move", "term": Glossary.Term.GROUP_MOVE},
+	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK},
+	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION},
+	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION},
+	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION},
+	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE},
+	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY},
+	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE},
+	SQUADUP: {"name": "Squad Up", "term": Glossary.Term.SQUAD_UP},
+	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD},
+	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD},
+	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD},
+	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT},
+	CANCEL: {"name": "Cancel Actions", "term": Glossary.Term.CANCEL_ACTIONS},
+	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT},
+	ENDTURN: {"name": "End Turn", "term": Glossary.Term.END_TURN},
 }
 
 # ==============================================================================

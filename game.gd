@@ -215,6 +215,12 @@ func _open_pause_menu() -> void:
 			mission_controller.abandon_mission()
 		PauseMenu.Choice.QUIT:
 			get_tree().quit()
+		PauseMenu.Choice.GLOSSARY:
+			await GlossaryScreen.show_screen(self)
+			# Same restore-before-reopen rule as REPORT below: reopening with MENU stashed as
+			# `prior` would leave the board locked for good on Resume.
+			game_state = prior
+			_open_pause_menu()
 		PauseMenu.Choice.REPORT:
 			# The state named is the one from BEFORE the pause, not MENU: a report should say what
 			# the player was doing when they reached for it.
