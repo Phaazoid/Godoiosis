@@ -43,3 +43,12 @@ enum Kind {
 	TREE,
 	WATER
 }
+
+# The player-facing spellings ("Burning", "Water") — Elemental.display_name's rule applied to the
+# tile vocabularies. Hover readouts and the Glossary's composed lines read these; dev readouts
+# that deliberately show the raw enum key keep doing so.
+static func tile_state_display_name(s: TileState) -> String:
+	return TileState.keys()[s].capitalize()
+
+static func kind_display_name(k: Kind) -> String:
+	return Kind.keys()[k].capitalize()

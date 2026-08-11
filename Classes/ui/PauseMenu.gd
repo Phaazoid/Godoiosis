@@ -4,7 +4,7 @@ class_name PauseMenu
 # The in-play pause card (#132): the only way a demo player can restart a botched mission or
 # leave the game. Built on ModalCard, the base shared with every other full-screen surface.
 
-enum Choice { RESUME, RESTART, TITLE, REPORT, QUIT }
+enum Choice { RESUME, RESTART, TITLE, GLOSSARY, REPORT, QUIT }
 
 signal chosen(choice: Choice)
 
@@ -38,6 +38,10 @@ func _build(can_restart: bool, game_node: Node) -> void:
 	# Always offered, unlike Restart: a Sandbox board has no file to reload but the way out of it
 	# is the same. Before this the only route back to the title was finishing a mission.
 	_add_button(row, "Return to Title", func(): chosen.emit(Choice.TITLE))
+
+	# The reference page (#135) — reachable mid-battle, because mid-battle is when a stranger
+	# first meets a term they don't know.
+	_add_button(row, "Glossary", func(): chosen.emit(Choice.GLOSSARY))
 
 	# The demo's report affordance (#131). F3 is correct for the developer and invisible to
 	# a stranger, so it needs a row somebody can find without being told it exists.

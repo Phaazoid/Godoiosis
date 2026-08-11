@@ -21,6 +21,7 @@ class_name MissionSelectScreen
 
 signal mission_chosen(path: String)
 signal sandbox_chosen
+signal glossary_chosen
 signal feedback_chosen
 signal quit_chosen
 
@@ -98,6 +99,10 @@ func _build(mission_paths: Array[String], other_paths: Array[String]) -> void:
 	_add_button(column, "Sandbox (Test Board)", func(): sandbox_chosen.emit(), Color(0.72, 0.72, 0.78))
 
 	column.add_child(HSeparator.new())
+
+	# The reference page (#135): readable before ever starting a mission, so a stranger can meet
+	# the vocabulary before the vocabulary meets them.
+	_add_button(column, "Glossary", func(): glossary_chosen.emit())
 
 	# Someone who bounces off this screen without ever starting a mission still has something to
 	# tell us, and it is the one thing a mid-battle pause menu can never collect (#131).

@@ -18,3 +18,10 @@ class_name TerrainReaction
 
 @export var popup: String = ""
 @export var icon: Texture2D
+
+# The tile gate as ONE predicate (#135 round 2): the resolver's deposit filter and the hover
+# card's "what can touch this tile" list read the same clauses, so they can never drift.
+func applies_to_tile(kind: Terrain.Kind, held_states: Array[Terrain.TileState]) -> bool:
+	if required_kind != Terrain.Kind.NONE and required_kind != kind:
+		return false
+	return required_tile_state == Terrain.TileState.NONE or held_states.has(required_tile_state)

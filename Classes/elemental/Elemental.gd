@@ -41,3 +41,8 @@ static func is_sigil_element(e: Element) -> bool:
 # enum key keep doing so — this is the player-facing spelling, not a general stringifier.
 static func display_name(e: Element) -> String:
 	return Element.keys()[e].capitalize()
+
+# The State twin ("Wet") — same rule, same reason (StateIcons' fallback label and the Glossary's
+# composed reaction lines both need it).
+static func state_display_name(s: State) -> String:
+	return State.keys()[s].capitalize()

@@ -24,6 +24,8 @@ const BASE_SPRITE_INDEX = 4
 const RALLY_BASE := 6       # Will restored by the first rally this battle
 const RALLY_FALLOFF := 2    # each further rally restores this much less; below 1 it's not offered
 
+const DOWNED_TURNS := 3     # turns a downed unit survives unrescued; Glossary interpolates it
+
 var rally_count: int = 0
 var unit_instance: UnitInstance
 # Provenance (#177): the standalone character FILE this unit was spawned from, when there is one.
@@ -452,7 +454,7 @@ func _go_downed(pay_will_cost := true):
 	if pay_will_cost:
 		unit_instance.spend_will_for_down()  # pays the flat Will cost; maims (limb + Will->0) if it can't afford it
 		_settle_stat_change()                # a maim moves STR/DEX, which can drop the wearer under a gate
-	downed_turns_remaining = 3
+	downed_turns_remaining = DOWNED_TURNS
 	_show_downed_sprite(true)
 	went_downed.emit(self)
 	downed_countdown_changed.emit(downed_turns_remaining)

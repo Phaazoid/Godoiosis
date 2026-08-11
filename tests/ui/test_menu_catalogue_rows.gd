@@ -183,6 +183,50 @@ func test_a_weapon_row_greys_with_its_familys_own_words() -> void:
 		.contains("Spring Load")
 
 
+# #135: the MAIN menu joined the readout law — every rendered row carries its glossary short
+# text as hover text, wrapped. On the rendered buttons, same reason as everything above: the
+# term keys living in ACTION_DATA proves nothing about what show_main_menu actually drew.
+func test_every_main_menu_row_carries_its_glossary_readout() -> void:
+	var unit := _spawn(Vector2i(3, 0))
+	game.main_action_menu.show_main_menu(unit, Vector2i.ZERO)
+	await await_idle_frame()
+
+	var rows := _open_rows()
+	assert_int(rows.size()).override_failure_message("the main menu opened with no rows").is_greater(0)
+	for row in rows:
+		assert_str(row.tooltip_text) \
+			.override_failure_message("main-menu row '%s' has no hover readout" % row.text) \
+			.is_not_empty()
+		assert_str(row.tooltip_text) \
+			.override_failure_message("main-menu row '%s' rendered an unwrapped tooltip: '%s'" % [row.text, row.tooltip_text]) \
+			.is_equal(UiText.wrap(row.tooltip_text))
+
+
+# #135 round 2: every attack row's readout ends with its targeting channel, in the concise
+# paren form the dev picked — both kinds compose it through AttackData.targets_text, and both
+# fixtures' attacks default to TargetMode.UNIT, so "(unit)" is the data-derived expectation.
+func test_attack_rows_name_their_targeting_channel() -> void:
+	var alch := _alchemist_with_a_partial_rune()
+	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
+	await await_idle_frame()
+	var ember := _row_named(_open_rows(), "Ember")
+	assert_object(ember).is_not_null()
+	assert_str(ember.tooltip_text) \
+		.override_failure_message("a carving row's readout has no targeting channel: '%s'" % ember.tooltip_text) \
+		.contains("(unit)")
+
+	var unit := _spawn(Vector2i(4, 0))
+	var spear := _sprung_springspear()
+	unit.add_item(spear)
+	game.main_action_menu.on_pressed(MainActionMenu.WEAPON_ACTION, unit)
+	await await_idle_frame()
+	var stab := _row_named(_open_rows(), "Spring Stab")
+	assert_object(stab).is_not_null()
+	assert_str(stab.tooltip_text) \
+		.override_failure_message("a weapon row's readout has no targeting channel: '%s'" % stab.tooltip_text) \
+		.contains("(unit)")
+
+
 # A Springspear whose secondary requires readiness, already spent.
 func _sprung_springspear() -> WeaponInstance:
 	var template := WeaponData.new()

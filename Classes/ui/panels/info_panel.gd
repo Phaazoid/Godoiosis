@@ -135,13 +135,13 @@ func _refresh_stats():
 		# Yellow = a TEMPORARY source is contributing — the same language the DEF row already uses
 		# for terrain cover. It means this number will move on its own when the effect runs out.
 		var stat_color: Color = TERRAIN_BUFF_COLOR if _temporary_delta(stat) != 0 else NO_TINT
-		_add_stat(Stats.Stat.keys()[stat], str(eff),
+		_add_stat(Stats.Stat.keys()[stat], str(eff), Glossary.term_for_stat(stat),
 			stat_tooltip(inst.get_base_stat(stat), eff, _stat_sources(stat)), stat_color)
-	_add_stat("MOV", str(unit.get_mov()), mov_tooltip(
+	_add_stat("MOV", str(unit.get_mov()), Glossary.Term.MOV, mov_tooltip(
 		UnitInstance.JOBLESS_MOV_BASE,
 		Stats.dex_mov_band(unit.get_effective_stat(Stats.Stat.DEX)),
 		inst.empty_leg_count()))
-	_add_stat("WT", str(unit.get_weight()), weight_tooltip(unit.get_weight()))
+	_add_stat("WT", str(unit.get_weight()), Glossary.Term.WEIGHT, weight_tooltip(unit.get_weight()))
 	var armor_name := ""
 	var armor_power := 0
 	if unit.worn_armor != null:
@@ -151,13 +151,15 @@ func _refresh_stats():
 	# contributing — terrain you're standing on, not gear you own.
 	var def := RulesService.def_breakdown(unit, unit.movement.cell, board)
 	var def_color: Color = TERRAIN_BUFF_COLOR if def["cover"] > 0 else NO_TINT
-	_add_stat("DEF", str(def["total"]), def_tooltip(
+	_add_stat("DEF", str(def["total"]), Glossary.Term.DEF, def_tooltip(
 		armor_name, armor_power, unit.get_effective_stat(Stats.Stat.CON),
 		def["armor"], def["cover"], def["total"]), def_color)
-	_add_stat("LDR", str(unit.get_effective_ldr()), "LDR %d %+d PER band" % [
-		unit.get_effective_stat(Stats.Stat.LDR),
-		Stats.per_ldr_band(unit.get_effective_stat(Stats.Stat.PER))])
+	_add_stat("LDR", str(unit.get_effective_ldr()), Glossary.term_for_stat(Stats.Stat.LDR),
+		"LDR %d %+d PER band" % [
+			unit.get_effective_stat(Stats.Stat.LDR),
+			Stats.per_ldr_band(unit.get_effective_stat(Stats.Stat.PER))])
 	_add_stat("SQD", "%d/%d" % [unit.squad.get_members().size(), unit.squad.max_size()],
+		Glossary.Term.SQUAD_SIZE,
 		"Capacity: 1 + leader eLDR %d / %d per member" % [
 			unit.squad.get_leader().get_effective_ldr(), Squad.MEMBER_LDR_COST])
 
@@ -190,7 +192,12 @@ func _temporary_delta(stat: Stats.Stat) -> int:
 		total += effect.get_modifier(stat)
 	return total
 
-func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_TINT):
+# Every row's tooltip leads with WHAT the stat means (Glossary short, #135), then the number's
+# provenance when there is any. This deliberately ends the empty-when-unmodified tooltip — that
+# emptiness was an anti-noise call about provenance alone, and the meaning line is the content
+# it was waiting for. The provenance builders below are unchanged.
+func _add_stat(stat_name: String, value: String, term: Glossary.Term, provenance: String,
+		value_color := NO_TINT):
 	var name_lbl := Label.new()
 	name_lbl.text = stat_name
 	name_lbl.add_theme_color_override("font_color", DIM_COLOR)
@@ -200,11 +207,13 @@ func _add_stat(stat_name: String, value: String, tip: String, value_color := NO_
 	value_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	if value_color.a > 0.0:
 		value_lbl.add_theme_color_override("font_color", value_color)
-	if tip != "":
-		var wrapped := UiText.wrap(tip)
-		for lbl: Label in [name_lbl, value_lbl]:
-			lbl.tooltip_text = wrapped
-			lbl.mouse_filter = Control.MOUSE_FILTER_STOP
+	var tip: String = Glossary.short(term)
+	if provenance != "":
+		tip += "\n" + provenance
+	var wrapped := UiText.wrap(tip)
+	for lbl: Label in [name_lbl, value_lbl]:
+		lbl.tooltip_text = wrapped
+		lbl.mouse_filter = Control.MOUSE_FILTER_STOP
 	stats_grid.add_child(name_lbl)
 	stats_grid.add_child(value_lbl)
 

@@ -97,7 +97,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	var hovered: Unit = game.unit_at_pointer(cell)
 	if hovered == null:
-		game.hover_info_panel.clear()
+		_show_hover_panel(null, cell)   # every real tile carries a card (dev, #135 round 2)
 		game.overlay_manager.clear_selection_overlays()
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 		if game.squad_manager.active_squad == null:
@@ -112,7 +112,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, game.get_move_range(moverange, hovered), OverlayManager.ATLAS_COORDS)
-	_show_hover_panel(hovered)
+	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
 	if hovered.has_squad() and game.squad_manager.active_squad == null:   #TODO later change this to muted colors if other squads are active
@@ -255,14 +255,56 @@ func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	game.cursor_controller.set_cursor_pos(cell)
 
-func _show_hover_panel(hovered: Unit) -> void:
+func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	# Inspect + hover must never overlap. The inspect panel is a docked left column (#68):
-	#   - hovering the inspected unit adds nothing -> suppress the hover card
-	#   - any other unit -> the card keeps its own top/bottom logic, shifted right of the column
+	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile card too)
+	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
+	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
+	# icon + kind name header, then the tile's states, rules and possible interactions.
+	var board: BoardContext = game._board()
+	var kind: Terrain.Kind = board.terrain_kind_at(cell)
+	# Direct map read, null for a decorative NONE-kind tile on purpose — a headerless card, not
+	# get_terrain_icon_at_cell's ERROR art (that fallback is for pathing readouts, not a display).
+	var icon: Texture2D = GridUtils.TERRAIN_ICONS.get(kind, null)
+	var header: String = Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else ""
+	var tile_lines: Array[String] = _tile_readout_lines(cell)
+	var world_pos: Vector2 = hovered.global_position if hovered != null \
+		else game.grid.to_global(game.grid.map_to_local(cell))
 	if game.unit_info_panel.is_showing():
-		if game.unit_info_panel.is_showing_unit(hovered):
+		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
 			game.hover_info_panel.clear()
 			return
-		game.hover_info_panel.set_unit(hovered, int(game.unit_info_panel.panel_width()) + 8)
+		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos,
+			int(game.unit_info_panel.panel_width()) + 8)
 	else:
-		game.hover_info_panel.set_unit(hovered)
+		game.hover_info_panel.show_hover(hovered, icon, header, tile_lines, world_pos)
+
+# The tile card's body (#135): each dynamic state (with its live clock), the ground rules worth
+# knowing (water's traversal gate, a move cost above the norm), then which elements can touch
+# this tile — filtered through the SAME predicate the resolver's deposit filter runs
+# (TerrainReaction.applies_to_tile, via Glossary.terrain_reactions_for). Meanings come from
+# Glossary short texts, numbers from the reads the rules make — the card can't disagree with
+# either. The kind itself is the card's header, composed in _show_hover_panel.
+func _tile_readout_lines(cell: Vector2i) -> Array[String]:
+	var lines: Array[String] = []
+	var board: BoardContext = game._board()
+	var held: Array[Terrain.TileState] = []
+	if board.terrain_states != null:
+		held = board.terrain_states.states_at(cell)
+	for state: Terrain.TileState in held:
+		var line: String = "%s — %s" % [Terrain.tile_state_display_name(state),
+			Glossary.short(Glossary.term_for_tile_state(state))]
+		var turns: int = board.terrain_states.turns_remaining(cell, state)
+		if turns > 0:
+			line += " %d left." % turns
+		lines.append(line)
+	var kind: Terrain.Kind = board.terrain_kind_at(cell)
+	if kind == Terrain.Kind.WATER:
+		lines.append(Glossary.short(Glossary.Term.WATER_TILE))
+	var data: TileData = game.grid.get_cell_tile_data(cell)
+	if data != null and data.has_custom_data("move_cost"):
+		var cost: int = data.get_custom_data("move_cost")
+		if cost > 1:
+			lines.append("Slow going — costs %d movement to enter." % cost)
+	lines.append_array(Glossary.terrain_reactions_for(kind, held))
+	return lines

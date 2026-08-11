@@ -79,6 +79,13 @@ func burning_cells() -> Array[Vector2i]:
 			result.append(cell)
 	return result
 
+# Public read of a ticking state's clock at one cell — -1 when it has no timer there (the state
+# is permanent, like COVER/BLAZE, or simply absent). The hover readout is the first reader.
+func turns_remaining(cell: Vector2i, state: Terrain.TileState) -> int:
+	if _state_turns.has(cell) and _state_turns[cell].has(state):
+		return _state_turns[cell][state]
+	return -1
+
 func tick_states() -> void:
 	for cell in _state_turns.keys():
 		for state in _state_turns[cell].keys():

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #172 (2026-08-10).**
+**Canon checked through #180 (2026-08-11).**
 
 ## Principles
 
@@ -44,6 +44,18 @@ plus the running order of the queue-UX checklist. Update it as items land.
    too big to memorize — reactive tooltips are the contract that keeps discovery fun instead of
    homework. (Board-side #44 scope; pairs with the codex's "public geometry, private lexicon"
    policy in [transmutation-model-proposal.md](transmutation-model-proposal.md).)
+
+   *Progress ([#135](https://github.com/Phaazoid/Godoiosis/issues/135), 2026-08-11):* the
+   unit-state and tile halves are BUILT — state icons (hover card + inspect bar) explain
+   themselves in place, and **every real tile carries a hover card** (playtest round 2: icon +
+   kind header, states with live clocks, and which elements can touch it — filtered through
+   `TerrainReaction.applies_to_tile`, the resolver's own deposit gate), all reading
+   `Glossary.short` (`Classes/core/Glossary.gd`, the one term registry). Every attack row's
+   readout ends with its targeting channel — `(unit)` / `(tile)` / `(unit/tile)`, one spelling
+   on `AttackData.targets_text`. The global tooltip delay went 0.5 → 1.0s the same round (the
+   note `project.godot` cannot carry: dev, *"most people know what attack and move mean"* — the
+   readouts stay, they just stop popping up mid-flow). Still open here: the rune "reacts-with"
+   list — #167's inventory tooltip shows recipe/payload/strain, not reactions.
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
