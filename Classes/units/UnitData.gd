@@ -19,3 +19,18 @@ class_name UnitData
 # this becomes base_abilities seeding a mutable UnitInstance.innate_abilities, and
 # ScenarioUnitEntry has to round-trip it in the same change.
 @export var innate_abilities: Array[AbilityData] = []
+
+# --- Starting kit (#177) — what this character carries into any board, seeded by
+# Unit._seed_starting_kit() right after initialize(). All defaults inert: a kit-less UnitData
+# spawns exactly as before. Inventory entries should reference standalone equippable .tres
+# (Item Editor output) — they are granted as copy_equippable() copies, never shared.
+@export var starting_jobs: Array[String] = []
+@export var starting_inventory: Array[EquippableData] = []
+@export var starting_equipped_index := -1   # into starting_inventory; -1 = add_item's auto-equip decides
+@export var starting_worn_index := -1       # into starting_inventory; -1 = nothing worn
+@export var starting_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
+@export var starting_prosthetics: Dictionary[UnitInstance.LimbSlot, int] = {}   # slot -> starting_inventory index
+
+func has_starting_kit() -> bool:
+	return not starting_jobs.is_empty() or not starting_inventory.is_empty() \
+		or not starting_proficiency.is_empty() or not starting_prosthetics.is_empty()

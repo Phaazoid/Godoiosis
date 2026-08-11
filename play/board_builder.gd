@@ -135,8 +135,10 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	for unit in spawned:
 		var entry: ScenarioUnitEntry = entry_by_unit[unit]
 		# The whole UnitInstance-side snapshot — stats/HP/Will/inventory/limbs/proficiency/
-		# aura/jobs (#83); mirrors ScenarioManager.load_scenario.
-		entry.apply_unit_state(unit)
+		# aura/jobs (#83); mirrors ScenarioManager.load_scenario, including the reference
+		# gate (#177): a reference entry captured nothing, so the spawn's initialize + kit stand.
+		if entry.state_saved:
+			entry.apply_unit_state(unit)
 
 	for squad_id in members.keys():
 		var leader: Unit = leaders.get(squad_id)

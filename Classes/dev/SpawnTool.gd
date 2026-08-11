@@ -8,6 +8,8 @@ class_name SpawnTool
 
 var game
 
+const CUSTOM_LABEL := "(custom)"
+
 var stat_values: Dictionary[Stats.Stat, int] = {}
 var unit_name
 var faction: Team.Faction
@@ -19,6 +21,10 @@ var valid := false
 var error_message := ""
 var soldier_increment := 1
 var _spawnable := {}
+# Character spawning (#177): a cast member picked from Resources/Units/ spawns from its FILE
+# resource, so provenance survives and an authored save references it. null = the form flow.
+var _characters := {}
+var selected_character: UnitData = null
 
 func init(p_game):
 	game = p_game
@@ -48,6 +54,15 @@ func init(p_game):
 	for sprite_name in sprite_catalog:
 		sprite_dropdown.add_item(sprite_name)
 	_on_sprite_dropdown_item_selected(sprite_dropdown.selected)
+
+	# The cast picker (#177), scanned once per session like JobCatalog. "(custom)" keeps the
+	# form flow; a character spawns from its file with the faction radio as an override.
+	_characters = UnitCatalog.get_characters()
+	var character_options: Array = [CUSTOM_LABEL]
+	character_options.append_array(_characters.keys())
+	DevWidgets.add_option(self, "Character", character_options, CUSTOM_LABEL,
+		func(label: String): selected_character = null if label == CUSTOM_LABEL else _characters[label])
+	move_child(get_child(get_child_count() - 1), 0)
 
 func refresh_weapons():
 	var dropdown := %WeaponDropdown
@@ -116,6 +131,14 @@ func build_unit_data():
 		selected_sprite["downed"])
 
 func try_spawn_at(cell: Vector2i) -> void:
+	if selected_character != null:
+		# The FILE resource, un-copied: UnitFactory copies it and stamps unit_data_source (#177).
+		# The character's own starting kit seeds in _ready — the form's weapon pick doesn't apply.
+		set_selected_faction()
+		var unit = game.spawn_unit(selected_character, cell)
+		if unit != null and unit.get_faction() != faction:
+			unit.change_faction(faction)
+		return
 	_validate()
 	if valid:
 		build_unit_data()

@@ -26,6 +26,10 @@ const RALLY_FALLOFF := 2    # each further rally restores this much less; below 
 
 var rally_count: int = 0
 var unit_instance: UnitInstance
+# Provenance (#177): the standalone character FILE this unit was spawned from, when there is one.
+# Set by UnitFactory (null for form-built or scenario-embedded UnitData). Authored saves read it
+# so a cast member serializes as a reference to its file, never as an inline copy.
+var unit_data_source: UnitData = null
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer
@@ -105,6 +109,7 @@ func _ready():
 	unit_instance.data = unit_data
 	unit_instance.initialize()
 	unit_instance.died.connect(_on_instance_died)
+	_seed_starting_kit()
 	map_sprite.z_index = BASE_SPRITE_INDEX
 	move_sprite.z_index = BASE_SPRITE_INDEX
 	downed_sprite.z_index = BASE_SPRITE_INDEX
@@ -116,6 +121,58 @@ func _ready():
 	if unit_data.downed_sprite != null:
 		downed_sprite.texture = unit_data.downed_sprite
 	_apply_faction_visuals()
+
+# Starting kit (#177): grant what the character file says this unit carries into every board.
+# Runs once, right after initialize() — aura is already seeded, so the #157 equip gates read real
+# values. Everything goes through the gated doors; a refusal is an AUTHORING error and warns loudly
+# rather than silently correcting. A kit-less UnitData makes this a no-op.
+func _seed_starting_kit() -> void:
+	if not unit_data.has_starting_kit():
+		return
+
+	for job_id in unit_data.starting_jobs:
+		if not unit_instance.add_job(job_id):
+			push_warning("%s: starting job '%s' unknown or duplicate — skipped" % [get_unit_name(), job_id])
+
+	for family: WeaponData.WeaponType in unit_data.starting_proficiency:
+		unit_instance.set_proficiency(family, unit_data.starting_proficiency[family])
+
+	# Grant copies, never the authored resources; remember where each kit index landed so the
+	# explicit picks below address the CARRIED instance.
+	var slot_for_kit_index: Dictionary[int, int] = {}
+	for i in unit_data.starting_inventory.size():
+		var authored := unit_data.starting_inventory[i]
+		if authored == null:
+			continue
+		var granted := authored.copy_equippable()
+		var weapon := granted as WeaponInstance
+		if weapon != null and weapon.get_script() == WeaponInstance and weapon.template != null \
+				and weapon.template.weapon_type != WeaponData.WeaponType.NONE:
+			# A hand-inlined inspector weapon misses its family subclass (make() never ran) —
+			# readiness/signature mechanics would be silently inert. Reference an Item Editor
+			# variant .tres instead.
+			push_warning("%s: starting item '%s' is a base-class WeaponInstance for a subclassed family" % [get_unit_name(), granted.display_name])
+		if not add_item(granted):
+			push_warning("%s: inventory full — starting item '%s' dropped" % [get_unit_name(), authored.display_name])
+			continue
+		slot_for_kit_index[i] = inventory.find(granted)
+
+	if unit_data.starting_equipped_index >= 0:
+		var equip_slot: int = slot_for_kit_index.get(unit_data.starting_equipped_index, -1)
+		if equip_slot < 0 or not set_equipped_weapon(inventory[equip_slot]):
+			push_warning("%s: starting equipped pick %d refused" % [get_unit_name(), unit_data.starting_equipped_index])
+
+	if unit_data.starting_worn_index >= 0:
+		var wear_slot: int = slot_for_kit_index.get(unit_data.starting_worn_index, -1)
+		if wear_slot < 0 or not wear_armor(wear_slot):
+			push_warning("%s: starting worn pick %d refused" % [get_unit_name(), unit_data.starting_worn_index])
+
+	for limb_slot: UnitInstance.LimbSlot in unit_data.starting_prosthetics:
+		var kit_index: int = unit_data.starting_prosthetics[limb_slot]
+		var item_slot: int = slot_for_kit_index.get(kit_index, -1)
+		var prosthetic := (inventory[item_slot] as WeaponInstance) if item_slot >= 0 else null
+		if prosthetic == null or not unit_instance.install_prosthetic(limb_slot, prosthetic):
+			push_warning("%s: starting prosthetic for slot %s refused" % [get_unit_name(), UnitInstance.LimbSlot.keys()[limb_slot]])
 
 func add_item(item: Item) -> bool:
 	for i in range(inventory.size()):

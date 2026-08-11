@@ -1,6 +1,10 @@
 extends Object
 class_name UnitFactory
 
+# Static construction of Unit nodes and ad-hoc UnitData: create_unit instantiates the Unit
+# scene off a UnitData (deep-copied — see below — with the source file remembered for #177's
+# reference saves); create_unit_data builds a throwaway UnitData for the dev spawner's form.
+
 static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> Unit:
 	var unit_scene = preload("res://Scenes/Unit.tscn")
 	var unit = unit_scene.instantiate()
@@ -24,6 +28,11 @@ static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> U
 	# board fact, not identity. That change also needs a `faction` field on ScenarioUnitEntry,
 	# because today saves persist it implicitly by copying the whole UnitData.
 	unit.unit_data = data.duplicate(true)
+	# Provenance (#177): remember the standalone character FILE this unit came from — the duplicate
+	# above has no resource_path, and a scenario-embedded sub-resource's path carries "::" and is
+	# not a character file. Authored saves read this to serialize a reference instead of a copy.
+	if data.resource_path != "" and not data.resource_path.contains("::"):
+		unit.unit_data_source = data
 
 	return unit
 	

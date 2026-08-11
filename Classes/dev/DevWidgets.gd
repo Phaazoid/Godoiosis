@@ -19,11 +19,12 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 	row.add_child(spinbox)
 	container.add_child(row)
 
-static func add_checkbox(container: Node, label_text: String, initial_value: bool, on_change: Callable) -> void:
+static func add_checkbox(container: Node, label_text: String, initial_value: bool, on_change: Callable, tooltip := "") -> void:
 	var checkbox := CheckBox.new()
 	checkbox.text = label_text
 	checkbox.button_pressed = initial_value
 	checkbox.toggled.connect(on_change)
+	checkbox.tooltip_text = tooltip
 	container.add_child(checkbox)
 
 static func add_option(container: Node, label_text: String, options: Array, current: String, on_change: Callable) -> void:

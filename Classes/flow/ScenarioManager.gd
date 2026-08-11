@@ -38,18 +38,22 @@ static func valid_entries(scenario: ScenarioData) -> Array[ScenarioUnitEntry]:
 
 # The write itself is DevWidgets.save_over -- dir creation, the take_over_path cache claim, and
 # the error path (mirrored into status_label when given, #168) all live there, not here.
-func save_scenario(scenario_name: String, status_label: Label = null):
+func save_scenario(scenario_name: String, status_label: Label = null, authored := false):
 	if scenario_name.strip_edges() == "":
 		push_warning("Scenario needs a name")
 		return
 
-	var scenario := capture_scenario(scenario_name)
+	var scenario := capture_scenario(scenario_name, authored)
 	var path := scenario_path(scenario_name)
 	if DevWidgets.save_over(scenario, path, status_label):
 		last_loaded_path = path
 
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
-func capture_scenario(scenario_name: String) -> ScenarioData:
+# authored (#177): cast units — those spawned from a standalone character file — save as a
+# REFERENCE to that file with no state captured, so every load re-reads the character as it is
+# then. Default false keeps every other caller (BugReporter's #87 mid-battle snapshot above all)
+# a byte-exact capture. Ad-hoc units snapshot fully in both modes; nothing else holds them.
+func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	var scenario := ScenarioData.new()
 	scenario.scenario_name = scenario_name
 	scenario.tile_data = grid.tile_map_data
@@ -66,7 +70,13 @@ func capture_scenario(scenario_name: String) -> ScenarioData:
 			continue
 
 		var entry := ScenarioUnitEntry.new()
-		entry.unit_data = unit.unit_data.duplicate(true)
+		if authored and unit.unit_data_source != null:
+			# Reference, not copy: serializes as an ExtResource to the character file, and
+			# state_saved=false tells the loader the spawn's own initialize+kit is the whole answer.
+			entry.unit_data = unit.unit_data_source
+			entry.state_saved = false
+		else:
+			entry.unit_data = unit.unit_data.duplicate(true)
 		entry.cell = unit.movement.cell
 		entry.squad_id = squad_manager.squads.find(unit.squad)
 		entry.is_leader = unit.is_leader()
@@ -76,7 +86,8 @@ func capture_scenario(scenario_name: String) -> ScenarioData:
 			entry.squad_zone = unit.squad.zone_name
 			entry.squad_has_acted = unit.squad.has_acted   # #87: a spent squad reloads spent
 
-		entry.capture_unit_state(unit)
+		if entry.state_saved:
+			entry.capture_unit_state(unit)
 
 		scenario.unit_entries.append(entry)
 
@@ -109,12 +120,15 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	var acted_squad_ids: Array[int] = []
 
 	for entry in valid_entries(scenario):
-		var unit: Unit = game.spawn_unit(entry.unit_data.duplicate(true), entry.cell)
+		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
+		# here was destroying resource_path — the provenance a reference entry exists to keep.
+		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell)
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue
 
-		entry.apply_unit_state(unit)
+		if entry.state_saved:
+			entry.apply_unit_state(unit)
 
 		if entry.squad_id == -1:
 			continue

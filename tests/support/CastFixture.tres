@@ -1,0 +1,9 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_cast"]
+
+[resource]
+script = ExtResource("1_cast")
+display_name = "Cast Fixture"
+starting_jobs = Array[String](["scout"])
+metadata/_custom_type_script = "uid://cvvknuw621ar2"
