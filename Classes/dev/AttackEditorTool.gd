@@ -26,6 +26,9 @@ var _mode := Mode.TRANSMUTATION
 var current: AttackData = null
 var current_template: WeaponData = null   # FAMILY_MAINS only: which family "current" belongs to
 var _items := {}
+# Which dropdown entry "current" was loaded from ("" = a New attack). Pool modes load a COPY with
+# no resource_path, so nothing else records this -- and Update's load-gate needs it (2026-08-11).
+var _loaded_name := ""
 
 func _ready():
 	_refresh_list()
@@ -50,6 +53,7 @@ func _on_family_mains_mode_selected():
 	if _items.is_empty():
 		current_template = null
 		current = null
+		_loaded_name = ""
 		name_input.text = ""
 		populate()
 		_refresh_buttons()
@@ -83,11 +87,21 @@ func _refresh_list(select_name := ""):
 # rather than a chosen name.
 func _refresh_buttons():
 	var noun := "family" if _mode == Mode.FAMILY_MAINS else "attack"
-	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), noun)
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), noun, _update_block_reason())
 	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(load_dropdown), noun)
 	save_as_button.disabled = _mode == Mode.FAMILY_MAINS
 	if _mode == Mode.FAMILY_MAINS:
 		delete_button.disabled = true
+
+# "" = allowed. Update only overwrites what is actually LOADED (dev call 2026-08-11). In
+# FAMILY_MAINS this also keeps the tooltip's named family and the written file in agreement --
+# its Update always wrote the loaded main's own file whatever the dropdown said.
+func _update_block_reason() -> String:
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "" or target == _loaded_name:
+		return ""
+	var noun := "family" if _mode == Mode.FAMILY_MAINS else "attack"
+	return "Load %s '%s' first -- Update overwrites it with whatever is in the editor" % [noun, target]
 
 func _load_selected():
 	var target := DevWidgets.selected_name(load_dropdown)
@@ -100,6 +114,8 @@ func _load_selected():
 	else:
 		current_template = null
 		current = picked.duplicate(true)
+	_loaded_name = target
+	_refresh_buttons()
 	populate()
 
 func _on_load_dropdown_item_selected(_index: int):
@@ -113,6 +129,7 @@ func _on_new_pressed():
 		return
 	current_template = null
 	current = TransmutationData.new() if _mode == Mode.TRANSMUTATION else WeaponAttackData.new()
+	_loaded_name = ""
 	name_input.text = ""
 	load_dropdown.select(-1)
 	_refresh_buttons()
@@ -123,6 +140,11 @@ func _on_update_pressed():
 		return
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
+		return
+	# The handler is the real gate -- the disabled button is only its surface (#166 shape).
+	var reason := _update_block_reason()
+	if reason != "":
+		status_label.text = reason
 		return
 	if _mode == Mode.FAMILY_MAINS:
 		# The main is edited LIVE, never duplicated, so it already knows its own file.
@@ -140,6 +162,7 @@ func _on_update_pressed():
 		status_label.text = msg
 		return
 	if DevWidgets.save_over(current, path, status_label):
+		_loaded_name = current.display_name   # a rename moves the loaded identity with it
 		_refresh_list(current.display_name)
 
 func _on_delete_pressed():
@@ -148,7 +171,14 @@ func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
+	DevWidgets.confirm_delete(self, "attack '%s'" % target, func(): _delete_confirmed(target))
+
+func _delete_confirmed(target: String) -> void:
+	if not _items.has(target):
+		return   # catalog moved between the press and the Yes
 	if DevWidgets.delete_saved_file(_items[target].resource_path, "attack", status_label):
+		if target == _loaded_name:
+			_loaded_name = ""
 		_refresh_list()
 
 func _on_save_as_pressed():
@@ -168,6 +198,7 @@ func _on_save_as_pressed():
 		return
 	current.display_name = chosen_name
 	if DevWidgets.save_over(current, path, status_label):
+		_loaded_name = chosen_name   # save_over take_over_path'd it: the editor now holds this file
 		name_input.text = ""
 		_refresh_list(chosen_name)
 

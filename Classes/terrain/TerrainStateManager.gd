@@ -70,6 +70,15 @@ func cells_with(state: Terrain.TileState) -> Array[Vector2i]:
 			result.append(cell)
 	return result
 
+# Every cell on fire, each listed ONCE -- a cell can legally hold both fire states (painted
+# BLAZE, then a fireball lands), and the end-of-turn burn must not damage its occupant twice.
+func burning_cells() -> Array[Vector2i]:
+	var result: Array[Vector2i] = []
+	for cell in _states:
+		if Terrain.is_burning(states_at(cell)):
+			result.append(cell)
+	return result
+
 func tick_states() -> void:
 	for cell in _state_turns.keys():
 		for state in _state_turns[cell].keys():

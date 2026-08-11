@@ -27,7 +27,8 @@ static func add_checkbox(container: Node, label_text: String, initial_value: boo
 	checkbox.tooltip_text = tooltip
 	container.add_child(checkbox)
 
-static func add_option(container: Node, label_text: String, options: Array, current: String, on_change: Callable) -> void:
+# Returns the row (like add_lineedit) so callers can show/hide it with a mode (#174).
+static func add_option(container: Node, label_text: String, options: Array, current: String, on_change: Callable) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
@@ -40,6 +41,7 @@ static func add_option(container: Node, label_text: String, options: Array, curr
 	row.add_child(label)
 	row.add_child(option)
 	container.add_child(row)
+	return row
 
 static func add_lineedit(container: Node, label_text: String, initial_value: String, on_change: Callable) -> HBoxContainer:
 	var row := HBoxContainer.new()
@@ -156,21 +158,42 @@ static func selected_name(dropdown: OptionButton) -> String:
 		return ""
 	return dropdown.get_item_text(dropdown.selected)
 
-# Update is the one button that overwrites without asking -- name its victim in the tooltip.
-static func refresh_update_button(button: Button, target: String, noun: String) -> void:
-	button.disabled = target == ""
+# Update only fires at the LOADED file (dev call 2026-08-11, after an Update aimed at an unloaded
+# scenario destroyed it): the tool passes the reason it is blocked, "" = allowed. The tooltip
+# carries the reason, so the greyed button and the refused press cannot disagree (#166 shape).
+static func refresh_update_button(button: Button, target: String, noun: String, block_reason := "") -> void:
+	button.disabled = target == "" or block_reason != ""
 	if target == "":
 		button.tooltip_text = "Pick a saved %s to overwrite" % noun
+	elif block_reason != "":
+		button.tooltip_text = block_reason
 	else:
 		button.tooltip_text = "Overwrite %s" % target
 
-# Delete follows Update's own doctrine -- no confirmation dialog, the tooltip names the victim.
+# Delete asks first -- every dev Delete rides confirm_delete (dev call 2026-08-11); the tooltip
+# still names the victim.
 static func refresh_delete_button(button: Button, target: String, noun: String) -> void:
 	button.disabled = target == ""
 	if target == "":
 		button.tooltip_text = "Pick a saved %s to delete" % noun
 	else:
 		button.tooltip_text = "Delete %s" % target
+
+# The Yes/No gate every dev Delete button rides. One-shot ConfirmationDialog transient to the
+# dev window; frees itself on either answer. Swap the mechanism here if the OS dialog feels wrong.
+static func confirm_delete(host: Control, victim: String, on_confirm: Callable) -> ConfirmationDialog:
+	var dialog := ConfirmationDialog.new()
+	dialog.title = "Are you sure?"
+	dialog.dialog_text = "Delete %s? This cannot be undone." % victim
+	dialog.ok_button_text = "Yes"
+	dialog.cancel_button_text = "No"
+	dialog.confirmed.connect(on_confirm)
+	dialog.visibility_changed.connect(func():
+		if not dialog.visible:
+			dialog.queue_free())
+	host.add_child(dialog)
+	dialog.popup_centered()
+	return dialog
 
 # Filenames illegal on Windows -- refuse rather than sanitize (a silently renamed file is the same
 # surprise one step later, and every catalog keys on the exact name). '/' is a separate question

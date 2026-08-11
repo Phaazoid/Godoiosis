@@ -15,6 +15,11 @@ const MISSION_DIR := SCENARIO_DIR + "missions/"
 static func scenario_path(scenario_name: String) -> String:
 	return SCENARIO_DIR + scenario_name + ".tres"
 
+# The inverse: a saved path's dropdown-relative name ("missions/Prolog"). One spelling for the
+# trim -- the Scenario tab's list, its Loaded label, and its auto-aim all read this.
+static func display_name(path: String) -> String:
+	return path.trim_prefix(SCENARIO_DIR).trim_suffix(".tres")
+
 @onready var game = get_parent()
 @onready var grid: TileMapLayer = $"../Grid"
 @onready var units_root: Node2D = $"../Units"
@@ -108,6 +113,8 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 	grid.tile_map_data = scenario.tile_data
 	game.terrain_states.load_state_dict(scenario.terrain_states)
+	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
+	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.zone_manager.load_dict(scenario.zones)
 	game.mission_controller.set_objectives(scenario.objectives)
 	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested)
@@ -193,6 +200,10 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 
 func clear_board():
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
+	# A cleared board has NO loaded scenario. Update's load-gate reads this; a stale path would let
+	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
+	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.
+	last_loaded_path = ""
 	# Same seam for AI control (#150): spawn_sandbox() lands here with no ScenarioData, so without
 	# this it would inherit the last mission's flags. A typed local, not a bare [] -- `game` is
 	# untyped, and a literal passed through it is not coerced to the typed parameter.
@@ -200,6 +211,8 @@ func clear_board():
 	game.ai_controller.set_ai_factions(no_ai_factions)
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager)
+	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)
+	overlay_manager.redraw_terrain_live(game.terrain_states)
 	if game.dev_overlay != null:
 		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()

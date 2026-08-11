@@ -15,6 +15,9 @@ class_name ItemEditorTool
 
 var current_item: EquippableData = null
 var _variants := {}
+# Which catalog entry current_item was loaded from ("" = a New item). Load hands out a COPY with
+# no resource_path, so nothing else records this -- and Update's load-gate needs it (2026-08-11).
+var _loaded_name := ""
 
 func _ready():
 	for key in _base_catalog():
@@ -55,14 +58,22 @@ func _refresh_variant_list(select_name := ""):
 	_refresh_update_button()
 
 func _refresh_update_button():
-	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), "item")
+	DevWidgets.refresh_update_button(update_button, DevWidgets.selected_name(load_dropdown), "item", _update_block_reason())
 	DevWidgets.refresh_delete_button(delete_button, DevWidgets.selected_name(load_dropdown), "item")
+
+# "" = allowed. Update only overwrites the entry that is actually LOADED (dev call 2026-08-11).
+func _update_block_reason() -> String:
+	var target := DevWidgets.selected_name(load_dropdown)
+	if target == "" or target == _loaded_name:
+		return ""
+	return "Load '%s' first -- Update overwrites it with whatever is in the editor" % target
 
 func _rebase_on_type(index: int):
 	var bases := _base_catalog()
 	var key = bases.keys()[index]
 	var base = bases[key]
 	current_item = WeaponInstance.make(base) if base is WeaponData else base.duplicate(true)
+	_loaded_name = ""
 	load_dropdown.select(-1)
 	_refresh_update_button()
 	populate()
@@ -82,11 +93,18 @@ func _on_load_pressed():
 	if target == "":
 		return
 	current_item = _variants[target].copy_equippable()
+	_loaded_name = target
+	_refresh_update_button()
 	populate()
 
 func _on_update_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if current_item == null or target == "":
+		return
+	# The handler is the real gate -- the disabled button is only its surface (#166 shape).
+	var reason := _update_block_reason()
+	if reason != "":
+		status_label.text = reason
 		return
 	# Overwrite the file the entry actually came from. The dropdown key is the item's NAME, and a
 	# path rebuilt from it would miss any file whose basename differs.
@@ -97,13 +115,21 @@ func _on_update_pressed():
 		status_label.text = msg
 		return
 	if DevWidgets.save_over(current_item, path, status_label):
+		_loaded_name = current_item.display_name   # a rename moves the loaded identity with it
 		_refresh_variant_list(current_item.display_name)
 
 func _on_delete_pressed():
 	var target := DevWidgets.selected_name(load_dropdown)
 	if target == "":
 		return
+	DevWidgets.confirm_delete(self, "item '%s'" % target, func(): _delete_confirmed(target))
+
+func _delete_confirmed(target: String) -> void:
+	if not _variants.has(target):
+		return   # catalog moved between the press and the Yes
 	if DevWidgets.delete_saved_file(_variants[target].resource_path, "item", status_label):
+		if target == _loaded_name:
+			_loaded_name = ""
 		_refresh_variant_list()
 
 func _on_save_as_pressed():
@@ -123,6 +149,7 @@ func _on_save_as_pressed():
 		return
 	current_item.display_name = entered_name
 	if DevWidgets.save_over(current_item, path, status_label):
+		_loaded_name = entered_name   # save_over take_over_path'd it: the editor now holds this file
 		name_input.text = ""
 		_refresh_variant_list(entered_name)
 

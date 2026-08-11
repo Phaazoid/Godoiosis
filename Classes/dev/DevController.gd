@@ -44,7 +44,7 @@ func _toggle_dev_overlay() -> void:
 		overlay.show_beside()
 		game.set_dev_mode(true)
 	else:
-		game.set_dev_mode(game.game_state != game.GameState.DEV_MODE)
+		game.set_dev_mode(not game.dev_mode_enabled)   # toggle the INTENT, never infer from game_state
 
 # --- unit move / duplicate ---
 
@@ -114,17 +114,23 @@ func handle_tile_brush(event) -> void:
 
 func _paint() -> void:
 	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
-	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.ZONE:
-		_paint_zone(cell)
-	else:
-		_paint_tile(cell)
+	match game.dev_overlay.tile_brush.paint_mode:
+		TileBrushTool.PaintMode.ZONE:
+			_paint_zone(cell)
+		TileBrushTool.PaintMode.STATE:
+			_paint_state(cell)
+		TileBrushTool.PaintMode.TERRAIN:
+			_paint_tile(cell)
 
 func _erase() -> void:
 	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
-	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.ZONE:
-		_erase_zone(cell)
-	else:
-		_erase_tile(cell)
+	match game.dev_overlay.tile_brush.paint_mode:
+		TileBrushTool.PaintMode.ZONE:
+			_erase_zone(cell)
+		TileBrushTool.PaintMode.STATE:
+			_erase_state(cell)
+		TileBrushTool.PaintMode.TERRAIN:
+			_erase_tile(cell)
 
 func _paint_tile(cell: Vector2i) -> void:
 	game.grid.set_cell(cell, 0, game.dev_overlay.tile_brush.selected_tile)
@@ -144,6 +150,29 @@ func _paint_zone(cell: Vector2i) -> void:
 func _erase_zone(cell: Vector2i) -> void:
 	game.zone_manager.erase_cell(cell)
 	game.overlay_manager.redraw_zones(game.zone_manager)
+
+# Dynamic tile-state painting (#174). Writes through TerrainStateManager.apply -- the ONE deposit
+# seam -- so a painted BURNING starts its real 3-turn clock; permanent fire is what BLAZE is for.
+func _paint_state(cell: Vector2i) -> void:
+	var state: Terrain.TileState = game.dev_overlay.tile_brush.selected_tile_state()
+	if game.terrain_states.has_state(cell, state):
+		return   # a drag repaints every motion event: skip the redraw churn and the timer rewind
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([state])
+	game.terrain_states.apply(effect)
+	game.overlay_manager.redraw_terrain_live(game.terrain_states)
+
+# Right-click clears the WHOLE cell's states, mirroring terrain erase.
+func _erase_state(cell: Vector2i) -> void:
+	var current: Array[Terrain.TileState] = game.terrain_states.states_at(cell)
+	if current.is_empty():
+		return
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_removed.assign(current)
+	game.terrain_states.apply(effect)
+	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	
 func resize_map(width: int, height: int, fill_tile: Vector2i) -> void:
 	width = maxi(1, width)

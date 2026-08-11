@@ -225,7 +225,7 @@ func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:
 
 func _end_mission() -> void:
 	_ending = true
-	game.clear_selection()                            # sets game_state = IDLE ...
+	game.clear_selection()                            # rests game_state ...
 	game.refresh_action_queue(null)
 	game.unit_info_panel.clear()
 	game.game_state = game.GameState.MISSION_OVER     # ... so lock the board AFTER it
@@ -234,7 +234,7 @@ func _end_mission() -> void:
 	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart())
 
 	_ending = false
-	game.game_state = game.GameState.IDLE
+	game.game_state = game._base_state()   # unlock; dev mode survives a mission end (2026-08-11)
 	match choice:
 		MissionEndBanner.Choice.RETRY:
 			restart_mission()
