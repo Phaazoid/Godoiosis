@@ -171,18 +171,31 @@ func test_capture_projects_the_live_unit() -> void:
 	assert_str(tool.status_label.text).contains("inline")
 
 # ==============================================================================
-#  The Spawn tab's dropdown refresh wire
+#  The Spawn form's dropdown refresh wires (both doors)
 # ==============================================================================
 
-func test_spawn_tab_entry_rebuilds_the_character_dropdown() -> void:
-	# A character authored here must reach the Spawn tab's cast picker without a restart. Drives
-	# the real tab-entry hook, not refresh_characters() directly -- the wire is the claim.
+func test_switching_to_the_spawn_subtab_rebuilds_the_character_dropdown() -> void:
+	# The inner door: save a character, flip Character -> Spawn, place it. No outer tab change
+	# ever fires on that path, so the sub-tab switch must carry its own refresh wire.
 	var spawn: SpawnTool = overlay.spawn
 	spawn._character_dropdown.clear()   # a stale list, as if the catalog changed underneath
 	assert_int(spawn._character_dropdown.item_count).is_equal(0)
 
+	var authoring_tabs: TabContainer = overlay.get_node("%AuthoringTabs")
+	authoring_tabs.current_tab = authoring_tabs.get_tab_idx_from_control(_tool())
+	authoring_tabs.current_tab = authoring_tabs.get_tab_idx_from_control(spawn)
+
+	assert_int(spawn._character_dropdown.item_count).is_equal(UnitCatalog.get_characters().size() + 1)
+
+func test_entering_the_authoring_tab_rebuilds_the_character_dropdown() -> void:
+	# The outer door: authoring can also happen entirely elsewhere (a scenario load, a delete),
+	# so entering Unit Authoring refreshes too. Drives the real tab-entry hook.
+	var spawn: SpawnTool = overlay.spawn
+	spawn._character_dropdown.clear()
+	assert_int(spawn._character_dropdown.item_count).is_equal(0)
+
 	var tabs: TabContainer = overlay.get_node("%DevTabs")
-	tabs.current_tab = tabs.get_tab_idx_from_control(_tool())
-	tabs.current_tab = tabs.get_tab_idx_from_control(spawn)
+	tabs.current_tab = tabs.get_tab_idx_from_control(overlay.unit_editor)
+	tabs.current_tab = tabs.get_tab_idx_from_control(overlay.unit_authoring)
 
 	assert_int(spawn._character_dropdown.item_count).is_equal(UnitCatalog.get_characters().size() + 1)
