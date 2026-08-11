@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #172 (2026-08-10).**
+**Canon checked through #180 (2026-08-11).**
 
 ## Principles
 
@@ -44,6 +44,14 @@ plus the running order of the queue-UX checklist. Update it as items land.
    too big to memorize — reactive tooltips are the contract that keeps discovery fun instead of
    homework. (Board-side #44 scope; pairs with the codex's "public geometry, private lexicon"
    policy in [transmutation-model-proposal.md](transmutation-model-proposal.md).)
+
+   *Progress ([#135](https://github.com/Phaazoid/Godoiosis/issues/135), 2026-08-11):* the
+   unit-state and tile halves are BUILT — state icons (hover card + inspect bar) and any hovered
+   tile that is anything other than ordinary ground now explain themselves in place, all reading
+   `Glossary.short` (`Classes/core/Glossary.gd`, the one term registry), and the Glossary page's
+   interaction list is composed from the authored reaction catalogs so it cannot drift from the
+   resolver. Still open here: the rune "reacts-with" list — #167's inventory tooltip shows
+   recipe/payload/strain, not reactions.
 
 ## #49 Action Queue UX — CLOSED, all items shipped
 
