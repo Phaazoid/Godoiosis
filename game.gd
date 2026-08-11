@@ -349,6 +349,9 @@ func _on_turn_started(faction: Team.Faction):
 	if not board.faction_has_active_units(faction) and board.has_active_units():
 		turn_manager.end_turn(board.present_factions())
 		return
+	# A turn HANDOFF resets actions; a menu arrival trusts the file (#144). Keep this out of
+	# start_faction_turn -- the menu paths call it, and a resumed save's has_acted must survive.
+	squad_manager.reset_faction_actions(faction)
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
@@ -356,7 +359,6 @@ func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.BETWEEN_TURNS
 	await Pacing.beat(self, Pacing.TURN_HANDOFF)
 	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
-	squad_manager.reset_faction_actions(faction)
 
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
