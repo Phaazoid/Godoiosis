@@ -31,7 +31,7 @@ func _ready() -> void:
 	tabs.set_tab_tooltip(2, "Author items — weapons and runes. Load a preset or start new, edit, name, save.")
 	tabs.set_tab_tooltip(3, "Author attacks — Transmutation, Weapon Attack, or Family Mains (edit an established family's main in place); toggle at top.")
 	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
-	tabs.set_tab_tooltip(5, "Paint tiles — left-drag paints, right-click erases.")
+	tabs.set_tab_tooltip(5, "Paint the board — Terrain, Zones, or Tile States (fire/ice/cover); left-drag paints, right-click erases.")
 
 func _on_close_requested():
 	hide()

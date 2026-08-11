@@ -158,7 +158,7 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0):
 			await get_tree().process_frame
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
-# the attack phase that produced them. Burning-only for now; generalizes as more tile states land.
+# the attack phase that produced them.
 func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 	for effect in cell_effects:
 		game.terrain_states.apply(effect)
@@ -171,7 +171,7 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
 # through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
-	for cell in game.terrain_states.cells_with(Terrain.TileState.BURNING):
+	for cell in game.terrain_states.burning_cells():
 		var unit: Unit = game.get_unit_at_cell(cell)
 		if unit != null and unit.is_active() and unit.get_faction() == faction:
 			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)

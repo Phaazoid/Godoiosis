@@ -15,9 +15,22 @@ enum TileState {
 	NONE,
 	BURNING,
 	FROZEN,
-	COVER    # #84: Burrow-dug entrenchment. Permanent (no STATE_DURATIONS entry -> never ticks out);
+	COVER,   # #84: Burrow-dug entrenchment. Permanent (no STATE_DURATIONS entry -> never ticks out);
 			 # removed only by a destructive hit (states_removed), never by a timer.
+	BLAZE    # #174: authored set-dressing fire -- BURNING's permanent sibling (COVER's no-timer
+			 # mechanism). Same end-of-turn damage; deposited only by the dev brush so far.
 }
+
+# "Is this tile on fire?" has ONE spelling (#174): FIRE_STATES is which states count, is_burning
+# the predicate over a cell's states, TerrainStateManager.burning_cells the enumeration form.
+# No reader may enumerate fire members itself.
+const FIRE_STATES: Array[TileState] = [TileState.BURNING, TileState.BLAZE]
+
+static func is_burning(states: Array[TileState]) -> bool:
+	for state in states:
+		if FIRE_STATES.has(state):
+			return true
+	return false
 
 # Static authored tile content, read straight off the tileset's "terrain_type" int
 # custom-data layer (Resources/TestTiles.tres). Serialized in the .tres: APPEND-ONLY.
