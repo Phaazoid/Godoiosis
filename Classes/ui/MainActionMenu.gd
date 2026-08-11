@@ -78,8 +78,14 @@ const ACTION_DATA := {
 #  Opening menus
 # ==============================================================================
 
+# Rows go through _entry like every other menu's (#166's law, applied here by #135): the
+# glossary short text is the hover readout on every option. Nothing is greyed at this level —
+# populate() still hides what a unit can't do, a deliberate per-menu policy (#166).
 func show_main_menu(unit: Unit, pos: Vector2i) -> void:
-	_open_menu(unit, populate(unit), ACTION_DATA, pos, on_pressed)
+	var data := {}
+	for id in ACTION_DATA:
+		data[id] = _entry(ACTION_DATA[id]["name"], "", Glossary.short(ACTION_DATA[id]["term"]))
+	_open_menu(unit, populate(unit), data, pos, on_pressed)
 
 # Attack entry (weapons-only Weapon Action refactor, 2026-07-24): a WEAPON always fires its default
 # (main) attack — no submenu; its extras + self-abilities live under Weapon Action now. A RUNE keeps

@@ -239,7 +239,7 @@ static func _build_entries() -> Dictionary:
 			% UnitInstance.JOBLESS_MOV_BASE
 			+ "leg halves it; losing both pins it to 1."}
 	e[Term.WEIGHT] = {"category": Category.STATS, "title": "Weight (WT)",
-		"short": "Carried gear mass. Tracked only — no effect yet.",
+		"short": "The mass of everything the unit carries.",   # the row's own tooltip already says "no effect yet"
 		"long": "The summed weight of everything in the unit's inventory. Tracked but not yet fed "
 			+ "into any rule."}
 	e[Term.DEF] = {"category": Category.STATS, "title": "Defense (DEF)",

@@ -97,7 +97,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 
 	var hovered: Unit = game.unit_at_pointer(cell)
 	if hovered == null:
-		game.hover_info_panel.clear()
+		_show_hover_panel(null, cell)   # a notable tile still gets its readout; plain ground clears
 		game.overlay_manager.clear_selection_overlays()
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 		if game.squad_manager.active_squad == null:
@@ -112,7 +112,7 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 		game.draw_squad_leader_range(hovered.squad, hovered.squad.leader.get_projected_destination())
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, game.get_move_range(moverange, hovered), OverlayManager.ATLAS_COORDS)
-	_show_hover_panel(hovered)
+	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
 	if hovered.has_squad() and game.squad_manager.active_squad == null:   #TODO later change this to muted colors if other squads are active
@@ -255,14 +255,45 @@ func _set_cursor_for_preview(cell: Vector2i, valid: bool) -> void:
 		game.cursor_controller.set_state(CursorController.CursorState.DEFAULT)
 	game.cursor_controller.set_cursor_pos(cell)
 
-func _show_hover_panel(hovered: Unit) -> void:
+func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	# Inspect + hover must never overlap. The inspect panel is a docked left column (#68):
-	#   - hovering the inspected unit adds nothing -> suppress the hover card
-	#   - any other unit -> the card keeps its own top/bottom logic, shifted right of the column
+	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile block too)
+	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
+	# The card is a stack since #135: the unit half plus a tile readout for any cell that is
+	# anything other than ordinary ground — either half can show alone.
+	var tile_lines: Array[String] = _tile_readout_lines(cell)
+	var world_pos: Vector2 = hovered.global_position if hovered != null \
+		else game.grid.to_global(game.grid.map_to_local(cell))
 	if game.unit_info_panel.is_showing():
-		if game.unit_info_panel.is_showing_unit(hovered):
+		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
 			game.hover_info_panel.clear()
 			return
-		game.hover_info_panel.set_unit(hovered, int(game.unit_info_panel.panel_width()) + 8)
+		game.hover_info_panel.show_hover(hovered, tile_lines, world_pos,
+			int(game.unit_info_panel.panel_width()) + 8)
 	else:
-		game.hover_info_panel.set_unit(hovered)
+		game.hover_info_panel.show_hover(hovered, tile_lines, world_pos)
+
+# The tile readout's content (#135): one line per notable fact about the hovered cell — each
+# dynamic tile state (with its live clock), water's traversal gate, a move cost above the norm.
+# Ordinary ground returns [] and no block shows. Meanings come from Glossary short texts and the
+# numbers from the same reads the rules make, so the readout cannot disagree with either.
+func _tile_readout_lines(cell: Vector2i) -> Array[String]:
+	var lines: Array[String] = []
+	var board: BoardContext = game._board()
+	if board.terrain_states != null:
+		for state: Terrain.TileState in board.terrain_states.states_at(cell):
+			var line: String = "%s — %s" % [Terrain.tile_state_display_name(state),
+				Glossary.short(Glossary.term_for_tile_state(state))]
+			var turns: int = board.terrain_states.turns_remaining(cell, state)
+			if turns > 0:
+				line += " %d left." % turns
+			lines.append(line)
+	if board.terrain_kind_at(cell) == Terrain.Kind.WATER:
+		lines.append("%s — %s" % [Terrain.kind_display_name(Terrain.Kind.WATER),
+			Glossary.short(Glossary.Term.WATER_TILE)])
+	var data: TileData = game.grid.get_cell_tile_data(cell)
+	if data != null and data.has_custom_data("move_cost"):
+		var cost: int = data.get_custom_data("move_cost")
+		if cost > 1:
+			lines.append("Slow going — costs %d movement to enter." % cost)
+	return lines
