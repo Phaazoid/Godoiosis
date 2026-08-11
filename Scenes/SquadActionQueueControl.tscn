@@ -20,20 +20,26 @@ border_color = Color(0, 0, 0, 1)
 
 [node name="SquadActionQueueControl" type="Control" unique_id=1755236960]
 visible = false
-custom_minimum_size = Vector2(128, 0)
 layout_mode = 3
-anchors_preset = 0
-offset_right = 128.0
-offset_bottom = 40.0
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
 script = ExtResource("1_voyyq")
 
 [node name="BackgroundPanel" type="Panel" parent="." unique_id=1567639531]
 custom_minimum_size = Vector2(50, 50)
-layout_mode = 0
-offset_left = 1000.0
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -152.0
 offset_top = 25.0
-offset_right = 1145.0
+offset_right = -7.0
 offset_bottom = 525.0
+grow_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_voyyq")
 
 [node name="MarginContainer" type="MarginContainer" parent="BackgroundPanel" unique_id=250797685]
