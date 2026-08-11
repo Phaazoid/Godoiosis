@@ -1,21 +1,28 @@
 extends VBoxContainer
 class_name TileBrushTool
 
-# Dev-overlay tab for authoring the board: paints terrain tiles (left-drag, right-erase),
-# resizes the map, and paints named AI zones (Sentry regions). Terrain choices are scanned
-# from the tileset itself, never hardcoded.
+# Dev-overlay tab for authoring the board: paints terrain tiles, dynamic tile states (#174),
+# and named AI zones (left-drag paints, right-click erases in every mode), plus map resize.
+# Terrain choices are scanned from the tileset itself, never hardcoded.
 
 const SOURCE_ID := 0
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE }
+enum PaintMode { TERRAIN, ZONE, STATE }
 var paint_mode := PaintMode.TERRAIN
 var _zone_name := ""
 var _zone_name_row: HBoxContainer
+var _zone_kind_row: HBoxContainer
 var _zone_kind := ZoneManager.Kind.PATROL
+var _tile_state := Terrain.TileState.BURNING
+var _state_row: HBoxContainer
+var _clear_states_button: Button
+var _state_labels: Array[String] = []
+var _state_values: Array[Terrain.TileState] = []
 
 # Parallel to the dropdown: the atlas coords each entry paints. Built by scanning the
 # board tileset for tiles carrying a terrain_type kind, so any terrain tile authored in
@@ -26,7 +33,10 @@ var _tile_coords: Array[Vector2i] = []
 var _width_spin: SpinBox
 var _height_spin: SpinBox
 
-@onready var tile_dropdown: OptionButton = %TileDropdown
+# Code-built beside the other mode pickers (2026-08-11 dev ask -- it used to sit in the scene next
+# to the on/off checkbox, the one mode control that didn't live below the Paint picker).
+var tile_dropdown: OptionButton
+var _tile_row: HBoxContainer
 
 func _ready():
 	_build_extra_controls()
@@ -112,20 +122,65 @@ func _build_extra_controls() -> void:
 
 	add_child(row)
 
-	# Part 3: zone painting. A capture point is a zone of kind CAPTURE, so this stays ONE mode with
-	# a kind picker rather than a mode per objective type. The terrain dropdown and zone-name field
-	# are mode-specific; the kind picker stays visible because DevWidgets.add_option returns nothing
-	# to hold a reference to.
-	DevWidgets.add_checkbox(self, "Paint Zones (instead of terrain)", false, _on_zone_mode_toggled)
-	DevWidgets.add_option(self, "Zone Kind", KIND_LABELS, KIND_LABELS[0],
+	# Part 3: the paint-mode picker (#174 made it three-way; a checkbox can't hold a third mode).
+	# A capture point is a zone of kind CAPTURE, so zones stay ONE mode with a kind picker rather
+	# than a mode per objective type. Each mode's own controls hide with it.
+	DevWidgets.add_option(self, "Paint", MODE_LABELS, MODE_LABELS[0],
+		func(label: String): _set_paint_mode(MODE_LABELS.find(label) as PaintMode))
+	_tile_row = HBoxContainer.new()
+	var tile_label := Label.new()
+	tile_label.text = "Terrain Tile"
+	_tile_row.add_child(tile_label)
+	tile_dropdown = OptionButton.new()
+	tile_dropdown.item_selected.connect(_on_tile_dropdown_item_selected)
+	_tile_row.add_child(tile_dropdown)
+	add_child(_tile_row)
+	_zone_kind_row = DevWidgets.add_option(self, "Zone Kind", KIND_LABELS, KIND_LABELS[0],
 		func(label: String): _zone_kind = KIND_LABELS.find(label) as ZoneManager.Kind)
 	_zone_name_row = DevWidgets.add_lineedit(self, "Zone Name", "", func(s): _zone_name = s)
-	_zone_name_row.visible = false
+
+	# Part 4: dynamic tile-state painting (#174). Options scan the enum, so a new state shows up
+	# here automatically; NONE means "unset" and is not paintable.
+	_build_state_options()
+	_state_row = DevWidgets.add_option(self, "Tile State", _state_labels, _state_labels[0],
+		func(label: String): _tile_state = _state_values[_state_labels.find(label)])
+	_clear_states_button = Button.new()
+	_clear_states_button.text = "Clear All Tile States"
+	_clear_states_button.tooltip_text = "Wipe every dynamic tile state on the board (fire/ice/cover). Unsaved paint is lost."
+	_clear_states_button.pressed.connect(_on_clear_states_pressed)
+	add_child(_clear_states_button)
+	_set_paint_mode(PaintMode.TERRAIN)
+
+func _build_state_options() -> void:
+	for i in Terrain.TileState.size():
+		var state: Terrain.TileState = Terrain.TileState.values()[i]
+		if state == Terrain.TileState.NONE:
+			continue
+		var state_name: String = Terrain.TileState.keys()[i]
+		_state_values.append(state)
+		_state_labels.append(state_name.capitalize())
 
 func selected_zone_kind() -> ZoneManager.Kind:
 	return _zone_kind
 
-func _on_zone_mode_toggled(pressed: bool) -> void:
-	paint_mode = PaintMode.ZONE if pressed else PaintMode.TERRAIN
-	tile_dropdown.visible = not pressed
-	_zone_name_row.visible = pressed
+func selected_tile_state() -> Terrain.TileState:
+	return _tile_state
+
+func _set_paint_mode(mode: PaintMode) -> void:
+	paint_mode = mode
+	_tile_row.visible = mode == PaintMode.TERRAIN
+	_zone_kind_row.visible = mode == PaintMode.ZONE
+	_zone_name_row.visible = mode == PaintMode.ZONE
+	_state_row.visible = mode == PaintMode.STATE
+	_clear_states_button.visible = mode == PaintMode.STATE
+
+# The board-wide wipe (dev ask 2026-08-11); per-cell erase stays right-click. Confirmed because
+# unsaved paint dies with it; the wipe pair is clear_board's own (clear + full redraw).
+func _on_clear_states_pressed() -> void:
+	DevWidgets.confirm_delete(self, "every tile state on the board", _clear_states_confirmed)
+
+func _clear_states_confirmed() -> void:
+	if game == null:
+		return
+	game.terrain_states.clear()
+	game.overlay_manager.redraw_terrain_live(game.terrain_states)

@@ -46,6 +46,11 @@ enum GameState {
 }
 
 var game_state: GameState = GameState.IDLE
+# Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
+# RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
+# mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
+# them (2026-08-11: every dev-window Load silently dropped the board to IDLE under an ON toggle).
+var dev_mode_enabled := false
 var last_clicked_cell: Vector2i = GridUtils.NO_CELL
 # Set once at selection, never re-derived from a cell (#107). Cleared in exit_current_mode, NOT in
 # clear_selection — that runs on every menu PICK, i.e. on the way INTO a mode.
@@ -343,7 +348,7 @@ func _on_turn_started(faction: Team.Faction):
 func start_faction_turn(faction: Team.Faction):
 	game_state = GameState.BETWEEN_TURNS
 	await Pacing.beat(self, Pacing.TURN_HANDOFF)
-	game_state = GameState.IDLE
+	game_state = _base_state()   # AI_TURN below still overrides -- the lock is not negotiable
 	squad_manager.reset_faction_actions(faction)
 
 	if ai_controller.is_ai_faction(faction):
@@ -450,9 +455,9 @@ func enter_target_pick_mode(candidates: Array[Unit], on_pick: Callable) -> void:
 	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, target_pick_cells, OverlayManager.TARGET_ATLAS_COORDS)
 
 func set_dev_mode(active: bool):
+	# Intent first: exit_current_mode's clear_selection rests the board on _base_state.
+	dev_mode_enabled = active
 	exit_current_mode()
-	if active:
-		game_state = GameState.DEV_MODE
 	if dev_overlay != null:
 		dev_overlay.sync_dev_mode_button(active)
 
@@ -479,8 +484,12 @@ func _clear_aiming_pick() -> void:
 	if selected_unit != null:
 		selected_unit.active_attack = null
 
+# Where the board rests when nothing is happening: dev mode if the dev asked for it, else IDLE.
+func _base_state() -> GameState:
+	return GameState.DEV_MODE if dev_mode_enabled else GameState.IDLE
+
 func clear_selection():
-	game_state = GameState.IDLE
+	game_state = _base_state()
 
 	target_pick_cells = []
 	_target_pick_callback = Callable()   # drop captured refs

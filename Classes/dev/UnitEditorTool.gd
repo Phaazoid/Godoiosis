@@ -3,6 +3,8 @@ class_name UnitEditorTool
 
 # Dev-only unit editor: the tab (in DevOverlay) for editing whichever unit is currently
 # selected — stats, inventory, squad, and job assignment. Never shown to a player.
+# Laid out as three sub-tabs (Stats / Gear & Jobs / Body & Affinity) between an always-visible
+# header+Save row and the five action buttons (2026-08-11 dev ask).
 #
 # Every control edits the STAGED buffer below, never the unit; Save is the only writer.
 # UnitInstance can't serve as that buffer (its fields are plain vars, so duplicate() returns a
@@ -31,6 +33,8 @@ var _armor_index := -1
 
 var _save_button: Button = null
 var _revert_button: Button = null
+var _active_subtab := 0   # survives the full-panel repaint every staged toggle triggers
+var _page_scroll := 0     # ditto for the active page's scroll -- a rebuild resets it to the top
 
 func init(p_game):
 	game = p_game
@@ -188,6 +192,12 @@ func _add_save_row() -> void:
 	_refresh_save_row()
 
 func populate_unit_editor(unit):
+	var old_tabs: TabContainer = unit_editor_container.get_node_or_null("SubTabs")
+	if old_tabs != null:
+		_active_subtab = old_tabs.current_tab
+		var old_page := old_tabs.get_tab_control(_active_subtab) as ScrollContainer
+		if old_page != null:
+			_page_scroll = old_page.scroll_vertical
 	for child in unit_editor_container.get_children():
 		unit_editor_container.remove_child(child)
 		child.queue_free()
@@ -200,21 +210,32 @@ func populate_unit_editor(unit):
 	DevWidgets.add_label(unit_editor_container, "Editing: " + unit.get_unit_name())
 	_add_save_row()
 
-	for stat in _stats:
-		var key: Stats.Stat = stat
-		DevWidgets.add_spinbox(unit_editor_container, Stats.Stat.keys()[key], _stats[key],
-			func(v): _stage_stat(key, int(v)))
-	DevWidgets.add_spinbox(unit_editor_container, "Current HP", _current_hp, func(v): _stage_hp(int(v)))
-	DevWidgets.add_spinbox(unit_editor_container, "Current Will", _current_will, func(v): _stage_will(int(v)))
-	DevWidgets.add_option(unit_editor_container, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
-		func(s): _stage_faction(s))
-	DevWidgets.add_lineedit(unit_editor_container, "Name", _unit_name, func(s): _stage_unit_name(s))
-	DevWidgets.add_lineedit(unit_editor_container, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
-	
-	_add_inventory_section()
-	_add_jobs_section()
-	_add_limbs_section(unit)
-	_add_affinity_section()
+	# The editing fields split across sub-tabs; the header, Save row and action buttons stay
+	# DIRECT children of unit_editor_container -- the dev sees them from any tab, and the test
+	# suites find them by a flat child scan.
+	var tabs := TabContainer.new()
+	tabs.name = "SubTabs"
+	tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	unit_editor_container.add_child(tabs)
+
+	_add_stats_section(_add_subtab(tabs, "Stats"))
+
+	var gear_page := _add_subtab(tabs, "Gear & Jobs")
+	_add_inventory_section(gear_page)
+	_add_jobs_section(gear_page)
+	_add_abilities_section(gear_page, unit)
+
+	var body_page := _add_subtab(tabs, "Body & Affinity")
+	_add_limbs_section(body_page, unit)
+	_add_affinity_section(body_page)
+	_add_element_state_section(body_page, unit)
+
+	tabs.current_tab = clampi(_active_subtab, 0, tabs.get_tab_count() - 1)
+	var page := tabs.get_tab_control(tabs.current_tab) as ScrollContainer
+	if page != null:
+		# Deferred: a freshly built ScrollContainer has no range until layout settles, and an
+		# immediate write clamps to 0 -- the reported "scrollbar jumps away" (2026-08-11).
+		page.set_deferred("scroll_vertical", _page_scroll)
 
 	var delete_button := Button.new()
 	delete_button.text = "Delete Unit"
@@ -244,6 +265,60 @@ func populate_unit_editor(unit):
 	revive_button.disabled = not unit.is_downed()
 	revive_button.pressed.connect(func(): _revive_unit(unit))
 	unit_editor_container.add_child(revive_button)
+
+func _add_subtab(tabs: TabContainer, title: String) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.name = title   # TabContainer reads the tab title off the child's node name
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	var page := VBoxContainer.new()
+	page.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	page.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	scroll.add_child(page)
+	tabs.add_child(scroll)
+	return page
+
+# The stat grid mirrors the inspect panel's StatsGrid shape (columns = 4: two name+field pairs
+# per visual row), with SpinBoxes as the value cells.
+func _add_stats_section(page: VBoxContainer) -> void:
+	var grid := GridContainer.new()
+	grid.columns = 4
+	grid.add_theme_constant_override("h_separation", 12)
+	page.add_child(grid)
+
+	for stat in _stats:
+		var key: Stats.Stat = stat
+		_add_grid_spinbox(grid, Stats.Stat.keys()[key], _stats[key], func(v): _stage_stat(key, int(v)))
+	_add_grid_spinbox(grid, "Current HP", _current_hp, func(v): _stage_hp(int(v)))
+	_add_grid_spinbox(grid, "Current Will", _current_will, func(v): _stage_will(int(v)))
+
+	DevWidgets.add_option(page, "Faction", Team.Faction.keys(), Team.Faction.keys()[_faction],
+		func(s): _stage_faction(s))
+	DevWidgets.add_lineedit(page, "Name", _unit_name, func(s): _stage_unit_name(s))
+	DevWidgets.add_lineedit(page, "Squad Name", _squad_name, func(s): _stage_squad_name(s))
+
+func _add_grid_spinbox(grid: GridContainer, label_text: String, value: int, on_change: Callable) -> void:
+	var label := Label.new()
+	label.text = label_text
+	grid.add_child(label)
+	var spin := SpinBox.new()
+	spin.min_value = -999
+	spin.max_value = 999
+	spin.value = value
+	spin.value_changed.connect(on_change)
+	grid.add_child(spin)
+
+# Read-only: abilities derive from jobs (JobData.ability_pool), so a listing is the honest
+# control. "(saved)" per the limbs convention -- this reads the live unit, not the staged jobs.
+func _add_abilities_section(page: VBoxContainer, unit: Unit) -> void:
+	DevWidgets.add_label(page, "Abilities (saved)")
+	var live: Array[AbilityData] = unit.get_live_abilities()
+	if live.is_empty():
+		DevWidgets.add_label(page, "  (none)")
+		return
+	for ability in live:
+		var a: AbilityData = ability
+		var kind_name: String = AbilityData.AbilityKind.keys()[a.kind].capitalize()
+		DevWidgets.add_label(page, "  %s  (%s)" % [a.display_name, kind_name])
 
 func _stage_stat(stat: Stats.Stat, value: int) -> void:
 	_stats[stat] = value
@@ -285,8 +360,8 @@ func _equippable_catalog() -> Dictionary:
 		items[k] = runes[k]
 	return items
 
-func _add_inventory_section():
-	DevWidgets.add_label(unit_editor_container, "Inventory")
+func _add_inventory_section(into: VBoxContainer):
+	DevWidgets.add_label(into, "Inventory")
 
 	var weapons := _equippable_catalog()   # name -> EquippableData (weapons + authored runes)
 	var weapon_keys := weapons.keys()
@@ -348,7 +423,7 @@ func _add_inventory_section():
 			gate_label.text = "(%s)" % gate if gate != "" else "(no requirement)"
 			row.add_child(gate_label)
 
-		unit_editor_container.add_child(row)
+		into.add_child(row)
 
 func _toggle_armor(index: int, pressed: bool):
 	if pressed:
@@ -395,8 +470,8 @@ func _equip_slot(index: int):
 	_touch()
 	populate_unit_editor(editing_unit)
 
-func _add_jobs_section():
-	DevWidgets.add_label(unit_editor_container, "Jobs")
+func _add_jobs_section(into: VBoxContainer):
+	DevWidgets.add_label(into, "Jobs")
 
 	var jobs := JobCatalog.get_editable()   # display_name -> JobData
 
@@ -412,11 +487,11 @@ func _add_jobs_section():
 		remove_button.pressed.connect(func(): _remove_job(id))
 		row.add_child(remove_button)
 
-		unit_editor_container.add_child(row)
+		into.add_child(row)
 
-	_add_job_picker(jobs)
+	_add_job_picker(into, jobs)
 
-func _add_job_picker(jobs: Dictionary):
+func _add_job_picker(into: VBoxContainer, jobs: Dictionary):
 	var available: Array[String] = []
 	for display_name in jobs:
 		if not _jobs.has(jobs[display_name].id):
@@ -436,7 +511,7 @@ func _add_job_picker(jobs: Dictionary):
 	button.pressed.connect(func(): _add_job(jobs[available[picker.selected]].id))
 	row.add_child(button)
 
-	unit_editor_container.add_child(row)
+	into.add_child(row)
 
 func _add_job(id: String) -> void:
 	if not _jobs.has(id):
@@ -455,23 +530,23 @@ func _display_name_for(jobs: Dictionary, id: String) -> String:
 			return display_name
 	return id   # catalog miss (shouldn't happen) — show the raw id rather than hiding it
 
-func _add_limbs_section(unit: Unit):
-	DevWidgets.add_label(unit_editor_container, "Limbs")
+func _add_limbs_section(into: VBoxContainer, unit: Unit):
+	DevWidgets.add_label(into, "Limbs")
 
 	var slot_names := UnitInstance.LimbSlot.keys()
 	var state_names := UnitInstance.LimbState.keys()
 
 	for slot in UnitInstance.LimbSlot.values():
 		var key: UnitInstance.LimbSlot = slot
-		DevWidgets.add_option(unit_editor_container, slot_names[key], state_names, state_names[_limb_states[key]],
+		DevWidgets.add_option(into, slot_names[key], state_names, state_names[_limb_states[key]],
 			func(s): _on_limb_state_picked(key, s))
 		if _limb_states[key] == UnitInstance.LimbState.PROSTHETIC:
-			_add_limb_item_picker(key)
+			_add_limb_item_picker(into, key)
 
 	# Derived through Unit (gear + effects), which the staging buffer deliberately doesn't model,
 	# so these show what the unit IS, not what's staged.
-	DevWidgets.add_label(unit_editor_container, "MOV: %d (saved)" % unit.get_mov())
-	DevWidgets.add_label(unit_editor_container, "Effective STR: %d   DEX: %d (saved)" % [
+	DevWidgets.add_label(into, "MOV: %d (saved)" % unit.get_mov())
+	DevWidgets.add_label(into, "Effective STR: %d   DEX: %d (saved)" % [
 		unit.get_effective_stat(Stats.Stat.STR), unit.get_effective_stat(Stats.Stat.DEX)])
 
 func _on_limb_state_picked(slot: UnitInstance.LimbSlot, state_name: String):
@@ -481,7 +556,7 @@ func _on_limb_state_picked(slot: UnitInstance.LimbSlot, state_name: String):
 
 # Which carried item fills a PROSTHETIC slot -- candidates filtered to the same limb_kind gate
 # install_prosthetic() enforces, so this list can never offer an item Save would then refuse.
-func _add_limb_item_picker(slot: UnitInstance.LimbSlot):
+func _add_limb_item_picker(into: VBoxContainer, slot: UnitInstance.LimbSlot):
 	var candidates: Array[int] = []
 	for i in range(_inventory.size()):
 		var item := _inventory[i] as WeaponInstance
@@ -502,34 +577,41 @@ func _add_limb_item_picker(slot: UnitInstance.LimbSlot):
 	picker.item_selected.connect(func(opt_index): _on_limb_item_picked(slot, opt_index, candidates))
 	row.add_child(picker)
 
-	unit_editor_container.add_child(row)
+	into.add_child(row)
 
 func _on_limb_item_picked(slot: UnitInstance.LimbSlot, opt_index: int, candidates: Array[int]):
 	_limb_prosthetics[slot] = candidates[opt_index - 1] if opt_index > 0 else -1
 	_touch()
 
-func _add_affinity_section():
-	DevWidgets.add_label(unit_editor_container, "Affinity")
+# One row per sigil element: the affinity checkbox and its aura pool together (condensed from two
+# separate lists, dev ask 2026-08-11). The spinbox only exists while the affinity is held;
+# unchecking still erases the aura through _on_affinity_toggled, exactly as before.
+func _add_affinity_section(into: VBoxContainer):
+	DevWidgets.add_label(into, "Affinity / Aura")
 
 	for element in Elemental.SIGIL_ELEMENTS:
 		var e: Elemental.Element = element
-		DevWidgets.add_checkbox(unit_editor_container, Elemental.Element.keys()[e], _affinity.has(e),
-			func(pressed): _on_affinity_toggled(e, pressed))
+		var row := HBoxContainer.new()
+		var box := CheckBox.new()
+		box.text = Elemental.Element.keys()[e]
+		box.button_pressed = _affinity.has(e)
+		box.toggled.connect(func(pressed: bool): _on_affinity_toggled(e, pressed))
+		row.add_child(box)
+		if _affinity.has(e):
+			var spin := SpinBox.new()
+			spin.min_value = -999
+			spin.max_value = 999
+			spin.value = _aura.get(e, 0)
+			spin.tooltip_text = "Aura points"
+			spin.value_changed.connect(func(v): _stage_aura(e, int(v)))
+			row.add_child(spin)
+		into.add_child(row)
 
-	DevWidgets.add_checkbox(unit_editor_container, "Alkahest affine (hidden — Isaac only)", _alkahest,
+	DevWidgets.add_checkbox(into, "Alkahest affine (hidden — Isaac only)", _alkahest,
 		func(pressed): _stage_alkahest(pressed))
 
 	var primary: Elemental.Element = _affinity[0] if not _affinity.is_empty() else Elemental.Element.NONE
-	DevWidgets.add_label(unit_editor_container, "Primary: %s" % (Elemental.Element.keys()[primary] if primary != Elemental.Element.NONE else "(none — Rebecca)"))
-
-	DevWidgets.add_label(unit_editor_container, "Aura")
-	for element in Elemental.SIGIL_ELEMENTS:
-		var e: Elemental.Element = element
-		if _affinity.has(e):
-			DevWidgets.add_spinbox(unit_editor_container, Elemental.Element.keys()[e], _aura.get(e, 0),
-				func(v): _stage_aura(e, int(v)))
-		else:
-			DevWidgets.add_label(unit_editor_container, "%s: — (no affinity)" % Elemental.Element.keys()[e])
+	DevWidgets.add_label(into, "Primary: %s" % (Elemental.Element.keys()[primary] if primary != Elemental.Element.NONE else "(none — Rebecca)"))
 
 func _on_affinity_toggled(element: Elemental.Element, pressed: bool):
 	if pressed:
@@ -548,6 +630,27 @@ func _stage_alkahest(pressed: bool) -> void:
 func _stage_aura(element: Elemental.Element, value: int) -> void:
 	_aura[element] = value
 	_touch()
+
+# Live element states (#174): IMMEDIATE writes to the transient Unit -- the Down/Revive pattern,
+# not the staged buffer above. Battle-scoped test setup (soak, then fire SHOCK); never saved here.
+func _add_element_state_section(into: VBoxContainer, unit: Unit) -> void:
+	DevWidgets.add_label(into, "Element States (live)")
+	for i in Elemental.State.size():
+		var state: Elemental.State = Elemental.State.values()[i]
+		if state == Elemental.State.NONE:
+			continue
+		var state_name: String = Elemental.State.keys()[i]
+		DevWidgets.add_checkbox(into, state_name.capitalize(), unit.element_states.has(state),
+			func(pressed: bool): _on_element_state_toggled(unit, state, pressed),
+			"Applies to the live unit immediately -- no Save needed; a reaction can still consume it")
+
+func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool) -> void:
+	if not is_instance_valid(unit):
+		return
+	if pressed:
+		unit.add_element_state(state)
+	else:
+		unit.remove_element_state(state)
 
 func _delete_unit(unit: Unit):
 	if is_instance_valid(unit):
