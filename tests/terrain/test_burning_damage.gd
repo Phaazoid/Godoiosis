@@ -80,3 +80,17 @@ func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 	game.order_executor.apply_burning_tile_damage(Team.Faction.ENEMY)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before)
+
+func test_burning_finishes_a_downed_unit_standing_on_the_fire() -> void:
+	# Fork 3 (#33): a downed body takes any damaging hit as a kill. Burn is a damage source like
+	# any other -- it must not be the one thing on the board that lets a downed unit sit in fire
+	# forever (#191).
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	unit.force_down()
+	_deposit(CELL, Terrain.TileState.BURNING)
+
+	game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_bool(unit.is_dead()) \
+		.override_failure_message("a downed unit standing in fire survived its faction's turn end") \
+		.is_true()

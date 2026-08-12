@@ -1,10 +1,12 @@
-[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://dnkm0jkhvbdso"]
+[gd_resource type="Resource" script_class="UnitData" format=3]
 
-[ext_resource type="Texture2D" uid="uid://cxaxsc32mh1ld" path="res://Art/Units/MapSprites/Basic_Soldier_Downed.png" id="1_ef1sp"]
-[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_v2kxy"]
-[ext_resource type="Texture2D" uid="uid://dwv13r7ee4qf6" path="res://Art/Units/MapSprites/Basic_Soldier.png" id="2_nyms1"]
-[ext_resource type="Texture2D" uid="uid://deyav21j482j7" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_t8aii"]
-[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_1fjdo"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Basic_Soldier_Downed.png" id="1_ef1sp"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="1_v2kxy"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Basic_Soldier.png" id="2_nyms1"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_t8aii"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Basic_Soldier_Moving.png" id="3_t8aii"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="4_1fjdo"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_1fjdo"]
 
 [resource]
 script = ExtResource("1_v2kxy")
@@ -25,4 +27,5 @@ downed_sprite = ExtResource("1_ef1sp")
 base_aura = Dictionary[int, int]({
 5: 2
 })
+base_affinity = Array[int]([5])
 metadata/_custom_type_script = "uid://cvvknuw621ar2"

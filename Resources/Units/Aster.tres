@@ -1,10 +1,12 @@
-[gd_resource type="Resource" script_class="UnitData" format=3 uid="uid://b3nnfkt85unrg"]
+[gd_resource type="Resource" script_class="UnitData" format=3]
 
-[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="1_02q80"]
-[ext_resource type="Texture2D" uid="uid://dnujumhyrhxk1" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_pp1ba"]
-[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="2_eboe8"]
-[ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="3_e65li"]
-[ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="4_7fkxf"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="1_02q80"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_pp1ba"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_e65li"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="2_eboe8"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="3_e65li"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="4_7fkxf"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_7fkxf"]
 
 [resource]
 script = ExtResource("1_02q80")
@@ -25,4 +27,5 @@ downed_sprite = ExtResource("1_pp1ba")
 base_aura = Dictionary[int, int]({
 2: 1
 })
+base_affinity = Array[int]([2])
 metadata/_custom_type_script = "uid://cvvknuw621ar2"
