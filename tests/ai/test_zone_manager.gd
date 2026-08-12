@@ -6,6 +6,11 @@
 # cases below are what stop that generalization from regressing into "cells, plus some other
 # stuff" — in particular that a kind survives the round-trip, since ScenarioData.zones is the
 # only place an authored objective's geometry is persisted.
+#
+# Zones OVERLAP since 2026-08-12 (enemies patrol an area containing a capture point), erase is
+# scoped to one zone, and a zone's kind locks at creation — the overlap/kind/erase cases pin all
+# three dev calls. zones_changed is the wire the Tile Brush picker rebuilds off; the signal cases
+# count real emissions because a listener nobody fires is legal GDScript.
 extends GdUnitTestSuite
 
 const PATROL := ZoneManager.Kind.PATROL
@@ -30,30 +35,48 @@ func test_paint_and_query() -> void:
 	assert_array(zones.cells_in("nope")).is_empty()
 
 
-func test_cell_belongs_to_at_most_one_zone() -> void:
+func test_zones_overlap_freely() -> void:
 	var zones: ZoneManager = _zones()
-	zones.paint_cell("a", PATROL, Vector2i(1, 1))
-	zones.paint_cell("b", PATROL, Vector2i(1, 1))   # repaint moves the cell, silently
+	zones.paint_cell("patrol route", PATROL, Vector2i(1, 1))
+	zones.paint_cell("the point", CAPTURE, Vector2i(1, 1))
 
-	assert_bool(zones.contains("b", Vector2i(1, 1))).is_true()
-	assert_bool(zones.contains("a", Vector2i(1, 1))).is_false()
-	# "a" lost its only cell -> pruned entirely
-	assert_array(zones.zone_names()).contains_exactly(["b"])
+	assert_bool(zones.contains("patrol route", Vector2i(1, 1))).is_true()
+	assert_bool(zones.contains("the point", Vector2i(1, 1))).is_true()
+	assert_array(zones.zone_names()).contains_exactly_in_any_order(["patrol route", "the point"])
+
+
+func test_repainting_an_owned_cell_does_not_duplicate_it() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("gate", PATROL, Vector2i(1, 1))
+	zones.paint_cell("gate", PATROL, Vector2i(1, 1))   # a drag repaints every motion event
+
+	assert_array(zones.cells_in("gate")).contains_exactly([Vector2i(1, 1)])
 
 
 func test_erase_prunes_empty_zone() -> void:
 	var zones: ZoneManager = _zones()
 	zones.paint_cell("gate", PATROL, Vector2i(1, 1))
-	zones.erase_cell(Vector2i(1, 1))
+	zones.erase_cell_from("gate", Vector2i(1, 1))
 
 	assert_array(zones.zone_names()).is_empty()
 	assert_bool(zones.contains("gate", Vector2i(1, 1))).is_false()
 
 
+func test_erase_is_scoped_to_its_zone() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("patrol route", PATROL, Vector2i(1, 1))
+	zones.paint_cell("the point", CAPTURE, Vector2i(1, 1))
+	zones.erase_cell_from("patrol route", Vector2i(1, 1))
+
+	assert_bool(zones.contains("patrol route", Vector2i(1, 1))).is_false()
+	assert_bool(zones.contains("the point", Vector2i(1, 1))).is_true()
+
+
 func test_erase_untracked_cell_is_a_noop() -> void:
 	var zones: ZoneManager = _zones()
 	zones.paint_cell("gate", PATROL, Vector2i(1, 1))
-	zones.erase_cell(Vector2i(9, 9))
+	zones.erase_cell_from("gate", Vector2i(9, 9))
+	zones.erase_cell_from("nope", Vector2i(1, 1))
 
 	assert_array(zones.cells_in("gate")).contains_exactly([Vector2i(1, 1)])
 
@@ -84,27 +107,37 @@ func test_kind_of_an_unknown_zone_is_patrol() -> void:
 	assert_int(_zones().kind_of("nope")).is_equal(PATROL)
 
 
-func test_repainting_an_existing_zone_retypes_it() -> void:
+# The silent-retype trap (reported 2026-08-12): painting more of a zone with a different kind
+# picked used to convert the whole zone. Kind is authored at creation and never after.
+func test_kind_locks_at_creation() -> void:
 	var zones: ZoneManager = _zones()
 	zones.paint_cell("throne", PATROL, Vector2i(4, 4))
 	zones.paint_cell("throne", CAPTURE, Vector2i(5, 4))
 
-	assert_int(zones.kind_of("throne")).is_equal(CAPTURE)
+	assert_int(zones.kind_of("throne")).is_equal(PATROL)
 	assert_array(zones.cells_in("throne")).contains_exactly_in_any_order([Vector2i(4, 4), Vector2i(5, 4)])
 
 
-func test_zone_at_finds_the_owning_zone() -> void:
+# ---- the picker's wire ----
+
+# The Tile Brush zone picker rebuilds off zones_changed. Count real emissions: a mutation that
+# changed nothing must stay silent (a drag emits per motion event), and every real change —
+# paint, erase, load — must speak.
+func test_zones_changed_fires_on_change_and_only_on_change() -> void:
 	var zones: ZoneManager = _zones()
-	zones.paint_cell("throne", CAPTURE, Vector2i(4, 4))
+	var hits: Array[int] = [0]
+	zones.zones_changed.connect(func(): hits[0] += 1)
 
-	assert_str(zones.zone_at(Vector2i(4, 4))).is_equal("throne")
-
-
-func test_zone_at_is_empty_for_an_unpainted_cell() -> void:
-	var zones: ZoneManager = _zones()
-	zones.paint_cell("throne", CAPTURE, Vector2i(4, 4))
-
-	assert_str(zones.zone_at(Vector2i(0, 0))).is_equal("")
+	zones.paint_cell("gate", PATROL, Vector2i(1, 1))
+	assert_int(hits[0]).is_equal(1)
+	zones.paint_cell("gate", CAPTURE, Vector2i(1, 1))   # owned cell: no-op, no emission
+	assert_int(hits[0]).is_equal(1)
+	zones.erase_cell_from("gate", Vector2i(9, 9))        # untracked cell: no-op, no emission
+	assert_int(hits[0]).is_equal(1)
+	zones.erase_cell_from("gate", Vector2i(1, 1))
+	assert_int(hits[0]).is_equal(2)
+	zones.load_dict({})
+	assert_int(hits[0]).is_equal(3)
 
 
 # ---- persistence ----
@@ -123,6 +156,20 @@ func test_dict_round_trip() -> void:
 	assert_array(restored.cells_in("gate")).contains_exactly_in_any_order([Vector2i(1, 1), Vector2i(2, 1)])
 	assert_array(restored.cells_in("yard")).contains_exactly([Vector2i(7, 3)])
 	assert_bool(restored.contains("stale", Vector2i(0, 0))).is_false()
+
+
+# Overlapping cells are just cells appearing in two zones' arrays — the dict format never encoded
+# exclusivity, so overlap must survive the same round-trip untouched.
+func test_dict_round_trip_preserves_overlap() -> void:
+	var zones: ZoneManager = _zones()
+	zones.paint_cell("patrol route", PATROL, Vector2i(1, 1))
+	zones.paint_cell("the point", CAPTURE, Vector2i(1, 1))
+
+	var restored: ZoneManager = auto_free(ZoneManager.new())
+	restored.load_dict(zones.to_dict())
+
+	assert_bool(restored.contains("patrol route", Vector2i(1, 1))).is_true()
+	assert_bool(restored.contains("the point", Vector2i(1, 1))).is_true()
 
 
 # The one that matters for missions: an objective's geometry is persisted ONLY as a zone kind, so

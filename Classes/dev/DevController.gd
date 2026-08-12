@@ -13,6 +13,7 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 var _pending_action: PendingAction = PendingAction.NONE
 var _pending_unit: Unit = null
 var _brush_painting := false
+var _brush_erasing := false
 var _brush_ghost: TileMapLayer = null
 
 # --- dev keys ---
@@ -102,16 +103,22 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 
 # --- tile brush / map resize ---
 
+# Both buttons are hold-to-drag (erase gained it 2026-08-12); paint wins if both are held.
 func handle_tile_brush(event) -> void:
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
 			if event.pressed:
 				_paint()
-		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+		elif event.button_index == MOUSE_BUTTON_RIGHT:
+			_brush_erasing = event.pressed
+			if event.pressed:
+				_erase()
+	elif event is InputEventMouseMotion:
+		if _brush_painting:
+			_paint()
+		elif _brush_erasing:
 			_erase()
-	elif event is InputEventMouseMotion and _brush_painting:
-		_paint()
 
 func _mouse_cell() -> Vector2i:
 	return game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
@@ -198,15 +205,22 @@ func _erase_tile(cell: Vector2i) -> void:
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _paint_zone(cell: Vector2i) -> void:
-	var zone_name = game.dev_overlay.tile_brush.selected_zone_name()
+	var zone_name: String = game.dev_overlay.tile_brush.selected_zone_name()
 	if zone_name == "":
 		return
 	game.zone_manager.paint_cell(zone_name, game.dev_overlay.tile_brush.selected_zone_kind(), cell)
 	game.overlay_manager.redraw_zones(game.zone_manager)
+	game.dev_overlay.tile_brush.update_zone_highlight()
 
+# Scoped to the picked zone (overlap, 2026-08-12): erase must be able to carve one zone out from
+# under another. No zone picked = no-op, mirroring paint's no-name rule.
 func _erase_zone(cell: Vector2i) -> void:
-	game.zone_manager.erase_cell(cell)
+	var zone_name: String = game.dev_overlay.tile_brush.selected_zone_name()
+	if zone_name == "":
+		return
+	game.zone_manager.erase_cell_from(zone_name, cell)
 	game.overlay_manager.redraw_zones(game.zone_manager)
+	game.dev_overlay.tile_brush.update_zone_highlight()
 
 # Dynamic tile-state painting (#174). Writes through TerrainStateManager.apply -- the ONE deposit
 # seam -- so a painted BURNING starts its real 3-turn clock; permanent fire is what BLAZE is for.

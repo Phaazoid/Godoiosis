@@ -48,6 +48,10 @@ Slices 3–4 originally derived the objective from what was painted: a CAPTURE z
 
 Zones now supply **geometry only**. The cost is a second source of truth, which is what the guard below exists to close.
 
+### Zones overlap, and a zone's kind locks at creation (2026-08-12)
+
+Two authoring rules replaced the original one-zone-per-cell store: **zones overlap freely** — the motivating case is a patrol area containing a capture point — and **a zone's kind is fixed when its first cell is painted** (repainting never retypes; changing kind = delete and repaint, which closes the trap where continuing to paint under an existing name with a different Kind picked silently converted the whole zone). Consequences: "the zone at this cell" stopped being a well-formed question — the kind-sensitive reader is `MissionController.capturable_zone_at(cell)` (the uncaptured CAPTURE zone there, which the menu gate and `CaptureAction`'s stamp both read) — and brush erase is **scoped to the picked zone**, since an unscoped erase could never carve one zone out from under another. Where two capture zones overlap, claiming one leaves the other capturable from the shared cell.
+
 ### The guard: declared without painted
 
 An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Two things catch it:

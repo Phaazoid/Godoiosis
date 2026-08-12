@@ -101,7 +101,7 @@ func test_the_stamp_survives_the_zone_being_repainted_underneath_it() -> void:
 	var unit := _stand_on_a_point()
 	var action := _capture_order(unit, POINT_CELL)
 
-	game.zone_manager.erase_cell(POINT_CELL)
+	game.zone_manager.erase_cell_from(POINT, POINT_CELL)
 	_paint("Bravo Point", ZoneManager.Kind.CAPTURE, [POINT_CELL])
 
 	assert_str(action.zone_name).is_equal(POINT)
@@ -152,25 +152,32 @@ func test_a_capture_with_no_controller_cannot_be_performed() -> void:
 	assert_bool(action.actor_can_perform()).is_false()
 
 
-func test_the_queue_gate_does_not_check_the_zones_KIND() -> void:
-	# DOCUMENTING ACTUAL BEHAVIOUR, not endorsing it. MainActionMenu gates the CAPTURE entry on
-	# mission_controller.is_capture_zone_at(), which checks Kind == CAPTURE; actor_can_perform()
-	# only checks that the cell is in SOME named zone. So the queue-time chokepoint is LOOSER than
-	# the menu, and an order aimed at a PATROL zone queues and then executes as a silent no-op
-	# (MissionController.capture() rejects the kind).
-	#
-	# Unreachable today: the menu is the only producer, CAPTURE sits in every archetype's
-	# MAIN_ACTION_NEVER, and the Play API has no capture command. It stops being unreachable the
-	# moment any of those three changes. Flagged for the dev rather than fixed here — gameplay code
-	# is hand-typed, and the fix is a one-line kind check in actor_can_perform().
+func test_the_queue_gate_refuses_a_cell_with_no_capture_zone() -> void:
+	# The stamp is kind-filtered (capturable_zone_at, 2026-08-12): a cell inside only a PATROL zone
+	# stamps "" and the gate refuses. This closes the asymmetry the pre-overlap version of this
+	# case documented — actor_can_perform() used to accept any named zone and execute as a silent
+	# no-op, because the old zone_at stamp was kind-blind.
 	var unit := _stand_on_a_point()
 	_paint("Patrol Route", ZoneManager.Kind.PATROL, [Vector2i(6, 6)])
 	var action := _capture_order(unit, Vector2i(6, 6))
 
-	assert_str(action.zone_name).is_equal("Patrol Route")
-	assert_bool(action.actor_can_perform()).is_true()    # <- the asymmetry
+	assert_str(action.zone_name).is_equal("")
+	assert_bool(action.actor_can_perform()).is_false()
+
+
+func test_the_stamp_finds_the_capture_zone_under_an_overlapping_patrol() -> void:
+	# Zones overlap since 2026-08-12 — the motivating case is a patrol area containing a capture
+	# point. The stamp must find the CAPTURE zone however many other kinds share the cell; a
+	# first-match-any-kind read returns the patrol zone and the capture dies as a silent no-op.
+	_paint("Patrol Route", ZoneManager.Kind.PATROL, [POINT_CELL])
+	var unit := _stand_on_a_point()   # paints POINT as CAPTURE on the same cell
+	var action := _capture_order(unit, POINT_CELL)
+
+	assert_str(action.zone_name).is_equal(POINT)
+	assert_bool(action.actor_can_perform()).is_true()
 	action.execute()
-	assert_bool(mc.is_zone_captured("Patrol Route")).is_false()   # ...and it does nothing
+	assert_bool(mc.is_zone_captured(POINT)).is_true()
+	assert_bool(mc.is_zone_captured("Patrol Route")).is_false()
 
 
 # --- execution ---

@@ -2,9 +2,12 @@ extends VBoxContainer
 class_name TileBrushTool
 
 # Dev-overlay tab for authoring the board: paints terrain tiles, dynamic tile states (#174),
-# and named AI zones (left-drag paints, right-click erases in every mode), plus map resize.
+# and named zones (left-drag paints, right-drag erases in every mode), plus map resize.
 # Terrain choices are scanned from the tileset itself, never hardcoded: every tile carrying a
 # terrain_type kind or an authored terrain_name is paintable, across all atlas sources.
+# Zone mode carries a picker (2026-08-12): a dropdown of every painted zone, so authoring can
+# see what exists and continue a zone instead of accidentally forking a new one; the picked
+# zone's cells are lifted on the board via OverlayManager.redraw_zone_highlight.
 
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
 const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
@@ -15,10 +18,19 @@ var selected_source := 0
 var game   # injected by DevOverlay.init
 enum PaintMode { TERRAIN, ZONE, STATE }
 var paint_mode := PaintMode.TERRAIN
+const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
 var _zone_name_row: HBoxContainer
+var _zone_name_edit: LineEdit
 var _zone_kind_row: HBoxContainer
-var _zone_kind := ZoneManager.Kind.PATROL
+var _zone_kind_option: OptionButton
+var _zone_kind := ZoneManager.Kind.PATROL   # the user's pick; applies to NEW zones only
+var _zone_row: HBoxContainer
+var zone_dropdown: OptionButton
+# Parallel to the dropdown rows past "(new zone)": names index the store, labels are the
+# rendered rows and double as the rebuild diff (a drag emits zones_changed per cell).
+var _zone_dropdown_names: Array[String] = []
+var _zone_dropdown_labels: Array[String] = []
 var _tile_state := Terrain.TileState.BURNING
 var _state_row: HBoxContainer
 var _clear_states_button: Button
@@ -58,6 +70,14 @@ func _ready():
 func init(game_ref) -> void:
 	game = game_ref
 	_populate_tile_dropdown()
+	# One wire covers every zone mutation path -- brush paint/erase, scenario load, clear_board,
+	# F2 reset -- so the picker can never list a board that no longer exists.
+	game.zone_manager.zones_changed.connect(_on_zones_changed)
+	refresh_zone_list()
+
+func _on_zones_changed() -> void:
+	refresh_zone_list()
+	update_zone_highlight()
 
 func _populate_tile_dropdown() -> void:
 	tile_dropdown.clear()
@@ -152,7 +172,7 @@ func selected_zone_name() -> String:
 func _build_extra_controls() -> void:
 	# Part 2: visible erase hint (the tab tooltip already says it, but this is in-panel).
 	var note := Label.new()
-	note.text = "Left-drag paints  ·  right-click erases"
+	note.text = "Left-drag paints  ·  right-drag erases"
 	add_child(note)
 
 	# Part 1: map-resize row.
@@ -194,9 +214,38 @@ func _build_extra_controls() -> void:
 	tile_dropdown.item_selected.connect(_on_tile_dropdown_item_selected)
 	_tile_row.add_child(tile_dropdown)
 	add_child(_tile_row)
-	_zone_kind_row = DevWidgets.add_option(self, "Zone Kind", KIND_LABELS, KIND_LABELS[0],
-		func(label: String): _zone_kind = KIND_LABELS.find(label) as ZoneManager.Kind)
-	_zone_name_row = DevWidgets.add_lineedit(self, "Zone Name", "", func(s): _zone_name = s)
+	# Zone picker rows, hand-built rather than DevWidgets.add_option: these refresh and
+	# enable/disable live, and add_option builds a one-shot list (the #179 trap).
+	_zone_row = HBoxContainer.new()
+	var zone_label := Label.new()
+	zone_label.text = "Zone"
+	_zone_row.add_child(zone_label)
+	zone_dropdown = OptionButton.new()
+	zone_dropdown.item_selected.connect(_on_zone_dropdown_item_selected)
+	_zone_row.add_child(zone_dropdown)
+	add_child(_zone_row)
+
+	_zone_kind_row = HBoxContainer.new()
+	var kind_label := Label.new()
+	kind_label.text = "Zone Kind"
+	_zone_kind_row.add_child(kind_label)
+	_zone_kind_option = OptionButton.new()
+	for label in KIND_LABELS:
+		_zone_kind_option.add_item(label)
+	_zone_kind_option.select(0)
+	_zone_kind_option.item_selected.connect(func(idx: int): _zone_kind = idx as ZoneManager.Kind)
+	_zone_kind_row.add_child(_zone_kind_option)
+	add_child(_zone_kind_row)
+
+	_zone_name_row = HBoxContainer.new()
+	var name_label := Label.new()
+	name_label.text = "Zone Name"
+	_zone_name_row.add_child(name_label)
+	_zone_name_edit = LineEdit.new()
+	_zone_name_edit.custom_minimum_size = Vector2(100, 0)
+	_zone_name_edit.text_changed.connect(_on_zone_name_changed)
+	_zone_name_row.add_child(_zone_name_edit)
+	add_child(_zone_name_row)
 
 	# Part 4: dynamic tile-state painting (#174). Options scan the enum, so a new state shows up
 	# here automatically; NONE means "unset" and is not paintable.
@@ -222,16 +271,85 @@ func _build_state_options() -> void:
 func selected_zone_kind() -> ZoneManager.Kind:
 	return _zone_kind
 
+# Rebuild the picker from the store. Diffed against the rendered labels first: a paint drag emits
+# zones_changed per cell, and identical rows mean nothing to rebuild. Selection re-binds by NAME
+# after the select(-1) reset (add_item auto-selects row 0 -- the OptionButton sharp edge); a
+# vanished pick falls back to "(new zone)" with the typed name kept.
+func refresh_zone_list() -> void:
+	if game == null:
+		return
+	var names: Array[String] = game.zone_manager.zone_names()
+	var labels: Array[String] = []
+	for name in names:
+		labels.append("%s (%s)" % [name, KIND_LABELS[game.zone_manager.kind_of(name)]])
+	if labels == _zone_dropdown_labels:
+		return
+	_zone_dropdown_names = names
+	_zone_dropdown_labels = labels
+	zone_dropdown.clear()
+	zone_dropdown.add_item(NEW_ZONE_LABEL)
+	for label in labels:
+		zone_dropdown.add_item(label)
+	zone_dropdown.select(-1)
+	var idx := _zone_dropdown_names.find(selected_zone_name())
+	zone_dropdown.select(idx + 1 if idx >= 0 else 0)
+	_sync_kind_row()
+
+func _on_zone_dropdown_item_selected(index: int) -> void:
+	if index <= 0:
+		# "(new zone)": clear the name, or the old pick would re-bind on the next keystroke.
+		_zone_name = ""
+		_zone_name_edit.text = ""
+	else:
+		_zone_name = _zone_dropdown_names[index - 1]
+		_zone_name_edit.text = _zone_name
+	_sync_kind_row()
+	update_zone_highlight()
+
+# Typing a name that exactly matches a painted zone IS picking it -- painting under an existing
+# name always continues that zone, so the picker must say so before the first click does it.
+func _on_zone_name_changed(text: String) -> void:
+	_zone_name = text
+	var idx := _zone_dropdown_names.find(selected_zone_name())
+	zone_dropdown.select(idx + 1 if idx >= 0 else 0)
+	_sync_kind_row()
+	update_zone_highlight()
+
+# Kind is authored at zone creation only (dev call 2026-08-12; repainting used to silently retype
+# the whole zone). While the current name is a painted zone the picker shows that zone's real kind
+# and greys out -- a control only greys what it can explain (#166 shape).
+func _sync_kind_row() -> void:
+	var existing: bool = game != null and game.zone_manager.zone_names().has(selected_zone_name())
+	_zone_kind_option.disabled = existing
+	if existing:
+		_zone_kind_option.select(game.zone_manager.kind_of(selected_zone_name()))
+		_zone_kind_option.tooltip_text = "Kind locks when a zone is first painted — pick a new name to choose a kind."
+	else:
+		_zone_kind_option.select(_zone_kind)
+		_zone_kind_option.tooltip_text = ""
+
+# The picked zone's cells, lifted on the board. Public: DevController re-pushes it after every
+# zone paint/erase, since the cells change under an unchanged pick.
+func update_zone_highlight() -> void:
+	if game == null:
+		return
+	var cells: Array[Vector2i] = []
+	if paint_mode == PaintMode.ZONE:
+		cells = game.zone_manager.cells_in(selected_zone_name())
+	game.overlay_manager.redraw_zone_highlight(cells)
+
 func selected_tile_state() -> Terrain.TileState:
 	return _tile_state
 
 func _set_paint_mode(mode: PaintMode) -> void:
 	paint_mode = mode
 	_tile_row.visible = mode == PaintMode.TERRAIN
+	_zone_row.visible = mode == PaintMode.ZONE
 	_zone_kind_row.visible = mode == PaintMode.ZONE
 	_zone_name_row.visible = mode == PaintMode.ZONE
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
+	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
 
 # The board-wide wipe (dev ask 2026-08-11); per-cell erase stays right-click. Confirmed because
 # unsaved paint dies with it; the wipe pair is clear_board's own (clear + full redraw).

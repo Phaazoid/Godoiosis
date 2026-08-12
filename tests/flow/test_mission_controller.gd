@@ -241,12 +241,31 @@ func test_capturing_an_unknown_or_empty_zone_is_a_no_op() -> void:
 	assert_array(mc._captured_zones).is_empty()
 
 
-func test_is_capture_zone_at_distinguishes_kind() -> void:
+func test_capturable_zone_at_distinguishes_kind() -> void:
 	_paint("Point", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
 	_paint("Patrol", ZoneManager.Kind.PATROL, [Vector2i(7, 7)])
-	assert_bool(mc.is_capture_zone_at(Vector2i(2, 2))).is_true()
-	assert_bool(mc.is_capture_zone_at(Vector2i(7, 7))).is_false()
-	assert_bool(mc.is_capture_zone_at(Vector2i(9, 9))).is_false()
+	assert_str(mc.capturable_zone_at(Vector2i(2, 2))).is_equal("Point")
+	assert_str(mc.capturable_zone_at(Vector2i(7, 7))).is_equal("")
+	assert_str(mc.capturable_zone_at(Vector2i(9, 9))).is_equal("")
+
+
+func test_capturable_zone_at_sees_through_an_overlapping_patrol() -> void:
+	# Zones overlap (2026-08-12); the motivating case is a patrol area containing a capture point.
+	# Painted patrol-first so a first-match-any-kind read would answer the patrol zone.
+	_paint("Patrol", ZoneManager.Kind.PATROL, [Vector2i(2, 2)])
+	_paint("Point", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
+	assert_str(mc.capturable_zone_at(Vector2i(2, 2))).is_equal("Point")
+
+
+func test_a_captured_zone_stops_being_capturable() -> void:
+	# The menu gate reads this: once claimed, the row disappears. Where two capture zones overlap,
+	# claiming one leaves the other capturable from the shared cell.
+	_paint("Point", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
+	_paint("Backup", ZoneManager.Kind.CAPTURE, [Vector2i(2, 2)])
+	mc.capture("Point")
+	assert_str(mc.capturable_zone_at(Vector2i(2, 2))).is_equal("Backup")
+	mc.capture("Backup")
+	assert_str(mc.capturable_zone_at(Vector2i(2, 2))).is_equal("")
 
 
 func test_all_capture_zones_must_be_taken() -> void:

@@ -1,9 +1,12 @@
 extends Node
 class_name ZoneManager
 
-# Named regions of the board, each carrying a KIND that says what the region MEANS. A cell belongs
-# to at most one zone; painting it into a new zone silently removes it from whichever zone it was
-# in before. Round-trips through ScenarioData.zones; drawn by OverlayManager.redraw_zones.
+# Named regions of the board, each carrying a KIND that says what the region MEANS. Zones OVERLAP
+# freely (dev call 2026-08-12 -- enemies patrol an area containing a capture point), so a cell can
+# belong to any number of zones; a kind-sensitive reader must ask a kind-filtered question
+# (MissionController.capturable_zone_at), never "the" zone at a cell. A zone's kind is fixed when
+# its first cell is painted -- repainting never retypes; changing kind = delete and repaint.
+# Round-trips through ScenarioData.zones; drawn by OverlayManager.redraw_zones.
 #
 # The kind is what makes this ONE mechanism instead of a parallel Array[Vector2i] on ScenarioData
 # per objective type (dev call 2026-07-28): a capture point is a zone of size one, and zone kinds
@@ -11,6 +14,10 @@ class_name ZoneManager
 # whatever rule consumes it -- save/load, authoring and persistence need no edit at all.
 #
 # PERSISTED, so the enum is APPEND-ONLY (enums serialize as plain ints).
+
+# Fires on any mutation (paint/erase/load) that actually changed the store. The Tile Brush's zone
+# picker rebuilds off this; per-cell drag emissions are cheap because the listener diffs first.
+signal zones_changed
 
 enum Kind {
 	PATROL,    # Sentry archetype trigger/leash regions -- the only kind until #96
@@ -47,28 +54,27 @@ func cells_in(zone_name: String) -> Array[Vector2i]:
 func contains(zone_name: String, cell: Vector2i) -> bool:
 	return _zones.has(zone_name) and _zones[zone_name]["cells"].has(cell)
 
-# Which zone (if any) owns this cell, "" when none. The one-zone-per-cell rule is exactly what
-# lets this return a single name instead of a list.
-func zone_at(cell: Vector2i) -> String:
-	for name in _zones:
-		if _zones[name]["cells"].has(cell):
-			return name
-	return ""
-
+# Kind applies only at creation; painting more of an existing zone keeps its own kind whatever the
+# brush has picked (the silent-retype trap, reported 2026-08-12). Repainting an owned cell is a
+# no-op so a drag doesn't churn listeners.
 func paint_cell(zone_name: String, kind: Kind, cell: Vector2i) -> void:
-	erase_cell(cell)
 	if not _zones.has(zone_name):
 		_zones[zone_name] = {"kind": kind, "cells": []}
-	_zones[zone_name]["kind"] = kind   # repainting an existing zone can retype it
+	elif _zones[zone_name]["cells"].has(cell):
+		return
 	_zones[zone_name]["cells"].append(cell)
+	zones_changed.emit()
 
-func erase_cell(cell: Vector2i) -> void:
-	for name in _zones.keys():
-		var cells: Array = _zones[name]["cells"]
-		if cells.has(cell):
-			cells.erase(cell)
-			if cells.is_empty():
-				_zones.erase(name)
+# Scoped to ONE zone (dev call 2026-08-12): with overlap legal, an unscoped erase could never
+# carve one zone out from under another. A zone erased down to nothing is deleted.
+func erase_cell_from(zone_name: String, cell: Vector2i) -> void:
+	if not contains(zone_name, cell):
+		return
+	var cells: Array = _zones[zone_name]["cells"]
+	cells.erase(cell)
+	if cells.is_empty():
+		_zones.erase(zone_name)
+	zones_changed.emit()
 
 func to_dict() -> Dictionary:
 	return _zones.duplicate(true)
@@ -81,3 +87,4 @@ func load_dict(data: Dictionary) -> void:
 		cells.assign(entry["cells"])
 		if not cells.is_empty():
 			_zones[name] = {"kind": entry["kind"] as Kind, "cells": cells}
+	zones_changed.emit()

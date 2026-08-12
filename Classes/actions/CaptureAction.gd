@@ -25,7 +25,7 @@ func init(capturer: Unit, target_cell: Vector2i, mission: MissionController) -> 
 	action_type = BaseAction.ActionType.CAPTURE
 	cell = target_cell
 	controller = mission
-	zone_name = mission.game.zone_manager.zone_at(target_cell)
+	zone_name = mission.capturable_zone_at(target_cell)
 
 func execute() -> void:
 	begin_execution()
