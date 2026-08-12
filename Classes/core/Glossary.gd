@@ -377,7 +377,7 @@ static func _build_entries() -> Dictionary:
 	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Water",
 		"short": "Impassable to most units. Waterwalkers cross it; frozen, it carries anyone.",
 		"long": "Most units cannot enter water. A unit with Waterwalk crosses it freely, and frozen "
-			+ "water is solid ground for everyone — until it thaws."}
+			+ "water is solid ground for everyone — permanently, unless burned away."}
 	e[Term.BURNING] = {"category": Category.TERRAIN, "title": "Burning",
 		"short": "On fire: %d damage to whoever stands here at end of turn. Burns out after %d turns."
 			% [Terrain.BURNING_TILE_DAMAGE, TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]],
@@ -392,11 +392,8 @@ static func _build_entries() -> Dictionary:
 			% Terrain.BURNING_TILE_DAMAGE
 			+ "on its own."}
 	e[Term.FROZEN] = {"category": Category.TERRAIN, "title": "Frozen",
-		"short": "Frozen solid for %d turns. Frozen water can be walked on."
-			% TerrainStateManager.STATE_DURATIONS[Terrain.TileState.FROZEN],
-		"long": "Ice. Frozen water is walkable ground for any unit, for %d turns — mind where you "
-			% TerrainStateManager.STATE_DURATIONS[Terrain.TileState.FROZEN]
-			+ "are standing when it thaws."}
+		"short": "Frozen solid. Frozen water can be walked on, and nothing melts it but fire.",
+		"long": "Ice. Frozen water is walkable ground for any unit — permanently, unless burned away."}
 	e[Term.COVER] = {"category": Category.TERRAIN, "title": "Cover",
 		"short": "Dug-in ground: +%d DEF to the occupant. Destroyed by attacks, never by time."
 			% Terrain.COVER_DEF,

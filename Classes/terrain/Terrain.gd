@@ -14,7 +14,10 @@ const COVER_DEF := 2   # flat DEF a Cover tile grants its occupant (#84 Burrow) 
 enum TileState {
 	NONE,
 	BURNING,
-	FROZEN,
+	FROZEN,  # Permanent (no STATE_DURATIONS entry -> never ticks out) since 2026-08-12 playtest
+			 # feedback -- ice held a 3-turn clock like BURNING until the dev found an auto-thaw
+			 # unwelcome. Removed only by states_removed (a future FIRE reaction; unbuilt today),
+			 # same mechanism as COVER.
 	COVER,   # #84: Burrow-dug entrenchment. Permanent (no STATE_DURATIONS entry -> never ticks out);
 			 # removed only by a destructive hit (states_removed), never by a timer.
 	BLAZE    # #174: authored set-dressing fire -- BURNING's permanent sibling (COVER's no-timer

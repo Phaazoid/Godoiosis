@@ -1,5 +1,8 @@
 # #50 ice slice: ICE on a WATER tile freezes it (a walkable FROZEN state over non-walkable water);
-# FIRE on a FROZEN tile reverts it; FROZEN melts after STATE_DURATIONS ticks. Headless model.
+# FIRE on a FROZEN tile reverts it. FROZEN is PERMANENT since 2026-08-12 (playtest call, no
+# STATE_DURATIONS entry — COVER's exact mechanism): the auto-thaw undercut the intended pattern
+# of the PLAYER choosing when ice goes away, per marketing.md's "freeze, cross, melt it behind
+# you". Headless model.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -120,12 +123,12 @@ func test_a_tileset_that_omits_the_walkable_flag_reads_unwalkable() -> void:
 	var board := BoardContext.new(grid, no_units, null)
 	assert_bool(board.is_walkable(Vector2i.ZERO)).is_false()
 
-func test_frozen_melts_after_its_authored_duration() -> void:
-	# Tick count off STATE_DURATIONS, not a literal (2026-08-10 sweep): the duration is a tuning
-	# dial. Walk to the last authored tick, assert the ice held, then one more melts it.
+func test_frozen_never_melts_on_its_own() -> void:
+	# The 2026-08-12 reversal: FROZEN carried a 3-turn clock like BURNING until playtest found the
+	# auto-thaw unwelcome. No STATE_DURATIONS entry means tick_states must never touch it, however
+	# many rounds pass — COVER's own case (test_cover_is_permanent_and_never_ticks_out) is the
+	# mirror. Falsify by re-adding the duration entry.
 	var tsm := _frozen_store()
-	for _i in range(TerrainStateManager.STATE_DURATIONS[Terrain.TileState.FROZEN] - 1):
+	for _i in 20:
 		tsm.tick_states()
 	assert_bool(tsm.has_state(WATER_CELL, Terrain.TileState.FROZEN)).is_true()
-	tsm.tick_states()
-	assert_bool(tsm.has_state(WATER_CELL, Terrain.TileState.FROZEN)).is_false()

@@ -100,7 +100,8 @@ func test_cover_shelters_whoever_stands_there_not_just_the_digger() -> void:
 
 func test_cover_is_permanent_and_never_ticks_out() -> void:
 	# COVER has no STATE_DURATIONS entry by design: it is removed by a destructive hit, never by
-	# a timer (unlike BURNING/FROZEN). Round ticks must not erode it.
+	# a timer (unlike BURNING; FROZEN joined COVER as permanent 2026-08-12). Round ticks must not
+	# erode it.
 	var s := _dig_board(Vector2i(1, 1))
 	var sess = s.sess
 	var states: TerrainStateManager = s.board.terrain_states
