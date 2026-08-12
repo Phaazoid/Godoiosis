@@ -4,7 +4,7 @@
 
 Supersedes the wiki's `Battle Mechanics/Elemental Combinatrix.docx` and `Systems Mechanics/Terrain Modification.docx`. Kept-but-era-checked: the *combinatrix concept* survives (the author flagged it keep-not-deprecate), but every "20% chance of shock," "hit/Avo advantage," "AP cost," and "move randomly 1 square" is **dead under Law #1** and re-expressed deterministically here.
 
-**Canon checked through #120 (2026-07-29).**
+**Canon checked through #199 (2026-08-12).**
 
 ## What it is
 
@@ -84,14 +84,14 @@ Success looks like: alchemist hits WATER (sets WET, shown in queue), mechanist h
 De-randomized from the wiki, plus a stacking example. Traced one first:
 
 1. **SHOCK × WET → Electrocuted** *(the first slice).* Pass: attack A (WATER) writes `add WET`. Attack B (SHOCK) sees WET, applies `damage_mult`, writes `remove WET`. Both numbers land in the queue pre-execution. Replay: WATER lands, WET icon appears; SHOCK lands boosted, "Electrocuted!" pops, WET clears.
-2. **FIRE × WET → QuickDry.** Fire on a wet target does *reduced* damage and removes WET (water buys one hit of protection, then it's spent). Punishes mis-ordered combos.
+2. **FIRE × WET → QuickDry.** Fire on a wet target does *reduced* damage and removes WET (water buys one hit of protection, then it's spent). Punishes mis-ordered combos. **BUILT 2026-08-12** (`fire_wet_quickdry.tres`, ×0.5), alongside the ICE→CHILLED line and the terrain douse set — the shipped roster is [elemental-interactions.md](elemental-interactions.md)'s [BUILT] tags.
 3. **Stacked: SHOCK on a WET + OILED target.** Both `SHOCK×WET→Electrocuted` and (say) `SHOCK×OILED→Overload` match the pre-hit snapshot (E8); multipliers multiply, both states resolve their removes — one hit, two reactions, a deterministic crescendo. This is combomaxing in one line.
 
 ## Deferred layers (captured, not cut)
 
 Real, wanted, out of the first slice. Recorded so the wiki synthesis isn't lost.
 
-- **Status lifecycle (instant vs over-time).** Wiki's two-speed model: *instant* states live one chain (first slice already does this); *EoT* states persist N turns until countered (fire dries wet). Needs a turn-tick lifecycle + storage for current durations. The planned next layer.
+- **Status lifecycle (instant vs over-time).** Wiki's two-speed model: *instant* states live one chain (first slice already does this); *EoT* states persist N turns until countered (fire dries wet). **The first timed unit state shipped 2026-08-12 without new storage (Law #4):** CHILLED is a *paired* state — the marker on `element_states` answers "is it chilled" (reactions key on it), a paired `StatEffect` carries the −1 DEX **and is the clock** (`Elemental.paired_stat_mods` / `STATE_DEFAULT_TURNS`; reactions may author a longer clock via `ElementalReaction.add_state_turns`, longest-wins across fired reactions). Unit's element-state doors own the lockstep; the clock expiring ends the state. A timed state with *no* stat payload (a pure DoT like unit-BURNING) still needs its own tick when it comes.
 - **Tile / terrain states.** *(Slice 1 BUILT 2026-06-28 — `TerrainStateManager` store + the `PlanResolver` cell-effect channel + a first `FIRE×tree→BURNING` reaction, in a **separate** `Terrain` vocabulary; `tests/terrain/`. See terrain.md build status.)* The store is a parallel `Dictionary[Vector2i, …]` in `TerrainStateManager`, persisted in `ScenarioData` (round-trip pending) and drawn by `OverlayManager` (pending). De-randomized wiki taxonomy worth keeping:
   - Categories: **ground / atmosphere / object / 1-time.** Stacking: ≤1 ground + ≤1 atmosphere + N objects per tile; water tiles reject ground/object.
   - Survivors: **Wet** (deterministic damage modifier favoring WATER / disfavoring FIRE, *not* hit-chance), **Fire** (Wet+Fire→Steam; burns occupants; self-extinguishes unless Flammable), **Powder Barrel** (deterministic chain-explode on fire/AoE — keep), **Flammable** (spreads fire to adjacent), **Cover** (deterministic *flat* mitigation — never stat-scaled, decided 2026-07-06, [terrain.md](terrain.md)), **Steam/Smoke** (cuts command range / vision), **Landmine** (deterministic trigger on entry). Dropped: random-push Tornado, all AP-cost framing.

@@ -478,7 +478,7 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	for s in r.states_removed:
 		target.remove_element_state(s)
 	for s in r.states_added:
-		target.add_element_state(s)
+		target.add_element_state(s, r.state_turns.get(s, 0))
 	events.append("%s hits %s for %d%s" % [handle_for(actor), handle_for(target), r.damage, _lethality_tag(r.lethality)])
 	# Knockback (#84): the headless stand-in for AttackAction.execute()'s shove — the resolver
 	# already picked the landing cell (stopped at any wall/unit/edge), so this just applies it.

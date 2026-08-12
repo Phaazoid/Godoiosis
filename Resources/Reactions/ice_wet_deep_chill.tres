@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="ElementalReaction" format=3]
+
+[ext_resource type="Script" path="res://Classes/elemental/ElementalReaction.gd" id="1_dchll"]
+
+[resource]
+script = ExtResource("1_dchll")
+incoming_element = 4
+required_state = 1
+damage_bonus = 5
+add_states = Array[int]([2])
+remove_states = Array[int]([1])
+add_state_turns = Dictionary[int, int]({2: 3})
+popup = "Deep Chill!"
