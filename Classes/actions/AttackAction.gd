@@ -77,7 +77,7 @@ func execute():
 		for s in resolved.states_removed:
 			target.remove_element_state(s)
 		for s in resolved.states_added:
-			target.add_element_state(s)
+			target.add_element_state(s, resolved.state_turns.get(s, 0))
 		# Knockback (#84): shove the target to the resolved landing cell. set_cell is instant (a
 		# tweened slide is polish, TODO); the resolver already stopped it at any wall/unit/edge.
 		if resolved.knockback_applied and is_instance_valid(target):

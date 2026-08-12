@@ -8,7 +8,7 @@
 
 **Tags:** ★ strong candidate · ⚗ experimental · ⚗⚗ far-future / gate-hard · ◆ from the wiki (de-randomized) · 🔗 wants the tile-state or EoT layer first.
 
-**Canon checked through #68 (2026-07-16).**
+**Canon checked through #199 (2026-08-12).** *Thermal batch shipped 2026-08-12 (dev picks in chat): FIRE×WET QuickDry, ICE→CHILLED (−1 DEX, paired StatEffect clock), ICE×WET Deep Chill, FIRE×CHILLED Temperature Shock, the Blow Dry utility carving, WATER douses BURNING/BLAZE tiles, FIRE ignites GRASS, and `Terrain.Kind.DIRT` as the non-flammable ground. Rows below tagged **[BUILT]** where the shipped form differs, the note says how.*
 
 ---
 
@@ -109,7 +109,7 @@ Deterministic only. `S` setup · `P` payload/control · `i` instant · `e` EoT �
 | ★ CONDUCTIVE | S,i | SHOCK reactions arc to adjacent CONDUCTIVE/FERROUS (chain backbone) |
 | ★ OILED | S,e | FIRE → big bonus + BURNING; ⚗ knockback travels +1 |
 | ★ BURNING | P,e🔗 | loses fixed HP each activation; spreads to flammable; doused by WATER/ICE |
-| ★ CHILLED | P,i | −move; a 2nd cold hit → FROZEN |
+| ★ CHILLED | P,i | **[BUILT 2026-08-12]** shipped as **−1 DEX for the victim's next activation** (a paired `StatEffect` is the clock; ice on a WET target doubles it — see the ICE table). The −move-and-2nd-cold-hit→FROZEN escalation stays on the bench: unit-side FROZEN isn't built |
 | ★ FROZEN | P,i | can't move **or counter** next activation; +EARTH/SOUND (shatter); FIRE → WET. *Gate behind CHILLED→FROZEN* |
 | ★ SHOCKED | S/P,i | +next SHOCK; relays chains while adjacent |
 | ★ AIRBORNE | P,i | launched — can't counter, +EARTH (slam); AIR/EARTH **reposition** it. *Also from the kinetic mace (weapon-applied)* |
@@ -138,10 +138,10 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### FIRE
 | × state | reaction | effect |
 |---|---|---|
-| ◆ WET | QuickDry | −dmg, remove WET (one hit of protection). Tile → STEAM 🔗 |
+| ◆ WET | QuickDry | **[BUILT 2026-08-12]** ×0.5 dmg, remove WET (`fire_wet_quickdry.tres`) — and the **Blow Dry** carving (damageless FIRE, `hits_allies`) exists purely to deliver it to friends. The tile→STEAM half stays deferred 🔗 |
 | ★ OILED | Conflagration | ++dmg, apply BURNING, *keep* OILED (non-consume) |
 | ◆ FROZEN | Thermal Shock | +dmg, FROZEN → WET |
-| CHILLED | Thaw | remove CHILLED |
+| CHILLED | ~~Thaw~~ **Temperature Shock** | **[BUILT 2026-08-12]** +5 dmg AND remove CHILLED (`fire_chilled_temp_shock.tres`) — the dev upgraded the bench's plain thaw: going from extreme cold to heat is painful. NB it fires on Blow Dry too (a damageless hit still carries its element — #126 ruling), so blow-drying a chilled ally hurts them. Designed, not a bug |
 | BLEEDING | Cauterize | +dmg now, remove BLEEDING (tradeoff) |
 | SULFUROUS | Brimstone | ++AoE (the will-to-burn ignites) |
 | PHLOGISTICATED | Phlogistic Release | huge burst, consume (powder-barrel on a person) |
@@ -167,7 +167,8 @@ Grouped by incoming element. Reactions **stack** (E8): one hit can fire several.
 ### ICE
 | × state | reaction | effect |
 |---|---|---|
-| ★ WET | Flash Freeze | +dmg, WET → FROZEN |
+| *(any unit)* | Chill | **[BUILT 2026-08-12]** apply CHILLED at its default clock (`ice_sets_chilled.tres`) — every ICE hit chills |
+| ★ WET | ~~Flash Freeze~~ **Deep Chill** | **[BUILT 2026-08-12]** +5 dmg, consume WET, CHILLED lasts twice as long (`ice_wet_deep_chill.tres`, the longest authored clock wins across fired reactions). Flash-Freeze-to-FROZEN stays on the bench with unit-FROZEN |
 | ◆ CHILLED | Frozen | CHILLED → FROZEN |
 | BURNING | Quench | −dmg, BURNING → WET |
 | CONDUCTIVE | Insulate | remove CONDUCTIVE |

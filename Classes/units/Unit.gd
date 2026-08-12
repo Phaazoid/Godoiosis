@@ -269,7 +269,18 @@ func tick_stat_effects() -> void:
 	if kept.size() == stat_effects.size():
 		return
 	stat_effects = kept
+	_sync_paired_states()
 	_settle_stat_change()
+
+# A paired state's clock expiring ends the state itself — and self-heals any marker left without
+# its effect, whatever the cause.
+func _sync_paired_states() -> void:
+	var kept: Array[Elemental.State] = []
+	for state in element_states:
+		if Elemental.paired_stat_mods(state).is_empty() or has_stat_effect_from(Elemental.state_effect_source(state)):
+			kept.append(state)
+	if kept.size() != element_states.size():
+		element_states = kept
 
 # Everything that has to settle after a stat moves, wherever it moved from. Every mutator ends
 # here, so "what happens when a stat changes?" has one answer and one place to extend.
@@ -385,14 +396,35 @@ func has_live_ability(id: Abilities.Id) -> bool:
 			return true
 	return false
 
-func add_element_state(state: Elemental.State) -> void:
+# The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
+# marker answers "is it chilled", the effect carries the stat change and the clock. The two
+# restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
+# purpose — a restore replays the RESULT, and both sides round-trip verbatim.
+# `turns` overrides the state's default clock (0 = default); only paired states read it.
+func add_element_state(state: Elemental.State, turns: int = 0) -> void:
 	if state == Elemental.State.NONE:
 		return
 	if not element_states.has(state):
 		element_states.append(state)
+	_apply_paired_effect(state, turns)
 
 func remove_element_state(state: Elemental.State) -> void:
 	element_states.erase(state)
+	if not Elemental.paired_stat_mods(state).is_empty():
+		remove_stat_effects_from(Elemental.state_effect_source(state))
+
+func _apply_paired_effect(state: Elemental.State, turns: int) -> void:
+	var mods := Elemental.paired_stat_mods(state)
+	if mods.is_empty():
+		return
+	var source := Elemental.state_effect_source(state)
+	var requested: int = turns if turns > 0 else Elemental.STATE_DEFAULT_TURNS.get(state, StatEffect.PERMANENT)
+	# A re-application refreshes, never stacks: one effect, whichever clock runs longer.
+	for effect in stat_effects:
+		if effect.source_name == source and effect.turns_remaining > requested:
+			requested = effect.turns_remaining
+	remove_stat_effects_from(source)
+	apply_stat_effect(StatEffect.make(source, mods, requested))
 
 func get_faction() -> Team.Faction:
 	return unit_data.faction

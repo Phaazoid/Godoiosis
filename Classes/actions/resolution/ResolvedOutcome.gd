@@ -9,6 +9,9 @@ var damage: int = 0                              # final, post-elemental
 var heal_amount: int = 0                          # final HP restored this hit (0 for a damage attack)
 var states_added: Array[Elemental.State] = []
 var states_removed: Array[Elemental.State] = []
+# Authored duration overrides for states_added entries (max across fired reactions). Absent = the
+# state's default clock (Elemental.STATE_DEFAULT_TURNS); only meaningful for paired states.
+var state_turns: Dictionary[Elemental.State, int] = {}
 var popups: Array[String] = []
 var reaction_icons: Array[Texture2D] = []        # icons of reactions that FIRED this hit — drawn behind the target in the queue
 var target_hp_after: int = 0                     # threaded hypothetical HP after this hit (R4)

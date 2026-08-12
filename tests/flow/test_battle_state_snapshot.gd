@@ -224,6 +224,30 @@ func test_element_states_are_copied_not_shared() -> void:
 	assert_array(a.element_states).contains_exactly([Elemental.State.WET])
 
 
+func test_a_chilled_unit_round_trips_with_its_clock() -> void:
+	# CHILLED is a PAIRED state: the marker and its StatEffect save as the two facts they are,
+	# and both restore paths bypass the element-state doors on purpose (a restore replays the
+	# RESULT) — so a load must come back with exactly ONE chill effect, mid-count, never a
+	# fresh re-application reseeded from its duration.
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var applied: int = Elemental.STATE_DEFAULT_TURNS[Elemental.State.CHILLED] + 1
+	a.add_element_state(Elemental.State.CHILLED, applied)
+	a.tick_stat_effects()   # mid-count
+
+	var loaded := _round_trip(a)
+
+	assert_bool(loaded.element_states.has(Elemental.State.CHILLED)).is_true()
+	var source := Elemental.state_effect_source(Elemental.State.CHILLED)
+	var count := 0
+	var remaining := -1
+	for effect in loaded.stat_effects:
+		if effect.source_name == source:
+			count += 1
+			remaining = effect.turns_remaining
+	assert_int(count).is_equal(1)
+	assert_int(remaining).is_equal(applied - 1)
+
+
 func test_a_downed_unit_reloads_downed_with_its_clock() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
 	_down(a)

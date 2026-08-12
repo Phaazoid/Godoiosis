@@ -25,7 +25,7 @@ enum Term {
 	RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	# Elemental
-	ELEMENTS, WET, REACTIONS,
+	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
 	TERRAIN_KINDS, WATER_TILE, BURNING, BLAZE, FROZEN, COVER,
 	# Will & lifecycle
@@ -95,6 +95,7 @@ static func term_for_tile_state(state: Terrain.TileState) -> Term:
 static func term_for_element_state(state: Elemental.State) -> Term:
 	const MAP: Dictionary[Elemental.State, Term] = {
 		Elemental.State.WET: Term.WET,
+		Elemental.State.CHILLED: Term.CHILLED,
 	}
 	return MAP[state]
 
@@ -360,6 +361,13 @@ static func _build_entries() -> Dictionary:
 		"short": "Soaked through. Some elements react hard with a wet target.",
 		"long": "The soaked condition, left by water. Harmless on its own — the danger is what "
 			+ "reacts with it. The interaction list below is the authored truth."}
+	e[Term.CHILLED] = {"category": Category.ELEMENTAL, "title": "Chilled",
+		"short": "Cold-slowed: %+d DEX until it thaws after the unit's next turn."
+			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX],
+		"long": "The cold-slowed condition, left by ice. %+d DEX while it lasts — normally through "
+			% Elemental.CHILL_STAT_MODS[Stats.Stat.DEX]
+			+ "the unit's next activation, twice that when the ice caught it soaked. Fire ends the "
+			+ "chill early, painfully: the sudden swing from cold to heat is its own reaction."}
 	e[Term.REACTIONS] = {"category": Category.ELEMENTAL, "title": "Reactions",
 		"short": "Element meets state, always the same way: reactions are fixed rules, never chance.",
 		"long": "When an attack's element meets a state the target holds, the reaction changes "
@@ -370,10 +378,10 @@ static func _build_entries() -> Dictionary:
 	# Terrain
 	e[Term.TERRAIN_KINDS] = {"category": Category.TERRAIN, "title": "Terrain",
 		"short": "Ground types set movement cost and rules. Hover any unusual tile for its effect.",
-		"long": "Every tile has a ground type — grass, mud, rock, tree, water — setting its movement "
-			+ "cost and rules. Attacks can also change tiles: fire leaves ground burning, ice "
-			+ "freezes water. Hovering a tile that is anything other than ordinary shows what it "
-			+ "does."}
+		"long": "Every tile has a ground type — grass, dirt, mud, rock, tree, water — setting its "
+			+ "movement cost and rules. Attacks can also change tiles: fire leaves grass burning "
+			+ "(bare dirt won't catch), ice freezes water. Hovering a tile that is anything other "
+			+ "than ordinary shows what it does."}
 	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Water",
 		"short": "Impassable to most units. Waterwalkers cross it; frozen, it carries anyone.",
 		"long": "Most units cannot enter water. A unit with Waterwalk crosses it freely, and frozen "

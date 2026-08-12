@@ -81,6 +81,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var bonus := 0
 	var adds: Array[Elemental.State] = []
 	var removes: Array[Elemental.State] = []
+	var add_turns: Dictionary[Elemental.State, int] = {}
 	for reaction in reactions:
 		if not elements.has(reaction.incoming_element):
 			continue
@@ -91,6 +92,9 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		for s in reaction.add_states:
 			if not adds.has(s):
 				adds.append(s)
+			# Longest authored clock wins across fired reactions (max is commutative -> E8-safe).
+			if reaction.add_state_turns.get(s, 0) > add_turns.get(s, 0):
+				add_turns[s] = reaction.add_state_turns[s]
 		for s in reaction.remove_states:
 			if not removes.has(s):
 				removes.append(s)
@@ -106,6 +110,9 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 			net_added.append(s)
 	outcome.states_added = net_added
 	outcome.states_removed = removes
+	for s in net_added:
+		if add_turns.get(s, 0) > 0:
+			outcome.state_turns[s] = add_turns[s]
 
 	# final damage (E8): round(base * mult + bonus), then flat DEF mitigation (#84), never negative.
 	# DEF subtracts AFTER elemental scaling and BEFORE the 0-floor; a revved Chainsword attacker
