@@ -385,14 +385,14 @@ text = "Loaded: (unsaved board)"
 [node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario" unique_id=1524370160]
 layout_mode = 2
 
+[node name="LoadScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=31186477]
+layout_mode = 2
+text = "Load"
+
 [node name="ScenarioDropdown" type="OptionButton" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=1217769002]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-
-[node name="LoadScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=31186477]
-layout_mode = 2
-text = "Load"
 
 [node name="UpdateScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/DevTabs/Scenario/ExistingRow" unique_id=990000011]
 unique_name_in_owner = true

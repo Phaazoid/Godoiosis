@@ -124,6 +124,50 @@ func test_showing_the_tab_with_nothing_loaded_leaves_the_selection_alone() -> vo
 	assert_str(DevWidgets.selected_name(tool.scenario_dropdown)).is_equal("Elemental")
 
 # ==============================================================================
+#  Update: the confirm dialog (dev call 2026-08-12 -- the load-gate cannot catch a mis-click
+#  at the loaded file itself; an accidental resize one button away from Load killed Level_1)
+# ==============================================================================
+
+func test_update_asks_before_overwriting() -> void:
+	var tool := _scenario_tool()
+	var path := ScenarioManager.scenario_path(PROLOG)
+	game.scenario_manager.load_scenario(path)
+	tool.refresh_dropdown(PROLOG)
+	var mtime := FileAccess.get_modified_time(path)
+
+	tool.update_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).is_not_null()
+	assert_int(FileAccess.get_modified_time(path)).is_equal(mtime)   # nothing saved yet
+
+func test_update_cancel_saves_nothing_and_the_dialog_frees() -> void:
+	var tool := _scenario_tool()
+	var path := ScenarioManager.scenario_path(PROLOG)
+	game.scenario_manager.load_scenario(path)
+	tool.refresh_dropdown(PROLOG)
+	var mtime := FileAccess.get_modified_time(path)
+	tool.update_button.pressed.emit()
+	var dialog := _find_dialog(tool)
+	assert_object(dialog).is_not_null()
+
+	dialog.canceled.emit()
+	dialog.hide()
+	await await_idle_frame()
+
+	assert_int(FileAccess.get_modified_time(path)).is_equal(mtime)
+	assert_object(_find_dialog(tool)).is_null()
+
+func test_a_blocked_update_never_reaches_the_dialog() -> void:
+	# The load-gate stays FIRST: an unloaded target is refused with the reason, not asked about.
+	var tool := _scenario_tool()
+	tool.refresh_dropdown(PROLOG)   # not loaded
+
+	tool.update_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).is_null()
+	assert_str(tool.status_label.text).is_not_empty()
+
+# ==============================================================================
 #  Delete: the confirm dialog
 # ==============================================================================
 

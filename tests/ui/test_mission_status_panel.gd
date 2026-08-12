@@ -127,6 +127,23 @@ func test_capturing_a_zone_updates_the_row_through_the_real_wire() -> void:
 	assert_array(_row_texts()).contains(["✓ Capture"])
 
 
+func test_loading_a_board_reads_extraction_off_the_finished_board() -> void:
+	# The reported bug (2026-08-12): apply_scenario's set_objectives refreshes the HUD mid-load,
+	# BEFORE units spawn, so extraction read 0/0 off the empty board as everyone-extracted and
+	# "✓ Extract" stuck until the first turn event. Drives the REAL load path -- capture a board,
+	# apply it, read the rendered labels; a load must end with the HUD reading the finished board.
+	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1)])
+	_spawn(Team.Faction.PLAYER, Vector2i(5, 5))   # outside the zone
+	_spawn(Team.Faction.ENEMY, Vector2i(7, 7))
+	_objectives([MissionRules.Objective.EXTRACT])
+	var snapshot: ScenarioData = game.scenario_manager.capture_scenario("load_repro")
+
+	game.scenario_manager.apply_scenario(snapshot)
+	await await_idle_frame()   # lets clear_board's queue_free of the pre-capture units process
+
+	assert_array(_row_texts()).contains(["Extract — 0/1 in the zone"])
+
+
 func test_a_kill_updates_the_rout_count_when_the_board_settles() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	var standing := _spawn(Team.Faction.ENEMY, Vector2i(4, 4))

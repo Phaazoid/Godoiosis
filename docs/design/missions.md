@@ -89,6 +89,8 @@ The practical effect: **dev sandbox boards stay inert.** Spawn five enemies in t
 
 "Surviving" means **not dead**, so a downed unit *inside* an extraction zone is extracted exactly like an active one — alive and in the zone means they get out. What blocks the objective is a living unit *outside* the zone, and a downed one out there cannot walk in on its own: someone has to reach them with `RescueAction`, which revives to 1 HP and ACTIVE.
 
+**Zero surviving players reads PENDING, not MET (2026-08-12)** — the `counts.y == 0` twin of capture's unpainted-geometry guard. Without it `0 == 0` counted as everyone-extracted, which ticked Extract on the HUD during load (`set_objectives` refreshes the HUD before units spawn; `apply_scenario` now re-pushes the HUD once the board is fully built). For `evaluate()` the guard never decides anything — DEFEAT is checked first.
+
 That is the whole design of the rescue-under-pressure mission. Counting only ACTIVE units would let you leave a body behind and still win (fork C: **surviving**, not starting).
 
 ### Capture is instant and uncontested

@@ -217,6 +217,10 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 	turn_manager.set_active_faction(scenario.active_faction)
 	game.refresh_end_turn_button()   # a resumed save can load straight into an already-spent faction (#189)
+	# The board has finished mutating -- re-push the mission HUD (#134's write-point set was missing
+	# this one). set_objectives refreshed it mid-load, BEFORE units spawned, so extraction read its
+	# progress off an empty board and the stale answer sat until the first turn event.
+	game.refresh_mission_status()
 
 func reload_current():
 	if last_loaded_path == "":

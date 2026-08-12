@@ -1,0 +1,952 @@
+[gd_resource type="Resource" script_class="ScenarioData" format=4]
+
+[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_u67y6"]
+[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_bkn2k"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_xuexq"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="4_xb5bl"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_nrpr3"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="6_4md37"]
+[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="7_xfsww"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="8_ugkkt"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="9_cvcta"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="10_rxito"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="11_2b4hx"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="12_3ikya"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="13_547l0"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="14_45ts8"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="15_y8oh2"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="16_gac6d"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="17_hmuey"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="18_n46v8"]
+[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="19_h1cgr"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="20_7gc35"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="21_dgd3j"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter.png" id="22_u8yuh"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="23_02bmv"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Myrmidon_Downed.png" id="24_q3c41"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Myrmidon.png" id="25_kfy1x"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Myrmidon_Moving.png" id="26_1q2cn"]
+[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="27_1tkim"]
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="28_3hm3v"]
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="29_gbsh8"]
+[ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="30_svwhi"]
+[ext_resource type="Script" path="res://Classes/alchemy/RuneData.gd" id="31_xky18"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Downed.png" id="32_3id6q"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="33_h3plt"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Moving.png" id="34_6id6f"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="35_x3usm"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="36_o7ahr"]
+
+[sub_resource type="Resource" id="Resource_1tkim"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_3hm3v"]
+script = ExtResource("13_547l0")
+display_name = "Thug"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("10_rxito")
+move_sprite = ExtResource("11_2b4hx")
+downed_sprite = ExtResource("8_ugkkt")
+
+[sub_resource type="Resource" id="Resource_gbsh8"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_3hm3v")
+cell = Vector2i(16, -18)
+squad_id = 0
+is_leader = true
+squad_archetype = 2
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 8,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 6
+})
+current_hp = 30
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_1tkim")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_svwhi"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_xky18"]
+script = ExtResource("13_547l0")
+display_name = "Thug3"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_3id6q"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_xky18")
+cell = Vector2i(15, -18)
+squad_id = 0
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_svwhi")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_h3plt"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_6id6f"]
+script = ExtResource("13_547l0")
+display_name = "Thug4"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_x3usm"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_6id6f")
+cell = Vector2i(15, -19)
+squad_id = 0
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_h3plt")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_o7ahr"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_ga0bu"]
+script = ExtResource("13_547l0")
+display_name = "Thug"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("10_rxito")
+move_sprite = ExtResource("11_2b4hx")
+downed_sprite = ExtResource("8_ugkkt")
+
+[sub_resource type="Resource" id="Resource_qdfkr"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_ga0bu")
+cell = Vector2i(16, -19)
+squad_id = 0
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 8,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 6
+})
+current_hp = 30
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_o7ahr")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_c2j5n"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_5a8c1"]
+script = ExtResource("13_547l0")
+display_name = "Thug"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("10_rxito")
+move_sprite = ExtResource("11_2b4hx")
+downed_sprite = ExtResource("8_ugkkt")
+
+[sub_resource type="Resource" id="Resource_1syme"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_5a8c1")
+cell = Vector2i(-9, 6)
+squad_id = 1
+is_leader = true
+squad_archetype = 2
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 8,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 6
+})
+current_hp = 30
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_c2j5n")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_id3v2"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_p1dkl"]
+script = ExtResource("13_547l0")
+display_name = "Thug"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("10_rxito")
+move_sprite = ExtResource("11_2b4hx")
+downed_sprite = ExtResource("8_ugkkt")
+
+[sub_resource type="Resource" id="Resource_n5s48"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_p1dkl")
+cell = Vector2i(-8, 6)
+squad_id = 1
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 8,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 6
+})
+current_hp = 30
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_id3v2")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_os0fr"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_1r2vb"]
+script = ExtResource("13_547l0")
+display_name = "Thug"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("10_rxito")
+move_sprite = ExtResource("11_2b4hx")
+downed_sprite = ExtResource("8_ugkkt")
+
+[sub_resource type="Resource" id="Resource_ctcr5"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_1r2vb")
+cell = Vector2i(-10, 6)
+squad_id = 1
+stats = Dictionary[int, int]({
+0: 30,
+1: 8,
+2: 8,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 6
+})
+current_hp = 30
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_os0fr")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_whq8x"]
+script = ExtResource("19_h1cgr")
+template = ExtResource("20_7gc35")
+display_name = "Smasher"
+
+[sub_resource type="Resource" id="Resource_f10k0"]
+script = ExtResource("13_547l0")
+display_name = "Thug5"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("22_u8yuh")
+move_sprite = ExtResource("23_02bmv")
+downed_sprite = ExtResource("21_dgd3j")
+
+[sub_resource type="Resource" id="Resource_afmdw"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_f10k0")
+cell = Vector2i(3, -7)
+squad_id = 2
+is_leader = true
+squad_archetype = 3
+squad_zone = "PatrolZone"
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_whq8x")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_cc41g"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_8d3q1"]
+script = ExtResource("13_547l0")
+display_name = "Thug6"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("25_kfy1x")
+move_sprite = ExtResource("26_1q2cn")
+downed_sprite = ExtResource("24_q3c41")
+
+[sub_resource type="Resource" id="Resource_4yu8n"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_8d3q1")
+cell = Vector2i(4, -8)
+squad_id = 2
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_cc41g")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_jfk3a"]
+script = ExtResource("4_xb5bl")
+template = ExtResource("6_4md37")
+display_name = "Chainsword"
+
+[sub_resource type="Resource" id="Resource_8uilc"]
+script = ExtResource("13_547l0")
+display_name = "Thug7"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("25_kfy1x")
+move_sprite = ExtResource("26_1q2cn")
+downed_sprite = ExtResource("24_q3c41")
+
+[sub_resource type="Resource" id="Resource_mgyax"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_8uilc")
+cell = Vector2i(2, -8)
+squad_id = 2
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_jfk3a")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
+
+[sub_resource type="Resource" id="Resource_h7ob1"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_kj2a7"]
+script = ExtResource("13_547l0")
+display_name = "Thug8"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_5rv14"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_kj2a7")
+cell = Vector2i(6, -10)
+squad_id = 3
+is_leader = true
+squad_archetype = 3
+squad_zone = "PatrolZone"
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_h7ob1")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_cmop5"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_mq5u2"]
+script = ExtResource("13_547l0")
+display_name = "Thug9"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_cqy3p"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_mq5u2")
+cell = Vector2i(0, -10)
+squad_id = 4
+is_leader = true
+squad_archetype = 3
+squad_zone = "PatrolZone"
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_cmop5")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_8mey3"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_sk6hk"]
+script = ExtResource("13_547l0")
+display_name = "Thug10"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_gi3f2"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_sk6hk")
+cell = Vector2i(6, -12)
+squad_id = 3
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_8mey3")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_14186"]
+script = ExtResource("14_45ts8")
+template = ExtResource("15_y8oh2")
+display_name = "Gun"
+
+[sub_resource type="Resource" id="Resource_5ohq1"]
+script = ExtResource("13_547l0")
+display_name = "Thug11"
+portrait = ExtResource("12_3ikya")
+base_stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+faction = 1
+map_sprite = ExtResource("17_hmuey")
+move_sprite = ExtResource("18_n46v8")
+downed_sprite = ExtResource("16_gac6d")
+
+[sub_resource type="Resource" id="Resource_f8ocy"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_5ohq1")
+cell = Vector2i(0, -12)
+squad_id = 4
+stats = Dictionary[int, int]({
+0: 15,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 15
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_14186")])
+equipped_index = 0
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
+
+[sub_resource type="Resource" id="Resource_moa87"]
+script = ExtResource("28_3hm3v")
+length = 3
+
+[sub_resource type="Resource" id="Resource_tk5sp"]
+script = ExtResource("27_1tkim")
+sigils = Array[int]([2, 2])
+flourishes = Array[int]([4, 3])
+display_name = "Freeze"
+power = 4
+attack_pattern = SubResource("Resource_moa87")
+hits_allies = true
+targets = 2
+
+[sub_resource type="Resource" id="Resource_ppevu"]
+script = ExtResource("29_gbsh8")
+length = 2
+metadata/_custom_type_script = "uid://cuvfasmongryk"
+
+[sub_resource type="Resource" id="Resource_a5xao"]
+script = ExtResource("27_1tkim")
+sigils = Array[int]([2])
+popup = "It wasn't very effective"
+icon = ExtResource("30_svwhi")
+display_name = "Splash"
+power = 2
+attack_pattern = SubResource("Resource_ppevu")
+hits_allies = true
+targets = 2
+deals_no_damage = true
+metadata/_custom_type_script = "uid://bgbidu2bbf33l"
+
+[sub_resource type="Resource" id="Resource_c0ty7"]
+script = ExtResource("31_xky18")
+size = 1
+inscriptions = Array[ExtResource("27_1tkim")]([SubResource("Resource_tk5sp"), SubResource("Resource_a5xao")])
+temper = 2
+display_name = "FreezeRune"
+
+[sub_resource type="Resource" id="Resource_iq7nb"]
+script = ExtResource("13_547l0")
+display_name = "Isaac"
+portrait = ExtResource("35_x3usm")
+map_sprite = ExtResource("33_h3plt")
+move_sprite = ExtResource("34_6id6f")
+downed_sprite = ExtResource("32_3id6q")
+base_aura = Dictionary[int, int]({
+1: 1,
+2: 1,
+5: 1,
+6: 1,
+7: 1
+})
+base_affinity = Array[int]([7, 6, 5, 2, 1])
+base_is_alkahest_affine = true
+starting_inventory = Array[ExtResource("3_xuexq")]([ExtResource("36_o7ahr")])
+
+[sub_resource type="Resource" id="Resource_0q1e1"]
+script = ExtResource("2_bkn2k")
+unit_data = SubResource("Resource_iq7nb")
+cell = Vector2i(27, 1)
+squad_id = 5
+is_leader = true
+stats = Dictionary[int, int]({
+0: 20,
+1: 5,
+2: 5,
+3: 5,
+4: 5,
+5: 5,
+6: 5,
+7: 4
+})
+current_hp = 20
+current_will = 5
+inventory = Array[ExtResource("3_xuexq")]([SubResource("Resource_c0ty7")])
+equipped_index = 0
+aura = Dictionary[int, int]({
+1: 1,
+2: 1,
+5: 1,
+6: 1,
+7: 1
+})
+affinity = Array[int]([7, 6, 5, 2, 1])
+is_alkahest_affine = true
+affinity_saved = true
+limb_states = Dictionary[int, int]({
+0: 0,
+1: 0,
+2: 0,
+3: 0
+})
+
+[resource]
+script = ExtResource("1_u67y6")
+scenario_name = "missions/Level_1"
+unit_entries = Array[ExtResource("2_bkn2k")]([SubResource("Resource_gbsh8"), SubResource("Resource_3id6q"), SubResource("Resource_x3usm"), SubResource("Resource_qdfkr"), SubResource("Resource_1syme"), SubResource("Resource_n5s48"), SubResource("Resource_ctcr5"), SubResource("Resource_afmdw"), SubResource("Resource_4yu8n"), SubResource("Resource_mgyax"), SubResource("Resource_5rv14"), SubResource("Resource_cqy3p"), SubResource("Resource_gi3f2"), SubResource("Resource_f8ocy"), SubResource("Resource_0q1e1")])
+tile_data = PackedByteArray("AAD0/+v/AAAFAAAAAAD0/+z/AAAFAAAAAAD0/+3/AAAFAAAAAAD0/+7/AAAFAAAAAAD0/+//AAAFAAAAAAD0//D/AAAFAAAAAAD0//H/AAAFAAAAAAD0//L/AAAFAAAAAAD0//P/AAAFAAAAAAD0//T/AAAFAAAAAAD0//X/AAAFAAAAAAD0//b/AAAFAAAAAAD0//f/AAAFAAAAAAD0//j/AAAFAAAAAAD0//n/AAAFAAAAAAD0//r/AAAFAAAAAAD0//v/AAAFAAAAAAD0//z/AAAFAAAAAAD0//3/AAAFAAAAAAD0//7/AAAFAAAAAAD0////AAAFAAAAAAD0/wAAAAAFAAAAAAD0/wEAAAAFAAAAAAD0/wIAAAAFAAAAAAD0/wMAAAAFAAAAAAD0/wQAAAAFAAAAAAD0/wUAAAAFAAAAAAD0/wYAAAAFAAAAAAD0/wcAAAAFAAAAAAD0/wgAAAAFAAAAAAD1/+v/AAAFAAAAAAD1/+z/AAAFAAAAAAD1/+3/AAAFAAAAAAD1/+7/AAAFAAAAAAD1/+//AAAFAAAAAAD1//D/AAAFAAAAAAD1//H/AAAFAAAAAAD1//L/AAAFAAAAAAD1//P/AAAFAAAAAAD1//T/AAAFAAAAAAD1//X/AAAFAAAAAAD1//b/AAAFAAAAAAD1//f/AAAFAAAAAAD1//j/AAAFAAAAAAD1//n/AAAFAAAAAAD1//r/AAAFAAAAAAD1//v/AAAFAAAAAAD1//z/AAAFAAAAAAD1//3/AAAFAAAAAAD1//7/AAAFAAAAAAD1////AAAFAAAAAAD1/wAAAAAFAAAAAAD1/wEAAAAFAAAAAAD1/wIAAAAFAAAAAAD1/wMAAAAFAAAAAAD1/wQAAAAFAAAAAAD1/wUAAAAFAAAAAAD1/wYAAAAFAAAAAAD1/wcAAAAFAAAAAAD1/wgAAAAFAAAAAAD2/+v/AAAFAAAAAAD2/+z/AAAFAAAAAAD2/+3/AAAFAAAAAAD2/+7/AAAFAAAAAAD2/+//AAAFAAAAAAD2//D/AAAFAAAAAAD2//H/AAAFAAAAAAD2//L/AAAFAAAAAAD2//P/AAAFAAAAAAD2//T/AAAFAAAAAAD2//X/AAAFAAAAAAD2//b/AAAFAAAAAAD2//f/AAAFAAAAAAD2//j/AAAFAAAAAAD2//n/AAAFAAAAAAD2//r/AAAFAAAAAAD2//v/AAAFAAAAAAD2//z/AAAFAAAAAAD2//3/AAAFAAAAAAD2//7/AAAFAAAAAAD2////AAAFAAAAAAD2/wAAAAAFAAAAAAD2/wEAAAAFAAAAAAD2/wIAAAAFAAAAAAD2/wMAAAAFAAAAAAD2/wQAAAAFAAAAAAD2/wUAAAAFAAAAAAD2/wYAAAAFAAAAAAD2/wcAAAAFAAAAAAD2/wgAAAAFAAAAAAD3/+v/AAAFAAAAAAD3/+z/AAAFAAAAAAD3/+3/AAAFAAAAAAD3/+7/AAAFAAAAAAD3/+//AAAFAAAAAAD3//D/AAAFAAAAAAD3//H/AAAFAAAAAAD3//L/AAAFAAAAAAD3//P/AAAFAAAAAAD3//T/AAAFAAAAAAD3//X/AAAFAAAAAAD3//b/AAAFAAAAAAD3//f/AAAFAAAAAAD3//j/AAAFAAAAAAD3//n/AAAFAAAAAAD3//r/AAAFAAAAAAD3//v/AAAFAAAAAAD3//z/AAAFAAAAAAD3//3/AAAFAAAAAAD3//7/AAAFAAAAAAD3////AAAFAAAAAAD3/wAAAAAFAAAAAAD3/wEAAAAFAAAAAAD3/wIAAAAFAAAAAAD3/wMAAAAFAAAAAAD3/wQAAAAFAAAAAAD3/wUAAAAFAAAAAAD3/wYAAAAFAAAAAAD3/wcAAAAFAAAAAAD3/wgAAAAFAAAAAAD4/+v/AAAFAAAAAAD4/+z/AAAFAAAAAAD4/+3/AAAFAAAAAAD4/+7/AAAFAAAAAAD4/+//AAAFAAAAAAD4//D/AAAFAAAAAAD4//H/AAAFAAAAAAD4//L/AAAFAAAAAAD4//P/AAAFAAAAAAD4//T/AAAFAAAAAAD4//X/AAAFAAAAAAD4//b/AAAFAAAAAAD4//f/AAAFAAAAAAD4//j/AAAFAAAAAAD4//n/AAAFAAAAAAD4//r/AAAFAAAAAAD4//v/AAAFAAAAAAD4//z/AAAFAAAAAAD4//3/AAAFAAAAAAD4//7/AAAFAAAAAAD4////AAAFAAAAAAD4/wAAAAAFAAAAAAD4/wEAAAAFAAAAAAD4/wIAAAAFAAAAAAD4/wMAAAAFAAAAAAD4/wQAAAAFAAAAAAD4/wUAAAAFAAAAAAD4/wYAAAAFAAAAAAD4/wcAAAAFAAAAAAD4/wgAAAAFAAAAAAD5/+v/AAAFAAAAAAD5/+z/AAAFAAAAAAD5/+3/AAAFAAAAAAD5/+7/AAAFAAAAAAD5/+//AAAFAAAAAAD5//D/AAAFAAAAAAD5//H/AAAFAAAAAAD5//L/AAAFAAAAAAD5//P/AAAFAAAAAAD5//T/AAAFAAAAAAD5//X/AAAFAAAAAAD5//b/AAAFAAAAAAD5//f/AAAFAAAAAAD5//j/AAAFAAAAAAD5//n/AAAFAAAAAAD5//r/AAAFAAAAAAD5//v/AAAFAAAAAAD5//z/AAAFAAAAAAD5//3/AAAFAAAAAAD5//7/AAAFAAAAAAD5////AAAFAAAAAAD5/wAAAAAFAAAAAAD5/wEAAAAFAAAAAAD5/wIAAAAFAAAAAAD5/wMAAAAFAAAAAAD5/wQAAAAFAAAAAAD5/wUAAAAFAAAAAAD5/wYAAAAFAAAAAAD5/wcAAAAFAAAAAAD5/wgAAAAFAAAAAAD6/+v/AAAFAAAAAAD6/+z/AAAFAAAAAAD6/+3/AAAFAAAAAAD6/+7/AAAFAAAAAAD6/+//AAAFAAAAAAD6//D/AAAFAAAAAAD6//H/AAAFAAAAAAD6//L/AAAFAAAAAAD6//P/AAAFAAAAAAD6//T/AAAFAAAAAAD6//X/AAAFAAAAAAD6//b/AAAFAAAAAAD6//f/AAAFAAAAAAD6//j/AAAFAAAAAAD6//n/AAAFAAAAAAD6//r/AAAFAAAAAAD6//v/AAAFAAAAAAD6//z/AAAFAAAAAAD6//3/AAAFAAAAAAD6//7/AAAFAAAAAAD6////AAAFAAAAAAD6/wAAAAAFAAAAAAD6/wEAAAAFAAAAAAD6/wIAAAAFAAAAAAD6/wMAAAAFAAAAAAD6/wQAAAAFAAAAAAD6/wUAAAAFAAAAAAD6/wYAAAAFAAAAAAD6/wcAAAAFAAAAAAD6/wgAAAAFAAAAAAD7/+v/AAAFAAAAAAD7/+z/AAAFAAAAAAD7/+3/AAAFAAAAAAD7/+7/AAAFAAAAAAD7/+//AAAFAAAAAAD7//D/AAAFAAAAAAD7//H/AAAFAAAAAAD7//L/AAAFAAAAAAD7//P/AAAFAAAAAAD7//T/AAAFAAAAAAD7//X/AAAFAAAAAAD7//b/AAAFAAAAAAD7//f/AAAFAAAAAAD7//j/AAAFAAAAAAD7//n/AAAFAAAAAAD7//r/AAAFAAAAAAD7//v/AAAFAAAAAAD7//z/AAAFAAAAAAD7//3/AAAFAAAAAAD7//7/AAAFAAAAAAD7////AAAFAAAAAAD7/wAAAAAFAAAAAAD7/wEAAAAFAAAAAAD7/wIAAAAFAAAAAAD7/wMAAAAFAAAAAAD7/wQAAAAFAAAAAAD7/wUAAAAFAAAAAAD7/wYAAAAFAAAAAAD7/wcAAAAFAAAAAAD7/wgAAAAFAAAAAAD8/+v/AAAFAAAAAAD8/+z/AAAFAAAAAAD8/+3/AAAFAAAAAAD8/+7/AAAFAAAAAAD8/+//AAAFAAAAAAD8//D/AAAFAAAAAAD8//H/AAAFAAAAAAD8//L/AAAFAAAAAAD8//P/AAAFAAAAAAD8//T/AAAFAAAAAAD8//X/AAAFAAAAAAD8//b/AAAFAAAAAAD8//f/AAAFAAAAAAD8//j/AAAFAAAAAAD8//n/AAAFAAAAAAD8//r/AAAFAAAAAAD8//v/AAAFAAAAAAD8//z/AAAFAAAAAAD8//3/AAAFAAAAAAD8//7/AAAFAAAAAAD8////AAAFAAAAAAD8/wAAAAAFAAAAAAD8/wEAAAAFAAAAAAD8/wIAAAAFAAAAAAD8/wMAAAAFAAAAAAD8/wQAAAAFAAAAAAD8/wUAAAAFAAAAAAD8/wYAAAAFAAAAAAD8/wcAAAAFAAAAAAD8/wgAAAAFAAAAAAD9/+v/AAAFAAAAAAD9/+z/AAAFAAAAAAD9/+3/AAAFAAAAAAD9/+7/AAAFAAAAAAD9/+//AAAFAAAAAAD9//D/AAAFAAAAAAD9//H/AAAFAAAAAAD9//L/AAAFAAAAAAD9//P/AAAFAAAAAAD9//T/AAAFAAAAAAD9//X/AAAFAAAAAAD9//b/AAAFAAAAAAD9//f/AAAFAAAAAAD9//j/AAAFAAAAAAD9//n/AAAFAAAAAAD9//r/AAAFAAAAAAD9//v/AAAFAAAAAAD9//z/AAAFAAAAAAD9//3/AAAFAAAAAAD9//7/AAAFAAAAAAD9////AAAFAAAAAAD9/wAAAAAFAAAAAAD9/wEAAAAFAAAAAAD9/wIAAAAFAAAAAAD9/wMAAAAFAAAAAAD9/wQAAAAFAAAAAAD9/wUAAAAFAAAAAAD9/wYAAAAFAAAAAAD9/wcAAAAFAAAAAAD9/wgAAAAFAAAAAAD+/+v/AAAFAAAAAAD+/+z/AAAFAAAAAAD+/+3/AAAFAAAAAAD+/+7/AAAFAAAAAAD+/+//AAAFAAAAAAD+//D/AAAFAAAAAAD+//H/AAAFAAAAAAD+//L/AAAFAAAAAAD+//P/AAAFAAAAAAD+//T/AAAFAAAAAAD+//X/AAAFAAAAAAD+//b/AAAFAAAAAAD+//f/AAAFAAAAAAD+//j/AAAFAAAAAAD+//n/AAAFAAAAAAD+//r/AAAFAAAAAAD+//v/AAAFAAAAAAD+//z/AAAFAAAAAAD+//3/AAAFAAAAAAD+//7/AAAFAAAAAAD+////AAAFAAAAAAD+/wAAAAAFAAAAAAD+/wEAAAAFAAAAAAD+/wIAAAAFAAAAAAD+/wMAAAAFAAAAAAD+/wQAAAAFAAAAAAD+/wUAAAAFAAAAAAD+/wYAAAAFAAAAAAD+/wcAAAAFAAAAAAD+/wgAAAAFAAAAAAD//+v/AAAFAAAAAAD//+z/AAAFAAAAAAD//+3/AAAFAAAAAAD//+7/AAAFAAAAAAD//+//AAAFAAAAAAD///D/AAAFAAAAAAD///H/AAAFAAAAAAD///L/AAAFAAAAAAD///P/AAAFAAAAAAD///T/AAAFAAAAAAD///X/AAAFAAAAAAD///b/AAAFAAAAAAD///f/AAAFAAAAAAD///j/AAAFAAAAAAD///n/AAAFAAAAAAD///r/AAAFAAAAAAD///v/AAAFAAAAAAD///z/AAAFAAAAAAD///3/AAAFAAAAAAD///7/AAAFAAAAAAD/////AAAFAAAAAAD//wAAAAAFAAAAAAD//wEAAAAFAAAAAAD//wIAAAAFAAAAAAD//wMAAAAFAAAAAAD//wQAAAAFAAAAAAD//wUAAAAFAAAAAAD//wYAAAAFAAAAAAD//wcAAAAFAAAAAAD//wgAAAAFAAAAAAAAAOv/AAAFAAAAAAAAAOz/AAAFAAAAAAAAAO3/AAAFAAAAAAAAAO7/AAAFAAAAAAAAAO//AAAFAAAAAAAAAPD/AAAFAAAAAAAAAPH/AAAFAAAAAAAAAPL/AAAFAAAAAAAAAPP/AAAFAAAAAAAAAPT/AAAFAAAAAAAAAPX/AAAFAAAAAAAAAPb/AAAFAAAAAAAAAPf/AAAFAAAAAAAAAPj/AAAFAAAAAAAAAPn/AAAFAAAAAAAAAPr/AAAFAAAAAAAAAPv/AAAFAAAAAAAAAPz/AAAFAAAAAAAAAP3/AAAFAAAAAAAAAP7/AAAFAAAAAAAAAP//AAAFAAAAAAAAAAAAAAAFAAAAAAAAAAEAAAAFAAAAAAAAAAIAAAAFAAAAAAAAAAMAAAAFAAAAAAAAAAQAAAAFAAAAAAAAAAUAAAAFAAAAAAAAAAYAAAAFAAAAAAAAAAcAAAAFAAAAAAAAAAgAAAAFAAAAAAABAOv/AAAFAAAAAAABAOz/AAAFAAAAAAABAO3/AAAFAAAAAAABAO7/AAAFAAAAAAABAO//AAAFAAAAAAABAPD/AAAFAAAAAAABAPH/AAAFAAAAAAABAPL/AAAFAAAAAAABAPP/AAAFAAAAAAABAPT/AAAFAAAAAAABAPX/AAAFAAAAAAABAPb/AAAFAAAAAAABAPf/AAAFAAAAAAABAPj/AAAFAAAAAAABAPn/AAAFAAAAAAABAPr/AAAFAAAAAAABAPv/AAAFAAAAAAABAPz/AAAFAAAAAAABAP3/AAAFAAAAAAABAP7/AAAFAAAAAAABAP//AAAFAAAAAAABAAAAAAAFAAAAAAABAAEAAAAFAAAAAAABAAIAAAAFAAAAAAABAAMAAAAFAAAAAAABAAQAAAAFAAAAAAABAAUAAAAFAAAAAAABAAYAAAAFAAAAAAABAAcAAAAFAAAAAAABAAgAAAAFAAAAAAACAOv/AAAFAAAAAAACAOz/AAAFAAAAAAACAO3/AAAFAAAAAAACAO7/AAAFAAAAAAACAO//AAAFAAAAAAACAPD/AAAFAAAAAAACAPH/AAAFAAAAAAACAPL/AAAFAAAAAAACAPP/AAAFAAAAAAACAPT/AAAFAAAAAAACAPX/AAAFAAAAAAACAPb/AAAFAAAAAAACAPf/AAAFAAAAAAACAPj/AAAFAAAAAAACAPn/AAAFAAAAAAACAPr/AAAFAAAAAAACAPv/AAAFAAAAAAACAPz/AAAFAAAAAAACAP3/AAAFAAAAAAACAP7/AAAFAAAAAAACAP//AAAFAAAAAAACAAAAAAAFAAAAAAACAAEAAAAFAAAAAAACAAIAAAAFAAAAAAACAAMAAAAFAAAAAAACAAQAAAAFAAAAAAACAAUAAAAFAAAAAAACAAYAAAAFAAAAAAACAAcAAAAFAAAAAAACAAgAAAAFAAAAAAADAOv/AAAFAAAAAAADAOz/AAAFAAAAAAADAO3/AAAFAAAAAAADAO7/AAAFAAAAAAADAO//AAAFAAAAAAADAPD/AAAFAAAAAAADAPH/AAAFAAAAAAADAPL/AAAFAAAAAAADAPP/AAAFAAAAAAADAPT/AAAFAAAAAAADAPX/AAAFAAAAAAADAPb/AAAFAAAAAAADAPf/AAAFAAAAAAADAPj/AAAFAAAAAAADAPn/AAAFAAAAAAADAPr/AAAFAAAAAAADAPv/AAAFAAAAAAADAPz/AAAFAAAAAAADAP3/AAAFAAAAAAADAP7/AAAFAAAAAAADAP//AAAFAAAAAAADAAAAAAAFAAAAAAADAAEAAAAFAAAAAAADAAIAAAAFAAAAAAADAAMAAAAFAAAAAAADAAQAAAAFAAAAAAADAAUAAAAFAAAAAAADAAYAAAAFAAAAAAADAAcAAAAFAAAAAAADAAgAAAAFAAAAAAAEAOv/AAAFAAAAAAAEAOz/AAAFAAAAAAAEAO3/AAAFAAAAAAAEAO7/AAAFAAAAAAAEAO//AAAFAAAAAAAEAPD/AAAFAAAAAAAEAPH/AAAFAAAAAAAEAPL/AAAFAAAAAAAEAPP/AAAFAAAAAAAEAPT/AAAFAAAAAAAEAPX/AAAFAAAAAAAEAPb/AAAFAAAAAAAEAPf/AAAFAAAAAAAEAPj/AAAFAAAAAAAEAPn/AAAFAAAAAAAEAPr/AAAFAAAAAAAEAPv/AAAFAAAAAAAEAPz/AAAFAAAAAAAEAP3/AAAFAAAAAAAEAP7/AAAFAAAAAAAEAP//AAAFAAAAAAAEAAAAAAAFAAAAAAAEAAEAAAAFAAAAAAAEAAIAAAAFAAAAAAAEAAMAAAAFAAAAAAAEAAQAAAAFAAAAAAAEAAUAAAAFAAAAAAAEAAYAAAAFAAAAAAAEAAcAAAAFAAAAAAAEAAgAAAAFAAAAAAAFAOv/AAAFAAAAAAAFAOz/AAAFAAAAAAAFAO3/AAAFAAAAAAAFAO7/AAAFAAAAAAAFAO//AAAFAAAAAAAFAPD/AAAFAAAAAAAFAPH/AAAFAAAAAAAFAPL/AAAFAAAAAAAFAPP/AAAFAAAAAAAFAPT/AAAFAAAAAAAFAPX/AAAFAAAAAAAFAPb/AAAFAAAAAAAFAPf/AAAFAAAAAAAFAPj/AAAFAAAAAAAFAPn/AAAFAAAAAAAFAPr/AAAFAAAAAAAFAPv/AAAFAAAAAAAFAPz/AAAFAAAAAAAFAP3/AAAFAAAAAAAFAP7/AAAFAAAAAAAFAP//AAAFAAAAAAAFAAAAAAAFAAAAAAAFAAEAAAAFAAAAAAAFAAIAAAAFAAAAAAAFAAMAAAAFAAAAAAAFAAQAAAAFAAAAAAAFAAUAAAAFAAAAAAAFAAYAAAAFAAAAAAAFAAcAAAAFAAAAAAAFAAgAAAAFAAAAAAAGAOv/AAAFAAAAAAAGAOz/AAAFAAAAAAAGAO3/AAAFAAAAAAAGAO7/AAAFAAAAAAAGAO//AAAFAAAAAAAGAPD/AAAFAAAAAAAGAPH/AAAFAAAAAAAGAPL/AAAFAAAAAAAGAPP/AAAFAAAAAAAGAPT/AAAFAAAAAAAGAPX/AAAFAAAAAAAGAPb/AAAFAAAAAAAGAPf/AAAFAAAAAAAGAPj/AAAFAAAAAAAGAPn/AAAFAAAAAAAGAPr/AAAFAAAAAAAGAPv/AAAFAAAAAAAGAPz/AAAFAAAAAAAGAP3/AAAFAAAAAAAGAP7/AAAFAAAAAAAGAP//AAAFAAAAAAAGAAAAAAAFAAAAAAAGAAEAAAAFAAAAAAAGAAIAAAAFAAAAAAAGAAMAAAAFAAAAAAAGAAQAAAAFAAAAAAAGAAUAAAAFAAAAAAAGAAYAAAAFAAAAAAAGAAcAAAAFAAAAAAAGAAgAAAAFAAAAAAAHAOv/AAAFAAAAAAAHAOz/AAAFAAAAAAAHAO3/AAAFAAAAAAAHAO7/AAAFAAAAAAAHAO//AAAFAAAAAAAHAPD/AAAFAAAAAAAHAPH/AAAFAAAAAAAHAPL/AAAFAAAAAAAHAPP/AAAFAAAAAAAHAPT/AAAFAAAAAAAHAPX/AAAFAAAAAAAHAPb/AAAFAAAAAAAHAPf/AAAFAAAAAAAHAPj/AAAFAAAAAAAHAPn/AAAFAAAAAAAHAPr/AAAFAAAAAAAHAPv/AAAFAAAAAAAHAPz/AAAFAAAAAAAHAP3/AAAFAAAAAAAHAP7/AAAFAAAAAAAHAP//AAAFAAAAAAAHAAAAAAAFAAAAAAAHAAEAAAAFAAAAAAAHAAIAAAAFAAAAAAAHAAMAAAAFAAAAAAAHAAQAAAAFAAAAAAAHAAUAAAAFAAAAAAAHAAYAAAAFAAAAAAAHAAcAAAAFAAAAAAAHAAgAAAAFAAAAAAAIAOv/AAAFAAAAAAAIAOz/AAAFAAAAAAAIAO3/AAAFAAAAAAAIAO7/AAAFAAAAAAAIAO//AAAFAAAAAAAIAPD/AAAFAAAAAAAIAPH/AAAFAAAAAAAIAPL/AAAFAAAAAAAIAPP/AAAFAAAAAAAIAPT/AAAFAAAAAAAIAPX/AAAFAAAAAAAIAPb/AAAFAAAAAAAIAPf/AAAFAAAAAAAIAPj/AAAFAAAAAAAIAPn/AAAFAAAAAAAIAPr/AAAFAAAAAAAIAPv/AAAFAAAAAAAIAPz/AAAFAAAAAAAIAP3/AAAFAAAAAAAIAP7/AAAFAAAAAAAIAP//AAAFAAAAAAAIAAAAAAAFAAAAAAAIAAEAAAAFAAAAAAAIAAIAAAAFAAAAAAAIAAMAAAAFAAAAAAAIAAQAAAAFAAAAAAAIAAUAAAAFAAAAAAAIAAYAAAAFAAAAAAAIAAcAAAAFAAAAAAAIAAgAAAAFAAAAAAAJAOv/AAAFAAAAAAAJAOz/AAAFAAAAAAAJAO3/AAAFAAAAAAAJAO7/AAAFAAAAAAAJAO//AAAFAAAAAAAJAPD/AAAFAAAAAAAJAPH/AAAFAAAAAAAJAPL/AAAFAAAAAAAJAPP/AAAFAAAAAAAJAPT/AAAFAAAAAAAJAPX/AAAFAAAAAAAJAPb/AAAFAAAAAAAJAPf/AAAFAAAAAAAJAPj/AAAFAAAAAAAJAPn/AAAFAAAAAAAJAPr/AAAFAAAAAAAJAPv/AAAFAAAAAAAJAPz/AAAFAAAAAAAJAP3/AAAFAAAAAAAJAP7/AAAFAAAAAAAJAP//AAAFAAAAAAAJAAAAAAAFAAAAAAAJAAEAAAAFAAAAAAAJAAIAAAAFAAAAAAAJAAMAAAAFAAAAAAAJAAQAAAAFAAAAAAAJAAUAAAAFAAAAAAAJAAYAAAAFAAAAAAAJAAcAAAAFAAAAAAAJAAgAAAAFAAAAAAAKAOv/AAAFAAAAAAAKAOz/AAAFAAAAAAAKAO3/AAAFAAAAAAAKAO7/AAAFAAAAAAAKAO//AAAFAAAAAAAKAPD/AAAFAAAAAAAKAPH/AAAFAAAAAAAKAPL/AAAFAAAAAAAKAPP/AAAFAAAAAAAKAPT/AAAFAAAAAAAKAPX/AAAFAAAAAAAKAPb/AAAFAAAAAAAKAPf/AAAFAAAAAAAKAPj/AAAFAAAAAAAKAPn/AAAFAAAAAAAKAPr/AAAFAAAAAAAKAPv/AAAFAAAAAAAKAPz/AAAFAAAAAAAKAP3/AAAFAAAAAAAKAP7/AAAFAAAAAAAKAP//AAAFAAAAAAAKAAAAAAAFAAAAAAAKAAEAAAAFAAAAAAAKAAIAAAAFAAAAAAAKAAMAAAAFAAAAAAAKAAQAAAAFAAAAAAAKAAUAAAAFAAAAAAAKAAYAAAAFAAAAAAAKAAcAAAAFAAAAAAAKAAgAAAAFAAAAAAALAOv/AAAFAAAAAAALAOz/AAAFAAAAAAALAO3/AAAFAAAAAAALAO7/AAAFAAAAAAALAO//AAAFAAAAAAALAPD/AAAFAAAAAAALAPH/AAAFAAAAAAALAPL/AAAFAAAAAAALAPP/AAAFAAAAAAALAPT/AAAFAAAAAAALAPX/AAAFAAAAAAALAPb/AAAFAAAAAAALAPf/AAAFAAAAAAALAPj/AAAFAAAAAAALAPn/AAAFAAAAAAALAPr/AAAFAAAAAAALAPv/AAAFAAAAAAALAPz/AAAFAAAAAAALAP3/AAAFAAAAAAALAP7/AAAFAAAAAAALAP//AAAFAAAAAAALAAAAAAAFAAAAAAALAAEAAAAFAAAAAAALAAIAAAAFAAAAAAALAAMAAAAFAAAAAAALAAQAAAAFAAAAAAALAAUAAAAFAAAAAAALAAYAAAAFAAAAAAALAAcAAAAFAAAAAAALAAgAAAAFAAAAAAAMAOv/AAAFAAAAAAAMAOz/AAAFAAAAAAAMAO3/AAAFAAAAAAAMAO7/AAAFAAAAAAAMAO//AAAFAAAAAAAMAPD/AAAFAAAAAAAMAPH/AAAFAAAAAAAMAPL/AAAFAAAAAAAMAPP/AAAFAAAAAAAMAPT/AAAFAAAAAAAMAPX/AAAFAAAAAAAMAPb/AAAFAAAAAAAMAPf/AAAFAAAAAAAMAPj/AAAFAAAAAAAMAPn/AAAFAAAAAAAMAPr/AAAFAAAAAAAMAPv/AAAFAAAAAAAMAPz/AAAFAAAAAAAMAP3/AAAFAAAAAAAMAP7/AAAFAAAAAAAMAP//AAAFAAAAAAAMAAAAAAAFAAAAAAAMAAEAAAAFAAAAAAAMAAIAAAAFAAAAAAAMAAMAAAAFAAAAAAAMAAQAAAAFAAAAAAAMAAUAAAAFAAAAAAAMAAYAAAAFAAAAAAAMAAcAAAAFAAAAAAAMAAgAAAAFAAAAAAANAOv/AAAFAAAAAAANAOz/AAAFAAAAAAANAO3/AAAFAAAAAAANAO7/AAAFAAAAAAANAO//AAAFAAAAAAANAPD/AAAFAAAAAAANAPH/AAAFAAAAAAANAPL/AAAFAAAAAAANAPP/AAAFAAAAAAANAPT/AAAFAAAAAAANAPX/AAAFAAAAAAANAPb/AAAFAAAAAAANAPf/AAAFAAAAAAANAPj/AAAFAAAAAAANAPn/AAAFAAAAAAANAPr/AAAFAAAAAAANAPv/AAAFAAAAAAANAPz/AAAFAAAAAAANAP3/AAAFAAAAAAANAP7/AAAFAAAAAAANAP//AAAFAAAAAAANAAAAAAAFAAAAAAANAAEAAAAFAAAAAAANAAIAAAAFAAAAAAANAAMAAAAFAAAAAAANAAQAAAAFAAAAAAANAAUAAAAFAAAAAAANAAYAAAAFAAAAAAANAAcAAAAFAAAAAAANAAgAAAAFAAAAAAAOAOv/AAAFAAAAAAAOAOz/AAAFAAAAAAAOAO3/AAAFAAAAAAAOAO7/AAAFAAAAAAAOAO//AAAFAAAAAAAOAPD/AAAFAAAAAAAOAPH/AAAFAAAAAAAOAPL/AAAFAAAAAAAOAPP/AAAFAAAAAAAOAPT/AAAFAAAAAAAOAPX/AAAFAAAAAAAOAPb/AAAFAAAAAAAOAPf/AAAFAAAAAAAOAPj/AAAFAAAAAAAOAPn/AAAFAAAAAAAOAPr/AAAFAAAAAAAOAPv/AAAFAAAAAAAOAPz/AAAFAAAAAAAOAP3/AAAFAAAAAAAOAP7/AAAFAAAAAAAOAP//AAAFAAAAAAAOAAAAAAAFAAAAAAAOAAEAAAAFAAAAAAAOAAIAAAAFAAAAAAAOAAMAAAAFAAAAAAAOAAQAAAAFAAAAAAAOAAUAAAAFAAAAAAAOAAYAAAAFAAAAAAAOAAcAAAAFAAAAAAAOAAgAAAAFAAAAAAAPAOv/AAAFAAAAAAAPAOz/AAAFAAAAAAAPAO3/AAAFAAAAAAAPAO7/AAAFAAAAAAAPAO//AAAFAAAAAAAPAPD/AAAFAAAAAAAPAPH/AAAFAAAAAAAPAPL/AAAFAAAAAAAPAPP/AAAFAAAAAAAPAPT/AAAFAAAAAAAPAPX/AAAFAAAAAAAPAPb/AAAFAAAAAAAPAPf/AAAFAAAAAAAPAPj/AAAFAAAAAAAPAPn/AAAFAAAAAAAPAPr/AAAFAAAAAAAPAPv/AAAFAAAAAAAPAPz/AAAFAAAAAAAPAP3/AAAFAAAAAAAPAP7/AAAFAAAAAAAPAP//AAAFAAAAAAAPAAAAAAAFAAAAAAAPAAEAAAAFAAAAAAAPAAIAAAAFAAAAAAAPAAMAAAAFAAAAAAAPAAQAAAAFAAAAAAAPAAUAAAAFAAAAAAAPAAYAAAAFAAAAAAAPAAcAAAAFAAAAAAAPAAgAAAAFAAAAAAAQAOv/AAAFAAAAAAAQAOz/AAAFAAAAAAAQAO3/AAAFAAAAAAAQAO7/AAAFAAAAAAAQAO//AAAFAAAAAAAQAPD/AAAFAAAAAAAQAPH/AAAFAAAAAAAQAPL/AAAFAAAAAAAQAPP/AAAFAAAAAAAQAPT/AAAFAAAAAAAQAPX/AAAFAAAAAAAQAPb/AAAFAAAAAAAQAPf/AAAFAAAAAAAQAPj/AAAFAAAAAAAQAPn/AAAFAAAAAAAQAPr/AAAFAAAAAAAQAPv/AAAFAAAAAAAQAPz/AAAFAAAAAAAQAP3/AAAFAAAAAAAQAP7/AAAFAAAAAAAQAP//AAAFAAAAAAAQAAAAAAAFAAAAAAAQAAEAAAAFAAAAAAAQAAIAAAAFAAAAAAAQAAMAAAAFAAAAAAAQAAQAAAAFAAAAAAAQAAUAAAAFAAAAAAAQAAYAAAAFAAAAAAAQAAcAAAAFAAAAAAAQAAgAAAAFAAAAAAARAOv/AAAFAAAAAAARAOz/AAAFAAAAAAARAO3/AAAFAAAAAAARAO7/AAAFAAAAAAARAO//AAAFAAAAAAARAPD/AAAFAAAAAAARAPH/AAAFAAAAAAARAPL/AAAFAAAAAAARAPP/AAAFAAAAAAARAPT/AAAFAAAAAAARAPX/AAAFAAAAAAARAPb/AAAFAAAAAAARAPf/AAAFAAAAAAARAPj/AAAFAAAAAAARAPn/AAAFAAAAAAARAPr/AAAFAAAAAAARAPv/AAAFAAAAAAARAPz/AAAFAAAAAAARAP3/AAAFAAAAAAARAP7/AAAFAAAAAAARAP//AAAFAAAAAAARAAAAAAAFAAAAAAARAAEAAAAFAAAAAAARAAIAAAAFAAAAAAARAAMAAAAFAAAAAAARAAQAAAAFAAAAAAARAAUAAAAFAAAAAAARAAYAAAAFAAAAAAARAAcAAAAFAAAAAAARAAgAAAAFAAAAAAASAOv/AAAFAAAAAAASAOz/AAAFAAAAAAASAO3/AAAFAAAAAAASAO7/AAAFAAAAAAASAO//AAAFAAAAAAASAPD/AAAFAAAAAAASAPH/AAAFAAAAAAASAPL/AAAFAAAAAAASAPP/AAAFAAAAAAASAPT/AAAFAAAAAAASAPX/AAAFAAAAAAASAPb/AAAFAAAAAAASAPf/AAAFAAAAAAASAPj/AAAFAAAAAAASAPn/AAAFAAAAAAASAPr/AAAFAAAAAAASAPv/AAAFAAAAAAASAPz/AAAFAAAAAAASAP3/AAAFAAAAAAASAP7/AAAFAAAAAAASAP//AAAFAAAAAAASAAAAAAAFAAAAAAASAAEAAAAFAAAAAAASAAIAAAAFAAAAAAASAAMAAAAFAAAAAAASAAQAAAAFAAAAAAASAAUAAAAFAAAAAAASAAYAAAAFAAAAAAASAAcAAAAFAAAAAAASAAgAAAAFAAAAAAATAOv/AAAFAAAAAAATAOz/AAAFAAAAAAATAO3/AAAFAAAAAAATAO7/AAAFAAAAAAATAO//AAAFAAAAAAATAPD/AAAFAAAAAAATAPH/AAAFAAAAAAATAPL/AAAFAAAAAAATAPP/AAAFAAAAAAATAPT/AAAFAAAAAAATAPX/AAAFAAAAAAATAPb/AAAFAAAAAAATAPf/AAAFAAAAAAATAPj/AAAFAAAAAAATAPn/AAAFAAAAAAATAPr/AAAFAAAAAAATAPv/AAAFAAAAAAATAPz/AAAFAAAAAAATAP3/AAAFAAAAAAATAP7/AAAFAAAAAAATAP//AAAFAAAAAAATAAAAAAAFAAAAAAATAAEAAAAFAAAAAAATAAIAAAAFAAAAAAATAAMAAAAFAAAAAAATAAQAAAAFAAAAAAATAAUAAAAFAAAAAAATAAYAAAAFAAAAAAATAAcAAAAFAAAAAAATAAgAAAAFAAAAAAAUAOv/AAAFAAAAAAAUAOz/AAAFAAAAAAAUAO3/AAAFAAAAAAAUAO7/AAAFAAAAAAAUAO//AAAFAAAAAAAUAPD/AAAFAAAAAAAUAPH/AAAFAAAAAAAUAPL/AAAFAAAAAAAUAPP/AAAFAAAAAAAUAPT/AAAFAAAAAAAUAPX/AAAFAAAAAAAUAPb/AAAFAAAAAAAUAPf/AAAFAAAAAAAUAPj/AAAFAAAAAAAUAPn/AAAFAAAAAAAUAPr/AAAFAAAAAAAUAPv/AAAFAAAAAAAUAPz/AAAFAAAAAAAUAP3/AAAFAAAAAAAUAP7/AAAFAAAAAAAUAP//AAAFAAAAAAAUAAAAAAAFAAAAAAAUAAEAAAAFAAAAAAAUAAIAAAAFAAAAAAAUAAMAAAAFAAAAAAAUAAQAAAAFAAAAAAAUAAUAAAAFAAAAAAAUAAYAAAAFAAAAAAAUAAcAAAAFAAAAAAAUAAgAAAAFAAAAAAAVAOv/AAAFAAAAAAAVAOz/AAAFAAAAAAAVAO3/AAAFAAAAAAAVAO7/AAAFAAAAAAAVAO//AAAFAAAAAAAVAPD/AAAFAAAAAAAVAPH/AAAFAAAAAAAVAPL/AAAFAAAAAAAVAPP/AAAFAAAAAAAVAPT/AAAFAAAAAAAVAPX/AAAFAAAAAAAVAPb/AAAFAAAAAAAVAPf/AAAFAAAAAAAVAPj/AAAFAAAAAAAVAPn/AAAFAAAAAAAVAPr/AAAFAAAAAAAVAPv/AAAFAAAAAAAVAPz/AAAFAAAAAAAVAP3/AAAFAAAAAAAVAP7/AAAFAAAAAAAVAP//AAAFAAAAAAAVAAAAAAAFAAAAAAAVAAEAAAAFAAAAAAAVAAIAAAAFAAAAAAAVAAMAAAAFAAAAAAAVAAQAAAAFAAAAAAAVAAUAAAAFAAAAAAAVAAYAAAAFAAAAAAAVAAcAAAAFAAAAAAAVAAgAAAAFAAAAAAAWAOv/AAAFAAAAAAAWAOz/AAAFAAAAAAAWAO3/AAAFAAAAAAAWAO7/AAAFAAAAAAAWAO//AAAFAAAAAAAWAPD/AAAFAAAAAAAWAPH/AAAFAAAAAAAWAPL/AAAFAAAAAAAWAPP/AAAFAAAAAAAWAPT/AAAFAAAAAAAWAPX/AAAFAAAAAAAWAPb/AAAFAAAAAAAWAPf/AAAFAAAAAAAWAPj/AAAFAAAAAAAWAPn/AAAFAAAAAAAWAPr/AAAFAAAAAAAWAPv/AAAFAAAAAAAWAPz/AAAFAAAAAAAWAP3/AAAFAAAAAAAWAP7/AAAFAAAAAAAWAP//AAAFAAAAAAAWAAAAAAAFAAAAAAAWAAEAAAAFAAAAAAAWAAIAAAAFAAAAAAAWAAMAAAAFAAAAAAAWAAQAAAAFAAAAAAAWAAUAAAAFAAAAAAAWAAYAAAAFAAAAAAAWAAcAAAAFAAAAAAAWAAgAAAAFAAAAAAAXAOv/AAAFAAAAAAAXAOz/AAAFAAAAAAAXAO3/AAAFAAAAAAAXAO7/AAAFAAAAAAAXAO//AAAFAAAAAAAXAPD/AAAFAAAAAAAXAPH/AAAFAAAAAAAXAPL/AAAFAAAAAAAXAPP/AAAFAAAAAAAXAPT/AAAFAAAAAAAXAPX/AAAFAAAAAAAXAPb/AAAFAAAAAAAXAPf/AAAFAAAAAAAXAPj/AAAFAAAAAAAXAPn/AAAFAAAAAAAXAPr/AAAFAAAAAAAXAPv/AAAFAAAAAAAXAPz/AAAFAAAAAAAXAP3/AAAFAAAAAAAXAP7/AAAFAAAAAAAXAP//AAAFAAAAAAAXAAAAAAAFAAAAAAAXAAEAAAAFAAAAAAAXAAIAAAAFAAAAAAAXAAMAAAAFAAAAAAAXAAQAAAAFAAAAAAAXAAUAAAAFAAAAAAAXAAYAAAAFAAAAAAAXAAcAAAAFAAAAAAAXAAgAAAAFAAAAAAAYAOv/AAAFAAAAAAAYAOz/AAAFAAAAAAAYAO3/AAAFAAAAAAAYAO7/AAAFAAAAAAAYAO//AAAFAAAAAAAYAPD/AAAFAAAAAAAYAPH/AAAFAAAAAAAYAPL/AAAFAAAAAAAYAPP/AAAFAAAAAAAYAPT/AAAFAAAAAAAYAPX/AAAFAAAAAAAYAPb/AAAFAAAAAAAYAPf/AAAFAAAAAAAYAPj/AAAFAAAAAAAYAPn/AAAFAAAAAAAYAPr/AAAFAAAAAAAYAPv/AAAFAAAAAAAYAPz/AAAFAAAAAAAYAP3/AAAFAAAAAAAYAP7/AAAFAAAAAAAYAP//AAAFAAAAAAAYAAAAAAAFAAAAAAAYAAEAAAAFAAAAAAAYAAIAAAAFAAAAAAAYAAMAAAAFAAAAAAAYAAQAAAAFAAAAAAAYAAUAAAAFAAAAAAAYAAYAAAAFAAAAAAAYAAcAAAAFAAAAAAAYAAgAAAAFAAAAAAAZAOv/AAAFAAAAAAAZAOz/AAAFAAAAAAAZAO3/AAAFAAAAAAAZAO7/AAAFAAAAAAAZAO//AAAFAAAAAAAZAPD/AAAFAAAAAAAZAPH/AAAFAAAAAAAZAPL/AAAFAAAAAAAZAPP/AAAFAAAAAAAZAPT/AAAFAAAAAAAZAPX/AAAFAAAAAAAZAPb/AAAFAAAAAAAZAPf/AAAFAAAAAAAZAPj/AAAFAAAAAAAZAPn/AAAFAAAAAAAZAPr/AAAFAAAAAAAZAPv/AAAFAAAAAAAZAPz/AAAFAAAAAAAZAP3/AAAFAAAAAAAZAP7/AAAFAAAAAAAZAP//AAAFAAAAAAAZAAAAAAAFAAAAAAAZAAEAAAAFAAAAAAAZAAIAAAAFAAAAAAAZAAMAAAAFAAAAAAAZAAQAAAAFAAAAAAAZAAUAAAAFAAAAAAAZAAYAAAAFAAAAAAAZAAcAAAAFAAAAAAAZAAgAAAAFAAAAAAAaAOv/AAAFAAAAAAAaAOz/AAAFAAAAAAAaAO3/AAAFAAAAAAAaAO7/AAAFAAAAAAAaAO//AAAFAAAAAAAaAPD/AAAFAAAAAAAaAPH/AAAFAAAAAAAaAPL/AAAFAAAAAAAaAPP/AAAFAAAAAAAaAPT/AAAFAAAAAAAaAPX/AAAFAAAAAAAaAPb/AAAFAAAAAAAaAPf/AAAFAAAAAAAaAPj/AAAFAAAAAAAaAPn/AAAFAAAAAAAaAPr/AAAFAAAAAAAaAPv/AAAFAAAAAAAaAPz/AAAFAAAAAAAaAP3/AAAFAAAAAAAaAP7/AAAFAAAAAAAaAP//AAAFAAAAAAAaAAAAAAAFAAAAAAAaAAEAAAAFAAAAAAAaAAIAAAAFAAAAAAAaAAMAAAAFAAAAAAAaAAQAAAAFAAAAAAAaAAUAAAAFAAAAAAAaAAYAAAAFAAAAAAAaAAcAAAAFAAAAAAAaAAgAAAAFAAAAAAAbAOv/AAAFAAAAAAAbAOz/AAAFAAAAAAAbAO3/AAAFAAAAAAAbAO7/AAAFAAAAAAAbAO//AAAFAAAAAAAbAPD/AAAFAAAAAAAbAPH/AAAFAAAAAAAbAPL/AAAFAAAAAAAbAPP/AAAFAAAAAAAbAPT/AAAFAAAAAAAbAPX/AAAFAAAAAAAbAPb/AAAFAAAAAAAbAPf/AAAFAAAAAAAbAPj/AAAFAAAAAAAbAPn/AAAFAAAAAAAbAPr/AAAFAAAAAAAbAPv/AAAFAAAAAAAbAPz/AAAFAAAAAAAbAP3/AAAFAAAAAAAbAP7/AAAFAAAAAAAbAP//AAAFAAAAAAAbAAAAAAAFAAAAAAAbAAEAAAAFAAAAAAAbAAIAAAAFAAAAAAAbAAMAAAAFAAAAAAAbAAQAAAAFAAAAAAAbAAUAAAAFAAAAAAAbAAYAAAAFAAAAAAAbAAcAAAAFAAAAAAAbAAgAAAAFAAAAAAAcAOv/AAAFAAAAAAAcAOz/AAAFAAAAAAAcAO3/AAAFAAAAAAAcAO7/AAAFAAAAAAAcAO//AAAFAAAAAAAcAPD/AAAFAAAAAAAcAPH/AAAFAAAAAAAcAPL/AAAFAAAAAAAcAPP/AAAFAAAAAAAcAPT/AAAFAAAAAAAcAPX/AAAFAAAAAAAcAPb/AAAFAAAAAAAcAPf/AAAFAAAAAAAcAPj/AAAFAAAAAAAcAPn/AAAFAAAAAAAcAPr/AAAFAAAAAAAcAPv/AAAFAAAAAAAcAPz/AAAFAAAAAAAcAP3/AAAFAAAAAAAcAP7/AAAFAAAAAAAcAP//AAAFAAAAAAAcAAAAAAAFAAAAAAAcAAEAAAAFAAAAAAAcAAIAAAAFAAAAAAAcAAMAAAAFAAAAAAAcAAQAAAAFAAAAAAAcAAUAAAAFAAAAAAAcAAYAAAAFAAAAAAAcAAcAAAAFAAAAAAAcAAgAAAAFAAAAAAAdAOv/AAAFAAAAAAAdAOz/AAAFAAAAAAAdAO3/AAAFAAAAAAAdAO7/AAAFAAAAAAAdAO//AAAFAAAAAAAdAPD/AAAFAAAAAAAdAPH/AAAFAAAAAAAdAPL/AAAFAAAAAAAdAPP/AAAFAAAAAAAdAPT/AAAFAAAAAAAdAPX/AAAFAAAAAAAdAPb/AAAFAAAAAAAdAPf/AAAFAAAAAAAdAPj/AAAFAAAAAAAdAPn/AAAFAAAAAAAdAPr/AAAFAAAAAAAdAPv/AAAFAAAAAAAdAPz/AAAFAAAAAAAdAP3/AAAFAAAAAAAdAP7/AAAFAAAAAAAdAP//AAAFAAAAAAAdAAAAAAAFAAAAAAAdAAEAAAAFAAAAAAAdAAIAAAAFAAAAAAAdAAMAAAAFAAAAAAAdAAQAAAAFAAAAAAAdAAUAAAAFAAAAAAAdAAYAAAAFAAAAAAAdAAcAAAAFAAAAAAAdAAgAAAAFAAAAAAAeAOv/AAAFAAAAAAAeAOz/AAAFAAAAAAAeAO3/AAAFAAAAAAAeAO7/AAAFAAAAAAAeAO//AAAFAAAAAAAeAPD/AAAFAAAAAAAeAPH/AAAFAAAAAAAeAPL/AAAFAAAAAAAeAPP/AAAFAAAAAAAeAPT/AAAFAAAAAAAeAPX/AAAFAAAAAAAeAPb/AAAFAAAAAAAeAPf/AAAFAAAAAAAeAPj/AAAFAAAAAAAeAPn/AAAFAAAAAAAeAPr/AAAFAAAAAAAeAPv/AAAFAAAAAAAeAPz/AAAFAAAAAAAeAP3/AAAFAAAAAAAeAP7/AAAFAAAAAAAeAP//AAAFAAAAAAAeAAAAAAAFAAAAAAAeAAEAAAAFAAAAAAAeAAIAAAAFAAAAAAAeAAMAAAAFAAAAAAAeAAQAAAAFAAAAAAAeAAUAAAAFAAAAAAAeAAYAAAAFAAAAAAAeAAcAAAAFAAAAAAAeAAgAAAAFAAAAAAAfAOv/AAAFAAAAAAAfAOz/AAAFAAAAAAAfAO3/AAAFAAAAAAAfAO7/AAAFAAAAAAAfAO//AAAFAAAAAAAfAPD/AAAFAAAAAAAfAPH/AAAFAAAAAAAfAPL/AAAFAAAAAAAfAPP/AAAFAAAAAAAfAPT/AAAFAAAAAAAfAPX/AAAFAAAAAAAfAPb/AAAFAAAAAAAfAPf/AAAFAAAAAAAfAPj/AAAFAAAAAAAfAPn/AAAFAAAAAAAfAPr/AAAFAAAAAAAfAPv/AAAFAAAAAAAfAPz/AAAFAAAAAAAfAP3/AAAFAAAAAAAfAP7/AAAFAAAAAAAfAP//AAAFAAAAAAAfAAAAAAAFAAAAAAAfAAEAAAAFAAAAAAAfAAIAAAAFAAAAAAAfAAMAAAAFAAAAAAAfAAQAAAAFAAAAAAAfAAUAAAAFAAAAAAAfAAYAAAAFAAAAAAAfAAcAAAAFAAAAAAAfAAgAAAAFAAAAAAAgAOv/AAAFAAAAAAAgAOz/AAAFAAAAAAAgAO3/AAAFAAAAAAAgAO7/AAAFAAAAAAAgAO//AAAFAAAAAAAgAPD/AAAFAAAAAAAgAPH/AAAFAAAAAAAgAPL/AAAFAAAAAAAgAPP/AAAFAAAAAAAgAPT/AAAFAAAAAAAgAPX/AAAFAAAAAAAgAPb/AAAFAAAAAAAgAPf/AAAFAAAAAAAgAPj/AAAFAAAAAAAgAPn/AAAFAAAAAAAgAPr/AAAFAAAAAAAgAPv/AAAFAAAAAAAgAPz/AAAFAAAAAAAgAP3/AAAFAAAAAAAgAP7/AAAFAAAAAAAgAP//AAAFAAAAAAAgAAAAAAAFAAAAAAAgAAEAAAAFAAAAAAAgAAIAAAAFAAAAAAAgAAMAAAAFAAAAAAAgAAQAAAAFAAAAAAAgAAUAAAAFAAAAAAAgAAYAAAAFAAAAAAAgAAcAAAAFAAAAAAAgAAgAAAAFAAAAAAAhAOv/AAAFAAAAAAAhAOz/AAAFAAAAAAAhAO3/AAAFAAAAAAAhAO7/AAAFAAAAAAAhAO//AAAFAAAAAAAhAPD/AAAFAAAAAAAhAPH/AAAFAAAAAAAhAPL/AAAFAAAAAAAhAPP/AAAFAAAAAAAhAPT/AAAFAAAAAAAhAPX/AAAFAAAAAAAhAPb/AAAFAAAAAAAhAPf/AAAFAAAAAAAhAPj/AAAFAAAAAAAhAPn/AAAFAAAAAAAhAPr/AAAFAAAAAAAhAPv/AAAFAAAAAAAhAPz/AAAFAAAAAAAhAP3/AAAFAAAAAAAhAP7/AAAFAAAAAAAhAP//AAAFAAAAAAAhAAAAAAAFAAAAAAAhAAEAAAAFAAAAAAAhAAIAAAAFAAAAAAAhAAMAAAAFAAAAAAAhAAQAAAAFAAAAAAAhAAUAAAAFAAAAAAAhAAYAAAAFAAAAAAAhAAcAAAAFAAAAAAAhAAgAAAAFAAAAAAA=")
+zones = {
+"Capturewa": {
+"cells": Array[Vector2i]([Vector2i(2, -11), Vector2i(4, -11), Vector2i(3, -10)]),
+"kind": 1
+},
+"Extractdddds": {
+"cells": Array[Vector2i]([Vector2i(30, 0), Vector2i(30, 1), Vector2i(30, 2), Vector2i(29, 0), Vector2i(29, 1), Vector2i(29, 2), Vector2i(31, 0), Vector2i(31, 1), Vector2i(31, 2)]),
+"kind": 2
+},
+"PatrolZone": {
+"cells": Array[Vector2i]([Vector2i(5, -12), Vector2i(6, -12), Vector2i(6, -11), Vector2i(6, -10), Vector2i(5, -10), Vector2i(4, -10), Vector2i(2, -10), Vector2i(1, -10), Vector2i(0, -10), Vector2i(0, -11), Vector2i(0, -12), Vector2i(1, -12), Vector2i(0, -9), Vector2i(1, -9), Vector2i(2, -9), Vector2i(3, -9), Vector2i(4, -9), Vector2i(5, -9), Vector2i(5, -8), Vector2i(4, -8), Vector2i(3, -8), Vector2i(2, -8), Vector2i(1, -8), Vector2i(0, -8), Vector2i(-1, -7), Vector2i(0, -7), Vector2i(1, -7), Vector2i(2, -7), Vector2i(3, -7), Vector2i(4, -7), Vector2i(5, -7), Vector2i(6, -7), Vector2i(7, -7), Vector2i(8, -7), Vector2i(8, -6), Vector2i(8, -5), Vector2i(7, -5), Vector2i(6, -5), Vector2i(5, -5), Vector2i(4, -5), Vector2i(3, -5), Vector2i(2, -5), Vector2i(1, -5), Vector2i(0, -5), Vector2i(-1, -5), Vector2i(-2, -5), Vector2i(-2, -7), Vector2i(-1, -6), Vector2i(0, -6), Vector2i(1, -6), Vector2i(2, -6), Vector2i(3, -6), Vector2i(4, -6), Vector2i(5, -6), Vector2i(6, -6), Vector2i(7, -6), Vector2i(4, -4), Vector2i(5, -4), Vector2i(6, -4), Vector2i(7, -4), Vector2i(8, -4), Vector2i(9, -4), Vector2i(1, -4)]),
+"kind": 0
+}
+}
+objectives = Array[int]([1, 2])
+ai_factions = Array[int]([1])
+contested = true

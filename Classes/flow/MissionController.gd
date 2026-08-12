@@ -271,6 +271,11 @@ func _extract_progress(board: BoardContext) -> MissionRules.Progress:
 	if game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
 		return MissionRules.Progress.PENDING
 	var counts := extract_counts(board)
+	# Zero surviving players is _capture_progress's counts.y == 0 twin (missing until 2026-08-12):
+	# 0 == 0 read as MET, which ticked Extract on the HUD during load, before units had spawned.
+	# For evaluate() the guard never decides anything -- DEFEAT is checked first.
+	if counts.y == 0:
+		return MissionRules.Progress.PENDING
 	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
 
 # Several extraction zones on one map are alternatives, not a set to split across.

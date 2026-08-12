@@ -283,6 +283,17 @@ func test_all_capture_zones_must_be_taken() -> void:
 #  Extraction
 # ==============================================================================
 
+func test_extraction_with_no_surviving_players_reads_pending() -> void:
+	# The mid-load board shape (objectives set before units spawn), and the all-dead one: zone
+	# painted, EXTRACT declared, zero player units. 0 == 0 read as vacuous-MET until 2026-08-12
+	# and ticked Extract on the HUD at load -- capture's counts.y == 0 guard finally got its twin.
+	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1)])
+	_objectives([MissionRules.Objective.EXTRACT])
+
+	assert_that(mc.progress_for(MissionRules.Objective.EXTRACT, game._board())) \
+		.is_equal(MissionRules.Progress.PENDING)
+
+
 func test_extraction_needs_every_survivor_inside() -> void:
 	_paint("Exit", ZoneManager.Kind.EXTRACTION, [Vector2i(1, 1), Vector2i(1, 2)])
 	_objectives([MissionRules.Objective.EXTRACT])
