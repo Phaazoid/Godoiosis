@@ -133,7 +133,8 @@ func _erase() -> void:
 			_erase_tile(cell)
 
 func _paint_tile(cell: Vector2i) -> void:
-	game.grid.set_cell(cell, 0, game.dev_overlay.tile_brush.selected_tile)
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.grid.set_cell(cell, brush.selected_source, brush.selected_tile)
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _erase_tile(cell: Vector2i) -> void:
@@ -174,12 +175,12 @@ func _erase_state(cell: Vector2i) -> void:
 	game.terrain_states.apply(effect)
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	
-func resize_map(width: int, height: int, fill_tile: Vector2i) -> void:
+func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) -> void:
 	width = maxi(1, width)
 	height = maxi(1, height)
 	game.grid.clear()
 	for x in range(width):
 		for y in range(height):
-			game.grid.set_cell(Vector2i(x, y), 0, fill_tile)
+			game.grid.set_cell(Vector2i(x, y), fill_source, fill_tile)
 	game.camera_controller.refresh_bounds(game.grid)
 	
