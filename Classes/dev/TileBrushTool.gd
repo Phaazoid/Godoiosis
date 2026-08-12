@@ -3,14 +3,15 @@ class_name TileBrushTool
 
 # Dev-overlay tab for authoring the board: paints terrain tiles, dynamic tile states (#174),
 # and named AI zones (left-drag paints, right-click erases in every mode), plus map resize.
-# Terrain choices are scanned from the tileset itself, never hardcoded.
+# Terrain choices are scanned from the tileset itself, never hardcoded: every tile carrying a
+# terrain_type kind or an authored terrain_name is paintable, across all atlas sources.
 
-const SOURCE_ID := 0
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
 const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
+var selected_source := 0
 var game   # injected by DevOverlay.init
 enum PaintMode { TERRAIN, ZONE, STATE }
 var paint_mode := PaintMode.TERRAIN
@@ -24,11 +25,22 @@ var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
 
-# Parallel to the dropdown: the atlas coords each entry paints. Built by scanning the
-# board tileset for tiles carrying a terrain_type kind, so any terrain tile authored in
-# the TileSet (grass/mud/rock/tree/water/...) shows up automatically, with no hardcoded
-# coords to drift out of sync. (#50 dev tooling.)
+# Parallel to the dropdown: the atlas source + coords each entry paints. Built by scanning
+# every atlas source for tiles that say what they ARE -- a terrain_type kind, an authored
+# terrain_name, or both -- so kind variants and named scenery all show up automatically,
+# with no hardcoded coords to drift out of sync. (#50 dev tooling; one entry per authored
+# TILE, no longer one per kind, 2026-08-12.)
 var _tile_coords: Array[Vector2i] = []
+var _tile_sources: Array[int] = []
+
+# One dropdown row: what to paint (source + coords) and how to list it (kind for grouping,
+# label, and the tile's own sprite region as the row icon).
+class PaletteEntry:
+	var kind: Terrain.Kind = Terrain.Kind.NONE
+	var source_id := 0
+	var coords := Vector2i.ZERO
+	var label := ""
+	var icon: Texture2D = null
 
 var _width_spin: SpinBox
 var _height_spin: SpinBox
@@ -50,27 +62,73 @@ func init(game_ref) -> void:
 func _populate_tile_dropdown() -> void:
 	tile_dropdown.clear()
 	_tile_coords.clear()
+	_tile_sources.clear()
 	if game == null or game.grid == null or game.grid.tile_set == null:
 		return
-	var source := game.grid.tile_set.get_source(SOURCE_ID) as TileSetAtlasSource
-	if source == null:
-		return
-	var seen: Dictionary[Terrain.Kind, bool] = {}
-	for i in source.get_tiles_count():
-		var coords := source.get_tile_id(i)
-		var data := source.get_tile_data(coords, 0)
-		if data == null or not data.has_custom_data("terrain_type"):
+	var tiles: TileSet = game.grid.tile_set
+	var entries: Array[PaletteEntry] = []
+	for s in tiles.get_source_count():
+		var source := tiles.get_source(tiles.get_source_id(s)) as TileSetAtlasSource
+		if source == null:
 			continue
-		var raw: int = data.get_custom_data("terrain_type")
-		var kind := raw as Terrain.Kind
-		if kind == Terrain.Kind.NONE or seen.has(kind):
-			continue
-		seen[kind] = true
-		_tile_coords.append(coords)
-		var kind_name: String = Terrain.Kind.keys()[kind]
-		tile_dropdown.add_item(kind_name.capitalize())
+		for i in source.get_tiles_count():
+			var entry := _palette_entry(tiles.get_source_id(s), source, source.get_tile_id(i))
+			if entry != null:
+				entries.append(entry)
+	entries.sort_custom(_palette_order)
+	for entry in entries:
+		_tile_sources.append(entry.source_id)
+		_tile_coords.append(entry.coords)
+		tile_dropdown.add_icon_item(entry.icon, entry.label)
 	if not _tile_coords.is_empty():
+		selected_source = _tile_sources[0]
 		selected_tile = _tile_coords[0]
+
+# A tile earns a palette slot by saying what it IS: a non-NONE terrain_type kind, an authored
+# terrain_name, or both. Unnamed bare decoration stays unpaintable. Labels prefer the authored
+# name; unnamed terrain falls back to kind + atlas coords. Null = not a palette tile.
+func _palette_entry(source_id: int, source: TileSetAtlasSource, coords: Vector2i) -> PaletteEntry:
+	var data := source.get_tile_data(coords, 0)
+	if data == null:
+		return null
+	var kind := Terrain.Kind.NONE
+	if data.has_custom_data("terrain_type"):
+		var raw: int = data.get_custom_data("terrain_type")
+		if raw >= 0 and raw < Terrain.Kind.size():
+			kind = raw as Terrain.Kind
+		else:
+			push_warning("TileBrushTool: tile %s carries terrain_type %d, not in Terrain.Kind; treating as scenery" % [coords, raw])
+	var tile_name := ""
+	if data.has_custom_data("terrain_name"):
+		tile_name = data.get_custom_data("terrain_name")
+	if kind == Terrain.Kind.NONE and tile_name == "":
+		return null
+	var entry := PaletteEntry.new()
+	entry.kind = kind
+	entry.source_id = source_id
+	entry.coords = coords
+	entry.label = tile_name.capitalize() if tile_name != "" \
+		else "%s (%d:%d)" % [Terrain.kind_display_name(kind), coords.x, coords.y]
+	var icon := AtlasTexture.new()
+	icon.atlas = source.texture
+	icon.region = source.get_tile_texture_region(coords)
+	entry.icon = icon
+	return entry
+
+# Real terrain first (grouped by kind, enum order), named scenery last; stable within a kind
+# by source then sheet position.
+static func _palette_order(a: PaletteEntry, b: PaletteEntry) -> bool:
+	var a_scenery := a.kind == Terrain.Kind.NONE
+	var b_scenery := b.kind == Terrain.Kind.NONE
+	if a_scenery != b_scenery:
+		return b_scenery
+	if a.kind != b.kind:
+		return a.kind < b.kind
+	if a.source_id != b.source_id:
+		return a.source_id < b.source_id
+	if a.coords.y != b.coords.y:
+		return a.coords.y < b.coords.y
+	return a.coords.x < b.coords.x
 
 func _on_tile_brush_toggled(pressed: bool):
 	brush_active = pressed
@@ -78,6 +136,7 @@ func _on_tile_brush_toggled(pressed: bool):
 func _on_tile_dropdown_item_selected(index: int):
 	if index >= 0 and index < _tile_coords.size():
 		selected_tile = _tile_coords[index]
+		selected_source = _tile_sources[index]
 
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
@@ -85,7 +144,7 @@ func deactivate():
 func _on_resize_pressed() -> void:
 	if game == null:
 		return
-	game.dev_controller.resize_map(int(_width_spin.value), int(_height_spin.value), selected_tile)
+	game.dev_controller.resize_map(int(_width_spin.value), int(_height_spin.value), selected_source, selected_tile)
 	
 func selected_zone_name() -> String:
 	return _zone_name.strip_edges()
