@@ -169,11 +169,14 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # ==============================================================================
 
 # End-of-phase burn: a unit standing in fire when ITS faction's turn ends takes damage. Routed
-# through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass uses.
+# through take_damage so downs/kills/Crisis apply, then the same ejection sweep the attack pass
+# uses. No is_active() filter (#191): LethalityRules.predict already rules DOWNED-plus-any-damage
+# as KILLED (Fork 3, #33) -- burn is a damage source like any other and take_damage no-ops safely
+# on an already-DEAD unit, so nothing upstream needs to ask the question again.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	for cell in game.terrain_states.burning_cells():
 		var unit: Unit = game.get_unit_at_cell(cell)
-		if unit != null and unit.is_active() and unit.get_faction() == faction:
+		if unit != null and unit.get_faction() == faction:
 			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
 	_process_downed_pending()
 
