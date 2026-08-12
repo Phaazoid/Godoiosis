@@ -251,7 +251,10 @@ func populate(unit: Unit) -> Array:
 		options.append(INSPECT)
 
 	if game.squad_manager.active_squad == null:
-		options.append(WAIT)
+		# Wait is a choice a squad makes ONCE; an acted squad has nothing left to end (#190).
+		# End Turn stays unconditional -- it's about the faction's turn, not this squad's state.
+		if not unit.squad.has_acted:
+			options.append(WAIT)
 		options.append(ENDTURN)
 
 	if unit != null and unit.has_any_actions(): #TODO separate general cancel and cancel queued plans
