@@ -1,0 +1,23 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="1_fq6i1"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_2w65q"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="3_t1a4k"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="4_qu2qa"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="5_tddgv"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_l7hev"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_tgyxx"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/brrr.tres" id="8_cke5f"]
+
+[resource]
+script = ExtResource("6_l7hev")
+display_name = "Noemie"
+portrait = ExtResource("5_tddgv")
+map_sprite = ExtResource("3_t1a4k")
+move_sprite = ExtResource("4_qu2qa")
+downed_sprite = ExtResource("1_fq6i1")
+base_aura = Dictionary[int, int]({
+6: 1
+})
+base_affinity = Array[int]([6])
+starting_inventory = Array[ExtResource("7_tgyxx")]([ExtResource("8_cke5f")])

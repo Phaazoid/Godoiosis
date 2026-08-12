@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Downed.png" id="1_6qlil"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="1_eaaxa"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="2_vwufm"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="3_eo7yh"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="3_pvpur"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="4_6qlil"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Moving.png" id="4_bijhs"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="8_eo7yh"]
+
+[resource]
+script = ExtResource("3_pvpur")
+display_name = "Isaac"
+portrait = ExtResource("2_vwufm")
+map_sprite = ExtResource("3_eo7yh")
+move_sprite = ExtResource("4_bijhs")
+downed_sprite = ExtResource("1_6qlil")
+base_aura = Dictionary[int, int]({
+1: 1,
+2: 1,
+5: 1,
+6: 1,
+7: 1
+})
+base_affinity = Array[int]([7, 6, 5, 2, 1])
+base_is_alkahest_affine = true
+starting_inventory = Array[ExtResource("4_6qlil")]([ExtResource("8_eo7yh")])
