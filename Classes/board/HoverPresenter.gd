@@ -260,13 +260,20 @@ func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	#   - hovering the inspected unit adds nothing -> suppress the hover card (tile card too)
 	#   - anything else -> the card keeps its own top/bottom logic, shifted right of the column
 	# The card is a stack since #135, and the tile half shows for EVERY real tile (dev, round 2):
-	# icon + kind name header, then the tile's states, rules and possible interactions.
+	# icon + name header, then the tile's states, rules and possible interactions.
 	var board: BoardContext = game._board()
 	var kind: Terrain.Kind = board.terrain_kind_at(cell)
-	# Direct map read, null for a decorative NONE-kind tile on purpose — a headerless card, not
-	# get_terrain_icon_at_cell's ERROR art (that fallback is for pathing readouts, not a display).
-	var icon: Texture2D = GridUtils.TERRAIN_ICONS.get(kind, null)
-	var header: String = Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else ""
+	# The tile's OWN data names and pictures the card (2026-08-12): authored terrain_name first,
+	# kind name as the fallback, the tile's sprite as the picture -- the same policy the brush
+	# palette rows read (GridUtils.authored_tile_display_name / tile_sprite), so hover and palette
+	# cannot disagree. A bare unnamed NONE-kind tile stays headerless on purpose, and
+	# TERRAIN_ICONS stays the queue rows' pathing glyph, not a display read.
+	var data: TileData = game.grid.get_cell_tile_data(cell)
+	var authored: String = GridUtils.authored_tile_display_name(data)
+	var header: String = authored if authored != "" \
+		else (Terrain.kind_display_name(kind) if kind != Terrain.Kind.NONE else "")
+	var source: TileSetAtlasSource = game.grid.tile_set.get_source(game.grid.get_cell_source_id(cell)) as TileSetAtlasSource
+	var icon: Texture2D = GridUtils.tile_sprite(source, game.grid.get_cell_atlas_coords(cell))
 	var tile_lines: Array[String] = _tile_readout_lines(cell)
 	var world_pos: Vector2 = hovered.global_position if hovered != null \
 		else game.grid.to_global(game.grid.map_to_local(cell))

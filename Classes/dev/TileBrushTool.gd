@@ -118,21 +118,16 @@ func _palette_entry(source_id: int, source: TileSetAtlasSource, coords: Vector2i
 			kind = raw as Terrain.Kind
 		else:
 			push_warning("TileBrushTool: tile %s carries terrain_type %d, not in Terrain.Kind; treating as scenery" % [coords, raw])
-	var tile_name := ""
-	if data.has_custom_data("terrain_name"):
-		tile_name = data.get_custom_data("terrain_name")
+	var tile_name := GridUtils.authored_tile_display_name(data)
 	if kind == Terrain.Kind.NONE and tile_name == "":
 		return null
 	var entry := PaletteEntry.new()
 	entry.kind = kind
 	entry.source_id = source_id
 	entry.coords = coords
-	entry.label = tile_name.capitalize() if tile_name != "" \
+	entry.label = tile_name if tile_name != "" \
 		else "%s (%d:%d)" % [Terrain.kind_display_name(kind), coords.x, coords.y]
-	var icon := AtlasTexture.new()
-	icon.atlas = source.texture
-	icon.region = source.get_tile_texture_region(coords)
-	entry.icon = icon
+	entry.icon = GridUtils.tile_sprite(source, coords)
 	return entry
 
 # Real terrain first (grouped by kind, enum order), named scenery last; stable within a kind

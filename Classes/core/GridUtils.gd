@@ -68,6 +68,26 @@ static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Text
 	if TERRAIN_ICONS.has(kind):
 		return TERRAIN_ICONS[kind]
 	return ERROR_ICON
+
+# The authored display name a tile carries (terrain_name custom data, capitalized), "" when
+# unnamed. ONE naming policy for every surface that names a tile -- the brush palette rows and
+# the hover card must not disagree (2026-08-12).
+static func authored_tile_display_name(data: TileData) -> String:
+	if data == null or not data.has_custom_data("terrain_name"):
+		return ""
+	var raw: String = data.get_custom_data("terrain_name")
+	return raw.capitalize()
+
+# The tile's own sprite, cut from its atlas sheet -- what the palette rows and the hover card
+# draw. Rect2-wrapped: the getter returns Rect2i and AtlasTexture.region is Rect2, and Variant
+# equality across the two is FALSE, which bites anything comparing regions later.
+static func tile_sprite(source: TileSetAtlasSource, coords: Vector2i) -> Texture2D:
+	if source == null:
+		return null
+	var icon := AtlasTexture.new()
+	icon.atlas = source.texture
+	icon.region = Rect2(source.get_tile_texture_region(coords))
+	return icon
 	
 # Blended Manhattan/Chebyshev range (#25). `integral` = Manhattan reach; `and_a_half`
 # bevels in the diagonal corners of that ring (Chebyshev <= integral AND Manhattan
