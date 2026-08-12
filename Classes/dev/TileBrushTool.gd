@@ -33,12 +33,14 @@ var _state_values: Array[Terrain.TileState] = []
 var _tile_coords: Array[Vector2i] = []
 var _tile_sources: Array[int] = []
 
-# One dropdown row: what to paint (source + coords) and how to list it (kind for grouping, label).
+# One dropdown row: what to paint (source + coords) and how to list it (kind for grouping,
+# label, and the tile's own sprite region as the row icon).
 class PaletteEntry:
 	var kind: Terrain.Kind = Terrain.Kind.NONE
 	var source_id := 0
 	var coords := Vector2i.ZERO
 	var label := ""
+	var icon: Texture2D = null
 
 var _width_spin: SpinBox
 var _height_spin: SpinBox
@@ -77,7 +79,7 @@ func _populate_tile_dropdown() -> void:
 	for entry in entries:
 		_tile_sources.append(entry.source_id)
 		_tile_coords.append(entry.coords)
-		tile_dropdown.add_item(entry.label)
+		tile_dropdown.add_icon_item(entry.icon, entry.label)
 	if not _tile_coords.is_empty():
 		selected_source = _tile_sources[0]
 		selected_tile = _tile_coords[0]
@@ -107,6 +109,10 @@ func _palette_entry(source_id: int, source: TileSetAtlasSource, coords: Vector2i
 	entry.coords = coords
 	entry.label = tile_name.capitalize() if tile_name != "" \
 		else "%s (%d:%d)" % [Terrain.kind_display_name(kind), coords.x, coords.y]
+	var icon := AtlasTexture.new()
+	icon.atlas = source.texture
+	icon.region = source.get_tile_texture_region(coords)
+	entry.icon = icon
 	return entry
 
 # Real terrain first (grouped by kind, enum order), named scenery last; stable within a kind
@@ -126,6 +132,8 @@ static func _palette_order(a: PaletteEntry, b: PaletteEntry) -> bool:
 
 func _on_tile_brush_toggled(pressed: bool):
 	brush_active = pressed
+	if not pressed and game != null:
+		game.dev_controller.hide_brush_ghost()
 
 func _on_tile_dropdown_item_selected(index: int):
 	if index >= 0 and index < _tile_coords.size():
@@ -221,6 +229,8 @@ func selected_tile_state() -> Terrain.TileState:
 
 func _set_paint_mode(mode: PaintMode) -> void:
 	paint_mode = mode
+	if mode != PaintMode.TERRAIN and game != null:
+		game.dev_controller.hide_brush_ghost()
 	_tile_row.visible = mode == PaintMode.TERRAIN
 	_zone_kind_row.visible = mode == PaintMode.ZONE
 	_zone_name_row.visible = mode == PaintMode.ZONE

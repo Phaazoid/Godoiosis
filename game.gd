@@ -495,6 +495,8 @@ func set_dev_mode(active: bool):
 	# Intent first: exit_current_mode's clear_selection rests the board on _base_state.
 	dev_mode_enabled = active
 	exit_current_mode()
+	if not active:
+		dev_controller.hide_brush_ghost()   # no brush events arrive outside DEV_MODE to hide it
 	if dev_overlay != null:
 		dev_overlay.sync_dev_mode_button(active)
 

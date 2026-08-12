@@ -76,6 +76,12 @@ func show_beside():
 	var main_pos := DisplayServer.window_get_position(DisplayServer.MAIN_WINDOW_ID)
 	var main_size := DisplayServer.window_get_size(DisplayServer.MAIN_WINDOW_ID)
 	position = main_pos + Vector2i(main_size.x + 16, 0)
+	# Keep the whole window on the monitor: overlapping the game beats hanging off-screen.
+	var usable := DisplayServer.screen_get_usable_rect(
+		DisplayServer.window_get_current_screen(DisplayServer.MAIN_WINDOW_ID))
+	position = Vector2i(
+		clampi(position.x, usable.position.x, usable.position.x + usable.size.x - size.x),
+		clampi(position.y, usable.position.y, usable.position.y + usable.size.y - size.y))
 	show()
 	_update_zone_visibility()
 

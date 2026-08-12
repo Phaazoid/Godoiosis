@@ -13,6 +13,7 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 var _pending_action: PendingAction = PendingAction.NONE
 var _pending_unit: Unit = null
 var _brush_painting := false
+var _brush_ghost: TileMapLayer = null
 
 # --- dev keys ---
 
@@ -102,6 +103,13 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 # --- tile brush / map resize ---
 
 func handle_tile_brush(event) -> void:
+	# Ghost rides the same event stream that paints: game.gd forwards every brush-gated mouse
+	# event here, so the preview tracks exactly where a click would land. Off-paths (brush off,
+	# mode switch, dev-mode exit) hide it from their own hooks -- no events arrive then.
+	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
+		update_brush_ghost(_mouse_cell())
+	else:
+		hide_brush_ghost()
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
@@ -112,8 +120,40 @@ func handle_tile_brush(event) -> void:
 	elif event is InputEventMouseMotion and _brush_painting:
 		_paint()
 
+func _mouse_cell() -> Vector2i:
+	return game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+
+# Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
+# multi-cell tile (the lantern) previews exactly as set_cell will draw it. Child of the grid --
+# same transform, and it freezes with the Game subtree like painting itself does.
+func update_brush_ghost(cell: Vector2i) -> void:
+	_ensure_brush_ghost()
+	if _brush_ghost.tile_set != game.grid.tile_set:
+		_brush_ghost.tile_set = game.grid.tile_set
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	_brush_ghost.clear()
+	_brush_ghost.set_cell(cell, brush.selected_source, brush.selected_tile)
+	_brush_ghost.visible = true
+
+func hide_brush_ghost() -> void:
+	if _brush_ghost == null:
+		return
+	_brush_ghost.clear()
+	_brush_ghost.visible = false
+
+func _ensure_brush_ghost() -> void:
+	if _brush_ghost != null:
+		return
+	_brush_ghost = TileMapLayer.new()
+	_brush_ghost.name = "BrushGhost"
+	_brush_ghost.tile_set = game.grid.tile_set
+	_brush_ghost.modulate = Color(1, 1, 1, 0.5)
+	_brush_ghost.z_index = 1   # above the board tiles, below units (Unit.BASE_SPRITE_INDEX)
+	_brush_ghost.visible = false
+	game.grid.add_child(_brush_ghost)
+
 func _paint() -> void:
-	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+	var cell := _mouse_cell()
 	match game.dev_overlay.tile_brush.paint_mode:
 		TileBrushTool.PaintMode.ZONE:
 			_paint_zone(cell)
@@ -123,7 +163,7 @@ func _paint() -> void:
 			_paint_tile(cell)
 
 func _erase() -> void:
-	var cell = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+	var cell := _mouse_cell()
 	match game.dev_overlay.tile_brush.paint_mode:
 		TileBrushTool.PaintMode.ZONE:
 			_erase_zone(cell)

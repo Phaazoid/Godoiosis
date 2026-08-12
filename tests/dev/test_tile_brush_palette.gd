@@ -124,6 +124,54 @@ func test_resize_fills_with_the_selected_source() -> void:
 		for y in range(2):
 			assert_int(game.grid.get_cell_source_id(Vector2i(x, y))).is_equal(_src2_id)
 
+func test_entries_carry_their_tile_sprite_as_icon() -> void:
+	# The row icon IS the tile: an AtlasTexture cut from the owning source's own sheet region.
+	var index: int = _labels().find("Mud Far")
+	var icon := _brush.tile_dropdown.get_item_icon(index) as AtlasTexture
+	assert_object(icon).is_not_null()
+	var source := (game.grid.tile_set as TileSet).get_source(_src2_id) as TileSetAtlasSource
+	assert_object(icon.atlas).is_same(source.texture)
+	assert_that(icon.region).is_equal(Rect2(source.get_tile_texture_region(Vector2i(0, 0))))
+
+func _ghost() -> TileMapLayer:
+	return game.grid.get_node_or_null("BrushGhost") as TileMapLayer
+
+func test_the_ghost_previews_the_selected_tile_at_half_alpha() -> void:
+	# The mouse->cell half can't be aimed headless (the states suite's note); these drive
+	# update_brush_ghost directly beneath handle_tile_brush.
+	_select_label("Mud Far")
+	game.dev_controller.update_brush_ghost(CELL)
+	var ghost := _ghost()
+	assert_object(ghost).is_not_null()
+	assert_bool(ghost.visible).is_true()
+	assert_int(ghost.get_cell_source_id(CELL)).is_equal(_src2_id)
+	assert_float(ghost.modulate.a).is_less(1.0)
+	assert_int(ghost.z_index).is_less(Unit.BASE_SPRITE_INDEX)
+
+func test_the_ghost_follows_the_latest_cell_and_pick() -> void:
+	game.dev_controller.update_brush_ghost(CELL)
+	_select_label("Crate")
+	game.dev_controller.update_brush_ghost(Vector2i(3, 3))
+	var ghost := _ghost()
+	assert_int(ghost.get_cell_source_id(CELL)).is_equal(-1)   # old cell cleared, never smeared
+	assert_that(ghost.get_cell_atlas_coords(Vector2i(3, 3))).is_equal(Vector2i(2, 0))
+
+func test_the_ghost_hides_on_every_off_path() -> void:
+	# brush off / paint-mode switch / dev-mode exit -- the three paths where brush events stop
+	# arriving, so each must hide the ghost itself.
+	game.dev_controller.update_brush_ghost(CELL)
+	_brush._on_tile_brush_toggled(false)
+	assert_bool(_ghost().visible).is_false()
+
+	game.dev_controller.update_brush_ghost(CELL)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
+	assert_bool(_ghost().visible).is_false()
+
+	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	game.dev_controller.update_brush_ghost(CELL)
+	game.set_dev_mode(false)
+	assert_bool(_ghost().visible).is_false()
+
 func test_an_unknown_kind_number_warns_instead_of_crashing() -> void:
 	# The fence_hor incident: a terrain_type outside Terrain.Kind must warn and degrade --
 	# named tiles list as scenery, unnamed ones are skipped -- never index the enum out of
