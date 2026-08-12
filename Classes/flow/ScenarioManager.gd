@@ -216,6 +216,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 			squad_manager.set_has_acted(acted_leader.squad, true)
 
 	turn_manager.set_active_faction(scenario.active_faction)
+	game.refresh_end_turn_button()   # a resumed save can load straight into an already-spent faction (#189)
 
 func reload_current():
 	if last_loaded_path == "":
@@ -267,6 +268,7 @@ func clear_board():
 	# Not clear_selection: only this nulls selected_unit, which the frees below would strand (#149).
 	game.exit_current_mode()
 	game.refresh_action_queue(null)
+	game.refresh_end_turn_button()   # a cleared board must not leave a stale flashing button up (#189)
 	overlay_manager.clear_all_planned_paths()
 	overlay_manager.clear_all_projected_sprites()
 
