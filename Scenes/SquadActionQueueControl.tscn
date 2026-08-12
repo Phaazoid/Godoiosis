@@ -38,7 +38,7 @@ anchor_right = 1.0
 offset_left = -152.0
 offset_top = 25.0
 offset_right = -7.0
-offset_bottom = 525.0
+offset_bottom = 490.0
 grow_horizontal = 0
 theme_override_styles/panel = SubResource("StyleBoxFlat_voyyq")
 
@@ -52,7 +52,7 @@ offset_bottom = 42.0
 layout_mode = 2
 
 [node name="OuterScroll" type="ScrollContainer" parent="BackgroundPanel/MarginContainer/VBox" unique_id=944768170]
-custom_minimum_size = Vector2(0, 475)
+custom_minimum_size = Vector2(0, 410)
 layout_mode = 2
 horizontal_scroll_mode = 0
 

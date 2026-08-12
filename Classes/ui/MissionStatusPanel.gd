@@ -12,6 +12,7 @@ class_name MissionStatusPanel
 # never re-derived here.
 
 const CORNER_MARGIN := 8
+const BUTTON_CLEARANCE := 44   # the End Turn button's reserved corner slot below us: 36 high + its 8 margin (#189)
 const MET_COLOR := Color(0.55, 0.95, 0.55)
 const PENDING_COLOR := Color(0.92, 0.92, 0.92)
 const UNWINNABLE_COLOR := Color(1, 0.45, 0.35)   # the Scenario tab's warning colour
@@ -47,6 +48,11 @@ func show_status(controller: MissionController, board: BoardContext) -> void:
 	# Re-anchor from the new minimum size each refresh -- offsets track content both ways, so a
 	# shrinking list never leaves the panel ratcheted at its widest (the off-screen-card lesson).
 	_panel.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_RIGHT, Control.PRESET_MODE_MINSIZE, CORNER_MARGIN)
+	# Pure post-preset translation, so it never fights the anchor math above: lifts the panel clear
+	# of the End Turn button's slot at the corner itself (#189) -- reserved even while the button is
+	# hidden, so the HUD never reflows when it appears.
+	_panel.offset_top -= BUTTON_CLEARANCE
+	_panel.offset_bottom -= BUTTON_CLEARANCE
 
 func _build_row(objective: MissionRules.Objective, controller: MissionController, board: BoardContext) -> Label:
 	var label := Label.new()

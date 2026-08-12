@@ -66,6 +66,20 @@ func reset_faction_actions(faction: Team.Faction) -> void:
 		if squad.leader.get_faction() == faction:
 			squad._reset_squad()
 
+# "Has this faction got anything left to click?" (#189) -- every squad with an ACTIVE leader on
+# this faction must have has_acted true, and there must be at least one such squad: an empty/wiped
+# faction is not "done", it's absent, so a vacuous true would flash the End Turn button over
+# nobody. Mirrors AIController.take_faction_turn's own per-squad faction/active filter.
+func faction_all_squads_acted(faction: Team.Faction) -> bool:
+	var any_active := false
+	for squad in squads:
+		if squad.leader.get_faction() != faction or not squad.leader.is_active():
+			continue
+		any_active = true
+		if not squad.has_acted:
+			return false
+	return any_active
+
 func create_squad(leader: Unit) -> Squad:
 	var squad := Squad.new()
 	add_child(squad)

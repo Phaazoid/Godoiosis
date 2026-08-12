@@ -28,6 +28,7 @@ extends Node2D
 @onready var squad_manager: SquadManager = $SquadManager
 @onready var squad_action_queue_control: SquadActionQueueControl = $UILayer/SquadActionQueueControl
 @onready var mission_status_panel: MissionStatusPanel = $UILayer/MissionStatusPanel
+@onready var end_turn_button: EndTurnButton = $UILayer/EndTurnButton
 @onready var cursor_controller: CursorController = $CursorController
 @onready var camera_controller: CameraController = $CameraController
 @onready var scenario_manager: ScenarioManager = $ScenarioManager
@@ -154,6 +155,7 @@ func _wire_signals() -> void:
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
+	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
 	# HoverPresenter connects its own handlers in its _ready, so this one runs after them.
 	hover_presenter.hovered_unit_changed.connect(overlay_manager.on_hovered_unit_changed)
@@ -369,6 +371,7 @@ func _on_turn_started(faction: Team.Faction):
 	# A turn HANDOFF resets actions; a menu arrival trusts the file (#144). Keep this out of
 	# start_faction_turn -- the menu paths call it, and a resumed save's has_acted must survive.
 	squad_manager.reset_faction_actions(faction)
+	refresh_end_turn_button()
 	turn_banner.show_label("%s Turn" % Team.faction_name(faction))
 	start_faction_turn(faction)
 
@@ -396,6 +399,14 @@ func end_turn():
 	clear_selection()
 	unit_info_panel.clear()
 	turn_manager.end_turn(_board().present_factions())
+
+# The bottom-right End Turn button's one caller (#189) -- same guard `_on_queue_execute_requested`
+# uses, since the button can only be reached while the board is unlocked anyway, but a stale frame
+# shouldn't be trusted over the live state.
+func _on_end_turn_button_pressed() -> void:
+	if _board_locked_for_player():
+		return
+	end_turn()
 
 func _on_round_completed() -> void:
 	terrain_states.tick_states()
@@ -663,6 +674,17 @@ func refresh_mission_status() -> void:
 		mission_status_panel.clear()
 		return
 	mission_status_panel.show_status(mission_controller, _board())
+
+# The bottom-right End Turn affordance (#189): flashes with the SAME Pulse cue as Execute Orders
+# once every squad on the active faction has acted or waited -- there's nothing left to click but
+# this. Called from has_acted's write points (SquadManager.set_has_acted's callers) and the turn
+# handoff -- the refresh_mission_status pattern above (#134), a write-point call, not a signal.
+func refresh_end_turn_button() -> void:
+	var faction: Team.Faction = turn_manager.active_faction()
+	var show: bool = (not _board_locked_for_player()
+		and not ai_controller.is_ai_faction(faction)
+		and squad_manager.faction_all_squads_acted(faction))
+	end_turn_button.set_active(show)
 
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).

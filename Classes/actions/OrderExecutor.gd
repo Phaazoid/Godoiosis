@@ -107,6 +107,7 @@ func _end_squad_turn(squad: Squad) -> void:
 		action.actor.visuals.set_projected(false)
 		game.squad_manager.remove_action(squad, action)
 	game.squad_manager.set_has_acted(squad, true)
+	game.refresh_end_turn_button()
 	for member in squad.members:
 		game.overlay_manager.clear_planned_path(member)
 

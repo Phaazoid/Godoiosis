@@ -281,6 +281,7 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.clear_selection()
 		WAIT:
 			game.squad_manager.set_has_acted(unit.squad, true)
+			game.refresh_end_turn_button()
 			game.clear_selection()
 		ENDTURN:
 			game.end_turn()
