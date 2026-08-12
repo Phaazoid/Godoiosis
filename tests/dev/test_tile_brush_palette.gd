@@ -136,40 +136,56 @@ func test_entries_carry_their_tile_sprite_as_icon() -> void:
 func _ghost() -> TileMapLayer:
 	return game.grid.get_node_or_null("BrushGhost") as TileMapLayer
 
-func test_the_ghost_previews_the_selected_tile_at_half_alpha() -> void:
-	# The mouse->cell half can't be aimed headless (the states suite's note); these drive
-	# update_brush_ghost directly beneath handle_tile_brush.
+func _hover_cell() -> Vector2i:
+	return game.dev_controller._mouse_cell()
+
+func _arm_brush() -> void:
+	game.set_dev_mode(true)
+	_brush.brush_active = true
+
+# The ghost POLLS per frame rather than riding mouse events, because while the Dev Tools OS
+# window holds focus the game window gets no motion events until a click -- picking a tile over
+# there must still show the ghost here on the very next frame, no click required. These cases
+# arm the real gate and await frames; no update call is ever made directly.
+func test_the_ghost_appears_from_the_gate_alone_no_click_needed() -> void:
 	_select_label("Mud Far")
-	game.dev_controller.update_brush_ghost(CELL)
+	_arm_brush()
+	await await_idle_frame()
 	var ghost := _ghost()
 	assert_object(ghost).is_not_null()
 	assert_bool(ghost.visible).is_true()
-	assert_int(ghost.get_cell_source_id(CELL)).is_equal(_src2_id)
+	assert_int(ghost.get_cell_source_id(_hover_cell())).is_equal(_src2_id)
 	assert_float(ghost.modulate.a).is_less(1.0)
 	assert_int(ghost.z_index).is_less(Unit.BASE_SPRITE_INDEX)
 
-func test_the_ghost_follows_the_latest_cell_and_pick() -> void:
-	game.dev_controller.update_brush_ghost(CELL)
+func test_the_ghost_follows_the_latest_pick() -> void:
+	_select_label("Mud Far")
+	_arm_brush()
+	await await_idle_frame()
 	_select_label("Crate")
-	game.dev_controller.update_brush_ghost(Vector2i(3, 3))
+	await await_idle_frame()
 	var ghost := _ghost()
-	assert_int(ghost.get_cell_source_id(CELL)).is_equal(-1)   # old cell cleared, never smeared
-	assert_that(ghost.get_cell_atlas_coords(Vector2i(3, 3))).is_equal(Vector2i(2, 0))
+	assert_int(ghost.get_cell_source_id(_hover_cell())).is_equal(_src1_id)
+	assert_that(ghost.get_cell_atlas_coords(_hover_cell())).is_equal(Vector2i(2, 0))
 
 func test_the_ghost_hides_on_every_off_path() -> void:
-	# brush off / paint-mode switch / dev-mode exit -- the three paths where brush events stop
-	# arriving, so each must hide the ghost itself.
-	game.dev_controller.update_brush_ghost(CELL)
-	_brush._on_tile_brush_toggled(false)
+	# brush off / paint-mode switch / dev-mode exit: the poll gate closes, next frame hides.
+	_arm_brush()
+	await await_idle_frame()
+	assert_bool(_ghost().visible).is_true()
+
+	_brush.brush_active = false
+	await await_idle_frame()
 	assert_bool(_ghost().visible).is_false()
 
-	game.dev_controller.update_brush_ghost(CELL)
+	_brush.brush_active = true
 	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
+	await await_idle_frame()
 	assert_bool(_ghost().visible).is_false()
 
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
-	game.dev_controller.update_brush_ghost(CELL)
 	game.set_dev_mode(false)
+	await await_idle_frame()
 	assert_bool(_ghost().visible).is_false()
 
 func test_an_unknown_kind_number_warns_instead_of_crashing() -> void:

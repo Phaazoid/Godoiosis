@@ -103,13 +103,6 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 # --- tile brush / map resize ---
 
 func handle_tile_brush(event) -> void:
-	# Ghost rides the same event stream that paints: game.gd forwards every brush-gated mouse
-	# event here, so the preview tracks exactly where a click would land. Off-paths (brush off,
-	# mode switch, dev-mode exit) hide it from their own hooks -- no events arrive then.
-	if game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
-		update_brush_ghost(_mouse_cell())
-	else:
-		hide_brush_ghost()
 	if event is InputEventMouseButton:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
@@ -123,6 +116,26 @@ func handle_tile_brush(event) -> void:
 func _mouse_cell() -> Vector2i:
 	return game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
 
+# The ghost POLLS the mouse per frame (HoverPresenter's mechanism), not the event stream:
+# while the Dev Tools OS window holds focus, the unfocused game window receives no mouse-motion
+# events until a click refocuses it -- the polled selector followed the cursor there while an
+# evented ghost sat stale. One driver; the gate mirrors game.gd's brush-input gate, so the
+# ghost shows exactly when a click would paint.
+func _process(_delta: float) -> void:
+	_sync_brush_ghost()
+
+func _sync_brush_ghost() -> void:
+	if game == null or game.process_mode == Node.PROCESS_MODE_DISABLED:
+		return   # modal freeze: painting is frozen, the ghost holds with it
+	var brush_ready: bool = game.game_state == game.GameState.DEV_MODE \
+		and game.dev_overlay != null \
+		and game.dev_overlay.tile_brush.brush_active \
+		and game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.TERRAIN
+	if brush_ready:
+		update_brush_ghost(_mouse_cell())
+	else:
+		hide_brush_ghost()
+
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
 # multi-cell tile (the lantern) previews exactly as set_cell will draw it. Child of the grid --
 # same transform, and it freezes with the Game subtree like painting itself does.
@@ -131,12 +144,15 @@ func update_brush_ghost(cell: Vector2i) -> void:
 	if _brush_ghost.tile_set != game.grid.tile_set:
 		_brush_ghost.tile_set = game.grid.tile_set
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	if _brush_ghost.visible and _brush_ghost.get_cell_source_id(cell) == brush.selected_source \
+			and _brush_ghost.get_cell_atlas_coords(cell) == brush.selected_tile:
+		return   # same cell, same pick: skip the per-frame clear/set churn
 	_brush_ghost.clear()
 	_brush_ghost.set_cell(cell, brush.selected_source, brush.selected_tile)
 	_brush_ghost.visible = true
 
 func hide_brush_ghost() -> void:
-	if _brush_ghost == null:
+	if _brush_ghost == null or not _brush_ghost.visible:
 		return
 	_brush_ghost.clear()
 	_brush_ghost.visible = false

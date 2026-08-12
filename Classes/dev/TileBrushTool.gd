@@ -132,8 +132,6 @@ static func _palette_order(a: PaletteEntry, b: PaletteEntry) -> bool:
 
 func _on_tile_brush_toggled(pressed: bool):
 	brush_active = pressed
-	if not pressed and game != null:
-		game.dev_controller.hide_brush_ghost()
 
 func _on_tile_dropdown_item_selected(index: int):
 	if index >= 0 and index < _tile_coords.size():
@@ -229,8 +227,6 @@ func selected_tile_state() -> Terrain.TileState:
 
 func _set_paint_mode(mode: PaintMode) -> void:
 	paint_mode = mode
-	if mode != PaintMode.TERRAIN and game != null:
-		game.dev_controller.hide_brush_ghost()
 	_tile_row.visible = mode == PaintMode.TERRAIN
 	_zone_kind_row.visible = mode == PaintMode.ZONE
 	_zone_name_row.visible = mode == PaintMode.ZONE
