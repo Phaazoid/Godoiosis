@@ -96,6 +96,20 @@ func set_downed(down: bool) -> void:
 		texture = _map_texture
 
 
+func is_downed() -> bool:
+	return _downed
+
+
+# Externally driven walking visual (#215's mirror: the 2D game owns the animation,
+# the mirror just reports the state). No-op while downed; only swaps on change.
+func set_walking_visual(walking: bool) -> void:
+	if _downed:
+		return
+	var wanted := _move_texture if (walking and _move_texture != null) else _map_texture
+	if texture != wanted:
+		texture = wanted
+
+
 func _step_to_next_cell() -> void:
 	if _walk_path.is_empty():
 		_walking = false
@@ -105,7 +119,7 @@ func _step_to_next_cell() -> void:
 		return
 	var next_cell: Vector3i = _walk_path.pop_front()
 	var target: Vector3 = stand_at.call(next_cell)
-	flip_h = _facing_flip_for(target - position)
+	flip_h = facing_flip_for(target - position)
 	var duration := position.distance_to(target) / maxf(move_speed, 0.01)
 	cell = next_cell
 	var tween := create_tween()
@@ -114,8 +128,9 @@ func _step_to_next_cell() -> void:
 
 
 # Facing seam v1: mirror when the step travels screen-left, judged against the live
-# camera. No camera (headless unit tests) = no flip, deterministically.
-func _facing_flip_for(step_direction: Vector3) -> bool:
+# camera. No camera (headless unit tests) = no flip, deterministically. Public since
+# #215 — the mirror derives steps externally and asks the same one function.
+func facing_flip_for(step_direction: Vector3) -> bool:
 	var camera := get_viewport().get_camera_3d() if is_inside_tree() else null
 	if camera == null:
 		return false

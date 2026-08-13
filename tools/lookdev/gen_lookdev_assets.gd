@@ -37,8 +37,41 @@ func _gen_textures() -> int:
 	_save(_stone_side(rng), "stone_side.png")
 	_save(_flame(rng), "torch_flame.png")
 	_save(_cell_fill(), "cell_fill.png")
+	_save(_speckled(rng, Color8(118, 86, 58), 0.10), "dirt_top.png")
+	_save(_speckled(rng, Color8(74, 58, 44), 0.14), "mud_top.png")
+	_save(_water_top(rng), "water_top.png")
+	_save(_speckled(rng, Color8(44, 86, 52), 0.16), "tree_top.png")
 	print("LookDev textures written to %s" % ART_DIR)
 	return 0
+
+
+# Generic speckled flat tile — the #215 kind tops (dirt / mud / tree canopy).
+func _speckled(rng: RandomNumberGenerator, base: Color, spread: float) -> Image:
+	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
+	for y in TILE:
+		for x in TILE:
+			var c := base
+			var r := rng.randf()
+			if r < 0.08:
+				c = base.darkened(spread)
+			elif r > 0.94:
+				c = base.lightened(spread)
+			img.set_pixel(x, y, c)
+	return img
+
+
+func _water_top(rng: RandomNumberGenerator) -> Image:
+	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
+	var base := Color8(52, 96, 150)
+	for y in TILE:
+		for x in TILE:
+			img.set_pixel(x, y, base.lightened(0.04) if (y % 8 < 1) else base)
+	for i in 14:  # sparse wave flecks
+		var x := rng.randi_range(0, TILE - 3)
+		var y := rng.randi_range(0, TILE - 1)
+		for dx in 2:
+			img.set_pixel(x + dx, y, base.lightened(0.22))
+	return img
 
 
 # The overlay fill (#213): white with a soft 2px inset border; layers tint it via
@@ -166,10 +199,22 @@ func _gen_meshlib() -> int:
 		return 1
 
 	DirAccess.make_dir_recursive_absolute(MESHLIB_PATH.get_base_dir())
+	var dirt_top := _load_tex("dirt_top.png")
+	var mud_top := _load_tex("mud_top.png")
+	var water_top := _load_tex("water_top.png")
+	var tree_top := _load_tex("tree_top.png")
+	if dirt_top == null or mud_top == null or water_top == null or tree_top == null:
+		push_error("Kind textures missing (#215) -- rerun --textures, then --import, first.")
+		return 1
+
 	var ml := MeshLibrary.new()
 	_add_item(ml, 0, "grass_block", _block_mesh(_mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 1, "stone_block", _block_mesh(_mat(stone_top), _mat(stone_side)))
 	_add_item(ml, 2, "dirt_ramp", _ramp_mesh(_mat(grass_top), _mat(dirt_side)))
+	_add_item(ml, 3, "dirt_block", _block_mesh(_mat(dirt_top), _mat(dirt_side)))
+	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
+	_add_item(ml, 5, "water_block", _block_mesh(_mat(water_top), _mat(water_top)))
+	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
 	var err := ResourceSaver.save(ml, MESHLIB_PATH)
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
