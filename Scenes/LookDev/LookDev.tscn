@@ -1,16 +1,13 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://Scenes/LookDev/look_dev.gd" id="1"]
 [ext_resource type="Script" path="res://Scenes/LookDev/board_painter.gd" id="2"]
 [ext_resource type="Script" path="res://Scenes/LookDev/look_dev_camera.gd" id="3"]
 [ext_resource type="MeshLibrary" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="4"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Knight.png" id="5"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="6"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="7"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="8"]
 [ext_resource type="Texture2D" path="res://Art/LookDev/torch_flame.png" id="9"]
 [ext_resource type="Shader" path="res://Scenes/LookDev/vignette.gdshader" id="10"]
 [ext_resource type="Script" path="res://Scenes/LookDev/cell_picker_demo.gd" id="11"]
+[ext_resource type="Script" path="res://Scenes/LookDev/unit_walk_demo.gd" id="12"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.78, 1)
@@ -120,46 +117,6 @@ omni_range = 6.0
 
 [node name="Units" type="Node3D" parent="."]
 
-[node name="Knight" type="Sprite3D" parent="Units"]
-position = Vector3(5.5, 1, 8.5)
-pixel_size = 0.03125
-billboard = 2
-shaded = true
-offset = Vector2(0, 16)
-alpha_cut = 2
-texture_filter = 0
-texture = ExtResource("5")
-
-[node name="Mage" type="Sprite3D" parent="Units"]
-position = Vector3(6.5, 1, 7.5)
-pixel_size = 0.03125
-billboard = 2
-shaded = true
-offset = Vector2(0, 16)
-alpha_cut = 2
-texture_filter = 0
-texture = ExtResource("6")
-
-[node name="Archer" type="Sprite3D" parent="Units"]
-position = Vector3(8.5, 3, 3.5)
-pixel_size = 0.03125
-billboard = 2
-shaded = true
-offset = Vector2(0, 16)
-alpha_cut = 2
-texture_filter = 0
-texture = ExtResource("7")
-
-[node name="Brigand" type="Sprite3D" parent="Units"]
-position = Vector3(11.5, 1, 11.5)
-pixel_size = 0.03125
-billboard = 2
-shaded = true
-offset = Vector2(0, 16)
-alpha_cut = 2
-texture_filter = 0
-texture = ExtResource("8")
-
 [node name="CameraRig" type="Node3D" parent="."]
 position = Vector3(7, 1, 7)
 script = ExtResource("3")
@@ -181,6 +138,9 @@ visible = false
 cast_shadow = 0
 mesh = SubResource("highlight_quad")
 
+[node name="WalkDemo" type="Node3D" parent="."]
+script = ExtResource("12")
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="Vignette" type="ColorRect" parent="UI"]
@@ -191,6 +151,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="WalkReadout" type="Label" parent="UI"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -50.0
+offset_right = 320.0
+offset_bottom = -30.0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 13
+modulate = Color(1, 1, 1, 0.85)
 
 [node name="CellReadout" type="Label" parent="UI"]
 anchor_top = 1.0

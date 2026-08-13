@@ -46,6 +46,7 @@ func test_sprites_are_billboarded_lit_pixel_quads() -> void:
 	for child in sprites:
 		var sprite := child as Sprite3D
 		assert_object(sprite).is_not_null()
+		assert_bool(sprite is UnitSprite3D).is_true()  # stage 2: the component is the one author
 		assert_object(sprite.texture).is_not_null()
 		assert_int(sprite.billboard).is_equal(BaseMaterial3D.BILLBOARD_FIXED_Y)
 		assert_int(sprite.alpha_cut).is_equal(SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS)
