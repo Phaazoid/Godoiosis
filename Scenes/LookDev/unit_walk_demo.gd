@@ -18,9 +18,14 @@ const SPAWN_COLUMNS: Array[Vector2i] = [
 	Vector2i(11, 11),  # far corner, deep in the DoF falloff
 ]
 
+# Fake attack ring radius for the layer-stacking demo: real reach is the sim's (stage 4).
+const DEMO_ATTACK_RANGE := 2
+const MOVE_RANGE_CAP := 6
+
 @onready var _board: GridMap = $"../Board"
 @onready var _camera: Camera3D = $"../CameraRig/Pitch/Camera"
 @onready var _units_root: Node3D = $"../Units"
+@onready var _overlays: BoardOverlays = $"../BoardOverlays"
 @onready var _readout: Label = $"../UI/WalkReadout"
 
 var _tops: Dictionary[Vector2i, int] = {}
@@ -33,7 +38,18 @@ func _ready() -> void:
 	_tops = BoardPicker.column_tops_from(_board)
 	_ramp_exits = ramp_exits_from(_board, _board.RAMP)
 	_spawn_cast()
+	_paint_zone_patch()
 	_update_readout()
+
+
+# A persistent layer coexisting with the transient ones: the stone platform as a
+# demo extraction zone.
+func _paint_zone_patch() -> void:
+	var cells: Array[Vector3i] = []
+	for x in range(2, 5):
+		for z in range(9, 12):
+			cells.append(_top_cell(Vector2i(x, z)))
+	_overlays.set_cells(BoardOverlays.Layer.ZONE_EXTRACTION, cells)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -57,12 +73,11 @@ func _unhandled_input(event: InputEvent) -> void:
 func order_walk(target_cell: Vector3i) -> void:
 	if _selected == null or _selected.is_walking():
 		return
-	var blocked: Dictionary[Vector2i, bool] = {}
-	for unit in _units:
-		if unit != _selected:
-			blocked[Vector2i(unit.cell.x, unit.cell.z)] = true
-	var path := find_path(_selected.cell, target_cell, _tops, blocked, _ramp_exits)
+	var path := find_path(_selected.cell, target_cell, _tops, _blocked_for(_selected), _ramp_exits)
 	if path.size() > 1:
+		_selected.walk_finished.connect(_refresh_selection_overlays, CONNECT_ONE_SHOT)
+		_overlays.clear(BoardOverlays.Layer.MOVE)
+		_overlays.clear(BoardOverlays.Layer.ATTACK)
 		_selected.walk_path(path)
 
 
@@ -127,6 +142,33 @@ static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[V
 	return path
 
 
+# Bounded reachability under the same ruling — the MOVE fill's demo data source.
+static func find_reachable(from_cell: Vector3i, max_steps: int, tops: Dictionary[Vector2i, int],
+		blocked: Dictionary[Vector2i, bool], ramp_exits: Dictionary[Vector2i, Array]) -> Array[Vector3i]:
+	var from_col := Vector2i(from_cell.x, from_cell.z)
+	if not tops.has(from_col):
+		return []
+	var depth: Dictionary[Vector2i, int] = {from_col: 0}
+	var frontier: Array[Vector2i] = [from_col]
+	while not frontier.is_empty():
+		var col: Vector2i = frontier.pop_front()
+		if depth[col] >= max_steps:
+			continue
+		for side in [Vector2i.RIGHT, Vector2i.LEFT, Vector2i.UP, Vector2i.DOWN]:
+			var next: Vector2i = col + side
+			if depth.has(next) or not tops.has(next) or blocked.has(next):
+				continue
+			if not _step_legal(col, next, tops, ramp_exits):
+				continue
+			depth[next] = depth[col] + 1
+			frontier.append(next)
+	var cells: Array[Vector3i] = []
+	for col: Vector2i in depth.keys():
+		if col != from_col:
+			cells.append(Vector3i(col.x, tops[col] - 1, col.y))
+	return cells
+
+
 static func _step_legal(col: Vector2i, next: Vector2i, tops: Dictionary[Vector2i, int],
 		ramp_exits: Dictionary[Vector2i, Array]) -> bool:
 	var col_is_ramp := ramp_exits.has(col)
@@ -179,11 +221,48 @@ func _unit_at(cell: Vector3i) -> UnitSprite3D:
 
 
 func _select(unit: UnitSprite3D) -> void:
+	if _selected == unit:  # click the selected unit again to deselect
+		_deselect()
+		return
 	if _selected != null:
 		_selected.modulate = Color.WHITE
 	_selected = unit
 	_selected.modulate = SELECTED_MODULATE
+	_refresh_selection_overlays()
 	_update_readout()
+
+
+func _deselect() -> void:
+	if _selected != null:
+		_selected.modulate = Color.WHITE
+	_selected = null
+	_overlays.clear(BoardOverlays.Layer.MOVE)
+	_overlays.clear(BoardOverlays.Layer.ATTACK)
+	_update_readout()
+
+
+func _blocked_for(mover: UnitSprite3D) -> Dictionary[Vector2i, bool]:
+	var blocked: Dictionary[Vector2i, bool] = {}
+	for unit in _units:
+		if unit != mover:
+			blocked[Vector2i(unit.cell.x, unit.cell.z)] = true
+	return blocked
+
+
+# MOVE = reachable under the ruling; ATTACK = a Manhattan ring (fake reach, see header).
+func _refresh_selection_overlays() -> void:
+	if _selected == null:
+		return
+	_overlays.set_cells(BoardOverlays.Layer.MOVE, find_reachable(
+			_selected.cell, MOVE_RANGE_CAP, _tops, _blocked_for(_selected), _ramp_exits))
+	var ring: Array[Vector3i] = []
+	var center := Vector2i(_selected.cell.x, _selected.cell.z)
+	for dx in range(-DEMO_ATTACK_RANGE, DEMO_ATTACK_RANGE + 1):
+		for dz in range(-DEMO_ATTACK_RANGE, DEMO_ATTACK_RANGE + 1):
+			var col := center + Vector2i(dx, dz)
+			if absi(dx) + absi(dz) <= DEMO_ATTACK_RANGE and col != center and _tops.has(col):
+				ring.append(Vector3i(col.x, _tops[col] - 1, col.y))
+	_overlays.set_cells(BoardOverlays.Layer.ATTACK, ring)
 
 
 func _update_readout() -> void:

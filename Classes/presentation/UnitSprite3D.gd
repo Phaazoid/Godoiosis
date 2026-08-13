@@ -47,6 +47,7 @@ func _init() -> void:
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	pixel_size = 1.0 / 32.0  # the one-density convention: 32 texels per world unit
 	offset = Vector2(0, 16)  # pivot at the feet
+	layers = BoardOverlays.UNIT_RENDER_LAYER  # overlay fills never paint sprites (#213 mask contract)
 
 
 static func for_unit_data(data: UnitData) -> UnitSprite3D:

@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=19 format=3]
 
 [ext_resource type="Script" path="res://Scenes/LookDev/look_dev.gd" id="1"]
 [ext_resource type="Script" path="res://Scenes/LookDev/board_painter.gd" id="2"]
@@ -8,6 +8,7 @@
 [ext_resource type="Shader" path="res://Scenes/LookDev/vignette.gdshader" id="10"]
 [ext_resource type="Script" path="res://Scenes/LookDev/cell_picker_demo.gd" id="11"]
 [ext_resource type="Script" path="res://Scenes/LookDev/unit_walk_demo.gd" id="12"]
+[ext_resource type="Script" path="res://Classes/presentation/BoardOverlays.gd" id="13"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.78, 1)
@@ -67,16 +68,6 @@ shader = ExtResource("10")
 shader_parameter/strength = 0.35
 shader_parameter/softness = 0.55
 
-[sub_resource type="StandardMaterial3D" id="highlight_mat"]
-transparency = 1
-shading_mode = 0
-albedo_color = Color(1, 0.9, 0.3, 0.45)
-
-[sub_resource type="QuadMesh" id="highlight_quad"]
-material = SubResource("highlight_mat")
-size = Vector2(0.95, 0.95)
-orientation = 1
-
 [node name="LookDev" type="Node3D"]
 script = ExtResource("1")
 
@@ -130,13 +121,11 @@ attributes = SubResource("cam_attrs")
 current = true
 fov = 30.0
 
+[node name="BoardOverlays" type="Node3D" parent="."]
+script = ExtResource("13")
+
 [node name="PickerDemo" type="Node3D" parent="."]
 script = ExtResource("11")
-
-[node name="Highlight" type="MeshInstance3D" parent="PickerDemo"]
-visible = false
-cast_shadow = 0
-mesh = SubResource("highlight_quad")
 
 [node name="WalkDemo" type="Node3D" parent="."]
 script = ExtResource("12")
