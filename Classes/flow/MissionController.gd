@@ -85,7 +85,7 @@ func open_mission_select() -> void:
 		if not missions.has(path):
 			others.append(path)   # root playtest saves + fixtures/ -- selectable during development
 	_select_screen = MissionSelectScreen.open(game, missions, others)
-	_select_screen.mission_chosen.connect(_on_mission_chosen)
+	_select_screen.mission_chosen.connect(begin_mission)
 	_select_screen.load_game_chosen.connect(_on_load_game_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
 	_select_screen.glossary_chosen.connect(func(): GlossaryScreen.show_screen(game))
@@ -98,7 +98,9 @@ func _close_mission_select() -> void:
 		_select_screen.queue_free()
 	_select_screen = null
 
-func _on_mission_chosen(path: String) -> void:
+# The one path-taking mission entry, public since #220 — the Mission Select signal
+# and the Battle3D driver both start missions through this door.
+func begin_mission(path: String) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
 	_begin_turn()
@@ -134,7 +136,7 @@ func restart_mission() -> void:
 	game.scenario_manager.reload_current()
 	_begin_turn()
 
-# Player-facing resume (#144): the same two-step arrival _on_mission_chosen makes, except the
+# Player-facing resume (#144): the same two-step arrival begin_mission makes, except the
 # board comes from a save slot and last_loaded_path is aimed at the ORIGIN mission -- so Restart
 # and F2 reload the mission start, and no dev tool can ever aim Update at a slot. _begin_turn no
 # longer resets actions (a menu arrival trusts the file -- see game._on_turn_started), which is

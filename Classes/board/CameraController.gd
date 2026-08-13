@@ -1,3 +1,7 @@
+# The 2D board camera: WASD-scrolled with grid snapping, clamped to the board,
+# with AI-turn locks (set_ai_locked/follow) and the fixed-duration pan_to beat.
+# center_on_position glides via the _process lerp; snap_to_position is the instant
+# form (the 3D input bridge maps clicks through the live transform, #220).
 extends Node2D
 class_name CameraController
 
@@ -41,6 +45,15 @@ func center_on_position(world_pos: Vector2):
 	lock_manual_input = true
 	target_position = world_pos
 	clamp_target_position()
+
+# Instant, clamped reposition. The 3D input bridge (#220) maps a click's viewport
+# position through the LIVE canvas transform, so the camera must already be showing
+# the clicked cell when the synthetic event lands — a lerp target isn't enough.
+func snap_to_position(world_pos: Vector2) -> void:
+	target_position = world_pos
+	clamp_target_position()
+	_apply_pan_position(target_position)
+	camera.force_update_scroll()
 
 func clamp_target_position():
 	var viewport_size = get_viewport_rect().size
