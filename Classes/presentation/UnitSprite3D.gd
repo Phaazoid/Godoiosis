@@ -14,11 +14,19 @@ class_name UnitSprite3D
 
 signal walk_finished
 
-const ART_FACES_SCREEN_RIGHT := true
+# false: the MapSprites face screen-LEFT natively (dev feel-check 2026-08-12 —
+# "all units look like they're moonwalking" with this set true).
+const ART_FACES_SCREEN_RIGHT := false
 const FALLBACK_SPRITE := "res://Art/Units/MapSprites/Recruit.png"
 
 # Matches the 2D game's cadence: 120 px/s over 32 px cells = 3.75 cells per second.
 @export var move_speed := 3.75
+
+# Where a cell's stand-point is. Defaults to the flat convention; a board-aware
+# owner injects its own (the walk demo lowers ramp cells to the slope midpoint,
+# dev feel-check 2026-08-12: units floated over slopes). Passing beats looking up:
+# the component never reads a GridMap.
+var stand_at: Callable = BoardSpace.standing_point
 
 var cell := BoardSpace.NO_CELL
 var display_name := "Unit"
@@ -58,7 +66,7 @@ static func for_unit_data(data: UnitData) -> UnitSprite3D:
 # Teleport: spawn/reset placement, no animation (MovementComponent.set_cell's twin).
 func place_at(new_cell: Vector3i) -> void:
 	cell = new_cell
-	position = BoardSpace.standing_point(new_cell)
+	position = stand_at.call(new_cell)
 
 
 # Walk the path one cell-tween at a time; `cell` is assigned as each step BEGINS,
@@ -95,7 +103,7 @@ func _step_to_next_cell() -> void:
 		walk_finished.emit()
 		return
 	var next_cell: Vector3i = _walk_path.pop_front()
-	var target := BoardSpace.standing_point(next_cell)
+	var target: Vector3 = stand_at.call(next_cell)
 	flip_h = _facing_flip_for(target - position)
 	var duration := position.distance_to(target) / maxf(move_speed, 0.01)
 	cell = next_cell

@@ -1,10 +1,10 @@
 # Stage-2 proof (#210): real cast members walking the diorama. Spawns UnitSprite3Ds
 # from UnitCatalog at authored columns, then LMB drives select-and-walk through the
 # stage-1 picker. The BFS here is DEMO-ONLY scaffolding, thrown away when the sim's
-# real move rules arrive (stage 4): 4-neighbor over column tops, a step is legal iff
-# |top delta| <= 1, other units block. Ramps read as the intended path visually but
-# are not yet mechanically required — traversal doctrine belongs to the rules layer,
-# and the demo deliberately does not pre-decide it.
+# real move rules arrive (stage 4) — but it implements the dev's traversal RULING
+# (2026-08-12): height changes happen ONLY via ramps, and a ramp connects exactly
+# its high-side and low-side neighbors (no sideways entry). Flat steps need equal
+# tops; other units block. Units on ramp cells stand at the slope midpoint.
 extends Node3D
 
 const SELECTED_MODULATE := Color(1.4, 1.4, 1.0)  # UnitVisuals.HIGHLIGHT_MODULATE's twin
@@ -24,12 +24,14 @@ const SPAWN_COLUMNS: Array[Vector2i] = [
 @onready var _readout: Label = $"../UI/WalkReadout"
 
 var _tops: Dictionary[Vector2i, int] = {}
+var _ramp_exits: Dictionary[Vector2i, Array] = {}
 var _units: Array[UnitSprite3D] = []
 var _selected: UnitSprite3D = null
 
 
 func _ready() -> void:
 	_tops = BoardPicker.column_tops_from(_board)
+	_ramp_exits = ramp_exits_from(_board, _board.RAMP)
 	_spawn_cast()
 	_update_readout()
 
@@ -59,7 +61,7 @@ func order_walk(target_cell: Vector3i) -> void:
 	for unit in _units:
 		if unit != _selected:
 			blocked[Vector2i(unit.cell.x, unit.cell.z)] = true
-	var path := find_path(_selected.cell, target_cell, _tops, blocked)
+	var path := find_path(_selected.cell, target_cell, _tops, blocked, _ramp_exits)
 	if path.size() > 1:
 		_selected.walk_path(path)
 
@@ -72,9 +74,26 @@ func units() -> Array[UnitSprite3D]:
 	return _units
 
 
-# DEMO-ONLY pathing (see header): BFS over columns, |top delta| <= 1 per step.
+# The ramp adjacency map: ramp column -> [high-side column, low-side column].
+# Orientation basis maps the mesh's high edge (-Z at yaw 0) into the world.
+static func ramp_exits_from(board: GridMap, ramp_item: int) -> Dictionary[Vector2i, Array]:
+	var exits: Dictionary[Vector2i, Array] = {}
+	for cell in board.get_used_cells():
+		if board.get_cell_item(cell) != ramp_item:
+			continue
+		var column := Vector2i(cell.x, cell.z)
+		var basis := board.get_basis_with_orthogonal_index(board.get_cell_item_orientation(cell))
+		var high_dir := basis * Vector3(0, 0, -1)
+		var high_step := Vector2i(roundi(high_dir.x), roundi(high_dir.z))
+		exits[column] = [column + high_step, column - high_step]
+	return exits
+
+
+# DEMO-ONLY pathing (see header), under the dev's traversal ruling: flat steps need
+# equal tops; any height change routes through a ramp, and a ramp connects ONLY its
+# high- and low-side neighbors.
 static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[Vector2i, int],
-		blocked: Dictionary[Vector2i, bool]) -> Array[Vector3i]:
+		blocked: Dictionary[Vector2i, bool], ramp_exits: Dictionary[Vector2i, Array]) -> Array[Vector3i]:
 	var from_col := Vector2i(from_cell.x, from_cell.z)
 	var to_col := Vector2i(to_cell.x, to_cell.z)
 	if not tops.has(from_col) or not tops.has(to_col):
@@ -92,7 +111,7 @@ static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[V
 			var next: Vector2i = col + side
 			if came_from.has(next) or not tops.has(next) or blocked.has(next):
 				continue
-			if absi(tops[next] - tops[col]) > 1:
+			if not _step_legal(col, next, tops, ramp_exits):
 				continue
 			came_from[next] = col
 			frontier.append(next)
@@ -108,6 +127,19 @@ static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[V
 	return path
 
 
+static func _step_legal(col: Vector2i, next: Vector2i, tops: Dictionary[Vector2i, int],
+		ramp_exits: Dictionary[Vector2i, Array]) -> bool:
+	var col_is_ramp := ramp_exits.has(col)
+	var next_is_ramp := ramp_exits.has(next)
+	if col_is_ramp and not (ramp_exits[col] as Array).has(next):
+		return false
+	if next_is_ramp and not (ramp_exits[next] as Array).has(col):
+		return false
+	if not col_is_ramp and not next_is_ramp and tops[next] != tops[col]:
+		return false
+	return true
+
+
 # --- Internals -----------------------------------------------------------------
 
 func _spawn_cast() -> void:
@@ -119,9 +151,19 @@ func _spawn_cast() -> void:
 			break
 		var data: UnitData = characters[names[i]]
 		var sprite := UnitSprite3D.for_unit_data(data)
+		sprite.stand_at = _surface_point
 		_units_root.add_child(sprite)
 		sprite.place_at(_top_cell(SPAWN_COLUMNS[i]))
 		_units.append(sprite)
+
+
+# Board-aware stand-point: ramp cells stand at the slope midpoint, half a cell
+# below the flat convention (dev feel-check 2026-08-12: units floated over slopes).
+func _surface_point(cell: Vector3i) -> Vector3:
+	var point := BoardSpace.standing_point(cell)
+	if _ramp_exits.has(Vector2i(cell.x, cell.z)):
+		point.y -= BoardSpace.CELL_SIZE * 0.5
+	return point
 
 
 func _top_cell(column: Vector2i) -> Vector3i:

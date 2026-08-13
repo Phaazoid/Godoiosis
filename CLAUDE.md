@@ -31,6 +31,7 @@ Tactical RPG (Fire Emblem-influenced), Godot 4.7, GDScript. Solo hobbyist develo
 - **Content is disposable; cleanliness is not.** `.tscn` scenes and saved `Scenarios/*.tres` are placeholder — fix them to match the code rather than carrying a legacy-compat branch for their sake.
 - **File header comments.** Any `Classes/`/`Scenes/`/`game.gd` file touched that lacks a top-of-file description comment (what the file/class IS and its place in the architecture) gets one added.
 - **Terse comments in source.** Rationale goes in chat, `docs/`, and issue text — never walkthrough prose in a `.gd` file.
+- **Aesthetic tuning values get a knob, not a guess (dev rule, 2026-08-12).** When a shader/lighting/post/animation value is a matter of taste, don't burn rounds picking numbers — expose it (an `@export`, an inspector-reachable resource, or the look-dev tuning panel) and hand it to the dev: *"I can find the values that work, and we can save a lot of time."*
 
 ## GitHub issue workflow (Claude ↔ human handoff)
 
