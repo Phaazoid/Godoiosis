@@ -92,10 +92,11 @@ func _parse_click(screen_pos: Vector2, button: MouseButton = MOUSE_BUTTON_LEFT) 
 	Input.parse_input_event(release)
 
 
-# Deliver everything: the test's own events flush first (dispatch runs the bridge,
-# which PARSES its synthetics but never flushes mid-dispatch), then a second flush
-# delivers the bridge's events; two trailing frames let _process polls observe the
-# result (process_frame resumes coroutines BEFORE node _process — one frame is stale).
+# Deliver everything. The flush drain re-checks its queue, so the bridge's synthetics
+# (parsed mid-dispatch) are delivered by the SAME flush as the test's own events; the
+# second flush is belt-and-braces for anything a frame boundary buffered. Two trailing
+# frames let _process polls observe the result (process_frame resumes coroutines
+# BEFORE node _process — one frame is stale).
 func _pump() -> void:
 	Input.flush_buffered_events()
 	await await_idle_frame()
@@ -168,6 +169,8 @@ func test_a_modal_freeze_stops_3d_clicks_cold() -> void:
 func test_the_board_lock_refuses_bridge_clicks_natively() -> void:
 	_game.game_state = _game.GameState.AI_TURN
 	var unit := _pickable_player_unit()
+	var cam: CameraController = _game.camera_controller
+	var cam_before: Vector2 = cam.global_position
 	_parse_click(_screen_of(unit.movement.cell))
 	# RMB is the sharp clause: without game.gd's _board_locked_for_player gate an
 	# RMB would run exit_current_mode and flip the state to IDLE mid-AI-turn.
@@ -175,6 +178,9 @@ func test_the_board_lock_refuses_bridge_clicks_natively() -> void:
 	await _pump()
 	assert_object(_selected()).is_null()
 	assert_int(_game.game_state).is_equal(_game.GameState.AI_TURN)
+	# A refused click must not yank the camera either — the bridge reads the same
+	# lock before snapping, or a stray click drags the PiP off the AI's pan.
+	assert_that(cam.global_position).is_equal(cam_before)
 
 
 # --- Hover -----------------------------------------------------------------------------
@@ -182,6 +188,13 @@ func test_the_board_lock_refuses_bridge_clicks_natively() -> void:
 func test_3d_hover_drives_the_real_hover_presenter() -> void:
 	var unit := _pickable_player_unit()
 	var cell: Vector2i = unit.movement.cell
+	# Park the pointer on a different cell first: the global Input mouse position
+	# leaks across cases, and a fresh fixture synthesizes an enter-motion at it —
+	# if that pre-hovers the target cell, the presenter's dedup would swallow the
+	# signal this case exists to observe.
+	var grid: TileMapLayer = _game.grid
+	_parse_motion(_screen_of(grid.get_used_rect().position))
+	await _pump()
 	var seen: Array[Vector2i] = []
 	_game.hover_presenter.hovered_cell_changed.connect(func(c: Vector2i) -> void: seen.append(c))
 
@@ -200,7 +213,8 @@ func test_the_pip_keeps_native_resolution() -> void:
 	assert_that(Vector2(_game_view.size)).is_equal(Vector2(1280.0, 720.0))
 	assert_that(_container.scale).is_equal(Vector2(_scene.pip_scale, _scene.pip_scale))
 	var view: Vector2 = _scene.get_viewport().get_visible_rect().size
-	var expected_pos: Vector2 = view - Vector2(1280.0, 720.0) * _scene.pip_scale - _scene.pip_margin
+	var native: Vector2 = _container.custom_minimum_size   # the authored source the PiP reads
+	var expected_pos: Vector2 = view - native * _scene.pip_scale - _scene.pip_margin
 	assert_that(_container.position).is_equal(expected_pos)
 
 
@@ -245,7 +259,13 @@ func test_rmb_cancels_the_current_mode() -> void:
 	_game.enter_move_mode(unit)
 	assert_int(_game.game_state).is_equal(_game.GameState.CHOOSING_MOVE)
 
-	_parse_click(_screen_of(unit.movement.cell), MOUSE_BUTTON_RIGHT)
+	# Cancel while POINTING AT A FAR CELL is the sharp form: the far cell's mapped 2D
+	# position falls outside the container rect (the hidden camera isn't showing it),
+	# so a cancel that reuses the pointer's mapped position is silently dropped and
+	# the player is stuck in the mode — RMB must push at a position that always
+	# forwards, because game.gd's _on_right_click is position-blind anyway.
+	var grid: TileMapLayer = _game.grid
+	_parse_click(_screen_of(grid.get_used_rect().position), MOUSE_BUTTON_RIGHT)
 	await _pump()
 	assert_int(_game.game_state).is_equal(_game.GameState.IDLE)
 	assert_object(_selected()).is_null()
@@ -263,3 +283,50 @@ func test_demo_mode_forces_both_factions_ai_and_playable_does_not() -> void:
 	await await_idle_frame()
 	assert_bool(ai.is_ai_faction(Team.Faction.PLAYER)).is_true()
 	assert_bool(ai.is_ai_faction(Team.Faction.ENEMY)).is_true()
+
+
+func test_demo_mode_boots_watch_only() -> void:
+	# demo_mode must be set BEFORE the scene enters the tree — _ready is where the
+	# fork lives, which the shared fixture (playable) can never exercise.
+	var packed := load(SCENE_PATH) as PackedScene
+	var demo := packed.instantiate() as Node3D
+	demo.auto_play = false
+	demo.demo_mode = true
+	get_tree().root.add_child(demo)
+	await await_idle_frame()
+	var container: SubViewportContainer = demo.get_node("Main/GameContainer")
+	assert_bool(container.visible).is_false()
+	get_tree().root.remove_child(demo)
+	demo.free()
+
+
+func test_demo_mode_keeps_the_rig_alive_behind_a_frozen_game() -> void:
+	# 4a parity: the end-of-mission banner freezes the hidden game forever in demo
+	# mode (it is invisible and unclickable there), and the diorama's camera must
+	# survive it. The freeze is simulated at its real seam — ModalLock's whole
+	# mechanism IS game.process_mode = DISABLED.
+	var packed := load(SCENE_PATH) as PackedScene
+	var demo := packed.instantiate() as Node3D
+	demo.auto_play = false
+	demo.demo_mode = true
+	get_tree().root.add_child(demo)
+	await await_idle_frame()
+	var demo_game: Node2D = demo.game
+	demo_game.process_mode = Node.PROCESS_MODE_DISABLED
+	await await_idle_frame()
+	await await_idle_frame()
+	var rig: Node3D = demo.get_node("CameraRig")
+	assert_bool(rig.is_processing()).is_true()
+	get_tree().root.remove_child(demo)
+	demo.free()
+
+
+func test_the_playable_rig_freezes_with_the_game() -> void:
+	# The other half of the pair: in playable mode the rig's global Input polls must
+	# die with the modal freeze (typing into the report card must not pan the rig).
+	_game.process_mode = Node.PROCESS_MODE_DISABLED
+	await await_idle_frame()
+	await await_idle_frame()
+	var rig: Node3D = _scene.get_node("CameraRig")
+	assert_bool(rig.is_processing()).is_false()
+	_game.process_mode = Node.PROCESS_MODE_INHERIT
