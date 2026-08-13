@@ -1,4 +1,4 @@
-[gd_scene load_steps=20 format=3]
+[gd_scene load_steps=23 format=3]
 
 [ext_resource type="Script" path="res://Scenes/LookDev/look_dev.gd" id="1"]
 [ext_resource type="Script" path="res://Scenes/LookDev/board_painter.gd" id="2"]
@@ -10,6 +10,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="8"]
 [ext_resource type="Texture2D" path="res://Art/LookDev/torch_flame.png" id="9"]
 [ext_resource type="Shader" path="res://Scenes/LookDev/vignette.gdshader" id="10"]
+[ext_resource type="Script" path="res://Scenes/LookDev/cell_picker_demo.gd" id="11"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.78, 1)
@@ -68,6 +69,16 @@ size = Vector2(0.4, 0.55)
 shader = ExtResource("10")
 shader_parameter/strength = 0.35
 shader_parameter/softness = 0.55
+
+[sub_resource type="StandardMaterial3D" id="highlight_mat"]
+transparency = 1
+shading_mode = 0
+albedo_color = Color(1, 0.9, 0.3, 0.45)
+
+[sub_resource type="QuadMesh" id="highlight_quad"]
+material = SubResource("highlight_mat")
+size = Vector2(0.95, 0.95)
+orientation = 1
 
 [node name="LookDev" type="Node3D"]
 script = ExtResource("1")
@@ -162,6 +173,14 @@ attributes = SubResource("cam_attrs")
 current = true
 fov = 30.0
 
+[node name="PickerDemo" type="Node3D" parent="."]
+script = ExtResource("11")
+
+[node name="Highlight" type="MeshInstance3D" parent="PickerDemo"]
+visible = false
+cast_shadow = 0
+mesh = SubResource("highlight_quad")
+
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="Vignette" type="ColorRect" parent="UI"]
@@ -172,6 +191,17 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+
+[node name="CellReadout" type="Label" parent="UI"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -28.0
+offset_right = 220.0
+offset_bottom = -8.0
+grow_vertical = 0
+theme_override_font_sizes/font_size = 13
+modulate = Color(1, 1, 1, 0.85)
 
 [node name="Help" type="Label" parent="UI"]
 offset_left = 8.0
