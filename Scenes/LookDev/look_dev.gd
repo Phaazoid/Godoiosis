@@ -20,11 +20,13 @@ const PRESETS: Array[Dictionary] = [
 		"sky_horizon": Color(0.68, 0.74, 0.82),
 	},
 	{
+		# Fog tamed 2026-08-12 ("looks like a forest fire") — stopgap until the
+		# tuning panel; the dev owns these numbers.
 		"sun_rotation": Vector3(-14.0, -62.0, 0.0),
 		"sun_color": Color(1.0, 0.62, 0.32),
 		"sun_energy": 1.1,
-		"fog_density": 0.03,
-		"fog_albedo": Color(0.98, 0.75, 0.55),
+		"fog_density": 0.018,
+		"fog_albedo": Color(0.9, 0.78, 0.62),
 		"saturation": 1.12,
 		"sky_top": Color(0.36, 0.28, 0.5),
 		"sky_horizon": Color(0.98, 0.6, 0.35),
