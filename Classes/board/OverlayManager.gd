@@ -96,6 +96,7 @@ var knockback_preview_sprites: Array[Node2D] = []
 # kind: colour is `modulate`, which is per-LAYER, so a kind that needs its own colour needs its
 # own layer. Adding a kind is one line here.
 var zone_layer_map := {}
+var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
 # Knockback preview (#84): a ghosted arrow (target cell -> landing cell) plus a planning-ghost of
 # the shoved unit where it lands. Same "resolve the plan, show it pending" rail as the terrain
 # preview; its own sprite list so a plan change clears and redraws it cleanly.
@@ -134,6 +135,18 @@ func _ready() -> void:
 		ZoneManager.Kind.CAPTURE: capture_overlay,
 		ZoneManager.Kind.EXTRACTION: extraction_overlay,
 	}
+	# The Tile Brush's picked-zone highlight: a white lift drawn over the kind layers so the picked
+	# zone reads against its neighbours. Code-built as a duplicate of zone_overlay (same tileset and
+	# transform, no .tscn edit) and appended LAST, so tree order draws it above every zone layer.
+	# Authoring-only like PATROL -- set_zone_visibility owns both. Headless Play boards
+	# (play/board_builder) supply the overlays as bare Node2Ds: no layer to duplicate, no brush to
+	# serve -- the highlight stays null there and redraw_zone_highlight tolerates it.
+	if zone_overlay is TileMapLayer:
+		zone_highlight_overlay = zone_overlay.duplicate() as TileMapLayer
+		zone_highlight_overlay.name = "ZoneHighlightOverlay"
+		zone_highlight_overlay.modulate = Color(1, 1, 1, 0.45)
+		zone_highlight_overlay.visible = false
+		add_child(zone_highlight_overlay)
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color.
@@ -155,9 +168,20 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 			squad_overlay.erase_cell(cell)
 			squadrange_overlay.erase_cell(cell)
 
-# PATROL only -- capture zones are objective info, not an authoring overlay.
+# PATROL only -- capture zones are objective info, not an authoring overlay. The picked-zone
+# highlight is authoring scaffolding too, so it follows the same switch.
 func set_zone_visibility(shown: bool) -> void:
 	zone_overlay.visible = shown
+	if zone_highlight_overlay != null:
+		zone_highlight_overlay.visible = shown
+
+# The Tile Brush's picked zone, drawn as a lift over whatever kind layers hold the same cells.
+# Empty = no pick (clears the layer).
+func redraw_zone_highlight(cells: Array[Vector2i]) -> void:
+	if zone_highlight_overlay == null:
+		return
+	zone_highlight_overlay.clear()
+	draw_cells(zone_highlight_overlay, cells, ATLAS_COORDS)
 
 # One method for every zone kind: each zone draws into the layer registered for its kind, and a
 # kind with no layer simply isn't drawn. `hidden` drops zones that are done with (a captured

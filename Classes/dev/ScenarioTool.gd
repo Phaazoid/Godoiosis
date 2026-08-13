@@ -201,6 +201,13 @@ func _on_update_pressed() -> void:
 	if reason != "":
 		status_label.text = reason
 		return
+	# Confirmed like Delete (dev call 2026-08-12): the load-gate cannot catch a mis-click at the
+	# loaded file itself -- a wrecked board (accidental resize) one button away from Load is
+	# exactly how Level_1 died.
+	DevWidgets.confirm(self, "Overwrite scenario '%s' with the current board? The saved version is lost." % target,
+		func(): _update_confirmed(target))
+
+func _update_confirmed(target: String) -> void:
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
 	scenario_manager.save_scenario(target, status_label, authored_save)
 	refresh_dropdown(target)

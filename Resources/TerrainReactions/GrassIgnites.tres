@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="TerrainReaction" format=3]
+
+[ext_resource type="Script" uid="uid://dxskrhe0srgid" path="res://Classes/terrain/TerrainReaction.gd" id="1_grsig"]
+
+[resource]
+script = ExtResource("1_grsig")
+incoming_element = 1
+required_kind = 1
+add_tile_states = Array[int]([1])
+popup = "Ignites!"
+metadata/_custom_type_script = "uid://dxskrhe0srgid"

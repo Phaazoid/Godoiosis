@@ -164,9 +164,15 @@ func abandon_mission() -> void:
 #  The capture objective (slice 3)
 # ==============================================================================
 
-func is_capture_zone_at(cell: Vector2i) -> bool:
-	var name = game.zone_manager.zone_at(cell)
-	return name != "" and game.zone_manager.kind_of(name) == ZoneManager.Kind.CAPTURE
+# The uncaptured CAPTURE zone at this cell, "" when none. Kind-filtered because zones overlap
+# (2026-08-12): "the" zone at a cell stopped being a well-formed question, and every reader of the
+# old zone_at was asking exactly this one. A captured zone stops matching, so where two capture
+# zones overlap the second becomes capturable once the first is claimed.
+func capturable_zone_at(cell: Vector2i) -> String:
+	for name in game.zone_manager.zone_names_of(ZoneManager.Kind.CAPTURE):
+		if game.zone_manager.contains(name, cell) and not _captured_zones.has(name):
+			return name
+	return ""
 
 # Standing anywhere in a capture zone claims the WHOLE zone -- a multi-tile objective is one
 # objective, not N of them.
@@ -265,6 +271,11 @@ func _extract_progress(board: BoardContext) -> MissionRules.Progress:
 	if game.zone_manager.zone_names_of(ZoneManager.Kind.EXTRACTION).is_empty():
 		return MissionRules.Progress.PENDING
 	var counts := extract_counts(board)
+	# Zero surviving players is _capture_progress's counts.y == 0 twin (missing until 2026-08-12):
+	# 0 == 0 read as MET, which ticked Extract on the HUD during load, before units had spawned.
+	# For evaluate() the guard never decides anything -- DEFEAT is checked first.
+	if counts.y == 0:
+		return MissionRules.Progress.PENDING
 	return MissionRules.Progress.MET if counts.x == counts.y else MissionRules.Progress.PENDING
 
 # Several extraction zones on one map are alternatives, not a set to split across.

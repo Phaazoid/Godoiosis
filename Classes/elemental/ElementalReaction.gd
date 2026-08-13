@@ -26,6 +26,12 @@ class_name ElementalReaction
 @export var add_states: Array[Elemental.State] = []
 @export var remove_states: Array[Elemental.State] = []   # omit to NOT consume the state
 
+# Optional duration override for `add_states` entries that expire (paired states — see
+# Elemental.STATE_DEFAULT_TURNS). Absent/0 = the state's default. When several fired reactions
+# add the same state, the LONGEST authored duration wins — max is commutative, so E8's
+# order-independence holds.
+@export var add_state_turns: Dictionary[Elemental.State, int] = {}
+
 # Feedback hooks, surfaced in preview + playback.
 @export var popup: String = ""        # e.g. "Electrocuted!"
 @export var vfx_tag: String = ""

@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="DrillWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="1_qh58b"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_8uxps"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="3_jn2u3"]
+
+[resource]
+script = ExtResource("1_qh58b")
+template = ExtResource("3_jn2u3")
+display_name = "Drill"

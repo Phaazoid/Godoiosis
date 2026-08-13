@@ -179,12 +179,12 @@ static func refresh_delete_button(button: Button, target: String, noun: String) 
 	else:
 		button.tooltip_text = "Delete %s" % target
 
-# The Yes/No gate every dev Delete button rides. One-shot ConfirmationDialog transient to the
+# The Yes/No gate destructive dev buttons ride. One-shot ConfirmationDialog transient to the
 # dev window; frees itself on either answer. Swap the mechanism here if the OS dialog feels wrong.
-static func confirm_delete(host: Control, victim: String, on_confirm: Callable) -> ConfirmationDialog:
+static func confirm(host: Control, message: String, on_confirm: Callable) -> ConfirmationDialog:
 	var dialog := ConfirmationDialog.new()
 	dialog.title = "Are you sure?"
-	dialog.dialog_text = "Delete %s? This cannot be undone." % victim
+	dialog.dialog_text = message
 	dialog.ok_button_text = "Yes"
 	dialog.cancel_button_text = "No"
 	dialog.confirmed.connect(on_confirm)
@@ -194,6 +194,12 @@ static func confirm_delete(host: Control, victim: String, on_confirm: Callable) 
 	host.add_child(dialog)
 	dialog.popup_centered()
 	return dialog
+
+# Every dev Delete rides this (dev call 2026-08-11); the Scenario tool's Update rides confirm()
+# directly with an overwrite message (dev call 2026-08-12, after a mis-aimed Update destroyed a
+# level the load-gate could not protect -- it WAS the loaded file).
+static func confirm_delete(host: Control, victim: String, on_confirm: Callable) -> ConfirmationDialog:
+	return confirm(host, "Delete %s? This cannot be undone." % victim, on_confirm)
 
 # Filenames illegal on Windows -- refuse rather than sanitize (a silently renamed file is the same
 # surprise one step later, and every catalog keys on the exact name). '/' is a separate question

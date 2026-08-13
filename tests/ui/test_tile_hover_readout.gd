@@ -1,21 +1,26 @@
 # The tile hover card (#135, rebuilt round 2), on the real scene: EVERY real tile shows a card
-# (icon + kind header), states join as content with their live clocks, a unit standing there
+# (icon + name header), states join as content with their live clocks, a unit standing there
 # stacks both halves, and the interactions list is filtered through the resolver's own predicate
 # (TerrainReaction.applies_to_tile) so the card never promises a deposit the resolver refuses.
 # Driven through the real hover path (HoverPresenter.update_hover_visuals), because composition,
 # panel and parking only meet there.
 #
-# Fixture is test_menu_catalogue_rows.gd's: the real game scene, a row of grass + one water cell.
+# The card reads the TILE'S OWN data since 2026-08-12 -- authored terrain_name first, kind name
+# as the fallback, the tile's sprite as the picture (the palette rows' policy, shared through
+# GridUtils). Fixture is a SYNTHETIC tileset (the palette suite's pattern): the dev names his
+# real TestTiles content live, so header assertions against it would move under his authoring.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
-const GRASS_SOURCE := 0
-const GRASS_ATLAS := Vector2i(5, 0)
-const WATER_ATLAS := Vector2i(5, 6)
+const GRASS_ATLAS := Vector2i(0, 0)         # unnamed GRASS -- the default paint, kind fallback
+const NAMED_GRASS_ATLAS := Vector2i(1, 0)   # GRASS authored "spring meadow"
+const CRATE_ATLAS := Vector2i(2, 0)         # kindless scenery authored "crate"
+const WATER_ATLAS := Vector2i(3, 0)         # unnamed WATER, no walkable flag (impassable)
 
 var _main: Node
 var game: Node2D
+var _src_id: int
 
 
 func before_test() -> void:
@@ -26,10 +31,51 @@ func before_test() -> void:
 	game = _main.get_node("GameContainer/GameView/Game")
 	game.scenario_manager.clear_board()
 	game.game_state = game.GameState.IDLE
+	game.grid.tile_set = _build_tile_set()
 	for x in range(8):
-		game.grid.set_cell(Vector2i(x, 0), GRASS_SOURCE, GRASS_ATLAS)
-	game.grid.set_cell(Vector2i(0, 1), GRASS_SOURCE, WATER_ATLAS)
+		game.grid.set_cell(Vector2i(x, 0), _src_id, GRASS_ATLAS)
+	game.grid.set_cell(Vector2i(0, 1), _src_id, WATER_ATLAS)
 	await await_idle_frame()
+
+
+func _build_tile_set() -> TileSet:
+	var tiles := TileSet.new()
+	tiles.tile_size = Vector2i(16, 16)
+	tiles.add_custom_data_layer()
+	tiles.set_custom_data_layer_name(0, "walkable")
+	tiles.set_custom_data_layer_type(0, TYPE_BOOL)
+	tiles.add_custom_data_layer()
+	tiles.set_custom_data_layer_name(1, "move_cost")
+	tiles.set_custom_data_layer_type(1, TYPE_INT)
+	tiles.add_custom_data_layer()
+	tiles.set_custom_data_layer_name(2, "terrain_type")
+	tiles.set_custom_data_layer_type(2, TYPE_INT)
+	tiles.add_custom_data_layer()
+	tiles.set_custom_data_layer_name(3, "terrain_name")
+	tiles.set_custom_data_layer_type(3, TYPE_STRING)
+	var source := TileSetAtlasSource.new()
+	source.texture = ImageTexture.create_from_image(
+		Image.create_empty(64, 16, false, Image.FORMAT_RGBA8))
+	source.texture_region_size = Vector2i(16, 16)
+	_src_id = tiles.add_source(source)
+	_author_tile(source, GRASS_ATLAS, Terrain.Kind.GRASS, "", true)
+	_author_tile(source, NAMED_GRASS_ATLAS, Terrain.Kind.GRASS, "spring meadow", true)
+	_author_tile(source, CRATE_ATLAS, Terrain.Kind.NONE, "crate", false)
+	_author_tile(source, WATER_ATLAS, Terrain.Kind.WATER, "", false)
+	return tiles
+
+
+func _author_tile(source: TileSetAtlasSource, coords: Vector2i, kind: Terrain.Kind,
+		tile_name: String, walkable: bool) -> void:
+	source.create_tile(coords)
+	var data := source.get_tile_data(coords, 0)
+	if walkable:
+		data.set_custom_data("walkable", true)
+	data.set_custom_data("move_cost", 1)
+	if kind != Terrain.Kind.NONE:
+		data.set_custom_data("terrain_type", kind)
+	if tile_name != "":
+		data.set_custom_data("terrain_name", tile_name)
 
 
 func after_test() -> void:
@@ -80,6 +126,42 @@ func test_every_tile_shows_a_card_with_its_kind() -> void:
 		.override_failure_message("the tile card has no kind picture").is_not_null()
 	# And the unit half stays down — nobody is standing there.
 	assert_bool(game.hover_info_panel.hover_panel.visible).is_false()
+
+
+func test_a_named_tile_headers_its_authored_name() -> void:
+	# The 2026-08-12 report: the card assumed the name off the Kind enum, so an authored
+	# variant read as plain "Grass" however it was named.
+	game.grid.set_cell(Vector2i(6, 0), _src_id, NAMED_GRASS_ATLAS)
+	game.hover_presenter.update_hover_visuals(Vector2i(6, 0))
+	await await_idle_frame()
+
+	assert_str(_tile_header_text()).is_equal("Spring Meadow")
+
+
+func test_named_kindless_scenery_gets_a_named_card() -> void:
+	# Kind NONE used to mean a headerless card no matter what the tile was authored as -- a
+	# Crate is scenery with a name, and the card must say so.
+	game.grid.set_cell(Vector2i(6, 0), _src_id, CRATE_ATLAS)
+	game.hover_presenter.update_hover_visuals(Vector2i(6, 0))
+	await await_idle_frame()
+
+	assert_bool(game.hover_info_panel._tile_panel.visible).is_true()
+	assert_str(_tile_header_text()).is_equal("Crate")
+
+
+func test_the_card_icon_is_the_tiles_own_sprite() -> void:
+	# The icon is the tile's actual art (an AtlasTexture cut from its own sheet region), not the
+	# hand-drawn kind icon -- TERRAIN_ICONS stays the queue rows' pathing glyph. NB the region
+	# getter returns Rect2i while AtlasTexture.region is Rect2; Variant equality across them is
+	# FALSE, hence the wrap.
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
+	await await_idle_frame()
+
+	var icon := game.hover_info_panel._tile_icon.texture as AtlasTexture
+	assert_object(icon).is_not_null()
+	var source := (game.grid.tile_set as TileSet).get_source(_src_id) as TileSetAtlasSource
+	assert_object(icon.atlas).is_same(source.texture)
+	assert_that(icon.region).is_equal(Rect2(source.get_tile_texture_region(GRASS_ATLAS)))
 
 
 func test_a_burning_tile_works_the_state_into_the_card() -> void:
@@ -146,7 +228,7 @@ func test_a_bottom_parked_card_stays_on_screen_after_a_taller_one() -> void:
 	var attempts := 0
 	while not _screen_pos_in_top_half(cell):
 		cell.y -= 1
-		game.grid.set_cell(cell, GRASS_SOURCE, GRASS_ATLAS)
+		game.grid.set_cell(cell, _src_id, GRASS_ATLAS)
 		attempts += 1
 		assert_int(attempts) \
 			.override_failure_message("could not find a cell in the top half of the viewport — fixture camera assumption is broken") \

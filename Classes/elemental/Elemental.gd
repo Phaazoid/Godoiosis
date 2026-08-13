@@ -25,6 +25,7 @@ enum Element {
 enum State {
 	NONE,
 	WET,
+	CHILLED,  # cold-slowed: carries a paired StatEffect (see the pairing block below)
 }
 
 # The five base elements: the only Sigils, the only aura carriers. Exotics (ICE, SHOCK,
@@ -46,3 +47,30 @@ static func display_name(e: Element) -> String:
 # composed reaction lines both need it).
 static func state_display_name(s: State) -> String:
 	return State.keys()[s].capitalize()
+
+# --- Paired stat debuffs ------------------------------------------------------------------------
+# A paired state carries a temporary stat change while held. The marker on Unit.element_states is
+# the authority for "does the unit hold it"; a paired StatEffect carries the stat change AND is
+# the state's clock. Unit's element-state doors own the pairing — nothing else creates or retires
+# these effects, and the effect's countdown expiring ends the state itself.
+#
+# Turn math: StatEffect ticks at the OWNER's turn start (game._run_turn_start_ticks), before the
+# unit acts — so 2 turns = debuffed for exactly its next activation, 3 covers two.
+
+const CHILL_STAT_MODS: Dictionary[Stats.Stat, int] = { Stats.Stat.DEX: -1 }
+
+# Default clock per paired state; a reaction may author a longer one (ElementalReaction.add_state_turns).
+const STATE_DEFAULT_TURNS: Dictionary[State, int] = { State.CHILLED: 2 }
+
+# The pairing registry: one match arm per paired state (a nested typed const dictionary isn't
+# expressible in GDScript). Empty result = not a paired state.
+static func paired_stat_mods(s: State) -> Dictionary[Stats.Stat, int]:
+	match s:
+		State.CHILLED:
+			return CHILL_STAT_MODS
+	var none: Dictionary[Stats.Stat, int] = {}
+	return none
+
+# Provenance tag for the paired StatEffect ("Chilled") — what Unit.remove_stat_effects_from keys on.
+static func state_effect_source(s: State) -> String:
+	return state_display_name(s)

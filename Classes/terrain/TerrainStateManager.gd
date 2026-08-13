@@ -8,7 +8,6 @@ class_name TerrainStateManager
 
 const STATE_DURATIONS := {
 	Terrain.TileState.BURNING: 3,
-	Terrain.TileState.FROZEN: 3,
 }
 
 var _states: Dictionary = {}        # Vector2i -> Array[Terrain.TileState]

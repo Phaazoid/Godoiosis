@@ -229,8 +229,7 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.has_transmutations():
 		options.append(TRANSMUTATION)
 
-	if _can_take_main_action(unit) and game.mission_controller.is_capture_zone_at(unit.get_projected_destination()) \
-		and not game.mission_controller.is_zone_captured(game.zone_manager.zone_at(unit.get_projected_destination())):
+	if _can_take_main_action(unit) and game.mission_controller.capturable_zone_at(unit.get_projected_destination()) != "":
 		options.append(CAPTURE)
 
 	if _can_take_main_action(unit) and unit.has_weapon_actions():

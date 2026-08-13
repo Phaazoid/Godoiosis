@@ -1,0 +1,25 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="1_yyn38"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_hbtnj"]
+[ext_resource type="Resource" path="res://Resources/Abilities/IronWill.tres" id="3_u5t1d"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter.png" id="4_3hhgk"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="5_6al02"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="6_gl24e"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="7_m50pb"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="8_kgmcy"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="9_251rx"]
+
+[resource]
+script = ExtResource("7_m50pb")
+display_name = "Ross"
+portrait = ExtResource("6_gl24e")
+map_sprite = ExtResource("4_3hhgk")
+move_sprite = ExtResource("5_6al02")
+downed_sprite = ExtResource("1_yyn38")
+base_aura = Dictionary[int, int]({
+5: 1
+})
+base_affinity = Array[int]([5])
+innate_abilities = Array[ExtResource("2_hbtnj")]([ExtResource("3_u5t1d")])
+starting_inventory = Array[ExtResource("8_kgmcy")]([ExtResource("9_251rx")])
