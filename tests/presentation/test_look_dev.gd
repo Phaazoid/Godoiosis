@@ -56,6 +56,13 @@ func test_sprites_are_billboarded_lit_pixel_quads() -> void:
 		assert_float(sprite.pixel_size).is_equal_approx(1.0 / 32.0, 0.0001)
 
 
+func test_board_cell_size_matches_the_declared_convention() -> void:
+	# BoardSpace.CELL_SIZE is the one metric; the GridMap's authored cell_size
+	# must agree or every standing_point drifts off the rendered board.
+	var board := _scene.get_node("Board") as GridMap
+	assert_that(board.cell_size).is_equal(Vector3.ONE * BoardSpace.CELL_SIZE)
+
+
 func test_board_is_painted_with_verticality() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	assert_object(board.mesh_library).is_not_null()
