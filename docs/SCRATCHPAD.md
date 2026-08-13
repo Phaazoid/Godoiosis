@@ -36,6 +36,10 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
+- (presentation/meta) **Game over = the diorama reveal.** When a player loses a battle, the game-over screen is a zoom out, out, out, until the whole battlefield is seen to be a diorama of the battle, being mulled over by a strategist, who realizes their plan does not work. The player is then given the option to watch a replay of the failure (to study), or try again. *(recorded 2026-08-13 — cross-refs: the "watch the failure" half is #209's replay substrate; the pull-back is #176's 3D camera, and the HD-2D mirror already literally renders the battle as a diorama. Story hook: every defeat reframed as a plan failing on the table, not deaths.)*
+- (presentation/meta) **A replay library** — a place to let players watch *all* of their battle replays. *(2026-08-13 — a #209 consumer; needs replays persisted, e.g. `user://replays/` beside #144's save slots, version-stamped per #209's design note 3.)*
+- (meta/stats) **Post-battle + end-of-game stat cards, and highlight clips cut from the winning replay.** After each battle and at the end of the game, show little stats — who took the most damage, who dealt the most, the single biggest hit, etc. — and play back short battle clips *from the player's own winning replay* (the biggest hit, a big elemental combo). Let players browse that data from the menu (biggest hit so far, …), maybe per-mission too. *(2026-08-13 — premise check: no stat collection exists in code yet; #200 (mission result record) is the collection half this would ride on, and #209's event log is the natural source for BOTH the stats and the clip bookmarks — one recorder feeds all three of these ideas.)*
+
 ## 🗂 Dispersed (log)
 
 - Group Move hover feedback: the arrow trail of a member who can't fully follow turns green → **BUILT same day** (`MoveAction.is_trailing` + `OverlayManager._arrow_modulate`; the missing per-arrow colour channel got added when Case 1 / Case 2 split, so the idea landed as part of the fix rather than as later work) (2026-08-04)
