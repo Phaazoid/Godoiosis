@@ -2,6 +2,12 @@
 # 90-degree snaps only (Q/E) -- free orbit would misrepresent the contract the real
 # game camera will honor. Wheel zooms, WASD pans the focus point, R resets. Pitch
 # and FOV are authored on the Pitch/Camera nodes and tuned in the inspector.
+#
+# DoF focus TRACKS the zoom (dev note, 2026-08-12: static distances made the blur
+# swallow the board at close zoom): every frame the near/far focus distances are
+# re-derived as offsets around the camera's live distance to the rig, so the focus
+# band stays glued to the diorama. The band widths are the exports below; blur
+# AMOUNT stays a hand-tuned knob on the camera's CameraAttributes.
 extends Node3D
 
 const YAW_STEP := 90.0
@@ -11,7 +17,13 @@ const ZOOM_STEP := 1.5
 const PAN_SPEED := 8.0
 const SMOOTHING := 8.0
 
+# Focus band offsets: in-focus from (distance - near) to (distance + far).
+# Defaults reproduce the originally authored look at the default zoom of 14.
+@export var focus_band_near := 5.0
+@export var focus_band_far := 4.0
+
 @onready var _camera: Camera3D = $Pitch/Camera
+@onready var _attributes: CameraAttributesPractical = _camera.attributes as CameraAttributesPractical
 
 var _target_yaw_degrees := 0.0
 var _target_distance := 14.0
@@ -43,15 +55,21 @@ func _unhandled_input(event: InputEvent) -> void:
 	var wheel := event as InputEventMouseButton
 	if wheel != null and wheel.pressed:
 		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
-			_target_distance = maxf(ZOOM_MIN, _target_distance - ZOOM_STEP)
+			set_zoom(_target_distance - ZOOM_STEP)
 		elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			_target_distance = minf(ZOOM_MAX, _target_distance + ZOOM_STEP)
+			set_zoom(_target_distance + ZOOM_STEP)
+
+
+func set_zoom(distance: float) -> void:
+	_target_distance = clampf(distance, ZOOM_MIN, ZOOM_MAX)
 
 
 func _process(delta: float) -> void:
 	var blend := 1.0 - exp(-SMOOTHING * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	_camera.position.z = lerpf(_camera.position.z, _target_distance, blend)
+	_attributes.dof_blur_near_distance = maxf(0.5, _camera.position.z - focus_band_near)
+	_attributes.dof_blur_far_distance = _camera.position.z + focus_band_far
 
 	var pan := Vector2.ZERO
 	if Input.is_physical_key_pressed(KEY_W):

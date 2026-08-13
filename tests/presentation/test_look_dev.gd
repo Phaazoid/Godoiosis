@@ -116,6 +116,29 @@ func test_presets_are_distinct_and_apply() -> void:
 	assert_int(signatures.size()).is_equal(preset_count)
 
 
+func test_dof_focus_tracks_the_camera_distance() -> void:
+	# The focus band is derived from the camera's live distance every frame (dev
+	# note 2026-08-12: static distances let close zoom drift into the near-blur
+	# band). Pinned as the RELATIONSHIP against the rig's own exported offsets --
+	# the offsets and the blur amount stay tunable feel values.
+	var rig := _scene.get_node("CameraRig") as Node3D
+	var camera := _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
+	var attributes := camera.attributes as CameraAttributesPractical
+	var band_near: float = rig.focus_band_near
+	var band_far: float = rig.focus_band_far
+	var initial_z := camera.position.z
+
+	rig.set_zoom(7.0)
+	for i in 5:
+		await get_tree().process_frame
+
+	assert_bool(camera.position.z < initial_z).is_true()  # the zoom actually moved
+	assert_float(attributes.dof_blur_near_distance) \
+			.is_equal_approx(maxf(0.5, camera.position.z - band_near), 0.01)
+	assert_float(attributes.dof_blur_far_distance) \
+			.is_equal_approx(camera.position.z + band_far, 0.01)
+
+
 func test_toggles_flip_their_layer() -> void:
 	var world_env := _scene.get_node("WorldEnvironment") as WorldEnvironment
 	var env := world_env.environment
