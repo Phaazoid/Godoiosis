@@ -36,8 +36,27 @@ func _gen_textures() -> int:
 	_save(_stone_top(rng), "stone_top.png")
 	_save(_stone_side(rng), "stone_side.png")
 	_save(_flame(rng), "torch_flame.png")
+	_save(_cell_fill(), "cell_fill.png")
 	print("LookDev textures written to %s" % ART_DIR)
 	return 0
+
+
+# The overlay fill (#213): white with a soft 2px inset border; layers tint it via
+# Decal.modulate, so ONE texture serves every fill color.
+func _cell_fill() -> Image:
+	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
+	for y in TILE:
+		for x in TILE:
+			var edge := mini(mini(x, TILE - 1 - x), mini(y, TILE - 1 - y))
+			var alpha := 1.0
+			if edge == 0:
+				alpha = 0.9
+			elif edge == 1:
+				alpha = 0.55
+			elif edge >= 2:
+				alpha = 0.75
+			img.set_pixel(x, y, Color(1, 1, 1, alpha))
+	return img
 
 
 func _save(img: Image, file_name: String) -> void:

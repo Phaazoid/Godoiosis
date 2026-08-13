@@ -53,6 +53,7 @@ func test_sprites_are_billboarded_lit_pixel_quads() -> void:
 		assert_bool(sprite.shaded).is_true()
 		assert_int(sprite.texture_filter).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 		assert_int(sprite.cast_shadow).is_equal(GeometryInstance3D.SHADOW_CASTING_SETTING_ON)
+		assert_int(sprite.layers).is_equal(BoardOverlays.UNIT_RENDER_LAYER)  # the #213 mask contract
 		# One pixel density everywhere: 32 texels per world unit (the authored convention).
 		assert_float(sprite.pixel_size).is_equal_approx(1.0 / 32.0, 0.0001)
 
