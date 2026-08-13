@@ -11,7 +11,7 @@ config_version=5
 [application]
 
 config/name="Iosis"
-config/version="0.7.0"
+config/version="0.8.0"
 run/main_scene="uid://cxiu0yvwwxlgo"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
@@ -85,5 +85,4 @@ dev_report_bug={
 
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
-renderer/rendering_method="mobile"
 2d/snap/snap_2d_transforms_to_pixel=true
