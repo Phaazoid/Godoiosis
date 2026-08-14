@@ -247,6 +247,45 @@ func test_hover_reaches_cells_the_hidden_camera_cannot_see() -> void:
 	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([BoardSpace.of_flat(far)])
 
 
+# --- Camera ownership (#176 stage 4d) ---------------------------------------------------
+
+func test_delegated_board_input_also_stands_the_2d_camera_down() -> void:
+	# WASD is bound to cam_* AND polled directly by the 3D rig, so before 4d one keypress
+	# panned both cameras. Asserted on keyboard_direction — the poll's own output — which
+	# a clamped or lerping camera position cannot mask.
+	var cam: CameraController = _game.camera_controller
+	assert_bool(_game.board_input_delegated).is_true()   # HD_2D, the fixture's default
+	Input.action_press("cam_right")
+	await _pump()
+	assert_that(cam.keyboard_direction).override_failure_message(
+			"the 2D camera still reads WASD while the 3D host owns it").is_equal(Vector2.ZERO)
+
+	# FLAT_2D hands it back, or the flat game would have no camera at all.
+	_scene.view = _scene.View.FLAT_2D
+	_scene._apply_hosting()
+	await _pump()
+	assert_that(cam.keyboard_direction).override_failure_message(
+			"the flat game never got its camera keys back").is_not_equal(Vector2.ZERO)
+	Input.action_release("cam_right")
+	_scene.view = _scene.View.HD_2D
+	_scene._apply_hosting()
+
+
+func test_delegating_input_does_not_break_the_ai_camera_follow() -> void:
+	# The survivor set. Only the KEYBOARD branch may be gated: follow() tracks its unit
+	# from the same _process, and the 3D camera mirror rides on the result — gating the
+	# whole loop would kill the feature this stage exists to build.
+	var unit := _pickable_player_unit()
+	assert_object(unit).is_not_null()
+	assert_bool(_game.board_input_delegated).is_true()
+	var cam: CameraController = _game.camera_controller
+	cam.follow(unit)
+	unit.global_position = Vector2(600.0, 400.0)
+	await _pump()
+	assert_that(cam.target_position).override_failure_message(
+			"follow() died with the keyboard poll").is_equal(unit.global_position)
+
+
 # --- board_loaded (#222) ---------------------------------------------------------------
 
 func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:

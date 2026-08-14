@@ -18,11 +18,32 @@ var units_root: Node2D
 
 var _mirrored: Dictionary[int, UnitSprite3D] = {}
 var _ghosts: Array[UnitSprite3D] = []
+var _camera_right := Vector3.ZERO   # last camera basis facing was judged against
 
 
 func _process(_delta: float) -> void:
 	if units_root != null:
 		reconcile()
+	_refresh_facing_on_camera_turn()
+
+
+# Facing is judged against the LIVE camera, but _sync only re-judges a sprite that MOVED
+# — so rotating the camera used to leave every standing unit mirrored the wrong way until
+# it next walked. Free orbit (#176 4d) made that continuous instead of occasional. One
+# viewport read per frame; per-sprite work only on the frames the camera actually turned.
+func _refresh_facing_on_camera_turn() -> void:
+	if not is_inside_tree():
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		return
+	var right := camera.global_transform.basis.x
+	if right.is_equal_approx(_camera_right):
+		return
+	_camera_right = right
+	for sprite: UnitSprite3D in _mirrored.values():
+		if sprite.last_step != Vector3.ZERO:
+			sprite.flip_h = sprite.facing_flip_for(sprite.last_step)
 
 
 func reconcile() -> void:
@@ -107,4 +128,5 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 
 	var step := sprite.position - previous
 	if Vector2(step.x, step.z).length_squared() > 0.000001:
+		sprite.last_step = step
 		sprite.flip_h = sprite.facing_flip_for(step)

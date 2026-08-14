@@ -46,3 +46,13 @@ static func flat(cell: Vector3i) -> Vector2i:
 
 static func of_flat(cell: Vector2i) -> Vector3i:
 	return Vector3i(cell.x, 0, cell.y)
+
+
+# A 2D-game world POSITION (pixels) as a 3D position at height `y`. The one spelling of
+# the ÷16 metric that maps the flat game onto the diorama — grid.map_to_local's pixel
+# size, which is what UnitMirror's sprite placement is pinned against. NB the 2D
+# camera's CELL_WORLD (32) is a zoom constant, not this, and mixing them was falsified
+# earlier in the arc.
+static func of_pixels(px: Vector2, y: float) -> Vector3:
+	var per_cell := float(GridUtils.TILE_SIZE)
+	return Vector3(px.x / per_cell, y, px.y / per_cell)
