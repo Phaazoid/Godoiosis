@@ -101,10 +101,15 @@ func _ready() -> void:
 	mission_controller.open_mission_select.call_deferred()
 
 # Null in a demo build. DevTools decides, so this never depends on when the overlay frees itself.
+#
+# RELATIVE, not "/root/Main/DevOverlay": the game is hosted under Battle3D now, where Main sits
+# at /root/Battle3D/Main and the absolute path resolved to nothing — F1 silently did nothing in
+# the 3D build. Walking up from Game (GameView -> GameContainer -> Main) asks the same question
+# without caring where Main is mounted.
 func _find_dev_overlay() -> DevOverlay:
 	if not DevTools.enabled():
 		return null
-	return get_node_or_null("/root/Main/DevOverlay")
+	return get_node_or_null("../../../DevOverlay")
 
 func _build_collaborators() -> void:
 	dev_controller = DevController.new()
