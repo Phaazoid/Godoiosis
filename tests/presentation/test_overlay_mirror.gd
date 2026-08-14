@@ -171,10 +171,16 @@ func test_unit_pulse_reaches_the_mirrored_sprite() -> void:
 	game.hover_presenter._hover_attack_targeting(foe.movement.cell)
 	await _settle()
 	assert_object(foe.visuals.pulse_tween).is_not_null()   # the 2D pulse is live
-	var live: Color = foe.visuals.sprite.modulate
+	# The PRODUCT, sampled at this instant: 2D multiplies the Unit node's faction tint down
+	# onto its sprite's pulse, so tint x pulse is what the screen shows (#232). Reading the
+	# child alone is the bug that left this foe un-reddened in 3D.
+	var live: Color = foe.modulate * foe.visuals.sprite.modulate
 	_unit_mirror.reconcile()
 	var sprite: UnitSprite3D = _unit_mirror.sprite_for(foe)
 	assert_that(sprite.modulate).is_equal(live)
+	# And the two COMPOSE rather than one replacing the other: a pulsing enemy still reads red.
+	assert_bool(sprite.modulate.r > sprite.modulate.g).override_failure_message(
+			"the pulse overwrote the faction tint instead of multiplying with it").is_true()
 
 
 func test_a_queued_move_mirrors_ghost_hide_and_arrows() -> void:

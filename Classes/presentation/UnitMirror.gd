@@ -8,8 +8,8 @@ class_name UnitMirror
 # map_to_local metric), so the 3D sprite glides exactly as the 2D one does.
 # Keyed by instance id, never by object ref (#149: a freed Unit in a typed slot
 # dies on the type-check before any null guard runs). Since #222 it also hosts the
-# planning-ghost pool (set_ghosts) and copies each 2D sprite's own visible/modulate
-# per frame — pulse, highlight and projected-hide parity by copy.
+# planning-ghost pool (set_ghosts) and copies each 2D sprite's own modulate per frame,
+# so pulse/highlight/tint parity comes by copy rather than by reimplementation.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 const COLUMN_TOP := 1.0  # flat mirror boards: every column is one cell tall
@@ -93,12 +93,17 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	if not downed:
 		sprite.set_walking_visual(unit.movement.moving)
 
-	# Pulse / highlight / projected-hide parity (#222): copy the 2D sprite's OWN
-	# flags, never is_visible_in_tree — 3D hosting hides the whole board subtree,
-	# which must not read as every unit hidden. The 2D tween stays the one
-	# animation authority; this is a per-frame copy of its output.
-	sprite.visible = unit.visuals.sprite.visible
-	sprite.modulate = unit.visuals.sprite.modulate
+	# Hidden ONLY when a planning ghost stands in (#232). Asking visuals.projected rather
+	# than copying $MapSprite.visible: that flag has a second writer, _show_downed_sprite,
+	# which hides it to swap in the separate downed art — so the copy hid every downed unit
+	# one line after set_downed above had correctly mirrored it. Never is_visible_in_tree
+	# either: 3D hosting hides the whole board subtree, which must not read as every unit
+	# hidden.
+	sprite.visible = not unit.visuals.projected
+	# The PRODUCT, because 2D modulate multiplies down the tree and the faction tint lives
+	# on the Unit node while the effects (pulse, highlight, flash) live on its sprite. The
+	# child alone is what left enemies un-reddened in 3D.
+	sprite.modulate = unit.modulate * unit.visuals.sprite.modulate
 
 	var step := sprite.position - previous
 	if Vector2(step.x, step.z).length_squared() > 0.000001:

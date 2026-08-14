@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real.
 
-**Canon checked through #222 (2026-08-13).**
+**Canon checked through #232 (2026-08-14).**
 
 ---
 
@@ -25,6 +25,8 @@ Stage 4b made the 3D view playable by keeping the whole 2D render as a corner pi
 - **Overlays render UNSHADED** (dev ruling): gameplay markup must never read as terrain, which is why fills are unshaded quads rather than Decals — a Decal's albedo modulates the lit surface by construction.
 - **Board clicks skip events entirely.** The picker calls `game._on_left_click` / `_on_right_click` (the dispatchers game.gd's own `_unhandled_input` only feeds), and `game.board_input_delegated` stands the 2D derivation down so one physical click cannot act twice. That bool is the whole arc's only game.gd input edit; unset, the flat 2D game is bit-for-bit unchanged — **all hosting mutations are runtime**, never authored into `Main.tscn`.
 - The corner PiP survives as a **dev debug view** (F4), not a player-facing mode. The launch-time chooser named above is still stage 4d.
+- **A mirror that copies a FLAG inherits every writer of that flag — mirror the QUESTION instead ([#232](https://github.com/Phaazoid/Godoiosis/issues/232), found in play, 2026-08-14).** 4c copied `$MapSprite.visible` to get planning-ghost parity, and `Unit._show_downed_sprite` writes that same flag for an unrelated reason (swapping in the separate downed art) — so going down made a unit vanish from the diorama one line after the mirror had correctly given it the downed pose. The fix is Law #4 at the source: `UnitVisuals.projected` is now declared, so the two questions stop sharing storage. The twin, same commit: the faction tint is set on the **Unit node** and 2D multiplies it down the tree for free, so copying only the child's `modulate` left every enemy un-reddened in 3D — the mirror takes the product. **The general rule for anything polling the 2D: copy what the 2D *renders*, not the field it happens to be stored in.**
+- Both of the above were **green under the suite**: `test_downed_and_death_reconcile` asserts the texture swap and passes against a unit nobody can see. Parity tests have to assert what reaches the screen.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
