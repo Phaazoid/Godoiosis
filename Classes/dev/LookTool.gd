@@ -297,7 +297,7 @@ func changed_values() -> Dictionary:
 		var knob: Dictionary = KNOBS[i]
 		var live: Variant = read(knob)
 		var authored: Variant = baseline_of(i)
-		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or live == authored:
+		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or same_value(live, authored):
 			continue
 		var split := _paste_split(knob)
 		var header: String = split[0]
@@ -345,6 +345,26 @@ func _value_count(groups: Dictionary) -> int:
 		var entries: Dictionary = groups[header]
 		total += entries.size()
 	return total
+
+
+# "Has this moved?" -- approximate for floats, because a value written and read straight back is
+# not always bit-identical: engine properties store single-precision, and a euler component
+# round-trips through a basis. Exact compare reported the sun and board pitch as still changed
+# immediately after Reset had put them back, and would do the same to a slider dragged out and
+# returned. Every slider step here is orders of magnitude coarser than these tolerances.
+static func same_value(a: Variant, b: Variant) -> bool:
+	if typeof(a) != typeof(b):
+		return false
+	match typeof(a):
+		TYPE_FLOAT:
+			return is_equal_approx(a, b)
+		TYPE_COLOR:
+			return (a as Color).is_equal_approx(b)
+		TYPE_VECTOR2:
+			return (a as Vector2).is_equal_approx(b)
+		TYPE_VECTOR3:
+			return (a as Vector3).is_equal_approx(b)
+	return a == b
 
 
 static func literal_for(value: Variant) -> String:

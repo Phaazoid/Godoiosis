@@ -96,6 +96,10 @@ func _ready() -> void:
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
+	# PUSH the 3D world at the Look tab rather than letting it reach up for one (#212): the game
+	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
+	if dev_overlay is DevOverlay:
+		(dev_overlay as DevOverlay).attach_look_host(self)
 	if demo_mode:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
@@ -137,7 +141,7 @@ func load_mission(path: String) -> void:
 # would otherwise eat the first repaint on a same-coordinate cell.
 func _on_board_loaded() -> void:
 	rebuild()
-	_fit_camera()
+	fit_camera()
 	_pointer_cell = BoardSpace.NO_CELL
 	_overlays.clear_all()
 
@@ -175,7 +179,9 @@ func _sync_terrain_while_authoring() -> void:
 		_rig.rebound(_board_volume())
 
 
-func _fit_camera() -> void:
+# Public because the Look tab's Re-fit button calls it (#212): pitch and FOV feed the framing
+# maths, which otherwise only runs on a board load, so tuning either leaves the shot stale.
+func fit_camera() -> void:
 	var board := _board_volume()
 	_rig.frame(_opening_volume(board), board)
 
