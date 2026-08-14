@@ -11,6 +11,7 @@ extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
+const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
 
 var _scene: Node3D
 var _game: Node2D
@@ -204,6 +205,64 @@ func test_3d_hover_drives_the_real_hover_presenter() -> void:
 	assert_that(_game.hover_presenter.last_hovered_cell).is_equal(cell)
 	assert_bool(seen.has(cell)).is_true()
 	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([Vector3i(cell.x, 0, cell.y)])
+
+
+func test_hover_reaches_cells_the_hidden_camera_cannot_see() -> void:
+	# The 4b gap made native (#222): the old mechanism pushed a synthetic motion at
+	# the cell's mapped viewport position, so any cell outside the hidden camera's
+	# window was silently dropped. The injected pointer source has no window.
+	var grid: TileMapLayer = _game.grid
+	var far: Vector2i = grid.get_used_rect().position   # the corner the pinned camera never shows
+	var near := _pickable_player_unit()
+	_parse_motion(_screen_of(near.movement.cell))   # park elsewhere first (cross-case Input leak)
+	await _pump()
+	var seen: Array[Vector2i] = []
+	_game.hover_presenter.hovered_cell_changed.connect(func(c: Vector2i) -> void: seen.append(c))
+
+	_parse_motion(_screen_of(far))
+	await _pump()
+
+	assert_that(_game.hover_presenter.last_hovered_cell).is_equal(far)
+	assert_bool(seen.has(far)).is_true()
+	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([BoardSpace.of_flat(far)])
+
+
+# --- board_loaded (#222) ---------------------------------------------------------------
+
+func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
+	# Load Game / Mission Select from ANOTHER mission is the real failure this seam
+	# closes: turn_started never fires on menu arrivals (#144), so before #222 the
+	# mirror, picker and pointer state stayed aimed at the dead board.
+	_scene._pointer_cell = Vector3i(0, 0, 0)   # stale pointer state aimed at Prolog
+	_overlays.set_cells(BoardOverlays.Layer.MOVE, [Vector3i(0, 0, 0)])
+	_game.mission_controller.begin_mission(LEVEL_1)
+	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
+	await await_idle_frame()
+	var board: GridMap = _scene.get_node("Board")
+	var mirrored: Array[Vector3i] = []
+	mirrored.assign(board.get_used_cells())
+	mirrored.sort()
+	var expected: Array[Vector3i] = []
+	for cell: Vector2i in _game.grid.get_used_cells():
+		expected.append(BoardSpace.of_flat(cell))
+	expected.sort()
+	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
+	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
+	assert_that(_scene._pointer_cell).is_equal(BoardSpace.NO_CELL)
+	assert_int(_overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(0)
+
+
+func test_spawn_sandbox_emits_the_same_rebuild() -> void:
+	# The one board build outside apply_scenario — reachable from the 3D view via the
+	# hidden Mission Select's Sandbox row, so it must speak the same signal.
+	_scene._pointer_cell = Vector3i(0, 0, 0)
+	_overlays.set_cells(BoardOverlays.Layer.MOVE, [Vector3i(0, 0, 0)])
+	_game.spawn_sandbox()
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_that(_scene._pointer_cell).is_equal(BoardSpace.NO_CELL)
+	assert_int(_overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(0)
+	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(_scene.get_node("Board")))
 
 
 # --- The PiP ---------------------------------------------------------------------------

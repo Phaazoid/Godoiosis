@@ -13,6 +13,11 @@
 # native 1280x720 SIZE (so GameView keeps full resolution under stretch) and only
 # the display shrinks via scale; input maps through the container transform.
 #
+# Stage 4c (PR1) adds parity: OverlayMirror polls the 2D OverlayManager into
+# BoardOverlays/UnitMirror per frame, board swaps rebuild via ScenarioManager's
+# board_loaded signal, and HoverPresenter reads the 3D pick through pointer_source
+# — hover now reaches every cell, not just the hidden camera's window.
+#
 # demo_mode = stage-4a behavior: both factions AI, no PiP, watch-only.
 extends Node3D
 
@@ -34,6 +39,7 @@ const BRIDGE_EVENT_META := &"iosis_3d_bridge"
 @onready var _main: Node = $Main
 @onready var _board_mirror: BoardMirror = $BoardMirror
 @onready var _unit_mirror: UnitMirror = $UnitMirror
+@onready var _overlay_mirror: OverlayMirror = $OverlayMirror
 @onready var _overlays: BoardOverlays = $BoardOverlays
 @onready var _rig: Node3D = $CameraRig
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
@@ -66,11 +72,19 @@ func _ready() -> void:
 	else:
 		_setup_pip()
 		get_viewport().size_changed.connect(_position_pip)
+		# The 3D pick IS the pointer (#222): HoverPresenter reads it instead of the
+		# hidden viewport's mouse, so hover works for every cell — not just the ones
+		# the hidden camera happens to show. flat(NO_CELL) == GridUtils.NO_CELL.
+		game.hover_presenter.pointer_source = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
 		_help.text = "Battle3D (stage 4b, playable)  |  LMB act  |  RMB cancel  |  UI in the corner PiP  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
 	_base_help = _help.text
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
+	_overlay_mirror.game = game
+	_overlay_mirror.overlays = _overlays
+	_overlay_mirror.unit_mirror = _unit_mirror
 	game.turn_manager.turn_started.connect(_on_turn_started)
+	game.scenario_manager.board_loaded.connect(_on_board_loaded)
 	if auto_play:
 		_start.call_deferred()
 
@@ -86,9 +100,18 @@ func _start() -> void:
 
 
 func load_mission(path: String) -> void:
-	game.mission_controller.begin_mission(path)
+	game.mission_controller.begin_mission(path)  # board_loaded does the rest
+
+
+# Every board swap lands here via ScenarioManager.board_loaded (#222): mission load,
+# Load Game (any mission), F2/Restart, Mission Select, sandbox. Rebuild the mirror
+# world and drop pointer state aimed at the dead board — _update_pointer's dedup
+# would otherwise eat the first repaint on a same-coordinate cell.
+func _on_board_loaded() -> void:
 	rebuild()
 	_fit_camera()
+	_pointer_cell = BoardSpace.NO_CELL
+	_overlays.clear_all()
 
 
 func rebuild() -> void:
@@ -183,7 +206,6 @@ func _update_pointer(screen_pos: Vector2) -> void:
 		_overlays.clear(BoardOverlays.Layer.HOVER)
 		return
 	_overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
-	_push_motion(_cell_view_pos(_flat(cell)))
 	_diag("pointer %s" % cell)
 
 
@@ -199,12 +221,12 @@ func _click_pointer_cell() -> void:
 	if game._board_locked_for_player():
 		_diag("LMB refused: board locked (state %d)" % game.game_state)
 		return
-	var cell := _flat(_pointer_cell)
+	var cell := BoardSpace.flat(_pointer_cell)
 	# The pushed position maps back to a cell through the LIVE 2D camera transform
 	# (game.gd:192), so the hidden camera must be showing the cell first. Side
 	# effect, by design: the PiP recenters on every 3D click the game can act on.
 	var cam: CameraController = game.camera_controller
-	cam.snap_to_position(_cell_world_2d(cell))
+	cam.snap_to_position(GridUtils.cell_world(game.grid, cell))
 	var view_pos := _cell_view_pos(cell)
 	_push_motion(view_pos)
 	_push_click(MOUSE_BUTTON_LEFT, view_pos)
@@ -213,27 +235,13 @@ func _click_pointer_cell() -> void:
 
 
 func _pick(screen_pos: Vector2) -> Vector3i:
-	return BoardPicker.pick_cell(
-		_camera.project_ray_origin(screen_pos),
-		_camera.project_ray_normal(screen_pos),
-		_tops
-	)
-
-
-func _flat(cell: Vector3i) -> Vector2i:
-	return Vector2i(cell.x, cell.z)  # boards are flat; the mirror paints (x, 0, y)
-
-
-# A cell's center in the 2D game's canvas (world) coordinates.
-func _cell_world_2d(cell: Vector2i) -> Vector2:
-	var grid: TileMapLayer = game.grid
-	return grid.to_global(grid.map_to_local(cell))
+	return BoardPicker.pick_at(_camera, screen_pos, _tops)
 
 
 # A cell's center in GameView's viewport coordinates — the space pushed events use.
 func _cell_view_pos(cell: Vector2i) -> Vector2:
 	var canvas: Transform2D = _game_view.get_canvas_transform()
-	return canvas * _cell_world_2d(cell)
+	return canvas * GridUtils.cell_world(game.grid, cell)
 
 
 func _push_motion(view_pos: Vector2) -> void:

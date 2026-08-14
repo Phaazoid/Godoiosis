@@ -1,6 +1,12 @@
 extends Node
 class_name OverlayManager
 
+# All 2D board visuals: the tile-layer fills (move/attack/hover/squad/zones), path
+# arrows, selection icons, projected-unit ghosts, knockback + terrain previews, and
+# the target-pulse channel. Every draw is RETAINED — the layers hold their cells and
+# the dicts below hold their sprites — which is what lets the 3D OverlayMirror poll
+# full parity off this manager with zero trigger hooks (#222).
+
 @onready var move_overlay = $MoveOverlay
 @onready var attack_overlay = $AttackOverlay
 @onready var hover_overlay = $HoverOverlay
@@ -249,7 +255,7 @@ func show_terrain_preview(deposits: Array) -> void:
 		var cell: Vector2i = deposit["cell"]
 		var sprite := Sprite2D.new()
 		sprite.texture = TERRAIN_STATE_ICONS[state]
-		sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+		sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 		sprite.z_index = TERRAIN_Z_INDEX
 		sprite.modulate = TERRAIN_PREVIEW_MODULATE
 		icon_overlay.add_child(sprite)
@@ -296,7 +302,7 @@ func show_knockback_preview(shoves: Array) -> void:
 		knockback_hidden_units.append(unit)
 		var ghost := Sprite2D.new()
 		ghost.texture = unit.get_move_texture()
-		ghost.global_position = board_tilemap.to_global(board_tilemap.map_to_local(final_cell[target]))
+		ghost.global_position = GridUtils.cell_world(board_tilemap, final_cell[target])
 		ghost.z_index = Unit.BASE_SPRITE_INDEX
 		ghost.modulate = PROJECTED_MODULATE
 		ghost.offset = Vector2i(0, -8)
@@ -430,7 +436,7 @@ func redraw_terrain_live(states: TerrainStateManager) -> void:
 		for cell in states.cells_with(state):
 			var sprite := Sprite2D.new()
 			sprite.texture = icon
-			sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+			sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 			sprite.z_index = TERRAIN_Z_INDEX
 			icon_overlay.add_child(sprite)
 			terrain_live_sprites.append(sprite)
@@ -559,7 +565,7 @@ func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, tint: Color) -> Sp
 	var sprite := Sprite2D.new()
 	sprite.texture = texture
 	sprite.z_index = MoveAction.ARROW_BASE_Z_INDEX
-	sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+	sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 	sprite.modulate = tint
 	arrow_icon_overlay.add_child(sprite)
 	return sprite
@@ -583,7 +589,7 @@ func show_projected_unit(unit: Unit, cell: Vector2i):
 	
 	var sprite := Sprite2D.new()
 	sprite.texture = unit.get_move_texture()
-	sprite.global_position = board_tilemap.to_global(board_tilemap.map_to_local(cell))
+	sprite.global_position = GridUtils.cell_world(board_tilemap, cell)
 	sprite.z_index = Unit.BASE_SPRITE_INDEX
 	
 	#Planning sprite modulation

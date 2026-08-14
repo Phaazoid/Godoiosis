@@ -36,7 +36,7 @@ func rebuild(grid: TileMapLayer, states: Dictionary) -> void:
 	for cell in grid.get_used_cells():
 		var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 		var item: int = KIND_TO_ITEM.get(kind, FALLBACK_ITEM)
-		board.set_cell_item(Vector3i(cell.x, 0, cell.y), item)
+		board.set_cell_item(BoardSpace.of_flat(cell), item)
 	refresh_states(states)
 
 
@@ -46,7 +46,7 @@ func refresh_states(states: Dictionary) -> void:
 	_fire_markers.clear()
 	for cell: Vector2i in states.keys():
 		if _has_fire(states[cell]):
-			_fire_markers.append(_make_fire(Vector3i(cell.x, 0, cell.y)))
+			_fire_markers.append(_make_fire(BoardSpace.of_flat(cell)))
 
 
 func fire_marker_count() -> int:

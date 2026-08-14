@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=13 format=3]
 
 [ext_resource type="Script" path="res://Scenes/Battle3D/battle3d.gd" id="1"]
 [ext_resource type="Script" path="res://Classes/presentation/BoardMirror.gd" id="2"]
@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://Classes/presentation/BoardOverlays.gd" id="5"]
 [ext_resource type="MeshLibrary" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="6"]
 [ext_resource type="PackedScene" path="res://Scenes/Main.tscn" id="7"]
+[ext_resource type="Script" path="res://Classes/presentation/OverlayMirror.gd" id="8"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.78, 1)
@@ -62,6 +63,9 @@ script = ExtResource("2")
 
 [node name="UnitMirror" type="Node3D" parent="."]
 script = ExtResource("3")
+
+[node name="OverlayMirror" type="Node" parent="."]
+script = ExtResource("8")
 
 [node name="CameraRig" type="Node3D" parent="."]
 position = Vector3(0, 1, 0)

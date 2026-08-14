@@ -23,6 +23,11 @@ signal hovered_unit_changed(previous_unit: Unit, new_unit: Unit)
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
+# Injectable pointer-cell source (#222, the board_source shape): a host whose pointer
+# is NOT this viewport's mouse (the 3D picker) supplies the hovered cell directly.
+# Unset = the mouse derivation below, i.e. the flat 2D game is untouched.
+var pointer_source: Callable
+
 var last_hovered_cell: Vector2i = GridUtils.NO_CELL
 
 var _highlighted_queue_units: Array[Unit] = []
@@ -33,8 +38,12 @@ func _ready() -> void:
 	hovered_cell_changed.connect(update_hover_visuals)
 
 func _process(_delta: float) -> void:
-	var mouse_world: Vector2 = game.get_global_mouse_position()
-	var hovered_cell: Vector2i = game.grid.local_to_map(game.grid.to_local(mouse_world))
+	var hovered_cell: Vector2i
+	if pointer_source.is_valid():
+		hovered_cell = pointer_source.call()
+	else:
+		var mouse_world: Vector2 = game.get_global_mouse_position()
+		hovered_cell = game.grid.local_to_map(game.grid.to_local(mouse_world))
 
 	if hovered_cell == last_hovered_cell:   # everything below only runs on a CELL change
 		return
@@ -276,7 +285,7 @@ func _show_hover_panel(hovered: Unit, cell: Vector2i) -> void:
 	var icon: Texture2D = GridUtils.tile_sprite(source, game.grid.get_cell_atlas_coords(cell))
 	var tile_lines: Array[String] = _tile_readout_lines(cell)
 	var world_pos: Vector2 = hovered.global_position if hovered != null \
-		else game.grid.to_global(game.grid.map_to_local(cell))
+		else GridUtils.cell_world(game.grid, cell)
 	if game.unit_info_panel.is_showing():
 		if hovered != null and game.unit_info_panel.is_showing_unit(hovered):
 			game.hover_info_panel.clear()
