@@ -10,6 +10,12 @@ enum PendingAction { NONE, MOVE, DUPLICATE }
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
+# Injectable brush-cell source (#231), the HoverPresenter.pointer_source twin: a host whose
+# pointer is NOT this viewport's mouse (the 3D picker) supplies the brush cell directly.
+# Applied inside _mouse_cell(), so paint, erase and the ghost poll inherit it from ONE place.
+# Unset = the mouse derivation below, i.e. the flat 2D game is untouched.
+var cell_source: Callable
+
 var _pending_action: PendingAction = PendingAction.NONE
 var _pending_unit: Unit = null
 var _brush_painting := false
@@ -103,6 +109,14 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 
 # --- tile brush / map resize ---
 
+# Is the brush armed and taking mouse input? Asked by game.gd's 2D input arm, Battle3D's 3D
+# arm (#231) and the ghost poll below -- ONE predicate, so a third caller cannot drift a third
+# answer. Deliberately NOT paint_mode-aware: every mode paints, only the ghost is TERRAIN-only.
+func brush_armed() -> bool:
+	return game.game_state == game.GameState.DEV_MODE \
+		and game.dev_overlay != null \
+		and game.dev_overlay.tile_brush.brush_active
+
 # Both buttons are hold-to-drag (erase gained it 2026-08-12); paint wins if both are held.
 func handle_tile_brush(event) -> void:
 	if event is InputEventMouseButton:
@@ -121,6 +135,9 @@ func handle_tile_brush(event) -> void:
 			_erase()
 
 func _mouse_cell() -> Vector2i:
+	if cell_source.is_valid():
+		var injected: Vector2i = cell_source.call()   # typed local: .call() erases to Variant
+		return injected
 	return game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
 
 # The ghost POLLS the mouse per frame (HoverPresenter's mechanism), not the event stream:
@@ -134,14 +151,32 @@ func _process(_delta: float) -> void:
 func _sync_brush_ghost() -> void:
 	if game == null or game.process_mode == Node.PROCESS_MODE_DISABLED:
 		return   # modal freeze: painting is frozen, the ghost holds with it
-	var brush_ready: bool = game.game_state == game.GameState.DEV_MODE \
-		and game.dev_overlay != null \
-		and game.dev_overlay.tile_brush.brush_active \
-		and game.dev_overlay.tile_brush.paint_mode == TileBrushTool.PaintMode.TERRAIN
-	if brush_ready:
-		update_brush_ghost(_mouse_cell())
-	else:
+	var cell := brush_ghost_cell()
+	if cell == GridUtils.NO_CELL:
 		hide_brush_ghost()
+		return
+	update_brush_ghost(cell)
+
+
+# The ghost's INTENT, for ANY renderer: the cell the brush would paint, or NO_CELL when it
+# would show nothing. A 3D mirror reads THIS and never the 2D ghost's `.visible` -- under a 3D
+# host that field has a second writer and a second meaning ("the 2D board draws at all"), which
+# is the #232/#238 trap exactly. Ask the question, not the field it happens to live in.
+func brush_ghost_cell() -> Vector2i:
+	if not brush_armed():
+		return GridUtils.NO_CELL
+	if game.dev_overlay.tile_brush.paint_mode != TileBrushTool.PaintMode.TERRAIN:
+		return GridUtils.NO_CELL
+	return _mouse_cell()
+
+
+# What that preview would BE. Read off the 2D ghost layer, which already holds the brush's pick
+# as a REAL placed tile -- so the 3D twin resolves its kind through the same TileData the 2D
+# preview does, and the two cannot drift into disagreeing about what is being painted.
+func brush_ghost_kind() -> Terrain.Kind:
+	if _brush_ghost == null:
+		return Terrain.Kind.NONE
+	return GridUtils.get_terrain_kind_at_cell(_brush_ghost, _mouse_cell())
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
 # multi-cell tile (the lantern) previews exactly as set_cell will draw it. Child of the grid --

@@ -12,6 +12,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const CELL := Vector2i(1, 1)
+const INJECTED := Vector2i(4, 3)   # deliberately not CELL, and not where a headless mouse sits
 
 var _main: Node
 var game: Node2D
@@ -187,6 +188,55 @@ func test_the_ghost_hides_on_every_off_path() -> void:
 	game.set_dev_mode(false)
 	await await_idle_frame()
 	assert_bool(_ghost().visible).is_false()
+
+# --- The injected cell source (#231) --------------------------------------------------
+#
+# A 3D host's pointer is not this viewport's mouse, so it hands the brush its cell directly --
+# the HoverPresenter.pointer_source shape. It is applied INSIDE _mouse_cell(), and that is the
+# point: paint, erase and the ghost poll inherit it from ONE place instead of three agreeing.
+
+func test_an_injected_cell_source_redirects_the_paint() -> void:
+	_select_label("Mud Far")
+	assert_that(game.dev_controller._mouse_cell()).override_failure_message(
+			"precondition: the mouse already sits on the injected cell, so this proves nothing"
+	).is_not_equal(INJECTED)
+	game.dev_controller.cell_source = func() -> Vector2i: return INJECTED
+	game.dev_controller._paint()
+	assert_int(game.grid.get_cell_source_id(INJECTED)).is_equal(_src2_id)
+
+
+func test_the_injected_source_also_drives_the_ghost_poll() -> void:
+	# The seam's whole reason for living where it does. A per-call-site fix would have moved
+	# the PAINT to the 3D cell and left the preview tracking the 2D mouse — the two would
+	# disagree about which cell was about to change, which is the bug that reads as unusable.
+	_select_label("Mud Far")
+	game.dev_controller.cell_source = func() -> Vector2i: return INJECTED
+	_arm_brush()
+	await await_idle_frame()
+	assert_int(_ghost().get_cell_source_id(INJECTED)).is_equal(_src2_id)
+
+
+func test_clearing_the_source_hands_the_brush_back_to_the_mouse() -> void:
+	# F4 to the flat view clears it; an un-cleared Callable would pin the brush to a stale cell.
+	game.dev_controller.cell_source = func() -> Vector2i: return INJECTED
+	assert_that(game.dev_controller._mouse_cell()).is_equal(INJECTED)
+	game.dev_controller.cell_source = Callable()
+	var by_mouse: Vector2i = game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
+	assert_that(game.dev_controller._mouse_cell()).is_equal(by_mouse)
+
+
+func test_the_ghost_intent_is_no_cell_unless_a_preview_is_owed() -> void:
+	# What a 3D mirror reads. It has to ask the INTENT and never the 2D ghost's `.visible`:
+	# under a 3D host that field has a second writer meaning "the 2D board draws at all"
+	# (#232/#238), so it reads TRUE on a ghost nobody can see.
+	assert_that(game.dev_controller.brush_ghost_cell()).is_equal(GridUtils.NO_CELL)
+	_arm_brush()
+	assert_that(game.dev_controller.brush_ghost_cell()).override_failure_message(
+			"armed on TERRAIN and still claiming no cell").is_not_equal(GridUtils.NO_CELL)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
+	assert_that(game.dev_controller.brush_ghost_cell()).override_failure_message(
+			"a non-TERRAIN mode still claims a ghost cell").is_equal(GridUtils.NO_CELL)
+
 
 func test_an_unknown_kind_number_warns_instead_of_crashing() -> void:
 	# The fence_hor incident: a terrain_type outside Terrain.Kind must warn and degrade --

@@ -193,12 +193,15 @@ func _unhandled_input(event: InputEvent) -> void:
 	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
 	# directly, so this derivation would act a SECOND time on the same physical click --
 	# at whatever cell the hidden 2D camera happens to be showing. Set by Battle3D only;
-	# the flat 2D game never touches it. Deliberately above the dev-brush and SPACE arms:
-	# both are 2D-surface affordances, and the 3D view hides the dev overlay outright.
+	# the flat 2D game never touches it. Still above the dev-brush and SPACE arms, but the
+	# REASON changed with #231: those used to be unreachable in 3D because the view had no
+	# dev tools at all. It has them now -- the 3D host routes both arms itself, off its own
+	# picker's cells -- so this gate standing down is what stops the two paths acting twice
+	# on one physical event. It is no longer "the 3D view hides the dev overlay".
 	if board_input_delegated:
 		return
 
-	if game_state == GameState.DEV_MODE and dev_overlay != null and dev_overlay.tile_brush.brush_active:
+	if dev_controller.brush_armed():
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
 			dev_controller.handle_tile_brush(event)
 			return
