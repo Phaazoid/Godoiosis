@@ -300,6 +300,11 @@ func _set_board_visible(shown: bool) -> void:
 		if item == null or item == overlays.zone_overlay or item == overlays.zone_highlight_overlay:
 			continue
 		item.visible = shown
+	# The two authoring-zone layers are skipped above because OverlayManager computes their
+	# visibility from BOTH inputs — a blanket true here would reveal PATROL zones in play, and
+	# a blanket false would be re-overridden the next time the Tile Brush tab changed. Telling
+	# it whether the 2D draws at all is this host's half; it owns the product (#231).
+	overlays.set_board_rendering(shown)
 
 
 # --- The input bridge (stage 4b) -------------------------------------------------------

@@ -108,6 +108,10 @@ var knockback_preview_sprites: Array[Node2D] = []
 # own layer. Adding a kind is one line here.
 var zone_layer_map := {}
 var zone_highlight_overlay: TileMapLayer = null   # the Tile Brush's picked zone; built in _ready
+# The two inputs to whether authoring zones draw -- see set_zone_visibility. The INTENT is what
+# a 3D mirror asks; `.visible` is the product and answers only "does the 2D draw this".
+var zones_authoring_visible := false
+var board_rendering := true
 # Knockback preview (#84): a ghosted arrow (target cell -> landing cell) plus a planning-ghost of
 # the shoved unit where it lands. Same "resolve the plan, show it pending" rail as the terrain
 # preview; its own sprite list so a plan change clears and redraws it cleanly.
@@ -181,7 +185,26 @@ func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 
 # PATROL only -- capture zones are objective info, not an authoring overlay. The picked-zone
 # highlight is authoring scaffolding too, so it follows the same switch.
+#
+# TWO inputs, one answer (#231). `.visible` on these layers used to BE the authoring intent,
+# and that stopped being true once the 3D mirrored them: Battle3D hides the whole 2D board in
+# the 3D view, so the same flag also had to mean "the 2D is rendering at all". Two writers,
+# two meanings, one field -- #232's shape exactly. So the intent gets its own name, `.visible`
+# becomes the computed render fact, and the 3D mirror reads the INTENT.
 func set_zone_visibility(shown: bool) -> void:
+	zones_authoring_visible = shown
+	_apply_zone_visibility()
+
+
+# Battle3D's half: whether the 2D board draws at all. Default true, so the flat game and every
+# headless fixture are untouched -- only a 3D host ever calls this.
+func set_board_rendering(shown: bool) -> void:
+	board_rendering = shown
+	_apply_zone_visibility()
+
+
+func _apply_zone_visibility() -> void:
+	var shown: bool = zones_authoring_visible and board_rendering
 	zone_overlay.visible = shown
 	if zone_highlight_overlay != null:
 		zone_highlight_overlay.visible = shown

@@ -304,6 +304,34 @@ func test_the_patrol_zone_and_picked_highlight_mirror_only_while_visible() -> vo
 			"the 2D dropped the cells, so the gate was never tested").is_true()
 
 
+func test_the_2d_zone_layers_stay_dark_in_3d_while_the_mirror_draws_them() -> void:
+	# Found in play: authoring zones drew TWICE in the 3D view — flat 2D tiles overlaid on
+	# screen plus the 3D fills — because _set_board_visible deliberately skipped those two
+	# layers (before the mirror existed they were the only way to see zones at all).
+	#
+	# The fix has to keep both halves true at once, which is why `.visible` cannot be the
+	# gate: it is false in this host by design. The mirror reads the authoring INTENT.
+	game.zone_manager.load_dict({
+		"patrol": {"kind": ZoneManager.Kind.PATROL, "cells": [Vector2i(2, 2)]},
+	})
+	_om().redraw_zones(game.zone_manager)
+	_om().set_zone_visibility(true)
+	await _settle()
+
+	var patrol := _om().zone_overlay as TileMapLayer
+	assert_bool(patrol.visible).override_failure_message(
+			"the flat 2D zone layer is drawing over the diorama").is_false()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_PATROL).size()).override_failure_message(
+			"hiding the 2D layer took the 3D mirror down with it").is_equal(1)
+
+	# FLAT_2D hands the board back, and the 2D layer must return — the intent never changed.
+	_scene.view = _scene.View.FLAT_2D
+	_scene._apply_hosting()
+	await _settle()
+	assert_bool(patrol.visible).override_failure_message(
+			"the 2D zone layer never came back in the flat view").is_true()
+
+
 func test_terrain_icons_mirror_with_the_fire_exception() -> void:
 	game.terrain_states.load_state_dict({
 		Vector2i(1, 1): [Terrain.TileState.FROZEN],
