@@ -214,3 +214,44 @@ func test_the_zone_patch_outlives_selection_churn() -> void:
 	demo._select(unit)
 	demo._select(unit)
 	assert_int(overlays.cells_of(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(9)
+
+
+# --- Sort order against the 2D authority -------------------------------------------
+
+func test_terrain_state_sorts_under_the_plan_exactly_as_2d_orders_it() -> void:
+	# Reported in play: freeze icons drew over path arrows and over planning ghosts. The 2D is
+	# the authority and it is unambiguous — TERRAIN_Z_INDEX is "above the board, below unit
+	# sprites" while arrows sit higher — and the 3D table had TERRAIN at the TOP of its range.
+	# Tie the two orders together rather than pinning either number, so changing EITHER side
+	# reds and the sorts stay free to be retuned.
+	var terrain_under_arrows_in_2d: bool = OverlayManager.TERRAIN_Z_INDEX < MoveAction.ARROW_BASE_Z_INDEX
+	var terrain: int = BoardOverlays.LAYERS[BoardOverlays.Layer.TERRAIN]["sort"]
+	var preview: int = BoardOverlays.LAYERS[BoardOverlays.Layer.TERRAIN_PREVIEW]["sort"]
+	var arrows: int = BoardOverlays.LAYERS[BoardOverlays.Layer.PATH_ARROWS]["sort"]
+	assert_bool(terrain_under_arrows_in_2d).override_failure_message(
+			"the 2D order changed; decide the 3D order deliberately rather than following this test").is_true()
+	assert_bool(terrain < arrows).override_failure_message(
+			"terrain state (%d) sorts at or above path arrows (%d) — the 3D contradicts the 2D" % [terrain, arrows]).is_true()
+	assert_int(preview).override_failure_message(
+			"the preview channel drifted from the live one").is_equal(terrain)
+
+
+func test_no_overlay_layer_can_sort_over_a_unit() -> void:
+	# The structural half, and the one that covers planning ghosts: a ghost is a UnitSprite3D,
+	# so board markup must sit below UNIT_RENDER_PRIORITY by construction — not because the
+	# numbers happen to land that way today. A new layer added above units reds here.
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		var sort: int = BoardOverlays.LAYERS[layer]["sort"]
+		assert_int(sort).override_failure_message(
+				"layer %d sorts at %d, at or above UNIT_RENDER_PRIORITY — it would draw over units and ghosts" \
+				% [layer, sort]).is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
+
+
+func test_a_unit_sprite_actually_carries_that_priority() -> void:
+	# Test the wire: the constant is worth nothing if no sprite reads it, and ghosts are built
+	# by UnitMirror through the same plain constructor rather than for_unit_data.
+	var sprite := UnitSprite3D.new()
+	assert_int(sprite.render_priority).override_failure_message(
+			"UnitSprite3D does not apply UNIT_RENDER_PRIORITY — the constant is inert").is_equal(
+			BoardOverlays.UNIT_RENDER_PRIORITY)
+	sprite.free()
