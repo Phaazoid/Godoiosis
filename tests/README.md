@@ -138,7 +138,7 @@ powershell -File tests\run_tests.ps1 res://tests/squad   # explicit path (back-c
 
 Two things make it work, and both are easy to get wrong:
 
-1. **Name the instanced root `Main` and add it to `/root`, not to the suite.** `game.gd` resolves the dev overlay by an *absolute* path (`get_node("/root/Main/DevOverlay")`), so under any other parent `dev_overlay` is null and `ScenarioManager.clear_board()` dies on `game.dev_overlay.unit_editor`. That error — not a segfault — is what made the scene look untestable.
+1. **Instantiate the whole of `Main.tscn`, don't hand-build a partial tree.** `game.gd` resolves the dev overlay *relative* to Game (`../../../DevOverlay` — up through `GameView` and `GameContainer` to `Main`), so the sibling structure is what matters; a fixture that reparents `Game` alone gets a null `dev_overlay`, and `ScenarioManager.clear_board()` then dies on `game.dev_overlay.unit_editor`. That error — not a segfault — is what made the scene look untestable. **The path was absolute (`/root/Main/DevOverlay`) until 2026-08-14**, which is why the older fixtures also name the root `Main` and add it to `/root`; that ritual is now harmless rather than required. To test the *absent* overlay deliberately, `free()` the `DevOverlay` node before entering the tree — mis-naming the root no longer produces a null (see `test_game_scene_without_dev_overlay.gd`).
    ```gdscript
    _main = (load("res://Scenes/Main.tscn") as PackedScene).instantiate()
    _main.name = "Main"

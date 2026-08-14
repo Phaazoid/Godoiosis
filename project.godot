@@ -11,8 +11,8 @@ config_version=5
 [application]
 
 config/name="Iosis"
-config/version="0.17.2"
-run/main_scene="uid://cxiu0yvwwxlgo"
+config/version="0.18.0"
+run/main_scene="res://Scenes/Battle3D/Battle3D.tscn"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
 

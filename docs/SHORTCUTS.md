@@ -10,7 +10,9 @@ Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. 
 | W / A / S / D (or arrow keys) | Pan camera (`cam_up`/`cam_down`/`cam_left`/`cam_right`) |
 | Space | Center camera on cursor *(outside dev mode)* |
 
-## The 3D battle view (`Scenes/Battle3D`, #176)
+## The 3D battle view (`Scenes/Battle3D`, #176) — this is what the game boots into
+**`Battle3D.tscn` is the main scene as of 2026-08-14.** Launching the game lands here, on Mission Select drawn over the 3D world; **F4** is the only way to the flat 2D game and it toggles straight back. There is deliberately no 2D option on the title screen.
+
 The 2D game runs underneath as the UI layer, so every UI click behaves exactly as above. These are the board-and-camera keys the 3D host owns. **Note the 2D camera stands down here** — `cam_*` reaches the 3D rig only, so W/A/S/D and the arrows drive one camera, not two.
 
 | Key | Action |
