@@ -29,6 +29,11 @@ enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
 const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
 const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
+# Every unit sprite (real or planning ghost) sorts ABOVE every overlay layer, structurally
+# rather than by numeric luck — the 3D twin of the 2D's "tile overlays sit below
+# Unit.BASE_SPRITE_INDEX". Must stay greater than any LAYERS "sort"; pinned by a test.
+# Without it a ghost was just render_priority 0, so arrows and terrain icons drew over it.
+const UNIT_RENDER_PRIORITY := 32
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
@@ -43,8 +48,11 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 4, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
-	Layer.TERRAIN: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
-	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
+	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
+	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.
+	Layer.TERRAIN: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
+	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 2, "kind": Kind.SPRITE},
 	Layer.ICONS: {"color": Color.WHITE, "sort": 0, "kind": Kind.BILLBOARD},
 }
 
