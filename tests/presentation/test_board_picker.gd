@@ -3,53 +3,157 @@
 # scene, via the unproject round-trip at all four yaw snaps, plus the occlusion case.
 # Scene cases assert PROPERTIES (the blocker wins, the aimed cell comes back), never
 # tuned camera values — pitch/FOV/zoom stay the dev's knobs and must not redden this.
+#
+# The PLANE (#231) is a second axis through most of this file: every call states its own
+# fallback rect, and `Rect2i()` means columns-only. Cases that assert a MISS say WHY it
+# still misses under a real plane — above the ceiling, or outside the apron — because
+# "no column here" stopped being a reason on its own.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/LookDev/LookDev.tscn"
+
+# The apron used by the plane cases. Any positive number works; the assertions derive
+# their coordinates from the resulting rect rather than restating it.
+const APRON := 4
 
 # A short column, a 3-tall tower, a short column, all in row z=0.
 var _tower_tops: Dictionary[Vector2i, int] = {
 	Vector2i(0, 0): 1, Vector2i(1, 0): 3, Vector2i(2, 0): 1,
 }
 
+# The same strip with (1, 0) ERASED — the shape the dev brush makes in 3D.
+var _holed_tops: Dictionary[Vector2i, int] = {
+	Vector2i(0, 0): 1, Vector2i(2, 0): 1,
+}
+
+
+func _apron_of(tops: Dictionary[Vector2i, int]) -> Rect2i:
+	return BoardPicker.used_rect(tops).grow(APRON)
+
 
 # --- Pure cases (no scene, authored rays) -------------------------------------
 
 func test_straight_down_hits_the_top_face() -> void:
-	var cell := BoardPicker.pick_cell(Vector3(0.5, 10.0, 0.5), Vector3.DOWN, _tower_tops)
+	var cell := BoardPicker.pick_cell(Vector3(0.5, 10.0, 0.5), Vector3.DOWN, _tower_tops, Rect2i())
 	assert_that(cell).is_equal(Vector3i(0, 0, 0))
 
 
 func test_parallax_ray_skips_the_short_column_and_hits_the_tower() -> void:
 	# Passes 2.75+ units above the short column, crosses the tower's top plane inside it.
-	var cell := BoardPicker.pick_cell(Vector3(-2.5, 5.0, 0.5), Vector3(4.0, -2.0, 0.0), _tower_tops)
+	var cell := BoardPicker.pick_cell(Vector3(-2.5, 5.0, 0.5), Vector3(4.0, -2.0, 0.0), _tower_tops, Rect2i())
 	assert_that(cell).is_equal(Vector3i(1, 2, 0))
 
 
 func test_cliff_side_hit_returns_the_column_top_cell() -> void:
 	# Enters the tower's footprint at y 2.2 — below its top at 3 — striking the wall.
-	var cell := BoardPicker.pick_cell(Vector3(-0.5, 2.5, 0.5), Vector3(1.0, -0.2, 0.0), _tower_tops)
+	var cell := BoardPicker.pick_cell(Vector3(-0.5, 2.5, 0.5), Vector3(1.0, -0.2, 0.0), _tower_tops, Rect2i())
 	assert_that(cell).is_equal(Vector3i(1, 2, 0))
 
 
 func test_shallow_approach_from_outside_the_board_hits_the_first_column() -> void:
-	var cell := BoardPicker.pick_cell(Vector3(-3.5, 1.5, 0.5), Vector3(1.0, -0.15, 0.0), _tower_tops)
+	var cell := BoardPicker.pick_cell(Vector3(-3.5, 1.5, 0.5), Vector3(1.0, -0.15, 0.0), _tower_tops, Rect2i())
 	assert_that(cell).is_equal(Vector3i(0, 0, 0))
 
 
 func test_level_ray_above_everything_misses() -> void:
-	var cell := BoardPicker.pick_cell(Vector3(-1.0, 5.0, 0.5), Vector3(1.0, 0.0, 0.0), _tower_tops)
-	assert_that(cell).is_equal(BoardSpace.NO_CELL)
+	# Misses for a GEOMETRIC reason, not for want of a plane: it is level and already
+	# above the tallest thing there is. So it must still miss with the apron live.
+	var ray_from := Vector3(-1.0, 5.0, 0.5)
+	var along := Vector3(1.0, 0.0, 0.0)
+	assert_that(BoardPicker.pick_cell(ray_from, along, _tower_tops, Rect2i())).is_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_cell(ray_from, along, _tower_tops, _apron_of(_tower_tops))) \
+		.override_failure_message("a level ray over the board resolved once a plane existed") \
+		.is_equal(BoardSpace.NO_CELL)
 
 
 func test_descending_ray_beyond_the_board_walks_off_and_misses() -> void:
-	var cell := BoardPicker.pick_cell(Vector3(5.0, 2.0, 0.5), Vector3(1.0, -1.0, 0.0), _tower_tops)
+	var cell := BoardPicker.pick_cell(Vector3(5.0, 2.0, 0.5), Vector3(1.0, -1.0, 0.0), _tower_tops, Rect2i())
 	assert_that(cell).is_equal(BoardSpace.NO_CELL)
 
 
-func test_vertical_ray_over_an_empty_column_misses() -> void:
-	var cell := BoardPicker.pick_cell(Vector3(10.5, 5.0, 10.5), Vector3.DOWN, _tower_tops)
+func test_the_apron_catches_a_ray_that_walks_off_the_board() -> void:
+	# The SAME ray as the case above, one input different. Two answers from one
+	# difference is the sharpest form this pin comes in.
+	var cell := BoardPicker.pick_cell(Vector3(5.0, 2.0, 0.5), Vector3(1.0, -1.0, 0.0),
+			_tower_tops, _apron_of(_tower_tops))
+	assert_that(cell).is_not_equal(BoardSpace.NO_CELL)
+	assert_that(BoardSpace.flat(cell)).is_equal(Vector2i(5, 0))
+
+
+func test_a_vertical_ray_outside_the_apron_still_misses() -> void:
+	# The apron BOUNDS the plane — it is not an infinite floor.
+	var plane := _apron_of(_tower_tops)
+	assert_bool(plane.has_point(Vector2i(10, 10))) \
+		.override_failure_message("the fixture's far cell drifted inside the apron").is_false()
+	var cell := BoardPicker.pick_cell(Vector3(10.5, 5.0, 10.5), Vector3.DOWN, _tower_tops, plane)
 	assert_that(cell).is_equal(BoardSpace.NO_CELL)
+
+
+# --- The plane fallback (#231) -------------------------------------------------
+
+func test_an_erased_cell_inside_the_board_is_still_pickable() -> void:
+	# The headline: erase a tile in the 3D view and it must not become unreachable.
+	var straight_down := Vector3.DOWN
+	var over_the_hole := Vector3(1.5, 5.0, 0.5)
+	assert_that(BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, Rect2i())) \
+		.override_failure_message("the fixture's hole is not actually a hole").is_equal(BoardSpace.NO_CELL)
+	var cell := BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, _apron_of(_holed_tops))
+	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 0)))
+
+
+func test_the_ground_plane_sits_on_the_top_face_not_the_slab_bottom() -> void:
+	# A shallow ray across the hole. At FLAT_TOP_LEVEL the plane is the face the
+	# neighbouring blocks present, so the ray lands IN the hole; at the slab's bottom it
+	# would travel a further cell and come down on the far column instead.
+	var cell := BoardPicker.pick_cell(Vector3(-1.5, 3.0, 0.5), Vector3(3.0, -2.0, 0.0),
+			_holed_tops, _apron_of(_holed_tops))
+	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 0)))
+	assert_int(cell.y).override_failure_message("the plane cell came back at the wrong level").is_equal(0)
+
+
+func test_a_real_column_beats_the_plane_at_the_same_ray() -> void:
+	# Ray order, not a hand-written comparison: resolving the plane before the walk
+	# would let a hole in front of the tower answer instead of the tower.
+	var ray_from := Vector3(-2.5, 5.0, 0.5)
+	var along := Vector3(4.0, -2.0, 0.0)
+	var columns_only := BoardPicker.pick_cell(ray_from, along, _tower_tops, Rect2i())
+	assert_that(columns_only).override_failure_message("the case proves nothing — the ray misses").is_not_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_cell(ray_from, along, _tower_tops, _apron_of(_tower_tops))) \
+		.override_failure_message("the plane stole a ray that strikes a real column") \
+		.is_equal(columns_only)
+
+
+func test_the_apron_bounds_where_the_plane_ends() -> void:
+	# Derived from the rect, never from numbers — the apron is a knob.
+	var plane := _apron_of(_tower_tops)
+	var inside := plane.end - Vector2i.ONE
+	var outside := plane.end
+	var hit := BoardPicker.pick_cell(Vector3(inside.x + 0.5, 5.0, inside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
+	assert_that(hit).is_equal(BoardSpace.of_flat(inside))
+	var miss := BoardPicker.pick_cell(Vector3(outside.x + 0.5, 5.0, outside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
+	assert_that(miss).is_equal(BoardSpace.NO_CELL)
+
+
+func test_an_empty_board_is_still_pickable_under_a_plane() -> void:
+	# Erase everything and you must be able to paint it back — so "no columns at all"
+	# cannot short-circuit while a plane exists.
+	var empty: Dictionary[Vector2i, int] = {}
+	var plane := Rect2i(0, 0, 4, 4)
+	var cell := BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, plane)
+	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 1)))
+	assert_that(BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, Rect2i())) \
+		.is_equal(BoardSpace.NO_CELL)
+
+
+func test_used_rect_and_max_top_describe_the_tops_table() -> void:
+	# The bbox battle3d._board_volume used to derive for itself.
+	assert_that(BoardPicker.used_rect(_tower_tops)).is_equal(Rect2i(0, 0, 3, 1))
+	assert_bool(BoardPicker.used_rect(_tower_tops).has_point(Vector2i(2, 0))) \
+		.override_failure_message("used_rect excluded its own highest column").is_true()
+	assert_int(BoardPicker.max_top(_tower_tops)).is_equal(3)
+	var empty: Dictionary[Vector2i, int] = {}
+	assert_that(BoardPicker.used_rect(empty)).is_equal(Rect2i())
+	assert_int(BoardPicker.max_top(empty)).is_equal(0)
 
 
 # --- The seam where it lives: the look-dev scene -------------------------------
@@ -77,6 +181,19 @@ func test_column_tops_read_the_painted_board() -> void:
 	assert_int(tops[Vector2i(5, 3)]).is_equal(2)   # ramp counts as a full block (stage-1 approximation)
 
 
+func test_used_rect_spans_the_painted_boards_own_footprint() -> void:
+	# Independent spelling: derive the expected rect from the GridMap's cells directly.
+	var board := _scene.get_node("Board") as GridMap
+	var lo := Vector2i(2147483647, 2147483647)
+	var hi := Vector2i(-2147483648, -2147483648)
+	for cell: Vector3i in board.get_used_cells():
+		lo = lo.min(BoardSpace.flat(cell))
+		hi = hi.max(BoardSpace.flat(cell))
+	assert_bool(lo.x <= hi.x).override_failure_message("the look-dev board is empty").is_true()
+	assert_that(BoardPicker.used_rect(BoardPicker.column_tops_from(board))) \
+		.is_equal(Rect2i(lo, hi - lo + Vector2i.ONE))
+
+
 func test_unproject_round_trip_finds_the_cell_at_every_yaw_snap() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var rig := _scene.get_node("CameraRig") as Node3D
@@ -92,36 +209,41 @@ func test_unproject_round_trip_finds_the_cell_at_every_yaw_snap() -> void:
 			var aim := BoardSpace.standing_point(cell) + Vector3(0.0, -0.02, 0.0)
 			var screen := camera.unproject_position(aim)
 			var picked := BoardPicker.pick_cell(
-					camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops)
+					camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops, Rect2i())
 			assert_that(picked).is_equal(cell)
 
 
 func test_pick_at_is_the_ray_pair_spelled_once() -> void:
 	# Delegation equality against a live camera — and not vacuously, on a real hit.
+	# Both sides pass Rect2i(), so the plane cannot make this pass for a new reason.
 	var board := _scene.get_node("Board") as GridMap
 	var camera := _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
 	var tops := BoardPicker.column_tops_from(board)
 	var screen := camera.unproject_position(BoardSpace.standing_point(Vector3i(8, 2, 3)) + Vector3(0.0, -0.02, 0.0))
 	var direct := BoardPicker.pick_cell(
-			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops)
+			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops, Rect2i())
 	assert_that(direct).is_not_equal(BoardSpace.NO_CELL)
-	assert_that(BoardPicker.pick_at(camera, screen, tops)).is_equal(direct)
+	assert_that(BoardPicker.pick_at(camera, screen, tops, Rect2i())).is_equal(direct)
 
 
 func test_occluded_cell_yields_the_blocker_not_the_hidden_cell() -> void:
 	# From the default camera (south, pitched down), ground cell (8, 0, 0) hides behind
 	# the 3-tall hill. Aiming at its standing point must pick a hill cell instead —
 	# asserted as a property (the blocker wins), not an exact cell, so camera tuning
-	# can't redden it.
+	# can't redden it. The Rect2i() pass keeps the not-a-miss clause non-vacuous.
 	var board := _scene.get_node("Board") as GridMap
 	var camera := _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
 	var tops := BoardPicker.column_tops_from(board)
 	var hidden := Vector3i(8, 0, 0)
 	var screen := camera.unproject_position(BoardSpace.standing_point(hidden))
 	var picked := BoardPicker.pick_cell(
-			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops)
+			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops, Rect2i())
 	assert_that(picked).is_not_equal(hidden)
 	assert_that(picked).is_not_equal(BoardSpace.NO_CELL)
 	assert_bool(picked.y >= 1).is_true()                      # a raised cell took the ray
 	assert_bool(picked.x >= 6 and picked.x <= 10).is_true()   # inside the hill's footprint
 	assert_bool(picked.z >= 1 and picked.z <= 5).is_true()
+	# And the blocker still wins with the apron live — the case a plane-first walk fails.
+	assert_that(BoardPicker.pick_cell(
+			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops,
+			BoardPicker.used_rect(tops).grow(APRON))).is_equal(picked)

@@ -1,8 +1,13 @@
 # BoardMirror (#215): the Kind->item table's completeness (law-style: every Kind
 # except the declared NONE skip), the board wire against the REAL Prolog mission
 # loaded through the real funnel inside the Battle3D fixture, fire markers derived
-# from the game's own terrain-state dict (never a pinned count), and clear-board
+# from terrain_states.burning_cells (never a pinned count), and clear-board
 # emptiness. The fixture disables auto_play so no AI churns during asserts.
+#
+# The live half (#231) is the second section: terrain paints and state changes reach
+# the diorama without an F2 or a turn boundary. Those cases drive the AUTHORITY —
+# game.grid / terrain_states.apply — and never call sync()/refresh_states themselves,
+# so a mirror that only works when a test pokes it goes red rather than green.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -49,21 +54,17 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 		assert_int(board.get_cell_item(Vector3i(cell.x, 0, cell.y))).is_equal(expected)
 
 
-func _expected_fires(states: Dictionary) -> int:
-	var expected := 0
-	for cell: Vector2i in states.keys():
-		var cell_states: Array = states[cell]
-		for state in cell_states:
-			if (state as Terrain.TileState) in Terrain.FIRE_STATES:
-				expected += 1
-				break
-	return expected
+# Which cells burn comes off the ONE enumeration form (Terrain.gd: "no reader may
+# enumerate fire members itself"). This helper used to walk FIRE_STATES itself — a third
+# copy beside BoardMirror._has_fire, both deleted by #231.
+func _burning() -> Array[Vector2i]:
+	return _game.terrain_states.burning_cells()
 
 
-func test_fire_markers_match_the_games_own_state_dict() -> void:
+func test_fire_markers_match_the_games_own_burning_cells() -> void:
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
-	var expected := _expected_fires(_game.terrain_states.to_state_dict())
+	var expected := _burning().size()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_int(mirror.fire_marker_count()).is_equal(expected)
 	assert_bool(expected > 0).is_true()  # Prolog authors BLAZE content; a zero here means the load broke
@@ -77,18 +78,17 @@ func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
 	# A held count means the node is alive and it is a render-order question, not a logic one.
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
+	#
+	# NB the reason this still holds CHANGED with #231. It used to be true by construction
+	# — nothing freed a marker between turn boundaries. Now the reconcile runs every frame,
+	# and it holds because a downing alters no terrain state, so the cell stays in
+	# burning_cells and its marker is left standing. That is a weaker guarantee, which is
+	# why test_a_standing_flame_survives_a_reconcile_that_lights_another exists beside it.
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
-	var states: Dictionary = _game.terrain_states.to_state_dict()
-	var fire_cell := Vector2i(-9999, -9999)
-	for cell: Vector2i in states.keys():
-		for state in states[cell]:
-			if (state as Terrain.TileState) in Terrain.FIRE_STATES:
-				fire_cell = cell
-				break
-		if fire_cell.x != -9999:
-			break
-	assert_bool(fire_cell.x != -9999).override_failure_message(
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
 			"Prolog authored no fire; the case is vacuous").is_true()
+	var fire_cell: Vector2i = burning[0]
 
 	var unit: Unit = null
 	for child in _game.units_root.get_children():
@@ -123,7 +123,159 @@ func test_rebuild_tracks_the_authority_after_clear_board() -> void:
 	# authority, whatever the authority does — never an assumption of emptiness.
 	assert_int(board.get_used_cells().size()).is_equal(_game.grid.get_used_cells().size())
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
-	assert_int(mirror.fire_marker_count()).is_equal(_expected_fires(_game.terrain_states.to_state_dict()))
+	assert_int(mirror.fire_marker_count()).is_equal(_burning().size())
+
+
+# --- Live mirroring (#231) -------------------------------------------------------
+
+func _settle() -> void:
+	# process_frame resumes coroutines BEFORE node _process — one frame reads stale.
+	await await_idle_frame()
+	await await_idle_frame()
+
+
+func test_a_standing_flame_survives_a_reconcile_that_lights_another() -> void:
+	# fire_marker_count() is BLIND to churn: free-all-and-recreate reads identical through
+	# it, so node identity is the only thing that can tell a reconcile from a rebuild.
+	#
+	# The change of state is load-bearing, and its absence made an earlier version of this
+	# case VACUOUS — it passed against the free-all mutant. OverlayMirror value-diffs the
+	# burning set before pushing, so with a static board refresh_states is never called
+	# twice and nothing gets the chance to churn. Only a reconcile that actually RUNS,
+	# while an unrelated cell keeps burning, can distinguish the two.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var standing: Vector2i = burning[0]
+	var id := mirror.fire_marker_at(standing).get_instance_id()
+
+	var effect := ResolvedCellEffect.new()
+	effect.cell = _a_cell_that_is_not_burning()
+	effect.states_added.assign([Terrain.TileState.BLAZE])
+	_game.terrain_states.apply(effect)
+	await _settle()
+	assert_object(mirror.fire_marker_at(effect.cell)).override_failure_message(
+			"the reconcile never ran; the case proves nothing").is_not_null()
+	assert_int(mirror.fire_marker_at(standing).get_instance_id()).override_failure_message(
+			"an untouched flame was rebuilt rather than left standing").is_equal(id)
+
+
+func test_fire_lit_mid_turn_appears_without_a_turn_boundary() -> void:
+	# The retirement of the v1 approximation: an ignition used to wait for turn_started.
+	# Deposited through terrain_states.apply — the sim's OWN seam, not a dev-only path.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var before := mirror.fire_marker_count()
+	var cell := _a_cell_that_is_not_burning()
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BLAZE])
+	_game.terrain_states.apply(effect)
+	await _settle()
+	assert_int(mirror.fire_marker_count()).override_failure_message(
+			"a mid-turn ignition did not reach the diorama").is_equal(before + 1)
+	assert_object(mirror.fire_marker_at(cell)).is_not_null()
+
+
+func test_fire_going_out_frees_its_marker() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var cell: Vector2i = burning[0]
+	var before := mirror.fire_marker_count()
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_removed.assign(_game.terrain_states.states_at(cell))
+	_game.terrain_states.apply(effect)
+	await _settle()
+	assert_int(mirror.fire_marker_count()).is_equal(before - 1)
+	assert_object(mirror.fire_marker_at(cell)).override_failure_message(
+			"the reconcile adds but never removes").is_null()
+
+
+func _a_cell_that_is_not_burning() -> Vector2i:
+	var burning := _burning()
+	for cell: Vector2i in _game.grid.get_used_cells():
+		if not burning.has(cell):
+			return cell
+	return Vector2i.ZERO
+
+
+func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
+	# The WIRE case: it writes through game.grid and never calls sync() itself, so a
+	# mirror that only works when a test drives it by hand goes red here.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	var at := BoardSpace.of_flat(cell)
+	var before := board.get_cell_item(at)
+	var other := _a_tile_of_a_different_kind(cell)
+	assert_bool(other.source >= 0).override_failure_message(
+			"the tileset offers no second kind; the case is vacuous").is_true()
+	_game.grid.set_cell(cell, other.source, other.coords)
+	await _settle()
+	var after := board.get_cell_item(at)
+	assert_int(after).override_failure_message("the paint never reached the 3D board").is_not_equal(before)
+	var kind := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
+	assert_int(after).is_equal(BoardMirror.KIND_TO_ITEM.get(kind, BoardMirror.FALLBACK_ITEM))
+
+
+func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	var at := BoardSpace.of_flat(cell)
+	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
+	_game.grid.erase_cell(cell)
+	await _settle()
+	assert_int(board.get_cell_item(at)).override_failure_message(
+			"sync paints but never erases").is_equal(GridMap.INVALID_CELL_ITEM)
+
+
+func test_a_drag_of_paints_inside_one_frame_costs_one_sync_pass() -> void:
+	# The falsifiable form of "coalesced": per-event syncing would cost N.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var before := mirror.sync_passes
+	for i in 8:
+		_game.grid.erase_cell(cells[i])
+	await await_idle_frame()
+	var spent := mirror.sync_passes - before
+	assert_int(spent).override_failure_message(
+			"8 writes in one frame cost %s sync passes" % spent).is_less_equal(2)
+
+
+func _a_tile_of_a_different_kind(cell: Vector2i) -> Dictionary:
+	var current := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if data == null or not data.has_custom_data("terrain_type"):
+				continue
+			var kind: int = data.get_custom_data("terrain_type")
+			if kind != current and kind != Terrain.Kind.NONE:
+				return {"source": source_id, "coords": coords}
+	return {"source": -1, "coords": Vector2i.ZERO}
 
 
 func test_the_flame_never_sits_in_the_ground_plane() -> void:

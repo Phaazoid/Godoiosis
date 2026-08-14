@@ -12,18 +12,32 @@ class_name OverlayMirror
 # so a static board costs comparisons, not writes.
 #
 # Deliberately NOT mirrored: the 2D hover layer's POINTER role (battle3d's bracket
-# is the 3D pointer; AIM covers the footprint role), CursorController, ZONE_PATROL
-# + the brush highlight + dev ghosts (dev authoring stays on the 2D surface).
+# is the 3D pointer; AIM covers the footprint role), CursorController, and the 2D
+# brush ghost (the 3D has its own block ghost).
+#
+# ZONE_PATROL and the picked-zone highlight ARE mirrored as of #231, reversing this
+# file's earlier "dev authoring stays on the 2D surface" exclusion: authoring moved
+# into the 3D view, and patrol is the brush's DEFAULT zone kind, so leaving it out
+# made zone painting invisible exactly where it is now done. They are the only two
+# layers whose mirroring is VISIBILITY-GATED — they are authoring scaffolding the 2D
+# shows solely while the Tile Brush tab is up, so mirroring their cells alone would
+# leak patrol zones into play. Mirror the QUESTION ("should this be on screen"),
+# which is cells AND visible, never just the field the cells happen to live in.
+#
+# It also owns the fire poll: BoardMirror's flame markers are board markup with the
+# same cadence question, and this is the node that already runs every frame.
 
 const TOP := UnitMirror.COLUMN_TOP       # flat mirror boards: anchors at y 1.0
 
 var game: Node2D            # the hidden Game coordinator; set by battle3d._ready
 var overlays: BoardOverlays
 var unit_mirror: UnitMirror
+var board_mirror: BoardMirror   # for the fire poll; set by battle3d._ready
 
 var _last_cells: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_markers: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_ghosts: Array[Dictionary] = []
+var _last_fire: Array[Vector2i] = []
 var _pick_texture: Texture2D   # the (3,0) "pick this unit" tile art, cut lazily
 
 
@@ -38,6 +52,10 @@ func _process(_delta: float) -> void:
 	_fill(BoardOverlays.Layer.SQUAD_RANGE, om.squadrange_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_CAPTURE, om.capture_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.ZONE_EXTRACTION, om.extraction_overlay.get_used_cells())
+	# Authoring scaffolding: cells AND the authoring INTENT, or patrol zones leak into play.
+	var authoring: bool = om.zones_authoring_visible
+	_fill_gated(BoardOverlays.Layer.ZONE_PATROL, om.zone_overlay, authoring)
+	_fill_gated(BoardOverlays.Layer.ZONE_HIGHLIGHT, om.zone_highlight_overlay, authoring)
 
 	# The aim footprint pulses by layer modulate in 2D — the animation rides the poll.
 	_fill(BoardOverlays.Layer.AIM, om.hover_overlay.get_used_cells())
@@ -54,9 +72,40 @@ func _process(_delta: float) -> void:
 	_icons(om)
 	_terrain(om)
 	_ghost_sync(om, kb_ghosts)
+	_fire()
+
+
+# Which cells are alight, straight off the ONE enumeration form. Polled rather than wired
+# because a states_changed signal would fire inside the resolver's per-effect loop and
+# churn markers many times within a single pass; the poll coalesces a frame into one
+# reconcile, and covers the sim, the dev brush, tick_states and load alike (#231).
+func _fire() -> void:
+	if board_mirror == null:
+		return
+	var burning: Array[Vector2i] = game.terrain_states.burning_cells()
+	burning.sort()
+	if _last_fire == burning:
+		return
+	_last_fire = burning
+	board_mirror.refresh_states(burning)
 
 
 # --- Fills -------------------------------------------------------------------------
+
+# _fill's twin for a layer the 2D shows and hides. `wanted` is the AUTHORING INTENT, passed
+# in rather than read off the node's `.visible` — that field is the 2D's own render fact and
+# is false in this very host, because Battle3D hides the whole 2D board behind the diorama.
+# Keying on it made the mirror go dark exactly where it is needed (#231; #232's lesson, which
+# the first draft of this function quoted and then broke). `source` is untyped (OverlayManager
+# declares zone_overlay with no type) and NULL on headless Play boards, which supply bare
+# Node2Ds and never build the highlight. Hiding costs one push: _fill's value-diff holds after.
+func _fill_gated(layer: BoardOverlays.Layer, source, wanted: bool) -> void:
+	var node := source as TileMapLayer
+	var cells: Array[Vector2i] = []
+	if wanted and node != null:
+		cells = node.get_used_cells()
+	_fill(layer, cells)
+
 
 func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	var cells: Array[Vector3i] = []

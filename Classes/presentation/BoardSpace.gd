@@ -36,6 +36,13 @@ static func cell_of(position: Vector3) -> Vector3i:
 	)
 
 
+# The TOP LEVEL of a flat-board column: of_flat puts every cell at y-index 0, so the
+# face a unit stands on — and the plane BoardPicker falls back to over an erased cell
+# (#231) — sits one CELL_SIZE up, never at y = 0. Named because y=0 is the slab's
+# BOTTOM and reads plausible: a fallback plane there returns the wrong cell at grazing
+# angles. UnitMirror.COLUMN_TOP derives from this rather than restating it.
+const FLAT_TOP_LEVEL := 1
+
 # The flat-board bridge (#222): sim cells are 2D (x, y), mirror cells are (x, 0, y)
 # until real elevation arrives — the ONE spelling of that pair. Not for columns with
 # a real height (BoardPicker._top_cell keeps its own y). flat(NO_CELL) equals

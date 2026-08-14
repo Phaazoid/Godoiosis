@@ -56,7 +56,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
 	if click == null or not click.pressed or click.button_index != MOUSE_BUTTON_LEFT:
 		return
-	var cell := BoardPicker.pick_at(_camera, click.position, _tops)
+	var cell := BoardPicker.pick_at(_camera, click.position, _tops, Rect2i())
 	if cell == BoardSpace.NO_CELL:
 		return
 	var clicked_unit := _unit_at(cell)

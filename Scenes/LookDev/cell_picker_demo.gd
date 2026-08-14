@@ -19,7 +19,7 @@ func _ready() -> void:
 
 func _process(_delta: float) -> void:
 	var mouse := get_viewport().get_mouse_position()
-	var cell := BoardPicker.pick_at(_camera, mouse, _tops)
+	var cell := BoardPicker.pick_at(_camera, mouse, _tops, Rect2i())
 	if cell == BoardSpace.NO_CELL:
 		_overlays.clear(BoardOverlays.Layer.HOVER)
 		_readout.text = ""

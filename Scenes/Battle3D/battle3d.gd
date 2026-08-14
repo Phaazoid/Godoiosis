@@ -42,6 +42,11 @@ enum View {
 # board is what the view is BOUNDED by, not what it opens at (dev feel-check 2026-08-14:
 # fitting all 64x40 of Prolog opened the game too far out to play from).
 @export var opening_view_cells := 18.0
+# How far PAST the painted board a click still resolves to a cell (#231). The 2D game
+# lets you paint outside the board to grow it, and CameraController.EDIT_MARGIN_CELLS is
+# how far it already lets you pan out to do so — this is that same authoring margin, in
+# the view that now has to support the same act. Not a new number: match them or say why.
+@export var paint_apron_cells: int = CameraController.EDIT_MARGIN_CELLS
 # The corner debug view's knobs (aesthetics get a knob, not a guess):
 @export var pip_scale := 0.35
 @export var pip_margin := Vector2(12.0, 12.0)
@@ -59,6 +64,10 @@ var game: Node2D
 var _game_container: SubViewportContainer
 var _game_view: SubViewport
 var _tops: Dictionary[Vector2i, int] = {}
+# The painted footprint, cached beside _tops and written wherever it is (#231): the
+# picker needs it grown by the apron on every motion event, and deriving it per pick
+# would walk every column of the board each time the mouse moves.
+var _board_rect := Rect2i()
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # The 2D game's native resolution, read in _ready off the container's authored
 # custom_minimum_size (Main.tscn) — the one source of that fact. The PiP pins the
@@ -97,7 +106,7 @@ func _ready() -> void:
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
-	game.turn_manager.turn_started.connect(_on_turn_started)
+	_overlay_mirror.board_mirror = _board_mirror
 	game.scenario_manager.board_loaded.connect(_on_board_loaded)
 	if auto_play:
 		_start.call_deferred()
@@ -129,12 +138,36 @@ func _on_board_loaded() -> void:
 
 
 func rebuild() -> void:
-	_board_mirror.rebuild(game.grid, game.terrain_states.to_state_dict())
+	_board_mirror.rebuild(game.grid, game.terrain_states.burning_cells())
+	_refresh_tops()
+
+
+# _tops and _board_rect are one fact in two shapes — never write one without the other.
+func _refresh_tops() -> void:
 	_tops = BoardPicker.column_tops_from($Board)
+	_board_rect = BoardPicker.used_rect(_tops)
 
 
-func _on_turn_started(_faction: int) -> void:
-	_board_mirror.refresh_states(game.terrain_states.to_state_dict())
+# The live terrain poll (#231). Confined to DEV_MODE on purpose: the sim never paints
+# terrain — the only writers are the dev brush and its Resize — so gating here keeps an
+# O(board) diff entirely out of the shipping game while still catching every writer,
+# including any future one, with no trigger site to remember. (An engine signal was the
+# first choice and is not available: TileMapLayer.changed does NOT fire on set_cell /
+# erase_cell in 4.7 — measured, with a property write as the control.)
+#
+# Repainting can add or erase a COLUMN, which is what the picker and the camera bounds
+# are derived from — so refresh them with it, or the newly painted cell is unclickable
+# and panning stops at the old edge. Bounds only, never a re-frame: the 2D twin
+# (CameraController.refresh_bounds) moves limits and never re-aims, and yanking the
+# camera mid-stroke is not what painting a tile should do.
+func _sync_terrain_while_authoring() -> void:
+	if game.game_state != game.GameState.DEV_MODE:
+		return
+	_board_mirror.sync(game.grid)
+	var before := _board_rect
+	_refresh_tops()
+	if _board_rect != before:
+		_rig.rebound(_board_volume())
 
 
 func _fit_camera() -> void:
@@ -173,13 +206,12 @@ func _opening_volume(board: AABB) -> AABB:
 func _board_volume() -> AABB:
 	if _tops.is_empty():
 		return AABB()
-	var lo := Vector3(INF, 0.0, INF)
-	var hi := Vector3(-INF, 0.0, -INF)
-	for column: Vector2i in _tops.keys():
-		var top: float = float(_tops[column])
-		lo = Vector3(minf(lo.x, column.x), 0.0, minf(lo.z, column.y))
-		hi = Vector3(maxf(hi.x, column.x + 1.0), maxf(hi.y, top), maxf(hi.z, column.y + 1.0))
-	return AABB(lo, hi - lo)
+	# The bbox itself is BoardPicker's — it derives the same one to bound its walk, and
+	# two copies of "how big is this board" is exactly the seam Law #4 forbids (#231).
+	var rect := _board_rect
+	return AABB(
+		Vector3(rect.position.x, 0.0, rect.position.y),
+		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)), rect.size.y))
 
 
 # --- Hosting the 2D game (stage 4c) ---------------------------------------------------
@@ -268,6 +300,11 @@ func _set_board_visible(shown: bool) -> void:
 		if item == null or item == overlays.zone_overlay or item == overlays.zone_highlight_overlay:
 			continue
 		item.visible = shown
+	# The two authoring-zone layers are skipped above because OverlayManager computes their
+	# visibility from BOTH inputs — a blanket true here would reveal PATROL zones in play, and
+	# a blanket false would be re-overridden the next time the Tile Brush tab changed. Telling
+	# it whether the 2D draws at all is this host's half; it owns the product (#231).
+	overlays.set_board_rendering(shown)
 
 
 # --- The input bridge (stage 4b) -------------------------------------------------------
@@ -286,6 +323,7 @@ func _process(_delta: float) -> void:
 	var live: bool = (demo_mode or game.can_process()) and view != View.FLAT_2D
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
+	_sync_terrain_while_authoring()
 	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.
@@ -429,4 +467,11 @@ func _cancel() -> void:
 
 
 func _pick(screen_pos: Vector2) -> Vector3i:
-	return BoardPicker.pick_at(_camera, screen_pos, _tops)
+	return BoardPicker.pick_at(_camera, screen_pos, _tops, _paint_plane())
+
+
+# Where a click still lands with no block under it (#231): the painted board plus the
+# authoring apron, so an erased cell stays clickable and painting can still grow the
+# board outward the way the 2D view allows.
+func _paint_plane() -> Rect2i:
+	return _board_rect.grow(paint_apron_cells)
