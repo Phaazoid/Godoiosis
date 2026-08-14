@@ -43,6 +43,98 @@ func _live_icon_count() -> int:
 	var count: int = game.overlay_manager.terrain_live_sprites.size()
 	return count
 
+# --- A state needs ground under it (#245) --------------------------------------------
+#
+# End-to-end over the REAL grid, so GridUtils.has_ground's choice of get_cell_source_id (rather
+# than get_cell_tile_data) is exercised against a board that actually has a TileSet.
+
+# Far outside any authored board. NOT merely off the row before_test paints -- clear_board() clears
+# units, zones and states but deliberately leaves the TILEMAP alone, so Main.tscn's own terrain is
+# still there and a nearby cell has ground under it. Every case below asserts that for itself.
+const VOID_CELL := Vector2i(64, 64)
+const FAR_CELL := Vector2i(6, 0)    # on the painted row, but outside a 3x3 resize
+
+func _assert_void_is_void() -> void:
+	assert_bool(GridUtils.has_ground(game.grid, VOID_CELL)).override_failure_message(
+			"precondition: VOID_CELL has ground, so nothing below proves anything").is_false()
+
+
+func test_a_state_cannot_be_painted_onto_a_cell_with_no_tile() -> void:
+	# The dev ruling, verbatim: a terrain effect modifies what happens when a unit walks on a tile,
+	# so if there is no tile there should be no modifier.
+	_assert_void_is_void()
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(VOID_CELL)
+	assert_bool(game.terrain_states.has_state(VOID_CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("a state landed on a cell with no ground").is_false()
+	# Non-vacuous: the same paint on real ground still lands, so this is not just a dead brush.
+	game.dev_controller._paint_state(CELL)
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)).is_true()
+
+
+func test_erasing_a_tile_takes_its_states_with_it() -> void:
+	# The half a forbid alone does NOT cover, and the reported bug's actual path: the state was
+	# perfectly legal when painted, and the ground went away afterwards.
+	#
+	# The ICON assertion is the one with teeth. The first version of this case checked has_state
+	# alone, went green, and shipped a build where the store was correct and the sprite stayed on
+	# screen — because _erase_tile cleared the state and never redrew, and the 3D mirror then
+	# faithfully mirrored the stale sprite. Assert the WIRE, not the two ends.
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(CELL)
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("precondition: the paint never landed").is_true()
+	var painted_icons := _live_icon_count()
+	assert_int(painted_icons).override_failure_message(
+			"precondition: painting drew no icon, so its disappearance would prove nothing").is_greater(0)
+
+	game.dev_controller._erase_tile(CELL)
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("the state outlived the ground it was standing on").is_false()
+	assert_int(_live_icon_count()).override_failure_message(
+			"the store cleared but the icon stayed — the redraw never ran").is_less(painted_icons)
+
+
+func test_painting_frozen_onto_a_burning_cell_keeps_the_fire() -> void:
+	# Reported in play, 3D only: painting FROZEN over a BURNING tile "erased" the fire. Bisecting
+	# store from render -- a cell legally holds both, so if this is green the store is innocent.
+	_brush._tile_state = Terrain.TileState.BURNING
+	game.dev_controller._paint_state(CELL)
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(CELL)
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the frozen paint dropped the fire from the STORE").is_true()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)).is_true()
+	assert_array(game.terrain_states.burning_cells()) \
+		.override_failure_message("the cell fell out of burning_cells, which is what drives the 3D flame") \
+		.contains([CELL])
+
+
+func test_shrinking_the_map_drops_the_states_left_outside_it() -> void:
+	# grid.clear() inside resize_map is the SECOND way to lose ground, and it never matched a search
+	# for erase_cell — which is exactly why the rule sweeps rather than clearing one named cell.
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(FAR_CELL)
+	assert_bool(game.terrain_states.has_state(FAR_CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("precondition: the paint never landed").is_true()
+	game.dev_controller.resize_map(3, 3, GRASS_SOURCE, GRASS_ATLAS)
+	assert_bool(game.terrain_states.has_state(FAR_CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("a state survived the board shrinking out from under it").is_false()
+
+
+func test_a_groundless_cell_never_becomes_walkable_through_frozen() -> void:
+	# The severe half, and why this was never only a floating icon. BoardContext.is_walkable
+	# short-circuits on FROZEN BEFORE the tile lookup -- deliberately, since headless fixtures carry
+	# no TileSet -- so a frozen void cell read as WALKABLE and the move-range BFS would happily path
+	# a unit onto nothing.
+	_assert_void_is_void()
+	assert_bool(game._board().is_walkable(VOID_CELL)) \
+		.override_failure_message("precondition: the void cell was walkable before any freeze").is_false()
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(VOID_CELL)
+	assert_bool(game._board().is_walkable(VOID_CELL)) \
+		.override_failure_message("freezing the void made it walkable").is_false()
+
 func test_painting_deposits_the_picked_state_and_draws_its_icon() -> void:
 	_brush._tile_state = Terrain.TileState.BLAZE
 	game.dev_controller._paint_state(CELL)

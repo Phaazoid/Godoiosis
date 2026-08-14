@@ -122,6 +122,9 @@ func _build_collaborators() -> void:
 
 	terrain_states = TerrainStateManager.new()
 	terrain_states.name = "TerrainStateManager"
+	# A tile state needs a tile under it (#245). Reads `grid` live rather than capturing it, so a
+	# board swap cannot leave the rule judging against the previous scenario's terrain.
+	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
 	add_child(terrain_states)
 
 	zone_manager = ZoneManager.new()

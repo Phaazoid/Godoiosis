@@ -237,6 +237,12 @@ func _paint_tile(cell: Vector2i) -> void:
 
 func _erase_tile(cell: Vector2i) -> void:
 	game.grid.erase_cell(cell)
+	# The states go with the ground (#245). The forbid stops NEW deposits on a groundless cell but
+	# says nothing about ones already sitting there when the tile is taken away. The REDRAW is not
+	# optional either: without it the store is correct and the icon stays on screen, which is how
+	# this shipped broken the first time -- the 3D mirror then faithfully mirrors a stale sprite.
+	if game.terrain_states.prune_groundless():
+		game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _paint_zone(cell: Vector2i) -> void:
@@ -287,5 +293,9 @@ func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) 
 	for x in range(width):
 		for y in range(height):
 			game.grid.set_cell(Vector2i(x, y), fill_source, fill_tile)
+	# The SECOND way to take ground away (#245), and the one a per-cell clear at the erase site
+	# would have missed: shrinking strands every state that sat outside the new rectangle.
+	if game.terrain_states.prune_groundless():
+		game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.camera_controller.refresh_bounds(game.grid)
 	

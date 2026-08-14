@@ -202,6 +202,11 @@ func _make_fire(cell: Vector3i) -> Node3D:
 	material.emission_texture = material.albedo_texture
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# Above every overlay layer, structurally rather than by luck. Unset, this was 0 while
+	# Layer.TERRAIN sorts at 2, so a frost icon painted onto a burning tile drew over the flame
+	# and the fire read as ERASED (#245, found in play). Transparent materials draw in priority
+	# order and this one does not write depth, so the sort IS the whole answer here.
+	material.render_priority = BoardOverlays.FLAME_RENDER_PRIORITY
 	quad.material = material
 	flame.mesh = quad
 	flame.position = Vector3(0, flame_base_lift(), 0)

@@ -55,6 +55,9 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	# (BURNING, and Cover's DEF since #84) silently answers "nothing here".
 	var terrain_states := TerrainStateManager.new()
 	terrain_states.name = "TerrainStateManager"
+	# Same rule as the flat game's store (#245) — a tile state needs a tile under it. The parallel
+	# stacks each wire it; neither is allowed to be the one that forgets, which is how #103 happened.
+	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
 	root.add_child(terrain_states)
 
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with

@@ -70,6 +70,33 @@ func test_fire_markers_match_the_games_own_burning_cells() -> void:
 	assert_bool(expected > 0).is_true()  # Prolog authors BLAZE content; a zero here means the load broke
 
 
+func test_the_flame_actually_carries_the_flame_priority() -> void:
+	# Test the WIRE: a sort constant is worth nothing if no flame reads it, and this one exists
+	# because the flame read NOTHING — it sat at the default 0, below every overlay layer, so
+	# painting a frost icon onto a burning tile drew straight over the fire and it looked erased
+	# (#245, found in play). The store was correct throughout, which is why only a render-side
+	# assertion could ever have caught it.
+	_scene.load_mission(PROLOG)
+	await await_idle_frame()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(burning.size() > 0).override_failure_message(
+			"precondition: nothing is burning, so there is no flame to inspect").is_true()
+	var marker := mirror.fire_marker_at(burning[0])
+	assert_object(marker).override_failure_message("no marker for a burning cell").is_not_null()
+	var flame: MeshInstance3D = null
+	for child in marker.get_children():
+		var mesh_child := child as MeshInstance3D
+		if mesh_child != null:
+			flame = mesh_child
+			break
+	assert_object(flame).override_failure_message("the fire marker has no mesh child").is_not_null()
+	var material := (flame.mesh as QuadMesh).material as StandardMaterial3D
+	assert_int(material.render_priority).override_failure_message(
+			"the flame does not apply FLAME_RENDER_PRIORITY — the constant is inert and overlay markup draws over fire again"
+	).is_equal(BoardOverlays.FLAME_RENDER_PRIORITY)
+
+
 func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
 	# Reported in play: a unit downed while standing in fire makes that fire vanish for the
 	# rest of the turn, returning at the next turn boundary. This isolates WHICH half is
