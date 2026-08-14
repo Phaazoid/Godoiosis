@@ -809,6 +809,7 @@ func spawn_sandbox() -> void:
 	scenario_manager.clear_board()
 	scenario_manager.last_loaded_path = ""
 	TestBoard.spawn(self)
+	scenario_manager.board_loaded.emit()  # the one board build outside apply_scenario (#222)
 
 # Returns null when the cell can't take a unit. NB: UnitFactory.create_unit already instantiated
 # the node, so every refusal path has to free it — an un-parented Unit is an orphan nothing else

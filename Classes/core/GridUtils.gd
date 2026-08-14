@@ -78,6 +78,12 @@ static func authored_tile_display_name(data: TileData) -> String:
 	var raw: String = data.get_custom_data("terrain_name")
 	return raw.capitalize()
 
+# A cell's center in the grid's GLOBAL space -- the one spelling of
+# to_global(map_to_local(cell)), consolidated from 7 copies (#222). Callers assigning
+# a LOCAL position keep the bare map_to_local half-form on purpose (different space).
+static func cell_world(grid: TileMapLayer, cell: Vector2i) -> Vector2:
+	return grid.to_global(grid.map_to_local(cell))
+
 # The tile's own sprite, cut from its atlas sheet -- what the palette rows and the hover card
 # draw. Rect2-wrapped: the getter returns Rect2i and AtlasTexture.region is Rect2, and Variant
 # equality across the two is FALSE, which bites anything comparing regions later.

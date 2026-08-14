@@ -96,6 +96,18 @@ func test_unproject_round_trip_finds_the_cell_at_every_yaw_snap() -> void:
 			assert_that(picked).is_equal(cell)
 
 
+func test_pick_at_is_the_ray_pair_spelled_once() -> void:
+	# Delegation equality against a live camera — and not vacuously, on a real hit.
+	var board := _scene.get_node("Board") as GridMap
+	var camera := _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
+	var tops := BoardPicker.column_tops_from(board)
+	var screen := camera.unproject_position(BoardSpace.standing_point(Vector3i(8, 2, 3)) + Vector3(0.0, -0.02, 0.0))
+	var direct := BoardPicker.pick_cell(
+			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops)
+	assert_that(direct).is_not_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_at(camera, screen, tops)).is_equal(direct)
+
+
 func test_occluded_cell_yields_the_blocker_not_the_hidden_cell() -> void:
 	# From the default camera (south, pitched down), ground cell (8, 0, 0) hides behind
 	# the 3-tall hill. Aiming at its standing point must pick a hill cell instead —

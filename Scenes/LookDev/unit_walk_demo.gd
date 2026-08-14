@@ -56,9 +56,7 @@ func _unhandled_input(event: InputEvent) -> void:
 	var click := event as InputEventMouseButton
 	if click == null or not click.pressed or click.button_index != MOUSE_BUTTON_LEFT:
 		return
-	var cell := BoardPicker.pick_cell(
-			_camera.project_ray_origin(click.position),
-			_camera.project_ray_normal(click.position), _tops)
+	var cell := BoardPicker.pick_at(_camera, click.position, _tops)
 	if cell == BoardSpace.NO_CELL:
 		return
 	var clicked_unit := _unit_at(cell)
@@ -96,7 +94,7 @@ static func ramp_exits_from(board: GridMap, ramp_item: int) -> Dictionary[Vector
 	for cell in board.get_used_cells():
 		if board.get_cell_item(cell) != ramp_item:
 			continue
-		var column := Vector2i(cell.x, cell.z)
+		var column := BoardSpace.flat(cell)
 		var basis := board.get_basis_with_orthogonal_index(board.get_cell_item_orientation(cell))
 		var high_dir := basis * Vector3(0, 0, -1)
 		var high_step := Vector2i(roundi(high_dir.x), roundi(high_dir.z))
@@ -109,8 +107,8 @@ static func ramp_exits_from(board: GridMap, ramp_item: int) -> Dictionary[Vector
 # high- and low-side neighbors.
 static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[Vector2i, int],
 		blocked: Dictionary[Vector2i, bool], ramp_exits: Dictionary[Vector2i, Array]) -> Array[Vector3i]:
-	var from_col := Vector2i(from_cell.x, from_cell.z)
-	var to_col := Vector2i(to_cell.x, to_cell.z)
+	var from_col := BoardSpace.flat(from_cell)
+	var to_col := BoardSpace.flat(to_cell)
 	if not tops.has(from_col) or not tops.has(to_col):
 		return []
 	if blocked.has(to_col):
@@ -145,7 +143,7 @@ static func find_path(from_cell: Vector3i, to_cell: Vector3i, tops: Dictionary[V
 # Bounded reachability under the same ruling — the MOVE fill's demo data source.
 static func find_reachable(from_cell: Vector3i, max_steps: int, tops: Dictionary[Vector2i, int],
 		blocked: Dictionary[Vector2i, bool], ramp_exits: Dictionary[Vector2i, Array]) -> Array[Vector3i]:
-	var from_col := Vector2i(from_cell.x, from_cell.z)
+	var from_col := BoardSpace.flat(from_cell)
 	if not tops.has(from_col):
 		return []
 	var depth: Dictionary[Vector2i, int] = {from_col: 0}
@@ -203,7 +201,7 @@ func _spawn_cast() -> void:
 # below the flat convention (dev feel-check 2026-08-12: units floated over slopes).
 func _surface_point(cell: Vector3i) -> Vector3:
 	var point := BoardSpace.standing_point(cell)
-	if _ramp_exits.has(Vector2i(cell.x, cell.z)):
+	if _ramp_exits.has(BoardSpace.flat(cell)):
 		point.y -= BoardSpace.CELL_SIZE * 0.5
 	return point
 
@@ -215,7 +213,7 @@ func _top_cell(column: Vector2i) -> Vector3i:
 
 func _unit_at(cell: Vector3i) -> UnitSprite3D:
 	for unit in _units:
-		if Vector2i(unit.cell.x, unit.cell.z) == Vector2i(cell.x, cell.z):
+		if BoardSpace.flat(unit.cell) == BoardSpace.flat(cell):
 			return unit
 	return null
 
@@ -245,7 +243,7 @@ func _blocked_for(mover: UnitSprite3D) -> Dictionary[Vector2i, bool]:
 	var blocked: Dictionary[Vector2i, bool] = {}
 	for unit in _units:
 		if unit != mover:
-			blocked[Vector2i(unit.cell.x, unit.cell.z)] = true
+			blocked[BoardSpace.flat(unit.cell)] = true
 	return blocked
 
 
@@ -256,7 +254,7 @@ func _refresh_selection_overlays() -> void:
 	_overlays.set_cells(BoardOverlays.Layer.MOVE, find_reachable(
 			_selected.cell, MOVE_RANGE_CAP, _tops, _blocked_for(_selected), _ramp_exits))
 	var ring: Array[Vector3i] = []
-	var center := Vector2i(_selected.cell.x, _selected.cell.z)
+	var center := BoardSpace.flat(_selected.cell)
 	for dx in range(-DEMO_ATTACK_RANGE, DEMO_ATTACK_RANGE + 1):
 		for dz in range(-DEMO_ATTACK_RANGE, DEMO_ATTACK_RANGE + 1):
 			var col := center + Vector2i(dx, dz)

@@ -5,6 +5,13 @@ class_name ScenarioManager
 # live unit into a ScenarioUnitEntry/ScenarioData, and rebuilds the board from a saved one.
 # Since #87 a save is a true mid-battle snapshot, battle-scoped layer included. Player save
 # slots (#144) live here too: same capture/apply pair, wrapped in a SaveGame under user://.
+# board_loaded (#222) fires once per board build, after the last settle step.
+
+# Every board swap crosses apply_scenario (begin_mission, Load Game, F2/Restart, the dev
+# Scenario tab) EXCEPT game.spawn_sandbox, which emits this itself after TestBoard.spawn.
+# turn_started deliberately never fires on menu arrivals (#144), so the load funnel speaks
+# for itself — the 3D mirror rebuilds on it.
+signal board_loaded
 
 const SCENARIO_DIR := "res://Scenarios/"
 
@@ -221,6 +228,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# this one). set_objectives refreshed it mid-load, BEFORE units spawned, so extraction read its
 	# progress off an empty board and the stale answer sat until the first turn event.
 	game.refresh_mission_status()
+	board_loaded.emit()
 
 func reload_current():
 	if last_loaded_path == "":

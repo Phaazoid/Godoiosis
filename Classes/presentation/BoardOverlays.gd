@@ -1,20 +1,31 @@
 extends Node3D
 class_name BoardOverlays
 
-# The 3D presentation stack's board markup (#213 / #176 stage 3): the one owner of
-# per-cell overlay layers. FILL layers are pooled Decals projecting straight down,
-# so fills conform to ramp slopes structurally (the dev's stage-1 requirement);
-# HOVER is a voxel corner-bracket mesh (the dev's stage-2 requirement, "just the
-# corners of the specific voxel"). Layer colors deliberately mirror the 2D
-# OverlayManager's constants — one declared representation per presentation stack
-# (the parallel-stacks doctrine); change a color in both places or say why not.
+# The 3D presentation stack's board markup (#213 / #176 stages 3+4c): the one owner
+# of per-cell overlay layers. Four marker kinds — FILL (pooled unshaded quads lying
+# on the cell's top face; the dev's ruling that gameplay markup must never read as
+# terrain, which a lit Decal cannot honor), BRACKET (the voxel corner-bracket
+# pointer), SPRITE (a ground quad with per-marker texture+tint — path arrows,
+# knockback trails, terrain icons, pick markers), BILLBOARD (a camera-facing
+# Sprite3D above the cell — selection icons). Layer colors deliberately mirror the
+# 2D OverlayManager's constants — one declared representation per presentation
+# stack (the parallel-stacks doctrine); change a color in both places or say why not.
 #
-# The mask contract: fill decals paint WORLD_RENDER_LAYER only, and UnitSprite3D
-# lives on UNIT_RENDER_LAYER, so a fill never tints a sprite. Both constants live
-# HERE; a drift test pins them disjoint.
+# Contract: a dumb idempotent sink. set_cells/set_markers replace a layer wholesale
+# and are cheap ONLY when the caller diffs first (OverlayMirror does); marker pos is
+# the cell's top-face ANCHOR (the mirror's geometry), and the LAYER adds its own
+# lift — board shape stays the caller's business.
+#
+# The mask contract: fill/sprite quads render on WORLD_RENDER_LAYER only, and
+# UnitSprite3D lives on UNIT_RENDER_LAYER. Both constants live HERE; a drift test
+# pins them disjoint.
 
-enum Layer { MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER }
-enum Kind { FILL, BRACKET }
+enum Layer {
+	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
+	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
+	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
+}
+enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
 const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
 const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
@@ -25,20 +36,39 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -2, "kind": Kind.FILL},
 	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -2, "kind": Kind.FILL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
+	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
+	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
+	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
+	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 3, "kind": Kind.FILL},
+	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 4, "kind": Kind.SPRITE},
+	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
+	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
+	Layer.TERRAIN: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	Layer.TERRAIN_PREVIEW: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	Layer.ICONS: {"color": Color.WHITE, "sort": 0, "kind": Kind.BILLBOARD},
 }
 
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
+# The 2D art's metric: a 16px texture covers exactly one board cell.
+const ART_PIXELS_PER_CELL := 16.0
 
-# Bracket proportions — eye-knobs (the tuning rule); read when the mesh first builds.
+# Eye-knobs (the tuning rule); read when markers build/place.
 @export var bracket_arm := 0.22
 @export var bracket_thickness := 0.04
 @export var bracket_scale := 1.02
+@export var fill_lift := 0.02          # quad height above the top face — the z-fight gap
+@export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
+@export var billboard_lift := 1.1      # icon height above the cell's top face
+@export var billboard_pixel_size := 1.0 / 32.0
 
 var fill_texture: Texture2D
 
-var _markers: Dictionary[Layer, Array] = {}
-var _cells: Dictionary[Layer, Array] = {}
+var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kinds)
+var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
+var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
+var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
+var _quad_mesh: PlaneMesh
 
 
 func _ready() -> void:
@@ -48,14 +78,16 @@ func _ready() -> void:
 
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same
 # set changes nothing; extras from a previous, larger set are hidden, not leaked).
+# FILL/BRACKET layers only — variant layers go through set_markers.
 func set_cells(layer: Layer, cells: Array[Vector3i]) -> void:
+	var spec: Dictionary = LAYERS[layer]
+	if spec["kind"] != Kind.FILL and spec["kind"] != Kind.BRACKET:
+		push_error("set_cells on a %s layer — use set_markers" % Kind.keys()[spec["kind"]])
+		return
 	_cells[layer] = cells.duplicate()
-	if not _markers.has(layer):
-		_markers[layer] = []
-	var pool: Array = _markers[layer]
+	var pool: Array = _pool_for(layer)
 	while pool.size() < cells.size():
 		pool.append(_make_marker(layer))
-	var spec: Dictionary = LAYERS[layer]
 	for i in pool.size():
 		var marker := pool[i] as Node3D
 		if i < cells.size():
@@ -65,8 +97,48 @@ func set_cells(layer: Layer, cells: Array[Vector3i]) -> void:
 			marker.visible = false
 
 
+# Replaces a variant layer wholesale: one entry per marker, {"pos": Vector3 (the
+# cell's top-face anchor), "texture": Texture2D, "modulate": Color}. Same
+# idempotent-pool contract as set_cells. SPRITE/BILLBOARD layers only.
+func set_markers(layer: Layer, markers: Array[Dictionary]) -> void:
+	var spec: Dictionary = LAYERS[layer]
+	if spec["kind"] != Kind.SPRITE and spec["kind"] != Kind.BILLBOARD:
+		push_error("set_markers on a %s layer — use set_cells" % Kind.keys()[spec["kind"]])
+		return
+	_marker_data[layer] = markers.duplicate()
+	var pool: Array = _pool_for(layer)
+	while pool.size() < markers.size():
+		pool.append(_make_marker(layer))
+	for i in pool.size():
+		var node := pool[i] as Node3D
+		if i < markers.size():
+			node.visible = true
+			_apply_marker(spec, node, markers[i])
+		else:
+			node.visible = false
+
+
+# Runtime recolor of a FILL layer's pool (the heal-green reach, the aim pulse —
+# colors the 2D layer modulates live). Skip-if-equal so a per-frame poll is free.
+func set_layer_modulate(layer: Layer, color: Color) -> void:
+	var spec: Dictionary = LAYERS[layer]
+	if spec["kind"] != Kind.FILL:
+		push_error("set_layer_modulate is for FILL layers")
+		return
+	if _layer_colors.get(layer, spec["color"]) == color:
+		return
+	_layer_colors[layer] = color
+	for node: Node3D in _pool_for(layer):
+		var material := (node as MeshInstance3D).material_override as StandardMaterial3D
+		material.albedo_color = color
+
+
 func clear(layer: Layer) -> void:
-	set_cells(layer, [])
+	var spec: Dictionary = LAYERS[layer]
+	if spec["kind"] == Kind.SPRITE or spec["kind"] == Kind.BILLBOARD:
+		set_markers(layer, [])
+	else:
+		set_cells(layer, [])
 
 
 func clear_all() -> void:
@@ -80,6 +152,16 @@ func cells_of(layer: Layer) -> Array[Vector3i]:
 	return current
 
 
+func markers_of(layer: Layer) -> Array[Dictionary]:
+	var current: Array[Dictionary] = []
+	current.assign(_marker_data.get(layer, []))
+	return current
+
+
+func layer_modulate(layer: Layer) -> Color:
+	return _layer_colors.get(layer, LAYERS[layer]["color"])
+
+
 func marker_count(layer: Layer) -> int:
 	var pool: Array = _markers.get(layer, [])
 	var visible_count := 0
@@ -91,31 +173,91 @@ func marker_count(layer: Layer) -> int:
 
 # --- Marker construction -----------------------------------------------------------
 
+func _pool_for(layer: Layer) -> Array:
+	if not _markers.has(layer):
+		_markers[layer] = []
+	return _markers[layer]
+
+
 func _marker_position(spec: Dictionary, cell: Vector3i) -> Vector3:
 	if spec["kind"] == Kind.BRACKET:
 		return BoardSpace.cell_center(cell)
-	# The decal box straddles the cell's top: tall enough to catch a full ramp slope,
-	# normal-faded so it barely touches vertical walls.
-	return BoardSpace.cell_center(cell) + Vector3(0.0, 0.4 * BoardSpace.CELL_SIZE, 0.0)
+	return BoardSpace.standing_point(cell) + Vector3(0.0, _lift_of(spec), 0.0)
+
+
+# Per-sort spacing keeps coplanar stacked fills apart; render_priority (set at
+# construction) keeps the alpha blend order stable regardless.
+func _lift_of(spec: Dictionary) -> float:
+	return fill_lift + spec["sort"] * lift_step
+
+
+func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
+	var pos: Vector3 = marker["pos"]
+	var texture: Texture2D = marker["texture"]
+	var tint: Color = marker.get("modulate", Color.WHITE)
+	if spec["kind"] == Kind.BILLBOARD:
+		var sprite := node as Sprite3D
+		sprite.position = pos + Vector3(0.0, billboard_lift, 0.0)
+		sprite.texture = texture
+		sprite.modulate = tint
+		return
+	var quad := node as MeshInstance3D
+	quad.position = pos + Vector3(0.0, _lift_of(spec), 0.0)
+	var material := quad.material_override as StandardMaterial3D
+	material.albedo_texture = texture
+	material.albedo_color = tint
+	if texture != null:
+		var art: Vector2 = texture.get_size() / ART_PIXELS_PER_CELL
+		quad.scale = Vector3(art.x, 1.0, art.y)
 
 
 func _make_marker(layer: Layer) -> Node3D:
 	var spec: Dictionary = LAYERS[layer]
-	if spec["kind"] == Kind.BRACKET:
-		return _make_bracket(spec)
-	return _make_fill(spec)
+	match spec["kind"] as Kind:
+		Kind.BRACKET:
+			return _make_bracket(spec)
+		Kind.BILLBOARD:
+			return _make_billboard(spec)
+		Kind.SPRITE:
+			return _make_quad(spec, null, Color.WHITE)
+		_:
+			return _make_quad(spec, fill_texture, _layer_colors.get(layer, spec["color"]))
 
 
-func _make_fill(spec: Dictionary) -> Decal:
-	var decal := Decal.new()
-	decal.texture_albedo = fill_texture
-	decal.modulate = spec["color"]
-	decal.size = Vector3(1.0, 2.0, 1.0) * BoardSpace.CELL_SIZE
-	decal.cull_mask = WORLD_RENDER_LAYER
-	decal.sorting_offset = spec["sort"]
-	decal.normal_fade = 0.3
-	add_child(decal)
-	return decal
+# The one fill/sprite recipe: an unshaded alpha quad lying on the cell's top face —
+# markup, never terrain (the dev's unshaded ruling; a Decal's albedo modulates the
+# lit surface, which is why 4c retired decals).
+func _make_quad(spec: Dictionary, texture: Texture2D, color: Color) -> MeshInstance3D:
+	if _quad_mesh == null:
+		_quad_mesh = PlaneMesh.new()
+		_quad_mesh.size = Vector2.ONE * BoardSpace.CELL_SIZE
+	var instance := MeshInstance3D.new()
+	instance.mesh = _quad_mesh
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.albedo_texture = texture
+	material.albedo_color = color
+	material.render_priority = spec["sort"]
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	add_child(instance)
+	return instance
+
+
+func _make_billboard(spec: Dictionary) -> Sprite3D:
+	var sprite := Sprite3D.new()
+	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	sprite.pixel_size = billboard_pixel_size
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.shaded = false
+	sprite.render_priority = spec["sort"]
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sprite.layers = WORLD_RENDER_LAYER
+	add_child(sprite)
+	return sprite
 
 
 func _make_bracket(spec: Dictionary) -> MeshInstance3D:

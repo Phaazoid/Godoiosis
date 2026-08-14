@@ -7,7 +7,9 @@ class_name UnitMirror
 # already the one animation authority — position is unit.position / 16 (the
 # map_to_local metric), so the 3D sprite glides exactly as the 2D one does.
 # Keyed by instance id, never by object ref (#149: a freed Unit in a typed slot
-# dies on the type-check before any null guard runs).
+# dies on the type-check before any null guard runs). Since #222 it also hosts the
+# planning-ghost pool (set_ghosts) and copies each 2D sprite's own visible/modulate
+# per frame — pulse, highlight and projected-hide parity by copy.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 const COLUMN_TOP := 1.0  # flat mirror boards: every column is one cell tall
@@ -15,6 +17,7 @@ const COLUMN_TOP := 1.0  # flat mirror boards: every column is one cell tall
 var units_root: Node2D
 
 var _mirrored: Dictionary[int, UnitSprite3D] = {}
+var _ghosts: Array[UnitSprite3D] = []
 
 
 func _process(_delta: float) -> void:
@@ -49,6 +52,35 @@ func sprite_for(unit: Unit) -> UnitSprite3D:
 	return _mirrored.get(unit.get_instance_id())
 
 
+# Planning ghosts (#222): the 2D projected/knockback stand-ins, mirrored as pooled
+# UnitSprite3Ds. One entry per ghost: {"pos": Vector3, "texture": Texture2D,
+# "modulate": Color} — texture and tint arrive by copy, the 2D stays the authority.
+# Wholesale replace, same pool contract as BoardOverlays (extras hidden, not freed).
+func set_ghosts(ghosts: Array[Dictionary]) -> void:
+	while _ghosts.size() < ghosts.size():
+		var ghost := UnitSprite3D.new()
+		ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # a translucent stand-in casts no shadow
+		add_child(ghost)
+		_ghosts.append(ghost)
+	for i in _ghosts.size():
+		var ghost: UnitSprite3D = _ghosts[i]
+		if i < ghosts.size():
+			ghost.visible = true
+			ghost.position = ghosts[i]["pos"]
+			ghost.texture = ghosts[i]["texture"]
+			ghost.modulate = ghosts[i]["modulate"]
+		else:
+			ghost.visible = false
+
+
+func ghost_count() -> int:
+	var visible_count := 0
+	for ghost in _ghosts:
+		if ghost.visible:
+			visible_count += 1
+	return visible_count
+
+
 func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	var previous := sprite.position
 	sprite.position = Vector3(
@@ -60,6 +92,13 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 		sprite.set_downed(downed)
 	if not downed:
 		sprite.set_walking_visual(unit.movement.moving)
+
+	# Pulse / highlight / projected-hide parity (#222): copy the 2D sprite's OWN
+	# flags, never is_visible_in_tree — 3D hosting hides the whole board subtree,
+	# which must not read as every unit hidden. The 2D tween stays the one
+	# animation authority; this is a per-frame copy of its output.
+	sprite.visible = unit.visuals.sprite.visible
+	sprite.modulate = unit.visuals.sprite.modulate
 
 	var step := sprite.position - previous
 	if Vector2(step.x, step.z).length_squared() > 0.000001:

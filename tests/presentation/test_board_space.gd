@@ -33,3 +33,15 @@ func test_negative_coordinates_floor_not_truncate() -> void:
 
 func test_no_cell_sits_outside_any_real_board() -> void:
 	assert_bool(BoardSpace.NO_CELL.y < -100).is_true()
+
+
+func test_flat_and_of_flat_bridge_the_flat_board_convention() -> void:
+	assert_that(BoardSpace.flat(Vector3i(5, 2, 8))).is_equal(Vector2i(5, 8))
+	assert_that(BoardSpace.of_flat(Vector2i(5, 8))).is_equal(Vector3i(5, 0, 8))
+	assert_that(BoardSpace.flat(BoardSpace.of_flat(Vector2i(-3, 7)))).is_equal(Vector2i(-3, 7))
+
+
+func test_flat_maps_the_no_cell_sentinel_onto_the_2d_one() -> void:
+	# The injected pointer source hands HoverPresenter flat(_pointer_cell) raw — a 3D
+	# miss must read as the 2D "no cell" by VALUE, never as a real coordinate.
+	assert_that(BoardSpace.flat(BoardSpace.NO_CELL)).is_equal(GridUtils.NO_CELL)

@@ -34,3 +34,15 @@ static func cell_of(position: Vector3) -> Vector3i:
 		floori(position.y / CELL_SIZE),
 		floori(position.z / CELL_SIZE)
 	)
+
+
+# The flat-board bridge (#222): sim cells are 2D (x, y), mirror cells are (x, 0, y)
+# until real elevation arrives — the ONE spelling of that pair. Not for columns with
+# a real height (BoardPicker._top_cell keeps its own y). flat(NO_CELL) equals
+# GridUtils.NO_CELL by value — pinned, the pointer source relies on it.
+static func flat(cell: Vector3i) -> Vector2i:
+	return Vector2i(cell.x, cell.z)
+
+
+static func of_flat(cell: Vector2i) -> Vector3i:
+	return Vector3i(cell.x, 0, cell.y)

@@ -23,12 +23,18 @@ const _MAX_STEPS := 4096
 static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 	var tops: Dictionary[Vector2i, int] = {}
 	for cell in board.get_used_cells():
-		var column := Vector2i(cell.x, cell.z)
+		var column := BoardSpace.flat(cell)
 		var top := cell.y + 1
 		var existing: int = tops.get(column, 0)
 		if top > existing:
 			tops[column] = top
 	return tops
+
+
+# Ray-pair convenience: the cell under a camera's screen point. Every live caller
+# built the same origin/normal pair by hand (#222 collapsed three copies).
+static func pick_at(camera: Camera3D, screen_pos: Vector2, tops: Dictionary[Vector2i, int]) -> Vector3i:
+	return pick_cell(camera.project_ray_origin(screen_pos), camera.project_ray_normal(screen_pos), tops)
 
 
 # The cell under a ray, or BoardSpace.NO_CELL on a miss.
