@@ -81,6 +81,74 @@ func test_downed_and_death_reconcile() -> void:
 	assert_int(_mirror.mirrored_count()).is_equal(before - 1)
 
 
+# The rig's own settle: process_frame resumes coroutines BEFORE node _process.
+func _settle() -> void:
+	await await_idle_frame()
+	await await_idle_frame()
+
+
+func test_a_downed_unit_stays_on_screen() -> void:
+	# #232, a 4c regression. The mirror copied $MapSprite.visible to get projected-hide
+	# parity, and Unit._show_downed_sprite hides that SAME flag to swap in the separate
+	# downed art — so a unit going down vanished from the diorama one line after
+	# set_downed had correctly mirrored it. Note that the reconcile case above passes
+	# against the bug: it asserts the texture swap, not that anything is drawn.
+	var unit := _live_units()[0]
+	unit._go_downed(false)
+	await _settle()
+	var sprite := _mirror.sprite_for(unit)
+	assert_bool(sprite.is_downed()).is_true()
+	assert_bool(sprite.visible).override_failure_message(
+			"the downed unit vanished from the diorama").is_true()
+
+
+func test_a_projected_unit_still_hides_for_its_ghost() -> void:
+	# The other half of the same flag: the hide existed for a real reason, and the fix must
+	# not simply delete it. A unit whose planning ghost is drawn elsewhere must not also be
+	# standing on the cell it is leaving.
+	var unit := _live_units()[0]
+	var sprite := _mirror.sprite_for(unit)
+	assert_bool(sprite.visible).override_failure_message(
+			"it was already hidden; the case proves nothing").is_true()
+
+	unit.visuals.set_projected(true)
+	await _settle()
+	assert_bool(sprite.visible).override_failure_message(
+			"a projected unit is drawn twice — as its ghost AND on its old cell").is_false()
+
+	unit.visuals.set_projected(false)
+	await _settle()
+	assert_bool(sprite.visible).is_true()
+
+
+func test_the_faction_tint_reaches_the_diorama() -> void:
+	# Reported in play: enemies were not shaded red in 3D. _apply_faction_visuals sets
+	# modulate on the UNIT node — 2D multiplies it down the tree for free — while the
+	# mirror copied only $MapSprite's own, so the tint never crossed.
+	var player: Unit = null
+	var enemy: Unit = null
+	for unit in _live_units():
+		if player == null and unit.get_faction() == Team.Faction.PLAYER:
+			player = unit
+		if enemy == null and unit.get_faction() == Team.Faction.ENEMY:
+			enemy = unit
+	assert_object(player).is_not_null()
+	assert_object(enemy).override_failure_message("Prolog fields no enemy; the case is vacuous").is_not_null()
+	await _settle()
+
+	# Asserted as the PROPERTY the dev reported — the enemy reads red — rather than by
+	# restating the production expression, which would only prove the code equals itself.
+	var enemy_tint: Color = _mirror.sprite_for(enemy).modulate
+	assert_bool(enemy_tint.r > enemy_tint.g and enemy_tint.r > enemy_tint.b) \
+		.override_failure_message(
+			"the enemy mirrored as %s — the faction tint never left the 2D Unit node" % enemy_tint
+			).is_true()
+	# ...and non-vacuous: the two factions must actually differ on screen.
+	var player_tint: Color = _mirror.sprite_for(player).modulate
+	assert_bool(player_tint.is_equal_approx(enemy_tint)).override_failure_message(
+			"both factions mirror the same colour — the tint discriminates nothing").is_false()
+
+
 func test_clear_board_empties_the_mirror() -> void:
 	assert_bool(_mirror.mirrored_count() > 0).is_true()
 	_game.scenario_manager.clear_board()

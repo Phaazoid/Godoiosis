@@ -1,7 +1,20 @@
+# A Unit's own sprite effects: the flash/shake/lunge tweens, the hover and aim-pulse
+# highlights, and the projected-stand-in hide. It owns writes to $MapSprite's
+# position/modulate/scale/z_index and restores them from the base_* snapshot taken at
+# _ready. It is deliberately NOT the whole unit's visual state — the downed art is a
+# separate node owned by Unit itself, which is why `projected` below is declared rather
+# than inferred from sprite.visible.
 extends Node
 class_name UnitVisuals
 
 @export var sprite: Sprite2D
+
+# TRUE while a planning ghost stands in for this unit. Declared rather than read back off
+# sprite.visible, because Unit._show_downed_sprite writes that same flag for a completely
+# different reason (swapping to the downed art). One flag, two questions -- which is
+# exactly how the 3D mirror ended up hiding downed units: it copied the flag and got
+# "projected" as the answer. Law #4: give the second question its own storage.
+var projected := false
 
 var visual_tween: Tween
 const HIGHLIGHT_MODULATE := Color(1.4, 1.4, 1.0)   # warm yellow-white; tune to taste
@@ -94,6 +107,7 @@ func set_highlighted(value: bool) -> void:
 func set_projected(value: bool):
 	if sprite == null:
 		return
+	projected = value
 	if value:
 		sprite.hide()
 	else:
