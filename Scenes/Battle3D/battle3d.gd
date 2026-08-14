@@ -77,7 +77,7 @@ func _ready() -> void:
 		# the hidden camera shows) and the 2D game stops deriving its own board clicks.
 		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
-		_help.text = "Battle3D (stage 4c)  |  LMB act  |  RMB cancel  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset  |  F4 flat 2D  |  Shift+F4 corner"
+		_help.text = "Battle3D  |  LMB act  |  RMB cancel  |  MMB-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  SPACE centre  |  R reset  |  F4 flat 2D  |  Shift+F4 corner"
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_overlay_mirror.game = game
@@ -124,10 +124,22 @@ func _on_turn_started(_faction: int) -> void:
 
 
 func _fit_camera() -> void:
-	var rect: Rect2i = game.grid.get_used_rect()
-	var center := Vector2(rect.position) + Vector2(rect.size) * 0.5
-	_rig.position = Vector3(center.x, 1.0, center.y)
-	_rig.set_zoom(maxf(float(rect.size.x), float(rect.size.y)) * 1.05)
+	_rig.frame(_board_volume())
+
+
+# The volume the camera must see, derived from the picker's column tops rather than the
+# 2D grid rect: _tops is the footprint actually RENDERED, and it already carries per
+# column heights for the day the sim grows elevation. Cells span [x, x+1].
+func _board_volume() -> AABB:
+	if _tops.is_empty():
+		return AABB()
+	var lo := Vector3(INF, 0.0, INF)
+	var hi := Vector3(-INF, 0.0, -INF)
+	for column: Vector2i in _tops.keys():
+		var top: float = float(_tops[column])
+		lo = Vector3(minf(lo.x, column.x), 0.0, minf(lo.z, column.y))
+		hi = Vector3(maxf(hi.x, column.x + 1.0), maxf(hi.y, top), maxf(hi.z, column.y + 1.0))
+	return AABB(lo, hi - lo)
 
 
 # --- Hosting the 2D game (stage 4c) ---------------------------------------------------
@@ -234,6 +246,29 @@ func _process(_delta: float) -> void:
 	var live: bool = (demo_mode or game.can_process()) and view != View.FLAT_2D
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
+	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
+	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
+	# Same predicate that refuses their clicks — one question, one answer.
+	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
+	_mirror_camera()
+
+
+# The 3D view follows the action by MIRRORING the 2D camera, which is already the
+# authority for where the action is (AIController pans it to each acting squad). No
+# second follow seam, and because the 2D camera owns the tween the 3D inherits
+# Pacing.AI_SQUAD_PAN exactly — one number, one reader.
+#
+# ai_locked is the gate, NOT _board_locked_for_player(): the latter also covers MENU,
+# and Mission Select opts out of the modal lock, so mirroring there would yank the rig
+# to a stale 2D position the moment a menu opened. ai_locked IS the fact "the AI owns
+# the 2D camera" — set in the same block as AI_TURN, cleared the moment it returns.
+# Re-read every frame, never latched: a turn handoff can re-enter set_ai_locked inside
+# the previous turn's stack, so the flag can legitimately flicker for a frame.
+func _mirror_camera() -> void:
+	var cam: CameraController = game.camera_controller
+	if not cam.ai_locked:
+		return
+	_rig.position = BoardSpace.of_pixels(cam.global_position, _rig.position.y)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -252,22 +287,55 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	# In FLAT_2D the flat game owns its own clicks — picking here would double-act,
 	# the mirror image of the bug game.board_input_delegated exists to prevent.
-	if view == View.FLAT_2D or not game.can_process():
+	# The board lock joins it: while an AI turn, a menu or the end banner is up, the
+	# click handlers below refuse anyway, so pointing would only paint a bracket over
+	# a board nobody can touch. (Mission Select opts OUT of the modal lock, so
+	# can_process() does not cover this — measured.)
+	if view == View.FLAT_2D or not game.can_process() or game._board_locked_for_player():
 		return
 	# UI consumed the event before it reached here (the container forwards physical
 	# clicks into the 2D game natively). What arrives is board pointing.
 	var motion := event as InputEventMouseMotion
 	if motion != null:
-		_update_pointer(motion.position)
+		if not _rig.is_orbiting():   # a drag is camera work, not pointing
+			_update_pointer(motion.position)
+		return
+	if key != null and key.pressed and key.keycode == KEY_SPACE:
+		_center_on_pointer()
 		return
 	var click := event as InputEventMouseButton
-	if click == null or not click.pressed:
+	if click == null:
 		return
-	if click.button_index == MOUSE_BUTTON_LEFT:
+	if click.button_index == MOUSE_BUTTON_RIGHT:
+		_handle_cancel_button(click)
+		return
+	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 		_update_pointer(click.position)  # a click is also a point — robust when no motion preceded it
 		_click_pointer_cell()
-	elif click.button_index == MOUSE_BUTTON_RIGHT:
+
+
+# Cancel fires on PRESS — the meaning right-click carries everywhere else in the game —
+# UNLESS right-click is also the orbit button, in which case it has to wait for the
+# release to know whether the gesture was a click or a drag. Branching here rather than
+# hard-coding either means orbit_button is a real inspector knob: flip it and both
+# behaviours follow.
+func _handle_cancel_button(click: InputEventMouseButton) -> void:
+	if _rig.orbit_button != MOUSE_BUTTON_RIGHT:
+		if click.pressed:
+			_cancel()
+		return
+	if not click.pressed and _rig.last_gesture_was_click():
 		_cancel()
+
+
+# SPACE recentres the diorama on whatever the pointer is over — the 3D answer to the 2D
+# camera's centre-on-mouse, which the delegation gate makes unreachable in this host.
+# Kept here so game.gd's one bool stays the arc's only edit to its input path.
+func _center_on_pointer() -> void:
+	if _pointer_cell == BoardSpace.NO_CELL:
+		return
+	var point := BoardSpace.standing_point(_pointer_cell)
+	_rig.position = Vector3(point.x, _rig.position.y, point.z)
 
 
 func _update_pointer(screen_pos: Vector2) -> void:

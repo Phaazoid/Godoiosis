@@ -15,7 +15,6 @@ class_name OverlayMirror
 # is the 3D pointer; AIM covers the footprint role), CursorController, ZONE_PATROL
 # + the brush highlight + dev ghosts (dev authoring stays on the 2D surface).
 
-const PX := float(GridUtils.TILE_SIZE)   # 16 — the art metric (UnitMirror's ÷16)
 const TOP := UnitMirror.COLUMN_TOP       # flat mirror boards: anchors at y 1.0
 
 var game: Node2D            # the hidden Game coordinator; set by battle3d._ready
@@ -204,6 +203,6 @@ func _anchor(cell: Vector2i) -> Vector3:
 	return Vector3(cell.x + 0.5, TOP, cell.y + 0.5)
 
 
-# A 2D world position's top-face anchor (the ÷16 metric; sprites sit at cell centers).
+# A 2D world position's top-face anchor (sprites sit at cell centers).
 func _anchor_px(px: Vector2) -> Vector3:
-	return Vector3(px.x / PX, TOP, px.y / PX)
+	return BoardSpace.of_pixels(px, TOP)

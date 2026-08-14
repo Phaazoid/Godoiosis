@@ -91,6 +91,7 @@ func _ready() -> void:
 	RenderingServer.viewport_set_default_canvas_item_texture_filter(get_viewport().get_viewport_rid(), RenderingServer.CANVAS_ITEM_TEXTURE_FILTER_NEAREST)
 
 	_wire_signals()
+	camera_controller.game = self   # so its WASD poll can see board_input_delegated (#176 4d)
 	camera_controller.refresh_bounds(grid)
 	# The front door (#96 slice 2). TestBoard is no longer spawned at boot — it is a row on the
 	# menu now. Lock the board synchronously, but DEFER opening the screen by a frame: during

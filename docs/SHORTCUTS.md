@@ -2,13 +2,31 @@
 
 Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. Keep this updated as new bindings are added (in-game ones live in Project Settings → Input Map, prefixed `cam_*` / `dev_*`). This is the canonical list — tab tooltips in the dev window should mirror it, not replace it.
 
-## Gameplay
+## Gameplay (the flat 2D game)
 | Key | Action |
 |-----|--------|
 | Left-click | Select tile / unit; choose menu option; confirm targeting |
 | Right-click | Deselect / cancel current mode; dismiss the action menu |
 | W / A / S / D (or arrow keys) | Pan camera (`cam_up`/`cam_down`/`cam_left`/`cam_right`) |
 | Space | Center camera on cursor *(outside dev mode)* |
+
+## The 3D battle view (`Scenes/Battle3D`, #176)
+The 2D game runs underneath as the UI layer, so every UI click behaves exactly as above. These are the board-and-camera keys the 3D host owns. **Note the 2D camera stands down here** — `cam_*` reaches the 3D rig only, so W/A/S/D and the arrows drive one camera, not two.
+
+| Key | Action |
+|-----|--------|
+| Left-click | Act on the cell under the pointer (delivered straight to the 2D dispatchers) |
+| Right-click | Cancel the current mode |
+| Middle-drag | Orbit freely; the yaw rests wherever you leave it (`orbit_button` is an inspector knob) |
+| Q / E | Snap to the next 90° detent — one press realigns from any angle |
+| Mouse wheel | Zoom (clamped so you cannot pull back past the whole board) |
+| W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
+| Space | Recentre the diorama on the pointer cell |
+| R | Reset to the opening shot (the framing the board loaded with) |
+| F4 | Toggle the flat 2D game full-screen and back *(dev builds)* |
+| Shift + F4 | The corner picture-in-picture debug view *(dev builds)* |
+
+During an AI turn the camera follows the acting squad by itself and refuses manual input until the turn ends.
 
 ## Dev tools
 | Key | Action |
@@ -30,5 +48,6 @@ Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.cl
 
 ## Notes
 - The dev tools open as a **separate OS window** (draggable to a second monitor). See `CLAUDE.md` → "Dev tools = separate OS window" for the architecture.
+- **Every `dev_*` binding above is currently inert inside the 3D view** — `game.gd` resolves the dev overlay by an absolute path that only exists under the flat game's scene tree, so F1 and the board-editing keys do nothing there. Tracked as #231, which is a design question (what should these tools *do* in 3D?) rather than a port.
 - Dev mode is editor-only tooling; none of the `dev_*` bindings are intended for the shipped game.
 - Scenarios (saved skirmish setups: units, squads, loadouts, tiles) live in `res://Scenarios/` and are saved/loaded from the dev tools' Save/Load section.

@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real.
 
-**Canon checked through #222 (2026-08-13).**
+**Canon checked through #232 (2026-08-14).**
 
 ---
 
@@ -25,6 +25,20 @@ Stage 4b made the 3D view playable by keeping the whole 2D render as a corner pi
 - **Overlays render UNSHADED** (dev ruling): gameplay markup must never read as terrain, which is why fills are unshaded quads rather than Decals — a Decal's albedo modulates the lit surface by construction.
 - **Board clicks skip events entirely.** The picker calls `game._on_left_click` / `_on_right_click` (the dispatchers game.gd's own `_unhandled_input` only feeds), and `game.board_input_delegated` stands the 2D derivation down so one physical click cannot act twice. That bool is the whole arc's only game.gd input edit; unset, the flat 2D game is bit-for-bit unchanged — **all hosting mutations are runtime**, never authored into `Main.tscn`.
 - The corner PiP survives as a **dev debug view** (F4), not a player-facing mode. The launch-time chooser named above is still stage 4d.
+
+### The camera contract, amended: free orbit rests, Q/E realign (#176 stage 4d, 2026-08-14)
+
+The original contract locked **"yaw snapping in 90° steps"**. The dev asked the sharper question — *do we need to snap to anything at all?* — and the answer from the code was no:
+
+- **Sprite facing never depended on it.** `UnitSprite3D.facing_flip_for` judges each step against the **live** camera basis, so it is correct at any continuous yaw today; the future `frame_for(unit_facing, camera_yaw)` seam quantizes the *relative* angle internally.
+- **"Units can't hide behind terrain" is helped, not threatened** — free rotation reaches every angle rather than four.
+- The genuine cost is **texel shimmer at off-axis rest**, which is aesthetic and about the *resting* pose, not about what happens mid-drag.
+
+**So: yaw orbits freely and rests wherever the player leaves it; Q/E step to the next 90° detent, realigning in one press.** The crisp axis-aligned pose is now an affordance rather than a cage. A corollary the amendment forced: facing was only re-judged when a unit *moved*, so any rotation left standing sprites facing the old angle — snapping never protected against that either; the mirror now re-judges on camera turn.
+
+Bindings are knobs, not canon: `orbit_button` defaults to middle-drag so right-click keeps its press-to-cancel meaning (and stays available to #228's queue-undo and to a future 3D tile brush), with the click/drag threshold built so flipping it to right-drag is an inspector change.
+
+Also settled here: **the camera follows the action by mirroring the 2D camera** (which `AIController` already pans to each acting squad) rather than growing a second follow seam — so `Pacing.AI_SQUAD_PAN` keeps one number and one reader, and the 3D inherits the 2D's easing exactly. The gate is `ai_locked`, deliberately *not* the broader board lock, which also covers menus.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
