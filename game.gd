@@ -53,6 +53,10 @@ var game_state: GameState = GameState.IDLE
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
 # them (2026-08-11: every dev-window Load silently dropped the board to IDLE under an ON toggle).
 var dev_mode_enabled := false
+# A 3D host (#222) delivers picked board cells straight to _on_left_click/_on_right_click,
+# so _unhandled_input's own cell derivation must stand down or the click acts twice. Set by
+# Battle3D at boot; false everywhere else, which is what keeps the flat 2D game untouched.
+var board_input_delegated := false
 var last_clicked_cell: Vector2i = GridUtils.NO_CELL
 # Set once at selection, never re-derived from a cell (#107). Cleared in exit_current_mode, NOT in
 # clear_selection — that runs on every menu PICK, i.e. on the way INTO a mode.
@@ -180,6 +184,14 @@ func _input(event: InputEvent) -> void:
 			_open_pause_menu()
 
 func _unhandled_input(event: InputEvent) -> void:
+	# A 3D host (#222) picks board cells itself and calls _on_left_click/_on_right_click
+	# directly, so this derivation would act a SECOND time on the same physical click --
+	# at whatever cell the hidden 2D camera happens to be showing. Set by Battle3D only;
+	# the flat 2D game never touches it. Deliberately above the dev-brush and SPACE arms:
+	# both are 2D-surface affordances, and the 3D view hides the dev overlay outright.
+	if board_input_delegated:
+		return
+
 	if game_state == GameState.DEV_MODE and dev_overlay != null and dev_overlay.tile_brush.brush_active:
 		if event is InputEventMouseButton or event is InputEventMouseMotion:
 			dev_controller.handle_tile_brush(event)

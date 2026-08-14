@@ -1,40 +1,33 @@
-# The Battle3D shell (#215/#220 / #176 stage 4a+4b): the hidden-2D-game-as-authority
+# The Battle3D shell (#176 stages 4a-4c): the hidden-2D-game-as-authority
 # architecture. Hosts the REAL Main.tscn — the full sim runs untouched — while
-# BoardMirror/UnitMirror render it as an HD-2D diorama.
+# BoardMirror/UnitMirror/OverlayMirror render it as an HD-2D diorama.
 #
-# Stage 4b makes it PLAYABLE: the bridge translates the 3D pointer to 2D-viewport
-# coordinates and feeds ordinary mouse events through Input.parse_input_event,
-# positioned over the PiP — the OS-driver entry, so the container forwards them
-# into GameView exactly like physical clicks and every gate (the board lock, the
-# modal freeze, menu placement) fires natively; game.gd needs no edits. (Measured:
-# Viewport.push_input dies against handle_input_locally=false — the container is
-# the only live door, and unconsumed events BUBBLE back out to the root.)
-# The 2D UI stays usable as a corner picture-in-picture: the container keeps its
-# native 1280x720 SIZE (so GameView keeps full resolution under stretch) and only
-# the display shrinks via scale; input maps through the container transform.
+# Stage 4c's hosting (#222): the 2D game IS the UI surface. Its container covers
+# the window at native scale with a TRANSPARENT viewport and its board visuals
+# hidden, so every Control — menus, cards, the queue panel, the HUD — draws over
+# the 3D world and takes PHYSICAL clicks natively: real tooltips, real menu
+# placement at the real cursor, the ModalLock click path untouched. Only BOARD
+# clicks need translating, and those skip events entirely — the picker calls
+# game._on_left_click / _on_right_click, which ARE the dispatchers (game.gd's
+# _unhandled_input only derives a cell and calls them). Its own derivation would
+# double-act on the same physical click, so game.board_input_delegated silences
+# it: one bool, the arc's only game.gd input edit. 4b's whole synthetic-event
+# bridge (parse_input_event, the echo tag, the PiP-rect guard) is retired.
 #
-# Stage 4c (PR1) adds parity: OverlayMirror polls the 2D OverlayManager into
-# BoardOverlays/UnitMirror per frame, board swaps rebuild via ScenarioManager's
-# board_loaded signal, and HoverPresenter reads the 3D pick through pointer_source
-# — hover now reaches every cell, not just the hidden camera's window.
+# corner_view is the dev-facing debug toggle (F4): the 4b picture-in-picture, 2D
+# board visuals and all. Board input is container-independent, so 3D play works
+# in either mode.
 #
-# demo_mode = stage-4a behavior: both factions AI, no PiP, watch-only.
+# demo_mode = stage-4a behavior: both factions AI, hidden 2D, watch-only.
 extends Node3D
 
 @export var auto_play := true    # start mission_path on launch (test fixtures set false)
-@export var demo_mode := false   # true = the 4a diorama demo: AI-vs-AI, no PiP, no bridge
+@export var demo_mode := false   # true = the 4a diorama demo: AI-vs-AI, hidden 2D, no bridge
 @export var mission_path := "res://Scenarios/missions/Prolog.tres"
-# PiP knobs (aesthetics get a knob, not a guess):
+# The corner debug view's knobs (aesthetics get a knob, not a guess):
+@export var corner_view := false   # F4 in dev builds; the 4b PiP with the 2D board showing
 @export var pip_scale := 0.35
 @export var pip_margin := Vector2(12.0, 12.0)
-# Bring-up diagnostic (4b): the bridge narrates each link on the help label —
-# pointer pick, click mapping, refusals — so a live run pinpoints which link is
-# dead without a debugger. Untick to silence; drop the mechanism at 4c.
-@export var debug_readout := true
-
-# Stamped on every synthetic event so the bridge never mistakes its own echo for
-# 3D pointing (InputEvent is a Resource — meta survives in-process delivery).
-const BRIDGE_EVENT_META := &"iosis_3d_bridge"
 
 @onready var _main: Node = $Main
 @onready var _board_mirror: BoardMirror = $BoardMirror
@@ -55,7 +48,6 @@ var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # container SIZE to it (GameView keeps full resolution under stretch) and shrinks
 # only the display via scale.
 var _pip_native: Vector2 = Vector2(1280.0, 720.0)
-var _base_help: String = ""
 
 
 func _ready() -> void:
@@ -70,14 +62,16 @@ func _ready() -> void:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
 	else:
-		_setup_pip()
+		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
 		# The 3D pick IS the pointer (#222): HoverPresenter reads it instead of the
 		# hidden viewport's mouse, so hover works for every cell — not just the ones
 		# the hidden camera happens to show. flat(NO_CELL) == GridUtils.NO_CELL.
 		game.hover_presenter.pointer_source = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
-		_help.text = "Battle3D (stage 4b, playable)  |  LMB act  |  RMB cancel  |  UI in the corner PiP  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
-	_base_help = _help.text
+		# The 2D game stops deriving board clicks from its own viewport mouse — this
+		# node delivers the picked cell instead (see the header).
+		game.board_input_delegated = true
+		_help.text = "Battle3D (stage 4c)  |  LMB act  |  RMB cancel  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset  |  F4 corner view"
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_overlay_mirror.game = game
@@ -130,19 +124,64 @@ func _fit_camera() -> void:
 	_rig.set_zoom(maxf(float(rect.size.x), float(rect.size.y)) * 1.05)
 
 
-# --- The PiP (stage 4b) --------------------------------------------------------------
+# --- Hosting the 2D game (stage 4c) ---------------------------------------------------
 
-func _setup_pip() -> void:
+# All of this is RUNTIME, never authored into Main.tscn: the flat 2D game is a
+# shipping target of its own and must open exactly as it always has (#176's
+# presentation-effects ruling).
+func _apply_hosting() -> void:
 	_game_container.visible = true
+	if corner_view:
+		_setup_corner()
+	else:
+		_setup_fullscreen()
+
+
+# The real hosting: the 2D game covers the window at native scale over a
+# transparent viewport, with its board visuals hidden — so what shows through is
+# the 3D world with the 2D UI on top, and Controls take physical clicks directly.
+func _setup_fullscreen() -> void:
+	_game_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_game_container.scale = Vector2.ONE
+	_game_view.transparent_bg = true
+	_set_board_visible(false)
+
+
+# The 4b picture-in-picture, kept as a dev debug view: the 2D board renders again,
+# shrunk into the corner. The container keeps its native SIZE (GameView keeps full
+# resolution under stretch) and only the display shrinks via scale.
+func _setup_corner() -> void:
 	_game_container.set_anchors_and_offsets_preset(Control.PRESET_TOP_LEFT)
 	_game_container.size = _pip_native
 	_game_container.scale = Vector2(pip_scale, pip_scale)
+	_game_view.transparent_bg = false
+	_set_board_visible(true)
 	_position_pip()
 
 
 func _position_pip() -> void:
+	if not corner_view:
+		return
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	_game_container.position = view - _pip_native * pip_scale - pip_margin
+
+
+# The board-visual set, hidden as a unit so the 2D layer reads as pure UI.
+# MEASURED (#222): `game.visible = false` is NOT the switch — OverlayManager is a
+# plain Node, which breaks CanvasItem visibility propagation to the overlay layers
+# (they stayed drawn), while the CanvasLayer UI went dark with it. Hence per-node.
+# ZoneOverlay and its highlight are skipped: they are authoring-only, owned by
+# set_zone_visibility, and a blanket restore would reveal PATROL zones in play.
+func _set_board_visible(shown: bool) -> void:
+	game.grid.visible = shown
+	game.units_root.visible = shown
+	game.cursor_controller.visible = shown
+	var overlays: OverlayManager = game.overlay_manager
+	for child in overlays.get_children():
+		var item := child as CanvasItem
+		if item == null or item == overlays.zone_overlay or item == overlays.zone_highlight_overlay:
+			continue
+		item.visible = shown
 
 
 # --- The input bridge (stage 4b) -------------------------------------------------------
@@ -161,23 +200,20 @@ func _process(_delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if demo_mode or not game.can_process():
+	if demo_mode:
 		return
-	var mouse := event as InputEventMouse
-	if mouse == null:
+	# The view toggle sits ABOVE the freeze gate on purpose — it is a dev control,
+	# and dev controls are a layer above ModalLock (#154). This node lives outside
+	# the frozen subtree, so its callbacks run regardless.
+	if DevTools.enabled() and event.is_pressed() and event is InputEventKey \
+			and (event as InputEventKey).keycode == KEY_F4:
+		corner_view = not corner_view
+		_apply_hosting()
 		return
-	# The bridge's own synthetics BUBBLE back here when the game leaves them unconsumed
-	# (measured). Re-reading one as 3D pointing forges a self-sustaining event loop that
-	# never lets a flush drain — the tag is the loop-breaker, not hygiene.
-	if mouse.has_meta(BRIDGE_EVENT_META):
+	if not game.can_process():
 		return
-	# Real events over the PiP belong to the 2D game — the container forwards them
-	# itself, and they too bubble back when unconsumed. Never read them as 3D pointing.
-	# Load-bearing BESIDE the meta tag, not redundant with it: accumulated input can
-	# MERGE a synthetic motion into a pending physical one, which drops the tag — the
-	# rect test still catches the merged event.
-	if _game_container.get_global_rect().has_point(mouse.position):
-		return
+	# UI consumed the event before it reached here (the container forwards physical
+	# clicks into the 2D game natively). What arrives is board pointing.
 	var motion := event as InputEventMouseMotion
 	if motion != null:
 		_update_pointer(motion.position)
@@ -189,12 +225,7 @@ func _unhandled_input(event: InputEvent) -> void:
 		_update_pointer(click.position)  # a click is also a point — robust when no motion preceded it
 		_click_pointer_cell()
 	elif click.button_index == MOUSE_BUTTON_RIGHT:
-		# Cancel is position-blind (game.gd:279 takes no cell), so push at the viewport
-		# center, which ALWAYS forwards — a far-cell hover's mapped position can fall
-		# outside the container rect and would be silently dropped, leaving the player
-		# stuck in a mode with a dead cancel.
-		_push_click(MOUSE_BUTTON_RIGHT, _pip_native * 0.5)
-		_diag("RMB cancel pushed at the viewport center")
+		_cancel()
 
 
 func _update_pointer(screen_pos: Vector2) -> void:
@@ -206,75 +237,39 @@ func _update_pointer(screen_pos: Vector2) -> void:
 		_overlays.clear(BoardOverlays.Layer.HOVER)
 		return
 	_overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
-	_diag("pointer %s" % cell)
+	# The hidden 2D camera still has one live consumer: the hover card parks itself
+	# by mapping a WORLD position through the 2D canvas transform, so the camera has
+	# to be showing the hovered cell or the card parks against a stale view. Skipped
+	# while the board is locked — an AI turn owns the camera (pan_to/follow).
+	if not game._board_locked_for_player():
+		game.camera_controller.snap_to_position(GridUtils.cell_world(game.grid, BoardSpace.flat(cell)))
 
 
+# game._on_left_click / _on_right_click ARE the dispatchers — game.gd's own
+# _unhandled_input just derives a cell and calls them, and every test in the repo
+# drives them this way (tests/README.md). Delivering the picked cell directly is
+# both simpler and exact: no viewport-mouse round trip to get wrong.
 func _click_pointer_cell() -> void:
 	if _pointer_cell == BoardSpace.NO_CELL:
-		_diag("LMB ignored: no cell under the pointer")
 		return
-	# The game refuses clicks while the board is locked (AI turn / mission over / menu
-	# — game.gd's one predicate; read it, don't re-derive it). Without this, a refused
-	# click would still yank the hidden camera off the AI's pan_to/follow. It also
-	# covers the MENU case the can_process() gate above cannot: Mission Select opts
-	# OUT of the modal lock deliberately, so the game is unfrozen behind it.
+	# The game refuses clicks while the board is locked (AI turn / mission over /
+	# menu — game.gd's one predicate; read it, don't re-derive it). Calling the
+	# dispatcher directly bypasses game.gd's own copy of this gate, so it moves here
+	# rather than disappearing. It also covers the MENU case the can_process() gate
+	# cannot: Mission Select opts OUT of the modal lock, so the game is unfrozen.
 	if game._board_locked_for_player():
-		_diag("LMB refused: board locked (state %d)" % game.game_state)
 		return
-	var cell := BoardSpace.flat(_pointer_cell)
-	# The pushed position maps back to a cell through the LIVE 2D camera transform
-	# (game.gd:192), so the hidden camera must be showing the cell first. Side
-	# effect, by design: the PiP recenters on every 3D click the game can act on.
-	var cam: CameraController = game.camera_controller
-	cam.snap_to_position(GridUtils.cell_world(game.grid, cell))
-	var view_pos := _cell_view_pos(cell)
-	_push_motion(view_pos)
-	_push_click(MOUSE_BUTTON_LEFT, view_pos)
-	_diag("LMB cell %s -> view %s -> root %s  (state %d)" % [
-		cell, view_pos.round(), (_game_container.get_global_transform() * view_pos).round(), game.game_state])
+	game._on_left_click(BoardSpace.flat(_pointer_cell))
+
+
+func _cancel() -> void:
+	if game._board_locked_for_player():
+		return
+	# Mirrors game.gd's own RMB arm: cancel is position-blind, and DEV_MODE keeps
+	# right-click for the tile brush.
+	if game.game_state != game.GameState.DEV_MODE:
+		game._on_right_click()
 
 
 func _pick(screen_pos: Vector2) -> Vector3i:
 	return BoardPicker.pick_at(_camera, screen_pos, _tops)
-
-
-# A cell's center in GameView's viewport coordinates — the space pushed events use.
-func _cell_view_pos(cell: Vector2i) -> Vector2:
-	var canvas: Transform2D = _game_view.get_canvas_transform()
-	return canvas * GridUtils.cell_world(game.grid, cell)
-
-
-func _push_motion(view_pos: Vector2) -> void:
-	_send_to_game(InputEventMouseMotion.new(), view_pos)
-
-
-func _push_click(button: MouseButton, view_pos: Vector2) -> void:
-	var press := InputEventMouseButton.new()
-	press.button_index = button
-	press.pressed = true
-	press.button_mask = MOUSE_BUTTON_MASK_LEFT if button == MOUSE_BUTTON_LEFT else MOUSE_BUTTON_MASK_RIGHT
-	_send_to_game(press, view_pos)
-	var release := InputEventMouseButton.new()
-	release.button_index = button
-	release.pressed = false
-	_send_to_game(release, view_pos)
-
-
-func _diag(msg: String) -> void:
-	if debug_readout:
-		_help.text = _base_help + "\n[bridge] " + msg
-
-
-# One door, the same one real input uses: OS-level parse, positioned over the PiP,
-# so the container forwards into GameView exactly like a physical click there.
-# Parse only, never flush — this runs INSIDE input dispatch (a re-entrant flush is
-# not safe). The drain loop re-checks its queue, so events parsed during dispatch
-# are delivered by the SAME flush — no frame boundary and no _process between the
-# camera snap and delivery, which is what makes reading the live transform at
-# parse time exact.
-func _send_to_game(ev: InputEventMouse, view_pos: Vector2) -> void:
-	var root_pos: Vector2 = _game_container.get_global_transform() * view_pos
-	ev.position = root_pos
-	ev.global_position = root_pos
-	ev.set_meta(BRIDGE_EVENT_META, true)
-	Input.parse_input_event(ev)
