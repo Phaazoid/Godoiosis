@@ -52,6 +52,7 @@ func _live_icon_count() -> int:
 # units, zones and states but deliberately leaves the TILEMAP alone, so Main.tscn's own terrain is
 # still there and a nearby cell has ground under it. Every case below asserts that for itself.
 const VOID_CELL := Vector2i(64, 64)
+const FAR_CELL := Vector2i(6, 0)    # on the painted row, but outside a 3x3 resize
 
 func _assert_void_is_void() -> void:
 	assert_bool(GridUtils.has_ground(game.grid, VOID_CELL)).override_failure_message(
@@ -74,13 +75,36 @@ func test_a_state_cannot_be_painted_onto_a_cell_with_no_tile() -> void:
 func test_erasing_a_tile_takes_its_states_with_it() -> void:
 	# The half a forbid alone does NOT cover, and the reported bug's actual path: the state was
 	# perfectly legal when painted, and the ground went away afterwards.
+	#
+	# The ICON assertion is the one with teeth. The first version of this case checked has_state
+	# alone, went green, and shipped a build where the store was correct and the sprite stayed on
+	# screen — because _erase_tile cleared the state and never redrew, and the 3D mirror then
+	# faithfully mirrored the stale sprite. Assert the WIRE, not the two ends.
 	_brush._tile_state = Terrain.TileState.FROZEN
 	game.dev_controller._paint_state(CELL)
 	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)) \
 		.override_failure_message("precondition: the paint never landed").is_true()
+	var painted_icons := _live_icon_count()
+	assert_int(painted_icons).override_failure_message(
+			"precondition: painting drew no icon, so its disappearance would prove nothing").is_greater(0)
+
 	game.dev_controller._erase_tile(CELL)
 	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)) \
 		.override_failure_message("the state outlived the ground it was standing on").is_false()
+	assert_int(_live_icon_count()).override_failure_message(
+			"the store cleared but the icon stayed — the redraw never ran").is_less(painted_icons)
+
+
+func test_shrinking_the_map_drops_the_states_left_outside_it() -> void:
+	# grid.clear() inside resize_map is the SECOND way to lose ground, and it never matched a search
+	# for erase_cell — which is exactly why the rule sweeps rather than clearing one named cell.
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(FAR_CELL)
+	assert_bool(game.terrain_states.has_state(FAR_CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("precondition: the paint never landed").is_true()
+	game.dev_controller.resize_map(3, 3, GRASS_SOURCE, GRASS_ATLAS)
+	assert_bool(game.terrain_states.has_state(FAR_CELL, Terrain.TileState.FROZEN)) \
+		.override_failure_message("a state survived the board shrinking out from under it").is_false()
 
 
 func test_a_groundless_cell_never_becomes_walkable_through_frozen() -> void:

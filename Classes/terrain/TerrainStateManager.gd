@@ -65,16 +65,23 @@ func _has_ground(cell: Vector2i) -> bool:
 	var grounded: bool = ground_source.call(cell)   # typed local: .call() erases to Variant
 	return grounded
 
-# Drop every state at one cell, through apply() so the timers unwind the same way they would on any
-# other removal. The dev brush calls this when its erase takes the ground out from under them.
-func clear_cell(cell: Vector2i) -> void:
-	var held := states_at(cell)
-	if held.is_empty():
-		return
-	var effect := ResolvedCellEffect.new()
-	effect.cell = cell
-	effect.states_removed.assign(held)
-	apply(effect)
+# Drop every state whose cell no longer has ground, through apply() so the timers unwind exactly as
+# they would on any other removal. Returns whether anything went, so a caller can skip its redraw.
+#
+# A SWEEP rather than a per-cell clear because there is more than one way to take ground away: the
+# brush erases one cell, and resize_map calls grid.clear() and repaints a whole new rectangle. A
+# targeted clear has to be remembered correctly at each site; this only has to be called.
+func prune_groundless() -> bool:
+	var doomed: Array[Vector2i] = []
+	for cell: Vector2i in _states.keys():
+		if not _has_ground(cell):
+			doomed.append(cell)
+	for cell in doomed:
+		var effect := ResolvedCellEffect.new()
+		effect.cell = cell
+		effect.states_removed.assign(states_at(cell))
+		apply(effect)
+	return not doomed.is_empty()
 
 func clear() -> void:
 	_states.clear()

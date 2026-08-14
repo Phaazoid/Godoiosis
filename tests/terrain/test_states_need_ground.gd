@@ -50,9 +50,20 @@ func test_a_removal_on_a_groundless_cell_still_applies() -> void:
 	_wire_ground()                              # ...and now the ground is gone from under it
 	assert_bool(_states.has_state(VOID, Terrain.TileState.FROZEN)) \
 		.override_failure_message("precondition: the deposit never landed").is_true()
-	_states.clear_cell(VOID)
+	assert_bool(_states.prune_groundless()) \
+		.override_failure_message("the sweep found nothing to prune").is_true()
 	assert_bool(_states.has_state(VOID, Terrain.TileState.FROZEN)) \
 		.override_failure_message("a groundless cell cannot be cleaned up").is_false()
+
+
+func test_the_sweep_leaves_grounded_states_alone() -> void:
+	# Non-vacuous partner to the case above: a sweep that dropped everything would satisfy it just
+	# as well, and would quietly delete the board's real fire on the next map resize.
+	_wire_ground()
+	_deposit(GROUND, Terrain.TileState.FROZEN)
+	_states.prune_groundless()
+	assert_bool(_states.has_state(GROUND, Terrain.TileState.FROZEN)) \
+		.override_failure_message("the sweep took a state that still had ground under it").is_true()
 
 
 func test_an_unwired_store_judges_nothing() -> void:
