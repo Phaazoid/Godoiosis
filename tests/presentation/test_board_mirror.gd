@@ -69,6 +69,46 @@ func test_fire_markers_match_the_games_own_state_dict() -> void:
 	assert_bool(expected > 0).is_true()  # Prolog authors BLAZE content; a zero here means the load broke
 
 
+func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
+	# Reported in play: a unit downed while standing in fire makes that fire vanish for the
+	# rest of the turn, returning at the next turn boundary. This isolates WHICH half is
+	# wrong — the marker being freed, or the marker still existing and being drawn under the
+	# downed sprite (both flame and unit are transparent quads at the same standing point).
+	# A held count means the node is alive and it is a render-order question, not a logic one.
+	_scene.load_mission(PROLOG)
+	await await_idle_frame()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var states: Dictionary = _game.terrain_states.to_state_dict()
+	var fire_cell := Vector2i(-9999, -9999)
+	for cell: Vector2i in states.keys():
+		for state in states[cell]:
+			if (state as Terrain.TileState) in Terrain.FIRE_STATES:
+				fire_cell = cell
+				break
+		if fire_cell.x != -9999:
+			break
+	assert_bool(fire_cell.x != -9999).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+
+	var unit: Unit = null
+	for child in _game.units_root.get_children():
+		var candidate := child as Unit
+		if candidate != null:
+			unit = candidate
+			break
+	assert_object(unit).is_not_null()
+	unit.movement.set_cell(fire_cell)   # teleport onto the burning tile
+	await await_idle_frame()
+	var before := mirror.fire_marker_count()
+	assert_int(before).override_failure_message("no flame to lose; the case is vacuous").is_greater(0)
+
+	unit._go_downed(false)
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_int(mirror.fire_marker_count()).override_failure_message(
+			"the flame marker was FREED when the unit went down").is_equal(before)
+
+
 func test_rebuild_tracks_the_authority_after_clear_board() -> void:
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()

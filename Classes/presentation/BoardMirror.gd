@@ -11,7 +11,9 @@ class_name BoardMirror
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. refresh_states() is
 # re-read each turn: a declared v1 approximation (mid-pass ignitions appear at
-# the next turn boundary).
+# the next turn boundary). That cadence is also why a flame that renders WRONG
+# appears to "come back at the end of the turn" — the marker is rebuilt, not the
+# state; nothing here ever frees a marker mid-turn (pinned by test_board_mirror).
 
 # NONE is the one declared skip: an authored tile with no kind still renders
 # ground via FALLBACK_ITEM rather than a hole.
@@ -25,6 +27,13 @@ const KIND_TO_ITEM: Dictionary[Terrain.Kind, int] = {
 }
 const FALLBACK_ITEM := 3  # dirt
 const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
+
+# Flame knobs (aesthetics get a knob, not a guess). Height and size are the two levers
+# for the reported "a body lying in the fire hides it" case — see _make_fire.
+@export var flame_lift := 0.35
+@export var flame_size := Vector2(0.5, 0.7)
+@export var flame_light_energy := 2.0
+@export var flame_light_range := 4.0
 
 var board: GridMap
 
@@ -67,9 +76,15 @@ func _make_fire(cell: Vector3i) -> Node3D:
 
 	var flame := MeshInstance3D.new()
 	var quad := QuadMesh.new()
-	quad.size = Vector2(0.5, 0.7)
+	quad.size = flame_size
 	var material := StandardMaterial3D.new()
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# DEPTH_PRE_PASS, not plain ALPHA: unit sprites are ALPHA_CUT_OPAQUE_PREPASS, so they
+	# write depth and a pure-alpha flame is drawn afterwards and depth-TESTED against them.
+	# A standing sprite is cut-out air around its feet so the flame showed through; a DOWNED
+	# body is solid coverage at exactly ground level and swallowed it whole (reported in play
+	# 2026-08-14 — the marker was never freed, only hidden). Matching the discipline puts both
+	# in the same per-pixel sort.
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
 	material.albedo_color = Color(0, 0, 0, 1)
 	material.albedo_texture = load(FLAME_TEXTURE_PATH) as Texture2D
 	material.emission_enabled = true
@@ -80,14 +95,14 @@ func _make_fire(cell: Vector3i) -> Node3D:
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	quad.material = material
 	flame.mesh = quad
-	flame.position = Vector3(0, 0.35, 0)
+	flame.position = Vector3(0, flame_lift, 0)
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(flame)
 
 	var light := OmniLight3D.new()
 	light.light_color = Color(1, 0.62, 0.3)
-	light.light_energy = 2.0
-	light.omni_range = 4.0
+	light.light_energy = flame_light_energy
+	light.omni_range = flame_light_range
 	light.position = Vector3(0, 0.6, 0)
 	root.add_child(light)
 	return root
