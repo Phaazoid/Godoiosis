@@ -19,11 +19,11 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 |-----|--------|
 | Left-click | Act on the cell under the pointer (delivered straight to the 2D dispatchers) |
 | Right-click | Cancel the current mode — an open aim or move pick. It does **not** unqueue orders (that is [#228](https://github.com/Phaazoid/Godoiosis/issues/228)), so with no mode open it does nothing |
-| Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press) |
+| Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press). While the Tile Brush is armed the brush takes right-click to erase, so orbit falls back to **middle**-drag on its own and the help bar reads whichever is live |
 | Q / E | Snap to the next 90° detent — one press realigns from any angle |
 | Mouse wheel | Zoom (clamped so you cannot pull back past the whole board) |
 | W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
-| Space | Recentre the diorama on the pointer cell |
+| Space | Recentre the diorama on the pointer cell — **unless dev mode is up**, where it spawns instead, the same precedence the flat game gives it |
 | R | Reset to the opening shot (the framing the board loaded with) |
 | F4 | Toggle the flat 2D game full-screen and back *(dev builds)* |
 | Shift + F4 | The corner picture-in-picture debug view *(dev builds)* |
@@ -37,8 +37,8 @@ The view **opens close on your own squad**, not on the whole board (`opening_vie
 | Space | Spawn a unit at the hovered cell *(in dev mode, with the Spawn tool configured)* — hardcoded `KEY_SPACE` check in `game.gd`, not an Input Map action |
 | F2 | Reload the last-loaded scenario (`dev_reset_scenario`) — instant board reset |
 | Left-click a unit | (DEV_MODE) Edit that unit in the Unit Editor |
-| Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile |
-| Right-click | (DEV_MODE, Tile Brush active) Erase a tile |
+| Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile — works in **both** views; the 3D one previews the real block under the cursor |
+| Right-click | (DEV_MODE, Tile Brush active) Erase a tile. In the 3D view this is why orbit steps aside to middle-drag while the brush is armed |
 
 ## Claude slash commands
 Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.claude/commands/`](../.claude/commands/) — the filename *is* the command name, and the file is the instructions Claude follows when you run it. Anything after the command is passed in as an argument to scope the run.
@@ -50,6 +50,7 @@ Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.cl
 
 ## Notes
 - The dev tools open as a **separate OS window** (draggable to a second monitor). See `CLAUDE.md` → "Dev tools = separate OS window" for the architecture.
-- **Every `dev_*` binding above is currently inert inside the 3D view** — `game.gd` resolves the dev overlay by an absolute path that only exists under the flat game's scene tree, so F1 and the board-editing keys do nothing there. Tracked as #231, which is a design question (what should these tools *do* in 3D?) rather than a port.
+- **The dev bindings work in the 3D view as of #231 (v0.20.0).** The tile brush paints and erases there, SPACE spawns, and the brush previews the real 3D block under the cursor. *(This note previously said every `dev_*` binding was inert in 3D, blaming an absolute `DevOverlay` path in `game.gd`. Both halves are dead: the lookup became relative earlier in the arc, and the input plumbing landed with #231.)*
+- **Bindings are deliberately IDENTICAL between the two views** — the flat game is not a different control scheme. The one runtime difference is right-click: the brush claims it to erase while armed, so orbit falls back to middle-drag and the help bar re-reads the live binding. 3D-*native* authoring — placing at height rather than on the flat plane — is a separate future issue, gated on #218's verticality work.
 - Dev mode is editor-only tooling; none of the `dev_*` bindings are intended for the shipped game.
 - Scenarios (saved skirmish setups: units, squads, loadouts, tiles) live in `res://Scenarios/` and are saved/loaded from the dev tools' Save/Load section.
