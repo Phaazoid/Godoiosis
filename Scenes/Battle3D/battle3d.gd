@@ -341,6 +341,7 @@ func _process(_delta: float) -> void:
 	_poll_pointer()
 	_sync_brush_bindings()
 	_sync_brush_ghost()
+	_sync_bracket_tint()
 	_mirror_camera()
 
 
@@ -466,6 +467,21 @@ func _poll_pointer() -> void:
 		return
 	_last_polled_mouse = mouse
 	_update_pointer(mouse)
+
+
+# The hover bracket goes RED over anything the 2D calls invalid (#245, asked for in play after the
+# groundless-state forbid started refusing paints SILENTLY). It MIRRORS CursorController's state
+# rather than deciding for itself: the 2D already answers "is the thing under the pointer valid"
+# — in dev mode, unwalkable or occupied — and a groundless cell is unwalkable, which is exactly the
+# refusal that prompted this. Re-deriving it here would be a second answer free to disagree with
+# the cursor sitting right next to it, which is the #232 shape.
+func _sync_bracket_tint() -> void:
+	if demo_mode:
+		return
+	var invalid: bool = game.cursor_controller.state == CursorController.CursorState.INVALID
+	var restore: Color = _overlays.authored_color(BoardOverlays.Layer.HOVER)
+	var color: Color = _overlays.invalid_bracket_color if invalid else restore
+	_overlays.set_layer_modulate(BoardOverlays.Layer.HOVER, color)   # skip-if-equal inside
 
 
 # The 3D half of the brush preview. POLLED off the brush's own intent, never hooked at the

@@ -27,6 +27,45 @@ func _overlays() -> BoardOverlays:
 	return _scene.get_node("BoardOverlays") as BoardOverlays
 
 
+# --- Bracket tinting (#245) ---------------------------------------------------------
+
+func test_a_bracket_layer_can_be_recoloured_at_runtime() -> void:
+	# set_layer_modulate was FILL-only and push_error'd on anything else; the invalid-hover red
+	# needs it on the BRACKET kind too. Asserted as a property (the layer took the tint, and the
+	# tint is not the authored colour) rather than against a value -- the red is a knob.
+	var overlays := _overlays()
+	var authored := overlays.authored_color(BoardOverlays.Layer.HOVER)
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [Vector3i(0, 0, 0)])
+	overlays.set_layer_modulate(BoardOverlays.Layer.HOVER, overlays.invalid_bracket_color)
+	assert_that(overlays.layer_modulate(BoardOverlays.Layer.HOVER)).is_equal(overlays.invalid_bracket_color)
+	assert_bool(overlays.invalid_bracket_color == authored).override_failure_message(
+			"the invalid tint IS the authored colour, so nothing could ever look different").is_false()
+
+
+func test_a_bracket_built_after_a_tint_comes_back_tinted() -> void:
+	# The trap: the pool grows ON DEMAND, and _make_bracket read the AUTHORED colour. Tint a layer
+	# whose pool is still empty, then ask for a marker, and the fresh node came back gold on a red
+	# layer. Invisible to any case that tints a pool which already exists -- which is the only way
+	# anyone would naturally write it, so the empty-pool ordering IS the case.
+	var overlays: BoardOverlays = auto_free(BoardOverlays.new())
+	add_child(overlays)
+	var tint := overlays.invalid_bracket_color
+	overlays.set_layer_modulate(BoardOverlays.Layer.HOVER, tint)   # pool still empty
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [Vector3i(0, 0, 0)])
+	var seen := false
+	for child in overlays.get_children():
+		var bracket := child as MeshInstance3D
+		if bracket == null:
+			continue
+		var material := bracket.material_override as StandardMaterial3D
+		if material == null:
+			continue
+		seen = true
+		assert_that(material.albedo_color).override_failure_message(
+				"a bracket built after the tint came back the authored colour").is_equal(tint)
+	assert_bool(seen).override_failure_message("no bracket node was built at all").is_true()
+
+
 # --- The table and the contract ----------------------------------------------------
 
 func test_every_layer_is_declared_in_the_table() -> void:

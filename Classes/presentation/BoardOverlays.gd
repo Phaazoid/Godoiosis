@@ -75,6 +75,10 @@ const ART_PIXELS_PER_CELL := 16.0
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 1.1      # icon height above the cell's top face
 @export var billboard_pixel_size := 1.0 / 32.0
+# What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
+# A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
+# and a bracket has no texture to swap, so the colour is a fresh aesthetic call.
+@export var invalid_bracket_color := Color(1.0, 0.3, 0.3, 0.9)
 
 var fill_texture: Texture2D
 
@@ -133,12 +137,15 @@ func set_markers(layer: Layer, markers: Array[Dictionary]) -> void:
 			node.visible = false
 
 
-# Runtime recolor of a FILL layer's pool (the heal-green reach, the aim pulse —
-# colors the 2D layer modulates live). Skip-if-equal so a per-frame poll is free.
+# Runtime recolor of a FILL or BRACKET layer's pool (the heal-green reach, the aim pulse —
+# colors the 2D layer modulates live; and the hover bracket's invalid red, #245). Skip-if-equal
+# so a per-frame poll is free. Both kinds are a MeshInstance3D with a StandardMaterial3D
+# override, which is why one loop serves them; SPRITE/BILLBOARD carry per-marker tints instead
+# and would need their entry data rewritten, not their pool.
 func set_layer_modulate(layer: Layer, color: Color) -> void:
 	var spec: Dictionary = LAYERS[layer]
-	if spec["kind"] != Kind.FILL:
-		push_error("set_layer_modulate is for FILL layers")
+	if spec["kind"] != Kind.FILL and spec["kind"] != Kind.BRACKET:
+		push_error("set_layer_modulate is for FILL and BRACKET layers")
 		return
 	if _layer_colors.get(layer, spec["color"]) == color:
 		return
@@ -175,6 +182,14 @@ func markers_of(layer: Layer) -> Array[Dictionary]:
 
 func layer_modulate(layer: Layer) -> Color:
 	return _layer_colors.get(layer, LAYERS[layer]["color"])
+
+
+# The AUTHORED colour, ignoring any runtime override — what a layer goes back TO. Distinct from
+# layer_modulate() above, which answers what it is right NOW; a caller restoring a tint needs this
+# one, or it would "restore" to whatever it last set.
+func authored_color(layer: Layer) -> Color:
+	var color: Color = LAYERS[layer]["color"]
+	return color
 
 
 func marker_count(layer: Layer) -> int:
@@ -230,7 +245,9 @@ func _make_marker(layer: Layer) -> Node3D:
 	var spec: Dictionary = LAYERS[layer]
 	match spec["kind"] as Kind:
 		Kind.BRACKET:
-			return _make_bracket(spec)
+			# The runtime colour, not the authored one: a bracket built AFTER a set_layer_modulate
+			# (the pool grows on demand) would otherwise come back gold on a red layer.
+			return _make_bracket(_layer_colors.get(layer, spec["color"]))
 		Kind.BILLBOARD:
 			return _make_billboard(spec)
 		Kind.SPRITE:
@@ -275,7 +292,7 @@ func _make_billboard(spec: Dictionary) -> Sprite3D:
 	return sprite
 
 
-func _make_bracket(spec: Dictionary) -> MeshInstance3D:
+func _make_bracket(color: Color) -> MeshInstance3D:
 	if _bracket_mesh == null:
 		_bracket_mesh = _build_bracket_mesh()
 	var instance := MeshInstance3D.new()
@@ -283,7 +300,7 @@ func _make_bracket(spec: Dictionary) -> MeshInstance3D:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.albedo_color = spec["color"]
+	material.albedo_color = color
 	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(instance)
