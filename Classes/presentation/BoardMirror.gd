@@ -28,10 +28,20 @@ const KIND_TO_ITEM: Dictionary[Terrain.Kind, int] = {
 const FALLBACK_ITEM := 3  # dirt
 const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 
-# Flame knobs (aesthetics get a knob, not a guess). Height and size are the two levers
-# for the reported "a body lying in the fire hides it" case — see _make_fire.
+# Flame knobs (aesthetics get a knob, not a guess). See _make_fire for how lift and gap
+# interact — the flame is CLAMPED off the ground, the knob cannot sink it back in.
 @export var flame_lift := 0.35
 @export var flame_size := Vector2(0.5, 0.7)
+# Minimum clearance between the flame's bottom edge and the tile's top face. This is the
+# z-fight gap, the flame's twin of BoardOverlays.fill_lift, and it is a CLAMP rather than
+# an offset so no authored flame_lift can put the quad back into the ground plane.
+@export var flame_ground_gap := 0.03
+# FALSE restores the rendering the flame had before #236, which is the known-good look.
+# #236 turned this on to stop a downed body swallowing the flame and bought constant
+# z-fighting for a rare, self-correcting artefact — a bad trade, reverted by default
+# (dev, 2026-08-14: "if anything, the z fighting is worse now"). The switch stays because
+# the two modes fail in opposite directions and only an eye can rank them; see _make_fire.
+@export var flame_writes_depth := false
 @export var flame_light_energy := 2.0
 @export var flame_light_range := 4.0
 
@@ -62,6 +72,22 @@ func fire_marker_count() -> int:
 	return _fire_markers.size()
 
 
+# Where the flame's CENTRE sits above the tile's top face, clamped so its bottom edge always
+# clears the ground by flame_ground_gap. A QuadMesh is centred on its origin, so the authored
+# 0.35 lift against a 0.7-tall quad put the bottom edge at exactly y = 0 — coplanar with the
+# tile it stands on. That was invisible while the flame did not write depth and became the
+# worst z-fighting on the board the moment it did (reported in play, 2026-08-14). Clamped
+# rather than merely re-defaulted: the knob must not be able to author the bug back.
+# Only clamped while the flame WRITES depth, because that is the only time coplanarity
+# costs anything — the bottom edge sat in the ground plane harmlessly for months before
+# #236 put the quad in the depth buffer. With depth off the authored lift stands, so the
+# default configuration reproduces the pre-#236 look exactly rather than approximately.
+func flame_base_lift() -> float:
+	if not flame_writes_depth:
+		return flame_lift
+	return maxf(flame_lift, flame_size.y * 0.5 + flame_ground_gap)
+
+
 func _has_fire(cell_states: Array) -> bool:
 	for state in cell_states:
 		if (state as Terrain.TileState) in Terrain.FIRE_STATES:
@@ -84,7 +110,15 @@ func _make_fire(cell: Vector3i) -> Node3D:
 	# body is solid coverage at exactly ground level and swallowed it whole (reported in play
 	# 2026-08-14 — the marker was never freed, only hidden). Matching the discipline puts both
 	# in the same per-pixel sort.
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS
+	#
+	# The knob exists because the two modes fail in OPPOSITE directions and only an eye can
+	# say which is worse here: writing depth makes the flame fight anything near-coplanar
+	# with it (its own tile, and a unit sprite standing on that tile — both are camera-facing
+	# planes through the same point), while not writing depth makes it lose to whatever wrote
+	# depth first, which is the swallowed-by-a-body bug. The ground half is fixed by geometry
+	# below; this switch is for the sprite half.
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS if flame_writes_depth \
+			else BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_color = Color(0, 0, 0, 1)
 	material.albedo_texture = load(FLAME_TEXTURE_PATH) as Texture2D
 	material.emission_enabled = true
@@ -95,7 +129,7 @@ func _make_fire(cell: Vector3i) -> Node3D:
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	quad.material = material
 	flame.mesh = quad
-	flame.position = Vector3(0, flame_lift, 0)
+	flame.position = Vector3(0, flame_base_lift(), 0)
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(flame)
 
