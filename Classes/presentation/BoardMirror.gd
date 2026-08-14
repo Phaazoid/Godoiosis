@@ -30,15 +30,18 @@ const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 
 # Flame knobs (aesthetics get a knob, not a guess). See _make_fire for how lift and gap
 # interact — the flame is CLAMPED off the ground, the knob cannot sink it back in.
-@export var flame_lift := 0.4
+@export var flame_lift := 0.35
 @export var flame_size := Vector2(0.5, 0.7)
 # Minimum clearance between the flame's bottom edge and the tile's top face. This is the
 # z-fight gap, the flame's twin of BoardOverlays.fill_lift, and it is a CLAMP rather than
 # an offset so no authored flame_lift can put the quad back into the ground plane.
 @export var flame_ground_gap := 0.03
-# Depth-prepass vs plain alpha, and the two failure modes are opposite — flip this if the
-# fighting is against UNIT SPRITES rather than the ground. See _make_fire.
-@export var flame_writes_depth := true
+# FALSE restores the rendering the flame had before #236, which is the known-good look.
+# #236 turned this on to stop a downed body swallowing the flame and bought constant
+# z-fighting for a rare, self-correcting artefact — a bad trade, reverted by default
+# (dev, 2026-08-14: "if anything, the z fighting is worse now"). The switch stays because
+# the two modes fail in opposite directions and only an eye can rank them; see _make_fire.
+@export var flame_writes_depth := false
 @export var flame_light_energy := 2.0
 @export var flame_light_range := 4.0
 
@@ -75,7 +78,13 @@ func fire_marker_count() -> int:
 # tile it stands on. That was invisible while the flame did not write depth and became the
 # worst z-fighting on the board the moment it did (reported in play, 2026-08-14). Clamped
 # rather than merely re-defaulted: the knob must not be able to author the bug back.
+# Only clamped while the flame WRITES depth, because that is the only time coplanarity
+# costs anything — the bottom edge sat in the ground plane harmlessly for months before
+# #236 put the quad in the depth buffer. With depth off the authored lift stands, so the
+# default configuration reproduces the pre-#236 look exactly rather than approximately.
 func flame_base_lift() -> float:
+	if not flame_writes_depth:
+		return flame_lift
 	return maxf(flame_lift, flame_size.y * 0.5 + flame_ground_gap)
 
 

@@ -132,6 +132,7 @@ func test_the_flame_never_sits_in_the_ground_plane() -> void:
 	# flame did not write depth; the worst z-fighting on the board once it did. Clamped in
 	# flame_base_lift, so this holds for any authored knob value, including a hostile one.
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	mirror.flame_writes_depth = true
 	for lift in [0.0, 0.1, 0.35, 0.4, 2.0]:
 		mirror.flame_lift = lift
 		var bottom: float = mirror.flame_base_lift() - mirror.flame_size.y * 0.5
@@ -142,3 +143,10 @@ func test_the_flame_never_sits_in_the_ground_plane() -> void:
 	mirror.flame_lift = 0.35
 	assert_float(mirror.flame_base_lift()).override_failure_message(
 			"the clamp is inert at the value that caused the bug").is_greater(0.35)
+
+	# ...and with depth off — the shipped default — the authored lift stands untouched, so
+	# the flame renders exactly as it did before #236 rather than approximately.
+	mirror.flame_writes_depth = false
+	assert_float(mirror.flame_base_lift()).override_failure_message(
+			"the clamp moved the flame even with depth-write off, so the revert is not exact" \
+			).is_equal_approx(0.35, 0.0001)
