@@ -30,6 +30,10 @@ var stand_at: Callable = BoardSpace.standing_point
 
 var cell := BoardSpace.NO_CELL
 var display_name := "Unit"
+# The last direction this sprite travelled. Facing is camera-relative, so a sprite that
+# has stopped still needs its step remembered — otherwise an ORBIT leaves it facing the
+# way it faced under the old camera angle (#176 stage 4d).
+var last_step := Vector3.ZERO
 
 var _map_texture: Texture2D
 var _move_texture: Texture2D

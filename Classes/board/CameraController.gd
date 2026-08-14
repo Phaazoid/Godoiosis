@@ -2,8 +2,16 @@
 # with AI-turn locks (set_ai_locked/follow) and the fixed-duration pan_to beat.
 # center_on_position glides via the _process lerp; snap_to_position is the instant
 # form (the 3D input bridge maps clicks through the live transform, #220).
+#
+# Manual scrolling has THREE locks now: lock_manual_input (a glide owns the camera),
+# ai_locked (the AI does), and game.board_input_delegated (a 3D host does -- #176
+# stage 4d, where WASD would otherwise pan this camera AND the 3D rig off one press).
+# Only the keyboard branch is gated: pan_to/follow/snap_to_position must keep working,
+# and follow needs this _process to track its unit.
 extends Node2D
 class_name CameraController
+
+var game   # the Game coordinator (Node2D); set by game._ready()
 
 @onready var camera: Camera2D = $Camera2D
 const TILE_SIZE := GridUtils.TILE_SIZE
@@ -89,7 +97,7 @@ func _process(delta: float):
 	
 	#Always scroll at least one cell, and never snap back.  
 	keyboard_direction = Vector2.ZERO
-	if not lock_manual_input and not ai_locked:
+	if not lock_manual_input and not ai_locked and not _input_delegated():
 		if Input.is_action_pressed("cam_right"):
 			keyboard_direction.x += 1
 		if Input.is_action_pressed("cam_left"):
@@ -131,7 +139,16 @@ func snap_to_grid():
 	elif last_move_dir.y < 0:
 		target_position.y = floor(target_position.y / TILE_SIZE) * TILE_SIZE
 	else:
-		target_position.y = round(target_position.y / TILE_SIZE) * TILE_SIZE		
+		target_position.y = round(target_position.y / TILE_SIZE) * TILE_SIZE
+
+# Does a 3D host own board input right now? The same one flag game.gd's _unhandled_input
+# reads -- one question, one answer. Explicitly typed: `game` is untyped, so `:=` cannot
+# infer through it. Null-guarded so a bare CameraController (fixtures) scrolls normally.
+func _input_delegated() -> bool:
+	if game == null:
+		return false
+	var delegated: bool = game.board_input_delegated
+	return delegated
 
 func set_ai_locked(locked: bool) -> void:
 	ai_locked = locked
