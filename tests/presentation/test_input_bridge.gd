@@ -1,12 +1,15 @@
-# The stage-4b input bridge (#220): 3D clicks/hover drive the REAL game through
-# synthetic input fed to Input.parse_input_event — the OS-driver entry, so the
-# events ride the same pipeline as physical input (root GUI -> the PiP container
-# forwards into GameView -> game.gd:192) and every gate fires natively. These are
-# the repo's first true click-through wire tests: events enter at the top of the
-# pipeline and must survive the whole chain; calling the dispatch directly would
-# test both ends and not the wire. (Viewport.push_input is a dead door against
-# handle_input_locally=false — measured; parse_input_event is what gdUnit's own
-# SceneRunner uses for headless GUI, so the engine behavior is load-bearing there.)
+# The Battle3D input bridge (#220 then #222): physical events enter at the top of
+# the real pipeline (Input.parse_input_event — the OS-driver entry, which is what
+# gdUnit's own SceneRunner uses for headless GUI) and must survive the whole chain.
+# These are the repo's true click-through wire tests: calling the dispatch directly
+# would test both ends and not the wire.
+#
+# Under 4c hosting the chain forks by WHAT was clicked. UI: root -> the full-screen
+# container -> GameView -> the Control, consumed natively. Board: nothing consumes
+# it, so it bubbles back OUT to the root (measured) and this node picks the cell and
+# calls game._on_left_click / _on_right_click. game.board_input_delegated silences
+# the 2D side's own cell derivation — without it the same physical click acts twice,
+# which test_the_delegation_gate_stops_the_2d_board_acting_twice pins.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -53,20 +56,31 @@ func _live_units() -> Array[Unit]:
 	return live
 
 
-# A player unit whose 3D screen position is clear of the PiP rect (the PiP sits on
-# top of the 3D view by design, so a click there belongs to the PiP, not the board).
+# A player unit the 3D pointer can actually reach: under 4c the 2D game covers the
+# window, so what a board click must dodge is a VISIBLE UI Control (the inspect
+# column, the queue panel), not the retired PiP rect.
 func _pickable_player_unit() -> Unit:
-	var pip: Rect2 = _container.get_global_rect()
 	for unit in _live_units():
 		if unit.get_faction() != Team.Faction.PLAYER:
 			continue
-		if not pip.has_point(_screen_of(unit.movement.cell)):
+		if not _under_ui(_screen_of(unit.movement.cell)):
 			return unit
 	return null
 
 
+func _under_ui(screen_pos: Vector2) -> bool:
+	for node in _game.ui_layer.get_children():
+		var control := node as Control
+		if control == null or not control.is_visible_in_tree():
+			continue
+		if control.mouse_filter != Control.MOUSE_FILTER_IGNORE \
+				and control.get_global_rect().has_point(screen_pos):
+			return true
+	return false
+
+
 func _screen_of(cell: Vector2i) -> Vector2:
-	return _camera3d.unproject_position(BoardSpace.standing_point(Vector3i(cell.x, 0, cell.y)))
+	return _camera3d.unproject_position(BoardSpace.standing_point(BoardSpace.of_flat(cell)))
 
 
 func _parse_motion(screen_pos: Vector2) -> void:
@@ -122,26 +136,33 @@ func test_a_3d_click_selects_the_unit_it_lands_on() -> void:
 	assert_bool(_selected() == unit).is_true()
 
 
-func test_the_bridge_snaps_the_hidden_camera_to_the_clicked_cell() -> void:
+func test_pointing_snaps_the_hidden_camera_to_the_hovered_cell() -> void:
+	# The hidden 2D camera has one live consumer left: the hover card parks itself by
+	# mapping a world position through the 2D canvas transform, so the camera must be
+	# showing whatever the 3D pointer is on. (4b snapped on CLICK because the click's
+	# cell was derived from the viewport mouse; delivery is direct now, so the snap
+	# moved to the pointer write and serves only the card.)
 	var unit := _pickable_player_unit()
 	var cam: CameraController = _game.camera_controller
-	var grid: TileMapLayer = _game.grid
-	var world: Vector2 = grid.to_global(grid.map_to_local(unit.movement.cell))
+	var world: Vector2 = GridUtils.cell_world(_game.grid, unit.movement.cell)
 	# Derive the clamped truth through the same seam, then park the camera far away.
 	cam.snap_to_position(world)
 	var expected: Vector2 = cam.global_position
 	cam.snap_to_position(Vector2(-100000.0, -100000.0))
 	assert_bool(cam.global_position.distance_to(expected) > 1.0).is_true()
 
-	_parse_click(_screen_of(unit.movement.cell))
+	_parse_motion(_screen_of(unit.movement.cell))
 	await _pump()
 	assert_that(cam.global_position).is_equal(expected)
-	assert_bool(_selected() == unit).is_true()
 
 
 # --- The gates -------------------------------------------------------------------------
 
 func test_a_modal_freeze_stops_3d_clicks_cold() -> void:
+	# Picked BEFORE the card opens: a modal is a full-rect Control on the UI layer, so
+	# _pickable_player_unit correctly finds nothing clickable once one is up.
+	var unit := _pickable_player_unit()
+	assert_object(unit).is_not_null()
 	# Open the pause menu through the real wire: ESC parsed at the top of the pipeline.
 	var esc := InputEventKey.new()
 	esc.keycode = KEY_ESCAPE
@@ -152,7 +173,6 @@ func test_a_modal_freeze_stops_3d_clicks_cold() -> void:
 	assert_bool(ModalLock.any_open(get_tree())).is_true()
 	assert_bool(_game.can_process()).is_false()
 
-	var unit := _pickable_player_unit()
 	_parse_click(_screen_of(unit.movement.cell))
 	await _pump()
 	# The sharp clause: a gate that held never let the bridge read the click at all,
@@ -265,49 +285,102 @@ func test_spawn_sandbox_emits_the_same_rebuild() -> void:
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(_scene.get_node("Board")))
 
 
-# --- The PiP ---------------------------------------------------------------------------
+# --- Hosting the 2D game as the UI layer (#222) ----------------------------------------
 
-func test_the_pip_keeps_native_resolution() -> void:
+func test_the_2d_game_hosts_full_screen_and_transparent() -> void:
+	# The whole mechanism in one place: the container covers the window at NATIVE
+	# scale (so Controls keep their real size and take physical clicks at real
+	# coordinates), the viewport clears transparent so the 3D world shows through,
+	# the board visuals are down, and the 2D side has stood down from board input.
 	assert_bool(_container.visible).is_true()
-	assert_that(Vector2(_game_view.size)).is_equal(Vector2(1280.0, 720.0))
-	assert_that(_container.scale).is_equal(Vector2(_scene.pip_scale, _scene.pip_scale))
-	var view: Vector2 = _scene.get_viewport().get_visible_rect().size
-	var native: Vector2 = _container.custom_minimum_size   # the authored source the PiP reads
-	var expected_pos: Vector2 = view - native * _scene.pip_scale - _scene.pip_margin
-	assert_that(_container.position).is_equal(expected_pos)
+	assert_that(_container.scale).is_equal(Vector2.ONE)
+	assert_that(_container.anchor_right).is_equal(1.0)
+	assert_that(_container.anchor_bottom).is_equal(1.0)
+	assert_that(_container.get_global_rect().size).is_equal(_scene.get_viewport().get_visible_rect().size)
+	assert_bool(_game_view.transparent_bg).is_true()
+	assert_bool(_game.board_input_delegated).is_true()
+	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_false()
 
 
-func test_the_pip_serves_a_real_button_click() -> void:
+func test_the_board_hide_spares_the_ui_and_the_authoring_layer() -> void:
+	# The probe this mechanism stands on. MEASURED (#222): `game.visible = false` is
+	# NOT the switch — OverlayManager is a plain Node, which breaks CanvasItem
+	# visibility propagation to the overlay layers (they stayed drawn), while the
+	# CanvasLayer UI went dark WITH it. Hence the per-node helper.
+	var unit := _pickable_player_unit()
 	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
-	end_turn.set_active(true)   # visibility is #189's own tested rule; the claim here is the wire
+	end_turn.set_active(true)   # its own visibility is #189's rule, not this claim's
+	await await_idle_frame()
+
+	assert_bool(unit.visuals.sprite.is_visible_in_tree()).is_false()
+	assert_bool((_game.overlay_manager.move_overlay as TileMapLayer).is_visible_in_tree()).is_false()
+	assert_bool(end_turn.is_visible_in_tree()).is_true()
+
+	_scene._set_board_visible(true)
+	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_true()
+	# The restore must not reveal the authoring-only zone layer (set_zone_visibility owns it).
+	assert_bool((_game.overlay_manager.zone_overlay as TileMapLayer).visible).is_false()
+
+
+func test_a_ui_click_over_the_3d_board_stays_in_the_ui() -> void:
+	# The payoff: a Control is clicked at its REAL screen rect (identity transform —
+	# no container math), the 2D consumes it, and nothing leaks to the 3D picker.
+	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
+	end_turn.set_active(true)
 	await await_idle_frame()
 	var presses: Array[bool] = []
 	end_turn.end_turn_requested.connect(func() -> void: presses.append(true))
 
 	var button: Button = end_turn.get_node("Button")
-	var inside: Vector2 = button.get_global_rect().get_center()
-	var root_pos: Vector2 = _container.get_global_transform() * inside
-	_parse_click(root_pos)
+	_parse_click(button.get_global_rect().get_center())
 	await _pump()
 
 	assert_int(presses.size()).is_equal(1)
-	assert_object(_selected()).is_null()   # the PiP consumed it — nothing leaked to the 3D picker
+	assert_object(_selected()).is_null()   # the UI consumed it; the picker never acted
 
 
-func test_a_pip_board_click_stays_in_the_pip() -> void:
-	# A board click on the PiP is UNCONSUMED by the game and bubbles back out to the
-	# root (measured) — the bridge's PiP-rect guard must never re-read it as 3D
-	# pointing, or every PiP board click double-acts as a 3D pick.
+func test_the_delegation_gate_stops_the_2d_board_acting_twice() -> void:
+	# THE gate regression. A board click is unconsumed by the 2D game, so it bubbles
+	# back out to the root and this node picks the cell — but game.gd's own
+	# _unhandled_input saw the SAME physical event first, and its cell derivation
+	# reads the viewport mouse against the hidden 2D camera, which is aimed somewhere
+	# else entirely. Without board_input_delegated the click acts twice, and the 2D's
+	# wrong cell wins because it runs FIRST and consumes the mode.
+	#
+	# Asserted on the QUEUE, never on the end-state selection: a second dispatch would
+	# simply overwrite the selection and the case would read green through the bug.
 	var unit := _pickable_player_unit()
-	var grid: TileMapLayer = _game.grid
-	_game.camera_controller.snap_to_position(grid.to_global(grid.map_to_local(unit.movement.cell)))
-	var view_pos: Vector2 = _scene._cell_view_pos(unit.movement.cell)
-	var root_pos: Vector2 = _container.get_global_transform() * view_pos
-	_parse_click(root_pos)
+	var destination := unit.movement.cell + Vector2i(1, 0)
+	assert_bool(_game.grid.get_cell_tile_data(destination) != null).is_true()   # fixture sanity
+	_game.selected_unit = unit
+	_game.enter_move_mode(unit)
+
+	_parse_click(_screen_of(destination))
 	await _pump()
-	assert_bool(_selected() == unit).is_true()                       # the 2D game acted on it
-	assert_that(_scene._pointer_cell).is_equal(BoardSpace.NO_CELL)   # the bridge never did
-	await await_idle_frame()   # the action menu's deferred _place_panel runs against a live panel
+
+	var move: MoveAction = _game.overlay_manager.planned_move_by_unit.get(unit)
+	assert_object(move).override_failure_message("the 3D click queued no move at all").is_not_null()
+	assert_that(move.destination) \
+		.override_failure_message("the move went to the 2D camera's cell, not the clicked one") \
+		.is_equal(destination)
+
+
+func test_the_corner_debug_view_restores_the_2d_board() -> void:
+	# F4's view, kept for debugging: the 4b geometry with the 2D board drawn again.
+	# Board input stays container-independent (direct cell calls), so play survives it.
+	_scene.corner_view = true
+	_scene._apply_hosting()
+	assert_that(_container.scale).is_equal(Vector2(_scene.pip_scale, _scene.pip_scale))
+	assert_that(Vector2(_game_view.size)).is_equal(Vector2(1280.0, 720.0))
+	assert_bool(_game_view.transparent_bg).is_false()
+	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_true()
+	var view: Vector2 = _scene.get_viewport().get_visible_rect().size
+	assert_that(_container.position).is_equal(view - _scene._pip_native * _scene.pip_scale - _scene.pip_margin)
+
+	_scene.corner_view = false
+	_scene._apply_hosting()
+	assert_that(_container.scale).is_equal(Vector2.ONE)
+	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_false()
 
 
 # --- Cancel + driver -------------------------------------------------------------------
