@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real.
 
-**Canon checked through #232 (2026-08-14).**
+**Canon checked through #243 (2026-08-14).**
 
 ---
 
@@ -47,6 +47,19 @@ Bindings are knobs, not canon: `orbit_button` was built to default to middle-dra
 Also settled here: **the camera follows the action by mirroring the 2D camera** (which `AIController` already pans to each acting squad) rather than growing a second follow seam — so `Pacing.AI_SQUAD_PAN` keeps one number and one reader, and the 3D inherits the 2D's easing exactly. The gate is `ai_locked`, deliberately *not* the broader board lock, which also covers menus. **Entering an AI turn also squares the camera up** to the nearest detent (dev call, 2026-08-14): free orbit is the player's, but an enemy phase reads on an axis-aligned board. It fires on the *edge* into the turn rather than every frame, so the day orbit is allowed to stay live under an AI turn it squares up once instead of fighting the drag.
 
 **The opening shot is the player's squad, not the board (dev feel-check, 2026-08-14: fitting all 64×40 of Prolog opened too far out to play from).** These are two different questions and the rig now takes both — `frame(shot, bounds)`: the *shot* is what is on screen at load, the *bounds* are the box the view may never leave, and only the bounds set the zoom ceiling and the pan limit. Solving the ceiling off a close shot would have clamped the player out of ever seeing the rest of the map, which is the same class of bug as the cells-passed-as-a-distance one this stage fixed. Falsification note worth keeping: the obvious test — *are the player's units on screen at load?* — **passes against a window aimed at the board's centre** on both authored missions, because both squads start near the middle. The aim itself has to be asserted, or "opens on your squad" is pinned by nothing.
+
+### The mirror is LIVE, and the turn-boundary approximation is retired (#231, 2026-08-14)
+
+Stage 4a shipped two declared cadences: the board mirrored on `board_loaded`, and tile states re-read at `turn_started`. Both were honest v1 approximations, and both became wrong the moment authoring moved into the 3D view — you painted and nothing happened until F2, which is the round trip the whole dev-tools-in-3D arc exists to kill. They are gone.
+
+**Fire is now reconciled per cell and polled**, so a mid-pass ignition appears when it happens. That also removes the artefact the old cadence produced: a flame that rendered wrong appeared to "come back at the end of the turn" because the *marker* was rebuilt, not the state. Poll rather than signal, and for a reason worth remembering: a `states_changed` signal fires *inside* the resolver's per-effect loop, so it would create and free markers many times within one pass, where a poll coalesces a whole frame into one reconcile.
+
+**Terrain syncs per cell too, but only while `DEV_MODE` is active** — the sim never paints terrain, so the diff stays entirely out of the shipping game while still catching every writer with no trigger site to remember. (An engine signal was the first choice and does not exist: `TileMapLayer.changed` does **not** fire on `set_cell`/`erase_cell` in 4.7. Measured, with a property write as the control.)
+
+Two rules this settled, both general:
+
+- **A repaint can add or erase a COLUMN**, which is what the picker table and the camera bounds derive from — refresh them with it, or the cell you just painted is unclickable. Bounds only, never a re-frame: painting a tile must not yank the camera, matching what `CameraController.refresh_bounds` has always done in 2D.
+- **Authoring scaffolding mirrors only while the 2D shows it.** `ZONE_PATROL` (the brush's default kind) and the picked-zone highlight had no 3D twin at all; giving them one means mirroring *cells and visibility*, because the 2D reveals those layers solely while the Tile Brush tab is up. Mirror the question — "should this be on screen" — never the field the cells happen to live in.
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 
