@@ -1,0 +1,83 @@
+# Bumps application/config/version on main, once per merged PR.
+#
+# WHY THIS EXISTS: the rule used to be "every PR bumps the version inside its own diff".
+# The reason was sound -- the stamp on the title screen and in bug reports must name the
+# build that actually contains the change -- but the cost was structural, not bad luck:
+# any two PRs branched off one base bump the SAME line, so every concurrent pair conflicts
+# on project.godot. That happened four times in a single day (2026-08-14) before the dev
+# called it: "let's move it to merge time, for efficiency's sake."
+#
+# The semver decision comes from the PR's own LABELS rather than a new signal, because
+# type/feature vs type/bug already answers exactly that question (Law #4). A PR labelled
+# type/feature bumps the middle digit; anything else bumps the last. No label = last digit,
+# the safe default.
+#
+# Note this workflow cannot bump its OWN merge: for pull_request events GitHub runs the
+# workflow file as it exists on the BASE branch, and main only gains this file once the
+# merge lands. Every merge after that is covered.
+name: Version bump
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+# Serialize: two PRs merged back to back must not both bump from the same base.
+concurrency:
+  group: version-bump-main
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Bump application/config/version
+        env:
+          # Quoted JSON array of label names. Read via env, never interpolated into the
+          # script body -- a PR title or label is attacker-controlled text.
+          LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+
+          current=$(sed -n 's/^config\/version="\(.*\)"$/\1/p' project.godot)
+          if [ -z "$current" ]; then
+            echo "::error::could not read application/config/version from project.godot"
+            exit 1
+          fi
+          IFS=. read -r major minor patch <<< "$current"
+
+          if printf '%s' "$LABELS" | grep -q '"type/feature"'; then
+            minor=$((minor + 1))
+            patch=0
+            kind=feature
+          else
+            patch=$((patch + 1))
+            kind=fix
+          fi
+          next="$major.$minor.$patch"
+          echo "$current -> $next ($kind, PR #$PR_NUMBER)"
+
+          sed -i "s|^config/version=\".*\"|config/version=\"$next\"|" project.godot
+          if git diff --quiet -- project.godot; then
+            echo "::error::version unchanged; refusing to push an empty commit"
+            exit 1
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add project.godot
+          # -F -, never -m with interpolated PR text.
+          printf 'Version %s\n\nBumped on merge of #%s (%s).\n' "$next" "$PR_NUMBER" "$kind" \
+            | git commit -F -
+          git pull --rebase origin main
+          git push origin HEAD:main
