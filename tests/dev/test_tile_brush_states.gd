@@ -95,6 +95,21 @@ func test_erasing_a_tile_takes_its_states_with_it() -> void:
 			"the store cleared but the icon stayed — the redraw never ran").is_less(painted_icons)
 
 
+func test_painting_frozen_onto_a_burning_cell_keeps_the_fire() -> void:
+	# Reported in play, 3D only: painting FROZEN over a BURNING tile "erased" the fire. Bisecting
+	# store from render -- a cell legally holds both, so if this is green the store is innocent.
+	_brush._tile_state = Terrain.TileState.BURNING
+	game.dev_controller._paint_state(CELL)
+	_brush._tile_state = Terrain.TileState.FROZEN
+	game.dev_controller._paint_state(CELL)
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.BURNING)) \
+		.override_failure_message("the frozen paint dropped the fire from the STORE").is_true()
+	assert_bool(game.terrain_states.has_state(CELL, Terrain.TileState.FROZEN)).is_true()
+	assert_array(game.terrain_states.burning_cells()) \
+		.override_failure_message("the cell fell out of burning_cells, which is what drives the 3D flame") \
+		.contains([CELL])
+
+
 func test_shrinking_the_map_drops_the_states_left_outside_it() -> void:
 	# grid.clear() inside resize_map is the SECOND way to lose ground, and it never matched a search
 	# for erase_cell — which is exactly why the rule sweeps rather than clearing one named cell.

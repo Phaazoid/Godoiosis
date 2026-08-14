@@ -312,6 +312,23 @@ func test_no_overlay_layer_can_sort_over_a_unit() -> void:
 				% [layer, sort]).is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+func test_no_overlay_layer_can_sort_over_the_flame() -> void:
+	# Fire's 3D form is a standing effect, not markup lying on the face (#245, found in play: a
+	# frost icon at sort 2 drew over a flame sitting at the default 0, and the fire read as
+	# erased). Structural, like the unit pin above — a new layer added above the flame reds here
+	# rather than being discovered by painting ice on a bonfire.
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		var sort: int = BoardOverlays.LAYERS[layer]["sort"]
+		assert_int(sort).override_failure_message(
+				"layer %d sorts at %d, at or above FLAME_RENDER_PRIORITY — it would draw over fire" \
+				% [layer, sort]).is_less(BoardOverlays.FLAME_RENDER_PRIORITY)
+	# ...and the flame still sits BELOW units, so the flame-vs-sprite trade #236 argued over
+	# (and the dev reverted) is untouched by giving the flame a band of its own.
+	assert_int(BoardOverlays.FLAME_RENDER_PRIORITY).override_failure_message(
+			"the flame now sorts at or above units, which re-opens #236's swallowed-body trade") \
+			.is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
+
+
 func test_a_unit_sprite_actually_carries_that_priority() -> void:
 	# Test the wire: the constant is worth nothing if no sprite reads it, and ghosts are built
 	# by UnitMirror through the same plain constructor rather than for_unit_data.

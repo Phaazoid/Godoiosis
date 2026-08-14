@@ -35,6 +35,12 @@ const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets thi
 # Unit.BASE_SPRITE_INDEX". Must stay greater than any LAYERS "sort"; pinned by a test.
 # Without it a ghost was just render_priority 0, so arrows and terrain icons drew over it.
 const UNIT_RENDER_PRIORITY := 32
+# Fire's 3D form is a STANDING effect, not markup lying on the tile face, so it sorts above every
+# overlay layer — the same structural claim units make, one band below them so the flame-vs-sprite
+# relationship #236 argued over is untouched. Found in play (#245): the flame set no priority at
+# all, so it sat at 0 while Layer.TERRAIN sorts at 2, and painting a frost icon onto a burning
+# tile drew straight over the flame. The fire read as erased; the store was perfectly correct.
+const FLAME_RENDER_PRIORITY := 16
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
