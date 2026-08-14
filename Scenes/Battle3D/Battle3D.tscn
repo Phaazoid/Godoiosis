@@ -1,13 +1,13 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene format=3 uid="uid://ux4n6j3if7q5"]
 
-[ext_resource type="Script" path="res://Scenes/Battle3D/battle3d.gd" id="1"]
-[ext_resource type="Script" path="res://Classes/presentation/BoardMirror.gd" id="2"]
-[ext_resource type="Script" path="res://Classes/presentation/UnitMirror.gd" id="3"]
-[ext_resource type="Script" path="res://Scenes/LookDev/look_dev_camera.gd" id="4"]
-[ext_resource type="Script" path="res://Classes/presentation/BoardOverlays.gd" id="5"]
-[ext_resource type="MeshLibrary" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="6"]
-[ext_resource type="PackedScene" path="res://Scenes/Main.tscn" id="7"]
-[ext_resource type="Script" path="res://Classes/presentation/OverlayMirror.gd" id="8"]
+[ext_resource type="Script" uid="uid://depspi72k46ew" path="res://Scenes/Battle3D/battle3d.gd" id="1"]
+[ext_resource type="Script" uid="uid://dj4gnh8d4qwou" path="res://Classes/presentation/BoardMirror.gd" id="2"]
+[ext_resource type="Script" uid="uid://d4f3aheegfqek" path="res://Classes/presentation/UnitMirror.gd" id="3"]
+[ext_resource type="Script" uid="uid://btoy3ievwu1rh" path="res://Scenes/LookDev/look_dev_camera.gd" id="4"]
+[ext_resource type="Script" uid="uid://c44kj2r8wa1q5" path="res://Classes/presentation/BoardOverlays.gd" id="5"]
+[ext_resource type="MeshLibrary" uid="uid://nxuokc0l1fj0" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="6"]
+[ext_resource type="PackedScene" uid="uid://cxiu0yvwwxlgo" path="res://Scenes/Main.tscn" id="7"]
+[ext_resource type="Script" uid="uid://bxgelre76vn41" path="res://Classes/presentation/OverlayMirror.gd" id="8"]
 
 [sub_resource type="ProceduralSkyMaterial" id="sky_mat"]
 sky_top_color = Color(0.32, 0.5, 0.78, 1)
@@ -39,56 +39,56 @@ dof_blur_near_distance = 9.0
 dof_blur_near_transition = 4.0
 dof_blur_amount = 0.08
 
-[node name="Battle3D" type="Node3D"]
+[node name="Battle3D" type="Node3D" unique_id=222815813]
 script = ExtResource("1")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldEnvironment" type="WorldEnvironment" parent="." unique_id=852089990]
 environment = SubResource("env")
 
-[node name="Sun" type="DirectionalLight3D" parent="."]
-rotation_degrees = Vector3(-50, -35, 0)
+[node name="Sun" type="DirectionalLight3D" parent="." unique_id=1885702633]
+transform = Transform3D(0.81915206, 0.43938506, -0.36868784, 0, 0.64278764, 0.76604444, 0.57357645, -0.62750685, 0.5265408, 0, 0, 0)
 light_color = Color(1, 0.985, 0.94, 1)
 light_energy = 1.3
 shadow_enabled = true
 
-[node name="Board" type="GridMap" parent="."]
+[node name="Board" type="GridMap" parent="." unique_id=2102806431]
 mesh_library = ExtResource("6")
 cell_size = Vector3(1, 1, 1)
 
-[node name="BoardOverlays" type="Node3D" parent="."]
+[node name="BoardOverlays" type="Node3D" parent="." unique_id=1690625544]
 script = ExtResource("5")
 
-[node name="BoardMirror" type="Node3D" parent="."]
+[node name="BoardMirror" type="Node3D" parent="." unique_id=1812552826]
 script = ExtResource("2")
 
-[node name="UnitMirror" type="Node3D" parent="."]
+[node name="UnitMirror" type="Node3D" parent="." unique_id=1640434048]
 script = ExtResource("3")
 
-[node name="OverlayMirror" type="Node" parent="."]
+[node name="OverlayMirror" type="Node" parent="." unique_id=1022743052]
 script = ExtResource("8")
 
-[node name="CameraRig" type="Node3D" parent="."]
-position = Vector3(0, 1, 0)
+[node name="CameraRig" type="Node3D" parent="." unique_id=1499197790]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
 script = ExtResource("4")
 
-[node name="Pitch" type="Node3D" parent="CameraRig"]
-rotation_degrees = Vector3(-40, 0, 0)
+[node name="Pitch" type="Node3D" parent="CameraRig" unique_id=1619412083]
+transform = Transform3D(1, 0, 0, 0, 0.76604444, 0.6427876, 0, -0.6427876, 0.76604444, 0, 0, 0)
 
-[node name="Camera" type="Camera3D" parent="CameraRig/Pitch"]
-position = Vector3(0, 0, 14)
+[node name="Camera" type="Camera3D" parent="CameraRig/Pitch" unique_id=205688826]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 14)
 attributes = SubResource("cam_attrs")
 current = true
 fov = 30.0
 
-[node name="UI" type="CanvasLayer" parent="."]
+[node name="UI" type="CanvasLayer" parent="." unique_id=1085063773]
 
-[node name="Help" type="Label" parent="UI"]
+[node name="Help" type="Label" parent="UI" unique_id=242989368]
+modulate = Color(1, 1, 1, 0.85)
 offset_left = 8.0
 offset_top = 8.0
 offset_right = 900.0
 offset_bottom = 28.0
 theme_override_font_sizes/font_size = 13
 text = "Battle3D mirror (stage 4a, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
-modulate = Color(1, 1, 1, 0.85)
 
-[node name="Main" parent="." instance=ExtResource("7")]
+[node name="Main" parent="." unique_id=933466344 instance=ExtResource("7")]
