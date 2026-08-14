@@ -124,3 +124,21 @@ func test_rebuild_tracks_the_authority_after_clear_board() -> void:
 	assert_int(board.get_used_cells().size()).is_equal(_game.grid.get_used_cells().size())
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_int(mirror.fire_marker_count()).is_equal(_expected_fires(_game.terrain_states.to_state_dict()))
+
+
+func test_the_flame_never_sits_in_the_ground_plane() -> void:
+	# A QuadMesh is centred on its origin, so a 0.7-tall flame lifted 0.35 has its BOTTOM EDGE
+	# at exactly y = 0 — coplanar with the tile top face it stands on. Harmless while the
+	# flame did not write depth; the worst z-fighting on the board once it did. Clamped in
+	# flame_base_lift, so this holds for any authored knob value, including a hostile one.
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	for lift in [0.0, 0.1, 0.35, 0.4, 2.0]:
+		mirror.flame_lift = lift
+		var bottom: float = mirror.flame_base_lift() - mirror.flame_size.y * 0.5
+		assert_float(bottom).override_failure_message(
+				"flame_lift %s puts the flame's bottom edge at %s — in/through the ground plane" \
+				% [lift, bottom]).is_greater_equal(mirror.flame_ground_gap)
+	# Non-vacuous: the clamp is doing work at the authored default, not just at absurd values.
+	mirror.flame_lift = 0.35
+	assert_float(mirror.flame_base_lift()).override_failure_message(
+			"the clamp is inert at the value that caused the bug").is_greater(0.35)
