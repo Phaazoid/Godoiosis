@@ -45,3 +45,15 @@ func test_flat_maps_the_no_cell_sentinel_onto_the_2d_one() -> void:
 	# The injected pointer source hands HoverPresenter flat(_pointer_cell) raw — a 3D
 	# miss must read as the 2D "no cell" by VALUE, never as a real coordinate.
 	assert_that(BoardSpace.flat(BoardSpace.NO_CELL)).is_equal(GridUtils.NO_CELL)
+
+
+func test_a_flat_boards_top_level_is_one_cell_up_not_zero() -> void:
+	# The y=0-vs-y=1 trap (#231). of_flat parks every cell at y-index 0, so the face
+	# things sit on is FLAT_TOP_LEVEL cells up. A picker fallback plane at y=0 would be
+	# the slab's BOTTOM and would resolve the wrong column at grazing angles.
+	var cell := BoardSpace.of_flat(Vector2i(4, 7))
+	assert_that(BoardSpace.standing_point(cell).y) \
+		.override_failure_message("the flat standing face moved off FLAT_TOP_LEVEL") \
+		.is_equal(BoardSpace.FLAT_TOP_LEVEL * BoardSpace.CELL_SIZE)
+	# The derivation, not a second literal: UnitMirror must not drift from the constant.
+	assert_float(UnitMirror.COLUMN_TOP).is_equal(BoardSpace.FLAT_TOP_LEVEL * BoardSpace.CELL_SIZE)

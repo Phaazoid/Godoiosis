@@ -12,7 +12,9 @@ class_name UnitMirror
 # so pulse/highlight/tint parity comes by copy rather than by reimplementation.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
-const COLUMN_TOP := 1.0  # flat mirror boards: every column is one cell tall
+# Flat mirror boards: every column is one cell tall. DERIVED, not restated — the picker's
+# fallback plane (#231) has to sit on this same face, and two literals would let them drift.
+const COLUMN_TOP := float(BoardSpace.FLAT_TOP_LEVEL) * BoardSpace.CELL_SIZE
 
 var units_root: Node2D
 
