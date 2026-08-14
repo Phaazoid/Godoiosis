@@ -19,6 +19,63 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 	row.add_child(spinbox)
 	container.add_child(row)
 
+# Feel work is DRAG work: a value you sweep while watching the board, with the number beside it
+# so a landed setting can be read off. add_spinbox is the typing form; this is the hunting form.
+# Returns the slider so a caller can write a value back into the widget (LookTool's Reset).
+static func add_slider(container: Node, label_text: String, initial_value: float,
+		min_value: float, max_value: float, step: float, on_change: Callable) -> HSlider:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(190, 0)
+	var slider := HSlider.new()
+	slider.min_value = min_value
+	slider.max_value = max_value
+	slider.step = step
+	slider.value = initial_value
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(120, 0)
+	var readout := Label.new()
+	readout.custom_minimum_size = Vector2(64, 0)
+	readout.text = format_decimals(initial_value, step)
+	slider.value_changed.connect(func(v: float) -> void:
+		readout.text = format_decimals(v, step)
+		on_change.call(v))
+	row.add_child(label)
+	row.add_child(slider)
+	row.add_child(readout)
+	container.add_child(row)
+	return slider
+
+
+static func add_color(container: Node, label_text: String, initial_value: Color,
+		on_change: Callable) -> ColorPickerButton:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(190, 0)
+	var picker := ColorPickerButton.new()
+	picker.color = initial_value
+	picker.edit_alpha = true
+	picker.custom_minimum_size = Vector2(120, 0)
+	picker.color_changed.connect(on_change)
+	row.add_child(label)
+	row.add_child(picker)
+	container.add_child(row)
+	return picker
+
+
+# How many decimals a step implies -- 0.005 prints 3, 1.0 prints 0. Derived rather than declared
+# so a knob's precision cannot disagree with the step it moves in.
+static func format_decimals(value: float, step: float) -> String:
+	var decimals := 0
+	var remaining := absf(step)
+	while remaining > 0.0 and remaining < 1.0 and decimals < 5:
+		remaining *= 10.0
+		decimals += 1
+	return String.num(value, decimals)
+
+
 static func add_checkbox(container: Node, label_text: String, initial_value: bool, on_change: Callable, tooltip := "") -> void:
 	var checkbox := CheckBox.new()
 	checkbox.text = label_text
