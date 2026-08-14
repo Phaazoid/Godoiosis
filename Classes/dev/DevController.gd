@@ -237,6 +237,10 @@ func _paint_tile(cell: Vector2i) -> void:
 
 func _erase_tile(cell: Vector2i) -> void:
 	game.grid.erase_cell(cell)
+	# The states go with the ground (#245). The forbid in TerrainStateManager stops NEW deposits on a
+	# groundless cell, but says nothing about ones already sitting there when the tile is taken away
+	# -- without this, erasing under a FROZEN tile leaves it frozen, floating and still walkable.
+	game.terrain_states.clear_cell(cell)
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _paint_zone(cell: Vector2i) -> void:

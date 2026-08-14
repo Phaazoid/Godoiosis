@@ -10,6 +10,16 @@ const STATE_DURATIONS := {
 	Terrain.TileState.BURNING: 3,
 }
 
+# Injectable "does this cell have ground?" (#245) -- the GridUtils.has_ground shape, wired at the
+# two construction sites (game.gd and play/board_builder.gd). A tile state modifies what happens
+# when a unit WALKS on a tile, so a cell with no tile has nothing to modify (dev ruling).
+# This store is the ONE seam every deposit passes through -- three producers (PlanResolver,
+# SquadManager's Burrow COVER, the dev brush) and three appliers (OrderExecutor, PlaySession, the
+# brush) -- so the rule lives here rather than in six places that would drift.
+# Unset = no judgement, NOT "no ground": a bare store built without a board still accepts
+# everything, which is what the headless terrain fixtures rely on.
+var ground_source: Callable
+
 var _states: Dictionary = {}        # Vector2i -> Array[Terrain.TileState]
 var _state_turns: Dictionary = {}   # Vector2i -> { Terrain.TileState: turns_left }
 
@@ -25,23 +35,46 @@ func has_state(cell: Vector2i, state: Terrain.TileState) -> bool:
 # Play back one resolved cell effect (R3). Remove-then-add, mirroring how AttackAction.execute
 # applies unit state deltas. Empties are pruned so an untouched cell never holds a stale entry.
 func apply(effect: ResolvedCellEffect) -> void:
+	# Deposits onto a groundless cell are DROPPED; removals always run. The asymmetry is the point:
+	# a cell whose tile was just erased still has to be cleanable, and routing that through here
+	# keeps the timer bookkeeping below correct instead of needing a second back door.
+	var grounded := _has_ground(effect.cell)
 	var current: Array[Terrain.TileState] = []
 	if _states.has(effect.cell):
 		current.assign(_states[effect.cell])
 	for s in effect.states_removed:
 		current.erase(s)
-	for s in effect.states_added:
-		if not current.has(s):
-			current.append(s)
+	if grounded:
+		for s in effect.states_added:
+			if not current.has(s):
+				current.append(s)
 	if current.is_empty():
 		_states.erase(effect.cell)
 	else:
 		_states[effect.cell] = current
 	for s in effect.states_removed:
 		_clear_timer(effect.cell, s)
-	for s in effect.states_added:
-		if STATE_DURATIONS.has(s):
-			_start_timer(effect.cell, s)
+	if grounded:
+		for s in effect.states_added:
+			if STATE_DURATIONS.has(s):
+				_start_timer(effect.cell, s)
+
+func _has_ground(cell: Vector2i) -> bool:
+	if not ground_source.is_valid():
+		return true
+	var grounded: bool = ground_source.call(cell)   # typed local: .call() erases to Variant
+	return grounded
+
+# Drop every state at one cell, through apply() so the timers unwind the same way they would on any
+# other removal. The dev brush calls this when its erase takes the ground out from under them.
+func clear_cell(cell: Vector2i) -> void:
+	var held := states_at(cell)
+	if held.is_empty():
+		return
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_removed.assign(held)
+	apply(effect)
 
 func clear() -> void:
 	_states.clear()
