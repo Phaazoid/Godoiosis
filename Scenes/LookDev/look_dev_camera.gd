@@ -17,7 +17,13 @@
 # look up). It also derives max_distance from that fit, so the fit can never be eaten
 # by its own clamp -- which is exactly what shipped before it: a board span in CELLS
 # was handed to set_zoom, which wants a camera DISTANCE, and clamped to 24 on boards
-# needing 82.
+# needing 82. Its second volume is the SHOT/BOUNDS split (dev feel-check 2026-08-14:
+# fitting the whole board opened the game unplayably far out): the first box is what
+# to look at now, the second the box the view may never leave, which is what sets the
+# zoom ceiling and the pan limit. One box means both, i.e. the original behaviour.
+#
+# align_to_detent() exists for the AI turn: an enemy phase plays out square-on however
+# the player left the camera. It is the only realign the rig does not owe to a keypress.
 #
 # DoF focus TRACKS the zoom (dev note, 2026-08-12: static distances made the blur
 # swallow the board at close zoom): every frame the near/far focus distances are
@@ -33,8 +39,8 @@ extends Node3D
 @export var zoom_step := 1.5
 @export var pan_speed := 8.0
 @export var smoothing := 8.0
-@export var orbit_button := MOUSE_BUTTON_MIDDLE
-@export var orbit_sensitivity := 0.35        # degrees of yaw per pixel dragged
+@export var orbit_button := MOUSE_BUTTON_RIGHT
+@export var orbit_sensitivity := 0.25        # degrees of yaw per pixel dragged
 @export var orbit_click_slop_px := 4.0       # travel under this still counts as a click
 @export var pan_margin_cells := 4.0          # how far past the board panning may stray
 @export var fit_margin_cells := 1.0          # breathing room around a framed board
@@ -134,23 +140,58 @@ func set_zoom(distance: float) -> void:
 
 
 # Frame `volume` (in cells/world units): aim at it, sit far enough back that all of it
-# is inside THIS camera's frustum, make that distance the new zoom ceiling, adopt it as
-# home, and bound panning to it. Callers supply the volume; the trigonometry is the
-# rig's because only it knows fov, aspect and pitch.
-func frame(volume: AABB) -> void:
+# is inside THIS camera's frustum, adopt that as home, and bound panning. Callers supply
+# the volume; the trigonometry is the rig's because only it knows fov, aspect and pitch.
+#
+# `bounds` is the larger box the view may never leave -- the whole board -- and it alone
+# sets the zoom ceiling and the pan limit. That split is what lets the opening shot sit
+# close on the player's own squad while zooming out still reaches the far corner. Omit it
+# and `volume` serves as both, which is the original single-box behaviour.
+func frame(volume: AABB, bounds := AABB()) -> void:
+	var limits := bounds if bounds.size != Vector3.ZERO else volume
+	var box := volume.grow(fit_margin_cells)
+	var limit_box := limits.grow(fit_margin_cells)
+	var ceiling := _fit_distance(limit_box)
+	if ceiling <= 0.0:
+		return   # no valid projection yet (a viewport with no size); keep the current framing
+
+	position = _aim_at(box)
+	# Derived from the BOUNDS, not from this shot: a ceiling solved off a close opening
+	# volume would clamp the player out of ever seeing the rest of the board.
+	max_distance = maxf(ceiling * zoom_out_slack, min_distance)
+	set_zoom(_fit_distance(box))
+	# Snap, never ease: a camera still lerping toward the fit unprojects at one distance
+	# and picks at another, which desyncs every screen-space read taken on the way.
+	_camera.position.z = _target_distance
+
+	# R means "back to the opening shot". Position and distance are board facts and come
+	# from the fit; yaw is a scene fact and stays whatever the scene authored.
+	_home_position = position
+	_home_distance = _target_distance
+
+	pan_limit = Rect2(limit_box.position.x, limit_box.position.z, limit_box.size.x, limit_box.size.z).grow(pan_margin_cells)
+
+
+# Where the rig sits to look at `box`: its centre, lifted to the top of the box so the
+# pitch looks down at the surface rather than through it.
+func _aim_at(box: AABB) -> Vector3:
+	var center := box.get_center()
+	return Vector3(center.x, box.end.y, center.z)
+
+
+# How far back this camera must sit for every corner of `box` to be inside its frustum.
+# Returns 0 when there is no valid projection yet, which is the caller's abort signal.
+func _fit_distance(box: AABB) -> float:
 	var proj := _camera.get_camera_projection()
 	var tan_h := 1.0 / proj.x.x if proj.x.x > 0.0 else 0.0
 	var tan_v := 1.0 / proj.y.y if proj.y.y > 0.0 else 0.0
 	if not is_finite(tan_h) or not is_finite(tan_v) or tan_h <= 0.0 or tan_v <= 0.0:
-		return   # no valid projection yet (a viewport with no size); keep the current framing
-
-	var box := volume.grow(fit_margin_cells)
-	var center := box.get_center()
-	var aim := Vector3(center.x, box.end.y, center.z)
+		return 0.0
 
 	# Solve per corner. With the camera at aim - d*forward, a corner's horizontal and
 	# vertical offsets are independent of d while its depth is (q . forward) + d, so
 	# each corner sets a lower bound on d directly.
+	var aim := _aim_at(box)
 	var basis := _camera.global_transform.basis
 	var right := basis.x
 	var up := basis.y
@@ -161,20 +202,13 @@ func frame(volume: AABB) -> void:
 		var depth := q.dot(forward)
 		distance = maxf(distance, absf(q.dot(right)) / tan_h - depth)
 		distance = maxf(distance, absf(q.dot(up)) / tan_v - depth)
+	return distance
 
-	position = aim
-	max_distance = maxf(distance * zoom_out_slack, min_distance)
-	set_zoom(distance)
-	# Snap, never ease: a camera still lerping toward the fit unprojects at one distance
-	# and picks at another, which desyncs every screen-space read taken on the way.
-	_camera.position.z = _target_distance
 
-	# R means "back to the opening shot". Position and distance are board facts and come
-	# from the fit; yaw is a scene fact and stays whatever the scene authored.
-	_home_position = position
-	_home_distance = _target_distance
-
-	pan_limit = Rect2(box.position.x, box.position.z, box.size.x, box.size.z).grow(pan_margin_cells)
+# Snap the yaw to the NEAREST detent, unlike Q/E which always travel one. The AI turn is
+# its caller: an enemy phase reads square-on however the player left the camera.
+func align_to_detent() -> void:
+	_target_yaw_degrees = roundf(_target_yaw_degrees / yaw_step) * yaw_step
 
 
 func _process(delta: float):

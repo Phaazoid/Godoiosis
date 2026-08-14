@@ -80,6 +80,50 @@ func test_frame_raises_the_zoom_ceiling_so_the_fit_survives_its_own_clamp() -> v
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
 
 
+func test_framing_a_shot_inside_bounds_leaves_the_ceiling_and_pan_on_the_bounds() -> void:
+	# The shot/bounds split (dev feel-check 2026-08-14). Asserted by EQUIVALENCE rather than
+	# by numbers: whatever framing the whole board alone would yield for the ceiling and the
+	# pan limit, framing a close shot *within* that board must yield identically.
+	var rig := _rig()
+	var camera := _camera()
+	var board := AABB(Vector3.ZERO, Vector3(64, 1, 40))
+	var shot := AABB(Vector3(20, 0, 12), Vector3(18, 1, 18))
+
+	rig.frame(shot, board)
+	await await_idle_frame()
+	for i in 8:
+		assert_bool(camera.is_position_in_frustum(shot.get_endpoint(i))) \
+			.override_failure_message("corner %d of the shot is off-camera" % i).is_true()
+	# Non-vacuous: the shot really is closer than fitting everything.
+	assert_float(rig._target_distance).override_failure_message(
+			"the shot opened at the whole-board distance — the split did nothing").is_less(rig.max_distance)
+
+	var split_ceiling: float = rig.max_distance
+	var split_pan: Rect2 = rig.pan_limit
+	rig.frame(board)
+	assert_float(split_ceiling).override_failure_message(
+			"the ceiling was solved off the shot, not the bounds — the rest of the board is unreachable" \
+			).is_equal_approx(rig.max_distance, 0.001)
+	assert_that(split_pan).override_failure_message(
+			"panning was bounded to the shot, not the board").is_equal(rig.pan_limit)
+
+
+func test_align_to_detent_snaps_to_the_nearest_one() -> void:
+	# What an AI turn calls. Distinct from Q/E, which always travel a whole step.
+	var rig := _rig()
+	rig._target_yaw_degrees = 37.0
+	rig.align_to_detent()
+	assert_float(rig._target_yaw_degrees).is_equal_approx(0.0, 0.001)
+	rig._target_yaw_degrees = 200.0
+	rig.align_to_detent()
+	assert_float(rig._target_yaw_degrees).override_failure_message(
+			"it snapped to zero rather than to the NEAREST detent").is_equal_approx(180.0, 0.001)
+	rig._target_yaw_degrees = 90.0
+	rig.align_to_detent()
+	assert_float(rig._target_yaw_degrees).override_failure_message(
+			"already square, and it moved anyway").is_equal_approx(90.0, 0.001)
+
+
 func test_frame_snaps_the_camera_rather_than_easing_to_it() -> void:
 	# Load-bearing for every screen-space read: a camera still lerping toward the fit
 	# unprojects at one distance and picks at another.

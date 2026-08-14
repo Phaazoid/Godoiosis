@@ -35,6 +35,10 @@ enum View {
 @export var demo_mode := false   # true = the 4a diorama demo: AI-vs-AI, hidden 2D, no bridge
 @export var mission_path := "res://Scenarios/missions/Prolog.tres"
 @export var view: View = View.HD_2D
+# How wide the OPENING shot is, in cells, centred on the player's own units. The whole
+# board is what the view is BOUNDED by, not what it opens at (dev feel-check 2026-08-14:
+# fitting all 64x40 of Prolog opened the game too far out to play from).
+@export var opening_view_cells := 18.0
 # The corner debug view's knobs (aesthetics get a knob, not a guess):
 @export var pip_scale := 0.35
 @export var pip_margin := Vector2(12.0, 12.0)
@@ -58,6 +62,8 @@ var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # container SIZE to it (GameView keeps full resolution under stretch) and shrinks
 # only the display via scale.
 var _pip_native: Vector2 = Vector2(1280.0, 720.0)
+# Last frame's ai_locked, so the square-on realign fires once per AI turn, not per frame.
+var _ai_owned_camera := false
 
 
 func _ready() -> void:
@@ -77,7 +83,12 @@ func _ready() -> void:
 		# the hidden camera shows) and the 2D game stops deriving its own board clicks.
 		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
-		_help.text = "Battle3D  |  LMB act  |  RMB cancel  |  MMB-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  SPACE centre  |  R reset  |  F4 flat 2D  |  Shift+F4 corner"
+		# The orbit button is a knob, so the label READS it instead of restating it — this
+		# line still said MMB after the binding was flipped. And the cancel verb is "aim":
+		# right-click exits the current mode, it has never touched the queued orders.
+		var orbit_button: int = _rig.orbit_button
+		var orbit := "RMB" if orbit_button == MOUSE_BUTTON_RIGHT else "MMB"
+		_help.text = "Battle3D  |  LMB act  |  RMB cancel aim  |  %s-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  SPACE centre  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % orbit
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_overlay_mirror.game = game
@@ -124,7 +135,33 @@ func _on_turn_started(_faction: int) -> void:
 
 
 func _fit_camera() -> void:
-	_rig.frame(_board_volume())
+	var board := _board_volume()
+	_rig.frame(_opening_volume(board), board)
+
+
+# The opening shot: the player's own units with opening_view_cells of board around them,
+# passed as the SHOT while the board is passed as the bounds — so the game opens on the
+# squad and zooming out still reaches the far corner. Falls back to the whole board when
+# a scenario opens with no player units (the sandbox, demo_mode).
+func _opening_volume(board: AABB) -> AABB:
+	var lo := Vector2.INF
+	var hi := -Vector2.INF
+	var units_root: Node2D = game.units_root
+	for child in units_root.get_children():
+		var unit := child as Unit
+		if unit == null or unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var at := Vector2(unit.movement.cell)
+		lo = lo.min(at)
+		hi = hi.max(at)
+	if is_inf(lo.x):
+		return board
+	# Cells span [x, x+1], so an occupied footprint is one wider than its corner spread.
+	var span := maxf(opening_view_cells, maxf(hi.x - lo.x, hi.y - lo.y) + 1.0)
+	var center := (lo + hi + Vector2.ONE) * 0.5
+	return AABB(
+		Vector3(center.x - span * 0.5, board.position.y, center.y - span * 0.5),
+		Vector3(span, board.size.y, span))
 
 
 # The volume the camera must see, derived from the picker's column tops rather than the
@@ -266,6 +303,13 @@ func _process(_delta: float) -> void:
 # the previous turn's stack, so the flag can legitimately flicker for a frame.
 func _mirror_camera() -> void:
 	var cam: CameraController = game.camera_controller
+	# Square-on for the enemy phase (dev call 2026-08-14), on the EDGE into the turn rather
+	# than every frame: idempotent either way today, but the moment orbit is allowed to stay
+	# live under an AI turn a per-frame snap would fight the player's own drag.
+	if cam.ai_locked != _ai_owned_camera:
+		_ai_owned_camera = cam.ai_locked
+		if _ai_owned_camera:
+			_rig.align_to_detent()
 	if not cam.ai_locked:
 		return
 	_rig.position = BoardSpace.of_pixels(cam.global_position, _rig.position.y)

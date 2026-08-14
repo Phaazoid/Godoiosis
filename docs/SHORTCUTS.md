@@ -16,8 +16,8 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 | Key | Action |
 |-----|--------|
 | Left-click | Act on the cell under the pointer (delivered straight to the 2D dispatchers) |
-| Right-click | Cancel the current mode |
-| Middle-drag | Orbit freely; the yaw rests wherever you leave it (`orbit_button` is an inspector knob) |
+| Right-click | Cancel the current mode — an open aim or move pick. It does **not** unqueue orders (that is [#228](https://github.com/Phaazoid/Godoiosis/issues/228)), so with no mode open it does nothing |
+| Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press) |
 | Q / E | Snap to the next 90° detent — one press realigns from any angle |
 | Mouse wheel | Zoom (clamped so you cannot pull back past the whole board) |
 | W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
@@ -26,7 +26,7 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 | F4 | Toggle the flat 2D game full-screen and back *(dev builds)* |
 | Shift + F4 | The corner picture-in-picture debug view *(dev builds)* |
 
-During an AI turn the camera follows the acting squad by itself and refuses manual input until the turn ends.
+The view **opens close on your own squad**, not on the whole board (`opening_view_cells`); the board is what bounds zoom and panning, so pulling back still reaches every corner. During an AI turn the camera follows the acting squad by itself, squares up to the nearest 90° detent, and refuses manual input until the turn ends.
 
 ## Dev tools
 | Key | Action |
