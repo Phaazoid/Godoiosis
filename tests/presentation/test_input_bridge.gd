@@ -366,21 +366,69 @@ func test_the_delegation_gate_stops_the_2d_board_acting_twice() -> void:
 
 
 func test_the_corner_debug_view_restores_the_2d_board() -> void:
-	# F4's view, kept for debugging: the 4b geometry with the 2D board drawn again.
-	# Board input stays container-independent (direct cell calls), so play survives it.
-	_scene.corner_view = true
+	# Shift+F4's view, kept for debugging: the 4b geometry with the 2D board drawn
+	# again. Board input stays container-independent (direct cell calls), so the 3D
+	# keeps driving and play survives it.
+	_scene.view = _scene.View.CORNER
 	_scene._apply_hosting()
 	assert_that(_container.scale).is_equal(Vector2(_scene.pip_scale, _scene.pip_scale))
 	assert_that(Vector2(_game_view.size)).is_equal(Vector2(1280.0, 720.0))
 	assert_bool(_game_view.transparent_bg).is_false()
 	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_true()
-	var view: Vector2 = _scene.get_viewport().get_visible_rect().size
-	assert_that(_container.position).is_equal(view - _scene._pip_native * _scene.pip_scale - _scene.pip_margin)
+	assert_bool(_game.board_input_delegated).is_true()
+	var size: Vector2 = _scene.get_viewport().get_visible_rect().size
+	assert_that(_container.position).is_equal(size - _scene._pip_native * _scene.pip_scale - _scene.pip_margin)
 
-	_scene.corner_view = false
+	_scene.view = _scene.View.HD_2D
 	_scene._apply_hosting()
 	assert_that(_container.scale).is_equal(Vector2.ONE)
 	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_false()
+
+
+func test_flat_2d_shows_the_whole_board_and_hands_input_back() -> void:
+	# F4's escape hatch, and the point of it: FLAT_2D is not a picture of the 2D game,
+	# it IS the 2D game. Showing the board while the 3D still owned clicks, hover and
+	# WASD would be a fallback you cannot actually play.
+	_scene.view = _scene.View.FLAT_2D
+	_scene._apply_hosting()
+	await await_idle_frame()
+	await await_idle_frame()
+
+	# Full-screen and opaque — the 3D world is covered, not torn down.
+	assert_that(_container.scale).is_equal(Vector2.ONE)
+	assert_that(_container.get_global_rect().size).is_equal(_scene.get_viewport().get_visible_rect().size)
+	assert_bool(_game_view.transparent_bg).is_false()
+	assert_bool((_game.grid as TileMapLayer).is_visible_in_tree()).is_true()
+	# ...and every input owner handed back.
+	assert_bool(_game.board_input_delegated) \
+		.override_failure_message("the flat game still cannot derive its own board clicks").is_false()
+	assert_bool((_game.hover_presenter.pointer_source as Callable).is_valid()) \
+		.override_failure_message("hover still reads the 3D pick, not the real mouse").is_false()
+	assert_bool((_scene.get_node("CameraRig") as Node3D).is_processing()) \
+		.override_failure_message("the hidden 3D rig still pans on WASD alongside the 2D camera").is_false()
+
+	# And back: HD_2D restores 3D ownership, so the toggle is round-trippable.
+	_scene.view = _scene.View.HD_2D
+	_scene._apply_hosting()
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(_game.board_input_delegated).is_true()
+	assert_bool((_game.hover_presenter.pointer_source as Callable).is_valid()).is_true()
+	assert_bool((_scene.get_node("CameraRig") as Node3D).is_processing()).is_true()
+
+
+func test_flat_2d_stops_the_3d_picker_acting_on_the_same_click() -> void:
+	# The mirror image of the delegation gate: with the 2D game deriving its own
+	# clicks again, this node must NOT also pick, or every click acts twice.
+	var unit := _pickable_player_unit()
+	_scene.view = _scene.View.FLAT_2D
+	_scene._apply_hosting()
+	await await_idle_frame()
+
+	_parse_click(_screen_of(unit.movement.cell))
+	await _pump()
+	assert_that(_scene._pointer_cell) \
+		.override_failure_message("the 3D picker read a click the flat game owns").is_equal(BoardSpace.NO_CELL)
 
 
 # --- Cancel + driver -------------------------------------------------------------------

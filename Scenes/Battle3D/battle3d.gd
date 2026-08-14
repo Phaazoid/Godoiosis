@@ -14,18 +14,28 @@
 # it: one bool, the arc's only game.gd input edit. 4b's whole synthetic-event
 # bridge (parse_input_event, the echo tag, the PiP-rect guard) is retired.
 #
-# corner_view is the dev-facing debug toggle (F4): the 4b picture-in-picture, 2D
-# board visuals and all. Board input is container-independent, so 3D play works
-# in either mode.
+# Three hosting VIEWS, switched live (F4 / Shift+F4 in dev builds). FLAT_2D is the
+# real escape hatch and the embryo of #176's 2D/3D chooser: it does not merely show
+# the 2D board, it hands INPUT BACK — un-delegates board clicks, drops the injected
+# pointer source, silences this node's picker and stops the rig — because a flat 2D
+# game that cannot take its own clicks (or that pans an invisible 3D camera with
+# WASD) is not a playable fallback. CORNER is the 4b picture-in-picture, kept only
+# as a debug view.
 #
 # demo_mode = stage-4a behavior: both factions AI, hidden 2D, watch-only.
 extends Node3D
 
+enum View {
+	HD_2D,    # the 2D game as transparent full-screen UI over the 3D diorama
+	FLAT_2D,  # the flat 2D game, full-screen and opaque; the 3D stands down
+	CORNER,   # dev debug: the 4b PiP, 2D board visuals and all, 3D still driving
+}
+
 @export var auto_play := true    # start mission_path on launch (test fixtures set false)
 @export var demo_mode := false   # true = the 4a diorama demo: AI-vs-AI, hidden 2D, no bridge
 @export var mission_path := "res://Scenarios/missions/Prolog.tres"
+@export var view: View = View.HD_2D
 # The corner debug view's knobs (aesthetics get a knob, not a guess):
-@export var corner_view := false   # F4 in dev builds; the 4b PiP with the 2D board showing
 @export var pip_scale := 0.35
 @export var pip_margin := Vector2(12.0, 12.0)
 
@@ -62,16 +72,12 @@ func _ready() -> void:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
 	else:
+		# _apply_hosting also assigns input ownership: the 3D pick becomes the pointer
+		# source HoverPresenter reads (so hover reaches every cell, not just the ones
+		# the hidden camera shows) and the 2D game stops deriving its own board clicks.
 		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
-		# The 3D pick IS the pointer (#222): HoverPresenter reads it instead of the
-		# hidden viewport's mouse, so hover works for every cell — not just the ones
-		# the hidden camera happens to show. flat(NO_CELL) == GridUtils.NO_CELL.
-		game.hover_presenter.pointer_source = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
-		# The 2D game stops deriving board clicks from its own viewport mouse — this
-		# node delivers the picked cell instead (see the header).
-		game.board_input_delegated = true
-		_help.text = "Battle3D (stage 4c)  |  LMB act  |  RMB cancel  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset  |  F4 corner view"
+		_help.text = "Battle3D (stage 4c)  |  LMB act  |  RMB cancel  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset  |  F4 flat 2D  |  Shift+F4 corner"
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_overlay_mirror.game = game
@@ -131,10 +137,29 @@ func _fit_camera() -> void:
 # presentation-effects ruling).
 func _apply_hosting() -> void:
 	_game_container.visible = true
-	if corner_view:
-		_setup_corner()
+	match view:
+		View.CORNER:
+			_setup_corner()
+		View.FLAT_2D:
+			_setup_flat_2d()
+		_:
+			_setup_fullscreen()
+	_apply_input_ownership()
+
+
+# WHO owns board input, derived from the view rather than tracked separately.
+# In FLAT_2D the 2D game is the whole game again: it derives its own clicks, hovers
+# off its own mouse, and owns WASD — so the delegation gate, the injected pointer
+# source and the 3D rig all stand down together. Anywhere else the 3D picker drives.
+func _apply_input_ownership() -> void:
+	var flat: bool = view == View.FLAT_2D
+	game.board_input_delegated = not flat
+	if flat:
+		game.hover_presenter.pointer_source = Callable()
+		_pointer_cell = BoardSpace.NO_CELL
+		_overlays.clear(BoardOverlays.Layer.HOVER)
 	else:
-		_setup_fullscreen()
+		game.hover_presenter.pointer_source = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
 
 
 # The real hosting: the 2D game covers the window at native scale over a
@@ -145,6 +170,15 @@ func _setup_fullscreen() -> void:
 	_game_container.scale = Vector2.ONE
 	_game_view.transparent_bg = true
 	_set_board_visible(false)
+
+
+# The escape hatch: the flat 2D game, full-screen and OPAQUE, board and all. The
+# 3D world is still there, simply covered — nothing tears down, so F4 back is free.
+func _setup_flat_2d() -> void:
+	_game_container.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_game_container.scale = Vector2.ONE
+	_game_view.transparent_bg = false
+	_set_board_visible(true)
 
 
 # The 4b picture-in-picture, kept as a dev debug view: the 2D board renders again,
@@ -160,7 +194,7 @@ func _setup_corner() -> void:
 
 
 func _position_pip() -> void:
-	if not corner_view:
+	if view != View.CORNER:
 		return
 	var view: Vector2 = get_viewport().get_visible_rect().size
 	_game_container.position = view - _pip_native * pip_scale - pip_margin
@@ -194,7 +228,10 @@ func _set_board_visible(shown: bool) -> void:
 # (a modal inside the HIDDEN container) would otherwise freeze the diorama's camera
 # forever — 4a kept the rig alive after the battle ended, and so does demo mode.
 func _process(_delta: float) -> void:
-	var live: bool = demo_mode or game.can_process()
+	# FLAT_2D hands the camera back too: the rig is invisible behind an opaque 2D
+	# viewport, and CameraController's WASD poll is global, so leaving it alive would
+	# pan both cameras at once off one keypress.
+	var live: bool = (demo_mode or game.can_process()) and view != View.FLAT_2D
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
 
@@ -202,15 +239,20 @@ func _process(_delta: float) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if demo_mode:
 		return
-	# The view toggle sits ABOVE the freeze gate on purpose — it is a dev control,
-	# and dev controls are a layer above ModalLock (#154). This node lives outside
-	# the frozen subtree, so its callbacks run regardless.
-	if DevTools.enabled() and event.is_pressed() and event is InputEventKey \
-			and (event as InputEventKey).keycode == KEY_F4:
-		corner_view = not corner_view
+	# The view keys sit ABOVE the freeze gate on purpose — they are dev controls, and
+	# dev controls are a layer above ModalLock (#154). This node lives outside the
+	# frozen subtree, so its callbacks run regardless.
+	var key := event as InputEventKey
+	if DevTools.enabled() and key != null and key.pressed and key.keycode == KEY_F4:
+		if key.shift_pressed:
+			view = View.HD_2D if view == View.CORNER else View.CORNER
+		else:
+			view = View.HD_2D if view == View.FLAT_2D else View.FLAT_2D
 		_apply_hosting()
 		return
-	if not game.can_process():
+	# In FLAT_2D the flat game owns its own clicks — picking here would double-act,
+	# the mirror image of the bug game.board_input_delegated exists to prevent.
+	if view == View.FLAT_2D or not game.can_process():
 		return
 	# UI consumed the event before it reached here (the container forwards physical
 	# clicks into the 2D game natively). What arrives is board pointing.
