@@ -57,6 +57,16 @@ enum View {
 @onready var _overlay_mirror: OverlayMirror = $OverlayMirror
 @onready var _overlays: BoardOverlays = $BoardOverlays
 @onready var _rig: Node3D = $CameraRig
+# The AUTHORED orbit binding, captured before anything rewrites it. The brush borrows MIDDLE
+# while it is armed and gives this back when it disarms, so orbit_button stays a real
+# inspector knob instead of a constant this file re-asserts every frame.
+@onready var _orbit_button_default: MouseButton = _rig.orbit_button
+# What the help label was last built for. The label is only worth rebuilding on a change.
+var _help_brush_armed := false
+var _help_dev_mode := false
+# Where the cursor was at the last poll. Seeded from the REAL position so the first frame
+# cannot fire a move that never happened and yank the pointer off its starting cell.
+@onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
 @onready var _help: Label = $UI/Help
 
@@ -95,12 +105,7 @@ func _ready() -> void:
 		# the hidden camera shows) and the 2D game stops deriving its own board clicks.
 		_apply_hosting()
 		get_viewport().size_changed.connect(_position_pip)
-		# The orbit button is a knob, so the label READS it instead of restating it — this
-		# line still said MMB after the binding was flipped. And the cancel verb is "aim":
-		# right-click exits the current mode, it has never touched the queued orders.
-		var orbit_button: int = _rig.orbit_button
-		var orbit := "RMB" if orbit_button == MOUSE_BUTTON_RIGHT else "MMB"
-		_help.text = "Battle3D  |  LMB act  |  RMB cancel aim  |  %s-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  SPACE centre  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % orbit
+		_update_help()
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_overlay_mirror.game = game
@@ -234,16 +239,21 @@ func _apply_hosting() -> void:
 # WHO owns board input, derived from the view rather than tracked separately.
 # In FLAT_2D the 2D game is the whole game again: it derives its own clicks, hovers
 # off its own mouse, and owns WASD — so the delegation gate, the injected pointer
-# source and the 3D rig all stand down together. Anywhere else the 3D picker drives.
+# sources and the 3D rig all stand down together. Anywhere else the 3D picker drives.
+# Hover and the dev brush are two CONSUMERS of one question ("what cell is the 3D
+# pointer over"), so they share a single source rather than each deriving their own.
 func _apply_input_ownership() -> void:
 	var flat: bool = view == View.FLAT_2D
 	game.board_input_delegated = not flat
 	if flat:
 		game.hover_presenter.pointer_source = Callable()
+		game.dev_controller.cell_source = Callable()
 		_pointer_cell = BoardSpace.NO_CELL
 		_overlays.clear(BoardOverlays.Layer.HOVER)
 	else:
-		game.hover_presenter.pointer_source = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
+		var pointer_cell: Callable = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
+		game.hover_presenter.pointer_source = pointer_cell
+		game.dev_controller.cell_source = pointer_cell
 
 
 # The real hosting: the 2D game covers the window at native scale over a
@@ -328,6 +338,9 @@ func _process(_delta: float) -> void:
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.
 	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
+	_poll_pointer()
+	_sync_brush_bindings()
+	_sync_brush_ghost()
 	_mirror_camera()
 
 
@@ -381,21 +394,34 @@ func _unhandled_input(event: InputEvent) -> void:
 	# UI consumed the event before it reached here (the container forwards physical
 	# clicks into the 2D game natively). What arrives is board pointing.
 	var motion := event as InputEventMouseMotion
+	var click := event as InputEventMouseButton
+	# The pointer moves BEFORE anything else consumes the event. DevController.cell_source
+	# reads _pointer_cell, so a brush routed ahead of this would paint the cell the cursor
+	# just LEFT — one cell of lag, smeared down the whole stroke.
 	if motion != null:
-		if not _rig.is_orbiting():   # a drag is camera work, not pointing
-			_update_pointer(motion.position)
+		if _rig.is_orbiting():   # a drag is camera work, not pointing
+			return
+		_update_pointer(motion.position)
+	elif click != null and click.pressed:
+		_update_pointer(click.position)  # a click is also a point — robust when no motion preceded it
+	# Armed, the brush owns the mouse outright — the same precedence game.gd gives it above
+	# its own board handlers, so RMB erases here instead of cancelling. BOTH button edges go
+	# through: paint and erase are hold-to-drag, and forwarding presses only would strand the
+	# drag flag TRUE and paint for ever.
+	if (motion != null or click != null) and game.dev_controller.brush_armed():
+		game.dev_controller.handle_tile_brush(event)
+		return
+	if motion != null:
 		return
 	if key != null and key.pressed and key.keycode == KEY_SPACE:
-		_center_on_pointer()
+		_handle_space()
 		return
-	var click := event as InputEventMouseButton
 	if click == null:
 		return
 	if click.button_index == MOUSE_BUTTON_RIGHT:
 		_handle_cancel_button(click)
 		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
-		_update_pointer(click.position)  # a click is also a point — robust when no motion preceded it
 		_click_pointer_cell()
 
 
@@ -411,6 +437,93 @@ func _handle_cancel_button(click: InputEventMouseButton) -> void:
 		return
 	if not click.pressed and _rig.last_gesture_was_click():
 		_cancel()
+
+
+# The pointer POLLS the mouse as well as riding motion events — the 2D ghost's lesson, found
+# in play again here (#231). While the Dev Tools OS window holds focus the game window receives
+# no motion events at all, so an event-only pointer sits STALE until a click refocuses: no tile
+# highlight, no brush ghost, until you click the window twice. DevController's ghost already
+# polls for exactly this and its comment says so; the 3D pointer had re-derived the event-only
+# version and brought the bug back with it.
+#
+# The event path in _unhandled_input STAYS — it has to run before the brush routing inside the
+# same frame, or a drag paints the cell the cursor just left. So this is a FALLBACK, not a
+# second authority, and the cursor-moved check is what keeps it one: an unconditional poll
+# re-answers the pointer every frame from a source the event path may legitimately disagree
+# with, which reds test_pointing_snaps_the_hidden_camera_to_the_hovered_cell and
+# test_the_3d_camera_follows_the_ai_camera the moment it is written that way (measured).
+# 2D has no such tension because DevController._mouse_cell() reads the mouse LIVE and caches
+# nothing; the 3D pointer is a cache, so it needs the guard.
+func _poll_pointer() -> void:
+	if demo_mode or view == View.FLAT_2D:
+		return
+	if not game.can_process() or game._board_locked_for_player():
+		return
+	if _rig.is_orbiting():   # a drag is camera work, not pointing — same rule the events use
+		return
+	var mouse: Vector2 = get_viewport().get_mouse_position()
+	if mouse == _last_polled_mouse:
+		return
+	_last_polled_mouse = mouse
+	_update_pointer(mouse)
+
+
+# The 3D half of the brush preview. POLLED off the brush's own intent, never hooked at the
+# paint site — the mirror stack's zero-hooks doctrine, and the same call PR 1 made for terrain.
+# The 2D ghost keeps running underneath as the kind source; it simply draws under a hidden
+# board here, which is why this asks brush_ghost_cell() and not that layer's `.visible`.
+func _sync_brush_ghost() -> void:
+	if demo_mode or view == View.FLAT_2D:
+		_board_mirror.hide_brush_ghost()   # the flat view has the 2D ghost for this
+		return
+	var cell: Vector2i = game.dev_controller.brush_ghost_cell()
+	if cell == GridUtils.NO_CELL:
+		_board_mirror.hide_brush_ghost()
+		return
+	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_kind())
+
+
+# The brush erases on RIGHT, so orbit steps aside to MIDDLE while it is armed — 2D and 3D keep
+# identical bindings (dev ruling), and 2D's brush already owns RMB. The BINDING is declarative
+# every frame: the rig's setter early-outs on an unchanged write and releases a live drag on a
+# real one, which is exactly why that setter exists. The LABEL is rebuilt only on the edge,
+# because it allocates a string and nothing else on this path does per frame.
+func _sync_brush_bindings() -> void:
+	if demo_mode:
+		return   # no 2D game to ask, and the demo label is not this function's to overwrite
+	var armed: bool = game.dev_controller.brush_armed()
+	var dev: bool = game.game_state == game.GameState.DEV_MODE
+	_rig.orbit_button = MOUSE_BUTTON_MIDDLE if armed else _orbit_button_default
+	if armed == _help_brush_armed and dev == _help_dev_mode:
+		return
+	_help_brush_armed = armed
+	_help_dev_mode = dev
+	_update_help()
+
+
+# Every binding this label names can now CHANGE at runtime, so it is rebuilt from the live
+# state instead of snapshotted at _ready. The orbit button was already a knob the label had
+# to read — it once still said MMB after the binding was flipped — and #231 gives right-click
+# and SPACE second meanings while the brush is armed and while dev mode is up. A one-shot
+# string would tell exactly that lie again, one release later.
+func _update_help() -> void:
+	var orbit := "RMB" if _rig.orbit_button == MOUSE_BUTTON_RIGHT else "MMB"
+	# The cancel verb is "aim": right-click exits the current mode, it has never touched
+	# the queued orders.
+	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel aim"
+	var space := "SPACE spawn" if game.game_state == game.GameState.DEV_MODE else "SPACE centre"
+	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, space]
+
+
+# SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves
+# it (#231). The 3D view is not a reason for a key to mean something different than it does
+# in the flat one; the only difference is where the cell comes from.
+func _handle_space() -> void:
+	if game.game_state == game.GameState.DEV_MODE and game.dev_overlay != null:
+		if _pointer_cell != BoardSpace.NO_CELL:
+			game.dev_overlay.spawn.try_spawn_at(BoardSpace.flat(_pointer_cell))
+		return
+	_center_on_pointer()
 
 
 # SPACE recentres the diorama on whatever the pointer is over — the 3D answer to the 2D

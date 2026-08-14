@@ -42,13 +42,27 @@ func _key(keycode: Key) -> void:
 
 
 func _drag(button: MouseButton, pixels: Vector2) -> void:
+	_press(button)
+	_move(pixels)
+	_release(button)
+
+
+# The halves, split out because the strand cases (#231) need a gesture left LIVE — a drag
+# whose release never arrives is the whole failure they pin.
+func _press(button: MouseButton) -> void:
 	var down := InputEventMouseButton.new()
 	down.button_index = button
 	down.pressed = true
 	_rig()._unhandled_input(down)
+
+
+func _move(pixels: Vector2) -> void:
 	var motion := InputEventMouseMotion.new()
 	motion.relative = pixels
 	_rig()._unhandled_input(motion)
+
+
+func _release(button: MouseButton) -> void:
 	var up := InputEventMouseButton.new()
 	up.button_index = button
 	up.pressed = false
@@ -171,6 +185,66 @@ func test_q_and_e_land_on_the_next_detent_from_anywhere() -> void:
 	rig._target_yaw_degrees = 90.0
 	_key(KEY_Q)
 	assert_float(rig._target_yaw_degrees).is_equal_approx(180.0, 0.001)
+
+
+# --- The orbit strand (#231) --------------------------------------------------------
+#
+# A gesture whose release can never match strands _orbiting TRUE for ever. After that every
+# motion is yaw and Battle3D's `not is_orbiting()` guard refuses to point at ANY cell —
+# permanently, for the rest of the session. #231 arms this on purpose: the tile brush takes
+# RIGHT while armed, so the host now rewrites orbit_button at runtime.
+
+func test_rebinding_the_orbit_button_mid_drag_releases_the_gesture() -> void:
+	var rig := _rig()
+	_press(rig.orbit_button)
+	_move(Vector2(30.0, 0.0))
+	assert_bool(rig.is_orbiting()).override_failure_message(
+			"precondition: the drag never started, so this proves nothing").is_true()
+	# Whichever way round the scene authored it — the knob is the dev's, not this test's.
+	var other: MouseButton = MOUSE_BUTTON_MIDDLE if rig.orbit_button == MOUSE_BUTTON_RIGHT \
+			else MOUSE_BUTTON_RIGHT
+	rig.orbit_button = other
+	assert_bool(rig.is_orbiting()).override_failure_message(
+			"the drag survived the rebind — pointing is now dead for the whole session"
+	).is_false()
+
+
+func test_losing_manual_input_mid_drag_releases_the_gesture() -> void:
+	var rig := _rig()
+	_press(rig.orbit_button)
+	_move(Vector2(30.0, 0.0))
+	assert_bool(rig.is_orbiting()).override_failure_message(
+			"precondition: the drag never started, so this proves nothing").is_true()
+	rig.manual_input_enabled = false
+	assert_bool(rig.is_orbiting()).is_false()
+
+
+# The early-out is not a micro-optimisation, it IS the correctness of the two cases above:
+# battle3d._process assigns both of these every frame, so an unguarded release would cancel a
+# live orbit sixty times a second and dragging would be impossible in the 3D view.
+func test_rewriting_the_same_values_does_not_cancel_a_live_drag() -> void:
+	var rig := _rig()
+	_press(rig.orbit_button)
+	_move(Vector2(30.0, 0.0))
+	var unchanged_button: MouseButton = rig.orbit_button
+	rig.manual_input_enabled = true      # exactly what _process writes, unchanged
+	rig.orbit_button = unchanged_button
+	assert_bool(rig.is_orbiting()).override_failure_message(
+			"a no-op write killed the drag — orbit is impossible under a per-frame host"
+	).is_true()
+
+
+# release_orbit() must NOT zero the travel. The PHYSICAL release is still coming, and
+# _handle_cancel_button reads last_gesture_was_click() on it — so zeroing here would report an
+# abandoned long drag as a click and fire a spurious cancel at whatever the cursor had reached.
+func test_releasing_the_orbit_keeps_the_gesture_travel() -> void:
+	var rig := _rig()
+	_press(rig.orbit_button)
+	_move(Vector2(rig.orbit_click_slop_px + 50.0, 0.0))
+	rig.release_orbit()
+	assert_bool(rig.last_gesture_was_click()).override_failure_message(
+			"the abandoned drag now reads as a click — a spurious cancel fires on release"
+	).is_false()
 
 
 func test_a_short_drag_still_reads_as_a_click() -> void:

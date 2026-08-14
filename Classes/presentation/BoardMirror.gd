@@ -53,6 +53,9 @@ const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 @export var flame_light_energy := 2.0
 @export var flame_light_range := 4.0
 
+# How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
+@export var brush_ghost_alpha := 0.45
+
 var board: GridMap
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
@@ -62,6 +65,8 @@ var sync_passes := 0
 # Keyed by cell, not a flat list: a reconcile has to answer "the marker for X", and the
 # positional array this replaced could only answer it by freeing everything (#149's shape).
 var _fire_markers: Dictionary[Vector2i, Node3D] = {}
+
+var _brush_ghost: MeshInstance3D = null
 
 
 func rebuild(grid: TileMapLayer, burning: Array[Vector2i]) -> void:
@@ -102,6 +107,42 @@ func refresh_states(burning: Array[Vector2i]) -> void:
 		if not wanted.has(cell):
 			_fire_markers[cell].queue_free()
 			_fire_markers.erase(cell)
+
+
+# The brush preview: the REAL block that would be painted, half-transparent (dev ruling —
+# WYSIWYG beat the bracket I recommended). It resolves the SAME MeshLibrary item sync() would
+# write for that kind, through the same KIND_TO_ITEM table, so the preview physically cannot
+# disagree with the paint that follows it — only the material differs.
+func show_brush_ghost(cell: Vector2i, kind: Terrain.Kind) -> void:
+	_ensure_brush_ghost()
+	var item: int = KIND_TO_ITEM.get(kind, FALLBACK_ITEM)
+	var mesh: Mesh = board.mesh_library.get_item_mesh(item)
+	if _brush_ghost.mesh != mesh:
+		_brush_ghost.mesh = mesh
+	# The item's own transform carries any authored offset/rotation; the cell supplies where.
+	var item_xform: Transform3D = board.mesh_library.get_item_mesh_transform(item)
+	var at := BoardSpace.of_flat(cell)
+	_brush_ghost.transform = Transform3D(item_xform.basis, BoardSpace.cell_center(at) + item_xform.origin)
+	_brush_ghost.visible = true
+
+
+func hide_brush_ghost() -> void:
+	if _brush_ghost == null or not _brush_ghost.visible:
+		return
+	_brush_ghost.visible = false
+
+
+func _ensure_brush_ghost() -> void:
+	if _brush_ghost != null:
+		return
+	_brush_ghost = MeshInstance3D.new()
+	_brush_ghost.name = "BrushGhost"
+	var mat := StandardMaterial3D.new()
+	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.albedo_color = Color(1.0, 1.0, 1.0, brush_ghost_alpha)
+	_brush_ghost.material_override = mat
+	_brush_ghost.visible = false
+	board.add_child(_brush_ghost)
 
 
 func fire_marker_count() -> int:

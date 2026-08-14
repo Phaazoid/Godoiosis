@@ -120,6 +120,46 @@ func _pump() -> void:
 	await await_idle_frame()
 
 
+# HALF a click. _parse_click always sends both edges, which is precisely why it cannot see a
+# missing release arm — the drag it strands is closed by its own next press.
+func _parse_button(screen_pos: Vector2, button: MouseButton, pressed: bool) -> void:
+	var event := InputEventMouseButton.new()
+	event.position = screen_pos
+	event.global_position = screen_pos
+	event.button_index = button
+	event.pressed = pressed
+	event.button_mask = MOUSE_BUTTON_MASK_LEFT if button == MOUSE_BUTTON_LEFT else MOUSE_BUTTON_MASK_RIGHT
+	Input.parse_input_event(event)
+
+
+func _arm_brush() -> void:
+	_game.set_dev_mode(true)
+	_game.dev_overlay.tile_brush.brush_active = true
+
+
+# The brush is HOLD-to-drag, so the 3D arm has to forward the button's RELEASE as well as its
+# press. Forwarding presses only leaves _brush_painting TRUE with no event left that can clear
+# it, and the brush then paints every cell the cursor crosses for the rest of the session, with
+# nothing held down. Invisible to any case that only fires whole clicks — hence the halves.
+func test_releasing_the_button_ends_the_brush_drag() -> void:
+	var unit := _pickable_player_unit()
+	assert_object(unit).override_failure_message("no reachable player unit to aim at").is_not_null()
+	_arm_brush()
+	await _pump()
+
+	_parse_button(_screen_of(unit.movement.cell), MOUSE_BUTTON_LEFT, true)
+	await _pump()
+	assert_bool(_game.dev_controller._brush_painting).override_failure_message(
+			"precondition: the press never armed the drag, so the release proves nothing"
+	).is_true()
+
+	_parse_button(_screen_of(unit.movement.cell), MOUSE_BUTTON_LEFT, false)
+	await _pump()
+	assert_bool(_game.dev_controller._brush_painting).override_failure_message(
+			"the drag outlived its button — the brush paints wherever the cursor goes now"
+	).is_false()
+
+
 func _selected() -> Unit:
 	# Typed read on purpose: a freed stored selection only trips a TYPED assignment (#149).
 	var unit: Unit = _game.selected_unit

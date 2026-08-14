@@ -10,7 +10,9 @@
 # orbit_button is a knob because the choice is a feel call: MIDDLE leaves right-click
 # free to mean cancel on PRESS (its meaning everywhere else), while RIGHT matches the
 # 3D-app instinct at the cost of deferring cancel to release. The rig tracks how far
-# a gesture travelled so its host can tell a click from a drag either way.
+# a gesture travelled so its host can tell a click from a drag either way. Rebinding it --
+# or losing manual input -- mid-drag RELEASES the orbit, because the matching release event
+# would otherwise never arrive and a stranded gesture kills pointing permanently (#231).
 #
 # frame() is the framing authority: only this node knows fov/aspect/pitch, so callers
 # pass the volume they want seen and this solves the distance (Law #4 -- pass, don't
@@ -43,7 +45,7 @@ extends Node3D
 @export var zoom_step := 1.5
 @export var pan_speed := 8.0
 @export var smoothing := 8.0
-@export var orbit_button := MOUSE_BUTTON_RIGHT
+@export var orbit_button: MouseButton = MOUSE_BUTTON_RIGHT: set = _set_orbit_button
 @export var orbit_sensitivity := 0.25        # degrees of yaw per pixel dragged
 @export var orbit_click_slop_px := 4.0       # travel under this still counts as a click
 @export var pan_margin_cells := 4.0          # how far past the board panning may stray
@@ -58,7 +60,7 @@ extends Node3D
 # False while something else owns the camera -- an AI turn, a menu. Deliberately NOT
 # set_process(false): the host still drives position, and the smoothing and DoF
 # tracking in _process have to keep running under it.
-@export var manual_input_enabled := true
+@export var manual_input_enabled := true: set = _set_manual_input_enabled
 
 @onready var _camera: Camera3D = $Pitch/Camera
 @onready var _attributes: CameraAttributesPractical = _camera.attributes as CameraAttributesPractical
@@ -137,6 +139,38 @@ func is_orbiting() -> bool:
 # host that shares orbit_button with a click verb (Battle3D's right-click cancel).
 func last_gesture_was_click() -> bool:
 	return _orbit_travel_px <= orbit_click_slop_px
+
+
+# End an orbit gesture that will never get its own release event. _orbit_travel_px
+# deliberately SURVIVES: the physical release is still coming, last_gesture_was_click()
+# reads this on it, and zeroing here would report an abandoned drag as a click — firing a
+# spurious cancel at whatever the pointer had wandered onto.
+func release_orbit() -> void:
+	_orbiting = false
+
+
+# Rebinding mid-drag strands _orbiting TRUE for ever: the release arrives on the OLD button
+# and never matches, so every later motion becomes yaw and is_orbiting() refuses pointing
+# permanently. #231 makes this a live path rather than a hypothesis — the tile brush takes
+# RIGHT while armed and hands orbit to MIDDLE, on a knob the host rewrites as the brush arms
+# and disarms. Guarding at the property rather than that one caller also catches the
+# inspector, which is where a feel call on this knob actually gets made.
+func _set_orbit_button(value: MouseButton) -> void:
+	if value == orbit_button:
+		return
+	orbit_button = value
+	release_orbit()
+
+
+# Same strand, second trigger: something else taking the camera (an AI turn, a menu) while
+# the player is mid-drag. MUST early-out on an unchanged write — battle3d._process assigns
+# this EVERY frame, and an unguarded release would cancel a live orbit sixty times a second.
+func _set_manual_input_enabled(value: bool) -> void:
+	if value == manual_input_enabled:
+		return
+	manual_input_enabled = value
+	if not value:
+		release_orbit()
 
 
 func set_zoom(distance: float) -> void:
