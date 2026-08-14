@@ -31,7 +31,10 @@ enum View {
 	CORNER,   # dev debug: the 4b PiP, 2D board visuals and all, 3D still driving
 }
 
-@export var auto_play := true    # start mission_path on launch (test fixtures set false)
+# FALSE is the shipping boot: this scene is the game's main_scene now, and the hidden 2D game
+# opens Mission Select for itself. Forcing mission_path here would skip the title screen, the
+# mission list and Load Game. True is a dev shortcut — jump straight into mission_path.
+@export var auto_play := false
 @export var demo_mode := false   # true = the 4a diorama demo: AI-vs-AI, hidden 2D, no bridge
 @export var mission_path := "res://Scenarios/missions/Prolog.tres"
 @export var view: View = View.HD_2D

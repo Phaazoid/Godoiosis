@@ -1,10 +1,15 @@
 # The game scene with NO dev overlay -- the state a demo build ships in (#132).
 #
-# This fixture deliberately breaks the ritual test_game_scene_smoke.gd performs: it does NOT
-# name the root "Main" and does NOT parent it under /root, so game.gd's absolute
-# get_node_or_null("/root/Main/DevOverlay") returns null. Before #132 that killed
-# ScenarioManager.clear_board() on `game.dev_overlay.unit_editor` -- the misdiagnosis #114
-# untangled, which had read as "the game scene segfaults in the runner" for thirteen months.
+# The overlay is ABSENT, not merely unreachable: this fixture FREES the DevOverlay node before
+# the tree is entered. It used to produce the null by naming the root "NotMain" so game.gd's
+# ABSOLUTE /root/Main/DevOverlay path missed -- which quietly coupled the fixture to the
+# lookup's spelling, and stopped producing a null the moment that path became relative (the
+# boot-into-3D change, where Main is mounted under Battle3D rather than at /root). Removing the
+# node tests the condition the suite actually cares about, under any lookup.
+#
+# Before #132 a null overlay killed ScenarioManager.clear_board() on `game.dev_overlay.unit_editor`
+# -- the misdiagnosis #114 untangled, which had read as "the game scene segfaults in the runner"
+# for thirteen months.
 #
 # Falsify by reverting any one guard: clear_board() dies with "Invalid access on a base object
 # of type Nil".
@@ -18,7 +23,10 @@ var game: Node2D
 
 func before_test() -> void:
 	_main = (load(MAIN_SCENE) as PackedScene).instantiate()
-	_main.name = "NotMain"   # the point of the fixture -- see the header
+	# Before the tree is entered: game.dev_overlay is @onready, so the node has to be gone
+	# by the time Game resolves it.
+	_main.get_node("DevOverlay").free()
+	_main.name = "Main"   # named as in production; the ABSENCE is what makes the overlay null
 	add_child(_main)
 	await await_idle_frame()
 	game = _main.get_node("GameContainer/GameView/Game")

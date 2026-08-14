@@ -549,3 +549,17 @@ func test_the_playable_rig_freezes_with_the_game() -> void:
 	var rig: Node3D = _scene.get_node("CameraRig")
 	assert_bool(rig.is_processing()).is_false()
 	_game.process_mode = Node.PROCESS_MODE_INHERIT
+
+
+func test_the_dev_overlay_resolves_while_the_game_is_hosted_in_3d() -> void:
+	# Boot-into-3D: Battle3D is the main_scene now, so Main is mounted at /root/Battle3D/Main
+	# and game.gd's old ABSOLUTE "/root/Main/DevOverlay" resolved to nothing — F1 silently did
+	# nothing in the 3D build, and every dev affordance behind game.dev_overlay went inert.
+	# Non-vacuous by construction: the node is looked up through the real @onready field.
+	assert_bool(DevTools.enabled()).override_failure_message(
+			"devtools are off in this run; the lookup never even runs and the case proves nothing").is_true()
+	var overlay: DevOverlay = _game.dev_overlay
+	assert_object(overlay).override_failure_message(
+			"game.dev_overlay is null while hosted under Battle3D — the lookup is mount-dependent again").is_not_null()
+	# It really is the one hanging off the hosted Main, not some other tree's.
+	assert_object(overlay).is_same(_scene.get_node("Main/DevOverlay"))
