@@ -236,6 +236,32 @@ func test_terrain_state_sorts_under_the_plan_exactly_as_2d_orders_it() -> void:
 			"the preview channel drifted from the live one").is_equal(terrain)
 
 
+func test_the_zone_layers_copy_the_2d_zone_colors() -> void:
+	# Parallel stacks: a mirrored colour is COPIED from the 2D's own constant, never
+	# restated. Asserted against OverlayManager rather than against literals, so changing
+	# one side alone goes red instead of silently drifting (#231).
+	assert_that(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_PATROL]["color"]) \
+		.is_equal(OverlayManager.ZONE_PATROL_MODULATE)
+	assert_that(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_HIGHLIGHT]["color"]) \
+		.is_equal(OverlayManager.ZONE_HIGHLIGHT_MODULATE)
+
+
+func test_the_picked_zone_highlight_sorts_above_the_zones_it_highlights() -> void:
+	# A RELATIONSHIP, not numbers. In 2D the highlight wins by tree order (it is appended
+	# last); 3D has no tree order for this, so the sort number carries the whole fact — and
+	# an equal sort would also mean an equal geometric lift, i.e. z-fighting.
+	var highlight: int = BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_HIGHLIGHT]["sort"]
+	for zone: BoardOverlays.Layer in [BoardOverlays.Layer.ZONE_PATROL,
+			BoardOverlays.Layer.ZONE_CAPTURE, BoardOverlays.Layer.ZONE_EXTRACTION]:
+		var sort: int = BoardOverlays.LAYERS[zone]["sort"]
+		assert_int(highlight).override_failure_message(
+				"the picked-zone highlight sorts at %d, not above zone layer %d at %d" \
+				% [highlight, zone, sort]).is_greater(sort)
+	# The three zone kinds share one band — they never overlap in 2D either.
+	assert_int(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_PATROL]["sort"]) \
+		.is_equal(BoardOverlays.LAYERS[BoardOverlays.Layer.ZONE_CAPTURE]["sort"])
+
+
 func test_no_overlay_layer_can_sort_over_a_unit() -> void:
 	# The structural half, and the one that covers planning ghosts: a ghost is a UnitSprite3D,
 	# so board markup must sit below UNIT_RENDER_PRIORITY by construction — not because the

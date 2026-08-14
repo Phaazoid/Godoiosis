@@ -272,6 +272,38 @@ func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_EXTRACTION).size()).is_equal(1)
 
 
+func test_the_patrol_zone_and_picked_highlight_mirror_only_while_visible() -> void:
+	# #231's whole point. PATROL is the tile brush's DEFAULT kind and had no 3D twin, so
+	# zone painting in the 3D view drew nothing. Mirroring its cells alone is the opposite
+	# error: the 2D shows that layer only while the Tile Brush tab is up, so an ungated
+	# mirror leaks authoring scaffolding into the play view.
+	game.zone_manager.load_dict({
+		"patrol": {"kind": ZoneManager.Kind.PATROL, "cells": [Vector2i(3, 4), Vector2i(3, 5)]},
+	})
+	_om().redraw_zones(game.zone_manager)
+	_om().redraw_zone_highlight([Vector2i(3, 4)])
+	var patrol := _om().zone_overlay as TileMapLayer
+	var highlight := _om().zone_highlight_overlay
+
+	_om().set_zone_visibility(true)
+	await _settle()
+	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_PATROL)).override_failure_message(
+			"a painted patrol zone is invisible in 3D").is_equal(_lifted(patrol))
+	assert_bool(_overlays.cells_of(BoardOverlays.Layer.ZONE_PATROL).size() > 0).override_failure_message(
+			"the case proves nothing — nothing was painted").is_true()
+	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_HIGHLIGHT)).is_equal(_lifted(highlight))
+
+	_om().set_zone_visibility(false)
+	await _settle()
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_PATROL).size()).override_failure_message(
+			"patrol zones leaked into the play view").is_equal(0)
+	assert_int(_overlays.cells_of(BoardOverlays.Layer.ZONE_HIGHLIGHT).size()).is_equal(0)
+	# The 2D still HOLDS the cells — it is visibility that changed, not the data. Without
+	# this the case would pass against a mirror that merely lost the zone.
+	assert_bool(patrol.get_used_cells().size() > 0).override_failure_message(
+			"the 2D dropped the cells, so the gate was never tested").is_true()
+
+
 func test_terrain_icons_mirror_with_the_fire_exception() -> void:
 	game.terrain_states.load_state_dict({
 		Vector2i(1, 1): [Terrain.TileState.FROZEN],

@@ -9,11 +9,19 @@ class_name BoardMirror
 # arrive when the rules do.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
-# the torch recipe, and the dev's "fire casts light" wish. refresh_states() is
-# re-read each turn: a declared v1 approximation (mid-pass ignitions appear at
-# the next turn boundary). That cadence is also why a flame that renders WRONG
-# appears to "come back at the end of the turn" — the marker is rebuilt, not the
-# state; nothing here ever frees a marker mid-turn (pinned by test_board_mirror).
+# the torch recipe, and the dev's "fire casts light" wish. Which cells burn is
+# TerrainStateManager.burning_cells — the one enumeration form (Terrain.gd: "no
+# reader may enumerate fire members itself").
+#
+# BOTH halves are LIVE as of #231, and both reconcile per cell rather than
+# rebuilding. refresh_states() used to be re-read only at a turn boundary — a
+# declared v1 approximation that made mid-pass ignitions late and made a flame
+# that rendered wrong appear to "come back at the end of the turn". It is now
+# polled (OverlayMirror, the poll-don't-wire doctrine), so a marker survives
+# untouched across frames and allocation is proportional to fire CHANGES, which
+# is normally none — strictly cheaper than the free-everything it replaces.
+# sync() is the terrain twin: a per-cell diff against the live 2D grid, driven
+# while the dev brush can paint, so painting shows up without an F2.
 
 # NONE is the one declared skip: an authored tile with no kind still renders
 # ground via FALLBACK_ITEM rather than a hole.
@@ -47,29 +55,62 @@ const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 
 var board: GridMap
 
-var _fire_markers: Array[Node3D] = []
+# How many terrain diffs have run. Read by the test that pins COALESCING — a drag
+# crossing N cells inside one frame must cost one pass, not N.
+var sync_passes := 0
+
+# Keyed by cell, not a flat list: a reconcile has to answer "the marker for X", and the
+# positional array this replaced could only answer it by freeing everything (#149's shape).
+var _fire_markers: Dictionary[Vector2i, Node3D] = {}
 
 
-func rebuild(grid: TileMapLayer, states: Dictionary) -> void:
+func rebuild(grid: TileMapLayer, burning: Array[Vector2i]) -> void:
 	board.clear()
+	sync(grid)
+	refresh_states(burning)
+
+
+# The live terrain diff: write only what differs, erase what the 2D no longer paints.
+# board.clear() is deliberately NOT here — a wholesale repaint per motion event is the
+# thing this exists to avoid; rebuild() owns the clear for a genuine board swap.
+func sync(grid: TileMapLayer) -> void:
+	sync_passes += 1
+	var live: Dictionary[Vector2i, bool] = {}
 	for cell in grid.get_used_cells():
+		live[cell] = true
 		var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
 		var item: int = KIND_TO_ITEM.get(kind, FALLBACK_ITEM)
-		board.set_cell_item(BoardSpace.of_flat(cell), item)
-	refresh_states(states)
+		var at := BoardSpace.of_flat(cell)
+		if board.get_cell_item(at) != item:
+			board.set_cell_item(at, item)
+	# get_used_cells returns a copy, so erasing inside the walk is safe.
+	for cell: Vector3i in board.get_used_cells():
+		if not live.has(BoardSpace.flat(cell)):
+			board.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
 
 
-func refresh_states(states: Dictionary) -> void:
-	for marker in _fire_markers:
-		marker.queue_free()
-	_fire_markers.clear()
-	for cell: Vector2i in states.keys():
-		if _has_fire(states[cell]):
-			_fire_markers.append(_make_fire(BoardSpace.of_flat(cell)))
+# Add what is newly alight, free what went out, LEAVE STANDING what still burns. The last
+# clause is the one with teeth: a marker that is rebuilt every frame looks identical
+# through fire_marker_count(), so the pin is node identity, not the count.
+func refresh_states(burning: Array[Vector2i]) -> void:
+	var wanted: Dictionary[Vector2i, bool] = {}
+	for cell in burning:
+		wanted[cell] = true
+		if not _fire_markers.has(cell):
+			_fire_markers[cell] = _make_fire(BoardSpace.of_flat(cell))
+	for cell: Vector2i in _fire_markers.keys():
+		if not wanted.has(cell):
+			_fire_markers[cell].queue_free()
+			_fire_markers.erase(cell)
 
 
 func fire_marker_count() -> int:
 	return _fire_markers.size()
+
+
+# The flame node standing on a cell, or null. The identity read the persistence pin needs.
+func fire_marker_at(cell: Vector2i) -> Node3D:
+	return _fire_markers.get(cell)
 
 
 # Where the flame's CENTRE sits above the tile's top face, clamped so its bottom edge always
@@ -86,13 +127,6 @@ func flame_base_lift() -> float:
 	if not flame_writes_depth:
 		return flame_lift
 	return maxf(flame_lift, flame_size.y * 0.5 + flame_ground_gap)
-
-
-func _has_fire(cell_states: Array) -> bool:
-	for state in cell_states:
-		if (state as Terrain.TileState) in Terrain.FIRE_STATES:
-			return true
-	return false
 
 
 func _make_fire(cell: Vector3i) -> Node3D:

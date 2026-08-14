@@ -106,7 +106,7 @@ func _ready() -> void:
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
-	game.turn_manager.turn_started.connect(_on_turn_started)
+	_overlay_mirror.board_mirror = _board_mirror
 	game.scenario_manager.board_loaded.connect(_on_board_loaded)
 	if auto_play:
 		_start.call_deferred()
@@ -138,7 +138,7 @@ func _on_board_loaded() -> void:
 
 
 func rebuild() -> void:
-	_board_mirror.rebuild(game.grid, game.terrain_states.to_state_dict())
+	_board_mirror.rebuild(game.grid, game.terrain_states.burning_cells())
 	_refresh_tops()
 
 
@@ -148,8 +148,26 @@ func _refresh_tops() -> void:
 	_board_rect = BoardPicker.used_rect(_tops)
 
 
-func _on_turn_started(_faction: int) -> void:
-	_board_mirror.refresh_states(game.terrain_states.to_state_dict())
+# The live terrain poll (#231). Confined to DEV_MODE on purpose: the sim never paints
+# terrain — the only writers are the dev brush and its Resize — so gating here keeps an
+# O(board) diff entirely out of the shipping game while still catching every writer,
+# including any future one, with no trigger site to remember. (An engine signal was the
+# first choice and is not available: TileMapLayer.changed does NOT fire on set_cell /
+# erase_cell in 4.7 — measured, with a property write as the control.)
+#
+# Repainting can add or erase a COLUMN, which is what the picker and the camera bounds
+# are derived from — so refresh them with it, or the newly painted cell is unclickable
+# and panning stops at the old edge. Bounds only, never a re-frame: the 2D twin
+# (CameraController.refresh_bounds) moves limits and never re-aims, and yanking the
+# camera mid-stroke is not what painting a tile should do.
+func _sync_terrain_while_authoring() -> void:
+	if game.game_state != game.GameState.DEV_MODE:
+		return
+	_board_mirror.sync(game.grid)
+	var before := _board_rect
+	_refresh_tops()
+	if _board_rect != before:
+		_rig.rebound(_board_volume())
 
 
 func _fit_camera() -> void:
@@ -300,6 +318,7 @@ func _process(_delta: float) -> void:
 	var live: bool = (demo_mode or game.can_process()) and view != View.FLAT_2D
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
+	_sync_terrain_while_authoring()
 	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.

@@ -69,6 +69,11 @@ const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
 # MAP-footprint hover-pulse channel below is untouched since no heal in the game targets MAP yet.
 const ATTACK_MODULATE := Color(1, 0, 0, .5)
 const HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
+# The two authoring-zone tints. Named because the 3D mirrors them (#231) and the parallel
+# stacks' rule is that a mirrored color is COPIED from here, never restated — a literal on
+# each side is two answers to "what colour is a patrol zone".
+const ZONE_PATROL_MODULATE := Color(1, 0.5, 0, 0.35)
+const ZONE_HIGHLIGHT_MODULATE := Color(1, 1, 1, 0.45)
 
 
 enum OverlayType {
@@ -130,7 +135,7 @@ func _ready() -> void:
 	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
-	zone_overlay.modulate = Color(1, 0.5, 0, 0.35)
+	zone_overlay.modulate = ZONE_PATROL_MODULATE
 	zone_overlay.visible = false   # authoring-only visual; DevOverlay shows it with the Tile Brush tab
 	capture_overlay.modulate = Color(0.3, 0.9, 1, 0.5)
 	extraction_overlay.modulate = Color(0.4, 1, 0.5, 0.5)
@@ -150,7 +155,7 @@ func _ready() -> void:
 	if zone_overlay is TileMapLayer:
 		zone_highlight_overlay = zone_overlay.duplicate() as TileMapLayer
 		zone_highlight_overlay.name = "ZoneHighlightOverlay"
-		zone_highlight_overlay.modulate = Color(1, 1, 1, 0.45)
+		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 		zone_highlight_overlay.visible = false
 		add_child(zone_highlight_overlay)
 

@@ -24,6 +24,7 @@ enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
+	ZONE_PATROL, ZONE_HIGHLIGHT,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
@@ -38,8 +39,14 @@ const UNIT_RENDER_PRIORITY := 32
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
-	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -2, "kind": Kind.FILL},
-	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -2, "kind": Kind.FILL},
+	# The zone BAND sits at -3, with the picked-zone highlight alone at -2 above it. In 2D
+	# the highlight wins by TREE ORDER (appended last); 3D has no such thing, so the sort
+	# number IS the relationship and a test pins it rather than the values (#231). -1 was
+	# unavailable: SQUAD/SQUAD_RANGE live there and would share the lift, i.e. z-fight.
+	Layer.ZONE_CAPTURE: {"color": Color(0.3, 0.9, 1, 0.5), "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_EXTRACTION: {"color": Color(0.4, 1, 0.5, 0.5), "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_PATROL: {"color": OverlayManager.ZONE_PATROL_MODULATE, "sort": -3, "kind": Kind.FILL},
+	Layer.ZONE_HIGHLIGHT: {"color": OverlayManager.ZONE_HIGHLIGHT_MODULATE, "sort": -2, "kind": Kind.FILL},
 	Layer.HOVER: {"color": Color(1, 0.9, 0.3, 0.9), "sort": 2, "kind": Kind.BRACKET},
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},

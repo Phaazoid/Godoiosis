@@ -14,7 +14,11 @@
 #
 # frame() is the framing authority: only this node knows fov/aspect/pitch, so callers
 # pass the volume they want seen and this solves the distance (Law #4 -- pass, don't
-# look up). It also derives max_distance from that fit, so the fit can never be eaten
+# look up). rebound() is its BOARD half, split out for #231 -- how far you may zoom out
+# and pan, with the camera left exactly where it is. Painting a tile grows the board and
+# must move the limits without moving the view, which is what the 2D twin
+# (CameraController.refresh_bounds) has always done; frame() calls it for that half, so
+# the two can never disagree. It also derives max_distance from that fit, so the fit can never be eaten
 # by its own clamp -- which is exactly what shipped before it: a board span in CELLS
 # was handed to set_zoom, which wants a camera DISTANCE, and clamped to 24 on boards
 # needing 82. Its second volume is the SHOT/BOUNDS split (dev feel-check 2026-08-14:
@@ -150,15 +154,10 @@ func set_zoom(distance: float) -> void:
 func frame(volume: AABB, bounds := AABB()) -> void:
 	var limits := bounds if bounds.size != Vector3.ZERO else volume
 	var box := volume.grow(fit_margin_cells)
-	var limit_box := limits.grow(fit_margin_cells)
-	var ceiling := _fit_distance(limit_box)
-	if ceiling <= 0.0:
+	if not rebound(limits):
 		return   # no valid projection yet (a viewport with no size); keep the current framing
 
 	position = _aim_at(box)
-	# Derived from the BOUNDS, not from this shot: a ceiling solved off a close opening
-	# volume would clamp the player out of ever seeing the rest of the board.
-	max_distance = maxf(ceiling * zoom_out_slack, min_distance)
 	set_zoom(_fit_distance(box))
 	# Snap, never ease: a camera still lerping toward the fit unprojects at one distance
 	# and picks at another, which desyncs every screen-space read taken on the way.
@@ -169,7 +168,23 @@ func frame(volume: AABB, bounds := AABB()) -> void:
 	_home_position = position
 	_home_distance = _target_distance
 
+
+# The half of frame() that is about the BOARD rather than the shot: how far out you may
+# zoom and how far you may pan. Split out for #231, where painting a tile grows the board
+# and the limits must follow WITHOUT the camera moving — the 2D twin
+# (CameraController.refresh_bounds) has always updated limits and never re-aimed.
+# False = no valid projection yet; the caller keeps what it has.
+func rebound(bounds: AABB) -> bool:
+	var limit_box := bounds.grow(fit_margin_cells)
+	var ceiling := _fit_distance(limit_box)
+	if ceiling <= 0.0:
+		return false
+	# Derived from the BOUNDS, not from any one shot: a ceiling solved off a close opening
+	# volume would clamp the player out of ever seeing the rest of the board.
+	max_distance = maxf(ceiling * zoom_out_slack, min_distance)
+	set_zoom(_target_distance)   # re-clamp: a shrunken board can leave you outside the new ceiling
 	pan_limit = Rect2(limit_box.position.x, limit_box.position.z, limit_box.size.x, limit_box.size.z).grow(pan_margin_cells)
+	return true
 
 
 # Where the rig sits to look at `box`: its centre, lifted to the top of the box so the
