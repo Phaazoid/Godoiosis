@@ -17,11 +17,14 @@ class_name BoardMirror
 # for (multi-cell art, flipped alternatives, an atlas newer than the generator run),
 # so a cell can never come out with no block at all.
 #
-# PROPS stand up (#255). A tile whose art depicts an object rather than ground carries
-# `stands_up`, and this mirror gives it a billboarded sprite planted on the cell while
-# the generator bakes that cell's top face as bare ground — so a tree is drawn ONCE,
-# standing, not also lying flat under itself. Same per-cell reconcile as the fire
-# markers, and the lantern borrows the torch's light.
+# PROPS stand up (#255), and HOW they stand up is the tile's authored `prop_shape` (#264).
+# The generator bakes a standing tile's top face as bare ground either way — so a tree is drawn
+# ONCE, standing, not also lying flat under itself — and this mirror plants the object on it:
+#   BILLBOARD  a camera-facing sprite. Thin, symmetric things: lamps, trees.
+#   CUBE/FACETED/ROUND  real geometry from the meshlib, sides wearing the tile's own art and a
+#              GENERATED top face. Volumetric things: crates, chests, rocks, pots — the class the
+#              dev judged "so odd" as billboards, because a 3/4 drawing has no top to show.
+# Same per-cell reconcile for both, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. Which cells burn is
@@ -85,6 +88,12 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 @export var prop_light_energy := 1.5
 @export var prop_light_range := 3.5
 @export var prop_light_height := 0.7
+
+# How tall a solid prop stands relative to its own art. A knob rather than a constant because the
+# art is drawn in 3/4: a crate sprite includes some of its own lid, so the height measured off the
+# sprite is always a little more than the object's front face really is. 1.0 is the measurement;
+# the right number is whatever looks like a crate.
+@export var block_height_scale := 1.0
 
 var board: GridMap
 
@@ -186,6 +195,13 @@ func item_for_tile(source_id: int, coords: Vector2i, alternative: int) -> int:
 # there is no second table to keep in sync.
 static func tile_item_name(source_id: int, coords: Vector2i) -> String:
 	return "tile_%d_%d_%d" % [source_id, coords.x, coords.y]
+
+
+# The same contract for a solid prop's geometry item (#264). A separate namespace rather than a
+# suffix on the ground item, because the two answer different questions about one tile: what the
+# cell's SURFACE looks like, and what STANDS on it.
+static func prop_item_name(source_id: int, coords: Vector2i) -> String:
+	return "prop_%d_%d_%d" % [source_id, coords.x, coords.y]
 
 
 func _ensure_item_index() -> void:
@@ -347,15 +363,56 @@ func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 			_props.erase(cell)
 
 
-# A billboarded sprite of the tile's own art, standing on the cell that paints it.
+# The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
+# the only fork; everything around it — where it stands, what layer it draws on, whether it casts
+# a shadow, whether it carries a light — is one answer for every prop.
 func _make_prop(grid: TileMapLayer, cell: Vector2i) -> Node3D:
-	var texture := _prop_texture(grid, cell)
-	if texture == null:
+	var shape := GridUtils.prop_shape_at_cell(grid, cell)
+	var body: GeometryInstance3D = null
+	if GridUtils.SOLID_SHAPES.has(shape):
+		body = _make_prop_block(grid, cell)
+	# A solid tile with no geometry item falls back to the billboard — the same declared fallback
+	# item_for_cell makes, for the same reason: an atlas newer than the last generator run must
+	# still draw SOMETHING rather than nothing.
+	if body == null:
+		body = _make_prop_billboard(grid, cell)
+	if body == null:
 		return null
+
 	var root := Node3D.new()
 	add_child(root)
 	root.position = BoardSpace.standing_point(BoardSpace.of_flat(cell))
+	body.layers = BoardOverlays.WORLD_RENDER_LAYER
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	root.add_child(body)
 
+	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
+		_add_light(root, prop_light_color, prop_light_energy, prop_light_range, prop_light_height)
+	return root
+
+
+# Real geometry, built by the meshlib generator: the tile's own sprite on the sides, a generated
+# top face, sized to the art's opaque bounds. Null when this tile has no prop item.
+func _make_prop_block(grid: TileMapLayer, cell: Vector2i) -> MeshInstance3D:
+	if board == null or board.mesh_library == null:
+		return null
+	_ensure_item_index()
+	var coords := grid.get_cell_atlas_coords(cell)
+	var item_name := prop_item_name(grid.get_cell_source_id(cell), coords)
+	if not _item_by_name.has(item_name):
+		return null
+	var node := MeshInstance3D.new()
+	node.mesh = board.mesh_library.get_item_mesh(_item_by_name[item_name])
+	# The mesh stands on y = 0 with its measured height, so the knob is a pure vertical stretch.
+	node.scale = Vector3(1.0, block_height_scale, 1.0)
+	return node
+
+
+# A billboarded sprite of the tile's own art.
+func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
+	var texture := _prop_texture(grid, cell)
+	if texture == null:
+		return null
 	var sprite := Sprite3D.new()
 	sprite.texture = texture
 	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
@@ -364,20 +421,14 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i) -> Node3D:
 	# sorts correctly in 3D and no render_priority has to be hand-maintained against it.
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
 	sprite.shaded = true
-	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	# Tied to the TILESET's tile size, never to UnitSprite3D.texels_per_unit: a tile is one cell
 	# wide BY DEFINITION, which is what makes a 1x2 lantern two cells tall and what lets a future
 	# 32px sheet drop in without touching this.
 	sprite.pixel_size = 1.0 / float(GridUtils.TILE_SIZE)
-	sprite.layers = BoardOverlays.WORLD_RENDER_LAYER
 	# Pivot at the BASE. A Sprite3D centres on its origin, so lifting it half its own height plants
 	# the bottom edge on the tile instead of burying half the prop in the ground.
 	sprite.offset = Vector2(0, texture.region.size.y * 0.5)
-	root.add_child(sprite)
-
-	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
-		_add_light(root, prop_light_color, prop_light_energy, prop_light_range, prop_light_height)
-	return root
+	return sprite
 
 
 # The tile's own art, region-cut from the tileset atlas. Multi-cell art comes through WHOLE — the

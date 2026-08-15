@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #260 (2026-08-15).**
+**Canon checked through #267 (2026-08-15).**
 
 ---
 
@@ -78,14 +78,26 @@ That sentence is the convention, and it is the same split Octopath uses (billboa
 |---|---|---|---|
 | **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, grass, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
 | **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | fixed-yaw quad, facing authored per piece | one front-on sprite **plus a facing** |
-| **Block** | volumetric — crates, chests, rocks, barrels | a real cube stacked on the ground block | a **top** texture and a **side** texture, minimum |
+| **Block** | volumetric — crates, chests, rocks, barrels | real geometry standing on the ground block | a **top** texture and a **side** texture, minimum |
 
-**Shipped so far: billboards only** (`stands_up` on the tileset, `BoardMirror`'s prop layer). The other two forms are deliberately unbuilt, and the reason is art rather than code — worth stating plainly because it inverts the usual assumption:
+**The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam. #263's oriented plane lands here as a further member.
 
-- **Block is nearly free mechanically.** The GridMap already stacks in 3D, the mirror simply only ever writes `y = 0`, and `gen_lookdev_assets.gd` already builds full cubes with separate top and side materials — that is how every ground block is made. What does not exist is **per-face art**: one 3/4 sprite pasted on all six faces looks worse than the billboard it replaces. So a blocky prop is blocked on a commission, not on engineering.
-- **Oriented plane needs no new art but does need a piece→facing mapping**, which is a *content convention* (Law #4's named hazard) and so is its own decision rather than a detail.
+**Shipped: billboards (#255) and blocks (#264).** The oriented plane is still unbuilt — it needs no new art but does need a piece→facing mapping, which is a *content convention* (Law #4's named hazard) and so is its own decision rather than a detail.
 
-**Consequence for the commission**: the sprite sheet must say, per prop, which form it is — and blocky props must be ordered as a top + side pair rather than as a single 3/4 view. That is cheap to specify up front and expensive to retrofit, which is exactly the bar the two conventions above are held to.
+### Block props are GENERATED, not commissioned (#264, 2026-08-15)
+
+The block form looked blocked on art, and it was — but on *one face*. **The blocker was never the shape: it was that a single 3/4 sprite cannot supply a top face**, and at the board's ~40° pitch you see plenty of top. Everything else was already free: the GridMap stacks, and `gen_lookdev_assets.gd` had built cubes with independent top and side UV rects since Stage 0.
+
+So the generator supplies the missing half. **The sides wear the tile's own sprite; the top is generated in that sprite's own measured palette**, one pattern per solid — planks for a crate lid, speckle for a boulder, rings for a pot's mouth. Both are packed into extra rows of the same composited atlas the ground already uses, so the board is still one texture and no PNG is written (which would re-import to VRAM with mipmaps and bleed the atlas — the #250 trap).
+
+Two rules worth keeping:
+
+- **The mesh is sized by the art's OPAQUE BOUNDS, not by the cell.** A rock is 32% transparent, so a cell-wide cube around it is mostly air. Measuring makes a small sprite a small object with no tuned offset anywhere.
+- **The footprint is square.** A 3/4 drawing says nothing about depth, so inventing a second number would be a guess dressed as a measurement.
+
+**This is the project's normal pipeline, not a compromise** — every look-dev ground texture is RNG-generated too, and that is the art that passed Stage 0's gate. The honest ceiling is coherent greybox: a generated rock reads as a faceted lump, not as a rock someone drew. **When an artist arrives the textures swap and the meshes stay**, so the commission line below still holds — it is now a quality upgrade rather than a prerequisite.
+
+**Consequence for the commission**: the sprite sheet must say, per prop, which form it is — and blocky props are best ordered as a top + side pair rather than as a single 3/4 view. That is cheap to specify up front and expensive to retrofit, which is exactly the bar the two conventions above are held to.
 
 ---
 
