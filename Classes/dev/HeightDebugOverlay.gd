@@ -28,12 +28,29 @@ const RAMP_COLOR := Color(0.5, 0.9, 1.0, 0.95)
 var grid: TileMapLayer
 var heights: BoardHeights
 
+# TWO independent reasons to be lit, and `visible` is DERIVED from both rather than assigned by
+# either (#260) — ModalLock's shape. Painting height into an invisible store is blind, so the
+# elevation brush lights this on its own; but if F5 already asked for it, leaving that paint mode
+# must not silently switch it off.
+var _toggled := false        # F5
+var _brush_active := false   # the Tile Brush is in Elevation mode
+
 func _ready() -> void:
 	visible = false
 	z_index = 100   # above the tile overlays, which sit below Unit.BASE_SPRITE_INDEX
 
 func toggle() -> void:
-	visible = not visible
+	_toggled = not _toggled
+	_apply()
+
+func set_brush_active(active: bool) -> void:
+	if _brush_active == active:
+		return
+	_brush_active = active
+	_apply()
+
+func _apply() -> void:
+	visible = _toggled or _brush_active
 	refresh()
 
 # Call after anything mutates the store — the height brush (#260) is the first real caller. Not

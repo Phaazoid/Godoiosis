@@ -120,6 +120,13 @@ func brush_armed() -> bool:
 # Both buttons are hold-to-drag (erase gained it 2026-08-12); paint wins if both are held.
 func handle_tile_brush(event) -> void:
 	if event is InputEventMouseButton:
+		# The wheel is read FIRST and returns (#260), so it can never reach the drag flags below:
+		# scrolling to change the level mid-stroke must not end the stroke. Godot emits a press AND
+		# a release per notch, hence the pressed gate -- otherwise every notch counts twice.
+		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			if event.pressed:
+				_nudge_elevation(1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1)
+			return
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
 			if event.pressed:
@@ -211,6 +218,15 @@ func _ensure_brush_ghost() -> void:
 	_brush_ghost.visible = false
 	game.grid.add_child(_brush_ghost)
 
+# The scroll wheel sets the level the elevation brush places at (#260). Mode-gated: the wheel is
+# unbound everywhere else in the 2D game, and silently retuning a brush you can't see would be a
+# surprise the next time you switched to Elevation.
+func _nudge_elevation(delta: int) -> void:
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	if brush.paint_mode != TileBrushTool.PaintMode.ELEVATION:
+		return
+	brush.nudge_elevation(delta)
+
 func _paint() -> void:
 	var cell := _mouse_cell()
 	match game.dev_overlay.tile_brush.paint_mode:
@@ -218,6 +234,8 @@ func _paint() -> void:
 			_paint_zone(cell)
 		TileBrushTool.PaintMode.STATE:
 			_paint_state(cell)
+		TileBrushTool.PaintMode.ELEVATION:
+			_paint_elevation(cell)
 		TileBrushTool.PaintMode.TERRAIN:
 			_paint_tile(cell)
 
@@ -228,6 +246,8 @@ func _erase() -> void:
 			_erase_zone(cell)
 		TileBrushTool.PaintMode.STATE:
 			_erase_state(cell)
+		TileBrushTool.PaintMode.ELEVATION:
+			_erase_elevation(cell)
 		TileBrushTool.PaintMode.TERRAIN:
 			_erase_tile(cell)
 
@@ -244,6 +264,7 @@ func _erase_tile(cell: Vector2i) -> void:
 	# this shipped broken the first time -- the 3D mirror then faithfully mirrors a stale sprite.
 	if game.terrain_states.prune_groundless():
 		game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	_prune_groundless_heights()
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _paint_zone(cell: Vector2i) -> void:
@@ -276,6 +297,27 @@ func _paint_state(cell: Vector2i) -> void:
 	game.terrain_states.apply(effect)
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 
+# Elevation + ramp painting (#260). One click writes BOTH fields, because set_cell takes both and a
+# cell is one answer. Groundless cells are refused for the same reason a state deposit is (#245):
+# height under no tile is invisible junk that would resurrect the moment ground was repainted there.
+func _paint_elevation(cell: Vector2i) -> void:
+	if not GridUtils.has_ground(game.grid, cell):
+		return
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise())
+	_refresh_height_readout()
+
+# Right-click returns the cell to flat ground -- both fields, mirroring the whole-cell state erase.
+func _erase_elevation(cell: Vector2i) -> void:
+	game.board_heights.set_cell(cell, 0, Terrain.RampRise.NONE)
+	_refresh_height_readout()
+
+# Null in a build with dev tools stripped; BoardHeights has no signals to redraw off (it is a data
+# store, not a subject), so every writer here pushes.
+func _refresh_height_readout() -> void:
+	if game.height_debug_overlay != null:
+		game.height_debug_overlay.refresh()
+
 # Right-click clears the WHOLE cell's states, mirroring terrain erase.
 func _erase_state(cell: Vector2i) -> void:
 	var current: Array[Terrain.TileState] = game.terrain_states.states_at(cell)
@@ -298,5 +340,12 @@ func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) 
 	# would have missed: shrinking strands every state that sat outside the new rectangle.
 	if game.terrain_states.prune_groundless():
 		game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	_prune_groundless_heights()
 	game.camera_controller.refresh_bounds(game.grid)
+
+# Elevation goes with the ground too (#260), at both sites the states do. The redraw is inside the
+# refresh, which no-ops when the readout is hidden.
+func _prune_groundless_heights() -> void:
+	if game.board_heights.prune_groundless(func(cell: Vector2i) -> bool: return GridUtils.has_ground(game.grid, cell)):
+		_refresh_height_readout()
 	

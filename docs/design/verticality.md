@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #218 (2026-08-14).**
+**Canon checked through #266 (2026-08-15).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -345,8 +345,10 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
 
-Then the dev-tools painting ticket (below), then 3D-native authoring — which the dev has said is the
-issue after [#231](https://github.com/Phaazoid/Godoiosis/issues/231), gated on this design landing.
+The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
+only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then
+3D-native authoring — which the dev has said is the issue after
+[#231](https://github.com/Phaazoid/Godoiosis/issues/231), gated on this design landing.
 
 ### The preview must keep telling the truth
 
@@ -359,11 +361,37 @@ move.
 
 ---
 
-## Dev tools [SCOPED, separate ticket]
+## Dev tools [BUILT as #260]
 
 Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush places at, with a
 dedicated button to reset it to 0.** Painting textures onto wall faces and other authoring niceties
 come later and do not gate anything.
+
+**BUILT 2026-08-15 ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)).** A fourth
+`TileBrushTool.PaintMode`, **ELEVATION** — a brush *mode* rather than a palette entry, which is the
+shape the per-cell store was chosen for in the first place. One click writes **both** fields, because
+`BoardHeights.set_cell` takes both and a cell is one answer; two brushes would be two ways to author
+one thing. The wheel is read **first** in `DevController.handle_tile_brush` and returns, so a notch
+mid-stroke changes the level without ending the stroke, and it is gated on `event.pressed` because
+Godot emits a press *and* a release per notch. Four rulings worth keeping:
+
+- **Negative levels are reachable, deliberately.** The dev: *"if I start designing a level and want a
+  dip, without allowing negatives, I would have to shift everything up. no bueno."* Nothing in
+  `can_step` cares — its only arithmetic is equality and ±1, which is symmetric about zero.
+- **Elevation goes with the ground.** `BoardHeights.prune_groundless` runs at both sites the tile-state
+  sweep does (brush erase, `resize_map`), because a height under no tile is invisible junk that
+  resurrects the moment ground is repainted there. The predicate is a **parameter**, not an injected
+  `ground_source` field like `TerrainStateManager`'s: that sibling needs one because attacks deposit
+  states from many call sites, while this store has one writer and one pruner.
+- **The readout lights itself.** Entering the mode shows `HeightDebugOverlay` — painting height into
+  an invisible store is blind. Its `visible` is **derived** from two named flags (F5, and the brush)
+  rather than assigned by either, so leaving the mode cannot switch off a readout F5 asked for.
+- **Painting is a 2D-view job for now**, and that is stated rather than fixed: the readout is a child
+  of the flat grid and nothing renders elevation in 3D, so authoring in the 3D view is blind.
+  3D-native authoring stays [#231](https://github.com/Phaazoid/Godoiosis/issues/231).
+
+Ramp painting is one 5-entry picker over `Terrain.RampRise`, not an axis plus a direction — the
+single field carries both, which is exactly why #257 replaced the sketched `{NONE, NS, EW}`.
 
 ---
 
