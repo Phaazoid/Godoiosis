@@ -2,11 +2,20 @@ extends Node3D
 class_name BoardMirror
 
 # The Battle3D board mirror (#215 / #176 stage 4a): paints the 3D GridMap from the
-# LIVE 2D grid — the hidden game is the authority, this only reads. Terrain kinds
-# resolve through the existing seam (GridUtils.get_terrain_kind_at_cell); the one
-# Kind -> meshlib-item table below is law-tested complete. Boards mirror FLAT
-# (column height 1) because the sim has no elevation yet — the diorama's hills
+# LIVE 2D grid — the hidden game is the authority, this only reads. Boards mirror
+# FLAT (column height 1) because the sim has no elevation yet — the diorama's hills
 # arrive when the rules do.
+#
+# WHICH BLOCK a cell gets is two questions, and Kind was answering both until #250:
+#   surface  — what the top face looks like. The 2D answers this with the tile's
+#              ATLAS COORDS, so item_for_cell asks the same thing (Law #4: mirror
+#              the question, not a field downstream of it). Four grass variants are
+#              four looks, and a fence stops being drawn as a tree.
+#   material — what the cell is made of, i.e. the side/wall texture. Still Kind,
+#              which is the vocabulary that is actually good at it.
+# KIND_TO_ITEM survives as the DECLARED FALLBACK for tiles the meshlib has no item
+# for (multi-cell art, flipped alternatives, an atlas newer than the generator run),
+# so a cell can never come out with no block at all.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. Which cells burn is
@@ -68,6 +77,11 @@ var _fire_markers: Dictionary[Vector2i, Node3D] = {}
 
 var _brush_ghost: MeshInstance3D = null
 
+# Meshlib item name -> id, built once off the library itself. The library IS the mapping;
+# indexing it here beats storing a second table that could disagree with the artifact.
+var _item_by_name: Dictionary[String, int] = {}
+var _item_index_built := false
+
 
 func rebuild(grid: TileMapLayer, burning: Array[Vector2i]) -> void:
 	board.clear()
@@ -83,8 +97,7 @@ func sync(grid: TileMapLayer) -> void:
 	var live: Dictionary[Vector2i, bool] = {}
 	for cell in grid.get_used_cells():
 		live[cell] = true
-		var kind := GridUtils.get_terrain_kind_at_cell(grid, cell)
-		var item: int = KIND_TO_ITEM.get(kind, FALLBACK_ITEM)
+		var item := item_for_cell(grid, cell)
 		var at := BoardSpace.of_flat(cell)
 		if board.get_cell_item(at) != item:
 			board.set_cell_item(at, item)
@@ -109,13 +122,54 @@ func refresh_states(burning: Array[Vector2i]) -> void:
 			_fire_markers.erase(cell)
 
 
+# Which meshlib item draws this cell — the SURFACE question, asked the way the 2D asks it.
+# Falls back to the cell's Kind when the tile has no item of its own, so the answer is always
+# a real block.
+func item_for_cell(grid: TileMapLayer, cell: Vector2i) -> int:
+	var item := item_for_tile(grid.get_cell_source_id(cell), grid.get_cell_atlas_coords(cell),
+			grid.get_cell_alternative_tile(cell))
+	if item != GridMap.INVALID_CELL_ITEM:
+		return item
+	return KIND_TO_ITEM.get(GridUtils.get_terrain_kind_at_cell(grid, cell), FALLBACK_ITEM)
+
+
+# The tile's OWN item, or INVALID_CELL_ITEM when the meshlib has none. Three ways to get
+# there, all deliberate: an empty cell (source -1), a flipped/rotated ALTERNATIVE, and a tile
+# the generator skipped (multi-cell art, which cannot go onto a 1x1 top face un-squashed).
+# INVALID_CELL_ITEM is the sentinel because it is already GridMap's own "no item" — this
+# function never writes it to the board; item_for_cell converts it into the Kind block.
+func item_for_tile(source_id: int, coords: Vector2i, alternative: int) -> int:
+	if source_id == -1 or alternative != 0:
+		return GridMap.INVALID_CELL_ITEM
+	_ensure_item_index()
+	return _item_by_name.get(tile_item_name(source_id, coords), GridMap.INVALID_CELL_ITEM)
+
+
+# The ONE spelling of a tile's meshlib item name. tools/lookdev/gen_lookdev_assets.gd writes
+# the items with this exact call, so the mapping cannot drift from the artifact it maps —
+# there is no second table to keep in sync.
+static func tile_item_name(source_id: int, coords: Vector2i) -> String:
+	return "tile_%d_%d_%d" % [source_id, coords.x, coords.y]
+
+
+func _ensure_item_index() -> void:
+	if _item_index_built or board == null or board.mesh_library == null:
+		return
+	_item_index_built = true
+	for id: int in board.mesh_library.get_item_list():
+		_item_by_name[board.mesh_library.get_item_name(id)] = id
+
+
 # The brush preview: the REAL block that would be painted, half-transparent (dev ruling —
-# WYSIWYG beat the bracket I recommended). It resolves the SAME MeshLibrary item sync() would
-# write for that kind, through the same KIND_TO_ITEM table, so the preview physically cannot
-# disagree with the paint that follows it — only the material differs.
-func show_brush_ghost(cell: Vector2i, kind: Terrain.Kind) -> void:
+# WYSIWYG beat the bracket I recommended). It runs item_for_cell against the 2D GHOST LAYER,
+# which is the same function sync() runs against the real grid — so the preview physically
+# cannot disagree with the paint that follows it; only the material differs.
+func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer) -> void:
+	if ghost == null:
+		hide_brush_ghost()
+		return
 	_ensure_brush_ghost()
-	var item: int = KIND_TO_ITEM.get(kind, FALLBACK_ITEM)
+	var item := item_for_cell(ghost, cell)
 	var mesh: Mesh = board.mesh_library.get_item_mesh(item)
 	if _brush_ghost.mesh != mesh:
 		_brush_ghost.mesh = mesh

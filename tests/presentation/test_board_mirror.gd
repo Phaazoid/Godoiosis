@@ -46,12 +46,18 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 	var grid_cells: Array[Vector2i] = _game.grid.get_used_cells()
 	assert_int(board.get_used_cells().size()).is_equal(grid_cells.size())
 	assert_bool(grid_cells.size() > 100).is_true()  # Prolog is a real board, not a stub
-	# Spot-check: every mirrored item matches the 2D cell's kind through the table.
+	# Spot-check: every mirrored block is the block for THAT TILE, named off the 2D cell's own
+	# atlas coords. Deliberately not asked through item_for_cell — that would assert the mirror
+	# against itself. Prolog paints only single-cell tiles, so every one has an item of its own.
 	for i in 25:
 		var cell := grid_cells[i * maxi(1, grid_cells.size() / 25)]
-		var kind := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
-		var expected: int = BoardMirror.KIND_TO_ITEM.get(kind, BoardMirror.FALLBACK_ITEM)
-		assert_int(board.get_cell_item(Vector3i(cell.x, 0, cell.y))).is_equal(expected)
+		var source_id: int = _game.grid.get_cell_source_id(cell)
+		var coords: Vector2i = _game.grid.get_cell_atlas_coords(cell)
+		var expected := BoardMirror.tile_item_name(source_id, coords)
+		var item := board.get_cell_item(Vector3i(cell.x, 0, cell.y))
+		assert_str(board.mesh_library.get_item_name(item)).override_failure_message(
+				"cell %s paints tile %s but got block '%s'" \
+				% [cell, coords, board.mesh_library.get_item_name(item)]).is_equal(expected)
 
 
 # Which cells burn comes off the ONE enumeration form (Terrain.gd: "no reader may
@@ -252,8 +258,8 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	await _settle()
 	var after := board.get_cell_item(at)
 	assert_int(after).override_failure_message("the paint never reached the 3D board").is_not_equal(before)
-	var kind := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
-	assert_int(after).is_equal(BoardMirror.KIND_TO_ITEM.get(kind, BoardMirror.FALLBACK_ITEM))
+	assert_str(board.mesh_library.get_item_name(after)).is_equal(
+			BoardMirror.tile_item_name(other.source, other.coords))
 
 
 func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
@@ -303,6 +309,113 @@ func _a_tile_of_a_different_kind(cell: Vector2i) -> Dictionary:
 			if kind != current and kind != Terrain.Kind.NONE:
 				return {"source": source_id, "coords": coords}
 	return {"source": -1, "coords": Vector2i.ZERO}
+
+
+# --- #250: the SURFACE question -------------------------------------------------------------
+
+# Every single-cell tile the tileset declares, in atlas order. The completeness cases and the
+# fallback case all need to walk the real tileset rather than name coordinates that an atlas
+# swap would invalidate.
+func _declared_tiles(multi_cell: bool) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var is_multi := source.get_tile_size_in_atlas(coords) != Vector2i.ONE
+			if is_multi == multi_cell:
+				out.append({"source": source_id, "coords": coords})
+	return out
+
+
+# THE case #250 exists for. Four grass variants are one Terrain.Kind, so a board keyed on kind
+# renders them as one repeated block — which is what the 3D did for every board ever loaded.
+# Nothing else in this suite can see it: kind-keyed and atlas-keyed agree on every assertion
+# that only ever looks at one tile per kind.
+func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var pair := _two_tiles_sharing_a_kind()
+	assert_bool(not pair.is_empty()).override_failure_message(
+			"the tileset has no kind with two single-cell tiles; the case is vacuous").is_true()
+
+	var board := _scene.get_node("Board") as GridMap
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var a: Vector2i = cells[0]
+	var b: Vector2i = cells[1]
+	_game.grid.set_cell(a, pair[0].source, pair[0].coords)
+	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
+	await _settle()
+
+	var item_a := board.get_cell_item(BoardSpace.of_flat(a))
+	var item_b := board.get_cell_item(BoardSpace.of_flat(b))
+	assert_int(item_a).override_failure_message(
+			"two tiles of the same kind (%s and %s) render as the SAME block — the board is still keyed on Kind" \
+			% [pair[0].coords, pair[1].coords]).is_not_equal(item_b)
+
+
+# Two single-cell tiles that share a Terrain.Kind, or [] if the tileset offers none.
+func _two_tiles_sharing_a_kind() -> Array[Dictionary]:
+	var by_kind: Dictionary[int, Array] = {}
+	var tiles: TileSet = _game.grid.tile_set
+	for entry in _declared_tiles(false):
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var kind := GridUtils.terrain_kind_of(source.get_tile_data(entry.coords, 0))
+		if kind == Terrain.Kind.NONE:
+			continue
+		if not by_kind.has(kind):
+			by_kind[kind] = []
+		by_kind[kind].append(entry)
+		if by_kind[kind].size() == 2:
+			return [by_kind[kind][0], by_kind[kind][1]]
+	return []
+
+
+# Law-style, beside test_every_kind_is_mapped_or_declared_skip: the generated meshlib must cover
+# every single-cell tile the brush can paint. A tile with no block of its own is not broken —
+# it falls back — but it is silently back to kind-keyed rendering, which is the bug this closes.
+func test_every_single_cell_tile_has_a_block_of_its_own() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var library := board.mesh_library
+	var missing: PackedStringArray = []
+	for entry in _declared_tiles(false):
+		var wanted := BoardMirror.tile_item_name(entry.source, entry.coords)
+		if library.find_item_by_name(wanted) < 0:
+			missing.append(wanted)
+	assert_int(missing.size()).override_failure_message(
+			"%d declared tiles have no block: %s — rerun tools/lookdev/gen_lookdev_assets.gd --meshlib" \
+			% [missing.size(), ", ".join(missing)]).is_equal(0)
+
+
+# The declared fallback, and the one thing it must never do. A multi-cell tile is skipped by the
+# generator on purpose (its art is taller than a cell and would squash onto a 1x1 top face), so
+# it lands on its Kind block — NOT on INVALID_CELL_ITEM, which would be a hole in the board where
+# the 2D shows a tile.
+func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var multi := _declared_tiles(true)
+	assert_bool(not multi.is_empty()).override_failure_message(
+			"the tileset declares no multi-cell tile; the case is vacuous").is_true()
+
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	var entry: Dictionary = multi[0]
+	_game.grid.set_cell(cell, entry.source, entry.coords)
+	await _settle()
+
+	var item := board.get_cell_item(BoardSpace.of_flat(cell))
+	assert_int(item).override_failure_message(
+			"a skipped tile left the cell EMPTY — the 2D paints a tile there and the 3D shows a hole" \
+			).is_not_equal(GridMap.INVALID_CELL_ITEM)
+	var kind := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
+	assert_int(item).is_equal(BoardMirror.KIND_TO_ITEM.get(kind, BoardMirror.FALLBACK_ITEM))
 
 
 func test_the_flame_never_sits_in_the_ground_plane() -> void:

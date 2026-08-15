@@ -496,7 +496,7 @@ func _sync_brush_ghost() -> void:
 	if cell == GridUtils.NO_CELL:
 		_board_mirror.hide_brush_ghost()
 		return
-	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_kind())
+	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_layer())
 
 
 # The brush erases on RIGHT, so orbit steps aside to MIDDLE while it is armed — 2D and 3D keep

@@ -35,6 +35,16 @@ var display_name := "Unit"
 # way it faced under the old camera angle (#176 stage 4d).
 var last_step := Vector3.ZERO
 
+# Texels per world unit — #176's "one pixel density, everywhere" convention, as a number
+# rather than a comment. STATIC, not @export: pixel_size is a Sprite3D property and cannot be
+# shadowed by one, and every sprite must move together anyway (knockback ghosts included) or
+# the density stops being one. battle3d.gd owns the inspector-facing knob that writes it.
+#
+# It became a dial at #250, when the ground started wearing the real 16px tile art: at 32 the
+# ground's pixels are twice the size of a unit's, at 16 a 32px unit stands two cells tall —
+# exactly its proportion in the 2D game. Which reads better is an eye call, not a guess.
+static var texels_per_unit := 32.0
+
 var _map_texture: Texture2D
 var _move_texture: Texture2D
 var _downed_texture: Texture2D
@@ -49,7 +59,7 @@ func _init() -> void:
 	alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
 	shaded = true
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	pixel_size = 1.0 / 32.0  # the one-density convention: 32 texels per world unit
+	pixel_size = 1.0 / texels_per_unit  # the one-density convention; see the static above
 	offset = Vector2(0, 16)  # pivot at the feet
 	layers = BoardOverlays.UNIT_RENDER_LAYER  # overlay fills never paint sprites (#213 mask contract)
 	# Board markup never draws OVER a unit — the mask above stops fills painting onto the

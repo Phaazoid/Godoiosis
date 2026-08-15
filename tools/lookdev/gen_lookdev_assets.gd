@@ -4,13 +4,32 @@
 #   godot --headless --path . --import
 #   godot --headless --path . --script res://tools/lookdev/gen_lookdev_assets.gd -- --meshlib
 # Textures land in Art/LookDev/ (32 px/tile, flat-lit, deterministic seed);
-# the MeshLibrary (grass block / stone block / dirt ramp) in Scenes/LookDev/.
-# Placeholder only -- real tile art replaces these files at the #176 art pass.
+# the MeshLibrary in Scenes/LookDev/.
+#
+# The meshlib has TWO tenants since #250, and the split is the whole point:
+#   ids 0-6   the hand-picked Kind blocks + the ramp. The LookDev diorama paints
+#             these by id (board_painter.gd's GRASS/STONE/RAMP), and BoardMirror
+#             keeps them as its declared fallback -- so they are APPEND-ONLY.
+#   ids 7+    one block per real tileset tile, top face wearing that tile's own
+#             art. This is what makes the 3D board show the GAME's tiles instead
+#             of six generated stand-ins.
+# A cell's SURFACE comes from its atlas coords (id 7+); what it is MADE OF -- the
+# side/wall material -- still comes from its Terrain.Kind. Two questions, and Kind
+# was answering both until #250.
 extends SceneTree
 
 const ART_DIR := "res://Art/LookDev"
 const MESHLIB_PATH := "res://Scenes/LookDev/lookdev_meshlib.tres"
+const TILESET_PATH := "res://Resources/TestTiles.tres"
 const TILE := 32
+
+# Where the per-tileset-tile items start. Everything below is the Stage-0 set.
+const FIRST_TILE_ITEM := 7
+
+# Share of non-opaque pixels above which a tile is reported as "mostly open" — a sprite on an
+# empty field rather than ground with a soft edge. Diagnostic only; every tile is based over
+# its kind regardless, so nothing depends on where exactly this sits.
+const HOLE_FRACTION := 0.05
 
 func _init() -> void:
 	var args: PackedStringArray = OS.get_cmdline_user_args()
@@ -215,12 +234,159 @@ func _gen_meshlib() -> int:
 	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
 	_add_item(ml, 5, "water_block", _block_mesh(_mat(water_top), _mat(water_top)))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
+
+	var bases: Dictionary[Terrain.Kind, Texture2D] = {
+		Terrain.Kind.GRASS: grass_top,
+		Terrain.Kind.MUD: mud_top,
+		Terrain.Kind.ROCK: stone_top,
+		Terrain.Kind.TREE: tree_top,
+		Terrain.Kind.WATER: water_top,
+		Terrain.Kind.DIRT: dirt_top,
+	}
+	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), bases, dirt_top) < 0:
+		return 1
+
 	var err := ResourceSaver.save(ml, MESHLIB_PATH)
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
 		return 1
 	print("MeshLibrary written to %s" % MESHLIB_PATH)
 	return 0
+
+
+# One block per real tileset tile, top face wearing that tile's own art. Returns how
+# many items were added, or -1 on failure.
+#
+# Two classes are SKIPPED deliberately, and BoardMirror falls back to the Kind blocks
+# for both: a multi-cell tile (the 1x2 lantern, the 3x3s) has art taller than a cell
+# and cannot go onto a 1x1 top face without squashing it, and a non-zero alternative
+# is a flip/rotate variant. Both are prop-shaped -- they get real form when props
+# stand up, not a squashed top face now.
+func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Material,
+		bases: Dictionary[Terrain.Kind, Texture2D], default_base: Texture2D) -> int:
+	var ts := load(TILESET_PATH) as TileSet
+	if ts == null:
+		push_error("Tileset missing or unreadable at %s" % TILESET_PATH)
+		return -1
+
+	var next_id := FIRST_TILE_ITEM
+	var translucent: PackedStringArray = []
+	for i in ts.get_source_count():
+		var source_id := ts.get_source_id(i)
+		var atlas := ts.get_source(source_id) as TileSetAtlasSource
+		if atlas == null:
+			continue   # only an atlas source has per-tile art to carry over
+		var tex := atlas.texture
+		var source_image := _rgba(tex)
+		if source_image == null:
+			push_error("Atlas source %d has no readable image" % source_id)
+			return -1
+		# The GROUND ATLAS: every tile painted over an opaque base of its own kind. In 2D a
+		# rock's transparent pixels show the window behind the board -- a void, which is a fine
+		# thing for a flat board to have and an impossible one for a solid block: the same pixels
+		# would cut a hole clean through it (measured: rock 32% open, tree 43%, fences up to 56%).
+		# A diorama's answer is that the rock SITS ON ground, so that is what gets baked. Ground
+		# tiles are already opaque, so for them this is a no-op -- no branch, one rule.
+		var ground := Image.create_empty(source_image.get_width(), source_image.get_height(),
+				false, Image.FORMAT_RGBA8)
+		var base_cache: Dictionary[Terrain.Kind, Image] = {}
+		# ONE material for every top face in this source: the items differ by UV, not by
+		# material, so the whole board's ground is one texture and one shader. Opaque, because
+		# the compositing above leaves nothing to blend.
+		var atlas_mat := _mat(null)
+		var atlas_size := Vector2(source_image.get_width(), source_image.get_height())
+		for coords in _sorted_tile_coords(atlas):
+			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+				continue
+			var region := atlas.get_tile_texture_region(coords, 0)
+			var kind := GridUtils.terrain_kind_of(atlas.get_tile_data(coords, 0))
+			if not base_cache.has(kind):
+				var base_tex: Texture2D = bases.get(kind, default_base)
+				var base_img := _rgba(base_tex)
+				base_img.resize(region.size.x, region.size.y, Image.INTERPOLATE_NEAREST)
+				base_cache[kind] = base_img
+			ground.blit_rect(base_cache[kind], Rect2i(Vector2i.ZERO, region.size), region.position)
+			ground.blend_rect(source_image, region, region.position)
+
+			var top_uv := _uv_rect(region, atlas_size)
+			var side: Material = stone_side if kind == Terrain.Kind.ROCK else dirt_side
+			var side_uv := Rect2(0, 0, 1, 1)
+			if kind == Terrain.Kind.WATER:
+				side = atlas_mat        # water wears its own surface down the sides, as water_block does
+				side_uv = top_uv
+			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
+					_block_mesh(atlas_mat, side, top_uv, side_uv))
+			next_id += 1
+			var clear := _transparent_fraction(source_image, region)
+			if clear >= HOLE_FRACTION:
+				translucent.append("%d/%d:%d (%d%%)" % [source_id, coords.x, coords.y, roundi(clear * 100.0)])
+
+		# Embedded in the meshlib rather than written as a PNG: a generated atlas saved to disk
+		# would be imported with detect_3d on and silently re-imported to VRAM compression with
+		# MIPMAPS the first time it rendered -- and mipmaps on an atlas bleed neighbouring tiles
+		# into each other at distance, which is the one thing the half-texel UV inset cannot fix.
+		atlas_mat.albedo_texture = ImageTexture.create_from_image(ground)
+
+	var added := next_id - FIRST_TILE_ITEM
+	print("Tileset items %d..%d (%d tiles) from %s" % [FIRST_TILE_ITEM, next_id - 1, added, TILESET_PATH])
+	if not translucent.is_empty():
+		# A report, not an error -- but the actionable one. A tile this open is a sprite on an
+		# empty field, so as a top face it cuts a hole straight into the block. Those are the
+		# props, and props get real form in the stand-up pass; until then they are painted onto
+		# an opaque base below rather than left as holes.
+		print("  mostly-open tiles (%d), based over their kind: %s" % [translucent.size(), ", ".join(translucent)])
+	return added
+
+
+# Deterministic order, so regenerating an unchanged tileset produces an identical file.
+func _sorted_tile_coords(atlas: TileSetAtlasSource) -> Array[Vector2i]:
+	var coords: Array[Vector2i] = []
+	for i in atlas.get_tiles_count():
+		coords.append(atlas.get_tile_id(i))
+	coords.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		if a.y != b.y:
+			return a.y < b.y
+		return a.x < b.x)
+	return coords
+
+
+# The tile's atlas region as UVs, inset by half a texel. The atlas declares no separation
+# or margin, so edge-exact UVs sample into the neighbouring tile.
+func _uv_rect(region: Rect2i, atlas_size: Vector2) -> Rect2:
+	var inset := Vector2(0.5, 0.5)
+	var from := (Vector2(region.position) + inset) / atlas_size
+	var to := (Vector2(region.end) - inset) / atlas_size
+	return Rect2(from, to - from)
+
+
+# A texture's pixels as a plain RGBA8 Image — imported textures arrive compressed, and both
+# blend_rect and get_pixel need the decoded form.
+func _rgba(tex: Texture2D) -> Image:
+	if tex == null:
+		return null
+	var img := tex.get_image()
+	if img == null:
+		return null
+	if img.is_compressed():
+		img.decompress()
+	if img.get_format() != Image.FORMAT_RGBA8:
+		img.convert(Image.FORMAT_RGBA8)
+	return img
+
+
+# What share of the tile's pixels are not fully opaque. A FRACTION rather than a yes/no,
+# because the two ends mean opposite things: a couple of soft corner pixels are nothing, while
+# a sprite drawn on an empty field cannot be a top face at all -- it would cut a hole straight
+# into the block. HOLE_FRACTION is where the second starts.
+func _transparent_fraction(image: Image, region: Rect2i) -> float:
+	if image == null:
+		return 0.0
+	var clear := 0
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if image.get_pixel(x, y).a < 1.0:
+				clear += 1
+	return float(clear) / float(maxi(1, region.size.x * region.size.y))
 
 
 func _load_tex(file_name: String) -> Texture2D:
@@ -247,28 +413,31 @@ func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:
 
 
 # A 1x1x1 cell block: surface 0 = top (terrain face), surface 1 = sides + bottom.
-func _block_mesh(top_mat: Material, side_mat: Material) -> ArrayMesh:
+# The UV rects default to the whole texture (the Kind blocks, whose textures are one
+# tile each); an atlas-backed item passes the tile's own region instead.
+func _block_mesh(top_mat: Material, side_mat: Material,
+		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
 	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, 0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3.UP)
+			Vector3(0.5, 0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3.UP, top_uv)
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
 	_quad(st, Vector3(-0.5, 0.5, 0.5), Vector3(0.5, 0.5, 0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), Vector3.BACK)      # south
+			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), Vector3.BACK, side_uv)      # south
 	_quad(st, Vector3(0.5, 0.5, -0.5), Vector3(-0.5, 0.5, -0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD) # north
+			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD, side_uv) # north
 	_quad(st, Vector3(0.5, 0.5, 0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5), Vector3.RIGHT)     # east
+			Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5), Vector3.RIGHT, side_uv)     # east
 	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, 0.5, 0.5),
-			Vector3(-0.5, -0.5, 0.5), Vector3(-0.5, -0.5, -0.5), Vector3.LEFT)    # west
+			Vector3(-0.5, -0.5, 0.5), Vector3(-0.5, -0.5, -0.5), Vector3.LEFT, side_uv)    # west
 	_quad(st, Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN)    # bottom
+			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN, side_uv)    # bottom
 	st.commit(mesh)
 	return mesh
 
@@ -301,13 +470,14 @@ func _ramp_mesh(top_mat: Material, side_mat: Material) -> ArrayMesh:
 
 
 # Corners in clockwise order viewed from outside (Godot front-face winding).
-func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3) -> void:
+func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, normal: Vector3,
+		uv_rect := Rect2(0, 0, 1, 1)) -> void:
 	var uvs: Array[Vector2] = [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
 	var points: Array[Vector3] = [a, b, c, a, c, d]
 	var uv_order: Array[int] = [0, 1, 2, 0, 2, 3]
 	for i in points.size():
 		st.set_normal(normal)
-		st.set_uv(uvs[uv_order[i]])
+		st.set_uv(uv_rect.position + uvs[uv_order[i]] * uv_rect.size)
 		st.add_vertex(points[i])
 
 
