@@ -15,6 +15,7 @@ class_name DevOverlay
 @onready var spawn: SpawnTool = get_node("%Spawn")
 @onready var unit_authoring: MarginContainer = get_node("%Unit Authoring")
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
+@onready var look_tool: LookTool = get_node("%Look")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 
 func _ready() -> void:
@@ -34,10 +35,20 @@ func _ready() -> void:
 	tabs.set_tab_tooltip(3, "Author attacks — Transmutation, Weapon Attack, or Family Mains (edit an established family's main in place); toggle at top.")
 	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
 	tabs.set_tab_tooltip(5, "Paint the board — Terrain, Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases.")
+	tabs.set_tab_tooltip(6, "Tune the 3D look live — lighting, post, fog, camera, markup. Copy Values hands back what you moved.")
 	var authoring_tabs: TabContainer = %AuthoringTabs
 	authoring_tabs.tab_changed.connect(_on_authoring_tab_changed)
 	authoring_tabs.set_tab_tooltip(0, "Spawn units — configure here, then hover the board + Space to place.")
 	authoring_tabs.set_tab_tooltip(1, "Author cast characters — the Resources/Units/ files authored saves reference. Update rewrites the character everywhere; Save As or Capture creates.")
+
+# The 3D host PUSHES itself in from battle3d._ready (it already resolves this window to hide it).
+# Nothing under Game reaches up to Battle3D as a result, and a flat Main.tscn launch just never
+# calls this. A demo build has already queue_free()'d this window, so don't build 60-odd rows for it.
+func attach_look_host(host: Node3D) -> void:
+	if not DevTools.enabled():
+		return
+	look_tool.attach_host(host)
+
 
 func _on_close_requested():
 	hide()

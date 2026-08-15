@@ -19,6 +19,114 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 	row.add_child(spinbox)
 	container.add_child(row)
 
+# Feel work is DRAG work: a value you sweep while watching the board, with the number beside it
+# so a landed setting can be read off. add_spinbox is the typing form; this is the hunting form.
+# Returns the slider so a caller can write a value back into the widget (LookTool's Reset).
+static func add_slider(container: Node, label_text: String, initial_value: float,
+		min_value: float, max_value: float, step: float, on_change: Callable) -> HSlider:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(190, 0)
+	var slider := HSlider.new()
+	slider.min_value = min_value
+	slider.max_value = max_value
+	slider.step = step
+	slider.value = initial_value
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.custom_minimum_size = Vector2(120, 0)
+	var readout := Label.new()
+	readout.custom_minimum_size = Vector2(64, 0)
+	readout.text = format_decimals(initial_value, step)
+	slider.value_changed.connect(func(v: float) -> void:
+		readout.text = format_decimals(v, step)
+		on_change.call(v))
+	row.add_child(label)
+	row.add_child(slider)
+	row.add_child(readout)
+	container.add_child(row)
+	return slider
+
+
+const COLOR_CHANNELS := ["R", "G", "B", "A"]   # index == Color's own component order
+
+# NO ColorPicker, deliberately. ColorPickerButton froze the dev window solid the first time one
+# was opened (dev, 2026-08-14) -- this window is a real OS window that embeds its own subwindows
+# while the project does not, and CLAUDE.md's sharp edge #4 says prefer Control-based. A plain
+# inline ColorPicker is not the escape either: it carries its own menus for colour mode and picker
+# shape, i.e. the same family one layer down. Four component sliders plus a live swatch are
+# Control-only by construction, and they match the drag idiom the rest of the panel already uses.
+# (OptionButton popups are fine here -- every other dev tab uses them -- so this is a ban on the
+# ColorPicker family, not on popups.)
+static func add_color(container: Node, label_text: String, initial_value: Color,
+		on_change: Callable) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	var label := Label.new()
+	label.text = label_text
+	label.custom_minimum_size = Vector2(190, 0)
+	row.add_child(label)
+	var swatch := ColorRect.new()
+	swatch.color = initial_value
+	swatch.custom_minimum_size = Vector2(30, 0)
+	row.add_child(swatch)
+	# The LIVE colour, boxed in a Dictionary because a GDScript lambda captures a local by VALUE --
+	# a plain Color local could not carry an edit from one channel's callback to the next. Editing
+	# one channel replaces only that component, so the untouched three keep their authored float
+	# precision instead of being re-derived through 8-bit and reading as changed.
+	var state := {"color": initial_value}
+	for i in COLOR_CHANNELS.size():
+		var tag := Label.new()
+		tag.text = COLOR_CHANNELS[i]
+		row.add_child(tag)
+		# Slider AND field both work in 0-255, the scale you read off a hex code. One scale, so
+		# typing a number and dragging the handle can never disagree about what the value is.
+		var slider := HSlider.new()
+		slider.min_value = 0.0
+		slider.max_value = 255.0
+		slider.step = 1.0
+		slider.value = roundi(initial_value[i] * 255.0)
+		slider.custom_minimum_size = Vector2(44, 0)
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(slider)
+		var field := SpinBox.new()
+		field.min_value = 0
+		field.max_value = 255
+		field.step = 1
+		field.value = slider.value
+		field.custom_minimum_size = Vector2(58, 0)
+		row.add_child(field)
+		# Each drives the other with set_value_no_signal, or the two would bounce a change back
+		# and forth forever.
+		slider.value_changed.connect(func(v: float) -> void:
+			field.set_value_no_signal(v)
+			_write_channel(state, i, v, swatch, on_change))
+		field.value_changed.connect(func(v: float) -> void:
+			slider.set_value_no_signal(v)
+			_write_channel(state, i, v, swatch, on_change))
+	container.add_child(row)
+	return row
+
+
+static func _write_channel(state: Dictionary, index: int, value_255: float,
+		swatch: ColorRect, on_change: Callable) -> void:
+	var color: Color = state["color"]
+	color[index] = value_255 / 255.0
+	state["color"] = color
+	swatch.color = color
+	on_change.call(color)
+
+
+# How many decimals a step implies -- 0.005 prints 3, 1.0 prints 0. Derived rather than declared
+# so a knob's precision cannot disagree with the step it moves in.
+static func format_decimals(value: float, step: float) -> String:
+	var decimals := 0
+	var remaining := absf(step)
+	while remaining > 0.0 and remaining < 1.0 and decimals < 5:
+		remaining *= 10.0
+		decimals += 1
+	return String.num(value, decimals)
+
+
 static func add_checkbox(container: Node, label_text: String, initial_value: bool, on_change: Callable, tooltip := "") -> void:
 	var checkbox := CheckBox.new()
 	checkbox.text = label_text
