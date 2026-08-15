@@ -173,50 +173,86 @@ func test_a_menu_leaves_the_pointer_alone() -> void:
 
 # --- Framing a real mission --------------------------------------------------------
 
-func test_both_authored_missions_open_on_the_players_own_squad() -> void:
+func test_both_authored_missions_open_where_they_say() -> void:
 	# REPLACES "opens with the whole board in frame" (dev feel-check 2026-08-14: fitting all
 	# 64x40 of Prolog was too far out to play from). The board is now what the view is
-	# BOUNDED by — see the case below, which keeps that half honest — and the opening shot
-	# frames the units you actually command.
+	# BOUNDED by — see the case below, which keeps that half honest.
+	#
+	# TWO answers since #234, so this forks on the SEAM and never on which mission it is:
+	# a board that authors a camera start opens THERE, one that authors none opens on its own
+	# squad. Naming which is which would pin authored content — the dev captured a start on
+	# Level_1 the day the feature landed, and *that is the feature working*. The derivation's
+	# content-independent pin lives in test_camera_start.gd, so this case going all-authored
+	# is correct rather than vacuous.
 	for path in [PROLOG, LEVEL_1]:
 		_scene.load_mission(path)
 		await _settle()
-		var seen := 0
-		var lo := Vector2.INF
-		var hi := -Vector2.INF
-		for child in _game.units_root.get_children():
-			var unit := child as Unit
-			if unit == null or unit.get_faction() != Team.Faction.PLAYER:
-				continue
-			seen += 1
-			lo = lo.min(Vector2(unit.movement.cell))
-			hi = hi.max(Vector2(unit.movement.cell))
-			var point := _stand(unit.movement.cell)
-			assert_bool(_camera3d.is_position_in_frustum(point)).override_failure_message(
-					"%s: player unit at %s is off-camera at load" % [path, unit.movement.cell]).is_true()
-		assert_int(seen).override_failure_message(
-				"%s spawns no player units; the case proves nothing" % path).is_greater(0)
+		var start: CameraPose = _game.scenario_manager.current_camera_start
+		if start != null:
+			_assert_opens_at_the_authored_pose(path, start)
+		else:
+			_assert_opens_on_the_player_squad(path)
 
-		# The rig is AIMED at them, not merely wide enough to contain them. Measured: both
-		# authored squads start near enough to the middle that the frustum loop above passes
-		# against a window centred on the BOARD — so without this clause the "opens on your
-		# squad" claim would be pinned by nothing.
-		var board: AABB = _scene._board_volume()
-		var focus := (lo + hi + Vector2.ONE) * 0.5
-		assert_bool(focus.distance_to(Vector2(board.get_center().x, board.get_center().z)) > 1.0) \
-			.override_failure_message(
-				"%s starts its squad on the board's centre; aim cannot be told from framing here" % path
-				).is_true()
-		assert_float(_rig.position.x).override_failure_message(
-				"%s: the rig is not aimed at the player squad" % path).is_equal_approx(focus.x, 0.01)
-		assert_float(_rig.position.z).override_failure_message(
-				"%s: the rig is not aimed at the player squad" % path).is_equal_approx(focus.y, 0.01)
-		# Non-vacuous wherever it can be. A board narrower than the opening window legitimately
-		# opens at the whole-board distance, so only assert "closer" where closer exists.
-		if maxf(board.size.x, board.size.z) > _scene.opening_view_cells + 2.0:
-			assert_float(_rig._target_distance).override_failure_message(
-					"%s opened at the whole-board distance — the shot/bounds split did nothing" % path
-					).is_less(_rig.max_distance)
+
+# The authored half. Compared against the pose CLAMPED into the rig's own limits, not against
+# the raw authored numbers: #234's ruling is that a stale start is clamped silently with no
+# validity predicate, so asserting the raw value would red on exactly the content the dev is
+# allowed to edit — and would contradict the rule it is meant to be checking.
+func _assert_opens_at_the_authored_pose(path: String, start: CameraPose) -> void:
+	var limit: Rect2 = _rig.pan_limit
+	assert_float(_rig.position.x).override_failure_message(
+			"%s authors a camera start and did not open at its aim" % path
+			).is_equal_approx(clampf(start.aim.x, limit.position.x, limit.end.x), 0.01)
+	assert_float(_rig.position.z).override_failure_message(
+			"%s authors a camera start and did not open at its aim" % path
+			).is_equal_approx(clampf(start.aim.z, limit.position.y, limit.end.y), 0.01)
+	# Yaw is the one axis nothing clamps, so it is the sharpest single check here.
+	assert_float(_rig.rotation_degrees.y).override_failure_message(
+			"%s authors a camera start and did not open at its angle" % path
+			).is_equal_approx(start.yaw_degrees, 0.01)
+	assert_float(_camera3d.position.z).override_failure_message(
+			"%s authors a camera start and did not open at its zoom" % path
+			).is_equal_approx(clampf(start.distance, _rig.min_distance, _rig.max_distance), 0.01)
+
+
+# The derived half — unchanged, and still the reason the shot/bounds split exists.
+func _assert_opens_on_the_player_squad(path: String) -> void:
+	var seen := 0
+	var lo := Vector2.INF
+	var hi := -Vector2.INF
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null or unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		seen += 1
+		lo = lo.min(Vector2(unit.movement.cell))
+		hi = hi.max(Vector2(unit.movement.cell))
+		var point := _stand(unit.movement.cell)
+		assert_bool(_camera3d.is_position_in_frustum(point)).override_failure_message(
+				"%s: player unit at %s is off-camera at load" % [path, unit.movement.cell]).is_true()
+	assert_int(seen).override_failure_message(
+			"%s spawns no player units; the case proves nothing" % path).is_greater(0)
+
+	# The rig is AIMED at them, not merely wide enough to contain them. Measured: both
+	# authored squads start near enough to the middle that the frustum loop above passes
+	# against a window centred on the BOARD — so without this clause the "opens on your
+	# squad" claim would be pinned by nothing.
+	var board: AABB = _scene._board_volume()
+	var focus := (lo + hi + Vector2.ONE) * 0.5
+	assert_bool(focus.distance_to(Vector2(board.get_center().x, board.get_center().z)) > 1.0) \
+		.override_failure_message(
+			"%s starts its squad on the board's centre; aim cannot be told from framing here" % path
+			).is_true()
+	assert_float(_rig.position.x).override_failure_message(
+			"%s: the rig is not aimed at the player squad" % path).is_equal_approx(focus.x, 0.01)
+	assert_float(_rig.position.z).override_failure_message(
+			"%s: the rig is not aimed at the player squad" % path).is_equal_approx(focus.y, 0.01)
+	# Non-vacuous wherever it can be. A board narrower than the opening window legitimately
+	# opens at the whole-board distance, so only assert "closer" where closer exists.
+	if maxf(board.size.x, board.size.z) > _scene.opening_view_cells + 2.0:
+		assert_float(_rig._target_distance).override_failure_message(
+				"%s opened at the whole-board distance — the shot/bounds split did nothing" % path
+				).is_less(_rig.max_distance)
 
 
 func test_zooming_fully_out_still_shows_the_whole_board() -> void:
