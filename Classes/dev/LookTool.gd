@@ -247,9 +247,13 @@ const AUTHORED_ENTRY := "(authored scene)"   # dropdown row 0: the way back to B
 #     shot/fit margin ARE framing and stay in.
 #   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
 #   * the brush ghost -- dev chrome; players never see it.
+#   * PROP GEOMETRY -- prop block height is an art convention matched to the tile art once, the
+#     same family as icon pixel size; the same authored block reading taller in one mission than
+#     another is world construction drifting, not mood. Wanting it PER OBJECT is #272.
 # The default is IN: a knob added later joins presets unless someone lists it here, which is right
 # for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
-# a renamed property fails loudly instead of silently un-excluding itself.
+# a renamed property fails loudly instead of silently un-excluding itself. #264's block_height_scale
+# is what proved the default has teeth -- it self-joined presets and had to be ruled on.
 const PRESET_EXCLUDED: Array[String] = [
 	"CameraRig|min_distance",
 	"CameraRig|zoom_step",
@@ -267,6 +271,7 @@ const PRESET_EXCLUDED: Array[String] = [
 	"BoardOverlays|billboard_lift",
 	"BoardOverlays|billboard_pixel_size",
 	"BoardMirror|brush_ghost_alpha",
+	"BoardMirror|block_height_scale",
 ]
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
