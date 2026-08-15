@@ -12,9 +12,6 @@ class_name UnitMirror
 # so pulse/highlight/tint parity comes by copy rather than by reimplementation.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
-# Flat mirror boards: every column is one cell tall. DERIVED, not restated — the picker's
-# fallback plane (#231) has to sit on this same face, and two literals would let them drift.
-const COLUMN_TOP := float(BoardSpace.FLAT_TOP_LEVEL) * BoardSpace.CELL_SIZE
 
 # Unit-sprite pixel density, in texels per world unit — the inspector face of
 # UnitSprite3D.texels_per_unit, which every sprite reads at construction (ghosts included, which
@@ -28,6 +25,11 @@ const COLUMN_TOP := float(BoardSpace.FLAT_TOP_LEVEL) * BoardSpace.CELL_SIZE
 @export var texels_per_unit := 32.0
 
 var units_root: Node2D
+
+# The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
+# SURFACE, and this is what tells it where that is — null on a board with no heights wired, which
+# BoardSpace.surface_point reads as flat.
+var heights: BoardHeights
 
 var _mirrored: Dictionary[int, UnitSprite3D] = {}
 var _ghosts: Array[UnitSprite3D] = []
@@ -121,8 +123,14 @@ func ghost_count() -> int:
 
 func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	var previous := sprite.position
-	sprite.position = Vector3(
-			unit.position.x / PIXELS_PER_CELL, COLUMN_TOP, unit.position.y / PIXELS_PER_CELL)
+	# The height comes from the cell the sprite is OVER, not from unit.movement.cell: mid-walk the
+	# pixel position is between cells, and reading the destination would pop the sprite to the new
+	# level before it arrives. Derived from the same pixels that place X and Z, so it steps up as
+	# the sprite crosses the edge.
+	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
+			floori(unit.position.y / PIXELS_PER_CELL))
+	sprite.position = Vector3(unit.position.x / PIXELS_PER_CELL,
+			BoardSpace.surface_point(over, heights).y, unit.position.y / PIXELS_PER_CELL)
 	sprite.cell = BoardSpace.cell_of(sprite.position + Vector3(0, -0.5, 0))
 
 	var downed := unit.lifecycle_state == Unit.LifecycleState.DOWNED

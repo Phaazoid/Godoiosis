@@ -249,7 +249,7 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_flat(cell)
+	var at := BoardSpace.of_cell(cell, 0)
 	var before := board.get_cell_item(at)
 	var other := _a_tile_of_a_different_kind(cell)
 	assert_bool(other.source >= 0).override_failure_message(
@@ -268,7 +268,7 @@ func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_flat(cell)
+	var at := BoardSpace.of_cell(cell, 0)
 	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
 	_game.grid.erase_cell(cell)
 	await _settle()
@@ -352,8 +352,8 @@ func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
 	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
 	await _settle()
 
-	var item_a := board.get_cell_item(BoardSpace.of_flat(a))
-	var item_b := board.get_cell_item(BoardSpace.of_flat(b))
+	var item_a := board.get_cell_item(BoardSpace.of_cell(a, 0))
+	var item_b := board.get_cell_item(BoardSpace.of_cell(b, 0))
 	assert_int(item_a).override_failure_message(
 			"two tiles of the same kind (%s and %s) render as the SAME block — the board is still keyed on Kind" \
 			% [pair[0].coords, pair[1].coords]).is_not_equal(item_b)
@@ -410,7 +410,7 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	_game.grid.set_cell(cell, entry.source, entry.coords)
 	await _settle()
 
-	var item := board.get_cell_item(BoardSpace.of_flat(cell))
+	var item := board.get_cell_item(BoardSpace.of_cell(cell, 0))
 	assert_int(item).override_failure_message(
 			"a skipped tile left the cell EMPTY — the 2D paints a tile there and the 3D shows a hole" \
 			).is_not_equal(GridMap.INVALID_CELL_ITEM)

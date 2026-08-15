@@ -2,9 +2,17 @@ extends Node3D
 class_name BoardMirror
 
 # The Battle3D board mirror (#215 / #176 stage 4a): paints the 3D GridMap from the
-# LIVE 2D grid — the hidden game is the authority, this only reads. Boards mirror
-# FLAT (column height 1) because the sim has no elevation yet — the diorama's hills
-# arrive when the rules do.
+# LIVE 2D grid — the hidden game is the authority, this only reads.
+#
+# THE HILLS HAVE ARRIVED (#273). This mirrored flat, column height 1, on the stated promise that
+# "the diorama's hills arrive when the rules do" — they did, in #257, and became authorable in
+# #260. A cell now writes its whole COLUMN: the surface block repeated down to a shared floor
+# (min(0, lowest painted level), so a dip has a bottom rather than a hole), and a ramp adds the
+# generated wedge ONE level above its own, since a level-E block occupies [E..E+1] and a ramp
+# whose elevation is its LOW side must slope from E+1 to E+2.
+#
+# The heights are PASSED IN, never looked up: the caller already holds the store, and this mirror
+# reaching back into the game for it would be the second answer to "how tall is this cell".
 #
 # WHICH BLOCK a cell gets is two questions, and Kind was answering both until #250:
 #   surface  — what the top face looks like. The 2D answers this with the tile's
@@ -52,6 +60,15 @@ const KIND_TO_ITEM: Dictionary[Terrain.Kind, int] = {
 	Terrain.Kind.TREE: 6,
 }
 const FALLBACK_ITEM := 3  # dirt
+
+# The ramp wedge the generator emits (#273). A NAME, not an id, for the reason item_for_tile is
+# name-keyed: gen_lookdev_assets.gd writes it under this exact string, so the mapping cannot drift
+# from the artifact it maps.
+const RAMP_ITEM_NAME := "dirt_ramp"
+
+# Which way the authored wedge already climbs, in board space: its high edge is at -Z, and -Z is
+# north. Every other rise is this rotated.
+const RAMP_MESH_HIGH_SIDE := Vector3(0.0, 0.0, -1.0)
 const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 
 # Flame knobs (aesthetics get a knob, not a guess). See _make_fire for how lift and gap
@@ -121,30 +138,35 @@ var _item_by_name: Dictionary[String, int] = {}
 var _item_index_built := false
 
 
-func rebuild(grid: TileMapLayer, burning: Array[Vector2i]) -> void:
+func rebuild(grid: TileMapLayer, heights: BoardHeights, burning: Array[Vector2i]) -> void:
 	board.clear()
-	sync(grid)
-	refresh_states(burning)
+	sync(grid, heights)
+	refresh_states(heights, burning)
+
+
+func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
+	return BoardSpace.surface_point(cell, heights)   # the one answer lives with the convention
 
 
 # The live terrain diff: write only what differs, erase what the 2D no longer paints.
 # board.clear() is deliberately NOT here — a wholesale repaint per motion event is the
 # thing this exists to avoid; rebuild() owns the clear for a genuine board swap.
-func sync(grid: TileMapLayer) -> void:
+#
+# The heights are PASSED, not looked up (#273): this already takes the grid the same way, and the
+# mirror has no business reaching into the game for the store the caller is already holding.
+func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	sync_passes += 1
+	var floor_level := _floor_level(heights)
 	var live: Dictionary[Vector2i, bool] = {}
 	var propped: Dictionary[Vector2i, bool] = {}
 	for cell in grid.get_used_cells():
 		live[cell] = true
-		var item := item_for_cell(grid, cell)
-		var at := BoardSpace.of_flat(cell)
-		if board.get_cell_item(at) != item:
-			board.set_cell_item(at, item)
+		_write_column(cell, item_for_cell(grid, cell), heights, floor_level)
 		# Props ride the SAME walk rather than a second pass over the same cells — this is the
 		# terrain diff, and whether a cell carries a standing object is a terrain fact.
 		if GridUtils.stands_up_at_cell(grid, cell):
 			propped[cell] = true
-			_reconcile_prop(grid, cell)
+			_reconcile_prop(grid, cell, heights)
 	_free_props_except(propped)
 	# get_used_cells returns a copy, so erasing inside the walk is safe.
 	for cell: Vector3i in board.get_used_cells():
@@ -152,15 +174,78 @@ func sync(grid: TileMapLayer) -> void:
 			board.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
 
 
+# The lowest surface any column has to reach down to. A dip must have a bottom rather than a hole,
+# and every column shares one floor so the board's underside stays flat. Clamped at 0 so an
+# all-flat board writes exactly the one layer it always did.
+func _floor_level(heights: BoardHeights) -> int:
+	var lowest := 0
+	for cell in heights.painted_cells():
+		lowest = mini(lowest, heights.elevation_at(cell))
+	return lowest
+
+
+# One cell's whole COLUMN (#273): the surface block repeated down to the shared floor, which is the
+# dev's call — BoardMirror already splits surface (top face, from atlas coords) from material (side
+# texture, from Kind), so a stack of one block already reads as a cliff face of that material.
+# Painting a DIFFERENT tile under a tile is a separate ticket he scoped out.
+#
+# A ramp adds its wedge ONE LEVEL ABOVE its own: a level-E block occupies [E..E+1], so level E's
+# surface is at E+1, and a ramp whose own elevation is its LOW side must slope from E+1 up to E+2.
+# That makes a ramp column read one cell taller than its flat neighbour, which is exactly what
+# BoardPicker's "ramps count as full blocks" already assumes.
+func _write_column(cell: Vector2i, item: int, heights: BoardHeights, floor_level: int) -> void:
+	var level := heights.elevation_at(cell)
+	var rise := heights.ramp_rise_at(cell)
+	for y in range(floor_level, level + 1):
+		var at := Vector3i(cell.x, y, cell.y)
+		if board.get_cell_item(at) != item:
+			board.set_cell_item(at, item)
+	var top := level
+	if rise != Terrain.RampRise.NONE:
+		var wedge := Vector3i(cell.x, level + 1, cell.y)
+		var orientation := _ramp_orientation(rise)
+		if board.get_cell_item(wedge) != ramp_item() \
+				or board.get_cell_item_orientation(wedge) != orientation:
+			board.set_cell_item(wedge, ramp_item(), orientation)
+		top = level + 1
+	# LOWERING a cell strands everything the column used to hold above its new top. Walk up until
+	# the column is genuinely clear rather than assuming one stale cell — a 5-level cut leaves 5.
+	var above := top + 1
+	while board.get_cell_item(Vector3i(cell.x, above, cell.y)) != GridMap.INVALID_CELL_ITEM:
+		board.set_cell_item(Vector3i(cell.x, above, cell.y), GridMap.INVALID_CELL_ITEM)
+		above += 1
+
+
+# The wedge's meshlib id, asked of the LIBRARY rather than hardcoded — the same reason
+# item_for_tile indexes by name: the library is the mapping, and a literal id here would silently
+# point at whatever the generator emitted second.
+func ramp_item() -> int:
+	_ensure_item_index()
+	return _item_by_name.get(RAMP_ITEM_NAME, GridMap.INVALID_CELL_ITEM)
+
+
+# The generator draws the wedge with its high edge at -Z and notes that "GridMap orientation (yaw
+# steps) points the high side at the upper level". -Z is NORTH in board space, so the yaw is
+# DERIVED from Terrain.rise_direction — the same vocabulary the rules use — rather than a
+# hand-written table of orthogonal indices that could drift from the mesh.
+func _ramp_orientation(rise: Terrain.RampRise) -> int:
+	var dir := Terrain.rise_direction(rise)
+	if dir == Vector2i.ZERO:
+		return 0
+	var target := Vector3(dir.x, 0.0, dir.y)
+	var angle := RAMP_MESH_HIGH_SIDE.signed_angle_to(target, Vector3.UP)
+	return board.get_orthogonal_index_from_basis(Basis(Vector3.UP, angle))
+
+
 # Add what is newly alight, free what went out, LEAVE STANDING what still burns. The last
 # clause is the one with teeth: a marker that is rebuilt every frame looks identical
 # through fire_marker_count(), so the pin is node identity, not the count.
-func refresh_states(burning: Array[Vector2i]) -> void:
+func refresh_states(heights: BoardHeights, burning: Array[Vector2i]) -> void:
 	var wanted: Dictionary[Vector2i, bool] = {}
 	for cell in burning:
 		wanted[cell] = true
 		if not _fire_markers.has(cell):
-			_fire_markers[cell] = _make_fire(BoardSpace.of_flat(cell))
+			_fire_markers[cell] = _make_fire(surface_point(cell, heights))
 	for cell: Vector2i in _fire_markers.keys():
 		if not wanted.has(cell):
 			_fire_markers[cell].queue_free()
@@ -216,7 +301,7 @@ func _ensure_item_index() -> void:
 # WYSIWYG beat the bracket I recommended). It runs item_for_cell against the 2D GHOST LAYER,
 # which is the same function sync() runs against the real grid — so the preview physically
 # cannot disagree with the paint that follows it; only the material differs.
-func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer) -> void:
+func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer, heights: BoardHeights) -> void:
 	if ghost == null:
 		hide_brush_ghost()
 		return
@@ -227,7 +312,7 @@ func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer) -> void:
 		_brush_ghost.mesh = mesh
 	# The item's own transform carries any authored offset/rotation; the cell supplies where.
 	var item_xform: Transform3D = board.mesh_library.get_item_mesh_transform(item)
-	var at := BoardSpace.of_flat(cell)
+	var at := BoardSpace.of_cell(cell, heights.elevation_at(cell))
 	_brush_ghost.transform = Transform3D(item_xform.basis, BoardSpace.cell_center(at) + item_xform.origin)
 	_brush_ghost.visible = true
 
@@ -276,10 +361,10 @@ func flame_base_lift() -> float:
 	return maxf(flame_lift, flame_size.y * 0.5 + flame_ground_gap)
 
 
-func _make_fire(cell: Vector3i) -> Node3D:
+func _make_fire(at: Vector3) -> Node3D:
 	var root := Node3D.new()
 	add_child(root)
-	root.position = BoardSpace.standing_point(cell)
+	root.position = at
 
 	var flame := MeshInstance3D.new()
 	var quad := QuadMesh.new()
@@ -340,7 +425,7 @@ func prop_at(cell: Vector2i) -> Node3D:
 # Build the prop this cell wants, or leave the standing one alone when it is already the right
 # tile. The tile comparison is what makes REPLACEMENT work: painting a rock onto a tree keeps the
 # cell in the wanted-set, so a cell-only check would leave the tree standing.
-func _reconcile_prop(grid: TileMapLayer, cell: Vector2i) -> void:
+func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> void:
 	var coords: Vector2i = grid.get_cell_atlas_coords(cell)
 	var tile := Vector3i(grid.get_cell_source_id(cell), coords.x, coords.y)
 	var standing: Node3D = _props.get(cell)
@@ -349,7 +434,7 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i) -> void:
 			return
 		standing.queue_free()
 		_props.erase(cell)
-	var built := _make_prop(grid, cell)
+	var built := _make_prop(grid, cell, surface_point(cell, heights))
 	if built == null:
 		return
 	built.set_meta(PROP_TILE_META, tile)
@@ -366,7 +451,7 @@ func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
 # the only fork; everything around it — where it stands, what layer it draws on, whether it casts
 # a shadow, whether it carries a light — is one answer for every prop.
-func _make_prop(grid: TileMapLayer, cell: Vector2i) -> Node3D:
+func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	var shape := GridUtils.prop_shape_at_cell(grid, cell)
 	var body: GeometryInstance3D = null
 	if GridUtils.SOLID_SHAPES.has(shape):
@@ -381,7 +466,7 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i) -> Node3D:
 
 	var root := Node3D.new()
 	add_child(root)
-	root.position = BoardSpace.standing_point(BoardSpace.of_flat(cell))
+	root.position = at
 	body.layers = BoardOverlays.WORLD_RENDER_LAYER
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
