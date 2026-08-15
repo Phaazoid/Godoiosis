@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #267 (2026-08-15).**
+**Canon checked through #274 (2026-08-15).**
 
 ---
 
@@ -84,11 +84,21 @@ That sentence is the convention, and it is the same split Octopath uses (billboa
 
 **Shipped: billboards (#255) and blocks (#264).** The oriented plane is still unbuilt — it needs no new art but does need a piece→facing mapping, which is a *content convention* (Law #4's named hazard) and so is its own decision rather than a detail.
 
-### Block props are GENERATED, not commissioned (#264, 2026-08-15)
+### Block props are GENERATED, not commissioned (#264 + #274, 2026-08-15)
 
 The block form looked blocked on art, and it was — but on *one face*. **The blocker was never the shape: it was that a single 3/4 sprite cannot supply a top face**, and at the board's ~40° pitch you see plenty of top. Everything else was already free: the GridMap stacks, and `gen_lookdev_assets.gd` had built cubes with independent top and side UV rects since Stage 0.
 
-So the generator supplies the missing half. **The sides wear the tile's own sprite; the top is generated in that sprite's own measured palette**, one pattern per solid — planks for a crate lid, speckle for a boulder, rings for a pot's mouth. Both are packed into extra rows of the same composited atlas the ground already uses, so the board is still one texture and no PNG is written (which would re-import to VRAM with mipmaps and bleed the atlas — the #250 trap).
+So the generator supplies the missing half. **Every face is generated in that sprite's own measured palette** — planks on a crate, staves on a pot, per-facet stone on a boulder — packed into extra rows of the same composited atlas the ground already uses, so the board is still one texture and no PNG is written (which would re-import to VRAM with mipmaps and bleed the atlas — the #250 trap).
+
+**The sides started as the sprite and that lasted one playtest (#274).** A sprite cannot *wrap*, so #264 put the whole sprite on every facet — and the dev's verdict was precise: *"the rocks and the pots need it most, their sprites do not map to their models."* A crate is a box, so a box-shaped drawing lands on its four sides tolerably; a ten-sided pot rendered as **ten overlapping pots**. Generating the strip fixes it structurally rather than cosmetically:
+
+- **Each facet owns a distinct, equal, contiguous slice of the side strip**, inset by its own half texel. One UV rule for both prisms — whether the slices read as a continuous wrap (a pot) or as separate stone faces (a boulder) is decided by the *texture*, not by the mesh code.
+- A prism's strip is therefore one atlas patch **per facet**: slicing a single 16px patch into ten facets would leave 1.6 texels each.
+- **No baked shading.** The material is shaded, the sun is real, and a prism's facet normals already differ, so lighting does that work and the albedo stays flat — the convention every look-dev texture holds to.
+
+**This is the one place the 3D deliberately does NOT show the game's tile art**, which is worth declaring because #250's whole finding was the opposite. The reconciliation is that the *colours are still measured from that art* — a prop's palette is its own sprite's dominant shades, read back rather than invented — and that a volumetric object genuinely cannot wear one 3/4 drawing, which #264 measured rather than assumed. A billboard is the one form a sprite maps onto correctly, and billboards still wear theirs.
+
+**Material is not yet a question the data can answer.** Crate and chest are both `CUBE` and share one plank recipe; they are both wooden boxes, so that is honest until something complains. Note that `terrain_type` **cannot** be pressed into service for it — pot, chest, rock and lantern all carry `Terrain.Kind.ROCK` and crate carries no kind at all, the same counterexample set that stopped `stands_up` being inferred from kind in #255.
 
 Two rules worth keeping:
 

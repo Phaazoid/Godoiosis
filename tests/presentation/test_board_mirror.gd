@@ -800,6 +800,149 @@ func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
 	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
 
 
+# --- #274: generated side faces ---------------------------------------------------------------
+
+# THE bug this issue exists for, stated directly. #264 put the whole texture on EVERY facet, because
+# that texture was the tile's sprite and a sprite cannot wrap -- so a 10-sided pot rendered as ten
+# overlapping pots. Every facet must now own a DISTINCT, contiguous, equal slice of the side strip.
+#
+# The facet count is derived from the mesh rather than read from the generator's table: a prism's
+# side surface is one 6-vertex quad plus one 3-vertex bottom-cap triangle per facet, so the vertex
+# count is 9 per facet. That keeps the case independent of the constant it is checking.
+func test_every_facet_of_a_prism_owns_a_distinct_slice_of_its_side_strip() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var checked := 0
+	for entry in _prism_entries():
+		var item_name: String = BoardMirror.prop_item_name(entry.source, entry.coords)
+		var mesh := _mesh_named(board, item_name)
+		assert_object(mesh).override_failure_message(
+				"no geometry item '%s'" % item_name).is_not_null()
+		var spans := _facet_spans(mesh)
+		assert_bool(spans.size() >= 7).override_failure_message(
+				"'%s' reports %d facets; the side surface is not the expected shape" \
+				% [item_name, spans.size()]).is_true()
+
+		var texel := 1.0 / _atlas_size(mesh).x
+		var width: float = spans[0].y - spans[0].x
+		for i in spans.size():
+			# Non-overlapping: the whole failure was every facet sharing one span.
+			if i > 0:
+				assert_bool(spans[i].x >= spans[i - 1].y - texel).override_failure_message(
+						"'%s' facets %d and %d overlap (%s vs %s) -- the strip is not being sliced" \
+						% [item_name, i - 1, i, spans[i - 1], spans[i]]).is_true()
+				# Contiguous: only the two half-texel insets may sit between neighbours.
+				assert_bool(spans[i].x - spans[i - 1].y <= texel * 2.0).override_failure_message(
+						"'%s' leaves a gap between facets %d and %d" % [item_name, i - 1, i]).is_true()
+			# Equal: a wrap that is not evenly divided stretches some facets and squashes others.
+			assert_bool(absf((spans[i].y - spans[i].x) - width) <= texel).override_failure_message(
+					"'%s' facet %d is %s wide against %s for facet 0" \
+					% [item_name, i, spans[i].y - spans[i].x, width]).is_true()
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no FACETED or ROUND props authored; the case is vacuous").is_greater(0)
+
+
+# The faces are GENERATED, but their colours are MEASURED -- that is what keeps #274 from
+# contradicting #250 (the 3D shows the game's tiles). Every colour a prop wears must be one its own
+# sprite contains, within one quantization bucket, since a palette shade is a bucket's mean.
+func test_a_generated_face_only_wears_colours_from_its_own_sprite() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var tiles: TileSet = _game.grid.tile_set
+	var bucket := 1.0 / 32.0   # the generator groups colours at 5 bits per channel
+	var checked := 0
+	for entry in _prism_entries():
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var art := source.texture.get_image()
+		if art.is_compressed():
+			art.decompress()
+		var mesh := _mesh_named(board, BoardMirror.prop_item_name(entry.source, entry.coords))
+		var atlas := _baked_atlas(board)
+		var spans := _facet_spans(mesh)
+		var size := _atlas_size(mesh)
+		# Read exactly what the mesh points at: facet 0's own slice, inset a pixel off each edge so
+		# the half-texel inset cannot put the sample on a neighbour.
+		var from := int(spans[0].x * size.x) + 1
+		var to := int(spans[0].y * size.x) - 1
+		var rows := _uv_rows(mesh, size)
+		var painted := _distinct_colours(atlas, Rect2i(Vector2i(from, rows.x + 1),
+				Vector2i(maxi(1, to - from), maxi(1, rows.y - rows.x - 2))))
+		var sprite := _distinct_colours(art, source.get_tile_texture_region(entry.coords, 0))
+		assert_bool(not painted.is_empty()).override_failure_message("read no generated pixels").is_true()
+		for c: Color in painted:
+			assert_bool(_nearest_distance(c, sprite) <= bucket).override_failure_message(
+					"a generated face wears %s, which is not a colour tile %s contains -- the " \
+					% [c, entry.coords] + "palette is not being read off the art").is_true()
+		checked += 1
+	assert_int(checked).is_greater(0)
+
+
+func _prism_entries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+				continue
+			var shape := GridUtils.prop_shape_of(source.get_tile_data(coords, 0))
+			if shape == GridUtils.PropShape.FACETED or shape == GridUtils.PropShape.ROUND:
+				out.append({"source": source_id, "coords": coords})
+	return out
+
+
+# Each facet's [min u, max u], read off the side surface. Nine vertices per facet: a 6-vertex quad
+# for the face itself, then a 3-vertex bottom-cap triangle appended after all the quads.
+func _facet_spans(mesh: Mesh) -> Array[Vector2]:
+	var uvs: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV]
+	var spans: Array[Vector2] = []
+	for f in uvs.size() / 9:
+		var lo := 1.0
+		var hi := 0.0
+		for k in 6:
+			var u := uvs[f * 6 + k].x
+			lo = minf(lo, u)
+			hi = maxf(hi, u)
+		spans.append(Vector2(lo, hi))
+	return spans
+
+
+# The vertical extent of the side strip in atlas pixels, taken from the same surface.
+func _uv_rows(mesh: Mesh, size: Vector2) -> Vector2i:
+	var uvs: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV]
+	var lo := 1.0
+	var hi := 0.0
+	for uv in uvs:
+		lo = minf(lo, uv.y)
+		hi = maxf(hi, uv.y)
+	return Vector2i(int(lo * size.y), int(hi * size.y))
+
+
+func _atlas_size(mesh: Mesh) -> Vector2:
+	var material := mesh.surface_get_material(1) as StandardMaterial3D
+	return Vector2(material.albedo_texture.get_size())
+
+
+func _distinct_colours(image: Image, region: Rect2i) -> Array[Color]:
+	var seen: Dictionary[Color, bool] = {}
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var c := image.get_pixel(x, y)
+			if c.a >= 0.5:
+				seen[Color(c.r, c.g, c.b)] = true
+	return seen.keys()
+
+
+func _nearest_distance(c: Color, palette: Array[Color]) -> float:
+	var best := 1.0
+	for p: Color in palette:
+		best = minf(best, maxf(absf(c.r - p.r), maxf(absf(c.g - p.g), absf(c.b - p.b))))
+	return best
+
+
 func test_the_flame_never_sits_in_the_ground_plane() -> void:
 	# A QuadMesh is centred on its origin, so a 0.7-tall flame lifted 0.35 has its BOTTOM EDGE
 	# at exactly y = 0 — coplanar with the tile top face it stands on. Harmless while the
