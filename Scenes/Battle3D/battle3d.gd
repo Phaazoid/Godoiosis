@@ -105,6 +105,7 @@ func _ready() -> void:
 	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_3d_host(self)
+	_show_checkout()
 	if demo_mode:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
