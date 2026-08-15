@@ -113,10 +113,35 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01},
 ]
 
+# Board-markup colours (#212 slice 2). A DECLARED second table rather than a widening of KNOBS:
+# those entries address a property path through get_indexed/set_indexed, these address a LAYER
+# through an accessor pair, and one table meaning both would hide the difference that matters.
+#
+# Which layers appear here is measured, not chosen. `set_layer_modulate` REPLACES a layer's albedo,
+# so any layer something already drives per frame would take a knob that silently reverts -- the
+# lying-slider class. Excluded for that reason: ATTACK's 3D side and AIM (OverlayMirror rewrites
+# both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL/ZONE_HIGHLIGHT
+# are excluded as authoring-only -- invisible during real play, and they READ OverlayManager's
+# constants, so a knob would fork a value that is deliberately one (dev call).
+#
+# `reach` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
+# the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
+const LAYER_KNOBS: Array[Dictionary] = [
+	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE},
+	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE},
+	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD},
+	{"group": "Board markup colours", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE},
+	{"group": "Board markup colours", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE},
+	{"group": "Board markup colours", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION},
+	{"group": "Board markup colours", "label": "Attack reach (2D+3D)", "reach": "ATTACK_MODULATE"},
+	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "reach": "HEAL_ATTACK_MODULATE"},
+]
+
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Scenario tab's heading gold
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
 var _baseline: Array = []        # the authored value per KNOBS index, read once on attach
+var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index
 var _rows: VBoxContainer
 var _status: Label
 
@@ -152,7 +177,68 @@ func attach_host(host: Node3D) -> void:
 	_baseline.clear()
 	for knob: Dictionary in KNOBS:
 		_baseline.append(read(knob))   # authored by definition: nothing has moved one yet
+	_layer_baseline.clear()
+	for knob: Dictionary in LAYER_KNOBS:
+		_layer_baseline.append(read_layer(knob))
 	_rebuild()
+
+
+# --- Board-markup colours ---------------------------------------------------------------
+
+func _overlays() -> BoardOverlays:
+	if _host == null:
+		return null
+	return _host.get_node_or_null(^"BoardOverlays") as BoardOverlays
+
+
+# A reach colour is a STATIC var, and Object.get/set are instance methods -- there is no reflecting
+# on the class, so the two names are matched explicitly. An unknown one is a loud failure rather
+# than a silently dead knob.
+func read_layer(knob: Dictionary) -> Variant:
+	if knob.has("reach"):
+		match knob["reach"]:
+			"ATTACK_MODULATE": return OverlayManager.ATTACK_MODULATE
+			"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
+		push_error("LookTool: unknown reach colour %s" % knob["reach"])
+		return null
+	var overlays := _overlays()
+	if overlays == null:
+		return null
+	return overlays.layer_modulate(knob["layer"])
+
+
+func write_layer(knob: Dictionary, color: Color) -> void:
+	if knob.has("reach"):
+		# The static var IS the authority; the live 2D fill is re-derived from it so the tuned
+		# colour shows now rather than at the next aim (the 3D mirrors that fill, not the var).
+		match knob["reach"]:
+			"ATTACK_MODULATE": OverlayManager.ATTACK_MODULATE = color
+			"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = color
+			_:
+				push_error("LookTool: unknown reach colour %s" % knob["reach"])
+				return
+		var om: OverlayManager = _overlay_manager()
+		if om != null:
+			om.refresh_attack_reach_color()
+		return
+	var overlays := _overlays()
+	if overlays != null:
+		overlays.set_layer_modulate(knob["layer"], color)
+
+
+func _overlay_manager() -> OverlayManager:
+	if _host == null:
+		return null
+	var game: Node2D = _host.game
+	if game == null:
+		return null
+	return game.overlay_manager as OverlayManager
+
+
+func layer_baseline_of(index: int) -> Variant:
+	if index < 0 or index >= _layer_baseline.size():
+		return null
+	return _layer_baseline[index]
 
 
 func has_host() -> bool:
@@ -207,6 +293,15 @@ func _rebuild() -> void:
 			group = knob_group
 			_add_heading(group)
 		_build_row(knob)
+	_add_heading(LAYER_KNOBS[0]["group"])
+	for knob: Dictionary in LAYER_KNOBS:
+		var value: Variant = read_layer(knob)
+		if typeof(value) != TYPE_COLOR:
+			DevWidgets.add_label(_rows, "%s - UNRESOLVED" % knob["label"])
+			push_error("LookTool layer knob does not resolve: %s" % knob["label"])
+			continue
+		DevWidgets.add_color(_rows, knob["label"], value,
+			func(picked: Color) -> void: write_layer(knob, picked))
 
 
 func _build_row(knob: Dictionary) -> void:
@@ -275,6 +370,10 @@ func _on_reset_pressed() -> void:
 		var authored: Variant = baseline_of(i)
 		if typeof(authored) != TYPE_NIL:
 			write(KNOBS[i], authored)
+	for i in LAYER_KNOBS.size():
+		var authored_color: Variant = layer_baseline_of(i)
+		if typeof(authored_color) == TYPE_COLOR:
+			write_layer(LAYER_KNOBS[i], authored_color)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
 	_status.text = "Every knob is back at its authored value."
 
@@ -299,13 +398,42 @@ func changed_values() -> Dictionary:
 		var authored: Variant = baseline_of(i)
 		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or same_value(live, authored):
 			continue
-		var split := _paste_split(knob)
-		var header: String = split[0]
-		if not groups.has(header):
-			groups[header] = {}
-		var entries: Dictionary = groups[header]
-		entries[split[1]] = split[2]
+		_record(groups, _paste_split(knob))
+	for i in LAYER_KNOBS.size():
+		var knob: Dictionary = LAYER_KNOBS[i]
+		var live: Variant = read_layer(knob)
+		var authored: Variant = layer_baseline_of(i)
+		if typeof(live) != TYPE_COLOR or typeof(authored) != TYPE_COLOR or same_value(live, authored):
+			continue
+		_record(groups, _layer_paste_split(knob, live))
 	return groups
+
+
+# split = [paste header, dedup key, the finished line]. The key exists only so two knobs that
+# emit the SAME line (flame_size:x and :y) collapse to one entry.
+func _record(groups: Dictionary, split: Array) -> void:
+	var header: String = split[0]
+	if not groups.has(header):
+		groups[header] = {}
+	var entries: Dictionary = groups[header]
+	entries[split[1]] = split[2]
+
+
+# A layer colour is not authored at a property path, so it gets its own paste shape: the whole
+# LAYERS row (sort and kind read off the live table, so the line is paste-ready as-is), or the
+# static var declaration for a reach colour.
+func _layer_paste_split(knob: Dictionary, live: Color) -> Array:
+	if knob.has("reach"):
+		var name: String = knob["reach"]
+		return ["OverlayManager.gd", name,
+			"static var %s := %s" % [name, literal_for(live)]]
+	var layer: BoardOverlays.Layer = knob["layer"]
+	var spec: Dictionary = BoardOverlays.LAYERS[layer]
+	var layer_name: String = BoardOverlays.Layer.keys()[layer]
+	var kind_name: String = BoardOverlays.Kind.keys()[spec["kind"]]
+	return ["BoardOverlays.gd -> LAYERS", layer_name,
+		'Layer.%s: {"color": %s, "sort": %d, "kind": Kind.%s},'
+			% [layer_name, literal_for(live), spec["sort"], kind_name]]
 
 
 func _paste_split(knob: Dictionary) -> Array:
@@ -325,7 +453,8 @@ func _paste_split(knob: Dictionary) -> Array:
 	var header := "Battle3D.tscn -> %s" % ("Battle3D" if node_path == "." else node_path)
 	if owner_bits.size() > 0:
 		header += ".%s" % ".".join(owner_bits)
-	return [header, segments[i], literal_for(current.get(segments[i]))]
+	var prop: String = segments[i]
+	return [header, prop, "%s = %s" % [prop, literal_for(current.get(prop))]]
 
 
 func _format(groups: Dictionary) -> String:
@@ -333,8 +462,8 @@ func _format(groups: Dictionary) -> String:
 	for header: String in groups:
 		out.append("# %s" % header)
 		var entries: Dictionary = groups[header]
-		for prop: String in entries:
-			out.append("%s = %s" % [prop, entries[prop]])
+		for key: String in entries:
+			out.append(entries[key])   # the split already built the finished line
 		out.append("")
 	return "\n".join(out).strip_edges()
 
