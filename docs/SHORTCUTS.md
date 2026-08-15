@@ -36,6 +36,7 @@ The view **opens close on your own squad**, not on the whole board (`opening_vie
 | F1 | Toggle the dev tools window (`toggle_dev_overlay`) — enters/exits DEV_MODE |
 | Space | Spawn a unit at the hovered cell *(in dev mode, with the Spawn tool configured)* — hardcoded `KEY_SPACE` check in `game.gd`, not an Input Map action |
 | F2 | Reload the last-loaded scenario (`dev_reset_scenario`) — instant board reset |
+| F5 | Toggle the elevation readout ([#257](https://github.com/Phaazoid/Godoiosis/issues/257)) — each cell's height, with an arrow on ramps showing which way they rise. Flat 2D view only; **throwaway**, and deleted when the real 2D height render lands. Hardcoded `KEY_F5` in `game.gd`, gated on `DevTools.enabled()` |
 | Left-click a unit | (DEV_MODE) Edit that unit in the Unit Editor |
 | Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile — works in **both** views; the 3D one previews the real block under the cursor |
 | Right-click | (DEV_MODE, Tile Brush active) Erase a tile. In the 3D view this is why orbit steps aside to middle-drag while the brush is armed |

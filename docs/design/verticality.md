@@ -27,7 +27,14 @@ below follows from taking that literally.
 ### Where height lives
 
 **A per-cell store, serialized into `ScenarioData` beside `terrain_states`.** Two fields per cell:
-`elevation: int` and `ramp_axis: {NONE, NS, EW}`.
+`elevation: int` and `ramp_rise: Terrain.RampRise`.
+
+> **AMENDED at build time (#257).** This originally read `ramp_axis: {NONE, NS, EW}`, which cannot
+> say which side of the ramp is high — a ramp at height N with an EW axis climbs to *either*
+> neighbour, and if both sit at N+1 the rule has no answer. `RampRise { NONE, NORTH, SOUTH, EAST,
+> WEST }` is **the direction the ramp rises toward**: one field carries the axis *and* the high side,
+> and "no sideways entry" collapses to a single question — does this step run along the rise axis?
+> Built as `Terrain.RampRise` with `Terrain.rise_direction` / `Terrain.is_on_rise_axis` beside it.
 
 **Not tileset custom data.** This was the first proposal and it is wrong: `walkable` / `move_cost` /
 `terrain_type` / `terrain_name` are per-TILE (per atlas coordinate), not per-cell. Elevation as tile
@@ -73,6 +80,13 @@ engine grows one:
   if one of the two cells is a ramp whose axis matches the step direction and whose high/low sides
   line up. **Ramps connect exactly ±1**, so a 5-tall cliff is a staircase of five ramp cells or it is
   not climbable at all.
+
+  **BUILT in #257.** Because a ramp's own elevation is its LOW side, the climb happens when *leaving*
+  it and the descent when *entering* it — so the two height clauses read opposite cells: `+1` is
+  legal iff `from` is a ramp whose rise equals the step, `-1` iff `to` is a ramp whose rise opposes
+  it. The sideways guard is **two clauses, one per cell**, and they are tested separately: the
+  2026-08-12 stage-2 round found that a case covering only *leaving* a ramp sideways let the
+  entering-guard mutant survive.
 
 **Blast radius is small, which is why the movement half is slice 1.** `movement_cost` has exactly ONE
 production caller (`compute_move_range`'s BFS) and it already holds `current_cell`. `can_traverse` has
@@ -321,6 +335,11 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
 
 1. **Store, `can_step`, 2D face rendering.** Movement only — complete and playable on its own. No
    climb cost, so `movement_cost` gains the `from` parameter purely for legality.
+   **NARROWED and BUILT as [#257](https://github.com/Phaazoid/Godoiosis/issues/257):** the rules and
+   store half shipped with a throwaway F5 readout instead of real rendering, because wall-face and
+   ramp art is gated on a tileset choice that has not been made. The 2D render — wall autotiles,
+   ramp sprites, per-level sprite Y-offset, and the `HoverPresenter` sprite-vs-cell disambiguation —
+   became its own ticket.
 2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
    `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the

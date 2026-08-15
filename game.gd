@@ -72,6 +72,8 @@ var _target_pick_callback: Callable           # func(picked: Unit) -> void
 var dev_controller: DevController
 var ai_controller: AIController
 var terrain_states: TerrainStateManager
+var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
+var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
 var zone_manager: ZoneManager
 var main_action_menu: MainActionMenu
 var hover_presenter: HoverPresenter
@@ -126,6 +128,15 @@ func _build_collaborators() -> void:
 	# board swap cannot leave the rule judging against the previous scenario's terrain.
 	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
 	add_child(terrain_states)
+
+	board_heights = BoardHeights.new()   # no add_child: RefCounted, and it needs nothing from the tree
+
+	if DevTools.enabled():
+		height_debug_overlay = HeightDebugOverlay.new()
+		height_debug_overlay.name = "HeightDebugOverlay"
+		height_debug_overlay.grid = grid
+		height_debug_overlay.heights = board_heights
+		grid.add_child(height_debug_overlay)   # child of the grid so map_to_local needs no conversion
 
 	zone_manager = ZoneManager.new()
 	zone_manager.name = "ZoneManager"
@@ -224,6 +235,12 @@ func _unhandled_input(event: InputEvent) -> void:
 			dev_overlay.spawn.try_spawn_at(hover_presenter.last_hovered_cell)
 		else:
 			camera_controller.center_on_position(get_global_mouse_position())
+
+	# Elevation readout (#257) — throwaway until the real 2D height render lands. Gated like
+	# Battle3D's F4 so it cannot reach a shipped build.
+	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_F5 \
+			and DevTools.enabled() and height_debug_overlay != null:
+		height_debug_overlay.toggle()
 
 # Esc during play. MENU locks the board while the card is up; the prior state is restored on
 # Resume so an in-progress aim survives the pause.
@@ -941,7 +958,7 @@ func clear_selection_icons() -> void:
 # ==============================================================================
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager)
+	return BoardContext.new(grid, _all_units(), squad_manager, terrain_states, zone_manager, board_heights)
 
 func _all_units() -> Array[Unit]:
 	var result: Array[Unit] = []

@@ -60,6 +60,12 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	terrain_states.ground_source = func(cell: Vector2i) -> bool: return GridUtils.has_ground(grid, cell)
 	root.add_child(terrain_states)
 
+	# Elevation (#257), the twin of game.board_heights. RefCounted, so nothing to parent -- it lives
+	# as long as the lambda and the returned board Dictionary hold it. Wired here for the same reason
+	# terrain_states is: a headless board that silently reads flat would let the Play API and the game
+	# disagree about whether a move is legal, which is exactly the split #103 was.
+	var board_heights := BoardHeights.new()
+
 	# Cohesion reads live terrain (#151) -- fresh BoardContext per call, mirroring game._board, with
 	# units scanned off units_root so mid-test spawns are seen. Sits below terrain_states because a
 	# lambda captures what exists at creation.
@@ -68,7 +74,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		for child in units_root.get_children():
 			if child is Unit:
 				units.append(child)
-		return BoardContext.new(grid, units, squad_manager, terrain_states)
+		return BoardContext.new(grid, units, squad_manager, terrain_states, null, board_heights)
 
 	return {
 		"root": root,
@@ -78,6 +84,7 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"squad_manager": squad_manager,
 		"turn_manager": turn_manager,
 		"terrain_states": terrain_states,
+		"board_heights": board_heights,
 	}
 
 static func paint_rect(grid: TileMapLayer, rect: Rect2i) -> void:
@@ -111,6 +118,8 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	board.grid.tile_map_data = scenario.tile_data
 	if board.get("terrain_states") != null:
 		board.terrain_states.load_state_dict(scenario.terrain_states)   # mirrors ScenarioManager
+	if board.get("board_heights") != null:
+		board.board_heights.load_dicts(scenario.elevations, scenario.ramp_rises)   # mirrors ScenarioManager
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry

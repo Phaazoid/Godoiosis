@@ -48,7 +48,7 @@ func test_water_is_impassable_without_waterwalk() -> void:
 	BoardBuilder.paint_cell(board.grid, Vector2i(1, 0), BoardBuilder.WATER_ATLAS)
 	var unit := _spawn(board, Vector2i(0, 0), false)
 
-	var cost := RulesService.movement_cost(Vector2i(1, 0), unit, _rules_board(board, unit))
+	var cost := RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),unit, _rules_board(board, unit))
 
 	assert_int(cost).is_equal(RulesService.CANNOT_WALK_TILE)
 
@@ -57,7 +57,7 @@ func test_waterwalk_water_step_costs_the_same_as_any_other_tile() -> void:
 	BoardBuilder.paint_cell(board.grid, Vector2i(1, 0), BoardBuilder.WATER_ATLAS)
 	var unit := _spawn(board, Vector2i(0, 0), true)
 
-	var cost := RulesService.movement_cost(Vector2i(1, 0), unit, _rules_board(board, unit))
+	var cost := RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),unit, _rules_board(board, unit))
 
 	assert_int(cost).is_equal(1)
 
@@ -88,7 +88,7 @@ func test_can_traverse_ignores_occupancy() -> void:
 	var context := BoardContext.new(board.grid, units, board.squad_manager)
 
 	assert_bool(RulesService.can_traverse(Vector2i(1, 0), mover, context)).is_true()
-	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
+	assert_int(RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
 
 
 func test_active_enemy_still_blocks_movement() -> void:
@@ -100,7 +100,7 @@ func test_active_enemy_still_blocks_movement() -> void:
 	var units: Array[Unit] = [mover, blocker]
 	var context := BoardContext.new(board.grid, units, board.squad_manager)
 
-	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
+	assert_int(RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),mover, context)).is_equal(RulesService.CANNOT_WALK_TILE)
 
 func test_downed_enemy_is_traversable_but_not_reachable() -> void:
 	# #122: a downed enemy body stops blocking a PATH through its cell (matching a downed ally
@@ -114,7 +114,7 @@ func test_downed_enemy_is_traversable_but_not_reachable() -> void:
 	var units: Array[Unit] = [mover, blocker]
 	var context := BoardContext.new(board.grid, units, board.squad_manager)
 
-	assert_int(RulesService.movement_cost(Vector2i(1, 0), mover, context)).is_less(RulesService.CANNOT_WALK_TILE)
+	assert_int(RulesService.movement_cost(Vector2i(0, 0), Vector2i(1, 0),mover, context)).is_less(RulesService.CANNOT_WALK_TILE)
 
 	var result := RulesService.compute_move_range(mover, context)
 	assert_bool(result.reachable.has(Vector2i(1, 0))).is_false()
