@@ -89,7 +89,7 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 #
 # FLAT is the ground itself. Everything else STANDS ON the ground, and the member says how it is
 # built: BILLBOARD is a camera-facing sprite (thin, symmetric -- lamps, trees), the rest are real
-# geometry (volumetric -- crates, rocks, pots). The split is the dev's measured ruling on #255:
+# geometry (volumetric -- crates, rocks, barrels). The split is the dev's measured ruling on #255:
 # "anything that's thin already works in this style"; blocky things "really want to be textures on
 # a 3D model". #263's oriented plane -- thin but DIRECTIONAL -- lands here as a further member.
 #
