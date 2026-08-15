@@ -113,6 +113,13 @@ var _fire_markers: Dictionary[Vector2i, Node3D] = {}
 const PROP_TILE_META := "prop_tile"
 var _props: Dictionary[Vector2i, Node3D] = {}
 
+# Where each tile's art actually sits, so a billboard is planted by its DRAWN pixels rather than by
+# its region. Both caches are pure derivations of the tileset — a decoded sheet per source, a
+# trimmed region per tile — and neither survives a board swap needing invalidation, because the
+# tileset is the same object throughout a run.
+var _art_images: Dictionary[int, Image] = {}
+var _drawn_regions: Dictionary[Vector3i, Rect2i] = {}
+
 var _brush_ghost: MeshInstance3D = null
 
 # Meshlib item name -> id, built once off the library itself. The library IS the mapping;
@@ -431,20 +438,80 @@ func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
 	return sprite
 
 
-# The tile's own art, region-cut from the tileset atlas. Multi-cell art comes through WHOLE — the
-# 1x2 lantern is a 16x32 sprite — which is exactly what a 1x1 top face could not carry, and why
-# the lantern arrives with this pass rather than with 5a's.
+# The tile's own art, region-cut from the tileset atlas and TRIMMED to the pixels that are actually
+# drawn. Multi-cell art still comes through whole — the 1x2 lantern is a 16x32 sprite — which is
+# exactly what a 1x1 top face could not carry, and why the lantern arrives with a billboard.
+#
+# The trim is what plants it. A tile region may carry transparent padding: the lantern's art stops
+# 5 rows above its region's bottom edge, so a quad planted by the REGION left the visible lamp
+# floating 5/16 of a cell in the air (reported in play 2026-08-15; present since #255, and only
+# obvious once the blocks beside it started sitting correctly). Trimming is a no-op for any sprite
+# that already reaches its own edges — crate, chest, rock and tree all measure a 0px gap — so this
+# can only move art that was floating.
 func _prop_texture(grid: TileMapLayer, cell: Vector2i) -> AtlasTexture:
 	var tiles := grid.tile_set
 	if tiles == null:
 		return null
-	var atlas := tiles.get_source(grid.get_cell_source_id(cell)) as TileSetAtlasSource
+	var source_id := grid.get_cell_source_id(cell)
+	var atlas := tiles.get_source(source_id) as TileSetAtlasSource
 	if atlas == null:
 		return null
 	var texture := AtlasTexture.new()
 	texture.atlas = atlas.texture
-	texture.region = Rect2(atlas.get_tile_texture_region(grid.get_cell_atlas_coords(cell), 0))
+	texture.region = Rect2(_drawn_region(atlas, source_id, grid.get_cell_atlas_coords(cell)))
 	return texture
+
+
+# The tile's region narrowed to its drawn pixels, in ATLAS coordinates. Cached per tile: decoding an
+# atlas sheet is not free and a prop is rebuilt whenever its cell's tile changes.
+func _drawn_region(atlas: TileSetAtlasSource, source_id: int, coords: Vector2i) -> Rect2i:
+	var key := Vector3i(source_id, coords.x, coords.y)
+	if _drawn_regions.has(key):
+		return _drawn_regions[key]
+	var region := atlas.get_tile_texture_region(coords, 0)
+	var image := _art_image(atlas, source_id)
+	var drawn := region
+	if image != null:
+		var bounds := opaque_bounds(image, region)
+		drawn = Rect2i(region.position + bounds.position, bounds.size)
+	_drawn_regions[key] = drawn
+	return drawn
+
+
+# The atlas sheet as readable pixels, once per source. Imported textures arrive compressed, and
+# get_pixel needs the decoded form.
+func _art_image(atlas: TileSetAtlasSource, source_id: int) -> Image:
+	if _art_images.has(source_id):
+		return _art_images[source_id]
+	var image: Image = null
+	if atlas.texture != null:
+		image = atlas.texture.get_image()
+	if image != null:
+		if image.is_compressed():
+			image.decompress()
+		if image.get_format() != Image.FORMAT_RGBA8:
+			image.convert(Image.FORMAT_RGBA8)
+	_art_images[source_id] = image
+	return image
+
+
+# Where a tile's art actually sits inside its region, in tile-local pixels. ONE answer to a question
+# both stacks ask: the meshlib generator sizes a solid prop's geometry by it, and the mirror plants a
+# billboard by it. Falls back to the whole region when nothing is drawn, so a blank tile cannot
+# produce a zero-sized sprite or mesh.
+static func opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
+	var min_p := region.size
+	var max_p := Vector2i(-1, -1)
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if image.get_pixel(x, y).a < 0.5:
+				continue
+			var p := Vector2i(x, y) - region.position
+			min_p = Vector2i(mini(min_p.x, p.x), mini(min_p.y, p.y))
+			max_p = Vector2i(maxi(max_p.x, p.x), maxi(max_p.y, p.y))
+	if max_p.x < 0:
+		return Rect2i(Vector2i.ZERO, region.size)
+	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
 
 
 func _add_light(root: Node3D, color: Color, energy: float, omni_range: float, height: float) -> OmniLight3D:
