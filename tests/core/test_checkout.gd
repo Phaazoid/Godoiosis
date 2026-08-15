@@ -26,6 +26,10 @@ var _root := ""
 func before_test() -> void:
 	_root = ProjectSettings.globalize_path("user://").path_join("checkout_fixture")
 	_wipe()
+	# Prove the wipe rather than trusting it. A leaked tree does not fail loudly -- it makes the
+	# next case assert against the PREVIOUS case's fixture, which is how the hidden-file difference
+	# below reached CI looking like an unrelated null.
+	assert_bool(DirAccess.dir_exists_absolute(_root)).is_false()
 	DirAccess.make_dir_recursive_absolute(_root)
 
 
@@ -168,6 +172,10 @@ func _wipe_at(dir: String) -> void:
 	var access := DirAccess.open(dir)
 	if access == null:
 		return
+	# EVERY fixture path here starts with a dot, and hidden is a PLATFORM question: ".git" is hidden
+	# on Linux and not on Windows, so without this the wipe silently no-ops on CI and each case
+	# inherits the previous one's tree. Found by CI reddening a case that is green on Windows.
+	access.include_hidden = true
 	for file: String in access.get_files():
 		DirAccess.remove_absolute(dir.path_join(file))
 	for sub: String in access.get_directories():
