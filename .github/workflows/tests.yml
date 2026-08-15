@@ -1,10 +1,20 @@
 name: Tests
 
+# A DOCS-ONLY change skips the suite entirely (2026-08-15). Safe because NOTHING in the
+# suite reads a tracked .md: every .md mention under tests/ and Classes/ is a comment
+# pointing at canon, and the only real read is report.md, which BugReporter GENERATES at
+# runtime under user://. Verified before this filter went in -- recheck it before widening
+# the list. GitHub matches paths-ignore against the WHOLE PR diff, so a PR touching docs
+# AND code still runs; only an all-docs change is skipped. If a docs lint ever lands (a
+# canon-marker check, a link checker), it needs its OWN workflow with the inverse filter
+# (paths: ['docs/**']) -- this one would skip exactly the change it exists to catch.
 on:
   push:
     branches: [main]
+    paths-ignore: ['docs/**', '**.md']
   pull_request:
     branches: [main]
+    paths-ignore: ['docs/**', '**.md']
 
 jobs:
   test:
