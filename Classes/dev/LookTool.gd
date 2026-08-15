@@ -1,191 +1,25 @@
 extends VBoxContainer
 class_name LookTool
 
-# The dev-tools Look tab (#212): the one live surface for the HD-2D stack's aesthetic values.
-# Every KNOBS entry names a property that ALREADY EXISTS on the running Battle3D world -- an
-# @export on a presentation node, or a field of a sub_resource authored in Battle3D.tscn -- and
-# both are reached the same way, via get_indexed/set_indexed. Nothing here stores a value; this
-# is a surface onto values that stay where they always lived. Adding a knob is one table line.
+# The dev-tools Look tab (#212): the live SURFACE onto the HD-2D stack's aesthetic values.
+#
+# What the look IS -- the knob table, reading and writing it, capturing and applying a preset --
+# moved to Classes/presentation/LookKnobs.gd in #253 part 2, because a MISSION carries a look now
+# and the shipping path cannot route through a dev tab. This file owns the PANEL: the rows, the
+# sub-tabs, the preset buttons, the baseline that Reset returns to, and Copy Values.
 #
 # The host is PUSHED in by battle3d._ready (attach_host), never looked up: no part of the game
 # subtree gains an upward path to the 3D scene, and launching Main.tscn flat -- a real shipping
 # target -- simply never attaches one, which this reports instead of crashing.
 #
-# Tuning SAVES as of #253: a named LookPreset under Resources/LookPresets/ captures the scene-mood
-# knobs, and loading one makes it the baseline everything else measures against. Copy Values still
-# exists beside it and still diffs the AUTHORED scene, because its output is paste-ready lines FOR
-# Battle3D.tscn -- diffed against a loaded preset those lines would not reproduce what you see.
-#
-# A knob may only name a property that is authored and READ. Anything the game writes back per
-# frame -- the rig's yaw, dof_blur_near/far_distance (re-derived from focus_band_*), max_distance,
-# orbit_button, manual_input_enabled -- would give a slider that moves and silently reverts, the
-# one failure that makes a tuning panel untrustworthy. tests/dev/test_look_tool.gd pins that by
-# writing, waiting a frame, and reading back.
+# Loading a preset makes it the BASELINE, so Reset returns there; Default returns to the fallback
+# look every board falls back to. Copy Values still diffs the AUTHORED scene rather than either,
+# because its output is paste-ready lines FOR Battle3D.tscn -- diffed against a loaded preset they
+# would not reproduce what you are looking at.
 
-# node = path relative to the host ("." = the host); prop = colon-joined property path.
-# A float knob carries min/max/step; bool and Color infer their widget from the live value;
-# options = an int-backed enum, labels in declaration order.
-const KNOBS: Array[Dictionary] = [
-	# --- Lighting ---
-	{"group": "Lighting", "node": "Sun", "prop": "light_energy", "label": "Sun energy", "min": 0.0, "max": 6.0, "step": 0.01,
-		"tip": "How bright the sun is. Multiplies its colour rather than replacing it, and the whole scene's exposure keys off this -- a big move here usually wants Exposure re-checked too."},
-	{"group": "Lighting", "node": "Sun", "prop": "light_color", "label": "Sun colour",
-		"tip": "The sun's tint. Warm reads as late day, cool as overcast or moonlight. Brightness is Sun energy, not here -- keep this near white unless you want the light itself coloured."},
-	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:x", "label": "Sun elevation", "min": -90.0, "max": 0.0, "step": 0.5,
-		"tip": "How high the sun sits. Near 0 is on the horizon, throwing long raking shadows; -90 is directly overhead, giving short shadows and flat-reading surfaces."},
-	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:y", "label": "Sun azimuth", "min": -180.0, "max": 180.0, "step": 0.5,
-		"tip": "Which direction the sun comes FROM. Swings shadows around the board without changing how long they are -- that is Sun elevation's job."},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_enabled", "label": "Shadows",
-		"tip": "Whether the sun casts shadows at all. A useful A/B when judging whether a shape reads because of the lighting or because of the sprite itself."},
-	# The #226 pair: units reading as hovering is most likely peter-panning, chased by eye.
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_bias", "label": "Shadow bias", "min": 0.0, "max": 0.5, "step": 0.001,
-		"tip": "Pushes a shadow away from the surface casting it, to stop that surface shadowing itself (acne -- a stippled, crawling look). Too high and the shadow detaches from the feet, which is what makes units read as hovering (#226)."},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_normal_bias", "label": "Shadow normal bias", "min": 0.0, "max": 4.0, "step": 0.01,
-		"tip": "The same trade as Shadow bias, but offsetting along the surface's facing instead of toward the light. Tuned together with it: one fixes acne on flat ground, the other on slopes."},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_opacity", "label": "Shadow opacity", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How dark a shadow goes. 1 is as dark as the ambient light allows; 0 makes shadows invisible without turning the shadow pass off."},
-	{"group": "Lighting", "node": "Sun", "prop": "directional_shadow_max_distance", "label": "Shadow draw distance", "min": 10.0, "max": 300.0, "step": 1.0,
-		"tip": "How far from the camera the sun still draws shadows. Lower concentrates the same shadow resolution on what is near, so shadows sharpen -- but push it too low and distant shadows vanish outright."},
-
-	# --- Sky ---
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_top_color", "label": "Sky top",
-		"tip": "The sky straight overhead. It feeds AMBIENT light as well as the visible sky, so it tints everything the sun does not hit directly -- the shadows most of all."},
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_horizon_color", "label": "Sky horizon",
-		"tip": "The sky at the horizon line. The gradient between this and Sky top carries most of a sky's mood; a warm horizon under a cool top reads as dawn or dusk."},
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:ground_horizon_color", "label": "Ground horizon",
-		"tip": "The half of the procedural sky BELOW the horizon. Barely visible at this camera pitch, but it still bounces into ambient, so it warms or cools the underside of everything."},
-
-	# --- Post ---
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_mode", "label": "Tonemap", "options": ["Linear", "Reinhard", "Filmic", "ACES", "AgX"],
-		"tip": "How light brighter than white gets squeezed into a displayable image. Linear just clips, so highlights blow out flat. Reinhard is soft and slightly washed. Filmic and ACES roll highlights off with more contrast. AgX is the flattest and most modern, and desaturates bright colour least."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_exposure", "label": "Exposure", "min": 0.1, "max": 4.0, "step": 0.01,
-		"tip": "Overall brightness applied BEFORE tonemapping, like a camera's exposure. Prefer this over Brightness for a general 'more light' -- it keeps the highlight roll-off intact instead of flattening it."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_white", "label": "White point", "min": 0.1, "max": 4.0, "step": 0.01,
-		"tip": "Which input brightness maps to pure white. Raise it to keep detail in bright areas for longer; lower it to blow highlights out sooner and harder."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_enabled", "label": "Glow",
-		"tip": "Whether bright areas bleed light into their surroundings at all. The whole bloom stack on or off -- the four dials below do nothing while this is off."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_intensity", "label": "Glow intensity", "min": 0.0, "max": 4.0, "step": 0.01,
-		"tip": "How strong the bloom is on anything that passes the threshold. The 'how much' dial."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_strength", "label": "Glow strength", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How far the bloom spreads before fading out. The 'how wide' dial -- bigger values give a softer, hazier halo around the same bright pixel."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_bloom", "label": "Glow bloom", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Adds glow to EVERYTHING, not just what passes the threshold. Small values only, unless a hazy dream look is what you are after -- this is the one that quietly fogs the whole image."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_hdr_threshold", "label": "Glow HDR threshold", "min": 0.0, "max": 4.0, "step": 0.01,
-		"tip": "How bright a pixel must be before it glows at all. Lower catches more of the scene (and can make ordinary lit ground shimmer); raise it to keep glow on genuine highlights like the flame."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_enabled", "label": "SSAO",
-		"tip": "Screen-space ambient occlusion: darkens creases and contact points that ambient light would struggle to reach. A cheap, strong cue for where things MEET -- especially a sprite's feet and the ground."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_radius", "label": "SSAO radius", "min": 0.1, "max": 8.0, "step": 0.05,
-		"tip": "How far around a point the effect looks for things blocking ambient light, in world units. Small values darken only tight corners; large values shade broad areas and start to look like dirt."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_intensity", "label": "SSAO intensity", "min": 0.0, "max": 8.0, "step": 0.05,
-		"tip": "How dark the occlusion goes. The most visible SSAO dial and the easiest to overdo -- past a point everything looks smudged with soot."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_power", "label": "SSAO power", "min": 0.1, "max": 8.0, "step": 0.05,
-		"tip": "The falloff curve. Higher values keep the darkening tight to the contact point instead of spreading it evenly across the radius."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_enabled", "label": "Colour adjust",
-		"tip": "Whether the final brightness / contrast / saturation pass runs. The three dials below do nothing while this is off."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_brightness", "label": "Brightness", "min": 0.1, "max": 3.0, "step": 0.01,
-		"tip": "Flat multiplier on the FINISHED image. Blunter than Exposure because it lifts blacks along with everything else -- reach for Exposure first."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_contrast", "label": "Contrast", "min": 0.1, "max": 3.0, "step": 0.01,
-		"tip": "Pushes the finished image away from mid-grey. Above 1 deepens shadows and brightens highlights; below 1 flattens toward grey."},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_saturation", "label": "Saturation", "min": 0.0, "max": 3.0, "step": 0.01,
-		"tip": "Colour intensity of the finished image. 0 is greyscale, 1 is untouched. A small lift is the cheapest way to make pixel art pop; too much and the palette turns to candy."},
-
-	# --- Fog ---
-	# The sunset preset reading as a forest fire is the case #212 was filed over.
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_enabled", "label": "Volumetric fog",
-		"tip": "A real volume of fog that light scatters THROUGH, not a flat colour laid over the image -- which is why lights carry visible shafts through it. Forward+ only, and the reason the renderer is not Mobile."},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_density", "label": "Fog density", "min": 0.0, "max": 0.2, "step": 0.001,
-		"tip": "How thick the fog is. Tiny numbers go a long way -- this is the dial that made the sunset preset read as a forest fire, which is what got this whole panel filed (#212)."},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_albedo", "label": "Fog albedo",
-		"tip": "The fog's own colour -- what it scatters back at you. Warm fog under a low sun reads as smoke or dust; cool fog reads as mist."},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_anisotropy", "label": "Fog anisotropy", "min": -0.9, "max": 0.9, "step": 0.01,
-		"tip": "Which way the fog throws light. Positive scatters it forward, so a bright haze gathers around whatever is lighting it; negative scatters back toward the source; 0 scatters evenly in all directions."},
-
-	# --- Camera ---
-	{"group": "Camera", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
-		"tip": "How far the camera looks DOWN at the board. Shallow shows more of the sprites' faces and more sky; steep reads like a map. Press Re-fit camera after moving it -- the framing maths only re-runs on a board load."},
-	{"group": "Camera", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
-		"tip": "Field of view. Low values flatten perspective toward an orthographic, model-railway look (the HD-2D diorama trick); high values exaggerate depth and bend the board's edges. Press Re-fit camera after moving it."},
-	{"group": "Camera", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,
-		"tip": "How many cells wide the view is when a mission OPENS, centred on your own units. It does not limit zoom -- the whole board still does -- it only decides where the game starts you."},
-	{"group": "Camera", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
-		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
-		"tip": "How far one notch of the mouse wheel moves the camera."},
-	{"group": "Camera", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
-		"tip": "How fast the camera catches up to where it has been told to go. Higher is snappier and more responsive; lower glides, which reads as cinematic until you are trying to play."},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5,
-		"tip": "How fast WASD slides the camera across the board, in world units per second."},
-	{"group": "Camera", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01,
-		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit."},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
-		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
-	{"group": "Camera", "node": "CameraRig", "prop": "fit_margin_cells", "label": "Fit margin (cells)", "min": 0.0, "max": 8.0, "step": 0.25,
-		"tip": "Breathing room left around the board whenever the camera frames it, so the edge tiles are not flush against the screen."},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
-		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
-
-	# --- Depth of field ---
-	# The BANDS are the knobs; the distances they produce are re-derived per frame off the live
-	# camera distance, which is what stopped close zooms drifting the board into the near blur.
-	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_near", "label": "Near band", "min": 0.5, "max": 20.0, "step": 0.1,
-		"tip": "How far IN FRONT of the focus point stays sharp; the near blur begins past it. The rig re-derives the actual focus distances every frame from the live camera distance, which is why those are not knobs -- static ones drifted the board into the near blur on a close zoom."},
-	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_far", "label": "Far band", "min": 0.5, "max": 20.0, "step": 0.1,
-		"tip": "The same, BEHIND the focus point: how far back stays sharp before the far blur begins. Narrow both bands for the strongest miniature effect."},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_amount", "label": "Blur amount", "min": 0.0, "max": 0.5, "step": 0.005,
-		"tip": "How strong the blur gets once a pixel is outside the sharp band. The headline tilt-shift / miniature-diorama dial, and the one most worth sweeping slowly."},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_enabled", "label": "Near blur",
-		"tip": "Whether anything CLOSER than the sharp band blurs at all. Off is worth trying -- near blur is the half most likely to read as a smeared foreground rather than as depth."},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_transition", "label": "Near transition", "min": 0.1, "max": 20.0, "step": 0.1,
-		"tip": "How gradually the near blur ramps in. Small values give a hard edge where sharp becomes blurred; large values fade it in over distance."},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_enabled", "label": "Far blur",
-		"tip": "Whether anything BEYOND the sharp band blurs at all. This is the half that sells the diorama, by making the far edge of the board read as distant."},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_transition", "label": "Far transition", "min": 0.1, "max": 20.0, "step": 0.1,
-		"tip": "How gradually the far blur ramps in. Too abrupt and you can see the band's edge crossing the board as a line."},
-
-	# --- Board markup ---
-	# fill_lift and lift_step raise every ground marker together, arrows included. A lift the
-	# ARROWS own alone (#227) needs its own export on BoardOverlays -- not in this slice.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001,
-		"tip": "How far every ground marker floats above the tile's top face. Enough to beat z-fighting (the flickering where two surfaces share a plane) and no more -- too much and the markup visibly hovers."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005,
-		"tip": "Extra lift per sort layer, so stacked markers never land on exactly the same plane and fight. Also what keeps path arrows drawing over the move fill rather than through it."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005,
-		"tip": "Length of each arm of the corner bracket that marks the hovered cell. Short arms read as corner ticks; long ones close into a full box."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001,
-		"tip": "How chunky the hover bracket's arms are. Thin reads precise, thick reads legible at a distance."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
-		"tip": "Size of the whole hover bracket relative to one cell. Just above 1 makes it sit proud of the tile edge so it is not swallowed by the tile art."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
-		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
-		"tip": "How high a selection icon floats above the cell it marks. High enough to clear the unit standing there, low enough not to read as belonging to the cell behind."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
-		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
-
-	# --- Effects ---
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How high the fire billboard's centre sits above a burning tile. Raising it makes fire read as standing up off the ground rather than lying on it."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01,
-		"tip": "Width of the fire billboard in world units, where 1.0 is exactly one cell across."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01,
-		"tip": "Height of the fire billboard in world units. Taller than wide reads as a flame; square reads as a scorch."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
-		"tip": "Gap between the base of the flame and the tile surface. A small gap stops the flame z-fighting the ground it stands on; too large and the fire floats."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",
-		"tip": "Whether the flame writes into the depth buffer. On, it occludes what is behind it correctly but can cut a hard edge against overlapping sprites; off, it always draws as a soft overlay and never clips."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05,
-		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
-		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "block_height_scale", "label": "Prop block height", "min": 0.2, "max": 2.5, "step": 0.01,
-		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
-]
-
-# Board-markup colours (#212 slice 2). A DECLARED second table rather than a widening of KNOBS:
-# those entries address a property path through get_indexed/set_indexed, these address a LAYER
-# through an accessor pair, and one table meaning both would hide the difference that matters.
+# Board-markup colours (#212 slice 2). A DECLARED second table rather than a widening of KNOBS,
+# and it stays HERE rather than moving with the rest: these address a LAYER through an accessor
+# pair rather than a property path, presets never touch them, and only this panel tunes them.
 #
 # Which layers appear here is measured, not chosen. `set_layer_modulate` REPLACES a layer's albedo,
 # so any layer something already drives per frame would take a knob that silently reverts -- the
@@ -234,51 +68,12 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Effects": "Effects",
 }
 
-# --- Presets (#253 part 1) ---------------------------------------------------------------
-
-const PRESET_DIR := "res://Resources/LookPresets/"
-const AUTHORED_ENTRY := "(authored scene)"   # dropdown row 0: the way back to Battle3D.tscn
-
-# A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
-# unless it is named here; LAYER_KNOBS is out wholesale, so a preset never touches board-markup
-# colour. Excluded for three separate reasons, all the same rule -- a MISSION must not be able to
-# change these, because they are things the player learns once and keeps:
-#   * camera HANDLING -- how the camera drags, not how the board is framed. Pitch/FOV/opening
-#     shot/fit margin ARE framing and stay in.
-#   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
-#   * the brush ghost -- dev chrome; players never see it.
-#   * PROP GEOMETRY -- prop block height is an art convention matched to the tile art once, the
-#     same family as icon pixel size; the same authored block reading taller in one mission than
-#     another is world construction drifting, not mood. Wanting it PER OBJECT is #272.
-# The default is IN: a knob added later joins presets unless someone lists it here, which is right
-# for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
-# a renamed property fails loudly instead of silently un-excluding itself. #264's block_height_scale
-# is what proved the default has teeth -- it self-joined presets and had to be ruled on.
-const PRESET_EXCLUDED: Array[String] = [
-	"CameraRig|min_distance",
-	"CameraRig|zoom_step",
-	"CameraRig|smoothing",
-	"CameraRig|pan_speed",
-	"CameraRig|orbit_sensitivity",
-	"CameraRig|pan_margin_cells",
-	"CameraRig|zoom_out_slack",
-	"BoardOverlays|fill_lift",
-	"BoardOverlays|lift_step",
-	"BoardOverlays|bracket_arm",
-	"BoardOverlays|bracket_thickness",
-	"BoardOverlays|bracket_scale",
-	"BoardOverlays|invalid_bracket_color",
-	"BoardOverlays|billboard_lift",
-	"BoardOverlays|billboard_pixel_size",
-	"BoardMirror|brush_ghost_alpha",
-	"BoardMirror|block_height_scale",
-]
-
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
-var _authored: Array = []        # the scene's own value per KNOBS index, read once on attach
-var _baseline: Array = []        # what Reset returns to: _authored, or a loaded preset over it
+var _authored: Array = []        # the SCENE's own value per KNOBS index, read once on attach.
+                                 # Only Copy Values reads it now -- its lines paste into the scene.
+var _baseline: Array = []        # what Reset returns to: the scene, or whatever was last applied
 var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index (presets never touch these)
-var _loaded_preset := ""         # dropdown-relative name; "" = the authored scene
+var _loaded_preset := ""         # dropdown-relative name; "" = nothing loaded (default or scene)
 var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
@@ -295,7 +90,10 @@ func _ready() -> void:
 		"Copy every value moved off the SCENE's authored setting to the clipboard, as paste-ready\nGDScript. Always measured against Battle3D.tscn, never against a loaded preset -- these lines\nare what you paste INTO the scene, so a preset-relative diff would not reproduce what you see.",
 		_on_copy_pressed))
 	buttons.add_child(_button("Reset",
-		"Put every knob back to the loaded preset, or to the scene's authored values when no preset\nis loaded", _on_reset_pressed))
+		"Put every knob back to whatever was last applied -- the loaded preset, the default, or the\nscene's own values if neither", _on_reset_pressed))
+	buttons.add_child(_button("Default",
+		"Load the default look -- what every board falls back to, and what a mission gets when it\nnames no preset. This is the way back; Reset returns to whatever you last loaded.",
+		_on_default_pressed))
 	buttons.add_child(_button("Re-fit camera",
 		"Pitch and FOV feed the framing maths, which only runs on a board load -- press this after moving either",
 		_on_refit_pressed))
@@ -326,7 +124,7 @@ func _ready() -> void:
 func attach_host(host: Node3D) -> void:
 	_host = host
 	_authored.clear()
-	for knob: Dictionary in KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		_authored.append(read(knob))   # authored by definition: nothing has moved one yet
 	_baseline = _authored.duplicate()  # no preset loaded yet, so Reset means "back to the scene"
 	_layer_baseline.clear()
@@ -399,27 +197,19 @@ func has_host() -> bool:
 
 # --- Reading and writing a knob ---------------------------------------------------------
 
+# Thin binds over LookKnobs' statics, closing over this tab's own _host. NOT a second answer --
+# the table and the property access both live there; these only save every call site passing it.
+
 func target_of(knob: Dictionary) -> Node:
-	if _host == null:
-		return null
-	var path: String = knob["node"]
-	if path == ".":
-		return _host
-	return _host.get_node_or_null(NodePath(path))
+	return LookKnobs.target_of(_host, knob)
 
 
 func read(knob: Dictionary) -> Variant:
-	var target := target_of(knob)
-	if target == null:
-		return null
-	return target.get_indexed(NodePath(knob["prop"]))
+	return LookKnobs.read(_host, knob)
 
 
 func write(knob: Dictionary, value: Variant) -> void:
-	var target := target_of(knob)
-	if target == null:
-		return
-	target.set_indexed(NodePath(knob["prop"]), value)
+	LookKnobs.write(_host, knob, value)
 
 
 # What Reset returns to -- the loaded preset if there is one, else the authored scene.
@@ -469,7 +259,7 @@ func _rebuild() -> void:
 			"No 3D host attached - the flat 2D game has no look stack to tune.")
 		return
 	var group := ""
-	for knob: Dictionary in KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		var knob_group: String = knob["group"]
 		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
@@ -561,93 +351,26 @@ func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
 
 # --- Presets ----------------------------------------------------------------------------
 
-# The key a preset stores a knob under. DERIVED from what already makes a row unique, so there is
-# no extra table column to keep in step -- and deliberately not the label, which reworded twice
-# while this panel was being built. A preset stores key -> value and NEVER the property path:
-# KNOBS is the one answer to "which property is Sun energy", so a path in a preset file would be a
-# second one, and renaming a property would mean editing every preset instead of one table row.
-static func preset_key(knob: Dictionary) -> String:
-	return "%s|%s" % [knob["node"], knob["prop"]]
-
-
-static func preset_knobs() -> Array[Dictionary]:
-	var wanted: Array[Dictionary] = []
-	for knob: Dictionary in KNOBS:
-		if not PRESET_EXCLUDED.has(preset_key(knob)):
-			wanted.append(knob)
-	return wanted
-
-
-static func preset_path(preset_name: String) -> String:
-	return "%s%s.tres" % [PRESET_DIR, preset_name]
-
-
-# ResourceDir, never DirAccess: a source-extension filter matches nothing in an exported build
-# (#141). Display names, i.e. what the dropdown shows.
-static func saved_presets() -> Array[String]:
-	var names: Array[String] = []
-	for file: String in ResourceDir.files_with_extension(PRESET_DIR, ".tres"):
-		names.append(file.trim_suffix(".tres"))
-	return names
-
+# Identity, capture and apply all live on LookKnobs now (#253 part 2) -- a mission carries a look,
+# so the shipping path can no longer route through a dev tab. What is left here is the SURFACE.
 
 func loaded_preset() -> String:
 	return _loaded_preset
 
 
-# Every in-scope knob, always -- a preset is self-contained, so re-tuning Battle3D.tscn later can
-# never silently move a saved mood (dev call). The cost is the twin: a preset saved today does not
-# mention a knob added tomorrow, which apply_preset reports rather than hiding.
 func capture_preset(preset_name: String) -> LookPreset:
-	var preset := LookPreset.new()
-	preset.preset_name = preset_name
-	if _host == null:
-		return preset
-	for knob: Dictionary in preset_knobs():
-		var value: Variant = read(knob)
-		if typeof(value) != TYPE_NIL:
-			preset.values[preset_key(knob)] = value
-	return preset
+	return LookKnobs.capture(_host, preset_name)
 
 
-# Returns {"missing": Array[String] of knob labels, "unknown": Array[String] of dead keys} so the
-# caller can SAY both. A knob the preset predates keeps its authored value; a saved key that no
-# longer matches an in-scope knob is skipped. Neither is silent: a preset quietly rendering with
-# whatever the scene happens to hold is the failure this reports its way out of.
+# The PANEL's half of applying. LookKnobs does the writing and the reporting (including falling a
+# knob the preset predates back to the default, and re-fitting the camera); this keeps the baseline
+# in step so Reset returns to whatever was just loaded, and redraws every row off it.
 func apply_preset(preset: LookPreset) -> Dictionary:
-	var missing: Array[String] = []
-	var unknown: Array[String] = []
-	if _host == null or preset == null:
-		return {"missing": missing, "unknown": unknown}
-	var applied := {}
-	_baseline = _authored.duplicate()
-	for i in KNOBS.size():
-		var knob: Dictionary = KNOBS[i]
-		var key := preset_key(knob)
-		if PRESET_EXCLUDED.has(key):
-			continue
-		if not preset.values.has(key):
-			missing.append(knob["label"])
-			# WRITTEN back to authored, not merely left alone: loading a preset has to land on the
-			# same look whatever was on screen first, or preset B silently inherits preset A's
-			# value for every knob B predates.
-			var authored: Variant = authored_of(i)
-			if typeof(authored) != TYPE_NIL:
-				write(knob, authored)
-			continue
-		applied[key] = true
-		write(knob, preset.values[key])
-		# Read BACK: the baseline must be what the property ACCEPTED, not what was asked for, or
-		# Reset chases a value the engine never stored and every knob reads as permanently moved.
-		_baseline[i] = read(knob)
-	for key: String in preset.values:
-		if not applied.has(key):
-			unknown.append(key)
-	# Pitch and FOV feed framing maths that only re-runs on a board load -- the same reason the
-	# Re-fit button exists. Without this a loaded preset frames the board with the old camera.
-	_host.fit_camera()
-	_rebuild()
-	return {"missing": missing, "unknown": unknown}
+	var report := LookKnobs.apply(_host, preset)
+	if _host != null and preset != null:
+		_baseline = _live_values()   # what the properties ACCEPTED, never what was asked for
+		_rebuild()
+	return report
 
 
 func _build_preset_row() -> void:
@@ -683,28 +406,22 @@ func refresh_preset_dropdown(select_name := "") -> void:
 	if select_name == "":
 		select_name = DevWidgets.selected_name(_preset_dropdown)
 	_preset_dropdown.clear()
-	_preset_dropdown.add_item(AUTHORED_ENTRY)
-	for preset_name: String in saved_presets():
+	for preset_name: String in LookKnobs.saved_presets():
 		_preset_dropdown.add_item(preset_name)
 	# add_item auto-selects index 0 -- force the match rather than inheriting it, or a deleted
-	# preset leaves the selection silently pointing at the authored row.
+	# preset leaves the selection silently pointing at whatever sorts first. Every row is a FILE
+	# now that the authored row is gone (#253 part 2 gave the way back its own button), so nothing
+	# may fall back to index 0: row 0 is a write target Update and Delete would aim at.
 	_preset_dropdown.select(-1)
 	for i in _preset_dropdown.item_count:
 		if _preset_dropdown.get_item_text(i) == select_name:
 			_preset_dropdown.select(i)
 			break
-	if _preset_dropdown.selected < 0:
-		# Falling back to row 0 is safe here and only here: the authored row is not a FILE, so
-		# _refresh_preset_buttons reads it as no target and greys both Update and Delete. That is
-		# the whole reason the auto-select trap bites elsewhere -- there, row 0 is a write target.
-		_preset_dropdown.select(0)
 	_refresh_preset_buttons()
 
 
 func _refresh_preset_buttons() -> void:
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	if target == AUTHORED_ENTRY:
-		target = ""   # not a file: nothing to update, nothing to delete
 	DevWidgets.refresh_update_button(_update_button, target, "preset", update_block_reason())
 	DevWidgets.refresh_delete_button(_delete_button, target, "preset")
 
@@ -714,7 +431,7 @@ func _refresh_preset_buttons() -> void:
 # with a look you were never looking at.
 func update_block_reason() -> String:
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	if target == "" or target == AUTHORED_ENTRY:
+	if target == "":
 		return ""
 	if target != _loaded_preset:
 		return "Load '%s' before updating it -- Update saves the live look back over its own file" % target
@@ -725,13 +442,11 @@ func _on_load_pressed() -> void:
 	if _host == null:
 		return
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	if target == "" or target == AUTHORED_ENTRY:
-		_load_authored()
+	if target == "":
 		return
-	var preset := load(preset_path(target)) as LookPreset
+	var preset := LookKnobs.resolve(target)
 	if preset == null:
-		_status.text = "Could not load preset '%s'" % target
-		push_error("LookTool: preset failed to load: %s" % preset_path(target))
+		_status.text = "Could not load preset '%s', and the default is missing too" % target
 		return
 	var report := apply_preset(preset)
 	_loaded_preset = target
@@ -739,14 +454,22 @@ func _on_load_pressed() -> void:
 	_status.text = _load_report(target, report)
 
 
-# The way back to Battle3D.tscn's own look, and the reason the dropdown has a row 0: once Reset
-# means "back to the loaded preset", the authored scene is otherwise unreachable.
-func _load_authored() -> void:
-	_baseline = _authored.duplicate()
+# The way back, and the ONE way back (dev, 2026-08-15): Reset returns to the loaded preset, so
+# without this the fallback look would be unreachable from the panel. It replaced an "(authored
+# scene)" dropdown row that did the same thing -- once a mission carries a look, Battle3D.tscn's
+# inline values stop being the truth, so two affordances would have been two names for one idea.
+func _on_default_pressed() -> void:
+	if _host == null:
+		return
+	var preset := LookKnobs.default_preset()
+	if preset == null:
+		_status.text = "The default look is missing from %s." % LookKnobs.DEFAULT_PATH
+		return
+	apply_preset(preset)
 	_loaded_preset = ""
-	_on_reset_pressed()
+	_preset_dropdown.select(-1)
 	_refresh_preset_buttons()
-	_status.text = "Loaded the scene's authored look. Reset now returns here."
+	_status.text = "Loaded the default look. Reset now returns here."
 
 
 func _load_report(target: String, report: Dictionary) -> String:
@@ -775,24 +498,21 @@ func _on_save_as_pressed() -> void:
 	# Flat folder, so no allow_slash: a '/' would land the file where the scan never looks (#168).
 	if DevWidgets.refuse_illegal_name(entered, "preset", _status):
 		return
-	if entered == AUTHORED_ENTRY:
-		_status.text = "'%s' is the dropdown's own name for the scene - pick another" % AUTHORED_ENTRY
+	if DevWidgets.refuse_existing_file(LookKnobs.preset_path(entered), "preset", _status):
 		return
-	if DevWidgets.refuse_existing_file(preset_path(entered), "preset", _status):
-		return
-	if not DevWidgets.save_over(capture_preset(entered), preset_path(entered), _status):
+	if not DevWidgets.save_over(capture_preset(entered), LookKnobs.preset_path(entered), _status):
 		return
 	# Saving is also loading: the look on screen IS this preset now, so Reset should return to it.
 	_baseline = _live_values()
 	_loaded_preset = entered
 	_preset_name_input.text = ""
 	refresh_preset_dropdown(entered)
-	_status.text = "Saved preset '%s' (%d knobs). Reset now returns here." % [entered, preset_knobs().size()]
+	_status.text = "Saved preset '%s' (%d knobs). Reset now returns here." % [entered, LookKnobs.preset_knobs().size()]
 
 
 func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	if target == "" or target == AUTHORED_ENTRY:
+	if target == "":
 		return
 	# The handler is the real gate; the greyed button is only its surface (#166 shape).
 	var reason := update_block_reason()
@@ -806,37 +526,37 @@ func _on_update_pressed() -> void:
 
 
 func _update_confirmed(target: String) -> void:
-	if not DevWidgets.save_over(capture_preset(target), preset_path(target), _status):
+	if not DevWidgets.save_over(capture_preset(target), LookKnobs.preset_path(target), _status):
 		return
 	_baseline = _live_values()   # the file now says what is on screen, so Reset must too
-	_status.text = "Updated preset '%s' (%d knobs)." % [target, preset_knobs().size()]
+	_status.text = "Updated preset '%s' (%d knobs)." % [target, LookKnobs.preset_knobs().size()]
 
 
 func _on_delete_pressed() -> void:
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	if target == "" or target == AUTHORED_ENTRY:
+	if target == "":
 		return
 	DevWidgets.confirm_delete(self, "preset '%s'" % target, func() -> void: _delete_confirmed(target))
 
 
 func _delete_confirmed(target: String) -> void:
-	if not DevWidgets.delete_saved_file(preset_path(target), "preset", _status):
+	if not DevWidgets.delete_saved_file(LookKnobs.preset_path(target), "preset", _status):
 		return
 	if _loaded_preset == target:
-		# The look on screen is untouched -- only its file is gone. Say so, and hand Reset back to
-		# the scene rather than leaving it pointing at a preset that no longer exists.
-		_baseline = _authored.duplicate()
+		# The look on screen is untouched -- only its file is gone. Reset holds it rather than
+		# snapping anywhere, so deleting a file never also changes what you are looking at.
+		_baseline = _live_values()
 		_loaded_preset = ""
-		_status.text = "Deleted preset '%s'. The look on screen is unchanged; Reset now returns to the authored scene." % target
+		_status.text = "Deleted preset '%s'. The look on screen is unchanged; press Default to leave it." % target
 	refresh_preset_dropdown()
 
 
-# The live value of every knob, per KNOBS index -- the baseline a just-saved preset establishes.
+# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved preset establishes.
 func _live_values() -> Array:
 	var values: Array = _authored.duplicate()
-	for i in KNOBS.size():
-		if not PRESET_EXCLUDED.has(preset_key(KNOBS[i])):
-			values[i] = read(KNOBS[i])
+	for i in LookKnobs.KNOBS.size():
+		if not LookKnobs.PRESET_EXCLUDED.has(LookKnobs.preset_key(LookKnobs.KNOBS[i])):
+			values[i] = read(LookKnobs.KNOBS[i])
 	return values
 
 
@@ -860,10 +580,10 @@ func _on_copy_pressed() -> void:
 func _on_reset_pressed() -> void:
 	if _host == null:
 		return
-	for i in KNOBS.size():
+	for i in LookKnobs.KNOBS.size():
 		var authored: Variant = baseline_of(i)
 		if typeof(authored) != TYPE_NIL:
-			write(KNOBS[i], authored)
+			write(LookKnobs.KNOBS[i], authored)
 	for i in LAYER_KNOBS.size():
 		var authored_color: Variant = layer_baseline_of(i)
 		if typeof(authored_color) == TYPE_COLOR:
@@ -889,18 +609,18 @@ func _on_refit_pressed() -> void:
 # .tscn, and it also collapses the x and y knobs into the single line they share.
 func changed_values() -> Dictionary:
 	var groups := {}
-	for i in KNOBS.size():
-		var knob: Dictionary = KNOBS[i]
+	for i in LookKnobs.KNOBS.size():
+		var knob: Dictionary = LookKnobs.KNOBS[i]
 		var live: Variant = read(knob)
 		var authored: Variant = authored_of(i)
-		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or same_value(live, authored):
+		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or LookKnobs.same_value(live, authored):
 			continue
 		_record(groups, _paste_split(knob))
 	for i in LAYER_KNOBS.size():
 		var knob: Dictionary = LAYER_KNOBS[i]
 		var live: Variant = read_layer(knob)
 		var authored: Variant = layer_baseline_of(i)
-		if typeof(live) != TYPE_COLOR or typeof(authored) != TYPE_COLOR or same_value(live, authored):
+		if typeof(live) != TYPE_COLOR or typeof(authored) != TYPE_COLOR or LookKnobs.same_value(live, authored):
 			continue
 		_record(groups, _layer_paste_split(knob, live))
 	return groups
@@ -971,26 +691,6 @@ func _value_count(groups: Dictionary) -> int:
 		var entries: Dictionary = groups[header]
 		total += entries.size()
 	return total
-
-
-# "Has this moved?" -- approximate for floats, because a value written and read straight back is
-# not always bit-identical: engine properties store single-precision, and a euler component
-# round-trips through a basis. Exact compare reported the sun and board pitch as still changed
-# immediately after Reset had put them back, and would do the same to a slider dragged out and
-# returned. Every slider step here is orders of magnitude coarser than these tolerances.
-static func same_value(a: Variant, b: Variant) -> bool:
-	if typeof(a) != typeof(b):
-		return false
-	match typeof(a):
-		TYPE_FLOAT:
-			return is_equal_approx(a, b)
-		TYPE_COLOR:
-			return (a as Color).is_equal_approx(b)
-		TYPE_VECTOR2:
-			return (a as Vector2).is_equal_approx(b)
-		TYPE_VECTOR3:
-			return (a as Vector3).is_equal_approx(b)
-	return a == b
 
 
 static func literal_for(value: Variant) -> String:

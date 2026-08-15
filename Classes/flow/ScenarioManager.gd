@@ -57,6 +57,11 @@ static func display_name(path: String) -> String:
 
 var last_loaded_path := ""
 
+# The look the CURRENT board wears (#253 part 2), by preset name; "" = the default. One store,
+# one writer per path: apply_scenario sets it from the loaded board, clear_board zeroes it, and
+# the dev Scenario tab writes it when you pick one. capture_scenario reads it back out.
+var current_look_preset := ""
+
 # Entries whose unit_data failed to resolve (resource deleted/moved since saving) come back
 # null. Drop them with a push_error instead of letting load_scenario null-deref (#13). Pure +
 # static so it's unit-testable without the game scene.
@@ -123,6 +128,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.zones = game.zone_manager.to_dict()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
+	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.captured_zones = game.mission_controller.captured_zone_names()
 	scenario.contested = game.mission_controller.is_contested()
 
@@ -178,6 +184,10 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)
+	# Set BEFORE board_loaded fires (it is this function's last line), because battle3d reads this
+	# from that signal. The 3D view is the only reader; a flat Main.tscn launch has no host and
+	# correctly applies nothing.
+	current_look_preset = scenario.look_preset
 
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
@@ -267,6 +277,9 @@ func clear_board():
 	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
 	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.
 	last_loaded_path = ""
+	# Same reasoning for the look (#253 part 2): spawn_sandbox() lands here with no ScenarioData,
+	# so without this it would keep wearing the last mission's preset. Empty = the default.
+	current_look_preset = ""
 	# Same seam for AI control (#150): spawn_sandbox() lands here with no ScenarioData, so without
 	# this it would inherit the last mission's flags. A typed local, not a bare [] -- `game` is
 	# untyped, and a literal passed through it is not coerced to the typed parameter.

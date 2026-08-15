@@ -25,6 +25,13 @@ class_name ScenarioData
 									 # reads an unpainted declared objective as PENDING, never NONE).
 @export var objectives: Array[MissionRules.Objective] = []   # empty = plain rout map
 
+# Which LookPreset this board wears (#253 part 2). A NAME, never a LookPreset reference, for two
+# load-bearing reasons: a dangling ext_resource can fail the WHOLE scenario load rather than
+# degrade, so "the preset was deleted -> fall back to the default" is only implementable soft; and
+# a Resource field risks EMBEDDING the preset into the scenario on save, the trap #177 hit with
+# unit_data. Empty = the default look. Resolved by LookKnobs.resolve, applied by battle3d.
+@export var look_preset := ""
+
 # Which factions the computer plays on this board (#150). Empty = every faction is manual, which
 # is the hotseat/dev-scratch default; an authored mission lists its ENEMY here or the player is
 # handed both sides. Applied exhaustively on load via AIController.set_ai_factions, so a board
