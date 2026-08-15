@@ -1,0 +1,386 @@
+# Verticality — What Elevation Does To The Rules
+
+**Status: DECIDED (rules shape), WORKSHOP (numbers).** Produced by the design session the dev
+requested on 2026-08-13 and ran on 2026-08-14 ([#218](https://github.com/Phaazoid/Godoiosis/issues/218)),
+grill-style. Every ruling below is his; the rationale is recorded because almost none of it is
+re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
+they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
+
+**Canon checked through #218 (2026-08-14).**
+
+The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
+rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
+
+---
+
+## The frame: platforms and ramps, not Z arithmetic
+
+The dev's reframe, and it is the load-bearing one:
+
+> *"for movement costs, we don't need to make a complicated Z value calculation — we just need to
+> think about directionality of platforms/ramps."*
+
+So the board is **contiguous same-height platforms connected by directional ramps**. Nothing in the
+movement rules ever computes `abs(z_a - z_b)`; the only arithmetic is equality and ±1. Everything
+below follows from taking that literally.
+
+### Where height lives
+
+**A per-cell store, serialized into `ScenarioData` beside `terrain_states`.** Two fields per cell:
+`elevation: int` and `ramp_axis: {NONE, NS, EW}`.
+
+**Not tileset custom data.** This was the first proposal and it is wrong: `walkable` / `move_cost` /
+`terrain_type` / `terrain_name` are per-TILE (per atlas coordinate), not per-cell. Elevation as tile
+data would need a distinct grass tile per level — 21 of them for a 20-level map — and a Tile Brush
+palette that explodes. Per-cell also makes painting it a **brush mode** rather than a palette entry,
+which is the shape #174 already established for Tile States.
+
+**Its own store, not folded into `TerrainStateManager`.** That manager holds a *stack of enum states
+with durations*; height is a scalar with different serialization and a different lifecycle. And the
+lifecycle is not guaranteed static forever — [terrain.md](terrain.md)'s "attack the map" list already
+carries **EARTH raising a destructible wall**, so nothing should be built on the assumption that
+height never changes mid-battle.
+
+**`walkable` keeps its own meaning and is not duplicated.** `walkable = false` answers *may anything
+ever stand on this ground* (water, void, solid rock). Elevation answers *at what level does its
+surface sit*. Two questions, two homes. A "wall" is therefore not a new concept — it is a tall column
+with no ramp reaching it.
+
+### A ramp's height is its LOW side [DECIDED]
+
+A 45° ramp's surface spans two levels, but heights are ints and a unit standing on one needs a single
+number for the tolerance check, the shove and the fall. **Low side** — a ramp is a floor tile at level
+N that connects upward to N+1, and the climb happens at its top edge.
+
+Rejected: **high side** (makes a ramp a third kind of thing rather than an annotated floor) and
+**half-steps** (turns every comparison in the system into a float, for very little).
+
+The visual midpoint stays purely presentational and already is — `UnitSprite3D.stand_at` is an
+injectable `Callable` precisely so the walk demo could lower ramp cells without the component knowing
+about boards. `BoardPicker`'s *"ramps count as full blocks"* is ray-intersection geometry, not a
+statement about level, and does not conflict.
+
+---
+
+## Movement
+
+`RulesService.movement_cost(cell, unit, board)` and `can_traverse(cell, unit, board)` are **cell**
+questions. Every verticality movement rule is an **edge** question — *from where?* — so the rules
+engine grows one:
+
+- **`can_stand(cell)`** — unchanged, the existing cell-scoped answer.
+- **`can_step(from, to)`** — new. Same height → ordinary terrain rules. Different height → legal only
+  if one of the two cells is a ramp whose axis matches the step direction and whose high/low sides
+  line up. **Ramps connect exactly ±1**, so a 5-tall cliff is a staircase of five ramp cells or it is
+  not climbable at all.
+
+**Blast radius is small, which is why the movement half is slice 1.** `movement_cost` has exactly ONE
+production caller (`compute_move_range`'s BFS) and it already holds `current_cell`. `can_traverse` has
+three: `movement_cost`, `path_hops` (also a BFS holding the previous cell), and
+`AITactics._standable_firing_cells` — and that third one asks a genuinely cell-shaped question
+("could anyone stand here") and correctly does **not** change.
+
+### No climb cost [DECIDED]
+
+> *"Let's not actually add extra move cost to going up ramps right now."*
+
+So `movement_cost` never *adds* anything for height; the `from` parameter exists purely to answer
+*is this step legal*. The consequence is a good one: **verticality's movement tax is the detour, not
+the climb.** Ramps are routing chokepoints, and a 20-level cliff city costs a mover exactly what flat
+ground costs so long as ramps connect.
+
+`path_hops` is deliberately **unweighted** ("how terrain connects, not what a move costs"), so a ramp
+climb costs 1 hop for cohesion and AI routing regardless of anything added later. That is correct and
+someone will eventually try to "fix" it — it wants a comment at the site.
+
+---
+
+## Squad range — already solved, build nothing
+
+Dev ruling: *"anything that blocks line of sight (1 block tall) should block squad range, like we
+already have it today with unwalkable terrain."*
+
+**This falls out for free.** `SquadCohesion.field` is a `path_hops` walk over `can_traverse` — a
+connectivity field, not a radius. The moment a 1-level step without a ramp is un-steppable, the
+cohesion leash routes around a cliff exactly the way it routes around water today. Same mechanism, not
+a lookalike; zero new code.
+
+---
+
+## Targeting — height buys reach [DECIDED]
+
+**Per-attack, asymmetric vertical tolerance**, checked *alongside* Manhattan distance, never folded
+into it. Each attack authors an up-tolerance and a down-tolerance; a sword might be 1 up / 2 down, a
+carbine tighter, a lobbed shell looser.
+
+### Why it is a separate check and not added to distance
+
+The first proposal was "add the height difference to the distance cost". The weapon roster kills it.
+`ManhattanRangePattern` defaults to `min_range = 1, max_range = 1`, and ChainSword, Kinetic Mace,
+Springspear, TheJaw and Blowback all take the defaults. **The Carbine is `min_range = 2,
+max_range = 2`** — and under the additive model a target one level up at Manhattan 1 becomes
+1 + 1 = 2, landing *inside* [2,2]. The gun could shoot the man on the ledge directly above it but not
+the one further along that same ledge. Mixing vertical distance into a horizontal budget that has a
+*minimum* is incoherent.
+
+The additive model also made *any* height difference a total melee barrier in both directions, since
+almost everything is range 1. The dev rejected that outright: *"I don't like the idea of not being
+able to melee up a slope."*
+
+### Melee is IN the system [DECIDED]
+
+> *"melee can be in the check too. We might want to edit some crazy melee attacks down the line.
+> Let's keep the tool flexible."*
+
+Melee is not exempted — it is authored with tolerances loose enough not to bite. **One mechanism,
+content decides.** This is the same shape as `arc_clearance` below: a number on the attack, never a
+category the code branches on.
+
+### The aim, not the footprint
+
+The vertical check attaches to the **aim** question (`Reach.can_hit_cell_from` /
+`get_all_attack_cells_from`), not the **footprint** question (`get_affected_cells_from`). Whether a
+blast covers a volume is a different question from whether the shot could be placed there. This
+roughly halves how much of `Reach` has to learn about the board — and `Reach` is currently entirely
+board-blind, so that matters.
+
+### What this buys, all from one rule
+
+- **Height advantage** — the high ground covers more than the low ground can answer.
+- **Counter denial, with no new rule.** `SquadManager:384` is the counter-reach check; a unit two
+  levels up with an up-tolerance-1 weapon below it simply generates no counter.
+- **The AI sees it with zero AI-side wiring** — `AITactics` probes candidates through `Reach` and
+  scores through the real `PlanResolver`. That satisfies #117's standing lesson and the integration
+  contract in `CLAUDE.md`.
+- **The "invulnerable ledge camper" becomes an authoring dial**, not a rules problem: a 1-level
+  terrace is crossable by most melee, a 2-level one is a genuine barrier. Same power-gating argument
+  as the shove kill — the level designer sets the frequency.
+
+### `ResolvedOutcome.elevation_delta` — the wire for later [DECIDED, v1]
+
+> *"it is important that we can track *if* attacks are happening up and down slopes so the wiring is
+> there for later."*
+
+The resolver stamps `elevation_delta` (target height − attacker height) onto each `ResolvedOutcome`.
+No behaviour in v1; a future height-damage rule reads it, and the hover card can say "uphill"
+immediately.
+
+**It must be FROZEN, not re-derived** — the same reason `fired_attack` is stamped at declare time.
+Units get shoved mid-pass, so re-deriving the delta later from live positions would give a different
+number than the one previewed, which is a Law #2 break.
+
+This is not pre-building a deferred seam ([`CLAUDE.md`](../../CLAUDE.md)'s counterweight rule): it was
+explicitly requested, it is one field, and it is computed where the resolver already holds the board
+and both cells.
+
+---
+
+## Line of sight — three consumers, three rules [DEFERRED past v1]
+
+Dev ruling: *"I think these are going to be fundamentally different things, and a bit case by case."*
+That is right, and **the mistake to avoid is building one shared LoS service they all call.** The
+question only looks singular:
+
+| Consumer | The question it actually asks | Answered by |
+|---|---|---|
+| **Squad range / cohesion** | can I *walk* there? | `path_hops` — already done, see above |
+| **Flat-trajectory aiming** | is the profile between us clear? | a raycast (deferred) |
+| **Lobbed aiming** | how high can I clear? | the same raycast, different threshold |
+
+### `arc_clearance: int`, replacing the planned `arcs_over_obstacles: bool`
+
+The dev's unification, and it deletes a flag before it was ever built:
+
+> *"shots are just lobs who answer 'how high is too high?' with 1... But we can't lob fireballs over,
+> say, 20 tile high walls."*
+
+So clearance is **a number, not a category**. A gun clears nothing; a fireball clears some; nothing
+clears infinity. No shot/lob classification, no second code path. The boolean is doc-only today
+(named as "planned" in `CLAUDE.md` and [weapons.md](weapons.md)) — **both should now say
+`arc_clearance: int`**, and no code is owed until evaluation lands.
+
+**When it does land, measure clearance against the shot's LINE** (interpolated shooter→target), not
+against the shooter's own height, with an **eye-height offset of 1**. Without the offset, standing on
+a cliff edge blocks you from shooting down past your own ledge — technically defensible, infuriating
+in play.
+
+### The cost of deferring it, stated honestly
+
+**V1 lets a gun shoot through a cliff at a same-level target.** There is no cheap approximation that
+fixes this — a target one level up at three tiles is a *legal* shot, and only a wall between should
+stop it, so it genuinely is a profile raycast. The mitigation is not code:
+
+> **Author v1 maps as terraces and slopes, not as sheer walls with things behind them.**
+
+That belongs in the slice-2 ticket, not in a feel-check surprise.
+
+---
+
+## Falls, shoves and tumbles [DECIDED]
+
+### Two kinds of edge
+
+- **A vertical drop** deals **fall damage**, scaled by height fallen and modified by weight
+  ([#120](https://github.com/Phaazoid/Godoiosis/issues/120)).
+- **A void** — chasm, airship edge, train side — is **removal**, not damage. This is
+  [#116](https://github.com/Phaazoid/Godoiosis/issues/116)'s original kill doctrine, intact.
+
+These reconcile rather than compete: a void is a drop with no floor. The cliff city gets both —
+terraces that hurt, an outer edge that removes you — and #116's power-gating argument survives
+untouched, because the level designer decides which edges exist.
+
+### Shoves
+
+- **You cannot be pushed uphill.** A shove that would climb stops dead. High ground braces you.
+- **Only vertical drops give fall damage.** Slopes never do.
+- **A shove onto a descending ramp becomes a TUMBLE.**
+
+### The tumble rule
+
+> A shove that steps onto a descending ramp keeps descending while the next cell is another ramp
+> continuing down, and ends on the first flat or level cell it can legally enter. A wall, a rise, or
+> an occupied cell stops it where it stands. No fall damage.
+
+```
+shove →
+  F3   R2   R1   R0   F0        one unbroken flight: tumbles F3 → R2 → R1 → R0, ends on F0
+  F3   R2   F2   R1   R0  F0    landing at F2 catches it: ends on F2, never reaches R1
+```
+
+**A landing stops the tumble** (dev: *"it makes visual sense for flat tiles to stop a tumble"*), and
+that is the point — it hands the level designer the dial. One unbroken flight down a cliff-city
+terrace is a genuine hazard; a landing halfway makes it survivable. Verticality's danger stays a
+map-design decision rather than a number anyone has to balance.
+
+Two consequences, both ruled the conservative way:
+
+1. **The tumble is free — it does not spend knockback distance.** Otherwise a 1-knockback weapon
+   could never push anyone down a flight, which is the whole image. Knockback moves its N cells
+   normally; if a step lands on a descending ramp, the slide is a bonus, and the tumble **ends** the
+   shove rather than resuming the remainder.
+2. **The tumble stops at a lip, it does not launch you off it.** If a flight bottoms out at a sheer
+   drop, the unit stops on the lip. Fall damage stays restricted to shoves that push a unit
+   *directly* over a vertical edge, so the two mechanics never compound into a two-stage prediction
+   on day one. Tumble-then-plummet is a fine later addition once the base case has been felt.
+
+Structurally this is cheap: `PlanResolver._resolve_knockback` already publishes `knockback_from` /
+`knockback_to` and threads the new position into the hypo, so a tumble is a longer `knockback_to`. No
+new channel, and the queue preview shows the landing cell for free.
+
+The existing declared placeholder at that call site — a shove asks the CELL-level `is_walkable`, never
+the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — **stays declared and stays
+correct**. Being thrown is not walking.
+
+---
+
+## Map scale and authoring [DECIDED]
+
+**No cap on a map's total Z span.** The dev's archetypes, worth using as authoring guidance:
+
+| Archetype | Span |
+|---|---|
+| Relatively flat | 1–2 levels across the map |
+| More interesting | up to ~5 |
+| Truly vertical (the cliff city) | up to ~20 |
+
+The earlier proposal to cap at 3 was wrong, and instructively so: it conflated a map's **total span**
+with the tallest single **face** that has to be drawn. A 20-level cliff city whose terraces each sit
+1–2 above their neighbour needs the same wall art as a 3-level map. And even face height stops
+mattering once the 2D wall is a **three-piece autotile — top cap / repeatable middle / base** — after
+which any face height is free.
+
+Two costs that *do* scale with span, neither of them art:
+
+1. **2D sprite displacement.** At 20 levels a per-level Y offset stacks into a large visual shift and
+   the sprite-overlap problem gets severe. That offset is a feel value, so it ships as an `@export`
+   knob and tall maps run a compressed one.
+2. **Fall damage.** A 20-level drop should be lethal, which the drop/void split already handles.
+
+---
+
+## The 2D bill
+
+Dev ruling, 2026-08-14 on #218: elevation is **not a 3D-only feature** — the flat 2D view has to
+render and play it, and the cost is *"new sprites to represent height differences."* This sharpens the
+2026-08-12 standing ruling (*"a Z level is just a variable"*, FFT lineage as evidence) from *"2D
+survives elevation"* to *"2D renders elevation, and here is the bill."*
+
+1. **Wall-face autotiles** — three-piece (cap / repeatable middle / base) so face height is free.
+2. **Ramp sprites**, per axis.
+3. **Per-level sprite Y-offset** for units, plus a drop shadow to anchor them. **A knob, not a
+   constant.**
+4. **Hover disambiguation — not art.** Offsetting a sprite upward makes a high unit overlap the cell
+   *above* it, so the 2D board must separate "cell under the mouse" from "sprite under the mouse".
+   That is a `HoverPresenter` change and it is the hidden line item.
+
+---
+
+## Build slices [APPROVED]
+
+Split so each is one reviewable diff and one feel-check, per the bite-sized-parts rule.
+
+1. **Store, `can_step`, 2D face rendering.** Movement only — complete and playable on its own. No
+   climb cost, so `movement_cost` gains the `from` parameter purely for legality.
+2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
+   `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
+3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
+   #116 / #120 interlock.
+
+Then the dev-tools painting ticket (below), then 3D-native authoring — which the dev has said is the
+issue after [#231](https://github.com/Phaazoid/Godoiosis/issues/231), gated on this design landing.
+
+### The preview must keep telling the truth
+
+Axiom 4 and Law #2 apply throughout, and one collision is worth naming now: the attack reach layer is
+documented as inviolable — *"drawn once on entering the mode, never filtered or re-tiled"* — but it
+must not paint cells that cannot be hit. **Both survive if membership never changes and blocked cells
+draw in a distinct state.** Precedent exists: that layer already forks colour red/green off
+`AttackData.heals` without touching membership. "In range but vertically out of reach" is the same
+move.
+
+---
+
+## Dev tools [SCOPED, separate ticket]
+
+Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush places at, with a
+dedicated button to reset it to 0.** Painting textures onto wall faces and other authoring niceties
+come later and do not gate anything.
+
+---
+
+## Deferred, and why each is deferred rather than dropped
+
+- **LoS evaluation** (`arc_clearance`, the profile raycast, the eye-height offset) — the model is
+  decided, only evaluation is deferred. Mitigated by the map-authoring constraint above.
+- **Height → damage.** The dev wants it eventually — *"there might be cases where it can affect damage
+  as well, but we can shelve that for a later grill session."* `elevation_delta` is the wire it will
+  attach to. Likeliest first case: a heavy melee weapon swung downhill, since falling damage already
+  establishes height-as-force in the fiction.
+- **3D blast extent.** *"A fire ball can be lobbed, and create a 3D explosion radius where it lands."*
+  Explicitly **not** part of this arc — recorded as a supported direction. On a heightmap it needs no
+  volume math: it is one more authored number, "the blast covers cells whose surface is within V of
+  the impact point," so a fireball on a terrace does not catch the men on the plateau above.
+- **Terrain interlocks** — water flowing downhill, fire climbing, fog settling in low ground. A rich
+  vein and a separate project; see [terrain.md](terrain.md).
+- **30° two-tile slopes** — a presentation experiment noted on #176. If adopted, traversal and the
+  ramp-height ruling above must be extended to cover them; everything here assumes 45°, one cell per
+  level.
+- **Height-modified LDR / cohesion.** Left as pure connectivity, which already behaves correctly.
+
+---
+
+## Sources & cross-refs
+
+Design session [#218](https://github.com/Phaazoid/Godoiosis/issues/218) (2026-08-14). Code:
+`RulesService` (`movement_cost` / `can_traverse` / `path_hops`), `SquadCohesion`, `Reach`,
+`ManhattanRangePattern`, `PlanResolver._resolve_knockback`, `ScenarioData`, `TerrainStateManager`.
+See [terrain.md](terrain.md) (the tile model and the state store), [weapons.md](weapons.md) (patterns
+as pure geometry, `arc_clearance`), [presentation-effects.md](presentation-effects.md) (the Triangle
+Strategy / FFT reference shelf), [philosophy.md](philosophy.md) (Axioms 3 and 4),
+[resolution-pipeline.md](resolution-pipeline.md) (where `elevation_delta` is stamped), and
+[`CLAUDE.md`](../../CLAUDE.md) (the three Laws, the tuning rule, the version-label rule).
+Related issues: [#116](https://github.com/Phaazoid/Godoiosis/issues/116) (shove/fall),
+[#120](https://github.com/Phaazoid/Godoiosis/issues/120) (weight),
+[#176](https://github.com/Phaazoid/Godoiosis/issues/176) (the board that renders it),
+[#117](https://github.com/Phaazoid/Godoiosis/issues/117) (AI catch-up),
+[#231](https://github.com/Phaazoid/Godoiosis/issues/231) (dev tools in 3D).
