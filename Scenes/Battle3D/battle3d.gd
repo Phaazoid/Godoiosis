@@ -595,9 +595,9 @@ func _sync_brush_bindings() -> void:
 # string would tell exactly that lie again, one release later.
 func _update_help() -> void:
 	var orbit := "RMB" if _rig.orbit_button == MOUSE_BUTTON_RIGHT else "MMB"
-	# The cancel verb is "aim": right-click exits the current mode, it has never touched
-	# the queued orders.
-	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel aim"
+	# Right-click carries two verbs since #228 and the label names both in the order they fire:
+	# it leaves an open aim first, and only from a board at rest does it undo the last order.
+	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel/undo"
 	var space := "SPACE spawn" if game.game_state == game.GameState.DEV_MODE else "SPACE centre"
 	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
 	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]

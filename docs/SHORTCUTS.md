@@ -6,7 +6,7 @@ Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. 
 | Key | Action |
 |-----|--------|
 | Left-click | Select tile / unit; choose menu option; confirm targeting |
-| Right-click | Deselect / cancel current mode; dismiss the action menu |
+| Right-click | Two verbs, mode first ([#228](https://github.com/Phaazoid/Godoiosis/issues/228)): cancel the current mode — an open aim, move pick or target pick — and dismiss the action menu. From a board already at rest it instead **undoes the last order you gave**, one press per order, newest first. A group move undoes whole (it was one decision); hold-position fillers are never what a press takes |
 | W / A / S / D (or arrow keys) | Pan camera (`cam_up`/`cam_down`/`cam_left`/`cam_right`) |
 | Space | Center camera on cursor *(outside dev mode)* |
 
@@ -18,7 +18,7 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 | Key | Action |
 |-----|--------|
 | Left-click | Act on the cell under the pointer (delivered straight to the 2D dispatchers) |
-| Right-click | Cancel the current mode — an open aim or move pick. It does **not** unqueue orders (that is [#228](https://github.com/Phaazoid/Godoiosis/issues/228)), so with no mode open it does nothing |
+| Right-click | Exactly as in the 2D table above — cancel the open mode, or undo the last order from a board at rest ([#228](https://github.com/Phaazoid/Godoiosis/issues/228)). Not a parallel implementation: the picker calls `game._on_right_click`, the same dispatcher, so the two views cannot drift |
 | Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press). While the Tile Brush is armed the brush takes right-click to erase, so orbit falls back to **middle**-drag on its own and the help bar reads whichever is live |
 | Q / E | Snap to the next 90° detent — one press realigns from any angle |
 | Mouse wheel | Zoom (clamped so you cannot pull back past the whole board). While the Tile Brush is armed in **Elevation** mode the brush takes the wheel for its paint level and **Ctrl+wheel** zooms instead ([#285](https://github.com/Phaazoid/Godoiosis/issues/285)) — scoped to that one mode, since the other three never read the wheel. The help bar reads whichever is live |
