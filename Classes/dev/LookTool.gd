@@ -70,7 +70,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
 var _authored: Array = []        # the SCENE's own value per KNOBS index, read once on attach.
-                                 # Only Copy Values reads it now -- its lines paste into the scene.
+								 # Only Copy Values reads it now -- its lines paste into the scene.
 var _baseline: Array = []        # what Reset returns to: the scene, or whatever was last applied
 var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index (presets never touch these)
 var _loaded_preset := ""         # dropdown-relative name; "" = nothing loaded (default or scene)
