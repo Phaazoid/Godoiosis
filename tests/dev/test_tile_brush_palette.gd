@@ -225,17 +225,71 @@ func test_clearing_the_source_hands_the_brush_back_to_the_mouse() -> void:
 	assert_that(game.dev_controller._mouse_cell()).is_equal(by_mouse)
 
 
-func test_the_ghost_intent_is_no_cell_unless_a_preview_is_owed() -> void:
+func test_the_ghost_intent_is_null_unless_a_preview_is_owed() -> void:
 	# What a 3D mirror reads. It has to ask the INTENT and never the 2D ghost's `.visible`:
 	# under a 3D host that field has a second writer meaning "the 2D board draws at all"
 	# (#232/#238), so it reads TRUE on a ghost nobody can see.
-	assert_that(game.dev_controller.brush_ghost_cell()).is_equal(GridUtils.NO_CELL)
+	assert_object(game.dev_controller.brush_ghost()).is_null()
 	_arm_brush()
-	assert_that(game.dev_controller.brush_ghost_cell()).override_failure_message(
-			"armed on TERRAIN and still claiming no cell").is_not_equal(GridUtils.NO_CELL)
+	assert_object(game.dev_controller.brush_ghost()).override_failure_message(
+			"armed on TERRAIN and still claiming no preview").is_not_null()
 	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
-	assert_that(game.dev_controller.brush_ghost_cell()).override_failure_message(
-			"a non-TERRAIN mode still claims a ghost cell").is_equal(GridUtils.NO_CELL)
+	assert_object(game.dev_controller.brush_ghost()).override_failure_message(
+			"ZONE places nothing and still claims a preview").is_null()
+	_brush._set_paint_mode(TileBrushTool.PaintMode.STATE)
+	assert_object(game.dev_controller.brush_ghost()).override_failure_message(
+			"STATE places nothing and still claims a preview").is_null()
+
+
+func test_the_elevation_ghost_previews_the_brushs_level_not_the_cells() -> void:
+	# #285's core: the answer is per MODE now, because an elevation preview cannot be described
+	# by a bare cell -- the level is the BRUSH's, and the art comes off the grid rather than the
+	# tile-pick layer that elevation never writes to.
+	_arm_brush()
+	var cell: Vector2i = game.dev_controller._mouse_cell()
+	game.grid.set_cell(cell, _brush.selected_source, _brush.selected_tile)
+	game.board_heights.set_cell(cell, 1)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	_brush.set_elevation(4)
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(Terrain.RampRise.EAST))
+
+	var ghost: BrushGhost = game.dev_controller.brush_ghost()
+
+	assert_object(ghost).is_not_null()
+	assert_int(ghost.level).override_failure_message(
+			"the ghost previewed the cell's CURRENT height instead of the brush's").is_equal(4)
+	assert_int(ghost.rise).is_equal(Terrain.RampRise.EAST)
+	assert_object(ghost.source).override_failure_message(
+			"elevation keeps the art the cell already has, so the source is the grid").is_same(game.grid)
+
+
+func test_a_groundless_cell_owes_no_elevation_ghost() -> void:
+	# The 3D picker answers over holes on purpose (#231's plane fallback) and _paint_elevation
+	# refuses them (#245's rule), so the click is a silent no-op. The ghost says so in advance.
+	_arm_brush()
+	var cell: Vector2i = game.dev_controller._mouse_cell()
+	game.grid.erase_cell(cell)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	_brush.set_elevation(2)
+
+	assert_object(game.dev_controller.brush_ghost()).override_failure_message(
+			"previewed a paint that _paint_elevation would refuse").is_null()
+
+
+func test_the_flat_view_draws_no_ghost_for_elevation() -> void:
+	# One description, each renderer drawing the half it can: 2D holds a TILE layer, and a height
+	# is not a tile. Leaving the old ghost on screen would preview the wrong thing entirely.
+	_arm_brush()
+	await await_idle_frame()
+	assert_bool(_ghost().visible).is_true()
+
+	var cell: Vector2i = game.dev_controller._mouse_cell()
+	game.grid.set_cell(cell, _brush.selected_source, _brush.selected_tile)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	await await_idle_frame()
+
+	assert_bool(_ghost().visible).override_failure_message(
+			"the 2D tile ghost stayed up in ELEVATION mode").is_false()
 
 
 func test_an_unknown_kind_number_warns_instead_of_crashing() -> void:

@@ -400,16 +400,18 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
 	var board: GridMap = _scene.get_node("Board")
-	# Compared as FOOTPRINTS — the set of columns, never their heights. The claim here is "the
-	# rebuild ran", and a cell-for-cell compare answered it by hand-listing what the mission happens
-	# to be painted to, so a height-brush stroke reddened a case about the load funnel (it did:
-	# b057f6e). What a column CONTAINS is BoardMirror's business, pinned by test_board_mirror's #273
-	# cases against game.board_heights. column_tops_from is keyed by column, so its keys are the
-	# footprint — the production seam already answers this, and the next assert uses the same call.
+	# COLUMNS, not cells. This case asks whether the mirror is aimed at the NEW board; how tall
+	# each column is belongs to test_board_mirror. It compared raw cells against every cell at
+	# level 0 until 2026-08-15, which silently depended on Level_1 being FLAT -- painting
+	# elevation into it (b057f6e) turned #273's correct multi-cell columns into a red case.
 	var mirrored: Array[Vector2i] = []
-	mirrored.assign(BoardPicker.column_tops_from(board).keys())
+	for cell: Vector3i in board.get_used_cells():
+		var column := BoardSpace.flat(cell)
+		if not mirrored.has(column):
+			mirrored.append(column)
 	mirrored.sort()
-	var expected: Array[Vector2i] = _game.grid.get_used_cells()
+	var expected: Array[Vector2i] = []
+	expected.assign(_game.grid.get_used_cells())
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
@@ -671,3 +673,81 @@ func test_the_dev_overlay_resolves_while_the_game_is_hosted_in_3d() -> void:
 			"game.dev_overlay is null while hosted under Battle3D — the lookup is mount-dependent again").is_not_null()
 	# It really is the one hanging off the hosted Main, not some other tree's.
 	assert_object(overlay).is_same(_scene.get_node("Main/DevOverlay"))
+
+
+# ---- the wheel: brush level vs camera zoom (#285) ----
+#
+# The fourth binding collision in this arc, after RMB and SPACE. battle3d routes the wheel to the
+# brush and RETURNS -- but a bare return does not CONSUME, and the rig reads the wheel in its own
+# _unhandled_input, so one notch did both jobs. These are wire cases on purpose: asserting only
+# that the level moved is exactly the blind spot that let this ship.
+
+func _rig() -> Node3D:
+	return _scene.get_node("CameraRig") as Node3D
+
+
+func _elevation_brush() -> TileBrushTool:
+	_arm_brush()
+	var brush: TileBrushTool = _game.dev_overlay.tile_brush
+	brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	brush.set_elevation(0)
+	return brush
+
+
+# A notch is a press AND a release, the way Godot emits it.
+func _parse_wheel(button: MouseButton, ctrl := false) -> void:
+	var at := Vector2(get_tree().root.size) * 0.5
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = at
+		event.global_position = at
+		event.button_index = button
+		event.pressed = pressed
+		event.ctrl_pressed = ctrl
+		Input.parse_input_event(event)
+
+
+func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void:
+	var brush := _elevation_brush()
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
+	await _pump()
+
+	assert_int(brush.selected_elevation()).override_failure_message(
+			"the notch never reached the brush").is_equal(1)
+	assert_float(_rig()._target_distance).override_failure_message(
+			"the same notch ALSO zoomed the camera: the brush is not suppressing the rig's wheel"
+			).is_equal_approx(zoom_before, 0.001)
+
+
+func test_ctrl_hands_the_notch_back_to_the_camera() -> void:
+	# Zoom needs somewhere to live while the wheel is the level.
+	var brush := _elevation_brush()
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP, true)
+	await _pump()
+
+	assert_int(brush.selected_elevation()).override_failure_message(
+			"Ctrl+wheel moved the brush level as well as the camera").is_equal(0)
+	assert_float(_rig()._target_distance).override_failure_message(
+			"Ctrl+wheel did not zoom").is_less(zoom_before)
+
+
+func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
+	# The consume is scoped to ELEVATION: the other three modes never read the wheel, so
+	# suppressing zoom for them would cost the 3D view its most-used gesture for nothing.
+	_arm_brush()
+	var brush: TileBrushTool = _game.dev_overlay.tile_brush
+	brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
+	await _pump()
+
+	assert_float(_rig()._target_distance).override_failure_message(
+			"an armed TERRAIN brush swallowed the camera's zoom").is_less(zoom_before)

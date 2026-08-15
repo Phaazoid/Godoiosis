@@ -143,7 +143,7 @@ func handle_tile_brush(event) -> void:
 		# scrolling to change the level mid-stroke must not end the stroke. Godot emits a press AND
 		# a release per notch, hence the pressed gate -- otherwise every notch counts twice.
 		if event.button_index == MOUSE_BUTTON_WHEEL_UP or event.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			if event.pressed:
+			if event.pressed and wheel_is_brush_level(event):
 				_nudge_elevation(1 if event.button_index == MOUSE_BUTTON_WHEEL_UP else -1)
 			return
 		if event.button_index == MOUSE_BUTTON_LEFT:
@@ -177,33 +177,41 @@ func _process(_delta: float) -> void:
 func _sync_brush_ghost() -> void:
 	if game == null or game.process_mode == Node.PROCESS_MODE_DISABLED:
 		return   # modal freeze: painting is frozen, the ghost holds with it
-	var cell := brush_ghost_cell()
-	if cell == GridUtils.NO_CELL:
+	var ghost := brush_ghost()
+	# The flat view can only draw a TILE, and only the TERRAIN answer carries a tile pick: an
+	# elevation preview is a HEIGHT, which 2D already reads out as numbers (HeightDebugOverlay).
+	# Not a second answer -- one description, each renderer drawing the half of it it can show.
+	if ghost == null or ghost.source != _brush_ghost:
 		hide_brush_ghost()
 		return
-	update_brush_ghost(cell)
+	update_brush_ghost(ghost.cell)
 
 
-# The ghost's INTENT, for ANY renderer: the cell the brush would paint, or NO_CELL when it
-# would show nothing. A 3D mirror reads THIS and never the 2D ghost's `.visible` -- under a 3D
-# host that field has a second writer and a second meaning ("the 2D board draws at all"), which
-# is the #232/#238 trap exactly. Ask the question, not the field it happens to live in.
-func brush_ghost_cell() -> Vector2i:
+# The ghost's INTENT, for ANY renderer: what the next click would PRODUCE, or null when it would
+# show nothing. A 3D mirror reads THIS and never the 2D ghost's `.visible` -- under a 3D host that
+# field has a second writer and a second meaning ("the 2D board draws at all"), which is the
+# #232/#238 trap exactly. Ask the question, not the field it happens to live in.
+#
+# Answered PER MODE (#285). It used to be one TERRAIN-shaped predicate returning a bare cell, and
+# an elevation preview cannot be described that way -- the level is the brush's, not the cell's,
+# and the art comes off the grid rather than the tile-pick layer. Modes that place nothing (ZONE,
+# STATE) still answer null.
+func brush_ghost() -> BrushGhost:
 	if not brush_armed():
-		return GridUtils.NO_CELL
-	if game.dev_overlay.tile_brush.paint_mode != TileBrushTool.PaintMode.TERRAIN:
-		return GridUtils.NO_CELL
-	return _mouse_cell()
-
-
-# What that preview would BE -- handed over as the LAYER, not as a decoded property of it. The
-# ghost layer already holds the brush's pick as a REAL placed tile, so a 3D twin resolves it with
-# the same call it uses on the real grid and the two cannot drift into disagreeing about what is
-# being painted. It returned the Kind until #250, which was one decode too early: the 3D board
-# now draws a cell from its ATLAS COORDS, and a kind-shaped answer could no longer describe the
-# block that paint would produce.
-func brush_ghost_layer() -> TileMapLayer:
-	return _brush_ghost
+		return null
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	var cell := _mouse_cell()
+	match brush.paint_mode:
+		TileBrushTool.PaintMode.TERRAIN:
+			return BrushGhost.make(cell, game.board_heights.elevation_at(cell), _brush_ghost)
+		TileBrushTool.PaintMode.ELEVATION:
+			# Elevation goes with the ground (#245/#260), so a groundless cell previews NOTHING --
+			# the 3D picker answers over holes on purpose, and _paint_elevation refuses them. The
+			# ghost says so before the click instead of letting it no-op silently.
+			if not GridUtils.has_ground(game.grid, cell):
+				return null
+			return BrushGhost.make(cell, brush.selected_elevation(), game.grid, brush.selected_rise())
+	return null
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
 # multi-cell tile (the lantern) previews exactly as set_cell will draw it. Child of the grid --
@@ -246,6 +254,24 @@ func _elevation_brush() -> TileBrushTool:
 		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	return brush if brush.paint_mode == TileBrushTool.PaintMode.ELEVATION else null
+
+# Does this wheel notch belong to the BRUSH rather than the camera? (#285) ONE answer, because a
+# 3D host has to suppress its own zoom on exactly the notches that move the level -- ask twice and
+# a notch both raises the brush and zooms the view, which is what shipped before this existed.
+# Ctrl hands the notch back to the camera: in ELEVATION mode the wheel is the level, so zoom needs
+# somewhere to live. Modes that never read the wheel (TERRAIN/ZONE/STATE) leave zoom alone.
+func wheel_is_brush_level(event: InputEventMouseButton) -> bool:
+	if not elevation_brush_live() or event.ctrl_pressed:
+		return false
+	return event.button_index == MOUSE_BUTTON_WHEEL_UP \
+			or event.button_index == MOUSE_BUTTON_WHEEL_DOWN
+
+
+# The same fact asked per FRAME rather than per event: a 3D host has to stand its camera's own
+# wheel-zoom down declaratively, because its rig is a child node and sees the event first.
+func elevation_brush_live() -> bool:
+	return _elevation_brush() != null
+
 
 # The scroll wheel sets the level the elevation brush places at (#260).
 func _nudge_elevation(delta: int) -> void:
