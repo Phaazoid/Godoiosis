@@ -254,14 +254,15 @@ func _gen_meshlib() -> int:
 	return 0
 
 
-# One block per real tileset tile, top face wearing that tile's own art. Returns how
-# many items were added, or -1 on failure.
+# One block per real tileset tile, top face wearing that tile's own art -- except a stands_up
+# tile, whose top face is the bare ground it stands on (#255). Returns how many items were
+# added, or -1 on failure.
 #
-# Two classes are SKIPPED deliberately, and BoardMirror falls back to the Kind blocks
-# for both: a multi-cell tile (the 1x2 lantern, the 3x3s) has art taller than a cell
-# and cannot go onto a 1x1 top face without squashing it, and a non-zero alternative
-# is a flip/rotate variant. Both are prop-shaped -- they get real form when props
-# stand up, not a squashed top face now.
+# Two classes are SKIPPED entirely, and BoardMirror falls back to the Kind blocks for both:
+# a multi-cell tile (the 1x2 lantern, the 3x3s) has art taller than a cell and cannot go onto
+# a 1x1 top face without squashing it, and a non-zero alternative is a flip/rotate variant.
+# The multi-cell ones are all props, so their art DOES reach the board -- on a billboard,
+# which has no 1x1 constraint. This loop only decides what the GROUND under them looks like.
 func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Material,
 		bases: Dictionary[Terrain.Kind, Texture2D], default_base: Texture2D) -> int:
 	var ts := load(TILESET_PATH) as TileSet
@@ -299,14 +300,20 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 				continue
 			var region := atlas.get_tile_texture_region(coords, 0)
-			var kind := GridUtils.terrain_kind_of(atlas.get_tile_data(coords, 0))
+			var data := atlas.get_tile_data(coords, 0)
+			var kind := GridUtils.terrain_kind_of(data)
 			if not base_cache.has(kind):
 				var base_tex: Texture2D = bases.get(kind, default_base)
 				var base_img := _rgba(base_tex)
 				base_img.resize(region.size.x, region.size.y, Image.INTERPOLATE_NEAREST)
 				base_cache[kind] = base_img
 			ground.blit_rect(base_cache[kind], Rect2i(Vector2i.ZERO, region.size), region.position)
-			ground.blend_rect(source_image, region, region.position)
+			# A prop's top face is the ground it STANDS ON, so its art is left off (#255) --
+			# BoardMirror puts that art on a billboard instead, and baking it here as well would
+			# render the tree twice, once flat and once standing.
+			var stands_up := GridUtils.stands_up_of(data)
+			if not stands_up:
+				ground.blend_rect(source_image, region, region.position)
 
 			var top_uv := _uv_rect(region, atlas_size)
 			var side: Material = stone_side if kind == Terrain.Kind.ROCK else dirt_side
@@ -317,8 +324,11 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
 					_block_mesh(atlas_mat, side, top_uv, side_uv))
 			next_id += 1
+			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
+			# and its art never reaches a top face), while an open ground tile is the surprising
+			# case -- it is being based over a kind colour that nobody chose deliberately.
 			var clear := _transparent_fraction(source_image, region)
-			if clear >= HOLE_FRACTION:
+			if not stands_up and clear >= HOLE_FRACTION:
 				translucent.append("%d/%d:%d (%d%%)" % [source_id, coords.x, coords.y, roundi(clear * 100.0)])
 
 		# Embedded in the meshlib rather than written as a PNG: a generated atlas saved to disk
@@ -330,11 +340,10 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 	var added := next_id - FIRST_TILE_ITEM
 	print("Tileset items %d..%d (%d tiles) from %s" % [FIRST_TILE_ITEM, next_id - 1, added, TILESET_PATH])
 	if not translucent.is_empty():
-		# A report, not an error -- but the actionable one. A tile this open is a sprite on an
-		# empty field, so as a top face it cuts a hole straight into the block. Those are the
-		# props, and props get real form in the stand-up pass; until then they are painted onto
-		# an opaque base below rather than left as holes.
-		print("  mostly-open tiles (%d), based over their kind: %s" % [translucent.size(), ", ".join(translucent)])
+		# A report, not an error. A GROUND tile this open is a sprite on an empty field wearing a
+		# kind colour behind it -- either it wants stands_up ticked, or its base was never chosen.
+		print("  mostly-open GROUND tiles (%d) (candidates for stands_up): %s" \
+				% [translucent.size(), ", ".join(translucent)])
 	return added
 
 

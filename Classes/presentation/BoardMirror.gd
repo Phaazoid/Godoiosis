@@ -17,6 +17,12 @@ class_name BoardMirror
 # for (multi-cell art, flipped alternatives, an atlas newer than the generator run),
 # so a cell can never come out with no block at all.
 #
+# PROPS stand up (#255). A tile whose art depicts an object rather than ground carries
+# `stands_up`, and this mirror gives it a billboarded sprite planted on the cell while
+# the generator bakes that cell's top face as bare ground — so a tree is drawn ONCE,
+# standing, not also lying flat under itself. Same per-cell reconcile as the fire
+# markers, and the lantern borrows the torch's light.
+#
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. Which cells burn is
 # TerrainStateManager.burning_cells — the one enumeration form (Terrain.gd: "no
@@ -65,6 +71,21 @@ const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
 
+# Which props light the board, by the ONE authored naming policy
+# (GridUtils.authored_tile_display_name, so these are its capitalized forms). A SET rather than a
+# colour table: WHICH props glow is content, while what the glow looks like is a feel call and
+# lives in the knobs below. Keyed on the authored name because that is the identity that survives
+# an atlas re-layout — a coordinate would not.
+const LIT_PROPS: PackedStringArray = ["Lantern"]
+
+# The lantern's light (#255, dev ask: "give it light like the torches"). Separate knobs from the
+# flame's on purpose — a steady lamp and a fire are different looks, and one shared number would
+# force whoever tunes the second to un-tune the first.
+@export var prop_light_color := Color(1, 0.8, 0.5)
+@export var prop_light_energy := 1.5
+@export var prop_light_range := 3.5
+@export var prop_light_height := 0.7
+
 var board: GridMap
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
@@ -74,6 +95,14 @@ var sync_passes := 0
 # Keyed by cell, not a flat list: a reconcile has to answer "the marker for X", and the
 # positional array this replaced could only answer it by freeing everything (#149's shape).
 var _fire_markers: Dictionary[Vector2i, Node3D] = {}
+
+# The standing props, keyed by cell — the same reconcile shape as the fire markers. Each node
+# carries the TILE it was built from (PROP_TILE_META), because unlike fire a cell's prop can be
+# REPLACED rather than merely added or removed: painting a rock over a tree leaves the cell in
+# both the old and new wanted-set, and a keyed-by-cell-only reconcile would leave the tree
+# standing forever.
+const PROP_TILE_META := "prop_tile"
+var _props: Dictionary[Vector2i, Node3D] = {}
 
 var _brush_ghost: MeshInstance3D = null
 
@@ -95,12 +124,19 @@ func rebuild(grid: TileMapLayer, burning: Array[Vector2i]) -> void:
 func sync(grid: TileMapLayer) -> void:
 	sync_passes += 1
 	var live: Dictionary[Vector2i, bool] = {}
+	var propped: Dictionary[Vector2i, bool] = {}
 	for cell in grid.get_used_cells():
 		live[cell] = true
 		var item := item_for_cell(grid, cell)
 		var at := BoardSpace.of_flat(cell)
 		if board.get_cell_item(at) != item:
 			board.set_cell_item(at, item)
+		# Props ride the SAME walk rather than a second pass over the same cells — this is the
+		# terrain diff, and whether a cell carries a standing object is a terrain fact.
+		if GridUtils.stands_up_at_cell(grid, cell):
+			propped[cell] = true
+			_reconcile_prop(grid, cell)
+	_free_props_except(propped)
 	# get_used_cells returns a copy, so erasing inside the walk is safe.
 	for cell: Vector3i in board.get_used_cells():
 		if not live.has(BoardSpace.flat(cell)):
@@ -267,10 +303,104 @@ func _make_fire(cell: Vector3i) -> Node3D:
 	flame.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	root.add_child(flame)
 
-	var light := OmniLight3D.new()
-	light.light_color = Color(1, 0.62, 0.3)
-	light.light_energy = flame_light_energy
-	light.omni_range = flame_light_range
-	light.position = Vector3(0, 0.6, 0)
-	root.add_child(light)
+	_add_light(root, Color(1, 0.62, 0.3), flame_light_energy, flame_light_range, 0.6)
 	return root
+
+
+# The one "a thing standing on a cell casts light" recipe — the torch's, now also the lantern's
+# (#255). Only the LIGHT is shared: a flame is a hand-built emissive quad with a knob-driven
+# transparency mode and a prop is a plain Sprite3D, so a common visual builder would have had to
+# change one of them. The values stay each caller's own knobs; what cannot drift is the shape.
+func prop_count() -> int:
+	return _props.size()
+
+
+# The prop standing on a cell, or null. The identity read the reconcile pin needs — a prop
+# rebuilt every frame looks identical through prop_count().
+func prop_at(cell: Vector2i) -> Node3D:
+	return _props.get(cell)
+
+
+# Build the prop this cell wants, or leave the standing one alone when it is already the right
+# tile. The tile comparison is what makes REPLACEMENT work: painting a rock onto a tree keeps the
+# cell in the wanted-set, so a cell-only check would leave the tree standing.
+func _reconcile_prop(grid: TileMapLayer, cell: Vector2i) -> void:
+	var coords: Vector2i = grid.get_cell_atlas_coords(cell)
+	var tile := Vector3i(grid.get_cell_source_id(cell), coords.x, coords.y)
+	var standing: Node3D = _props.get(cell)
+	if standing != null:
+		if standing.get_meta(PROP_TILE_META) == tile:
+			return
+		standing.queue_free()
+		_props.erase(cell)
+	var built := _make_prop(grid, cell)
+	if built == null:
+		return
+	built.set_meta(PROP_TILE_META, tile)
+	_props[cell] = built
+
+
+func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
+	for cell: Vector2i in _props.keys():
+		if not wanted.has(cell):
+			_props[cell].queue_free()
+			_props.erase(cell)
+
+
+# A billboarded sprite of the tile's own art, standing on the cell that paints it.
+func _make_prop(grid: TileMapLayer, cell: Vector2i) -> Node3D:
+	var texture := _prop_texture(grid, cell)
+	if texture == null:
+		return null
+	var root := Node3D.new()
+	add_child(root)
+	root.position = BoardSpace.standing_point(BoardSpace.of_flat(cell))
+
+	var sprite := Sprite3D.new()
+	sprite.texture = texture
+	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# Unit sprites' discipline: cut-out alpha that WRITES DEPTH, so a unit standing behind a tree
+	# sorts correctly in 3D and no render_priority has to be hand-maintained against it.
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+	sprite.shaded = true
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	# Tied to the TILESET's tile size, never to UnitSprite3D.texels_per_unit: a tile is one cell
+	# wide BY DEFINITION, which is what makes a 1x2 lantern two cells tall and what lets a future
+	# 32px sheet drop in without touching this.
+	sprite.pixel_size = 1.0 / float(GridUtils.TILE_SIZE)
+	sprite.layers = BoardOverlays.WORLD_RENDER_LAYER
+	# Pivot at the BASE. A Sprite3D centres on its origin, so lifting it half its own height plants
+	# the bottom edge on the tile instead of burying half the prop in the ground.
+	sprite.offset = Vector2(0, texture.region.size.y * 0.5)
+	root.add_child(sprite)
+
+	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
+		_add_light(root, prop_light_color, prop_light_energy, prop_light_range, prop_light_height)
+	return root
+
+
+# The tile's own art, region-cut from the tileset atlas. Multi-cell art comes through WHOLE — the
+# 1x2 lantern is a 16x32 sprite — which is exactly what a 1x1 top face could not carry, and why
+# the lantern arrives with this pass rather than with 5a's.
+func _prop_texture(grid: TileMapLayer, cell: Vector2i) -> AtlasTexture:
+	var tiles := grid.tile_set
+	if tiles == null:
+		return null
+	var atlas := tiles.get_source(grid.get_cell_source_id(cell)) as TileSetAtlasSource
+	if atlas == null:
+		return null
+	var texture := AtlasTexture.new()
+	texture.atlas = atlas.texture
+	texture.region = Rect2(atlas.get_tile_texture_region(grid.get_cell_atlas_coords(cell), 0))
+	return texture
+
+
+func _add_light(root: Node3D, color: Color, energy: float, omni_range: float, height: float) -> OmniLight3D:
+	var light := OmniLight3D.new()
+	light.light_color = color
+	light.light_energy = energy
+	light.omni_range = omni_range
+	light.position = Vector3(0, height, 0)
+	root.add_child(light)
+	return light
