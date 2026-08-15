@@ -36,9 +36,10 @@ class_name BoardMirror
 #              tile's authored `wall_edges` mask, and the generator bakes that into the tile's OWN
 #              mesh — so nothing here holds a yaw, and a fence is planted by the same
 #              _make_prop_block that plants a crate.
-#   TUFT       a billboard a FRACTION of a cell tall, on ground that keeps its own art (#280).
-#              Flowers and clover: the tile is still walkable ground, so its art is baked flat AND
-#              popped up, which is the one case where a tile's art is drawn twice on purpose.
+#   TUFT       ground that keeps its own art with the things drawn ON it standing up (#280) —
+#              one small camera-facing sprite PER DRAWN CLUSTER, each planted where the art puts
+#              it in the cell. Flowers and weeds: the tile is still walkable ground, so its art is
+#              baked flat AND popped up, the one case where a tile's art is drawn twice on purpose.
 # Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
@@ -121,12 +122,13 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # the right number is whatever looks like a crate.
 @export var block_height_scale := 1.0
 
-# How much of a cell a TUFT stands up (#280) — the fraction of its own art a flowering tile pops
-# up by. Unlike the baked block props this one is a live Sprite3D property, so it can be a real
-# knob; the SETTER is what makes it one. Props are only rebuilt when their tile changes and sync()
-# runs in DEV_MODE alone, so a value read at build time would need a repaint to show — which is
-# the one failure that makes a tuning knob worthless.
-@export var tuft_scale := 0.35: set = _set_tuft_scale
+# How tall a TUFT's plants stand relative to their own art (#280) — 1.0 draws a flower at the size
+# it is drawn. Only the SIZE: where each one sits in the cell comes off the art and is not tunable.
+# Unlike the baked block props this is a live Sprite3D property, so it can be a real knob; the
+# SETTER is what makes it one. Props are only rebuilt when their tile changes and sync() runs in
+# DEV_MODE alone, so a value read at build time would need a repaint to show — which is the one
+# failure that makes a tuning knob worthless.
+@export var tuft_scale := 1.0: set = _set_tuft_scale
 
 var board: GridMap
 
@@ -485,15 +487,15 @@ func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 
 
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
-# the only fork; everything around it — where it stands, what layer it draws on, whether it carries
-# a light — is one answer for every prop.
+# the only fork; everything around it — where it stands, what layer it draws on, whether it casts a
+# shadow, whether it carries a light — is one answer for every prop.
 #
-# SHADOWS are the one exception, and it is a declared one: a TUFT does not cast. Prolog paints
-# ~1,500 tuft cells against a dozen lamps and trees, so this is not a look call made per prop but
-# a shadow-map draw per instance for a plant a few pixels tall.
+# A TUFT is the one prop that is SEVERAL objects rather than one, so it owns its whole assembly
+# below (the shape _make_fire already has) instead of being forced through a one-body path.
 func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	var shape := GridUtils.prop_shape_at_cell(grid, cell)
-	var is_tuft := shape == GridUtils.PropShape.TUFT
+	if shape == GridUtils.PropShape.TUFT:
+		return _make_tuft(grid, cell, at)
 	var body: GeometryInstance3D = null
 	if GridUtils.SOLID_SHAPES.has(shape):
 		body = _make_prop_block(grid, cell)
@@ -501,7 +503,7 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	# item_for_cell makes, for the same reason: an atlas newer than the last generator run must
 	# still draw SOMETHING rather than nothing.
 	if body == null:
-		body = _make_prop_billboard(grid, cell, is_tuft)
+		body = _make_prop_billboard(grid, cell)
 	if body == null:
 		return null
 
@@ -509,8 +511,7 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	add_child(root)
 	root.position = at
 	body.layers = BoardOverlays.WORLD_RENDER_LAYER
-	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if is_tuft \
-			else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
 
 	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
@@ -535,16 +536,13 @@ func _make_prop_block(grid: TileMapLayer, cell: Vector2i) -> MeshInstance3D:
 	return node
 
 
-# A billboarded sprite of the tile's own art. A TUFT is the same sprite at a fraction of the size
-# (#280) — the ONE fork, because a tuft is a billboard in every other respect.
-func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i, is_tuft := false) -> Sprite3D:
+# A billboarded sprite of the tile's own art.
+func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
 	var texture := _prop_texture(grid, cell)
 	if texture == null:
 		return null
 	var sprite := Sprite3D.new()
 	sprite.texture = texture
-	if is_tuft:
-		sprite.set_meta(TUFT_META, true)
 	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	# Unit sprites' discipline: cut-out alpha that WRITES DEPTH, so a unit standing behind a tree
@@ -554,20 +552,106 @@ func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i, is_tuft := false) 
 	# Tied to the TILESET's tile size, never to UnitSprite3D.texels_per_unit: a tile is one cell
 	# wide BY DEFINITION, which is what makes a 1x2 lantern two cells tall and what lets a future
 	# 32px sheet drop in without touching this.
-	sprite.pixel_size = _pixel_size_for(is_tuft)
+	sprite.pixel_size = 1.0 / float(GridUtils.TILE_SIZE)
 	# Pivot at the BASE. A Sprite3D centres on its origin, so lifting it half its own height plants
-	# the bottom edge on the tile instead of burying half the prop in the ground. In PIXELS, so
-	# shrinking a tuft through pixel_size moves the plant with it and the base stays on the tile.
+	# the bottom edge on the tile instead of burying half the prop in the ground.
 	sprite.offset = Vector2(0, texture.region.size.y * 0.5)
 	return sprite
 
 
-# How many world units one art pixel covers. A tuft is the same sprite scaled through DENSITY
-# rather than through the node's scale: a Y-billboard rebuilds its basis from the camera, and
-# pixel_size also scales the base offset above, so the tuft shrinks toward the ground it stands on.
-func _pixel_size_for(is_tuft: bool) -> float:
-	var density := 1.0 / float(GridUtils.TILE_SIZE)
-	return density * tuft_scale if is_tuft else density
+# --- TUFTS (#280) -------------------------------------------------------------------------------
+#
+# A tuft is ONE SPRITE PER DRAWN CLUSTER, not one sprite of the tile, and that is the whole trick.
+# The art is a TOP-DOWN tile: a flower's y inside it is DEPTH INTO THE CELL, not height. Stand the
+# whole rectangle up and every one of those depths silently becomes an altitude — two flowers drawn
+# at different depths end up one above the other, with the lower one hanging in the air. (The same
+# reading error #263 made with the foreshortened fence pieces.)
+#
+# So the tile is decomposed: its background colour is keyed out, what remains is split into
+# connected clusters, and each cluster stands up AT ITS OWN PLACE IN THE CELL — x from the cluster's
+# centre column, z from its BOTTOM row, because in a top-down drawing the lowest drawn pixel is
+# where the plant meets the ground.
+#
+# The background is the tile's OWN most common colour, measured, not a diff against a base tile:
+# "which tile is this one's ground?" is a relationship the content does not declare and this must
+# not invent (Law #4). It holds by construction for a tuft — ground with something on it is mostly
+# ground — and it is measured at 76-96% across the authored tufts.
+
+# Below this many pixels a cluster is grass TEXTURE, not an object standing on grass. Measured
+# rather than picked: the shipped sheet's clusters are 2px specks or 23px-plus objects with nothing
+# in between, so any threshold in that gap says the same thing. A speck is not lost by staying flat
+# — a tuft tile keeps its full bake, so it is still drawn on the ground; it is only not duplicated.
+# Standing every speck up as well is #311, and needs one mesh per cell to stay affordable.
+const TUFT_MIN_CLUSTER_PIXELS := 4
+
+# Keyed art + cluster list per TILE, since every cell painted with one tile stands up the same
+# thing. Prolog paints over a thousand tuft cells off three tiles, so this is the difference
+# between three decompositions and a thousand.
+var _tuft_tiles: Dictionary[Vector3i, Dictionary] = {}
+
+
+# The cell's tufts: a root on the surface with one camera-facing sprite per cluster. Null when the
+# tile's art holds no cluster worth standing up, which is a supported outcome rather than an error
+# — the tile simply stays the ground it already draws.
+#
+# No light and no shadow, unlike every other prop. LIT_PROPS is keyed on a whole prop's name and a
+# tuft is not one object; shadows are a count, not a look call — a thousand tuft cells is thousands
+# of shadow-map draws for plants a few pixels tall.
+func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
+	var tiles := grid.tile_set
+	if tiles == null:
+		return null
+	var source_id := grid.get_cell_source_id(cell)
+	var atlas := tiles.get_source(source_id) as TileSetAtlasSource
+	if atlas == null:
+		return null
+	var art := _tuft_art(atlas, source_id, grid.get_cell_atlas_coords(cell))
+	var clusters: Array[Rect2i] = art.get("clusters", [] as Array[Rect2i])
+	var sheet: Texture2D = art.get("texture")
+	if sheet == null or clusters.is_empty():
+		return null
+
+	var root := Node3D.new()
+	add_child(root)
+	root.position = at
+	for rect: Rect2i in clusters:
+		root.add_child(_make_tuft_sprite(sheet, rect))
+	return root
+
+
+# One cluster, standing on the cell at the spot the art draws it.
+func _make_tuft_sprite(sheet: Texture2D, rect: Rect2i) -> Sprite3D:
+	var texture := AtlasTexture.new()
+	texture.atlas = sheet
+	texture.region = Rect2(rect)
+
+	var sprite := Sprite3D.new()
+	sprite.texture = texture
+	sprite.set_meta(TUFT_META, true)
+	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
+	sprite.shaded = true
+	sprite.layers = BoardOverlays.WORLD_RENDER_LAYER
+	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	sprite.pixel_size = _tuft_pixel_size()
+	sprite.offset = Vector2(0, rect.size.y * 0.5)   # planted at ITS OWN base, per cluster
+
+	# The cluster's FOOT, in tile pixels, placed on the cell: centre column and bottom edge, against
+	# the tile's own centre. A tile is one cell wide by definition, so a pixel is 1/TILE_SIZE of a
+	# cell — the same density pixel_size uses, and the reason the two cannot disagree.
+	var half := float(GridUtils.TILE_SIZE) * 0.5
+	var foot := Vector2(rect.position.x + rect.size.x * 0.5, float(rect.end.y))
+	sprite.position = Vector3((foot.x - half), 0.0, (foot.y - half)) / float(GridUtils.TILE_SIZE)
+	return sprite
+
+
+# How many world units one art pixel of a TUFT covers. Scaled through DENSITY rather than the
+# node's scale: a Y-billboard rebuilds its basis from the camera, and pixel_size also scales the
+# base offset, so a tuft shrinks toward the ground it stands on. Its POSITION in the cell is
+# untouched by the knob, because where a flower grows is not a matter of taste.
+func _tuft_pixel_size() -> float:
+	return tuft_scale / float(GridUtils.TILE_SIZE)
 
 
 # Re-size every standing tuft. What makes tuft_scale a live knob rather than a value baked into
@@ -578,7 +662,80 @@ func _set_tuft_scale(value: float) -> void:
 		for child in root.get_children():
 			var sprite := child as Sprite3D
 			if sprite != null and sprite.has_meta(TUFT_META):
-				sprite.pixel_size = _pixel_size_for(true)
+				sprite.pixel_size = _tuft_pixel_size()
+
+
+# This tile's tuft art: {"texture": the tile with its background keyed out, "clusters": each
+# standing thing's rect inside it}. Both fall out of one decomposition, so they are cached together
+# and can never describe different pixels.
+func _tuft_art(atlas: TileSetAtlasSource, source_id: int, coords: Vector2i) -> Dictionary:
+	var key := Vector3i(source_id, coords.x, coords.y)
+	if _tuft_tiles.has(key):
+		return _tuft_tiles[key]
+	var built: Dictionary = {}
+	var sheet := _art_image(atlas, source_id)
+	if sheet != null:
+		var region := atlas.get_tile_texture_region(coords, 0)
+		var keyed := Image.create_empty(region.size.x, region.size.y, false, Image.FORMAT_RGBA8)
+		var ground := _background_colour(sheet, region)
+		for y in region.size.y:
+			for x in region.size.x:
+				var c := sheet.get_pixel(region.position.x + x, region.position.y + y)
+				keyed.set_pixel(x, y, Color(0, 0, 0, 0) if c == ground else c)
+		built = {"texture": ImageTexture.create_from_image(keyed), "clusters": _clusters_of(keyed)}
+	_tuft_tiles[key] = built
+	return built
+
+
+# The most common colour in a region. A tuft's ground, by the argument above.
+func _background_colour(image: Image, region: Rect2i) -> Color:
+	var counts: Dictionary[Color, int] = {}
+	var best := Color(0, 0, 0, 0)
+	var best_seen := 0
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var c := image.get_pixel(x, y)
+			var seen: int = counts.get(c, 0) + 1
+			counts[c] = seen
+			if seen > best_seen:
+				best_seen = seen
+				best = c
+	return best
+
+
+# The drawn pixels split into 8-connected clusters, each as its own rect. DIAGONALS count: pixel art
+# this small draws a stem as a diagonal run, and 4-connectivity would cut one plant into three.
+func _clusters_of(keyed: Image) -> Array[Rect2i]:
+	var out: Array[Rect2i] = []
+	var seen: Dictionary[Vector2i, bool] = {}
+	var size := Vector2i(keyed.get_width(), keyed.get_height())
+	for y in size.y:
+		for x in size.x:
+			var start := Vector2i(x, y)
+			if seen.has(start) or keyed.get_pixel(x, y).a < 0.5:
+				continue
+			seen[start] = true
+			var stack: Array[Vector2i] = [start]
+			var drawn := 0
+			var lo := start
+			var hi := start
+			while not stack.is_empty():
+				var p: Vector2i = stack.pop_back()
+				drawn += 1
+				lo = Vector2i(mini(lo.x, p.x), mini(lo.y, p.y))
+				hi = Vector2i(maxi(hi.x, p.x), maxi(hi.y, p.y))
+				for dy: int in [-1, 0, 1]:
+					for dx: int in [-1, 0, 1]:
+						var n := p + Vector2i(dx, dy)
+						if n.x < 0 or n.y < 0 or n.x >= size.x or n.y >= size.y:
+							continue
+						if seen.has(n) or keyed.get_pixel(n.x, n.y).a < 0.5:
+							continue
+						seen[n] = true
+						stack.push_back(n)
+			if drawn >= TUFT_MIN_CLUSTER_PIXELS:
+				out.append(Rect2i(lo, hi - lo + Vector2i.ONE))
+	return out
 
 
 # The tile's own art, region-cut from the tileset atlas and TRIMMED to the pixels that are actually

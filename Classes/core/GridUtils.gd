@@ -92,9 +92,10 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 # geometry (volumetric -- crates, rocks, barrels). The split is the dev's measured ruling on #255:
 # "anything that's thin already works in this style"; blocky things "really want to be textures on
 # a 3D model". PLANE is #263's oriented plane -- thin but DIRECTIONAL, a fence -- and it says only
-# the FORM; which way it runs is the separate wall_edges question below. TUFT is #280's: a thin
-# camera-facing sprite like BILLBOARD, but a FRACTION of a cell tall and standing on ground that
-# KEEPS its own art -- a flowering tile is walkable ground that happens to have flowers on it.
+# the FORM; which way it runs is the separate wall_edges question below. TUFT is #280's, and it is
+# the odd one: ground that KEEPS its own art, with the things drawn on it -- flowers, a weed --
+# standing up individually. A flowering tile is walkable ground that happens to have flowers on it,
+# so it is the one shape whose tile is both baked flat and popped up.
 #
 # APPEND-ONLY: the values are persisted in the tileset.
 enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE, TUFT }

@@ -80,7 +80,7 @@ That sentence is the convention, and it is the same split Octopath uses (billboa
 | **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
 | **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | thin slab, run authored per piece | one front-on sprite **plus a facing** |
 | **Block** | volumetric — crates, chests, rocks, barrels | real geometry standing on the ground block | a **top** texture and a **side** texture, minimum |
-| **Tuft** | ground WITH something on it — flowers, clover, weeds | camera-facing sprite a fraction of a cell tall, **over ground that keeps its own art** | the ground tile itself, nothing more |
+| **Tuft** | ground WITH things growing on it — flowers, weeds | one small camera-facing sprite **per plant the art draws**, over ground that keeps its own art | the ground tile itself, nothing more |
 
 **The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam; `PLANE` is #263's oriented plane; `TUFT` is #280's.
 
@@ -88,13 +88,28 @@ That sentence is the convention, and it is the same split Octopath uses (billboa
 
 #### A TUFT splits "does it stand up" from "does its art leave the ground" (#280, 2026-08-15)
 
-The dev's ask was *"I want grass to pop up a bit as well, have a tiny bit of 3D presence, similar to unit sprites… flowers and clover… on their respective tiles."* The mechanism he picked over the alternatives is the plain one: **the ground art stays baked flat and a small camera-facing copy of that same art is planted on top of it.** Masking the flowers against plain grass was rejected because it invents an undeclared *which tile is this one's base?* relationship (the Law #4 hazard the form ruling above avoided), and generated blades were rejected because they would not stand up the clover and flowers he actually named.
+The dev's ask was *"I want grass to pop up a bit as well, have a tiny bit of 3D presence, similar to unit sprites… flowers and clover… on their respective tiles."*
 
-**The interesting part is a predicate that had one answer for every shape until now.** The meshlib generator bakes a standing tile's top face as bare ground, because standing a tile up and taking its art off the ground had always been the same act — a tree drawn both flat and standing renders twice. A tuft does both at once: it is walkable ground that happens to have flowers on it. So the generator's question stopped being *does this tile stand up?* (`GridUtils.stands_up_of`, which `BoardMirror` still reads correctly — a tuft does stand something up) and became *does this tile's art LEAVE the ground?* (`GridUtils.art_leaves_ground_of`). Two predicates, declared, rather than one widened.
+**The interesting part is a predicate that had one answer for every shape until now.** The meshlib generator bakes a standing tile's top face as bare ground, because standing a tile up and taking its art off the ground had always been the same act — a tree drawn both flat and standing renders twice. A tuft does both at once: it is walkable ground that happens to have flowers on it. So the generator's question stopped being *does this tile stand up?* (`GridUtils.stands_up_of`, which `BoardMirror` still reads correctly — a tuft does stand something up) and became *does this tile's art LEAVE the ground?* (`GridUtils.art_leaves_ground_of`). Two predicates, declared, rather than one widened. The deliberate consequence: **a tuft's art is drawn twice, flat and popped** — the only place in the stack where that is intended rather than the #255 bug.
 
-The deliberate consequence: **a tuft's art is drawn twice, flat and popped** — the only place in the stack where that is intended rather than the #255 bug. How much it pops is `BoardMirror.tuft_scale`, a real Look-tab knob rather than a baked constant, because a tuft is a runtime `Sprite3D` and its size is therefore a live property. Two things fall out of that and are worth keeping: the sprite is scaled through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a tuft shrinks *toward* the tile it stands on), and the knob's setter re-sizes tufts that are already standing — props reconcile only when their tile changes, so a build-time-only read would be a slider that moves and does nothing.
+#### A tuft is ONE SPRITE PER PLANT, because a top-down tile's y is DEPTH
 
-**Tufts are the one prop form that casts no shadow**, and that is a count rather than a look call: `Prolog` paints ~1,500 tuft cells against a dozen lamps and trees.
+The first build stood the whole tile up as one quad, and the dev's feel-check found two things wrong with it at once — one obvious and one structural.
+
+The obvious one: **the green behind the flowers stood up with them**, so the board grew squares with pictures of flowers on them. The fix is to key the background out, and the reason it does not need the *which tile is this one's base?* relationship the form ruling above avoids is that **the background is the tile's own most common colour**, measured — which holds by construction for a tuft, since ground with something on it is mostly ground (76–96% across the authored tiles, and the same flat green `grass_basic` is 100% made of).
+
+The structural one is the keeper. **A ground tile is drawn TOP-DOWN, so a flower's y inside it is depth into the cell, not height.** Standing the rectangle up silently converts every depth into an altitude: two flowers drawn at different depths come out one above the other, with the lower one hanging in the air. *This is the same reading error #263 made with the foreshortened `fence_ver` pieces, and it is worth stating as a general rule — **before standing any ground art up, ask what its vertical axis MEANS.***
+
+So a tuft decomposes its tile: background keyed out, what remains split into connected clusters, and **each cluster stands up at its own place in the cell** — x from its centre column, z from its **bottom row**, because in a top-down drawing the lowest drawn pixel is where the plant meets the ground. Each is planted on its own base, so every plant touches the tile.
+
+Two consequences worth knowing:
+
+- **Only clusters above `BoardMirror.TUFT_MIN_CLUSTER_PIXELS` stand up**, and the threshold is measured rather than picked: the shipped sheet's clusters are 2-px specks or 23-px-plus objects with nothing in between. A speck loses nothing by staying flat, because the tile keeps its full bake — it is still drawn, just not duplicated. Standing every speck up as well is [#311](https://github.com/Phaazoid/Godoiosis/issues/311), and needs one mesh per cell plus a per-quad billboard to stay affordable, because a whole-mesh billboard would swing the plants around the cell centre as the camera orbits.
+- **`grass_clover` is not a tuft**, and that is the art's own answer rather than a design call: its content is five 2-pixel dots. It is grass speckle, not clover.
+
+`BoardMirror.tuft_scale` is the Look-tab knob — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile changes.
+
+**Tufts are the one prop form that casts no shadow**, and that is a count rather than a look call: `Prolog` paints over a thousand tuft cells against a dozen lamps and trees.
 
 #### The facing is a SET OF EDGES, and it is a second column (#263, 2026-08-15)
 
