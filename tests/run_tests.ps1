@@ -1,10 +1,17 @@
 # One-command headless gdUnit4 runner for Iosis.
 #
 # Usage:
-#   powershell -File tests\run_tests.ps1                   # full tree (default)
-#   powershell -File tests\run_tests.ps1 fast              # the fast tier -- inner-loop check
+#   powershell -File tests\run_tests.ps1                   # the fast tier (default)
 #   powershell -File tests\run_tests.ps1 weapons items     # one or more areas (folders under tests/)
 #   powershell -File tests\run_tests.ps1 res://tests/ai    # explicit res:// path (back-compat)
+#   powershell -File tests\run_tests.ps1 full              # the whole tree -- SEE BELOW, you probably want CI
+#
+# THE FULL TREE IS CI'S JOB, NOT YOURS (dev rule 2026-08-15; canon in CLAUDE.md).
+# .github/workflows/tests.yml runs the whole suite on every push and PR, with the same #93 and
+# #146 guards this script has, in ~127s on GitHub's machine while you get on with something else.
+# A local full run duplicates that exactly and costs ~230s of YOUR machine that you sit through.
+# So the bare invocation defaults to `fast`, not `full` -- the expensive option should take
+# deliberate typing. Locally, prefer the narrowest AREA that loads the surface you touched.
 #
 # WHY TIERS EXIST -- measured 2026-07-24 over 573 cases / 79 suites (report_173):
 # cost is ~0.10s per test case plus ~0.75s per suite FILE, and it is near-UNIFORM. The
@@ -34,7 +41,9 @@ if (-not (Test-Path $bin)) {
 }
 
 $root = Split-Path $PSScriptRoot -Parent
-if (-not $Targets -or $Targets.Count -eq 0) { $Targets = @('full') }
+# Defaults to `fast`, NOT `full` -- see the header. An accidental bare invocation should cost
+# seconds, not four minutes, and the full tree already has an owner (CI).
+if (-not $Targets -or $Targets.Count -eq 0) { $Targets = @('fast') }
 
 $folders = New-Object System.Collections.Generic.List[string]
 $explicit = New-Object System.Collections.Generic.List[string]
@@ -72,6 +81,11 @@ if ($wholeTree) {
 $argv = @('--path', $root, '--headless', '-s', 'res://addons/gdUnit4/bin/GdUnitCmdTool.gd')
 foreach ($p in $paths) { $argv += @('-a', $p) }
 $argv += '--ignoreHeadlessMode'
+
+if ($wholeTree) {
+	Write-Host "NOTE: the full tree is CI's job (.github/workflows/tests.yml runs it on every push/PR" -ForegroundColor Yellow
+	Write-Host "      in ~127s, off your machine). Locally, prefer the narrowest area folder." -ForegroundColor Yellow
+}
 
 Write-Host "Running: $($paths -join '  ')" -ForegroundColor Cyan
 $sw = [System.Diagnostics.Stopwatch]::StartNew()
