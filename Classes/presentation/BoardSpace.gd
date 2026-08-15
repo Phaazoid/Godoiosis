@@ -45,12 +45,53 @@ static func surface_y(level: int) -> float:
 # level. That is the one place presentation and rules deliberately disagree, and it is why
 # UnitSprite3D.stand_at was made injectable in the first place.
 static func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
+	return surface_transform(cell, heights).origin
+
+
+# One level of rise per cell of run — the authored wedge's own profile (its slope face runs corner
+# to corner, normal (0,1,1)), and the same ratio surface_point's half-level lift already encodes.
+const RAMP_SLOPE_ANGLE := atan2(CELL_SIZE, CELL_SIZE)
+
+# A slope is LONGER than the cell it spans (1/cos of the angle), so markup that only rotated would
+# cover the cell's footprint and leave the ramp face bare at both edges. Stretching along the slope
+# is what keeps a fill covering its whole cell and an arrow foreshortening exactly as the ground
+# under it does.
+const SLOPE_STRETCH := 1.0 / cos(RAMP_SLOPE_ANGLE)
+
+
+# How a FLAT thing LIES on this cell's surface (#281) — a path arrow, an overlay fill, any markup
+# that is part of the ground rather than standing on it. The origin half is surface_point's, so the
+# two cannot drift; the basis half is what makes markup follow a slope instead of hanging level
+# through it. Anything that STANDS stays upright and keeps reading surface_point (units, flames,
+# props).
+static func surface_transform(cell: Vector2i, heights: BoardHeights) -> Transform3D:
 	if heights == null:
-		return standing_point(of_cell(cell, 0))
-	var point := standing_point(of_cell(cell, heights.elevation_at(cell)))
-	if heights.is_ramp(cell):
-		point.y += CELL_SIZE * 0.5
-	return point
+		return lie_on(of_cell(cell, 0), Terrain.RampRise.NONE)
+	return lie_on(of_cell(cell, heights.elevation_at(cell)), heights.ramp_rise_at(cell))
+
+
+# The lie itself, for a caller that already resolved the level — the overlay fills, whose Vector3i
+# states it (of_cell's "every caller states the LEVEL it means" rule, #273; re-deriving it here
+# would look up what was already passed).
+#
+# The tilt is DERIVED from Terrain.rise_direction — the same call BoardMirror._ramp_orientation
+# yaws the wedge by — so the ground and the markup on it cannot disagree about which way it climbs.
+static func lie_on(cell: Vector3i, rise: Terrain.RampRise) -> Transform3D:
+	var origin := standing_point(cell)
+	if rise == Terrain.RampRise.NONE:
+		return Transform3D(Basis.IDENTITY, origin)
+	# The midpoint of the slope, which is exactly where a quad tilted about its own centre lies flat.
+	origin.y += CELL_SIZE * 0.5
+	var dir := Terrain.rise_direction(rise)
+	var uphill := Vector3(dir.x, 0.0, dir.y)
+	var basis := Basis(uphill.cross(Vector3.UP).normalized(), RAMP_SLOPE_ANGLE)
+	# Stretch the ONE local axis that ends up running up the slope, so the art keeps its orientation
+	# (a rotated arrow would point somewhere else) and only its length along the slope changes.
+	if dir.x != 0:
+		basis.x *= SLOPE_STRETCH
+	else:
+		basis.z *= SLOPE_STRETCH
+	return Transform3D(basis, origin)
 
 
 # The cell containing a world position (floor per axis — see the boundary rule above).
