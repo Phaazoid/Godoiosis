@@ -126,14 +126,51 @@ func test_dragging_a_slider_moves_the_live_property() -> void:
 
 
 func _slider_for(label_text: String) -> HSlider:
+	return _row_for(label_text).get_child(1) as HSlider
+
+
+func _row_for(label_text: String) -> HBoxContainer:
 	for row in _look._rows.get_children():
 		var box := row as HBoxContainer
 		if box == null:
 			continue
 		var label := box.get_child(0) as Label
 		if label != null and label.text == label_text:
-			return box.get_child(1) as HSlider
+			return box
 	return null
+
+
+# A colour knob is FOUR sliders and a swatch, not a picker. ColorPickerButton froze the dev window
+# solid the first time one was opened (dev, 2026-08-14), so the ban is a law with a test rather
+# than a comment that the next colour knob quietly re-breaks. It bans the ColorPicker FAMILY, not
+# popups -- the tonemap OptionButton on this same panel is fine, as it is on every other dev tab.
+func test_the_panel_builds_no_colorpicker_widgets() -> void:
+	var offenders: Array[String] = []
+	_walk_for_pickers(_look, offenders)
+	assert_array(offenders).override_failure_message(
+		"ColorPicker widgets in the Look tab (these freeze the dev window): %s"
+		% ", ".join(offenders)).is_empty()
+
+
+func _walk_for_pickers(node: Node, offenders: Array[String]) -> void:
+	for child in node.get_children(true):   # include internal children
+		if child is ColorPicker or child is ColorPickerButton:
+			offenders.append("%s (%s)" % [child.name, child.get_class()])
+		_walk_for_pickers(child, offenders)
+
+
+func test_dragging_a_colour_channel_moves_the_live_property() -> void:
+	var knob := _knob("Sun", "light_color")
+	var row := _row_for(knob["label"])
+	assert_object(row).is_not_null()
+	var before: Color = _look.read(knob)
+	# Child order is label, swatch, then (tag, slider) per channel -- index 3 is the R slider.
+	var red := row.get_child(3) as HSlider
+	assert_object(red).is_not_null()
+	red.value = 0.5
+	var after: Color = _look.read(knob)
+	assert_float(after.r).is_equal_approx(0.5, 0.005)
+	assert_float(after.g).is_equal_approx(before.g, 0.005)   # the other channels are untouched
 
 
 # --- The handoff --------------------------------------------------------------------------

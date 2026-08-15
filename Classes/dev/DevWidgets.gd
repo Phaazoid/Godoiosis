@@ -48,21 +48,50 @@ static func add_slider(container: Node, label_text: String, initial_value: float
 	return slider
 
 
+const COLOR_CHANNELS := ["R", "G", "B", "A"]   # index == Color's own component order
+
+# NO ColorPicker, deliberately. ColorPickerButton froze the dev window solid the first time one
+# was opened (dev, 2026-08-14) -- this window is a real OS window that embeds its own subwindows
+# while the project does not, and CLAUDE.md's sharp edge #4 says prefer Control-based. A plain
+# inline ColorPicker is not the escape either: it carries its own menus for colour mode and picker
+# shape, i.e. the same family one layer down. Four component sliders plus a live swatch are
+# Control-only by construction, and they match the drag idiom the rest of the panel already uses.
+# (OptionButton popups are fine here -- every other dev tab uses them -- so this is a ban on the
+# ColorPicker family, not on popups.)
 static func add_color(container: Node, label_text: String, initial_value: Color,
-		on_change: Callable) -> ColorPickerButton:
+		on_change: Callable) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
 	label.custom_minimum_size = Vector2(190, 0)
-	var picker := ColorPickerButton.new()
-	picker.color = initial_value
-	picker.edit_alpha = true
-	picker.custom_minimum_size = Vector2(120, 0)
-	picker.color_changed.connect(on_change)
 	row.add_child(label)
-	row.add_child(picker)
+	var swatch := ColorRect.new()
+	swatch.color = initial_value
+	swatch.custom_minimum_size = Vector2(30, 0)
+	row.add_child(swatch)
+	var channels: Array[HSlider] = []
+	for i in COLOR_CHANNELS.size():
+		var tag := Label.new()
+		tag.text = COLOR_CHANNELS[i]
+		row.add_child(tag)
+		var slider := HSlider.new()
+		slider.min_value = 0.0
+		slider.max_value = 1.0
+		slider.step = 0.01
+		slider.value = initial_value[i]
+		slider.custom_minimum_size = Vector2(56, 0)
+		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(slider)
+		channels.append(slider)
+	# Connected only once every channel exists -- each callback reads all four to rebuild the Color.
+	for slider: HSlider in channels:
+		slider.value_changed.connect(func(_v: float) -> void:
+			var picked := Color(channels[0].value, channels[1].value,
+				channels[2].value, channels[3].value)
+			swatch.color = picked
+			on_change.call(picked))
 	container.add_child(row)
-	return picker
+	return row
 
 
 # How many decimals a step implies -- 0.005 prints 3, 1.0 prints 0. Derived rather than declared
