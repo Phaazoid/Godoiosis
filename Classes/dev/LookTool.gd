@@ -11,8 +11,10 @@ class_name LookTool
 # subtree gains an upward path to the 3D scene, and launching Main.tscn flat -- a real shipping
 # target -- simply never attaches one, which this reports instead of crashing.
 #
-# Tuning is LIVE ONLY. Copy Values dumps whatever moved off the authored baseline as paste-ready
-# GDScript and the clipboard is the handoff (#212's own call); nothing here writes a file.
+# Tuning SAVES as of #253: a named LookPreset under Resources/LookPresets/ captures the scene-mood
+# knobs, and loading one makes it the baseline everything else measures against. Copy Values still
+# exists beside it and still diffs the AUTHORED scene, because its output is paste-ready lines FOR
+# Battle3D.tscn -- diffed against a loaded preset those lines would not reproduce what you see.
 #
 # A knob may only name a property that is authored and READ. Anything the game writes back per
 # frame -- the rig's yaw, dof_blur_near/far_distance (re-derived from focus_band_*), max_distance,
@@ -230,21 +232,63 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Effects": "Effects",
 }
 
+# --- Presets (#253 part 1) ---------------------------------------------------------------
+
+const PRESET_DIR := "res://Resources/LookPresets/"
+const AUTHORED_ENTRY := "(authored scene)"   # dropdown row 0: the way back to Battle3D.tscn
+
+# A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
+# unless it is named here; LAYER_KNOBS is out wholesale, so a preset never touches board-markup
+# colour. Excluded for three separate reasons, all the same rule -- a MISSION must not be able to
+# change these, because they are things the player learns once and keeps:
+#   * camera HANDLING -- how the camera drags, not how the board is framed. Pitch/FOV/opening
+#     shot/fit margin ARE framing and stay in.
+#   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
+#   * the brush ghost -- dev chrome; players never see it.
+# The default is IN: a knob added later joins presets unless someone lists it here, which is right
+# for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
+# a renamed property fails loudly instead of silently un-excluding itself.
+const PRESET_EXCLUDED: Array[String] = [
+	"CameraRig|min_distance",
+	"CameraRig|zoom_step",
+	"CameraRig|smoothing",
+	"CameraRig|pan_speed",
+	"CameraRig|orbit_sensitivity",
+	"CameraRig|pan_margin_cells",
+	"CameraRig|zoom_out_slack",
+	"BoardOverlays|fill_lift",
+	"BoardOverlays|lift_step",
+	"BoardOverlays|bracket_arm",
+	"BoardOverlays|bracket_thickness",
+	"BoardOverlays|bracket_scale",
+	"BoardOverlays|invalid_bracket_color",
+	"BoardOverlays|billboard_lift",
+	"BoardOverlays|billboard_pixel_size",
+	"BoardMirror|brush_ghost_alpha",
+]
+
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
-var _baseline: Array = []        # the authored value per KNOBS index, read once on attach
-var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index
+var _authored: Array = []        # the scene's own value per KNOBS index, read once on attach
+var _baseline: Array = []        # what Reset returns to: _authored, or a loaded preset over it
+var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index (presets never touch these)
+var _loaded_preset := ""         # dropdown-relative name; "" = the authored scene
 var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
+var _preset_name_input: LineEdit
+var _preset_dropdown: OptionButton
+var _update_button: Button
+var _delete_button: Button
 
 
 func _ready() -> void:
+	_build_preset_row()
 	var buttons := HBoxContainer.new()
 	buttons.add_child(_button("Copy changed values",
-		"Copy every value moved off its authored setting to the clipboard, as paste-ready GDScript",
+		"Copy every value moved off the SCENE's authored setting to the clipboard, as paste-ready\nGDScript. Always measured against Battle3D.tscn, never against a loaded preset -- these lines\nare what you paste INTO the scene, so a preset-relative diff would not reproduce what you see.",
 		_on_copy_pressed))
-	buttons.add_child(_button("Reset to authored",
-		"Put every knob back to the value the scene was authored with", _on_reset_pressed))
+	buttons.add_child(_button("Reset",
+		"Put every knob back to the loaded preset, or to the scene's authored values when no preset\nis loaded", _on_reset_pressed))
 	buttons.add_child(_button("Re-fit camera",
 		"Pitch and FOV feed the framing maths, which only runs on a board load -- press this after moving either",
 		_on_refit_pressed))
@@ -266,6 +310,7 @@ func _ready() -> void:
 		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		scroll.add_child(rows)
 		_tab_rows[tab_title] = rows
+	refresh_preset_dropdown()   # after _status exists: a refusal has somewhere to print
 	_rebuild()
 
 
@@ -273,9 +318,10 @@ func _ready() -> void:
 # the tab always builds its no-host state and then rebuilds here.
 func attach_host(host: Node3D) -> void:
 	_host = host
-	_baseline.clear()
+	_authored.clear()
 	for knob: Dictionary in KNOBS:
-		_baseline.append(read(knob))   # authored by definition: nothing has moved one yet
+		_authored.append(read(knob))   # authored by definition: nothing has moved one yet
+	_baseline = _authored.duplicate()  # no preset loaded yet, so Reset means "back to the scene"
 	_layer_baseline.clear()
 	for knob: Dictionary in LAYER_KNOBS:
 		_layer_baseline.append(read_layer(knob))
@@ -369,10 +415,19 @@ func write(knob: Dictionary, value: Variant) -> void:
 	target.set_indexed(NodePath(knob["prop"]), value)
 
 
+# What Reset returns to -- the loaded preset if there is one, else the authored scene.
 func baseline_of(index: int) -> Variant:
 	if index < 0 or index >= _baseline.size():
 		return null
 	return _baseline[index]
+
+
+# What the SCENE was authored with, whatever is loaded. Copy Values' reference point, because its
+# output is lines you paste into Battle3D.tscn.
+func authored_of(index: int) -> Variant:
+	if index < 0 or index >= _authored.size():
+		return null
+	return _authored[index]
 
 
 # --- Building the rows ------------------------------------------------------------------
@@ -497,15 +552,302 @@ func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
 	return button
 
 
+# --- Presets ----------------------------------------------------------------------------
+
+# The key a preset stores a knob under. DERIVED from what already makes a row unique, so there is
+# no extra table column to keep in step -- and deliberately not the label, which reworded twice
+# while this panel was being built. A preset stores key -> value and NEVER the property path:
+# KNOBS is the one answer to "which property is Sun energy", so a path in a preset file would be a
+# second one, and renaming a property would mean editing every preset instead of one table row.
+static func preset_key(knob: Dictionary) -> String:
+	return "%s|%s" % [knob["node"], knob["prop"]]
+
+
+static func preset_knobs() -> Array[Dictionary]:
+	var wanted: Array[Dictionary] = []
+	for knob: Dictionary in KNOBS:
+		if not PRESET_EXCLUDED.has(preset_key(knob)):
+			wanted.append(knob)
+	return wanted
+
+
+static func preset_path(preset_name: String) -> String:
+	return "%s%s.tres" % [PRESET_DIR, preset_name]
+
+
+# ResourceDir, never DirAccess: a source-extension filter matches nothing in an exported build
+# (#141). Display names, i.e. what the dropdown shows.
+static func saved_presets() -> Array[String]:
+	var names: Array[String] = []
+	for file: String in ResourceDir.files_with_extension(PRESET_DIR, ".tres"):
+		names.append(file.trim_suffix(".tres"))
+	return names
+
+
+func loaded_preset() -> String:
+	return _loaded_preset
+
+
+# Every in-scope knob, always -- a preset is self-contained, so re-tuning Battle3D.tscn later can
+# never silently move a saved mood (dev call). The cost is the twin: a preset saved today does not
+# mention a knob added tomorrow, which apply_preset reports rather than hiding.
+func capture_preset(preset_name: String) -> LookPreset:
+	var preset := LookPreset.new()
+	preset.preset_name = preset_name
+	if _host == null:
+		return preset
+	for knob: Dictionary in preset_knobs():
+		var value: Variant = read(knob)
+		if typeof(value) != TYPE_NIL:
+			preset.values[preset_key(knob)] = value
+	return preset
+
+
+# Returns {"missing": Array[String] of knob labels, "unknown": Array[String] of dead keys} so the
+# caller can SAY both. A knob the preset predates keeps its authored value; a saved key that no
+# longer matches an in-scope knob is skipped. Neither is silent: a preset quietly rendering with
+# whatever the scene happens to hold is the failure this reports its way out of.
+func apply_preset(preset: LookPreset) -> Dictionary:
+	var missing: Array[String] = []
+	var unknown: Array[String] = []
+	if _host == null or preset == null:
+		return {"missing": missing, "unknown": unknown}
+	var applied := {}
+	_baseline = _authored.duplicate()
+	for i in KNOBS.size():
+		var knob: Dictionary = KNOBS[i]
+		var key := preset_key(knob)
+		if PRESET_EXCLUDED.has(key):
+			continue
+		if not preset.values.has(key):
+			missing.append(knob["label"])
+			# WRITTEN back to authored, not merely left alone: loading a preset has to land on the
+			# same look whatever was on screen first, or preset B silently inherits preset A's
+			# value for every knob B predates.
+			var authored: Variant = authored_of(i)
+			if typeof(authored) != TYPE_NIL:
+				write(knob, authored)
+			continue
+		applied[key] = true
+		write(knob, preset.values[key])
+		# Read BACK: the baseline must be what the property ACCEPTED, not what was asked for, or
+		# Reset chases a value the engine never stored and every knob reads as permanently moved.
+		_baseline[i] = read(knob)
+	for key: String in preset.values:
+		if not applied.has(key):
+			unknown.append(key)
+	# Pitch and FOV feed framing maths that only re-runs on a board load -- the same reason the
+	# Re-fit button exists. Without this a loaded preset frames the board with the old camera.
+	_host.fit_camera()
+	_rebuild()
+	return {"missing": missing, "unknown": unknown}
+
+
+func _build_preset_row() -> void:
+	var top := HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Preset"
+	top.add_child(label)
+	_preset_dropdown = OptionButton.new()
+	_preset_dropdown.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_preset_dropdown.item_selected.connect(func(_index: int) -> void: _refresh_preset_buttons())
+	top.add_child(_preset_dropdown)
+	top.add_child(_button("Load", "Apply the picked preset to the live scene", _on_load_pressed))
+	_update_button = _button("Update", "", _on_update_pressed)
+	top.add_child(_update_button)
+	_delete_button = _button("Delete", "", _on_delete_pressed)
+	top.add_child(_delete_button)
+	add_child(top)
+
+	var bottom := HBoxContainer.new()
+	_preset_name_input = LineEdit.new()
+	_preset_name_input.placeholder_text = "New preset name"
+	_preset_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bottom.add_child(_preset_name_input)
+	bottom.add_child(_button("Save As",
+		"Save every scene-mood knob under a new name. Camera handling, board markup and the brush\nghost are deliberately not captured -- those are game settings, not a mission's look.",
+		_on_save_as_pressed))
+	add_child(bottom)
+
+
+# select_name is a display name. Empty re-selects whatever was showing, so a rebuild never silently
+# moves Update's target.
+func refresh_preset_dropdown(select_name := "") -> void:
+	if select_name == "":
+		select_name = DevWidgets.selected_name(_preset_dropdown)
+	_preset_dropdown.clear()
+	_preset_dropdown.add_item(AUTHORED_ENTRY)
+	for preset_name: String in saved_presets():
+		_preset_dropdown.add_item(preset_name)
+	# add_item auto-selects index 0 -- force the match rather than inheriting it, or a deleted
+	# preset leaves the selection silently pointing at the authored row.
+	_preset_dropdown.select(-1)
+	for i in _preset_dropdown.item_count:
+		if _preset_dropdown.get_item_text(i) == select_name:
+			_preset_dropdown.select(i)
+			break
+	if _preset_dropdown.selected < 0:
+		# Falling back to row 0 is safe here and only here: the authored row is not a FILE, so
+		# _refresh_preset_buttons reads it as no target and greys both Update and Delete. That is
+		# the whole reason the auto-select trap bites elsewhere -- there, row 0 is a write target.
+		_preset_dropdown.select(0)
+	_refresh_preset_buttons()
+
+
+func _refresh_preset_buttons() -> void:
+	var target := DevWidgets.selected_name(_preset_dropdown)
+	if target == AUTHORED_ENTRY:
+		target = ""   # not a file: nothing to update, nothing to delete
+	DevWidgets.refresh_update_button(_update_button, target, "preset", update_block_reason())
+	DevWidgets.refresh_delete_button(_delete_button, target, "preset")
+
+
+# "" = allowed. Update only ever writes the LOADED preset back over its own file -- the 2026-08-11
+# scenario rule, for the same reason: aiming Update at a preset you have not loaded overwrites it
+# with a look you were never looking at.
+func update_block_reason() -> String:
+	var target := DevWidgets.selected_name(_preset_dropdown)
+	if target == "" or target == AUTHORED_ENTRY:
+		return ""
+	if target != _loaded_preset:
+		return "Load '%s' before updating it -- Update saves the live look back over its own file" % target
+	return ""
+
+
+func _on_load_pressed() -> void:
+	if _host == null:
+		return
+	var target := DevWidgets.selected_name(_preset_dropdown)
+	if target == "" or target == AUTHORED_ENTRY:
+		_load_authored()
+		return
+	var preset := load(preset_path(target)) as LookPreset
+	if preset == null:
+		_status.text = "Could not load preset '%s'" % target
+		push_error("LookTool: preset failed to load: %s" % preset_path(target))
+		return
+	var report := apply_preset(preset)
+	_loaded_preset = target
+	_refresh_preset_buttons()
+	_status.text = _load_report(target, report)
+
+
+# The way back to Battle3D.tscn's own look, and the reason the dropdown has a row 0: once Reset
+# means "back to the loaded preset", the authored scene is otherwise unreachable.
+func _load_authored() -> void:
+	_baseline = _authored.duplicate()
+	_loaded_preset = ""
+	_on_reset_pressed()
+	_refresh_preset_buttons()
+	_status.text = "Loaded the scene's authored look. Reset now returns here."
+
+
+func _load_report(target: String, report: Dictionary) -> String:
+	var text := "Loaded preset '%s'. Reset now returns here." % target
+	var missing: Array = report["missing"]
+	if not missing.is_empty():
+		text += ("\n%d knob(s) added since this preset was saved, left at the scene's value: %s."
+			+ " Set them and press Update to back-add.") % [missing.size(), ", ".join(missing)]
+	var unknown: Array = report["unknown"]
+	if not unknown.is_empty():
+		text += "\n%d saved value(s) no longer apply (knob removed or now excluded): %s." \
+			% [unknown.size(), ", ".join(unknown)]
+	return text
+
+
+func _on_save_as_pressed() -> void:
+	if _host == null:
+		_status.text = "No 3D host attached - there is no look to save."
+		return
+	var entered := _preset_name_input.text.strip_edges()
+	if entered == "":
+		var msg := "Preset needs a name"
+		push_warning(msg)
+		_status.text = msg
+		return
+	# Flat folder, so no allow_slash: a '/' would land the file where the scan never looks (#168).
+	if DevWidgets.refuse_illegal_name(entered, "preset", _status):
+		return
+	if entered == AUTHORED_ENTRY:
+		_status.text = "'%s' is the dropdown's own name for the scene - pick another" % AUTHORED_ENTRY
+		return
+	if DevWidgets.refuse_existing_file(preset_path(entered), "preset", _status):
+		return
+	if not DevWidgets.save_over(capture_preset(entered), preset_path(entered), _status):
+		return
+	# Saving is also loading: the look on screen IS this preset now, so Reset should return to it.
+	_baseline = _live_values()
+	_loaded_preset = entered
+	_preset_name_input.text = ""
+	refresh_preset_dropdown(entered)
+	_status.text = "Saved preset '%s' (%d knobs). Reset now returns here." % [entered, preset_knobs().size()]
+
+
+func _on_update_pressed() -> void:
+	var target := DevWidgets.selected_name(_preset_dropdown)
+	if target == "" or target == AUTHORED_ENTRY:
+		return
+	# The handler is the real gate; the greyed button is only its surface (#166 shape).
+	var reason := update_block_reason()
+	if reason != "":
+		_status.text = reason
+		return
+	# Confirmed as well as load-gated (the 2026-08-12 scenario call): the gate cannot catch a
+	# mis-click at the file you DID load, which is exactly how a tuned look would be lost.
+	DevWidgets.confirm(self, "Overwrite preset '%s' with the current look? The saved version is lost." % target,
+		func() -> void: _update_confirmed(target))
+
+
+func _update_confirmed(target: String) -> void:
+	if not DevWidgets.save_over(capture_preset(target), preset_path(target), _status):
+		return
+	_baseline = _live_values()   # the file now says what is on screen, so Reset must too
+	_status.text = "Updated preset '%s' (%d knobs)." % [target, preset_knobs().size()]
+
+
+func _on_delete_pressed() -> void:
+	var target := DevWidgets.selected_name(_preset_dropdown)
+	if target == "" or target == AUTHORED_ENTRY:
+		return
+	DevWidgets.confirm_delete(self, "preset '%s'" % target, func() -> void: _delete_confirmed(target))
+
+
+func _delete_confirmed(target: String) -> void:
+	if not DevWidgets.delete_saved_file(preset_path(target), "preset", _status):
+		return
+	if _loaded_preset == target:
+		# The look on screen is untouched -- only its file is gone. Say so, and hand Reset back to
+		# the scene rather than leaving it pointing at a preset that no longer exists.
+		_baseline = _authored.duplicate()
+		_loaded_preset = ""
+		_status.text = "Deleted preset '%s'. The look on screen is unchanged; Reset now returns to the authored scene." % target
+	refresh_preset_dropdown()
+
+
+# The live value of every knob, per KNOBS index -- the baseline a just-saved preset establishes.
+func _live_values() -> Array:
+	var values: Array = _authored.duplicate()
+	for i in KNOBS.size():
+		if not PRESET_EXCLUDED.has(preset_key(KNOBS[i])):
+			values[i] = read(KNOBS[i])
+	return values
+
+
 # --- The handoff ------------------------------------------------------------------------
 
 func _on_copy_pressed() -> void:
 	var moved := changed_values()
 	if moved.is_empty():
-		_status.text = "Nothing has moved off its authored value yet."
+		_status.text = "Nothing has moved off the scene's authored values yet."
 		return
 	DisplayServer.clipboard_set(_format(moved))
-	_status.text = "Copied %d changed value(s) to the clipboard." % _value_count(moved)
+	var count := _value_count(moved)
+	if _loaded_preset == "":
+		_status.text = "Copied %d changed value(s) to the clipboard." % count
+	else:
+		# Say which, or the count reads as "what I tuned" when it is "preset + what I tuned".
+		_status.text = ("Copied %d value(s) differing from Battle3D.tscn -- that is preset '%s' PLUS "
+			+ "anything you moved since. Save As / Update is the handoff for a preset.") % [count, _loaded_preset]
 
 
 func _on_reset_pressed() -> void:
@@ -520,7 +862,10 @@ func _on_reset_pressed() -> void:
 		if typeof(authored_color) == TYPE_COLOR:
 			write_layer(LAYER_KNOBS[i], authored_color)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
-	_status.text = "Every knob is back at its authored value."
+	if _loaded_preset == "":
+		_status.text = "Every knob is back at its authored value."
+	else:
+		_status.text = "Every knob is back at preset '%s'." % _loaded_preset
 
 
 func _on_refit_pressed() -> void:
@@ -540,7 +885,7 @@ func changed_values() -> Dictionary:
 	for i in KNOBS.size():
 		var knob: Dictionary = KNOBS[i]
 		var live: Variant = read(knob)
-		var authored: Variant = baseline_of(i)
+		var authored: Variant = authored_of(i)
 		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or same_value(live, authored):
 			continue
 		_record(groups, _paste_split(knob))

@@ -406,3 +406,161 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 	assert_dict(orphan.changed_values()).is_empty()
 	orphan.queue_free()
 	await await_idle_frame()
+
+
+# --- Presets (#253 part 1) -----------------------------------------------------------------
+#
+# NO CASE HERE WRITES TO DISK, matching test_dev_tool_overwrite_guards.gd's discipline: presets
+# are captured and applied in memory, and the Save/Update/Delete guards are asserted at REASON
+# level. A real save would drop a .tres into Resources/LookPresets/ that the dropdown then lists
+# forever.
+#
+# Two of these are laws. What a preset covers is a DESIGN ruling (scene mood in, game settings
+# out -- dev, 2026-08-15), and the only thing standing between that ruling and a silent widening
+# is the pair below.
+
+# The ruling restated in its OWN terms, deliberately not by re-reading PRESET_EXCLUDED -- a case
+# that asks the same const it is checking is blind to the const changing, which is the one edit
+# most likely to widen this quietly. Everything is scene mood by default; the three carve-outs
+# below are the dev's, and changing one has to change this list too, i.e. has to be noticed.
+const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit margin (cells)"]
+
+func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
+	var captured: Array = _look.capture_preset("law").values.keys()
+	for knob: Dictionary in LookTool.KNOBS:
+		var group: String = knob["group"]
+		var label: String = knob["label"]
+		var belongs := true
+		var because := "scene mood"
+		if group == "Board markup":
+			belongs = false                          # gameplay legibility, learned once
+			because = "board markup is a game setting"
+		elif group == "Camera":
+			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
+			because = "camera handling is a game setting" if not belongs else "camera framing is look"
+		elif group == "Effects":
+			belongs = label != "Brush ghost alpha"   # dev chrome; players never see it
+			because = "the brush ghost is dev chrome" if not belongs else "flame lights the world"
+		assert_bool(captured.has(LookTool.preset_key(knob))).override_failure_message(
+			"'%s' should%s be captured -- %s" % [label, "" if belongs else " NOT", because]).is_equal(belongs)
+
+
+# A preset only ever walks KNOBS -- board-markup COLOUR (the LAYER_KNOBS half) is out by
+# construction rather than by exclusion, which is the same ruling reached a different way. Nothing
+# may reach a preset that is not an in-scope KNOBS row, in either direction.
+func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void:
+	var captured: Array = _look.capture_preset("law").values.keys()
+	var in_scope: Array[String] = []
+	for knob: Dictionary in LookTool.preset_knobs():
+		in_scope.append(LookTool.preset_key(knob))
+	assert_int(captured.size()).is_equal(in_scope.size())
+	for key: String in captured:
+		assert_bool(in_scope.has(key)).override_failure_message(
+			"'%s' reached a preset without being an in-scope knob" % key).is_true()
+
+
+# A property rename would otherwise silently un-exclude its knob: the old key stops matching
+# anything, the new one is in nobody's list, and a camera-handling value quietly joins presets.
+func test_every_excluded_key_names_a_real_knob() -> void:
+	var live_keys: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS:
+		live_keys.append(LookTool.preset_key(knob))
+	for key: String in LookTool.PRESET_EXCLUDED:
+		assert_bool(live_keys.has(key)).override_failure_message(
+			"PRESET_EXCLUDED names '%s', which is not a knob -- it has silently stopped excluding anything" % key).is_true()
+
+
+# Compared against what the property ACCEPTED, never against what was asked for: engine properties
+# store single-precision. The "the write registered" assertion is the load-bearing one -- without
+# it an apply_preset that did nothing at all would sit inside a passing case (the trap this panel
+# has now walked into twice).
+func test_a_captured_preset_round_trips_through_apply() -> void:
+	var knob := _knob("Sun", "light_energy")
+	var authored: Variant = _look.read(knob)
+	_look.write(knob, _nudged(knob, authored))
+	var accepted: Variant = _look.read(knob)
+	assert_bool(LookTool.same_value(accepted, authored)).override_failure_message(
+		"the tuning write never registered, so this case would pass against an inert apply").is_false()
+
+	var preset := _look.capture_preset("roundtrip")
+	_look._load_authored()
+	assert_bool(LookTool.same_value(_look.read(knob), authored)).is_true()
+
+	_look.apply_preset(preset)
+	assert_bool(LookTool.same_value(_look.read(knob), accepted)).is_true()
+	await await_idle_frame()
+
+
+# The dev's call: load a mood, tweak it, Reset returns to the MOOD. Getting back to Battle3D.tscn
+# is the dropdown's own "(authored scene)" row instead.
+func test_reset_returns_to_the_loaded_preset_not_the_authored_scene() -> void:
+	var knob := _knob("WorldEnvironment", "environment:adjustment_saturation")
+	var authored: Variant = _look.read(knob)
+	_look.write(knob, _nudged(knob, authored))
+	var preset := _look.capture_preset("mood")
+	_look._load_authored()
+	_look.apply_preset(preset)
+	var in_preset: Variant = _look.read(knob)
+	assert_bool(LookTool.same_value(in_preset, authored)).is_false()
+
+	_look.write(knob, _nudged(knob, in_preset))
+	assert_bool(LookTool.same_value(_look.read(knob), in_preset)).is_false()
+	_look._on_reset_pressed()
+	assert_bool(LookTool.same_value(_look.read(knob), in_preset)).is_true()
+	await await_idle_frame()
+
+
+# Copy Values emits paste-ready lines FOR Battle3D.tscn, so it keeps measuring the scene even
+# while a preset is loaded -- diffed against the preset those lines would not reproduce the look.
+func test_copy_values_measures_the_authored_scene_even_with_a_preset_loaded() -> void:
+	var knob := _knob("WorldEnvironment", "environment:tonemap_exposure")
+	_look.write(knob, _nudged(knob, _look.read(knob)))
+	var preset := _look.capture_preset("mood")
+	_look._load_authored()
+	_look.apply_preset(preset)
+	var entries: Dictionary = _look.changed_values()["Battle3D.tscn -> WorldEnvironment.environment"]
+	assert_dict(entries).contains_keys(["tonemap_exposure"])
+	await await_idle_frame()
+
+
+# The dev accepted back-adding new knobs to old presets by hand -- so the panel has to SAY which
+# ones, and the knob has to land on the authored value rather than on whatever was last on screen.
+func test_a_preset_missing_a_knob_leaves_it_authored_and_says_so() -> void:
+	var knob := _knob("Sun", "shadow_opacity")
+	var authored: Variant = _look.read(knob)
+	var preset := _look.capture_preset("partial")
+	preset.values.erase(LookTool.preset_key(knob))
+	_look.write(knob, _nudged(knob, authored))   # so "left at authored" is a real claim
+
+	var report := _look.apply_preset(preset)
+	assert_array(report["missing"]).contains([knob["label"]])
+	assert_bool(LookTool.same_value(_look.read(knob), authored)).override_failure_message(
+		"a knob the preset predates must land on the authored value, not on the last look").is_true()
+	await await_idle_frame()
+
+
+func test_a_preset_naming_a_dead_knob_is_skipped_and_reported() -> void:
+	var preset := _look.capture_preset("stale")
+	preset.values["Sun|a_property_that_no_longer_exists"] = 1.0
+	var report := _look.apply_preset(preset)
+	assert_array(report["unknown"]).contains(["Sun|a_property_that_no_longer_exists"])
+	await await_idle_frame()
+
+
+# Update writes the LOADED preset back over its own file and nothing else -- the 2026-08-11
+# scenario rule, which exists because a mis-aimed Update destroyed missions/Prolog.
+func test_update_refuses_a_preset_that_is_not_the_loaded_one() -> void:
+	_look._preset_dropdown.add_item("Some Other Preset")
+	_look._preset_dropdown.select(_look._preset_dropdown.item_count - 1)
+	assert_str(_look.loaded_preset()).is_empty()
+	assert_str(_look.update_block_reason()).is_not_empty()
+
+
+# The authored row is why falling back to index 0 is safe here while the same auto-select is a
+# trap everywhere else: row 0 is not a file, so it can never be a write target.
+func test_the_authored_row_is_never_a_write_target() -> void:
+	assert_str(_look._preset_dropdown.get_item_text(0)).is_equal(LookTool.AUTHORED_ENTRY)
+	_look._preset_dropdown.select(0)
+	_look._refresh_preset_buttons()
+	assert_bool(_look._update_button.disabled).is_true()
+	assert_bool(_look._delete_button.disabled).is_true()
