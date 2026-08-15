@@ -68,7 +68,14 @@ static func has_ground(grid: TileMapLayer, cell: Vector2i) -> bool:
 	return grid.get_cell_source_id(cell) != -1
 
 static func get_terrain_kind_at_cell(grid: TileMapLayer, cell: Vector2i) -> Terrain.Kind:
-	var data := grid.get_cell_tile_data(cell)
+	return terrain_kind_of(grid.get_cell_tile_data(cell))
+
+
+# The kind a TileData carries. Split out of get_terrain_kind_at_cell (#250) so a caller
+# holding a tile rather than a placed cell -- the meshlib generator walks the TILESET, which
+# has no board -- reads the same rule instead of copying it. Same shape as the
+# authored_tile_display_name pair below.
+static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 	if data == null or not data.has_custom_data("terrain_type"):
 		return Terrain.Kind.NONE
 	var raw: int = data.get_custom_data("terrain_type")

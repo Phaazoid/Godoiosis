@@ -16,11 +16,26 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # fallback plane (#231) has to sit on this same face, and two literals would let them drift.
 const COLUMN_TOP := float(BoardSpace.FLAT_TOP_LEVEL) * BoardSpace.CELL_SIZE
 
+# Unit-sprite pixel density, in texels per world unit — the inspector face of
+# UnitSprite3D.texels_per_unit, which every sprite reads at construction (ghosts included, which
+# is why the number lives on the class and not on each sprite). It sits here because this is the
+# node that builds them, and its _ready runs before any reconcile can.
+#
+# A knob since #250 put the real 16px tile art on the ground: at 32 the ground's pixels are twice
+# the size of a unit's, at 16 a 32px unit stands two cells tall — exactly its proportion in the 2D
+# game. #176 calls mixed densities "the single loudest amateur HD-2D tell"; which way to fix it is
+# an eye call, so it is a dial rather than a guess.
+@export var texels_per_unit := 32.0
+
 var units_root: Node2D
 
 var _mirrored: Dictionary[int, UnitSprite3D] = {}
 var _ghosts: Array[UnitSprite3D] = []
 var _camera_right := Vector3.ZERO   # last camera basis facing was judged against
+
+
+func _ready() -> void:
+	UnitSprite3D.texels_per_unit = texels_per_unit
 
 
 func _process(_delta: float) -> void:

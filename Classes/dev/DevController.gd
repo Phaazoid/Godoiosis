@@ -170,13 +170,14 @@ func brush_ghost_cell() -> Vector2i:
 	return _mouse_cell()
 
 
-# What that preview would BE. Read off the 2D ghost layer, which already holds the brush's pick
-# as a REAL placed tile -- so the 3D twin resolves its kind through the same TileData the 2D
-# preview does, and the two cannot drift into disagreeing about what is being painted.
-func brush_ghost_kind() -> Terrain.Kind:
-	if _brush_ghost == null:
-		return Terrain.Kind.NONE
-	return GridUtils.get_terrain_kind_at_cell(_brush_ghost, _mouse_cell())
+# What that preview would BE -- handed over as the LAYER, not as a decoded property of it. The
+# ghost layer already holds the brush's pick as a REAL placed tile, so a 3D twin resolves it with
+# the same call it uses on the real grid and the two cannot drift into disagreeing about what is
+# being painted. It returned the Kind until #250, which was one decode too early: the 3D board
+# now draws a cell from its ATLAS COORDS, and a kind-shaped answer could no longer describe the
+# block that paint would produce.
+func brush_ghost_layer() -> TileMapLayer:
+	return _brush_ghost
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
 # multi-cell tile (the lantern) previews exactly as set_cell will draw it. Child of the grid --
