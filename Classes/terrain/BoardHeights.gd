@@ -49,6 +49,25 @@ func clear() -> void:
 	_elevations.clear()
 	_ramps.clear()
 
+# Elevation goes with the ground (#260), the rule TerrainStateManager.prune_groundless already holds
+# for tile states: a height under no tile is junk that resurrects the moment ground is repainted
+# there, and it rides every save in the meantime. A SWEEP for the same reason that one is -- the
+# brush erases one cell, resize_map clears and repaints a whole rectangle. Returns whether anything
+# went, so a caller can skip its redraw.
+#
+# The predicate is a PARAMETER rather than an injected ground_source field like that sibling's: it
+# needs one because attacks deposit states from many sites, while this store has one writer and one
+# pruner, both of which can reach GridUtils.has_ground from where they stand.
+func prune_groundless(has_ground: Callable) -> bool:
+	var doomed: Array[Vector2i] = []
+	for cell in painted_cells():
+		var grounded: bool = has_ground.call(cell)   # typed local: .call() erases to Variant
+		if not grounded:
+			doomed.append(cell)
+	for cell in doomed:
+		set_cell(cell, 0, Terrain.RampRise.NONE)
+	return not doomed.is_empty()
+
 # Every cell carrying a non-default value -- what a dev readout or a renderer iterates. Ramp cells
 # at elevation 0 are legal and must not be missed, so both stores contribute.
 func painted_cells() -> Array[Vector2i]:

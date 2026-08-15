@@ -2,21 +2,24 @@ extends VBoxContainer
 class_name TileBrushTool
 
 # Dev-overlay tab for authoring the board: paints terrain tiles, dynamic tile states (#174),
-# and named zones (left-drag paints, right-drag erases in every mode), plus map resize.
+# named zones, and per-cell elevation + ramps (#260) — left-drag paints, right-drag erases in
+# every mode — plus map resize.
 # Terrain choices are scanned from the tileset itself, never hardcoded: every tile carrying a
 # terrain_type kind or an authored terrain_name is paintable, across all atlas sources.
 # Zone mode carries a picker (2026-08-12): a dropdown of every painted zone, so authoring can
 # see what exists and continue a zone instead of accidentally forking a new one; the picked
 # zone's cells are lifted on the board via OverlayManager.redraw_zone_highlight.
+# Elevation mode (#260) is a paint MODE rather than a palette expansion for the reason the design
+# put height in a per-cell store at all: a per-tile elevation would need one grass tile per level.
 
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
-const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Elevation"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var selected_source := 0
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE, STATE }
+enum PaintMode { TERRAIN, ZONE, STATE, ELEVATION }
 var paint_mode := PaintMode.TERRAIN
 const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
@@ -36,6 +39,31 @@ var _state_row: HBoxContainer
 var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
+
+# Elevation brush (#260): the level the next click places at, and whether that cell is a ramp.
+# One click writes BOTH, because BoardHeights.set_cell takes both — two brushes would be two ways
+# to author one cell. NOT clamped at 0: a dip has to be authorable without lifting the whole map
+# (dev, 2026-08-15).
+var _elevation := 0
+var _rise := Terrain.RampRise.NONE
+var _elevation_row: HBoxContainer
+var _elevation_spin: SpinBox
+var _rise_row: HBoxContainer
+var _rise_option: OptionButton
+
+# COMPASS order, not enum order, and it is both the picker's row order and the Z/C cycle order —
+# one list, so the dropdown and the keys cannot disagree about what comes next. Turning has to read
+# as turning (N -> E -> S -> W), where the enum declares N/S then E/W; NONE rides along so flat
+# ground is reachable without a menu trip, which is the whole point of the keys.
+# tests/dev/test_height_brush.gd pins it against Terrain.RampRise, so a new direction cannot ship
+# missing from the picker.
+const RISE_CYCLE: Array[Terrain.RampRise] = [
+	Terrain.RampRise.NONE,
+	Terrain.RampRise.NORTH,
+	Terrain.RampRise.EAST,
+	Terrain.RampRise.SOUTH,
+	Terrain.RampRise.WEST
+]
 
 # Parallel to the dropdown: the atlas source + coords each entry paints. Built by scanning
 # every atlas source for tiles that say what they ARE -- a terrain_type kind, an authored
@@ -252,7 +280,84 @@ func _build_extra_controls() -> void:
 	_clear_states_button.tooltip_text = "Wipe every dynamic tile state on the board (fire/ice/cover). Unsaved paint is lost."
 	_clear_states_button.pressed.connect(_on_clear_states_pressed)
 	add_child(_clear_states_button)
+
+	# Part 5: the elevation brush (#260). Hand-built rather than DevWidgets.add_spinbox/add_option
+	# for the reason the zone rows are: the wheel writes the level back INTO the SpinBox, and
+	# add_option builds a one-shot list (the #179 trap).
+	_elevation_row = HBoxContainer.new()
+	var level_label := Label.new()
+	level_label.text = "Level"
+	_elevation_row.add_child(level_label)
+	_elevation_spin = SpinBox.new()
+	_elevation_spin.min_value = -99
+	_elevation_spin.max_value = 99
+	_elevation_spin.value = _elevation
+	_elevation_spin.value_changed.connect(func(v: float): set_elevation(int(v)))
+	_elevation_row.add_child(_elevation_spin)
+	var reset := Button.new()
+	reset.text = "Reset to flat (0)"
+	reset.pressed.connect(reset_elevation)
+	_elevation_row.add_child(reset)
+	add_child(_elevation_row)
+	DevWidgets.apply_tooltip(_elevation_row, DevWidgets.wrap_tooltip(
+		"Scroll the mouse wheel over the board to change the level the brush paints at. "
+		+ "Reset returns the brush to flat ground: level 0, no ramp. Negative levels are dips."))
+
+	_rise_row = HBoxContainer.new()
+	var rise_label := Label.new()
+	rise_label.text = "Ramp Rise"
+	_rise_row.add_child(rise_label)
+	_rise_option = OptionButton.new()
+	for rise in RISE_CYCLE:
+		_rise_option.add_item(Terrain.ramp_rise_display_name(rise))
+	_rise_option.select(RISE_CYCLE.find(_rise))
+	_rise_option.item_selected.connect(func(idx: int): set_rise(RISE_CYCLE[idx]))
+	_rise_row.add_child(_rise_option)
+	add_child(_rise_row)
+	DevWidgets.apply_tooltip(_rise_row, DevWidgets.wrap_tooltip(
+		"Which way this cell RISES — Z and C turn it, the way Q and E turn the board. A ramp's own "
+		+ "level is its LOW side, so a ramp at level 2 rising North connects level 2 to level 3 to "
+		+ "the north. None = ordinary flat ground."))
+
 	_set_paint_mode(PaintMode.TERRAIN)
+
+func selected_elevation() -> int:
+	return _elevation
+
+func selected_rise() -> Terrain.RampRise:
+	return _rise
+
+# The ONE writer of the brush level: the wheel, the SpinBox and Reset all land here, so the widget
+# and the value the brush paints with cannot drift. set_value_no_signal, or the SpinBox's own
+# value_changed would call straight back into this.
+func set_elevation(value: int) -> void:
+	_elevation = value
+	if _elevation_spin != null:
+		_elevation_spin.set_value_no_signal(value)
+
+func nudge_elevation(delta: int) -> void:
+	set_elevation(_elevation + delta)
+
+# The ONE writer of the rise, the set_elevation twin: the dropdown, the Z/C keys and Reset all land
+# here, so the picker always shows what the next click will paint.
+func set_rise(rise: Terrain.RampRise) -> void:
+	_rise = rise
+	if _rise_option != null:
+		_rise_option.select(RISE_CYCLE.find(rise))
+
+# Turn the rise one step (dev ask 2026-08-15: a menu trip per direction is the wrong cost for
+# something you change constantly). Wraps, so the keys alone reach every value including flat.
+func cycle_rise(delta: int) -> void:
+	var index := RISE_CYCLE.find(_rise)
+	if index == -1:
+		index = 0
+	set_rise(RISE_CYCLE[posmod(index + delta, RISE_CYCLE.size())])
+
+# Back to plain flat ground, which is BOTH fields: a reset that left the rise armed would still
+# paint ramps, and "flat" is what the button is for.
+func reset_elevation() -> void:
+	set_elevation(0)
+	set_rise(Terrain.RampRise.NONE)
 
 func _build_state_options() -> void:
 	for i in Terrain.TileState.size():
@@ -344,7 +449,19 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_zone_name_row.visible = mode == PaintMode.ZONE
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
+	_elevation_row.visible = mode == PaintMode.ELEVATION
+	_rise_row.visible = mode == PaintMode.ELEVATION
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
+	update_height_readout()   # the same, for ELEVATION mode
+
+# Painting height into an invisible store is blind, so entering ELEVATION mode lights the height
+# readout — the twin of update_zone_highlight above. The overlay derives its own visibility from
+# this AND F5, so leaving the mode cannot switch off a readout F5 asked for. Null in a build with
+# dev tools stripped, and while _build_extra_controls runs before init() hands us the game.
+func update_height_readout() -> void:
+	if game == null or game.height_debug_overlay == null:
+		return
+	game.height_debug_overlay.set_brush_active(paint_mode == PaintMode.ELEVATION)
 
 # The board-wide wipe (dev ask 2026-08-11); per-cell erase stays right-click. Confirmed because
 # unsaved paint dies with it; the wipe pair is clear_board's own (clear + full redraw).
