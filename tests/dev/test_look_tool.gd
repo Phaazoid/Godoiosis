@@ -159,18 +159,32 @@ func _walk_for_pickers(node: Node, offenders: Array[String]) -> void:
 		_walk_for_pickers(child, offenders)
 
 
+# Child order is label, swatch, then (tag, slider, field) per channel: 3 = R slider, 4 = R field.
 func test_dragging_a_colour_channel_moves_the_live_property() -> void:
 	var knob := _knob("Sun", "light_color")
 	var row := _row_for(knob["label"])
 	assert_object(row).is_not_null()
 	var before: Color = _look.read(knob)
-	# Child order is label, swatch, then (tag, slider) per channel -- index 3 is the R slider.
 	var red := row.get_child(3) as HSlider
 	assert_object(red).is_not_null()
-	red.value = 0.5
+	red.value = 128.0                                        # 0-255, the scale a hex code is in
 	var after: Color = _look.read(knob)
-	assert_float(after.r).is_equal_approx(0.5, 0.005)
-	assert_float(after.g).is_equal_approx(before.g, 0.005)   # the other channels are untouched
+	assert_float(after.r).is_equal_approx(128.0 / 255.0, 0.005)
+	# Editing R must not re-quantise the others through 8-bit -- G is authored 0.985, and a
+	# round trip would land it on 0.9843 and report the colour as changed when it was not.
+	assert_float(after.g).is_equal_approx(before.g, 0.0001)
+
+
+# Typing a number is its own wire: the field could be built, display correctly, and drive nothing.
+func test_typing_a_colour_channel_moves_the_live_property_and_the_slider() -> void:
+	var knob := _knob("Sun", "light_color")
+	var row := _row_for(knob["label"])
+	var slider := row.get_child(3) as HSlider
+	var field := row.get_child(4) as SpinBox
+	assert_object(field).is_not_null()
+	field.value = 64.0
+	assert_float(_look.read(knob).r).is_equal_approx(64.0 / 255.0, 0.005)
+	assert_float(slider.value).is_equal_approx(64.0, 0.001)   # the two never disagree
 
 
 # --- The handoff --------------------------------------------------------------------------

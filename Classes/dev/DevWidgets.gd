@@ -69,29 +69,51 @@ static func add_color(container: Node, label_text: String, initial_value: Color,
 	swatch.color = initial_value
 	swatch.custom_minimum_size = Vector2(30, 0)
 	row.add_child(swatch)
-	var channels: Array[HSlider] = []
+	# The LIVE colour, boxed in a Dictionary because a GDScript lambda captures a local by VALUE --
+	# a plain Color local could not carry an edit from one channel's callback to the next. Editing
+	# one channel replaces only that component, so the untouched three keep their authored float
+	# precision instead of being re-derived through 8-bit and reading as changed.
+	var state := {"color": initial_value}
 	for i in COLOR_CHANNELS.size():
 		var tag := Label.new()
 		tag.text = COLOR_CHANNELS[i]
 		row.add_child(tag)
+		# Slider AND field both work in 0-255, the scale you read off a hex code. One scale, so
+		# typing a number and dragging the handle can never disagree about what the value is.
 		var slider := HSlider.new()
 		slider.min_value = 0.0
-		slider.max_value = 1.0
-		slider.step = 0.01
-		slider.value = initial_value[i]
-		slider.custom_minimum_size = Vector2(56, 0)
+		slider.max_value = 255.0
+		slider.step = 1.0
+		slider.value = roundi(initial_value[i] * 255.0)
+		slider.custom_minimum_size = Vector2(44, 0)
 		slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		row.add_child(slider)
-		channels.append(slider)
-	# Connected only once every channel exists -- each callback reads all four to rebuild the Color.
-	for slider: HSlider in channels:
-		slider.value_changed.connect(func(_v: float) -> void:
-			var picked := Color(channels[0].value, channels[1].value,
-				channels[2].value, channels[3].value)
-			swatch.color = picked
-			on_change.call(picked))
+		var field := SpinBox.new()
+		field.min_value = 0
+		field.max_value = 255
+		field.step = 1
+		field.value = slider.value
+		field.custom_minimum_size = Vector2(58, 0)
+		row.add_child(field)
+		# Each drives the other with set_value_no_signal, or the two would bounce a change back
+		# and forth forever.
+		slider.value_changed.connect(func(v: float) -> void:
+			field.set_value_no_signal(v)
+			_write_channel(state, i, v, swatch, on_change))
+		field.value_changed.connect(func(v: float) -> void:
+			slider.set_value_no_signal(v)
+			_write_channel(state, i, v, swatch, on_change))
 	container.add_child(row)
 	return row
+
+
+static func _write_channel(state: Dictionary, index: int, value_255: float,
+		swatch: ColorRect, on_change: Callable) -> void:
+	var color: Color = state["color"]
+	color[index] = value_255 / 255.0
+	state["color"] = color
+	swatch.color = color
+	on_change.call(color)
 
 
 # How many decimals a step implies -- 0.005 prints 3, 1.0 prints 0. Derived rather than declared
