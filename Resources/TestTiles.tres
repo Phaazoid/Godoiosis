@@ -289,6 +289,7 @@ texture = ExtResource("1_halkr")
 9:10/0 = 0
 9:10/0/custom_data_2 = 3
 9:10/0/custom_data_3 = "lantern"
+9:10/0/custom_data_4 = true
 10:10/0 = 0
 11:10/0 = 0
 12:10/0 = 0
@@ -416,6 +417,7 @@ texture = ExtResource("1_halkr")
 18:13/0/custom_data_1 = 1
 18:13/0/custom_data_2 = 4
 18:13/0/custom_data_3 = "tree"
+18:13/0/custom_data_4 = true
 
 [resource]
 custom_data_layer_0/name = "walkable"
@@ -426,4 +428,6 @@ custom_data_layer_2/name = "terrain_type"
 custom_data_layer_2/type = 2
 custom_data_layer_3/name = "terrain_name"
 custom_data_layer_3/type = 4
+custom_data_layer_4/name = "stands_up"
+custom_data_layer_4/type = 1
 sources/0 = SubResource("TileSetAtlasSource_e2o6t")

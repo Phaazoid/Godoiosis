@@ -418,6 +418,220 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	assert_int(item).is_equal(BoardMirror.KIND_TO_ITEM.get(kind, BoardMirror.FALLBACK_ITEM))
 
 
+# --- #255: props stand up --------------------------------------------------------------------
+
+# Tiles carrying stands_up (or not), in atlas order. Derived from the tileset so an atlas swap
+# cannot invalidate a hardcoded coordinate.
+func _tiles_that_stand(standing: bool) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			if GridUtils.stands_up_of(source.get_tile_data(coords, 0)) == standing:
+				out.append({"source": source_id, "coords": coords})
+	return out
+
+
+func _tile_named(name: String) -> Dictionary:
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			if GridUtils.authored_tile_display_name(source.get_tile_data(coords, 0)) == name:
+				return {"source": source_id, "coords": coords}
+	return {}
+
+
+func _light_under(node: Node3D) -> OmniLight3D:
+	for child in node.get_children():
+		var light := child as OmniLight3D
+		if light != null:
+			return light
+	return null
+
+
+# THE case #255 exists for. Before it, a tree was painted flat into the ground it should be
+# standing on; the fix is only real if a stands_up tile produces a standing node and a ground
+# tile produces none — the second half matters as much, or "props stand up" degenerates into
+# "everything stands up".
+func test_a_standing_tile_stands_up_and_a_ground_tile_does_not() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var standing := _tiles_that_stand(true)
+	var flat := _tiles_that_stand(false)
+	assert_bool(not standing.is_empty()).override_failure_message(
+			"no tile carries stands_up; the case is vacuous").is_true()
+
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var prop_cell: Vector2i = cells[0]
+	var ground_cell: Vector2i = cells[1]
+	_game.grid.set_cell(prop_cell, standing[0].source, standing[0].coords)
+	_game.grid.set_cell(ground_cell, flat[0].source, flat[0].coords)
+	await _settle()
+
+	assert_object(mirror.prop_at(prop_cell)).override_failure_message(
+			"a stands_up tile did not stand up — it is still painted flat into the ground").is_not_null()
+	assert_object(mirror.prop_at(ground_cell)).override_failure_message(
+			"a GROUND tile stood up; stands_up is not being read").is_null()
+
+
+# The other half of standing up: the cell's top face must go back to being ground, or the tree
+# renders twice — once flat under itself and once standing. Asserted against the SOURCE atlas
+# rather than against a colour: a prop's baked region must DIFFER from its art (the art was left
+# off), while an opaque ground tile's must match it exactly (nothing was left off).
+func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var tiles: TileSet = _game.grid.tile_set
+	var source := tiles.get_source(tiles.get_source_id(0)) as TileSetAtlasSource
+	var baked := _baked_atlas(board)
+	assert_object(baked).override_failure_message("the meshlib carries no baked atlas").is_not_null()
+	var art := source.texture.get_image()
+	if art.is_compressed():
+		art.decompress()
+
+	var prop := _tile_named("Tree")
+	assert_bool(not prop.is_empty()).override_failure_message("no Tree tile; the case is vacuous").is_true()
+	assert_bool(_regions_match(baked, art, source.get_tile_texture_region(prop.coords, 0))) \
+			.override_failure_message("the prop's own art is baked onto its top face — it will render twice") \
+			.is_false()
+
+	var ground := _tile_named("Grass Basic")
+	assert_bool(not ground.is_empty()).override_failure_message("no grass tile; the case is vacuous").is_true()
+	assert_bool(_regions_match(baked, art, source.get_tile_texture_region(ground.coords, 0))) \
+			.override_failure_message("a GROUND tile lost its art — stands_up is being read too broadly") \
+			.is_true()
+
+
+func _baked_atlas(board: GridMap) -> Image:
+	var mesh := board.mesh_library.get_item_mesh(BoardMirror.FALLBACK_ITEM + 4)
+	for id: int in board.mesh_library.get_item_list():
+		if board.mesh_library.get_item_name(id).begins_with("tile_"):
+			mesh = board.mesh_library.get_item_mesh(id)
+			break
+	var material := mesh.surface_get_material(0) as StandardMaterial3D
+	if material == null or material.albedo_texture == null:
+		return null
+	return material.albedo_texture.get_image()
+
+
+func _regions_match(a: Image, b: Image, region: Rect2i) -> bool:
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if a.get_pixel(x, y) != b.get_pixel(x, y):
+				return false
+	return true
+
+
+# The multi-cell case 5a could not serve: a 1x2 lantern is 16x32 of art, which cannot go onto a
+# 1x1 top face un-squashed but is exactly what a billboard is for. Two cells tall, measured in
+# world units off the sprite's own density rather than from a pinned number.
+func test_the_lantern_stands_two_cells_tall() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var lantern := _tile_named("Lantern")
+	assert_bool(not lantern.is_empty()).override_failure_message("no Lantern tile; the case is vacuous").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, lantern.source, lantern.coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var prop := mirror.prop_at(cell)
+	assert_object(prop).override_failure_message("the lantern did not stand up").is_not_null()
+	var sprite := prop.get_child(0) as Sprite3D
+	assert_object(sprite).is_not_null()
+	var height: float = sprite.texture.region.size.y * sprite.pixel_size
+	assert_float(height).override_failure_message(
+			"the lantern stands %s cells tall, not 2 — its multi-cell art was cropped" \
+			% [height / BoardSpace.CELL_SIZE]).is_equal_approx(2.0 * BoardSpace.CELL_SIZE, 0.001)
+
+
+# Test the WIRE: a light table nothing reads looks exactly like a table with no entries. The
+# negative half is what gives it teeth — every prop lighting up would also pass the first, so the
+# pairing must be two things that BOTH stand up and differ only in whether they glow.
+func test_the_lantern_carries_a_light_and_the_tree_does_not() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var lantern := _tile_named("Lantern")
+	var tree := _tile_named("Tree")
+	assert_bool(not lantern.is_empty() and not tree.is_empty()).override_failure_message(
+			"Lantern or Tree missing from the tileset; the case is vacuous").is_true()
+
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	_game.grid.set_cell(cells[0], lantern.source, lantern.coords)
+	_game.grid.set_cell(cells[1], tree.source, tree.coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	assert_object(_light_under(mirror.prop_at(cells[0]))).override_failure_message(
+			"the lantern casts no light — LIT_PROPS is inert").is_not_null()
+	assert_object(_light_under(mirror.prop_at(cells[1]))).override_failure_message(
+			"the tree casts light — every prop is lit, so the table is not being consulted").is_null()
+
+
+# A prop REPLACED on a cell must be rebuilt, and a prop merely re-seen must be left standing.
+# The second half cannot be seen through prop_count(), which is why the pin is node identity —
+# the same lesson the fire markers already carry.
+func test_a_prop_is_rebuilt_only_when_its_tile_changes() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var standing := _tiles_that_stand(true)
+	assert_bool(standing.size() >= 2).override_failure_message(
+			"fewer than two standing tiles; the case is vacuous").is_true()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	_game.grid.set_cell(cell, standing[0].source, standing[0].coords)
+	await _settle()
+	var first := mirror.prop_at(cell)
+	assert_object(first).is_not_null()
+
+	await _settle()   # reconciled again, same tile
+	assert_object(mirror.prop_at(cell)).override_failure_message(
+			"the prop is rebuilt every frame").is_same(first)
+
+	_game.grid.set_cell(cell, standing[1].source, standing[1].coords)
+	await _settle()
+	assert_object(mirror.prop_at(cell)).override_failure_message(
+			"painting a DIFFERENT prop left the old one standing").is_not_same(first)
+
+	_game.grid.erase_cell(cell)
+	await _settle()
+	assert_object(mirror.prop_at(cell)).override_failure_message(
+			"erasing the tile left its prop standing").is_null()
+
+
+# Props sort against units by DEPTH, not by a hand-maintained priority — which is only true while
+# they write depth. Cut-out alpha in the opaque pass is what buys that, so it is the property
+# worth pinning rather than the render layer (nothing culls by layer in this project).
+func test_props_write_depth_so_units_sort_against_them() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var standing := _tiles_that_stand(true)
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, standing[0].source, standing[0].coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var sprite := mirror.prop_at(cell).get_child(0) as Sprite3D
+	assert_int(sprite.alpha_cut).override_failure_message(
+			"a prop that does not write depth loses its sort against unit sprites" \
+			).is_equal(SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS)
+	assert_int(sprite.layers).is_equal(BoardOverlays.WORLD_RENDER_LAYER)
+
+
 func test_the_flame_never_sits_in_the_ground_plane() -> void:
 	# A QuadMesh is centred on its origin, so a 0.7-tall flame lifted 0.35 has its BOTTOM EDGE
 	# at exactly y = 0 — coplanar with the tile top face it stands on. Harmless while the

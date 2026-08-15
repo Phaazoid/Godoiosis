@@ -81,6 +81,22 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 	var raw: int = data.get_custom_data("terrain_type")
 	return raw as Terrain.Kind
 
+# Does this tile's ART depict an object STANDING ON the ground, rather than the ground itself
+# (#255)? A presentation fact with no existing answer, which is why it is authored rather than
+# inferred -- every candidate rule has a counterexample in the sheet we ship: crate carries no
+# kind and is a prop, pot is walkable and is a prop, hole carries no kind and is NOT one, and
+# chest reads opaque while pot reads 48% open. Read by the 3D mirror (which stands it up) and by
+# the meshlib generator (which then bakes that cell's top face as bare ground).
+static func stands_up_of(data: TileData) -> bool:
+	if data == null or not data.has_custom_data("stands_up"):
+		return false
+	return data.get_custom_data("stands_up")
+
+
+static func stands_up_at_cell(grid: TileMapLayer, cell: Vector2i) -> bool:
+	return stands_up_of(grid.get_cell_tile_data(cell))
+
+
 static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Texture2D:
 	var kind := get_terrain_kind_at_cell(grid, cell)
 	if TERRAIN_ICONS.has(kind):

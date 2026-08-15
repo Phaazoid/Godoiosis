@@ -68,6 +68,25 @@ Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments
 1. **Emission channel** — windows, runes, crystals authored with an emission mask so bloom picks them selectively. Cheap to demand up front, impossible to retrofit across a finished sprite library.
 2. **Normal-mapped pixel art** — generated from sprites (e.g. Laigter-class tools) so flat-lit art still takes directional light convincingly. This *amends* the flat-lit convention rather than breaking it (albedo stays flat; the normal map carries the depth). Decide by eye in the look-dev scene.
 
+### A prop's FORM is authored art data, not a rendering choice (#255, 2026-08-15 — MEASURED, not predicted)
+
+Stage 5b stood every object-shaped tile up as a billboard and the dev judged the result: *"most of it looks awful… things that are supposed to be blocky, like the chest and the crates, look so odd like this, they really want to be textures on a 3D model. The fences don't work at all. The lamps, surprisingly, are fine. I think **anything that's thin already works in this style**."*
+
+That sentence is the convention, and it is the same split Octopath uses (billboarded foliage and lampposts; real geometry for crates, walls and buildings). **A prop therefore has three possible forms, and which one it is belongs to the ART, decided when it is drawn:**
+
+| Form | What it is | Renders as | Art it needs |
+|---|---|---|---|
+| **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, grass, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
+| **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | fixed-yaw quad, facing authored per piece | one front-on sprite **plus a facing** |
+| **Block** | volumetric — crates, chests, rocks, barrels | a real cube stacked on the ground block | a **top** texture and a **side** texture, minimum |
+
+**Shipped so far: billboards only** (`stands_up` on the tileset, `BoardMirror`'s prop layer). The other two forms are deliberately unbuilt, and the reason is art rather than code — worth stating plainly because it inverts the usual assumption:
+
+- **Block is nearly free mechanically.** The GridMap already stacks in 3D, the mirror simply only ever writes `y = 0`, and `gen_lookdev_assets.gd` already builds full cubes with separate top and side materials — that is how every ground block is made. What does not exist is **per-face art**: one 3/4 sprite pasted on all six faces looks worse than the billboard it replaces. So a blocky prop is blocked on a commission, not on engineering.
+- **Oriented plane needs no new art but does need a piece→facing mapping**, which is a *content convention* (Law #4's named hazard) and so is its own decision rather than a detail.
+
+**Consequence for the commission**: the sprite sheet must say, per prop, which form it is — and blocky props must be ordered as a top + side pair rather than as a single 3/4 view. That is cheap to specify up front and expensive to retrofit, which is exactly the bar the two conventions above are held to.
+
 ---
 
 ## Tier 1 — finishing the HD-2D canon
