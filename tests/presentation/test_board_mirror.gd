@@ -130,6 +130,8 @@ func test_a_unit_going_down_on_fire_does_not_take_the_flame_with_it() -> void:
 	# wrong — the marker being freed, or the marker still existing and being drawn under the
 	# downed sprite (both flame and unit are transparent quads at the same standing point).
 	# A held count means the node is alive and it is a render-order question, not a logic one.
+	# That report stopped reproducing (#243 closed 2026-08-15); the live artefact is the flame
+	# and the sprite z-fighting (#298). This case pins the half that is still true.
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
 	#

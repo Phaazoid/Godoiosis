@@ -86,8 +86,10 @@ const FLAME_TEXTURE_PATH := "res://Art/LookDev/torch_flame.png"
 # FALSE restores the rendering the flame had before #236, which is the known-good look.
 # #236 turned this on to stop a downed body swallowing the flame and bought constant
 # z-fighting for a rare, self-correcting artefact — a bad trade, reverted by default
-# (dev, 2026-08-14: "if anything, the z fighting is worse now"). The switch stays because
-# the two modes fail in opposite directions and only an eye can rank them; see _make_fire.
+# (dev, 2026-08-14: "if anything, the z fighting is worse now"). NOT a choice between two
+# artefacts, though it read as one for a day: OFF fights the unit sprite too (#298), since
+# both are Y-billboards through one cell centre, i.e. one plane. The switch only picks
+# which surface the flame argues with; see _make_fire.
 @export var flame_writes_depth := false
 @export var flame_light_energy := 2.0
 @export var flame_light_range := 4.0
@@ -392,17 +394,16 @@ func _make_fire(at: Vector3) -> Node3D:
 	var material := StandardMaterial3D.new()
 	# DEPTH_PRE_PASS, not plain ALPHA: unit sprites are ALPHA_CUT_OPAQUE_PREPASS, so they
 	# write depth and a pure-alpha flame is drawn afterwards and depth-TESTED against them.
-	# A standing sprite is cut-out air around its feet so the flame showed through; a DOWNED
-	# body is solid coverage at exactly ground level and swallowed it whole (reported in play
-	# 2026-08-14 — the marker was never freed, only hidden). Matching the discipline puts both
-	# in the same per-pixel sort.
+	# #236 turned that on because a downed body swallowed the flame whole; that symptom no
+	# longer reproduces and #243 is closed.
 	#
-	# The knob exists because the two modes fail in OPPOSITE directions and only an eye can
-	# say which is worse here: writing depth makes the flame fight anything near-coplanar
-	# with it (its own tile, and a unit sprite standing on that tile — both are camera-facing
-	# planes through the same point), while not writing depth makes it lose to whatever wrote
-	# depth first, which is the swallowed-by-a-body bug. The ground half is fixed by geometry
-	# below; this switch is for the sprite half.
+	# What the switch does NOT do is trade one artefact for another, which is what this
+	# comment claimed until #298. The marker root and the sprite origin share a cell centre
+	# and both are BILLBOARD_FIXED_Y, so the two quads are not near-coplanar — they are the
+	# SAME plane, and the flame fights the sprite either way. Swallowed vs. speckled is which
+	# way the per-fragment precision fell. Only separating the planes reaches a clean frame,
+	# and flame_lift cannot: Y is the one axis that does not separate them. The ground half
+	# is fixed by the geometry below.
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_DEPTH_PRE_PASS if flame_writes_depth \
 			else BaseMaterial3D.TRANSPARENCY_ALPHA
 	material.albedo_color = Color(0, 0, 0, 1)
