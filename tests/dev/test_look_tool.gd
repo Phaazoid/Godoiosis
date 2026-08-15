@@ -424,6 +424,11 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 # most likely to widen this quietly. Everything is scene mood by default; the three carve-outs
 # below are the dev's, and changing one has to change this list too, i.e. has to be noticed.
 const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit margin (cells)"]
+# The Effects group is flame plus two things that are not mood at all. This list earned its keep
+# immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
+# rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
+# ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
+const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height"]
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
@@ -439,8 +444,8 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
 			because = "camera handling is a game setting" if not belongs else "camera framing is look"
 		elif group == "Effects":
-			belongs = label != "Brush ghost alpha"   # dev chrome; players never see it
-			because = "the brush ghost is dev chrome" if not belongs else "flame lights the world"
+			belongs = not EFFECTS_NOT_MOOD.has(label)   # dev chrome and prop geometry are not mood
+			because = "'%s' is not scene mood" % label if not belongs else "flame lights the world"
 		assert_bool(captured.has(LookTool.preset_key(knob))).override_failure_message(
 			"'%s' should%s be captured -- %s" % [label, "" if belongs else " NOT", because]).is_equal(belongs)
 
