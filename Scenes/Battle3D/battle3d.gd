@@ -70,6 +70,7 @@ var _help_wheel_is_level := false
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
 @onready var _help: Label = $UI/Help
+@onready var _checkout: Label = $UI/Checkout
 
 var game: Node2D
 var _game_container: SubViewportContainer
@@ -104,6 +105,7 @@ func _ready() -> void:
 	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_look_host(self)
+	_show_checkout()
 	if demo_mode:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
@@ -599,6 +601,21 @@ func _update_help() -> void:
 	var space := "SPACE spawn" if game.game_state == game.GameState.DEV_MODE else "SPACE centre"
 	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
 	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
+
+
+# WHICH CHECKOUT is on screen (#295) — several agents move the dev's working tree, so the build he
+# is playing is a fact worth reading rather than remembering. A LABEL OF ITS OWN, not a field of
+# the help line: that line is rebuilt from live bindings and rewritten wholesale in demo_mode,
+# while this is fixed for the process, and a suffix on a 140-character string is exactly the kind
+# of absence nobody notices. Set once — describe() names the checkout this build was LOADED from,
+# and re-reading per frame would answer about the tree instead, which is a different question.
+#
+# This UI CanvasLayer sits above the 2D game's container in all three hosting views, so the
+# readout survives F4 into FLAT_2D (#292 parity). Hidden, not blanked, outside a dev build.
+func _show_checkout() -> void:
+	var stamp := Checkout.describe()
+	_checkout.visible = stamp != ""
+	_checkout.text = stamp
 
 
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves
