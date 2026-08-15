@@ -21,6 +21,8 @@ The board is a `TileMapLayer` (`Grid`). Tiles already carry **custom data** the 
 - `terrain_name: String` (added 2026-08-12) — dev-facing tile label, read only by the Tile Brush palette. The brush lists **every tile carrying a kind or a name** across all atlas sources — kind variants and named scenery included — labelled by the authored name when present, kind + atlas coords otherwise. A named tile with no `terrain_type` is paintable scenery; nothing else reads the name yet.
 - a per-cell **terrain icon** (`GridUtils.get_terrain_icon_at_cell`), surfaced in the action queue.
 
+> **ELEVATION IS NOT HERE, and deliberately so (#218, 2026-08-14).** Height and ramp direction are **per-CELL**, not per-tile — the four entries above are per-*tile* (per atlas coordinate), so an `elevation` among them would need a distinct grass tile per level. They live in their own store beside `ScenarioData.terrain_states`, and separate from `TerrainStateManager` because that holds a stack of enum states with durations while height is a scalar. `walkable` is untouched and keeps its own question (*may anything ever stand here* — water, void); elevation answers *at what level does the surface sit*. Full spec: [verticality.md](verticality.md).
+
 Everything below layers **on top of** that base tile: dynamic, per-cell **state** that units, runes, and weapons apply and read. State round-trips through scenario save/load via **`ScenarioData.terrain_states`** — a dedicated field added by #50; `tile_data` itself stays the static tilemap and never carried dynamic state.
 
 ## Modification layers ([WORKSHOP] — from the wiki, de-RNG'd)
