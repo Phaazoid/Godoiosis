@@ -547,7 +547,7 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	# this case used until #264) therefore cannot match its art even when the bug is present:
 	# measured by falsification, a mutant that baked every prop's art passed against it. Picking the
 	# most opaque standing tile off the tileset keeps that true through an atlas swap.
-	var prop := _most_opaque_standing_tile(source, art)
+	var prop := _most_opaque_tile_that_leaves_the_ground(source, art)
 	assert_bool(not prop.is_empty()).override_failure_message("no standing tile; the case is vacuous").is_true()
 	assert_int(prop.clear).override_failure_message(
 			"the most opaque standing tile still has %s see-through pixels — this case cannot tell a " \
@@ -575,25 +575,37 @@ func _baked_atlas(board: GridMap) -> Image:
 	return material.albedo_texture.get_image()
 
 
-# The standing tile with the fewest see-through pixels, and how many it has. Measured rather than
-# named, so the case above states its own precondition instead of trusting a tile to stay opaque.
-func _most_opaque_standing_tile(source: TileSetAtlasSource, art: Image) -> Dictionary:
+# The tile whose art was left OFF the bake with the fewest see-through pixels, and how many it has.
+# Measured rather than named, so the case above states its own precondition instead of trusting a
+# tile to stay opaque.
+#
+# art_leaves_ground_of and NOT stands_up_of (#280): a TUFT stands up and keeps its art baked, so it
+# is the one standing tile whose region is SUPPOSED to match — and being 100% opaque grass it would
+# win this search outright and make the caller assert the opposite of what it means.
+func _most_opaque_tile_that_leaves_the_ground(source: TileSetAtlasSource, art: Image) -> Dictionary:
 	var best: Dictionary = {}
 	for i in source.get_tiles_count():
 		var coords := source.get_tile_id(i)
 		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if not GridUtils.stands_up_of(source.get_tile_data(coords, 0)):
+		if not GridUtils.art_leaves_ground_of(source.get_tile_data(coords, 0)):
 			continue
-		var region := source.get_tile_texture_region(coords, 0)
-		var clear := 0
-		for y in range(region.position.y, region.end.y):
-			for x in range(region.position.x, region.end.x):
-				if art.get_pixel(x, y).a < 1.0:
-					clear += 1
+		var clear := _clear_pixels(art, source.get_tile_texture_region(coords, 0))
 		if best.is_empty() or clear < int(best.clear):
 			best = {"coords": coords, "clear": clear}
 	return best
+
+
+# How many pixels of a region are not fully opaque. The measurement both bake cases state their own
+# precondition with: a see-through tile is blended over its kind base, so its baked region differs
+# from its art whatever the code does.
+func _clear_pixels(art: Image, region: Rect2i) -> int:
+	var clear := 0
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if art.get_pixel(x, y).a < 1.0:
+				clear += 1
+	return clear
 
 
 func _regions_match(a: Image, b: Image, region: Rect2i) -> bool:
@@ -1278,6 +1290,121 @@ func test_every_plane_tile_declares_which_way_it_runs() -> void:
 		checked += 1
 	assert_int(checked).override_failure_message(
 			"no PLANE tiles authored; the case is vacuous").is_greater(0)
+
+
+# --- #280: grass tufts -------------------------------------------------------------------------
+
+# THE case #280 exists for, and it is the half that separates a tuft from every other prop: it
+# stands something up AND its tile stays painted. The generator's bake predicate stopped being
+# "does this tile stand up" and became "does its art LEAVE the ground", so this is the one place a
+# tile's art is drawn twice on purpose. Asserted against the SOURCE atlas exactly the way its
+# opposite is (test_a_prop_cell_bakes_ground_not_the_prop): a prop's baked region must DIFFER from
+# its art, a tuft's must MATCH it.
+#
+# The opacity precondition is what gives the comparison teeth rather than being decoration: a
+# see-through tile is blended over its kind base, so its regions differ no matter what the code
+# does, and the case would pass against the bug (measured on #264, with Tree).
+func test_a_tuft_keeps_its_own_art_baked_on_the_ground() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var tiles: TileSet = _game.grid.tile_set
+	var baked := _baked_atlas(board)
+	assert_object(baked).override_failure_message("the meshlib carries no baked atlas").is_not_null()
+
+	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
+	assert_bool(not tufts.is_empty()).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_true()
+	for entry in tufts:
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var art := _readable(source.texture)
+		var region := source.get_tile_texture_region(entry.coords, 0)
+		var name: String = GridUtils.authored_tile_display_name(source.get_tile_data(entry.coords, 0))
+		assert_int(_clear_pixels(art, region)).override_failure_message(
+				"'%s' has see-through pixels, so its bake shows the kind base through them — this case " \
+				% [name] + "cannot tell a baked tuft from a bare one, and would pass against the bug" \
+				).is_equal(0)
+		assert_bool(_regions_match(baked, art, region)).override_failure_message(
+				"'%s' bakes as BARE GROUND — the popped-up tuft is the only thing left on the cell and " \
+				% [name] + "the tile reads as empty grass").is_true()
+
+
+# The other half: the tuft itself. A tuft is a BILLBOARD in every respect but its size, so what is
+# worth asserting is the two things that make it one — it faces the camera as the unit sprites do,
+# and it STANDS ON the tile rather than floating over it or sinking into it. Measured off the
+# sprite's own AABB, so no tuning of the scale can move it (the #279 planting rule, restated for a
+# quad whose size is a live knob).
+func test_a_tuft_faces_the_camera_and_stands_on_its_tile() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
+	assert_bool(not tufts.is_empty()).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, tufts[0].source, tufts[0].coords)
+	await _settle()
+
+	var root := mirror.prop_at(cell)
+	assert_object(root).override_failure_message(
+			"a TUFT tile stood nothing up — its flowers are still lying flat in the ground").is_not_null()
+	var sprite := root.get_child(0) as Sprite3D
+	assert_object(sprite).override_failure_message(
+			"a TUFT built geometry instead of a sprite — a tuft is thin, and a solid one cannot face " \
+			+ "the camera").is_not_null()
+	assert_int(sprite.billboard).override_failure_message(
+			"a tuft that does not billboard shows its edge as the camera orbits").is_equal(
+			BaseMaterial3D.BILLBOARD_FIXED_Y)
+
+	var surface: float = mirror.surface_point(cell, _game.board_heights).y
+	assert_float(root.position.y + sprite.get_aabb().position.y).override_failure_message(
+			"the tuft's bottom edge is not on the cell's surface — it either hovers over the tile or " \
+			+ "is buried in it").is_equal_approx(surface, 0.001)
+
+
+# The KNOB is a wire, and this is the case that fires it. A tuft is a runtime Sprite3D, so unlike
+# the baked block props its size can be found by eye in play — but only if the setter reaches the
+# tufts that are ALREADY standing: props reconcile when their tile changes and sync() runs in
+# DEV_MODE alone, so a build-time-only read gives a slider that moves and changes nothing.
+#
+# Two values, both DERIVED from the knob, so nothing here pins a feel number and any scale the dev
+# settles on keeps the case green. The identity assert inside the loop is the case's guard against
+# going blind: a REBUILT tuft would pick the new scale up at build time and pass against exactly
+# the bug this exists for, so the sprite being measured has to be the one that was already standing.
+func test_the_tuft_knob_resizes_a_tuft_that_is_already_standing() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
+	assert_bool(not tufts.is_empty()).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, tufts[0].source, tufts[0].coords)
+	await _settle()
+	var root := mirror.prop_at(cell)
+	var sprite := root.get_child(0) as Sprite3D
+	assert_object(sprite).override_failure_message("a TUFT tile stood no sprite up").is_not_null()
+
+	var art_height := float(sprite.texture.region.size.y)
+	var surface: float = mirror.surface_point(cell, _game.board_heights).y
+	for wanted: float in [0.2, 0.8]:
+		mirror.tuft_scale = wanted
+		# SpriteBase3D rebuilds its quad DEFERRED, so its AABB is a frame behind the write.
+		await await_idle_frame()
+		assert_object(mirror.prop_at(cell).get_child(0)).override_failure_message(
+				"the tuft was rebuilt between the write and the read — a rebuilt one picks the new " \
+				+ "scale up at build time, so this case can no longer see the bug it exists for" \
+				).is_same(sprite)
+		assert_float(sprite.get_aabb().size.y).override_failure_message(
+				"at tuft_scale %s the standing tuft is %s tall, not %s — the knob does not reach a tuft " \
+				% [wanted, sprite.get_aabb().size.y, art_height * wanted / GridUtils.TILE_SIZE] \
+				+ "that is already built, so tuning it does nothing until the cell is repainted") \
+				.is_equal_approx(art_height * wanted / GridUtils.TILE_SIZE, 0.001)
+		assert_float(root.position.y + sprite.get_aabb().position.y).override_failure_message(
+				"resizing the tuft lifted it off its tile — the scale has to shrink it TOWARD the " \
+				+ "ground it stands on").is_equal_approx(surface, 0.001)
 
 # ---- the brush ghost at height (#285) ----
 #

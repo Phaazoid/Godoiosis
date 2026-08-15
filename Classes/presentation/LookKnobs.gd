@@ -188,6 +188,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
 	{"group": "Effects", "node": "BoardMirror", "prop": "block_height_scale", "label": "Prop block height", "min": 0.2, "max": 2.5, "step": 0.01,
 		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far a flower or clover tile pops up off the ground, as a fraction of its own art. The tile stays painted flat as well -- the tuft is a small camera-facing copy standing on top of it, so 1.0 is a full-height card and small values read as relief."},
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
 ]
@@ -200,9 +202,9 @@ const KNOBS: Array[Dictionary] = [
 #     shot/fit margin ARE framing and stay in.
 #   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
 #   * the brush ghost -- dev chrome; players never see it.
-#   * PROP GEOMETRY -- prop block height is an art convention matched to the tile art once, the
-#     same family as icon pixel size; the same authored block reading taller in one mission than
-#     another is world construction drifting, not mood. Wanting it PER OBJECT is #272.
+#   * PROP GEOMETRY -- prop block height and tuft scale are art conventions matched to the tile art
+#     once, the same family as icon pixel size; the same authored block or tuft reading taller in
+#     one mission than another is world construction drifting, not mood. Per OBJECT is #272.
 # The default is IN: a knob added later joins presets unless someone lists it here, which is right
 # for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
 # a renamed property fails loudly instead of silently un-excluding itself. #264's block_height_scale
@@ -225,6 +227,7 @@ const PRESET_EXCLUDED: Array[String] = [
 	"BoardOverlays|billboard_pixel_size",
 	"BoardMirror|brush_ghost_alpha",
 	"BoardMirror|block_height_scale",
+	"BoardMirror|tuft_scale",
 ]
 
 # --- Identity ---------------------------------------------------------------------------

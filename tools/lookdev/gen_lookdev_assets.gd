@@ -350,9 +350,13 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# A prop's top face is the ground it STANDS ON, so its art is left off (#255) --
 			# BoardMirror puts that art on a billboard instead, and baking it here as well would
 			# render the tree twice, once flat and once standing.
+			#
+			# The predicate is "does the art LEAVE the ground", NOT "does the tile stand up" (#280).
+			# One question until a TUFT existed: a flowering tile stands a small sprite up and stays
+			# ground, so it keeps its art here and is drawn twice ON PURPOSE.
 			var shape := GridUtils.prop_shape_of(data)
 			var stands_up := shape != GridUtils.PropShape.FLAT
-			if not stands_up:
+			if not GridUtils.art_leaves_ground_of(data):
 				ground.blend_rect(source_image, region, region.position)
 
 			var top_uv := _uv_rect(region, atlas_size)
@@ -412,6 +416,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
 			# and its art never reaches a top face), while an open ground tile is the surprising
 			# case -- it is being based over a kind colour that nobody chose deliberately.
+			# This one really is stands_up and not the bake predicate above: a TUFT tile is baked,
+			# but it already carries an authored shape, so it is not a CANDIDATE for one.
 			var clear := _transparent_fraction(source_image, region)
 			if not stands_up and clear >= HOLE_FRACTION:
 				translucent.append("%d/%d:%d (%d%%)" % [source_id, coords.x, coords.y, roundi(clear * 100.0)])

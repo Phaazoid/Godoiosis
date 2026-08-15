@@ -26,8 +26,8 @@ class_name BoardMirror
 # so a cell can never come out with no block at all.
 #
 # PROPS stand up (#255), and HOW they stand up is the tile's authored `prop_shape` (#264).
-# The generator bakes a standing tile's top face as bare ground either way — so a tree is drawn
-# ONCE, standing, not also lying flat under itself — and this mirror plants the object on it:
+# The generator bakes a standing tile's top face as bare ground — so a tree is drawn ONCE,
+# standing, not also lying flat under itself — and this mirror plants the object on it:
 #   BILLBOARD  a camera-facing sprite. Thin, symmetric things: lamps, trees.
 #   CUBE/FACETED/ROUND  real geometry from the meshlib, sides wearing the tile's own art and a
 #              GENERATED top face. Volumetric things: crates, chests, rocks, barrels — the class the
@@ -36,6 +36,9 @@ class_name BoardMirror
 #              tile's authored `wall_edges` mask, and the generator bakes that into the tile's OWN
 #              mesh — so nothing here holds a yaw, and a fence is planted by the same
 #              _make_prop_block that plants a crate.
+#   TUFT       a billboard a FRACTION of a cell tall, on ground that keeps its own art (#280).
+#              Flowers and clover: the tile is still walkable ground, so its art is baked flat AND
+#              popped up, which is the one case where a tile's art is drawn twice on purpose.
 # Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
@@ -118,6 +121,13 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # the right number is whatever looks like a crate.
 @export var block_height_scale := 1.0
 
+# How much of a cell a TUFT stands up (#280) — the fraction of its own art a flowering tile pops
+# up by. Unlike the baked block props this one is a live Sprite3D property, so it can be a real
+# knob; the SETTER is what makes it one. Props are only rebuilt when their tile changes and sync()
+# runs in DEV_MODE alone, so a value read at build time would need a repaint to show — which is
+# the one failure that makes a tuning knob worthless.
+@export var tuft_scale := 0.35: set = _set_tuft_scale
+
 var board: GridMap
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
@@ -135,6 +145,11 @@ var _fire_markers: Dictionary[Vector2i, Node3D] = {}
 # standing forever.
 const PROP_TILE_META := "prop_tile"
 var _props: Dictionary[Vector2i, Node3D] = {}
+
+# Marks a prop sprite as a TUFT, so the tuft_scale setter can find the standing ones. A mark on the
+# node rather than a second dictionary keyed by cell: _props already tracks prop LIFETIME, and a
+# parallel store would have to be kept in step with every free.
+const TUFT_META := "tuft"
 
 # Where each tile's art actually sits, so a billboard is planted by its DRAWN pixels rather than by
 # its region. Both caches are pure derivations of the tileset — a decoded sheet per source, a
@@ -470,10 +485,15 @@ func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 
 
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
-# the only fork; everything around it — where it stands, what layer it draws on, whether it casts
-# a shadow, whether it carries a light — is one answer for every prop.
+# the only fork; everything around it — where it stands, what layer it draws on, whether it carries
+# a light — is one answer for every prop.
+#
+# SHADOWS are the one exception, and it is a declared one: a TUFT does not cast. Prolog paints
+# ~1,500 tuft cells against a dozen lamps and trees, so this is not a look call made per prop but
+# a shadow-map draw per instance for a plant a few pixels tall.
 func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	var shape := GridUtils.prop_shape_at_cell(grid, cell)
+	var is_tuft := shape == GridUtils.PropShape.TUFT
 	var body: GeometryInstance3D = null
 	if GridUtils.SOLID_SHAPES.has(shape):
 		body = _make_prop_block(grid, cell)
@@ -481,7 +501,7 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	# item_for_cell makes, for the same reason: an atlas newer than the last generator run must
 	# still draw SOMETHING rather than nothing.
 	if body == null:
-		body = _make_prop_billboard(grid, cell)
+		body = _make_prop_billboard(grid, cell, is_tuft)
 	if body == null:
 		return null
 
@@ -489,7 +509,8 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	add_child(root)
 	root.position = at
 	body.layers = BoardOverlays.WORLD_RENDER_LAYER
-	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF if is_tuft \
+			else GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
 
 	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
@@ -514,13 +535,16 @@ func _make_prop_block(grid: TileMapLayer, cell: Vector2i) -> MeshInstance3D:
 	return node
 
 
-# A billboarded sprite of the tile's own art.
-func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
+# A billboarded sprite of the tile's own art. A TUFT is the same sprite at a fraction of the size
+# (#280) — the ONE fork, because a tuft is a billboard in every other respect.
+func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i, is_tuft := false) -> Sprite3D:
 	var texture := _prop_texture(grid, cell)
 	if texture == null:
 		return null
 	var sprite := Sprite3D.new()
 	sprite.texture = texture
+	if is_tuft:
+		sprite.set_meta(TUFT_META, true)
 	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	# Unit sprites' discipline: cut-out alpha that WRITES DEPTH, so a unit standing behind a tree
@@ -530,11 +554,31 @@ func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
 	# Tied to the TILESET's tile size, never to UnitSprite3D.texels_per_unit: a tile is one cell
 	# wide BY DEFINITION, which is what makes a 1x2 lantern two cells tall and what lets a future
 	# 32px sheet drop in without touching this.
-	sprite.pixel_size = 1.0 / float(GridUtils.TILE_SIZE)
+	sprite.pixel_size = _pixel_size_for(is_tuft)
 	# Pivot at the BASE. A Sprite3D centres on its origin, so lifting it half its own height plants
-	# the bottom edge on the tile instead of burying half the prop in the ground.
+	# the bottom edge on the tile instead of burying half the prop in the ground. In PIXELS, so
+	# shrinking a tuft through pixel_size moves the plant with it and the base stays on the tile.
 	sprite.offset = Vector2(0, texture.region.size.y * 0.5)
 	return sprite
+
+
+# How many world units one art pixel covers. A tuft is the same sprite scaled through DENSITY
+# rather than through the node's scale: a Y-billboard rebuilds its basis from the camera, and
+# pixel_size also scales the base offset above, so the tuft shrinks toward the ground it stands on.
+func _pixel_size_for(is_tuft: bool) -> float:
+	var density := 1.0 / float(GridUtils.TILE_SIZE)
+	return density * tuft_scale if is_tuft else density
+
+
+# Re-size every standing tuft. What makes tuft_scale a live knob rather than a value baked into
+# whatever was built last (see the export).
+func _set_tuft_scale(value: float) -> void:
+	tuft_scale = value
+	for root: Node3D in _props.values():
+		for child in root.get_children():
+			var sprite := child as Sprite3D
+			if sprite != null and sprite.has_meta(TUFT_META):
+				sprite.pixel_size = _pixel_size_for(true)
 
 
 # The tile's own art, region-cut from the tileset atlas and TRIMMED to the pixels that are actually
