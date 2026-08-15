@@ -312,19 +312,28 @@ func _ensure_item_index() -> void:
 # WYSIWYG beat the bracket I recommended). It runs item_for_cell against the 2D GHOST LAYER,
 # which is the same function sync() runs against the real grid — so the preview physically
 # cannot disagree with the paint that follows it; only the material differs.
-func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer, heights: BoardHeights) -> void:
-	if ghost == null:
+func show_brush_ghost(ghost: BrushGhost) -> void:
+	if ghost == null or ghost.source == null:
 		hide_brush_ghost()
 		return
 	_ensure_brush_ghost()
-	var item := item_for_cell(ghost, cell)
+	# A ramp previews as the WEDGE one level above its own, the rule _write_column paints by: a
+	# level-E block occupies [E..E+1], so the slope that starts at E's surface sits at E+1. A flat
+	# paint previews the block that would become the column's new top.
+	var ramping := ghost.rise != Terrain.RampRise.NONE
+	var item := ramp_item() if ramping else item_for_cell(ghost.source, ghost.cell)
+	var level := ghost.level + 1 if ramping else ghost.level
 	var mesh: Mesh = board.mesh_library.get_item_mesh(item)
 	if _brush_ghost.mesh != mesh:
 		_brush_ghost.mesh = mesh
-	# The item's own transform carries any authored offset/rotation; the cell supplies where.
+	# The item's own transform carries any authored offset/rotation; the cell supplies where. A
+	# wedge needs the same yaw the real one gets, or the ghost previews a slope climbing elsewhere.
 	var item_xform: Transform3D = board.mesh_library.get_item_mesh_transform(item)
-	var at := BoardSpace.of_cell(cell, heights.elevation_at(cell))
-	_brush_ghost.transform = Transform3D(item_xform.basis, BoardSpace.cell_center(at) + item_xform.origin)
+	var basis := item_xform.basis
+	if ramping:
+		basis = board.get_basis_with_orthogonal_index(_ramp_orientation(ghost.rise)) * basis
+	var at := BoardSpace.of_cell(ghost.cell, level)
+	_brush_ghost.transform = Transform3D(basis, BoardSpace.cell_center(at) + item_xform.origin)
 	_brush_ghost.visible = true
 
 

@@ -44,8 +44,18 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 	await await_idle_frame()
 	var board := _scene.get_node("Board") as GridMap
 	var grid_cells: Array[Vector2i] = _game.grid.get_used_cells()
-	assert_int(board.get_used_cells().size()).is_equal(grid_cells.size())
-	assert_bool(grid_cells.size() > 100).is_true()  # Prolog is a real board, not a stub
+	assert_bool(grid_cells.is_empty()).override_failure_message(
+			"the mission painted no tiles; a footprint compare over nothing proves nothing").is_false()
+	# FOOTPRINTS, not a cell count. `used_cells.size()` on both sides was an equality that only
+	# holds while the board is FLAT — one raised cell writes a whole column — so painting three
+	# tiles onto Prolog reddened this and aborted the other 31 cases in this file (measured).
+	# column_tops_from is keyed by column, so its keys are the footprint.
+	var mirrored: Array[Vector2i] = []
+	mirrored.assign(BoardPicker.column_tops_from(board).keys())
+	mirrored.sort()
+	var expected_columns := grid_cells.duplicate()
+	expected_columns.sort()
+	assert_that(mirrored).is_equal(expected_columns)
 	# Spot-check: every mirrored block is the block for THAT TILE, named off the 2D cell's own
 	# atlas coords. Deliberately not asked through item_for_cell — that would assert the mirror
 	# against itself. Prolog paints only single-cell tiles, so every one has an item of its own.
@@ -54,10 +64,20 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 		var source_id: int = _game.grid.get_cell_source_id(cell)
 		var coords: Vector2i = _game.grid.get_cell_atlas_coords(cell)
 		var expected := BoardMirror.tile_item_name(source_id, coords)
-		var item := board.get_cell_item(Vector3i(cell.x, 0, cell.y))
+		var item := board.get_cell_item(_surface_of(cell))
 		assert_str(board.mesh_library.get_item_name(item)).override_failure_message(
 				"cell %s paints tile %s but got block '%s'" \
 				% [cell, coords, board.mesh_library.get_item_name(item)]).is_equal(expected)
+
+
+# The mirror cell holding this 2D cell's SURFACE block, at whatever level the board is painted to.
+# Every case below that inspects "the block for this cell" goes through here rather than assuming
+# level 0 — that assumption is a bet on the fixture staying flat, and it is exactly the bet that
+# broke when the height brush reached Level_1 (b057f6e). Deliberately the elevation and NOT the
+# column top: a ramp's top block is the generated wedge, not the cell's own tile.
+func _surface_of(cell: Vector2i) -> Vector3i:
+	var heights: BoardHeights = _game.board_heights
+	return BoardSpace.of_cell(cell, heights.elevation_at(cell))
 
 
 # Which cells burn comes off the ONE enumeration form (Terrain.gd: "no reader may
@@ -73,7 +93,8 @@ func test_fire_markers_match_the_games_own_burning_cells() -> void:
 	var expected := _burning().size()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_int(mirror.fire_marker_count()).is_equal(expected)
-	assert_bool(expected > 0).is_true()  # Prolog authors BLAZE content; a zero here means the load broke
+	assert_bool(expected > 0).override_failure_message(
+			"nothing on this board burns, so marker parity is a comparison of two zeroes").is_true()
 
 
 func test_the_flame_actually_carries_the_flame_priority() -> void:
@@ -249,7 +270,7 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_cell(cell, 0)
+	var at := _surface_of(cell)
 	var before := board.get_cell_item(at)
 	var other := _a_tile_of_a_different_kind(cell)
 	assert_bool(other.source >= 0).override_failure_message(
@@ -268,7 +289,7 @@ func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_cell(cell, 0)
+	var at := _surface_of(cell)
 	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
 	_game.grid.erase_cell(cell)
 	await _settle()
@@ -352,8 +373,8 @@ func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
 	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
 	await _settle()
 
-	var item_a := board.get_cell_item(BoardSpace.of_cell(a, 0))
-	var item_b := board.get_cell_item(BoardSpace.of_cell(b, 0))
+	var item_a := board.get_cell_item(_surface_of(a))
+	var item_b := board.get_cell_item(_surface_of(b))
 	assert_int(item_a).override_failure_message(
 			"two tiles of the same kind (%s and %s) render as the SAME block — the board is still keyed on Kind" \
 			% [pair[0].coords, pair[1].coords]).is_not_equal(item_b)
@@ -410,7 +431,7 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	_game.grid.set_cell(cell, entry.source, entry.coords)
 	await _settle()
 
-	var item := board.get_cell_item(BoardSpace.of_cell(cell, 0))
+	var item := board.get_cell_item(_surface_of(cell))
 	assert_int(item).override_failure_message(
 			"a skipped tile left the cell EMPTY — the 2D paints a tile there and the 3D shows a hole" \
 			).is_not_equal(GridMap.INVALID_CELL_ITEM)
@@ -1053,7 +1074,7 @@ func test_a_raised_cell_fills_its_whole_column() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var surface := board.get_cell_item(BoardSpace.of_cell(cell, 0))
+	var surface := board.get_cell_item(_surface_of(cell))
 
 	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NONE)
 	await _settle()
@@ -1255,3 +1276,89 @@ func test_every_plane_tile_declares_which_way_it_runs() -> void:
 		checked += 1
 	assert_int(checked).override_failure_message(
 			"no PLANE tiles authored; the case is vacuous").is_greater(0)
+
+# ---- the brush ghost at height (#285) ----
+#
+# The 3D preview of what an elevation click would produce. The level is the BRUSH's, not the
+# cell's current one, which is the whole point: hovering a flat cell with the wheel at 3 has to
+# show a block three levels up, or the ghost is previewing the thing you are replacing.
+
+func _ghost_node() -> MeshInstance3D:
+	return (_scene._board_mirror as BoardMirror)._brush_ghost
+
+
+func test_the_ghost_hangs_at_the_level_the_click_would_produce() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	# A DELTA, so no item's authored offset can be mistaken for the level -- and so the mutant
+	# that reads heights.elevation_at(cell) instead reports 0 rather than a near-miss.
+	mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid))
+	var at_zero: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 3, _game.grid))
+	var at_three: float = _ghost_node().position.y
+
+	assert_float(at_three - at_zero).override_failure_message(
+			"three levels of BRUSH height moved the ghost %s, not three cells -- it is reading the "
+			% (at_three - at_zero) + "cell's own elevation").is_equal_approx(
+			3.0 * BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wears_the_art_the_cell_already_has() -> void:
+	# Raising a cell keeps its tile, so the preview resolves off the GRID -- the same call the
+	# real column uses, which is what stops the two disagreeing about what a cell looks like.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+
+	var want: Mesh = board.mesh_library.get_item_mesh(mirror.item_for_cell(_game.grid, cell))
+	assert_object(_ghost_node().mesh).is_same(want)
+
+
+func test_a_rise_previews_the_wedge_one_level_above_its_own() -> void:
+	# _write_column's rule, mirrored: a level-E block occupies [E..E+1], so the slope that starts
+	# at E's surface sits at E+1. Preview it at E and the ramp appears to sink into the terrace.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+	var flat_y: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST))
+	var wedge_y: float = _ghost_node().position.y
+
+	assert_object(_ghost_node().mesh).override_failure_message(
+			"a rise still previewed the flat block").is_same(
+			board.mesh_library.get_item_mesh(mirror.ramp_item()))
+	assert_float(wedge_y - flat_y).override_failure_message(
+			"the wedge did not sit one level above the block it climbs from").is_equal_approx(
+			BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:
+	# The geometry, not a magic orthogonal index -- the same shape the real wedge's case asserts.
+	# A ghost that previews the slope climbing the wrong way is worse than no ghost.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for rise: Terrain.RampRise in [Terrain.RampRise.NORTH, Terrain.RampRise.EAST,
+			Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
+		mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid, rise))
+		var high: Vector3 = _ghost_node().basis * BoardMirror.RAMP_MESH_HIGH_SIDE
+		var want := Terrain.rise_direction(rise)
+		assert_float(high.x).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on X" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.x), 0.01)
+		assert_float(high.z).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.y), 0.01)

@@ -335,3 +335,67 @@ while `CHOOSING_GROUP_MOVE` is up. An empty dict means "nowhere", not "unset", s
 recompute-if-empty fallback — which is what caught the two callers (a test helper and the profiler)
 that had been setting `game_state` directly instead of going through the door. Numbers and the
 regression signal: [`docs/performance.md`](performance.md).
+
+## A level edit reddens an input test — 2026-08-15 (PR #290)
+
+`tests/presentation/test_input_bridge.gd`'s board-swap case went red on `main`, and the commit that
+did it wrote no code. **`b057f6e` "quick level update"** touched one file and added eighteen lines:
+eight tiles painted onto `Level_1` with the height brush. #273 had merged just before it (`543b636`)
+and given elevation the ability to render, so neither alone would have done anything — a flat board
+renders flat, and heights with no renderer render nothing. It took both, and the one that pulled the
+trigger was the level edit.
+
+The case audits `battle3d._on_board_loaded()` line by line: mirror rebuilt, `_tops` refreshed,
+pointer dropped, overlays cleared. Three of its four assertions are content-blind. The fourth asked
+the same question — *did the rebuild run?* — by hand-listing the cells it expected to find, and
+`Level_1` was no longer painted to that list.
+
+**The rule already existed and was scoped one notch too narrow.** Six of the ten headers in
+`tests/presentation/` say never pin a tuned value, and `tests/README.md` #8 (the tuning razor) says
+it for the rules layer. But every statement of it named *feel-tuned* values — colours, light
+energies, camera distances. Authored content is the same kind of thing (edited with a brush, in
+play, without touching code) and had never been written down, because a cell coordinate reads as
+structure rather than taste. Now `tests/README.md` #9, *the content razor*: **a test may LOAD
+authored content to exercise a real path; it may not ASSERT what that content contains.**
+
+**Blast radius, measured rather than argued.** Painting three raised cells plus a ramp onto
+`Prolog.tres` — doing to Prolog what `b057f6e` did to Level_1:
+
+| | executed | failures | suites hit |
+|---|---|---|---|
+| before, flat | 165 | 1 | 1 |
+| before, hilly | **116** | **7** | **4** |
+| after, hilly | **179** | **0** | 0 |
+
+Three painted tiles cost **49 test cases**, because a failing case aborts the rest of its own suite
+and four suites went red at their *first* content-dependent assertion. That abort also hid the size
+of the problem in both directions: on flat content the known failure was silently suppressing 14
+cases in its own file, which is why the fix moved the executed count 165 → 179 rather than merely
+turning one red case green. **A landmine was sitting behind it too** —
+`test_board_mirror.gd`'s `board.get_used_cells().size() == grid.get_used_cells().size()`, an equality
+that holds only while every board is flat, since one raised cell writes a whole column. One hill on
+Prolog would have taken 30 cases with it.
+
+**Two hazards that only exist once a board is not flat**, both surfaced by running the falsification
+rather than by reasoning about it — which is the whole argument for doing it:
+
+1. **A taller column shadows the cell behind it** from the pitched camera, so a click aimed at the
+   shadowed cell resolves to the blocker. "Can I click here" stopped being answerable by a
+   UI-overlap check and is now asked of the real `BoardPicker`.
+2. **A unit standing on a terrace with no ramp off it genuinely cannot move.** A case needing a
+   mover has to *find* one; assuming the first clickable unit qualifies reads as "the click queued
+   no move" and blames the input wire for a level-design fact.
+
+Every expectation now derives from the seam under test — `BoardPicker.column_tops_from` (keyed by
+column, so its keys *are* the footprint), `BoardSpace.surface_point` (where `UnitMirror` seats a
+sprite), `board_heights.elevation_at` (the level `OverlayMirror` marks at), `game.get_move_range`
+(where a unit may actually be ordered, replacing `cell + Vector2i(1, 0)`, which bet both that the
+mission paints ground east *and* that stepping onto it is legal). Deriving the full column set from
+`board_heights` was rejected: it works, but it puts a second copy of `BoardMirror._write_column`'s
+rule inside a test — the same problem one layer up, and Law #4's.
+
+Deliberately untouched: content **laws** that iterate whatever exists and name none of it
+(`test_scenario_load_integrity.gd` is the model), and rules-layer suites where the content IS the
+subject (`test_kinetic_mace_charge` says so in its own comment). Still open as a separate pass: the
+rules-layer suites that load a real weapon or carving as a *convenience fixture*, which #4 already
+says to build ad hoc.

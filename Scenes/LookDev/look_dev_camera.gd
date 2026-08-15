@@ -46,6 +46,11 @@ extends Node3D
 @export var pan_speed := 8.0
 @export var smoothing := 8.0
 @export var orbit_button: MouseButton = MOUSE_BUTTON_RIGHT: set = _set_orbit_button
+# Stood down by a host that needs the wheel for something else (#285: the elevation brush paints
+# at the wheel's level). Declarative, exactly like orbit_button above -- and it has to be a knob
+# rather than the host consuming the event, because this rig is a CHILD of the host and therefore
+# sees _unhandled_input FIRST: a set_input_as_handled() up there lands after the zoom (measured).
+@export var wheel_zoom_enabled := true
 @export var orbit_sensitivity := 0.25        # degrees of yaw per pixel dragged
 @export var orbit_click_slop_px := 4.0       # travel under this still counts as a click
 @export var pan_margin_cells := 4.0          # how far past the board panning may stray
@@ -115,11 +120,17 @@ func _unhandled_input(event: InputEvent) -> void:
 				_target_yaw_degrees = _home_yaw_degrees
 				_target_distance = _home_distance
 	var wheel := event as InputEventMouseButton
-	if wheel != null and wheel.pressed:
+	if wheel != null and wheel.pressed and wheel_zoom_enabled:
 		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
-			set_zoom(_target_distance - zoom_step)
+			zoom_by(-1)
 		elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			set_zoom(_target_distance + zoom_step)
+			zoom_by(1)
+
+
+# One notch of zoom. Public so a host that has taken the wheel away can still hand a MODIFIED
+# notch back (#285's Ctrl+wheel) without reaching into _target_distance or re-spelling the step.
+func zoom_by(notches: int) -> void:
+	set_zoom(_target_distance + zoom_step * notches)
 
 
 # The next detent in `direction`. From an exact detent this is the old `+= yaw_step`
