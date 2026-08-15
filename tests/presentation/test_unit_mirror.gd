@@ -29,6 +29,14 @@ func after_test() -> void:
 	_scene.free()
 
 
+# Where the mirror seats a sprite standing on this cell. The y comes through
+# BoardSpace.surface_point — the same seam UnitMirror places it with — rather than the literal 1.0
+# that is only that seam's answer on a board with no hills painted on it.
+func _sprite_seat(cell: Vector2i) -> Vector3:
+	var heights: BoardHeights = _game.board_heights
+	return Vector3(cell.x + 0.5, BoardSpace.surface_point(cell, heights).y, cell.y + 0.5)
+
+
 func _live_units() -> Array[Unit]:
 	var live: Array[Unit] = []
 	for child in _game.units_root.get_children():
@@ -40,14 +48,16 @@ func _live_units() -> Array[Unit]:
 
 func test_the_roster_mirrors_one_to_one() -> void:
 	var live := _live_units()
-	assert_bool(live.size() >= 8).is_true()  # Prolog fields 10
+	# Non-vacuity, not a census. The claim is PARITY — mirrored_count equals the live roster — and
+	# a threshold ("Prolog fields 10") only says the load worked, while breaking the day the roster
+	# is re-cast. Every count in this file is derived from the board it just loaded.
+	assert_bool(live.size() > 0).override_failure_message(
+			"the board spawned nobody; parity over an empty roster proves nothing").is_true()
 	assert_int(_mirror.mirrored_count()).is_equal(live.size())
 	for unit in live:
 		var sprite := _mirror.sprite_for(unit)
 		assert_object(sprite).is_not_null()
-		var expected := Vector3(
-				unit.movement.cell.x + 0.5, 1.0, unit.movement.cell.y + 0.5)
-		assert_that(sprite.position).is_equal(expected)
+		assert_that(sprite.position).is_equal(_sprite_seat(unit.movement.cell))
 
 
 func test_a_real_walk_glides_the_sprite_to_the_destination() -> void:
@@ -62,8 +72,8 @@ func test_a_real_walk_glides_the_sprite_to_the_destination() -> void:
 	await await_idle_frame()
 	await await_idle_frame()
 	var sprite := _mirror.sprite_for(unit)
-	assert_that(sprite.position).is_equal(Vector3(to.x + 0.5, 1.0, to.y + 0.5))
-	assert_that(sprite.cell).is_equal(Vector3i(to.x, 0, to.y))
+	assert_that(sprite.position).is_equal(_sprite_seat(to))
+	assert_that(sprite.cell).is_equal(BoardSpace.of_cell(to, _game.board_heights.elevation_at(to)))
 
 
 func test_downed_and_death_reconcile() -> void:
