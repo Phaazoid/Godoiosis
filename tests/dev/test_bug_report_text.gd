@@ -194,3 +194,26 @@ func test_the_report_and_the_summary_name_the_build() -> void:
 
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
 	assert_str(summary).contains("v%s" % Build.version())
+
+# ---- where it was seen from (#240) ----
+
+func test_the_report_names_the_view_and_the_look_it_was_seen_under() -> void:
+	# Both are PASSED, not looked up: the view comes off the 3D host (which the reporter cannot
+	# reach) and the look off the loaded board. This case pins that they land in the body at all.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log", "HD_2D -- yaw 90 deg, zoom 11.5, centred on (12, 8)", "Dusk")
+
+	assert_str(text).contains("View: **HD_2D -- yaw 90 deg, zoom 11.5, centred on (12, 8)**")
+	assert_str(text).contains("Look: **Dusk**")
+
+func test_a_flat_launch_says_so_rather_than_stamping_a_blank() -> void:
+	# The twin of "sent from a menu": a report claiming a View and then showing nothing is the
+	# kind of small lie that wastes a triage session. An empty look_preset is a real state too --
+	# every board that never named one falls back to DefaultLook.tres.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log")
+
+	assert_str(text).contains("View: **%s**" % BugReporter.NO_3D_VIEW)
+	assert_str(text).contains("Look: **%s**" % BugReporter.DEFAULT_LOOK)

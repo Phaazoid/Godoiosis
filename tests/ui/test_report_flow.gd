@@ -158,6 +158,22 @@ func test_a_submitted_report_writes_the_note_and_the_board() -> void:
 	assert_bool(FileAccess.file_exists(result["dir"] + "board.tres")).is_true()
 
 
+func test_the_screenshot_comes_from_the_window_and_not_the_hidden_subviewport() -> void:
+	# #240. game.get_viewport() is the SubViewport the 2D game lives in, and since #222 that
+	# viewport is transparent with the board visuals hidden -- so a frame grabbed there is 2D UI
+	# on nothing, with the diorama, and therefore every visual bug in it, missing.
+	#
+	# The IMAGE cannot be the subject: capture_frame() returns null headless by design, because
+	# RenderingServer.frame_post_draw never fires without a draw. So pin the CHOICE, which is the
+	# whole of the fix. Falsify by pointing capture_viewport() back at game.get_viewport().
+	#
+	# Both halves are load-bearing. A case asserting only "it returns a Viewport" passes against
+	# the bug; the is_not_same is what actually reds.
+	var chosen: Viewport = game.bug_reporter.capture_viewport()
+	assert_object(chosen).is_same(get_tree().root)
+	assert_object(chosen).is_not_same(game.get_viewport())
+
+
 func test_a_menu_side_report_has_no_board_and_says_so() -> void:
 	# Feedback sent from mission select. Claiming "board.tres is the authoritative snapshot" beside
 	# a folder with no board.tres is the kind of small lie that wastes a triage session.

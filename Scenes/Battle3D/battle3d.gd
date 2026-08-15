@@ -93,6 +93,9 @@ func _ready() -> void:
 	_game_container = _main.get_node("GameContainer") as SubViewportContainer
 	_game_view = _main.get_node("GameContainer/GameView") as SubViewport
 	_pip_native = _game_container.custom_minimum_size
+	# The SAME push, one layer down (#240): a bug report names the angle it was seen from.
+	# Unconditional, because F3 files a report in demo_mode too.
+	game.bug_reporter.view_source = _describe_view
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -235,6 +238,21 @@ func _board_volume() -> AABB:
 	return AABB(
 		Vector3(rect.position.x, 0.0, rect.position.y),
 		Vector3(rect.size.x, float(BoardPicker.max_top(_tops)), rect.size.y))
+
+
+# What a bug report needs to know about the angle it was seen from (#240), pushed at
+# BugReporter in _ready. Composed here rather than shipped out as a bag of numbers: only this
+# scene knows what its own rig fields MEAN, and BugReporter.build_report_text stays pure.
+#
+# The LIVE yaw and distance, never their _target twins: a screenshot caught where the smoothing
+# had reached, not where it was heading.
+func _describe_view() -> String:
+	return "%s -- yaw %.0f deg, zoom %.1f, centred on %s" % [
+		View.keys()[view],
+		_rig.rotation_degrees.y,
+		_camera.position.z,
+		BoardSpace.flat(BoardSpace.cell_of(_rig.position)),
+	]
 
 
 # --- Hosting the 2D game (stage 4c) ---------------------------------------------------
