@@ -119,6 +119,7 @@ func _ready() -> void:
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
 	_unit_mirror.heights = game.board_heights
+	_unit_mirror.hovered_unit_source = _hovered_unit
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -695,6 +696,21 @@ func _click_pointer_cell() -> void:
 	if game._board_locked_for_player():
 		return
 	game._on_left_click(BoardSpace.flat(_pointer_cell))
+
+
+# Which unit the pointer resolves to, for UnitMirror's health readout (#229). Deliberately the
+# SAME expression HoverPresenter._process runs — the 2D stays the one authority on what the
+# pointer is over, and any other way of asking (nearest sprite, a 3D ray against units) would be
+# a second answer free to disagree with the one a CLICK uses. Note it reads through
+# unit_at_pointer, so it answers at the PROJECTED cell, which is what the readout anchors to.
+#
+# Wired in _ready rather than in _apply_hosting: it holds in FLAT_2D too, where last_hovered_cell
+# comes off the 2D mouse instead of the 3D pick. Nothing renders the diorama there, so the bar is
+# simply unseen rather than needing a branch.
+func _hovered_unit() -> Unit:
+	var presenter: HoverPresenter = game.hover_presenter
+	var hovered: Unit = game.unit_at_pointer(presenter.last_hovered_cell)
+	return hovered
 
 
 func _cancel() -> void:

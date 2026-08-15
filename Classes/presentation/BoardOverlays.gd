@@ -41,6 +41,11 @@ const UNIT_RENDER_PRIORITY := 32
 # all, so it sat at 0 while Layer.TERRAIN sorts at 2, and painting a frost icon onto a burning
 # tile drew straight over the flame. The fire read as erased; the store was perfectly correct.
 const FLAME_RENDER_PRIORITY := 16
+# The band above the units: HUD hung in the volume over a unit's head (#229's health readout), which
+# must never be sorted behind the sprite it describes. It lives HERE with the other two because the
+# relationship between the bands is the thing worth pinning, and a table is the only place a
+# relationship can be read at a glance. The readout claims this value and the two above it.
+const UNIT_HUD_RENDER_PRIORITY := 48
 
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},

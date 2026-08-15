@@ -190,6 +190,29 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
+	# --- Unit HUD (#229) ---
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout height", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "How high the health readout floats above the hovered unit's feet, in cells. Too low and it sits on the unit's own head; too high and it stops reading as belonging to that unit at all, especially at a low camera pitch."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_width_texels", "label": "Bar width", "min": 4.0, "max": 128.0, "step": 1.0,
+		"tip": "Width of the health bar in texels, at the same pixel density as every sprite -- 16 is one cell wide. The bar is pixel-snapped, so this also decides how finely it can show a fraction: at 20 wide, one texel is 5% of a unit's health."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_height_texels", "label": "Bar height", "min": 1.0, "max": 16.0, "step": 1.0,
+		"tip": "Thickness of the health bar in texels. Thin reads as a delicate HUD line and can vanish at distance; thick reads as a solid gauge and starts competing with the unit sprite for attention."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_back_color", "label": "Bar backing",
+		"tip": "The unfilled part of the bar -- the track the fill sits in. Its alpha is what decides whether the missing health reads as a dark socket or as a faint ghost of the board behind it."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_full_color", "label": "Bar at full",
+		"tip": "The fill colour at full health. The fill lerps between this and 'Bar at empty' by the health fraction, so setting both to the same value gives a flat bar that never changes colour."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_empty_color", "label": "Bar at empty",
+		"tip": "The fill colour approached as health runs out. Pair with 'Bar at full' for a ramp, or match them for a single colour that only changes length."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_font_size", "label": "Number size", "min": 4.0, "max": 48.0, "step": 1.0,
+		"tip": "Glyph size of the HP number. The readout is world-scaled, so this is a size in the SCENE, not on screen -- a value that reads well up close will shrink with the unit as you zoom out."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_outline_size", "label": "Number outline", "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "Thickness of the black outline behind the number. The board can be any colour underneath, so this is what keeps the digits readable over a bright tile or a lit flame; 0 removes it entirely."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
+		"tip": "Colour of the HP digits. The outline is always black, so this is the fill; a tint here is the cheapest way to make the number read as part of the bar rather than as separate text."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number gap", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Clear space between the top edge of the bar and the bottom of the digits, in cells. Zero puts them touching; a gap makes the two read as separate elements stacked in the same volume."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
+		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
 ]
 
 # A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
@@ -225,6 +248,21 @@ const PRESET_EXCLUDED: Array[String] = [
 	"BoardOverlays|billboard_pixel_size",
 	"BoardMirror|brush_ghost_alpha",
 	"BoardMirror|block_height_scale",
+	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
+	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
+	# by wearing a look. Excluded wholesale, which also keeps the twelve shipped presets valid
+	# under test_look_presets' "names every in-scope knob" law.
+	"UnitMirror|hud_lift",
+	"UnitMirror|bar_width_texels",
+	"UnitMirror|bar_height_texels",
+	"UnitMirror|bar_back_color",
+	"UnitMirror|bar_full_color",
+	"UnitMirror|bar_empty_color",
+	"UnitMirror|number_font_size",
+	"UnitMirror|number_outline_size",
+	"UnitMirror|number_color",
+	"UnitMirror|number_gap",
+	"UnitMirror|number_shows_max",
 ]
 
 # --- Identity ---------------------------------------------------------------------------
