@@ -83,6 +83,50 @@ func _squad_pair() -> Array[Unit]:
 
 # --- Fills -------------------------------------------------------------------------
 
+# The WIRE for #281: BoardOverlays can tilt a fill onto a slope, and OverlayMirror knows the board's
+# heights, and neither of those facts puts a tilt on screen unless the mirror actually HANDS the
+# heights over. Both ends were correct while nothing connected them is #103's shape exactly, and the
+# unit-level cases cannot see it -- they call set_cells themselves.
+#
+# The ramp is painted into the fixture's own hand-built board, so nothing here reads authored
+# content. It is painted BEFORE the mode is entered because _fill diffs on the CELL LIST: a rise
+# added under an already-drawn overlay does not change any cell, so it would not re-push.
+func test_a_fill_over_a_ramp_reaches_the_3d_tilted() -> void:
+	var pair := _squad_pair()
+	var mover: Unit = pair[1]
+
+	# Discover the real range first, then ramp a cell inside it -- picking a cell blind would sit
+	# outside the range on any future change to MOV or cohesion and quietly assert nothing.
+	game.enter_move_mode(mover)
+	await _settle()
+	var painted: Array[Vector2i] = _om().move_overlay.get_used_cells()
+	assert_bool(painted.size() > 0).override_failure_message(
+			"nothing painted -- this case cannot see the wire").is_true()
+	game.exit_current_mode()
+	await _settle()
+
+	# EAST so the ramp is entered along its own axis from the west, keeping it reachable.
+	painted.sort()
+	var ramp: Vector2i = painted[0]
+	game.board_heights.set_cell(ramp, 0, Terrain.RampRise.EAST)
+
+	game.enter_move_mode(mover)
+	await _settle()
+	var still_painted: Array[Vector2i] = _om().move_overlay.get_used_cells()
+	assert_bool(still_painted.has(ramp)).override_failure_message(
+			"the ramped cell fell out of range -- nothing tilted would be drawn").is_true()
+
+	var tilted := 0
+	for child in _overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh \
+				and not quad.basis.y.normalized().is_equal_approx(Vector3.UP):
+			tilted += 1
+	assert_int(tilted).override_failure_message(
+			"every fill came through level -- the mirror is not handing its heights to set_cells") \
+		.is_greater(0)
+
+
 func test_move_and_invalid_fills_mirror_the_2d_layers() -> void:
 	var pair := _squad_pair()
 	game.enter_move_mode(pair[1])   # the member: cohesion clips its range -> both layers paint

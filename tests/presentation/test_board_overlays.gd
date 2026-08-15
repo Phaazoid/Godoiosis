@@ -212,6 +212,105 @@ func test_hover_is_a_bracket_mesh_at_the_cell() -> void:
 	assert_bool(bracket_seen).is_true()
 
 
+# --- Markup lies on the surface it marks (#281) ------------------------------------
+
+# A fresh sink rather than the demo scene's: these cases read a single quad's transform, and the
+# demo's own zone patch would put other visible quads in the same child sweep.
+func _bare_overlays() -> BoardOverlays:
+	var overlays: BoardOverlays = auto_free(BoardOverlays.new())
+	add_child(overlays)
+	return overlays
+
+
+func _ramp_at(cell: Vector2i, level: int) -> BoardHeights:
+	var heights := BoardHeights.new()
+	heights.set_cell(cell, level, Terrain.RampRise.EAST)
+	return heights
+
+
+# The quad's own facing, which is what "flat against the ground" means. basis.y is the normal; it
+# carries no art scale, so it compares clean.
+func _normal_of(overlays: BoardOverlays) -> Vector3:
+	for child in overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh:
+			return quad.basis.y.normalized()
+	return Vector3.ZERO
+
+
+func test_a_fill_on_a_ramp_lies_on_the_slope_instead_of_hanging_level_through_it() -> void:
+	# The fill half of #281, and with it the anchoring defect it shared a cause with: _fill resolved
+	# a cell to its RULES level (the ramp's low edge) while every marker went through surface_point's
+	# midpoint, so a move tile and a path arrow on one ramp cell disagreed by half a level.
+	# Both halves are derived from the seam here, never from a literal.
+	var cell := Vector2i(3, 2)
+	var heights := _ramp_at(cell, 1)
+	var overlays := _bare_overlays()
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], heights)
+
+	var expected := BoardSpace.surface_transform(cell, heights)
+	assert_that(_normal_of(overlays)).is_equal(expected.basis.y.normalized())
+	assert_bool(_normal_of(overlays).is_equal_approx(Vector3.UP)).override_failure_message(
+			"the fill is still level -- it would cut through the slope").is_false()
+
+	for child in overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh:
+			# The clearance rides the surface normal, so the height is the surface's plus a lift
+			# smaller than the half-level the ramp midpoint itself contributes.
+			var above := quad.position.y - expected.origin.y
+			assert_float(above).is_between(0.0, BoardSpace.CELL_SIZE * 0.5)
+
+
+func test_a_marker_lies_on_the_slope_its_own_cell_carries() -> void:
+	var cell := Vector2i(3, 2)
+	var heights := _ramp_at(cell, 1)
+	var surface := BoardSpace.surface_transform(cell, heights)
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
+		"pos": surface.origin, "texture": GridUtils.ERROR_ICON,
+		"modulate": Color.WHITE, "basis": surface.basis,
+	}])
+	assert_that(_normal_of(overlays)).is_equal(surface.basis.y.normalized())
+
+
+func test_an_entry_with_no_basis_still_draws_flat() -> void:
+	# Every pre-#281 caller -- and the ghost channel, which ignores the key -- omits it.
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [
+		{"pos": Vector3(2.5, 1.0, 2.5), "texture": GridUtils.ERROR_ICON, "modulate": Color.WHITE}])
+	assert_that(_normal_of(overlays)).is_equal(Vector3.UP)
+
+
+func test_a_pooled_marker_reused_on_flat_ground_drops_the_tilt_it_had() -> void:
+	# Marker nodes are REUSED between frames, so the tilt is written unconditionally rather than only
+	# when a cell ramps. A mutant that sets the basis only for ramps passes every case above and
+	# fails here: walk an arrow off a ramp and it keeps sloping over flat ground forever.
+	var cell := Vector2i(3, 2)
+	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 1))
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
+		"pos": surface.origin, "texture": GridUtils.ERROR_ICON,
+		"modulate": Color.WHITE, "basis": surface.basis,
+	}])
+	assert_that(_normal_of(overlays)).is_not_equal(Vector3.UP)   # the precondition, not the claim
+
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [
+		{"pos": Vector3(9.5, 1.0, 9.5), "texture": GridUtils.ERROR_ICON, "modulate": Color.WHITE}])
+	assert_that(_normal_of(overlays)).is_equal(Vector3.UP)
+
+
+func test_a_fill_pooled_off_a_ramp_drops_the_tilt_too() -> void:
+	# The same reuse hazard on the set_cells path, which writes a whole transform per frame.
+	var cell := Vector2i(3, 2)
+	var overlays := _bare_overlays()
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], _ramp_at(cell, 1))
+	assert_that(_normal_of(overlays)).is_not_equal(Vector3.UP)
+
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(Vector2i(9, 9), 0)], BoardHeights.new())
+	assert_that(_normal_of(overlays)).is_equal(Vector3.UP)
+
+
 # --- find_reachable under the traversal ruling -------------------------------------
 
 func test_reachable_respects_the_ramp_ruling_and_the_cap() -> void:

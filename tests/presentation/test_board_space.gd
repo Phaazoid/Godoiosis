@@ -86,3 +86,59 @@ func test_a_ramp_stands_things_half_a_level_up_its_slope() -> void:
 func test_a_board_with_no_heights_wired_reads_as_flat() -> void:
 	# The headless Play boards never set one, and every anchor still has to resolve.
 	assert_float(BoardSpace.surface_point(Vector2i(4, 4), null).y).is_equal(BoardSpace.surface_y(0))
+	assert_that(BoardSpace.surface_transform(Vector2i(4, 4), null).basis).is_equal(Basis.IDENTITY)
+
+
+# --- How markup LIES on a surface (#281) --------------------------------------------
+
+# Markup on a ramp has to reach the two levels the ramp CONNECTS -- its low edge at the level below,
+# its high edge at the level above. Asserted as that geometry rather than as an angle, so it stays
+# true of whatever the wedge's profile is and cannot be satisfied by a quad that merely tilts
+# (one rotated but unstretched would fall short of both edges).
+#
+# Every rise is checked because "no sideways entry" means each one connects a DIFFERENT pair of
+# neighbours, and a sign error shows up in exactly one of the four.
+func test_markup_on_a_ramp_spans_the_two_levels_the_ramp_joins() -> void:
+	for rise: Terrain.RampRise in [Terrain.RampRise.NORTH, Terrain.RampRise.SOUTH,
+			Terrain.RampRise.EAST, Terrain.RampRise.WEST]:
+		var cell := Vector2i(3, 2)
+		var heights := BoardHeights.new()
+		heights.set_cell(cell, 1, rise)
+		var xform := BoardSpace.surface_transform(cell, heights)
+
+		# The quad's own uphill/downhill edge midpoints, in ITS local frame: half a cell either way
+		# along whichever local axis the slope runs on.
+		var dir := Terrain.rise_direction(rise)
+		var edge := Vector3(dir.x, 0.0, dir.y) * 0.5 * BoardSpace.CELL_SIZE
+		var high := xform * edge
+		var low := xform * -edge
+
+		assert_float(high.y).override_failure_message(
+				"%s: the high edge misses the level above" % Terrain.RampRise.keys()[rise]) \
+			.is_equal_approx(BoardSpace.surface_y(2), 0.0001)
+		assert_float(low.y).override_failure_message(
+				"%s: the low edge misses the level below" % Terrain.RampRise.keys()[rise]) \
+			.is_equal_approx(BoardSpace.surface_y(1), 0.0001)
+
+		# ...and it still covers exactly its own cell in plan view, or it would spill onto a neighbour.
+		var span := Vector2(high.x - low.x, high.z - low.z).length()
+		assert_float(span).override_failure_message(
+				"%s: the footprint is not one cell wide" % Terrain.RampRise.keys()[rise]) \
+			.is_equal_approx(BoardSpace.CELL_SIZE, 0.0001)
+
+
+func test_markup_lies_flat_where_there_is_no_ramp() -> void:
+	# The pair to the above: an unrotated basis on ordinary ground, and the level the cell states.
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(2, 2), 2, Terrain.RampRise.NONE)
+	var xform := BoardSpace.surface_transform(Vector2i(2, 2), heights)
+	assert_that(xform.basis).is_equal(Basis.IDENTITY)
+	assert_float(xform.origin.y).is_equal(BoardSpace.surface_y(2))
+
+
+func test_lie_on_takes_the_level_it_is_given_rather_than_looking_one_up() -> void:
+	# The fill path resolves the level itself (of_cell's rule) and asks only the RISE question here.
+	# Were this to re-derive elevation, a caller's stated level would be silently overridden.
+	var flat := BoardSpace.lie_on(BoardSpace.of_cell(Vector2i(6, 6), 3), Terrain.RampRise.NONE)
+	assert_float(flat.origin.y).is_equal(BoardSpace.surface_y(3))
+	assert_that(flat.basis).is_equal(Basis.IDENTITY)

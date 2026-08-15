@@ -133,7 +133,7 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	if _last_cells.get(layer, Array()) == cells:
 		return
 	_last_cells[layer] = cells
-	overlays.set_cells(layer, cells)
+	overlays.set_cells(layer, cells, _heights())
 
 
 # ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (3,0) on the
@@ -149,7 +149,7 @@ func _attack(om: OverlayManager) -> void:
 	reach.sort()
 	if _last_cells.get(BoardOverlays.Layer.ATTACK, Array()) != reach:
 		_last_cells[BoardOverlays.Layer.ATTACK] = reach
-		overlays.set_cells(BoardOverlays.Layer.ATTACK, reach)
+		overlays.set_cells(BoardOverlays.Layer.ATTACK, reach, _heights())
 	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK, om.attack_overlay.modulate)
 	_markers(BoardOverlays.Layer.TARGET_PICK, picks)
 
@@ -210,8 +210,9 @@ func _icons(om: OverlayManager) -> void:
 			var icon := by_type[type] as OverlayIcon
 			if icon == null or not is_instance_valid(icon):
 				continue
-			var pos := _anchor(icon.target_cell) + Vector3(0.0, float(type) * 0.02, 0.0)
-			entries.append(_marker(pos, icon.sprite.texture, icon.sprite.modulate))
+			var surface := _anchor(icon.target_cell)
+			surface.origin.y += float(type) * 0.02
+			entries.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
 	_markers(BoardOverlays.Layer.ICONS, entries)
 
 
@@ -261,19 +262,22 @@ func _markers(layer: BoardOverlays.Layer, entries: Array[Dictionary]) -> void:
 	overlays.set_markers(layer, entries)
 
 
-func _marker(pos: Vector3, texture: Texture2D, tint: Color) -> Dictionary:
-	return {"pos": pos, "texture": texture, "modulate": tint}
+# Both halves of a marker come off ONE surface_transform, so where it sits and how it lies can
+# never disagree. A BILLBOARD ignores the basis and stays upright; the ghost channel likewise.
+func _marker(surface: Transform3D, texture: Texture2D, tint: Color) -> Dictionary:
+	return {"pos": surface.origin, "texture": texture, "modulate": tint, "basis": surface.basis}
 
 
-# A cell's top-face center — the marker anchor convention, now on the cell's own SURFACE (#273)
-# so a marker on a terrace rides the terrace. BoardSpace.surface_point is the one answer; a ramp's
-# half-level lift comes along with it.
-func _anchor(cell: Vector2i) -> Vector3:
-	return BoardSpace.surface_point(cell, _heights())
+# How markup LIES on a cell — the marker anchor convention, on the cell's own SURFACE since #273 so
+# a marker on a terrace rides the terrace, and tilted with that surface since #281 so one on a ramp
+# lies flat against the slope. BoardSpace.surface_transform is the one answer.
+func _anchor(cell: Vector2i) -> Transform3D:
+	return BoardSpace.surface_transform(cell, _heights())
 
 
-# A 2D world position's top-face anchor (sprites sit at cell centers). The LEVEL comes from the
-# cell those pixels fall in, so a ghost or arrow over a terrace lifts with it.
-func _anchor_px(px: Vector2) -> Vector3:
+# The same, for a 2D world position (sprites sit at cell centers). The LEVEL and the SLOPE both come
+# from the cell those pixels fall in, so a ghost or arrow over a terrace lifts and tilts with it.
+func _anchor_px(px: Vector2) -> Transform3D:
 	var cell := Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))
-	return BoardSpace.of_pixels(px, BoardSpace.surface_point(cell, _heights()).y)
+	var surface := BoardSpace.surface_transform(cell, _heights())
+	return Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
