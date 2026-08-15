@@ -11,13 +11,15 @@ var units: Array[Unit]
 var squad_manager: SquadManager
 var terrain_states: TerrainStateManager
 var zones: ZoneManager
+var heights: BoardHeights
 
-func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null) -> void:
+func _init(grid_layer: TileMapLayer, unit_list: Array[Unit], manager: SquadManager, states: TerrainStateManager = null, zone_manager: ZoneManager = null, board_heights: BoardHeights = null) -> void:
 	grid = grid_layer
 	units = unit_list
 	squad_manager = manager
 	terrain_states = states
 	zones = zone_manager
+	heights = board_heights
 
 func unit_at_cell(cell: Vector2i) -> Unit:
 	for unit in units:
@@ -70,6 +72,22 @@ func cover_def_at(cell: Vector2i) -> int:
 	if terrain_states == null:
 		return 0
 	return Terrain.COVER_DEF if terrain_states.has_state(cell, Terrain.TileState.COVER) else 0
+
+# The rules' read-points for elevation (#257), siblings of terrain_kind_at / cover_def_at and there
+# for the same reason: methods rather than inline store reads, so a fixture board can stub them.
+#
+# A board built WITHOUT a heights store reads perfectly flat — every existing caller, test fixture
+# and headless board therefore behaves exactly as it did before elevation existed, which is what
+# lets can_step ship without touching a single one of them.
+func elevation_at(cell: Vector2i) -> int:
+	if heights == null:
+		return 0
+	return heights.elevation_at(cell)
+
+func ramp_rise_at(cell: Vector2i) -> Terrain.RampRise:
+	if heights == null:
+		return Terrain.RampRise.NONE
+	return heights.ramp_rise_at(cell)
 
 # Census over this board's units — shared by game.gd and the headless PlaySession so the
 # turn cycle's membership/auto-skip reads have ONE implementation.

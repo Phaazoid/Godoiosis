@@ -322,5 +322,14 @@ func _tile_readout_lines(cell: Vector2i) -> Array[String]:
 		var cost: int = data.get_custom_data("move_cost")
 		if cost > 1:
 			lines.append("Slow going — costs %d movement to enter." % cost)
+	# Elevation (#257). Only spoken when it is non-default, so a flat board's card reads exactly as
+	# it did before verticality existed — the same rule the move_cost line above follows.
+	var elevation: int = board.elevation_at(cell)
+	var rise: Terrain.RampRise = board.ramp_rise_at(cell)
+	if rise != Terrain.RampRise.NONE:
+		lines.append("Ramp — rises %s from height %d. Enter or leave it only along that slope."
+			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation])
+	elif elevation != 0:
+		lines.append("Height %d — reached only by a ramp from height %d." % [elevation, elevation - 1])
 	lines.append_array(Glossary.terrain_reactions_for(kind, held))
 	return lines

@@ -13,6 +13,7 @@ var squad_manager: SquadManager
 var turn_manager: TurnManager
 var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
+var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
 
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
@@ -30,6 +31,7 @@ func _init(board: Dictionary) -> void:
 	turn_manager = board.turn_manager
 	overlay_manager = board.overlay_manager
 	terrain_states = board.get("terrain_states")
+	board_heights = board.get("board_heights")
 	for unit in live_units():
 		_register(unit)
 
@@ -86,7 +88,7 @@ func unit_by_handle(h: String) -> Unit:
 	return null
 
 func _board() -> BoardContext:
-	return BoardContext.new(grid, live_units(), squad_manager, terrain_states)
+	return BoardContext.new(grid, live_units(), squad_manager, terrain_states, null, board_heights)
 
 func active_faction() -> Team.Faction:
 	return turn_manager.active_faction()

@@ -118,6 +118,8 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.tile_data = grid.tile_map_data
 	scenario.active_faction = turn_manager.active_faction()
 	scenario.terrain_states = game.terrain_states.to_state_dict()
+	scenario.elevations = game.board_heights.to_elevation_dict()
+	scenario.ramp_rises = game.board_heights.to_ramp_dict()
 	scenario.zones = game.zone_manager.to_dict()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
@@ -167,6 +169,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 	grid.tile_map_data = scenario.tile_data
 	game.terrain_states.load_state_dict(scenario.terrain_states)
+	game.board_heights.load_dicts(scenario.elevations, scenario.ramp_rises)
 	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
 	overlay_manager.redraw_terrain_live(game.terrain_states)
 	game.zone_manager.load_dict(scenario.zones)
@@ -273,6 +276,8 @@ func clear_board():
 	overlay_manager.redraw_zones(game.zone_manager)
 	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)
 	overlay_manager.redraw_terrain_live(game.terrain_states)
+	game.board_heights.clear()   # so is elevation (#257) -- a sandbox spawn starts flat, not on the
+								 # last mission's cliff. apply_scenario refills it straight after.
 	if game.dev_overlay != null:
 		game.dev_overlay.unit_editor.edit_unit(null)
 	game.unit_info_panel.clear()

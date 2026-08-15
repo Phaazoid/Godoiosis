@@ -30,11 +30,49 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
 		and unit.has_live_ability(Abilities.Id.WATERWALK)
 
-static func movement_cost(cell: Vector2i, unit: Unit, board: BoardContext) -> int:
+# May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
+# the reason elevation needs one at all: can_traverse above answers "may this unit be on that cell",
+# which cannot express "only via a ramp, and only along the ramp's slope".
+#
+# The rule is platforms-and-ramps, NOT Z arithmetic (dev reframe, docs/design/verticality.md): the
+# only height maths here is equality and +/-1. A cliff of five is a staircase of five ramp cells or
+# it is not climbable at all.
+#
+# A ramp's own elevation is its LOW side, so the climb happens LEAVING it and the descent happens
+# ENTERING it -- which is why the two height clauses look at opposite cells.
+static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardContext) -> bool:
+	if not can_traverse(to, unit, board):
+		return false
+
+	var step := to - from
+	var from_rise := board.ramp_rise_at(from)
+	var to_rise := board.ramp_rise_at(to)
+
+	# No sideways entry (dev ruling): a ramp connects exactly its high and low sides, so any step
+	# touching one must run along its slope. Checked for BOTH cells -- leaving a ramp sideways and
+	# entering one sideways are separate clauses, and a test covering only one is blind to the other.
+	if from_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(from_rise, step):
+		return false
+	if to_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(to_rise, step):
+		return false
+
+	var delta := board.elevation_at(to) - board.elevation_at(from)
+	if delta == 0:
+		return true
+	if abs(delta) != 1:
+		return false
+	if delta > 0:
+		return Terrain.rise_direction(from_rise) == step      # climbing off the ramp we stand on
+	return Terrain.rise_direction(to_rise) == -step           # descending onto a ramp, against its rise
+
+static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)
 	if data == null:
 		return OUT_OF_MAP_TILE
-	if not can_traverse(cell, unit, board):
+	# Takes `from` since #257: legality is an EDGE question. Deliberately REQUIRED rather than an
+	# optional defaulting to `cell` -- an optional would give one question two answers depending on
+	# who called, which is the exact drift #102 was built to end.
+	if not can_step(from, cell, unit, board):
 		return CANNOT_WALK_TILE
 	if not board.grid.get_used_rect().has_point(cell):
 		return OUT_OF_MAP_TILE
@@ -85,7 +123,7 @@ static func compute_move_range(unit: Unit, board: BoardContext, leader_cell = nu
 
 		for dir in NEIGHBOURS:
 			var next: Vector2i = current_cell + dir
-			var move_cost: int = movement_cost(next, unit, board)
+			var move_cost: int = movement_cost(current_cell, next, unit, board)
 
 			if move_cost > CANNOT_WALK_TILE:
 				continue
@@ -262,9 +300,14 @@ static func def_breakdown(unit: Unit, cell: Vector2i, board: BoardContext) -> Di
 # _path_hops until the second caller arrived (Law #4 -- one question, one answer).
 #
 # Takes the unit because traversal is per-unit (#115): a Waterwalker's connected region includes
-# water. Asks can_traverse and NOT movement_cost -- occupancy blocks a move but is not terrain and
+# water. Asks can_step and NOT movement_cost -- occupancy blocks a move but is not terrain and
 # moves every turn. Letting an enemy body sever this field would change formations near any enemy,
 # and would make a pursuing squad route around the very unit it is chasing.
+#
+# Still UNWEIGHTED after #257, and deliberately so: a ramp climb costs one hop like any other step.
+# This measures how terrain CONNECTS, not what a move costs -- which is also why an unramped cliff
+# breaks a squad's cohesion leash for free (dev ruling: a 1-block rise blocks squad range the way
+# unwalkable terrain already does). Do not "fix" it by weighting climbs.
 #
 # `block_on_occupancy` (#127) is the opt-in exception, and the DEFAULT IS LOAD-BEARING: cohesion
 # must keep the terrain-only field for the reason directly above (docs/performance.md states this
@@ -304,7 +347,7 @@ static func path_hops(source: Vector2i, board: BoardContext, unit: Unit, max_dep
 				continue
 			if not bounds.has_point(next):
 				continue
-			if not can_traverse(next, unit, board):
+			if not can_step(cell, next, unit, board):
 				continue
 			if block_on_occupancy and blocks_passage(unit, board.unit_at_cell(next)):
 				continue
