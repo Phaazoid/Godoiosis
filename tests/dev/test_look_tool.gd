@@ -154,6 +154,39 @@ func _find_row(node: Node, label_text: String) -> HBoxContainer:
 	return null
 
 
+# The dev asked for a tooltip on every knob (2026-08-14), so a knob shipping without one is a
+# regression rather than an oversight to notice later.
+func test_every_knob_has_a_tooltip() -> void:
+	var untipped: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		if String(knob.get("tip", "")).strip_edges() == "":
+			untipped.append(knob["label"])
+	assert_array(untipped).override_failure_message(
+		"Knobs with no tooltip: %s" % ", ".join(untipped)).is_empty()
+
+
+# A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen.
+func test_no_tooltip_line_runs_too_long() -> void:
+	var wide: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		for line: String in _look.tip_for(knob).split("\n"):
+			if line.length() > 90:   # the wrapper targets 74; this catches a wrap that never ran
+				wide.append(knob["label"])
+				break
+	assert_array(wide).override_failure_message(
+		"Tooltips with an unwrapped line: %s" % ", ".join(wide)).is_empty()
+
+
+# The wire: the tip has to reach the control you actually hover, not just the row's label. A
+# slider has mouse_filter STOP, so Godot asks IT for the tooltip and never walks up to the label.
+func test_the_tooltip_reaches_the_slider_you_hover() -> void:
+	var knob := _knob("BoardOverlays", "fill_lift")
+	var slider := _slider_for(knob["label"])
+	assert_object(slider).is_not_null()
+	assert_str(slider.tooltip_text).is_equal(_look.tip_for(knob))
+	assert_str(slider.tooltip_text).is_not_empty()
+
+
 # Every group must land on a sub-tab. An unmapped group draws nowhere the dev would look, which is
 # indistinguishable from the knob not existing.
 func test_every_knob_group_has_a_sub_tab() -> void:
