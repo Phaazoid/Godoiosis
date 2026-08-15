@@ -302,28 +302,30 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# A diorama's answer is that the rock SITS ON ground, so that is what gets baked. Ground
 		# tiles are already opaque, so for them this is a no-op -- no branch, one rule.
 		#
-		# It also grows EXTRA ROWS below the source art (#264), two per solid prop: its SIDE (its
-		# own sprite, which the composite above has just replaced with bare ground) and its
-		# GENERATED TOP. Counting the props BEFORE the walk is what lets a UV be computed inside
-		# it -- the finished atlas height has to be known before the first one is written.
+		# It also grows EXTRA ROWS below the source art (#264), two per solid prop: its SIDE strip
+		# and its TOP. BOTH are generated as of #274 -- the sprite reached neither face -- so a
+		# prism's side is one patch PER FACET rather than one patch, which is why the layout is
+		# packed by a function instead of counted. Packing BEFORE the walk is what lets a UV be
+		# computed inside it: the finished atlas height has to be known before the first is written.
 		var patch: Vector2i = atlas.texture_region_size
 		var columns := maxi(1, source_image.get_width() / patch.x)
-		var extra_rows := ceili(float(_solid_tile_count(atlas) * 2) / float(columns))
+		var packed := _pack_slots(_solid_patch_widths(atlas), columns, patch, source_image.get_height())
+		if packed.is_empty():
+			return -1
+		var slots: Array[Rect2i] = packed["slots"]
 		var ground := Image.create_empty(source_image.get_width(),
-				source_image.get_height() + extra_rows * patch.y, false, Image.FORMAT_RGBA8)
-		var next_patch := 0
+				source_image.get_height() + int(packed["rows"]) * patch.y, false, Image.FORMAT_RGBA8)
+		var next_slot := 0
 		var base_cache: Dictionary[Terrain.Kind, Image] = {}
 		# ONE material for every top face in this source: the items differ by UV, not by
 		# material, so the whole board's ground is one texture and one shader. Opaque, because
 		# the compositing above leaves nothing to blend.
 		var atlas_mat := _mat(null)
-		# The props' own material over the SAME texture: cut-out alpha (a pot's handle gap must be a
-		# hole, not a smear) and backface culling ON, because a prop is a closed solid and its far
-		# faces would otherwise show through that hole. Scissor rather than blended alpha so it stays
-		# in the opaque pass and writes depth, which is how the billboard props already sort.
+		# The props' own material over the SAME texture. Backface culling ON, because a prop is a
+		# closed solid. Fully OPAQUE as of #274: every face is now generated and paints every pixel,
+		# so there is no cut-out left to do -- the alpha scissor #264 needed existed only because the
+		# sides wore a sprite with holes in it.
 		var prop_mat := _mat(null)
-		prop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
-		prop_mat.alpha_scissor_threshold = 0.5
 		prop_mat.cull_mode = BaseMaterial3D.CULL_BACK
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
@@ -356,24 +358,24 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 					_block_mesh(atlas_mat, side, top_uv, side_uv))
 			next_id += 1
 
-			# The solid prop's own item: real geometry sized by the art, sides wearing the sprite,
-			# top generated. A billboard prop gets none -- BoardMirror builds its sprite directly.
+			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
+			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
+			# sprite directly, and a billboard is the one form a sprite maps onto correctly.
 			if GridUtils.SOLID_SHAPES.has(shape):
-				var side_slot := _patch_slot(next_patch, columns, patch, source_image.get_height())
-				var top_slot := _patch_slot(next_patch + 1, columns, patch, source_image.get_height())
-				next_patch += 2
-				ground.blit_rect(source_image, region, side_slot.position)
-				ground.blit_rect(_prop_top(rng, shape, _palette_of(source_image, region), patch),
-						Rect2i(Vector2i.ZERO, patch), top_slot.position)
+				var side_slot: Rect2i = slots[next_slot]
+				var top_slot: Rect2i = slots[next_slot + 1]
+				next_slot += 2
+				var palette := _palette_of(source_image, region)
+				ground.blit_rect(_prop_side(rng, shape, palette, side_slot.size, _facets_of(shape)),
+						Rect2i(Vector2i.ZERO, side_slot.size), side_slot.position)
+				ground.blit_rect(_prop_top(rng, shape, palette, top_slot.size),
+						Rect2i(Vector2i.ZERO, top_slot.size), top_slot.position)
 				# The mesh is sized to the art's OPAQUE BOUNDS, not to the tile: a rock is 32% clear
 				# (measured in #250), so a full cell-wide cube would be a box of mostly empty air.
-				# The side UV names the same bounds inside the patch, so art and geometry line up by
-				# construction rather than by a tuned offset.
 				var bounds := _opaque_bounds(source_image, region)
 				_add_item(ml, next_id, BoardMirror.prop_item_name(source_id, coords),
-						_prop_mesh(shape, prop_mat, _uv_rect(top_slot, atlas_size),
-								_uv_rect(Rect2i(side_slot.position + bounds.position, bounds.size), atlas_size),
-								bounds, patch, rng))
+						_prop_mesh(shape, prop_mat, _uv_rect(top_slot, atlas_size), side_slot,
+								atlas_size, bounds, patch, rng))
 				next_id += 1
 				props += 1
 			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
@@ -563,22 +565,63 @@ func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3) 
 
 # --- Solid props (#264) ------------------------------------------------------
 
-# How many 1x1 tiles in this source want real geometry. Counted ahead of the walk because the
-# atlas has to be allocated at its finished height before the first UV inside the walk is taken.
-func _solid_tile_count(atlas: TileSetAtlasSource) -> int:
-	var count := 0
+# How many SIDE FACES a shape's geometry has, and therefore how many independent slices its side
+# texture is cut into. ONE table (#274): the mesh builder and the texture generator both read it, and
+# if they disagreed the art would land on the wrong facets. A shape absent here is a box, whose four
+# sides are congruent and share one whole-rect slice.
+const PRISM_FACETS: Dictionary[GridUtils.PropShape, int] = {
+	GridUtils.PropShape.FACETED: 7,
+	GridUtils.PropShape.ROUND: 10,
+}
+
+
+func _facets_of(shape: GridUtils.PropShape) -> int:
+	return PRISM_FACETS.get(shape, 1)
+
+
+# The patch-widths every solid tile in this source needs, in walk order: a SIDE run then a TOP.
+# Measured ahead of the walk because the atlas has to be allocated at its finished height before the
+# first UV inside the walk is taken.
+#
+# A prism's side run is one patch PER FACET, and that is a resolution requirement rather than a
+# convenience: slicing a single 16px patch into a pot's ten facets would leave 1.6 texels each.
+func _solid_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
+	var widths: Array[int] = []
 	for coords in _sorted_tile_coords(atlas):
 		if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if GridUtils.SOLID_SHAPES.has(GridUtils.prop_shape_of(atlas.get_tile_data(coords, 0))):
-			count += 1
-	return count
+		var shape := GridUtils.prop_shape_of(atlas.get_tile_data(coords, 0))
+		if not GridUtils.SOLID_SHAPES.has(shape):
+			continue
+		widths.append(_facets_of(shape))   # side
+		widths.append(1)                   # top
+	return widths
 
 
-# Where patch N lands in the rows appended below the source art — a plain grid in the atlas's own
-# tile size, so the existing half-texel UV inset works on it unchanged.
-func _patch_slot(index: int, columns: int, patch: Vector2i, base_y: int) -> Rect2i:
-	return Rect2i(Vector2i((index % columns) * patch.x, base_y + (index / columns) * patch.y), patch)
+# Lay the extra patches out in rows below the source art, wrapping when a run will not fit.
+# Returns {"slots": Array[Rect2i], "rows": int}.
+#
+# ONE function rather than a counter consulted twice: the row count is needed before the atlas is
+# allocated and the rects are needed inside the walk, and two pieces of arithmetic kept in step by
+# hand is exactly how a UV ends up pointing at the wrong patch.
+func _pack_slots(widths: Array[int], columns: int, patch: Vector2i, base_y: int) -> Dictionary:
+	var slots: Array[Rect2i] = []
+	var col := 0
+	var row := 0
+	for w: int in widths:
+		if w > columns:
+			push_error("A %d-patch run does not fit an atlas %d patches wide" % [w, columns])
+			return {}
+		if col + w > columns:
+			col = 0
+			row += 1
+		slots.append(Rect2i(Vector2i(col * patch.x, base_y + row * patch.y),
+				Vector2i(w * patch.x, patch.y)))
+		col += w
+	var rows := 0
+	if not slots.is_empty():
+		rows = row + 1
+	return {"slots": slots, "rows": rows}
 
 
 # The art's opaque extent inside its tile, in tile-local pixels. This is what sizes a prop's mesh:
@@ -599,22 +642,57 @@ func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
 	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
 
 
-# Three shades taken from the sprite's OWN opaque pixels — dark, mid, light. The generated top
-# face has to sit beside the art on the same object, so its colours are measured from that art
-# rather than authored; a hand-picked palette would be a second answer to "what colour is this".
+# How many shades a generated face is allowed to use, and how coarsely colours are bucketed when
+# looking for them. Five bits per channel groups a pixel-artist's near-identical shades together
+# without merging the highlight into the midtone.
+const PALETTE_SHADES := 4
+const PALETTE_BITS := 5
+
+
+# The sprite's DOMINANT colours, darkest first. Every generated face is painted only from these, so
+# a prop reads as the same object the 2D board shows even though none of its art is the sprite —
+# which is what keeps this from contradicting #250 (the 3D shows the GAME's tiles).
+#
+# Dominant, not mean (#274): averaging a rock's greys returns one flat grey, so every face came out
+# a wash and the shading carried no shape. A pixel artist's shade ramp is already in the art; this
+# reads it back rather than inventing one.
 func _palette_of(image: Image, region: Rect2i) -> Array[Color]:
-	var total := Color(0, 0, 0, 1)
-	var count := 0
+	var counts: Dictionary[int, int] = {}
+	var sums: Dictionary[int, Vector3] = {}
+	var shift := 8 - PALETTE_BITS
 	for y in range(region.position.y, region.end.y):
 		for x in range(region.position.x, region.end.x):
 			var c := image.get_pixel(x, y)
 			if c.a < 0.5:
 				continue
-			total += Color(c.r, c.g, c.b, 0)
-			count += 1
-	var mid := Color(0.5, 0.5, 0.5) if count == 0 \
-			else Color(total.r / count, total.g / count, total.b / count)
-	return [mid.darkened(0.28), mid, mid.lightened(0.18)]
+			var key := ((int(c.r8) >> shift) << (PALETTE_BITS * 2)) \
+					| ((int(c.g8) >> shift) << PALETTE_BITS) | (int(c.b8) >> shift)
+			counts[key] = counts.get(key, 0) + 1
+			sums[key] = sums.get(key, Vector3.ZERO) + Vector3(c.r, c.g, c.b)
+	if counts.is_empty():
+		var grey := Color(0.5, 0.5, 0.5)
+		return _pad_palette([grey])
+
+	var keys: Array[int] = counts.keys()
+	keys.sort_custom(func(a: int, b: int) -> bool: return counts[a] > counts[b])
+	var shades: Array[Color] = []
+	for i in mini(PALETTE_SHADES, keys.size()):
+		var key: int = keys[i]
+		var mean: Vector3 = sums[key] / float(counts[key])
+		shades.append(Color(mean.x, mean.y, mean.z))
+	shades.sort_custom(func(a: Color, b: Color) -> bool: return a.get_luminance() < b.get_luminance())
+	return _pad_palette(shades)
+
+
+# A sprite may genuinely hold fewer distinct shades than a face wants. Extend the ramp off its own
+# ends rather than refusing, so every generator can index PALETTE_SHADES entries unconditionally.
+func _pad_palette(shades: Array[Color]) -> Array[Color]:
+	while shades.size() < PALETTE_SHADES:
+		if shades.size() % 2 == 0:
+			shades.push_front(shades[0].darkened(0.22))
+		else:
+			shades.append(shades[shades.size() - 1].lightened(0.16))
+	return shades
 
 
 # The face one 3/4 drawing cannot supply. One pattern per shape family, because the pattern IS the
@@ -623,56 +701,122 @@ func _palette_of(image: Image, region: Rect2i) -> Array[Color]:
 func _prop_top(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
 		size: Vector2i) -> Image:
 	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
-	var dark: Color = palette[0]
-	var mid: Color = palette[1]
-	var light: Color = palette[2]
 	var center := Vector2(size) * 0.5
 	var plank := maxi(3, size.y / 4)
 	for y in size.y:
 		for x in size.x:
-			var c := mid
+			var shade := 2
 			match shape:
 				GridUtils.PropShape.CUBE:
-					c = dark if y % plank == 0 else (light if (y / plank) % 2 == 0 else mid)
+					shade = 0 if y % plank == 0 else (3 if (y / plank) % 2 == 0 else 2)
 				GridUtils.PropShape.ROUND:
 					var d := (Vector2(x, y) + Vector2(0.5, 0.5) - center).length()
 					var rim := float(mini(size.x, size.y)) * 0.5
-					c = dark if d > rim * 0.62 else (mid if d > rim * 0.34 else light)
+					shade = 1 if d > rim * 0.62 else (2 if d > rim * 0.34 else 3)
 				_:
-					c = mid
-			if rng.randf() < 0.10:
-				c = c.darkened(0.10)
-			elif rng.randf() > 0.92:
-				c = c.lightened(0.08)
-			img.set_pixel(x, y, c)
+					shade = 2
+			img.set_pixel(x, y, _speck(rng, palette, shade))
 	return img
+
+
+# The faces #264 could not supply, because it wore the SPRITE there and a sprite cannot wrap (#274).
+# Laid out as one strip of `facets` cells, which _prism_mesh then slices one cell per facet:
+#   CUBE     one cell, four congruent sides — vertical planks between end rails
+#   ROUND    a continuous band, one stave per facet, so it wraps the pot exactly once
+#   FACETED  one INDEPENDENT cell per facet, each a different stone tone, so the lump reads faceted
+# The last two are the same UV rule; only the texture differs, which is the point.
+func _prop_side(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
+		size: Vector2i, facets: int) -> Image:
+	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+	var cell := maxi(1, size.x / maxi(1, facets))
+	var stave := maxi(2, cell / 2)
+	var rail := maxi(1, size.y / 6)
+	for x in size.x:
+		# Which facet this column belongs to, and how far along that facet it sits — FACETED reads
+		# the first (a whole cell is one tone), ROUND and CUBE read the second.
+		var facet := mini(facets - 1, x / cell)
+		for y in size.y:
+			var shade := 2
+			match shape:
+				GridUtils.PropShape.CUBE:
+					if y < rail or y >= size.y - rail:
+						shade = 1                      # top and bottom rails
+					elif x % stave == 0:
+						shade = 0                      # the gap between planks
+					else:
+						shade = 3 if (x / stave) % 2 == 0 else 2
+				GridUtils.PropShape.ROUND:
+					if y < rail:
+						shade = 1                      # the lip
+					elif x % stave == 0:
+						shade = 1
+					else:
+						shade = 3 if (x / stave) % 2 == 0 else 2
+				_:
+					# A tone per facet, walked so neighbours differ; the real sun does the shading,
+					# so this is albedo variation only and nothing is baked in.
+					shade = 1 + (facet * 2) % 3
+			img.set_pixel(x, y, _speck(rng, palette, shade))
+	return img
+
+
+# One pixel of a generated face: a palette shade, roughened. The roughening stays INSIDE the palette
+# by stepping to a neighbouring shade rather than tinting, so every pixel of every face is a colour
+# the sprite actually contains.
+func _speck(rng: RandomNumberGenerator, palette: Array[Color], shade: int) -> Color:
+	var i := clampi(shade, 0, palette.size() - 1)
+	var r := rng.randf()
+	if r < 0.10:
+		i = maxi(0, i - 1)
+	elif r > 0.92:
+		i = mini(palette.size() - 1, i + 1)
+	return palette[i]
 
 
 # The prop's geometry, sized by the art's opaque bounds. A tile is one cell wide by definition, so
 # a pixel is 1/patch of a world unit — the same density rule the billboard props use.
 # The footprint is SQUARE (depth = width): a 3/4 sprite says nothing about how deep the object is,
 # so inventing a second number would be a guess dressed as a measurement.
-func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_uv: Rect2,
-		bounds: Rect2i, patch: Vector2i, rng: RandomNumberGenerator) -> ArrayMesh:
+#
+# The side face arrives as a PIXEL rect rather than a UV rect (#274) so a prism can cut it per facet
+# and inset each slice by its own half texel — insetting the whole strip once would leave every
+# internal facet boundary sampling half a texel of its neighbour.
+func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_px: Rect2i,
+		atlas_size: Vector2, bounds: Rect2i, patch: Vector2i,
+		rng: RandomNumberGenerator) -> ArrayMesh:
 	var w := float(bounds.size.x) / float(patch.x)
 	var h := float(bounds.size.y) / float(patch.y)
 	var size := Vector3(w, h, w)
 	match shape:
 		GridUtils.PropShape.CUBE:
-			return _block_mesh(mat, mat, top_uv, side_uv, size, h * 0.5)
+			return _block_mesh(mat, mat, top_uv, _uv_rect(side_px, atlas_size), size, h * 0.5)
 		GridUtils.PropShape.ROUND:
-			return _prism_mesh(mat, mat, top_uv, side_uv, 10, size, 0.78, 0.0, rng)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.78, 0.0, rng, shape)
 		_:
-			return _prism_mesh(mat, mat, top_uv, side_uv, 7, size, 0.55, 0.30, rng)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.55, 0.30, rng, shape)
 
 
 # A tapered prism standing on y = 0 — the faceted lump and the round pot are the same solid with
-# different side counts and jitter. Every side face wears the WHOLE sprite rather than a slice of
-# it wrapped around: a seventh of a rock drawing per facet reads as smeared texture, while the
-# whole drawing on each facet reads as a rock from any orbit angle.
-func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_uv: Rect2,
-		sides: int, size: Vector3, taper: float, jitter: float,
-		rng: RandomNumberGenerator) -> ArrayMesh:
+# different facet counts and jitter.
+#
+# Every facet takes its OWN SLICE of the side strip (#274). #264 put the whole texture on every
+# facet, because the texture was the tile's sprite and a sprite cannot wrap — which is exactly what
+# the dev saw: *"the rocks and the pots need it most, their sprites do not map to their models"*, a
+# pot rendering as ten overlapping pots. With the strip generated, slice i is simply facet i's art,
+# and whether that reads as a continuous wrap (ROUND) or as distinct stone faces (FACETED) is
+# decided by the texture rather than by this loop.
+func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: Rect2i,
+		atlas_size: Vector2, size: Vector3, taper: float, jitter: float,
+		rng: RandomNumberGenerator, shape: GridUtils.PropShape) -> ArrayMesh:
+	var sides := _facets_of(shape)
+	var facet_w := side_px.size.x / sides
+	# Each slice is inset by its own half texel. Insetting the strip once instead would leave every
+	# internal boundary sampling half a texel of the neighbouring facet.
+	var facet_uv: Array[Rect2] = []
+	for i in sides:
+		facet_uv.append(_uv_rect(Rect2i(side_px.position + Vector2i(i * facet_w, 0),
+				Vector2i(facet_w, side_px.size.y)), atlas_size))
+	var side_uv := _uv_rect(side_px, atlas_size)   # the bottom cap, which no facet owns
 	var base: Array[Vector3] = []
 	var cap: Array[Vector3] = []
 	for i in sides:
@@ -706,7 +850,7 @@ func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_uv: 
 		var normal := (base[i] - base[j]).cross(cap[j] - base[j]).normalized()
 		if normal.dot(base[i] + base[j]) < 0.0:
 			normal = -normal   # the jitter can flip a degenerate face; point it outward
-		_quad(st, cap[j], cap[i], base[i], base[j], normal, side_uv)
+		_quad(st, cap[j], cap[i], base[i], base[j], normal, facet_uv[i])
 	for i in sides:
 		var j := (i + 1) % sides
 		_cap_vertex(st, Vector3.ZERO, size, side_uv, Vector3.DOWN)
