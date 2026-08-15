@@ -2,8 +2,9 @@ extends VBoxContainer
 class_name ScenarioTool
 
 # Dev-overlay tab for scenario authoring: Save As / Update / Load / Delete over Scenarios/,
-# per-faction AI toggles (#150), squad archetype/zone rows, mission objectives (#96), and the
-# authored-save checkbox (#177 — cast units save as references to their character files).
+# per-faction AI toggles (#150), squad archetype/zone rows, mission objectives (#96), the
+# authored-save checkbox (#177 — cast units save as references to their character files), the
+# board's look preset (#253) and where its camera opens (#234).
 
 @onready var scenario_name_input: LineEdit = %ScenarioNameInput
 @onready var scenario_dropdown: OptionButton = %ScenarioDropdown
@@ -25,6 +26,7 @@ var _objective_warning: Label
 # Ad-hoc units snapshot fully either way.
 var authored_save := true
 var _look_row: HBoxContainer
+var _camera_row: HBoxContainer
 
 const NO_ZONE_LABEL := "(no zone)"
 const NO_LOOK_LABEL := "(none - default)"
@@ -50,6 +52,7 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 		+ "Bug reports (F3) ignore this and always snapshot.")
 	move_child(get_child(get_child_count() - 1), 0)
 	refresh_look_row()
+	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
 
 
 # The board's look (#253 part 2). Code-built and moved to the top, exactly like the checkbox above
@@ -73,11 +76,80 @@ func refresh_look_row() -> void:
 func _on_look_picked(picked: String) -> void:
 	scenario_manager.current_look_preset = "" if picked == NO_LOOK_LABEL else picked
 	# Apply live so the pick is visible at once, and route it through the Look tab so ITS baseline
-	# stays in step -- that tab is also the only thing here holding the pushed-in 3D host.
+	# stays in step.
 	var overlay: DevOverlay = game.dev_overlay
 	if overlay == null or not overlay.look_tool.has_host():
 		return
 	overlay.look_tool.apply_preset(LookKnobs.resolve(scenario_manager.current_look_preset))
+
+
+# Where this board opens the camera (#234). Same code-built-and-moved-to-the-top shape as the look
+# row: fly the camera where you want the mission to start and press Capture, rather than typing
+# numbers at it. Persisted by the tab's own Save As / Update, through capture_scenario.
+func refresh_camera_row() -> void:
+	if _camera_row != null:
+		remove_child(_camera_row)
+		_camera_row.queue_free()
+
+	_camera_row = HBoxContainer.new()
+	var label := Label.new()
+	label.text = "Camera start: %s" % _camera_start_text()
+	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_camera_row.add_child(label)
+
+	var capture := Button.new()
+	capture.text = "Capture view"
+	capture.disabled = _host_3d() == null
+	capture.pressed.connect(_on_capture_camera_pressed)
+	_camera_row.add_child(capture)
+
+	var clear := Button.new()
+	clear.text = "Clear"
+	clear.disabled = scenario_manager.current_camera_start == null
+	clear.pressed.connect(_on_clear_camera_pressed)
+	_camera_row.add_child(clear)
+
+	DevWidgets.apply_tooltip(_camera_row, DevWidgets.wrap_tooltip(
+		"Where the camera sits when this mission OPENS. Capture stores the view you are looking at "
+		+ "right now -- aim, angle and zoom -- and every load of this board returns to it, including "
+		+ "a resumed save.\n\n"
+		+ "Clear goes back to DERIVED: the camera opens on your own units, as wide as the Look tab's "
+		+ "'Opening shot (cells)'. That knob does nothing on a board that authors a start.\n\n"
+		+ "Nothing is validated. Edit the board afterwards and an aim that now sits off it is simply "
+		+ "clamped back on, silently -- re-capture if the shot looks wrong.\n\n"
+		+ "3D only: the flat 2D view has no opening shot of its own (#292)."))
+
+	add_child(_camera_row)
+	move_child(_camera_row, 0)
+
+
+func _camera_start_text() -> String:
+	var start: CameraPose = scenario_manager.current_camera_start
+	if start == null:
+		return "derived (opens on your own units)"
+	return "authored -- yaw %.0f deg, zoom %.1f, at %s" % [
+		start.yaw_degrees, start.distance, BoardSpace.flat(BoardSpace.cell_of(start.aim))]
+
+
+# Null under a flat Main.tscn launch -- nothing pushed a 3D world in, so there is no view to capture.
+func _host_3d() -> Node3D:
+	var overlay: DevOverlay = game.dev_overlay
+	return null if overlay == null else overlay.host_3d
+
+
+func _on_capture_camera_pressed() -> void:
+	var host := _host_3d()
+	if host == null:
+		return
+	scenario_manager.current_camera_start = host.capture_camera_start()
+	status_label.text = "Camera start captured -- save the scenario to keep it."
+	refresh_camera_row()
+
+
+func _on_clear_camera_pressed() -> void:
+	scenario_manager.current_camera_start = null
+	status_label.text = "Camera start cleared -- this board opens on your own units again."
+	refresh_camera_row()
 
 # select_name is a dropdown-relative name ("fixtures/Foo"), not a path. Load and Save As hand it
 # whatever they just touched; the empty default re-selects what was already showing, so a rebuild
@@ -115,6 +187,7 @@ func refresh_on_show() -> void:
 	refresh_ai_toggles()
 	refresh_loaded_label()
 	refresh_look_row()   # a board load changes which preset this board wears
+	refresh_camera_row()   # ...and where it opens (#234)
 	# Aim the dropdown at the loaded scenario (dev ask 2026-08-11): with the load-gate it is the
 	# only target Update can act on, so finding it by hand every visit was pure friction. Nothing
 	# loaded leaves the selection alone; refresh_dropdown re-evaluates the Update button either way.
@@ -224,6 +297,7 @@ func _on_load_pressed() -> void:
 	refresh_dropdown(target)
 	refresh_loaded_label()
 	refresh_look_row()   # a board load changes which preset this board wears
+	refresh_camera_row()   # ...and where it opens (#234)
 
 func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)

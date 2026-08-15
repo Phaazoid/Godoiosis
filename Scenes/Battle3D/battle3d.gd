@@ -101,10 +101,10 @@ func _ready() -> void:
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
-	# PUSH the 3D world at the Look tab rather than letting it reach up for one (#212): the game
+	# PUSH the 3D world at the dev window rather than letting it reach up for one (#212): the game
 	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
 	if dev_overlay is DevOverlay:
-		(dev_overlay as DevOverlay).attach_look_host(self)
+		(dev_overlay as DevOverlay).attach_3d_host(self)
 	_show_checkout()
 	if demo_mode:
 		_game_container.visible = false
@@ -199,9 +199,33 @@ func _sync_terrain_while_authoring() -> void:
 
 # Public because the Look tab's Re-fit button calls it (#212): pitch and FOV feed the framing
 # maths, which otherwise only runs on a board load, so tuning either leaves the shot stale.
+#
+# TWO answers to "where does the camera open", declared per Law #4 (#234): an AUTHORED pose on the
+# board is AUTHORITATIVE, and _opening_volume below is the fallback for a board that authors none.
+# Same shape as the objectives-vs-painted-zones guard in missions.md. Note the board already
+# authors how WIDE it opens -- opening_view_cells rides the LookPreset it names -- so an authored
+# start is a second influence over a different axis (where/which way/how far), not a duplicate;
+# it simply retires the width knob for that board.
 func fit_camera() -> void:
 	var board := _board_volume()
+	var start: CameraPose = game.scenario_manager.current_camera_start
+	if start != null:
+		_rig.pose(start.aim, start.yaw_degrees, start.distance, board)
+		return
 	_rig.frame(_opening_volume(board), board)
+
+
+# What the Scenario tab's Capture button stores (#234). Here rather than in the dev tab for the
+# same reason _describe_view is: only this scene knows what its own rig fields MEAN.
+#
+# The LIVE pose, never the _target_* twins -- you are capturing the shot you are looking at, not
+# the one the smoothing is heading toward.
+func capture_camera_start() -> CameraPose:
+	var start := CameraPose.new()
+	start.aim = _rig.position
+	start.yaw_degrees = _rig.rotation_degrees.y
+	start.distance = _camera.position.z
+	return start
 
 
 # The opening shot: the player's own units with opening_view_cells of board around them,

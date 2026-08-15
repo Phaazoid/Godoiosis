@@ -18,6 +18,10 @@ class_name DevOverlay
 @onready var look_tool: LookTool = get_node("%Look")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 
+# The running Battle3D, pushed in by attach_3d_host below; null under a flat Main.tscn launch.
+# Any tab needing the 3D world reads it from here.
+var host_3d: Node3D = null
+
 func _ready() -> void:
 	if not DevTools.enabled():
 		queue_free()   # a demo build constructs no dev tools (#132)
@@ -44,9 +48,15 @@ func _ready() -> void:
 # The 3D host PUSHES itself in from battle3d._ready (it already resolves this window to hide it).
 # Nothing under Game reaches up to Battle3D as a result, and a flat Main.tscn launch just never
 # calls this. A demo build has already queue_free()'d this window, so don't build 60-odd rows for it.
-func attach_look_host(host: Node3D) -> void:
+#
+# The WINDOW holds it, not the Look tab (#234). It arrived for the Look tab (#212) and was named for
+# it, and by #253 the Scenario tab was already borrowing it back off that panel -- which quietly made
+# a tuning panel the project's host registry. Second consumer, so it moves to the wiring hub that
+# every other tab is already wired from; look_tool keeps its own copy for the ~76 knob rows.
+func attach_3d_host(host: Node3D) -> void:
 	if not DevTools.enabled():
 		return
+	host_3d = host
 	look_tool.attach_host(host)
 
 

@@ -3,7 +3,7 @@
 # This is a WIRE suite, and it exists because both ends can be right while nothing connects them
 # -- #103's shape. BugReporter cannot reach the 3D scene (the game subtree deliberately keeps no
 # upward path, and an absolute /root/... lookup is forbidden by CLAUDE.md), so battle3d PUSHES a
-# describe-callable at it in _ready, the same idiom as DevOverlay.attach_look_host and
+# describe-callable at it in _ready, the same idiom as DevOverlay.attach_3d_host and
 # HoverPresenter.pointer_source. Delete that one line and both ends still pass their own tests.
 #
 # Deliberately NOT here: the screenshot. capture_frame() returns null headless because
