@@ -1,0 +1,75 @@
+Big 32x32 Tileset - Asset Pack License
+
+Copyright (c) 2025 PxlDev (Mika Henttinen) and contributors.
+
+This asset pack contains pixel art tiles originally created for the game
+"No One Man" by Team Melon, along with additional tiles, edits, and
+repackaging by PxlDev.
+
+
+1. Permission of Use
+
+You are free to use these assets in personal and commercial projects,
+including but not limited to:
+
+- Video games
+- Prototypes
+- Commercial games
+- Game jams
+- Software projects
+
+You may modify, edit, recolor, or combine the assets to fit your project.
+
+
+2. Credit Requirement
+
+If the assets are used in a commercial project, you must provide credit.
+
+Example credit:
+
+Assetpack (Tileset) by PxlDev (Mika Henttinen) and Team Melon.
+Original assets by Team Melon
+
+Credit may be placed in:
+- Game credits
+- Documentation
+- Store pages
+- Project descriptions
+
+
+3. Redistribution
+
+You may redistribute the assets only as part of a separate asset pack
+under the following conditions:
+
+1. The redistributed pack must be free.
+2. The redistributed pack must include full credit to the original creators.
+3. The redistributed pack must not claim the assets as solely your own work.
+
+
+4. Contributors
+
+Assets in this pack include work from:
+
+PxlDev (Mika Henttinen)
+- Tile creation, adjustments, new tiles, color grading, repackaging
+
+Ommtdh
+- Tile creation, color grading, ideation, planning
+
+Cherin
+- Early-stage tiles
+
+Kapa
+- Decorations, posters, graffiti elements
+
+A small portion of tiles were adapted from:
+
+Anokolisa - Sidescroller Shooter Central City Pack
+
+
+5. Disclaimer
+
+These assets are provided "as is", without warranty of any kind.
+The authors are not liable for any damages or issues arising from
+the use of these assets.
