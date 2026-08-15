@@ -351,13 +351,18 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# BoardMirror puts that art on a billboard instead, and baking it here as well would
 			# render the tree twice, once flat and once standing.
 			#
-			# The predicate is "does the art LEAVE the ground", NOT "does the tile stand up" (#280).
-			# One question until a TUFT existed: a flowering tile stands a small sprite up and stays
-			# ground, so it keeps its art here and is drawn twice ON PURPOSE.
+			# THREE answers, not two, since #280. A FLAT tile wears its own art. A prop wears the
+			# bare kind base. A TUFT wears a GENERATED SPECKLE in its own colours: its plants stand
+			# up, so drawing them flat here as well is the same double-render -- but the bare kind
+			# base is the wrong ground under them, because it is a different green from the tile
+			# the plants were cut out of.
 			var shape := GridUtils.prop_shape_of(data)
 			var stands_up := shape != GridUtils.PropShape.FLAT
-			if not GridUtils.art_leaves_ground_of(data):
+			if not stands_up:
 				ground.blend_rect(source_image, region, region.position)
+			elif shape == GridUtils.PropShape.TUFT:
+				ground.blit_rect(_tuft_ground(rng, source_image, region),
+						Rect2i(Vector2i.ZERO, region.size), region.position)
 
 			var top_uv := _uv_rect(region, atlas_size)
 			var side: Material = stone_side if kind == Terrain.Kind.ROCK else dirt_side
@@ -793,6 +798,34 @@ func _pack_slots(widths: Array[int], columns: int, patch: Vector2i, base_y: int)
 	if not slots.is_empty():
 		rows = row + 1
 	return {"slots": slots, "rows": rows}
+
+
+# The ground a TUFT's plants stand on (#280): the tile's own field colour, sparsely speckled in its
+# own other colours. GENERATED rather than borrowed from the plain-grass tile, because "which tile
+# is this one's base?" is a relationship the content does not declare (Law #4) -- and generated in
+# MEASURED colours rather than in the kind base's, because the kind base is a muted olive while the
+# sheet's grass is a bright green, so a tuft cell would read as a patch among its neighbours.
+#
+# The field colour is BoardMirror's, the same static the mirror keys OUT to cut the plants from the
+# tile -- so the plants cannot end up standing on a field they were not cut from.
+#
+# Sparse on purpose: a speckle every 25 pixels or so. This is ground, and the interest on a tuft
+# cell is meant to come from the things standing on it.
+func _tuft_ground(rng: RandomNumberGenerator, source_image: Image, region: Rect2i) -> Image:
+	var field := BoardMirror.background_colour(source_image, region)
+	var palette := _palette_of(source_image, region)
+	var speckles: Array[Color] = []
+	for shade: Color in palette:
+		if shade != field:
+			speckles.append(shade)
+	var img := Image.create_empty(region.size.x, region.size.y, false, Image.FORMAT_RGBA8)
+	img.fill(field)
+	if speckles.is_empty():
+		return img          # a single-colour tile has nothing to speckle WITH; flat is honest
+	for i in maxi(1, region.size.x * region.size.y / 25):
+		img.set_pixel(rng.randi_range(0, region.size.x - 1), rng.randi_range(0, region.size.y - 1),
+				speckles[rng.randi_range(0, speckles.size() - 1)])
+	return img
 
 
 # The art's opaque extent inside its tile, in tile-local pixels. This is what sizes a prop's mesh:

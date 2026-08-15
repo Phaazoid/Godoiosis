@@ -547,7 +547,7 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	# this case used until #264) therefore cannot match its art even when the bug is present:
 	# measured by falsification, a mutant that baked every prop's art passed against it. Picking the
 	# most opaque standing tile off the tileset keeps that true through an atlas swap.
-	var prop := _most_opaque_tile_that_leaves_the_ground(source, art)
+	var prop := _most_opaque_tile_baked_as_bare_ground(source, art)
 	assert_bool(not prop.is_empty()).override_failure_message("no standing tile; the case is vacuous").is_true()
 	assert_int(prop.clear).override_failure_message(
 			"the most opaque standing tile still has %s see-through pixels — this case cannot tell a " \
@@ -575,20 +575,23 @@ func _baked_atlas(board: GridMap) -> Image:
 	return material.albedo_texture.get_image()
 
 
-# The tile whose art was left OFF the bake with the fewest see-through pixels, and how many it has.
-# Measured rather than named, so the case above states its own precondition instead of trusting a
-# tile to stay opaque.
+# The tile baked as BARE GROUND with the fewest see-through pixels, and how many it has. Measured
+# rather than named, so the case above states its own precondition instead of trusting a tile to
+# stay opaque.
 #
-# art_leaves_ground_of and NOT stands_up_of (#280): a TUFT stands up and keeps its art baked, so it
-# is the one standing tile whose region is SUPPOSED to match — and being 100% opaque grass it would
-# win this search outright and make the caller assert the opposite of what it means.
-func _most_opaque_tile_that_leaves_the_ground(source: TileSetAtlasSource, art: Image) -> Dictionary:
+# TUFT is excluded, and inline rather than behind a predicate because this is the only caller that
+# wants the distinction: a tuft stands up like a prop but its top face is SPECKLED rather than left
+# as the kind base (#280), and being 100% opaque grass it would otherwise win this search and quietly
+# move the case off the props it is about.
+func _most_opaque_tile_baked_as_bare_ground(source: TileSetAtlasSource, art: Image) -> Dictionary:
 	var best: Dictionary = {}
 	for i in source.get_tiles_count():
 		var coords := source.get_tile_id(i)
 		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if not GridUtils.art_leaves_ground_of(source.get_tile_data(coords, 0)):
+		var data := source.get_tile_data(coords, 0)
+		if not GridUtils.stands_up_of(data) \
+				or GridUtils.prop_shape_of(data) == GridUtils.PropShape.TUFT:
 			continue
 		var clear := _clear_pixels(art, source.get_tile_texture_region(coords, 0))
 		if best.is_empty() or clear < int(best.clear):
@@ -1294,17 +1297,19 @@ func test_every_plane_tile_declares_which_way_it_runs() -> void:
 
 # --- #280: grass tufts -------------------------------------------------------------------------
 
-# THE case #280 exists for, and it is the half that separates a tuft from every other prop: it
-# stands something up AND its tile stays painted. The generator's bake predicate stopped being
-# "does this tile stand up" and became "does its art LEAVE the ground", so this is the one place a
-# tile's art is drawn twice on purpose. Asserted against the SOURCE atlas exactly the way its
-# opposite is (test_a_prop_cell_bakes_ground_not_the_prop): a prop's baked region must DIFFER from
-# its art, a tuft's must MATCH it.
+# A tuft's cell bakes GROUND, not its own plants — the dev's feel-check: drawing the flowers flat as
+# well as standing them up "looks very silly", which is #255's double-render in miniature. But it
+# cannot bake the bare KIND BASE either, because that base is a muted olive while the sheet's grass
+# is a bright green, so the cell would read as a patch among its neighbours. Three things, and the
+# middle one is the whole reason a tuft's ground is generated rather than left alone:
+#   * the plants are gone       — the baked region does not match the tile's art
+#   * it still looks like this tile's grass — its most common colour is the tile's OWN field colour,
+#     the same one BoardMirror keys out to cut the plants, so the plants stand on what they came from
+#   * it is not a flat mat      — more than one colour, i.e. actually speckled
 #
-# The opacity precondition is what gives the comparison teeth rather than being decoration: a
-# see-through tile is blended over its kind base, so its regions differ no matter what the code
-# does, and the case would pass against the bug (measured on #264, with Tree).
-func test_a_tuft_keeps_its_own_art_baked_on_the_ground() -> void:
+# The opacity precondition is what gives the first comparison teeth: a see-through tile is blended
+# over its kind base, so its regions would differ no matter what the code did (measured on #264).
+func test_a_tuft_bakes_speckled_ground_and_not_its_own_plants() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var tiles: TileSet = _game.grid.tile_set
 	var baked := _baked_atlas(board)
@@ -1320,11 +1325,18 @@ func test_a_tuft_keeps_its_own_art_baked_on_the_ground() -> void:
 		var name: String = GridUtils.authored_tile_display_name(source.get_tile_data(entry.coords, 0))
 		assert_int(_clear_pixels(art, region)).override_failure_message(
 				"'%s' has see-through pixels, so its bake shows the kind base through them — this case " \
-				% [name] + "cannot tell a baked tuft from a bare one, and would pass against the bug" \
-				).is_equal(0)
+				% [name] + "cannot tell a baked tuft from a based one").is_equal(0)
 		assert_bool(_regions_match(baked, art, region)).override_failure_message(
-				"'%s' bakes as BARE GROUND — the popped-up tuft is the only thing left on the cell and " \
-				% [name] + "the tile reads as empty grass").is_true()
+				"'%s' bakes its own plants onto the ground as well as standing them up — the cell shows " \
+				% [name] + "the flowers twice").is_false()
+		var field := BoardMirror.background_colour(art, region)
+		assert_bool(BoardMirror.background_colour(baked, region) == field).override_failure_message(
+				"'%s' bakes a ground whose field colour is %s, not the tile's own %s — its plants stand " \
+				% [name, BoardMirror.background_colour(baked, region), field] \
+				+ "on a patch that does not match the grass they were cut out of").is_true()
+		assert_int(_distinct_colours(baked, region).size()).override_failure_message(
+				"'%s' bakes a flat mat of one colour — nothing was speckled onto it" % [name]) \
+				.is_greater(1)
 
 
 # EVERY plant on the tile stands on the tile. This is the case the first build got wrong and the

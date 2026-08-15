@@ -92,10 +92,11 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 # geometry (volumetric -- crates, rocks, barrels). The split is the dev's measured ruling on #255:
 # "anything that's thin already works in this style"; blocky things "really want to be textures on
 # a 3D model". PLANE is #263's oriented plane -- thin but DIRECTIONAL, a fence -- and it says only
-# the FORM; which way it runs is the separate wall_edges question below. TUFT is #280's, and it is
-# the odd one: ground that KEEPS its own art, with the things drawn on it -- flowers, a weed --
-# standing up individually. A flowering tile is walkable ground that happens to have flowers on it,
-# so it is the one shape whose tile is both baked flat and popped up.
+# the FORM; which way it runs is the separate wall_edges question below. TUFT is #280's: WALKABLE
+# GROUND with things growing on it -- flowers, a weed -- each standing up individually. It is the
+# one shape whose cell keeps a ground face of its own rather than the bare kind base: the generator
+# fills it with a speckle in the tile's own colours, because the plants were cut out of that tile
+# and the kind base is a different green.
 #
 # APPEND-ONLY: the values are persisted in the tileset.
 enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE, TUFT }
@@ -165,21 +166,6 @@ static func stands_up_of(data: TileData) -> bool:
 
 static func stands_up_at_cell(grid: TileMapLayer, cell: Vector2i) -> bool:
 	return stands_up_of(grid.get_cell_tile_data(cell))
-
-
-# Does this tile's art LEAVE the ground? The question the meshlib generator asks when it decides
-# whether to bake a tile's art onto its own top face -- and until #280 it had the same answer as
-# stands_up_of for every shape, which is why they were one predicate: standing a tile up and taking
-# its art off the ground were the same act (a tree drawn both flat and standing renders twice).
-#
-# TUFT separates them, and is the only member that does. A tuft stands something up AND keeps its
-# own art baked underneath, because the tile is still ground; every other standing form REPLACES
-# its ground with what it stands up. Declared as its own predicate rather than by widening
-# stands_up_of, which the mirror still reads correctly as-is -- the mirror asks "plant a prop on
-# this cell?", and a tuft's answer to that is yes.
-static func art_leaves_ground_of(data: TileData) -> bool:
-	var shape := prop_shape_of(data)
-	return shape != PropShape.FLAT and shape != PropShape.TUFT
 
 
 static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Texture2D:

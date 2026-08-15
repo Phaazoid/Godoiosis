@@ -36,10 +36,10 @@ class_name BoardMirror
 #              tile's authored `wall_edges` mask, and the generator bakes that into the tile's OWN
 #              mesh — so nothing here holds a yaw, and a fence is planted by the same
 #              _make_prop_block that plants a crate.
-#   TUFT       ground that keeps its own art with the things drawn ON it standing up (#280) —
-#              one small camera-facing sprite PER DRAWN CLUSTER, each planted where the art puts
-#              it in the cell. Flowers and weeds: the tile is still walkable ground, so its art is
-#              baked flat AND popped up, the one case where a tile's art is drawn twice on purpose.
+#   TUFT       walkable ground with things growing ON it (#280) — one small camera-facing sprite
+#              PER DRAWN CLUSTER, each planted where the art puts it in the cell. Its top face is
+#              the one the generator SPECKLES rather than leaving as the bare kind base, since the
+#              plants were cut out of that tile and must stand on the field they came from.
 # Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
@@ -122,13 +122,14 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # the right number is whatever looks like a crate.
 @export var block_height_scale := 1.0
 
-# How tall a TUFT's plants stand relative to their own art (#280) — 1.0 draws a flower at the size
-# it is drawn. Only the SIZE: where each one sits in the cell comes off the art and is not tunable.
+# How tall a TUFT's plants stand relative to their own art (#280) — 1.0 would draw a flower at the
+# size the tile draws it, which is a flower the height of a unit's shin; 0.25 is the dev's eye
+# against the units. Only the SIZE: where each plant sits in the cell comes off the art, not here.
 # Unlike the baked block props this is a live Sprite3D property, so it can be a real knob; the
 # SETTER is what makes it one. Props are only rebuilt when their tile changes and sync() runs in
 # DEV_MODE alone, so a value read at build time would need a repaint to show — which is the one
 # failure that makes a tuning knob worthless.
-@export var tuft_scale := 1.0: set = _set_tuft_scale
+@export var tuft_scale := 0.25: set = _set_tuft_scale
 
 var board: GridMap
 
@@ -575,7 +576,8 @@ func _make_prop_billboard(grid: TileMapLayer, cell: Vector2i) -> Sprite3D:
 # The background is the tile's OWN most common colour, measured, not a diff against a base tile:
 # "which tile is this one's ground?" is a relationship the content does not declare and this must
 # not invent (Law #4). It holds by construction for a tuft — ground with something on it is mostly
-# ground — and it is measured at 76-96% across the authored tufts.
+# ground — and it is measured at 76-96% across the authored tufts. The generator fills the cell's
+# top face with that same colour (speckled), so the plants stand on the field they were cut from.
 
 # Below this many pixels a cluster is grass TEXTURE, not an object standing on grass. Measured
 # rather than picked: the shipped sheet's clusters are 2px specks or 23px-plus objects with nothing
@@ -677,7 +679,7 @@ func _tuft_art(atlas: TileSetAtlasSource, source_id: int, coords: Vector2i) -> D
 	if sheet != null:
 		var region := atlas.get_tile_texture_region(coords, 0)
 		var keyed := Image.create_empty(region.size.x, region.size.y, false, Image.FORMAT_RGBA8)
-		var ground := _background_colour(sheet, region)
+		var ground := background_colour(sheet, region)
 		for y in region.size.y:
 			for x in region.size.x:
 				var c := sheet.get_pixel(region.position.x + x, region.position.y + y)
@@ -687,8 +689,11 @@ func _tuft_art(atlas: TileSetAtlasSource, source_id: int, coords: Vector2i) -> D
 	return built
 
 
-# The most common colour in a region. A tuft's ground, by the argument above.
-func _background_colour(image: Image, region: Rect2i) -> Color:
+# The most common colour in a region — a tuft's GROUND, by the argument above. A static both stacks
+# call, for the reason opaque_bounds is one: the mirror keys this colour OUT to find the plants and
+# the generator FILLS the tile's top face with it, so two answers here would stand the plants on a
+# patch that does not match what they were cut from.
+static func background_colour(image: Image, region: Rect2i) -> Color:
 	var counts: Dictionary[Color, int] = {}
 	var best := Color(0, 0, 0, 0)
 	var best_seen := 0
