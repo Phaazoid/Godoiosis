@@ -139,10 +139,28 @@ const LAYER_KNOBS: Array[Dictionary] = [
 
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Scenario tab's heading gold
 
+# Which SUB-TAB each group lands on (dev, 2026-08-14: ~60 rows in one scroll is too much for a
+# 900x360 window, so split to about a windowful each). A map rather than a key on every knob, so
+# adding a knob stays one line and adding a GROUP is one line here -- and a group with no tab is a
+# group that silently vanishes from the panel, which is why a law test pins the mapping complete.
+# Declaration order below is the tab order.
+const GROUP_TABS: Dictionary[String, String] = {
+	"Lighting": "Lighting",
+	"Sky": "Lighting",
+	"Post": "Post",
+	"Fog": "Fog & DoF",
+	"Depth of field": "Fog & DoF",
+	"Camera": "Camera",
+	"Board markup": "Markup",
+	"Board markup colours": "Markup",
+	"Effects": "Effects",
+}
+
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
 var _baseline: Array = []        # the authored value per KNOBS index, read once on attach
 var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index
-var _rows: VBoxContainer
+var _tabs: TabContainer
+var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
 
 
@@ -160,13 +178,20 @@ func _ready() -> void:
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	add_child(scroll)
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_rows)
+	# Buttons and status sit ABOVE the sub-tabs and outside them, so they are reachable from every
+	# tab (dev ask) -- Reset and Re-fit are panel-wide, not per-group.
+	_tabs = TabContainer.new()
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_tabs)
+	for tab_title: String in _tab_titles():
+		var scroll := ScrollContainer.new()
+		scroll.name = tab_title
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_tabs.add_child(scroll)
+		var rows := VBoxContainer.new()
+		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(rows)
+		_tab_rows[tab_title] = rows
 	_rebuild()
 
 
@@ -278,70 +303,95 @@ func baseline_of(index: int) -> Variant:
 
 # --- Building the rows ------------------------------------------------------------------
 
+# Tab titles in GROUP_TABS declaration order, de-duplicated -- the order the sub-tabs appear in.
+func _tab_titles() -> Array[String]:
+	var titles: Array[String] = []
+	for group: String in GROUP_TABS:
+		var title: String = GROUP_TABS[group]
+		if not titles.has(title):
+			titles.append(title)
+	return titles
+
+
+# Where a group's rows go. A group missing from GROUP_TABS would otherwise draw nowhere at all,
+# so it lands on the first tab and says so; the law test is what stops that shipping.
+func _rows_for_group(group: String) -> VBoxContainer:
+	if not GROUP_TABS.has(group):
+		push_error("LookTool: group '%s' has no tab in GROUP_TABS" % group)
+		return _tab_rows[_tab_titles()[0]]
+	return _tab_rows[GROUP_TABS[group]]
+
+
 func _rebuild() -> void:
-	for child in _rows.get_children():
-		_rows.remove_child(child)
-		child.queue_free()
+	var showing := _tabs.current_tab   # a Reset must not bounce you off the tab you were tuning
+	for rows: VBoxContainer in _tab_rows.values():
+		for child in rows.get_children():
+			rows.remove_child(child)
+			child.queue_free()
 	if _host == null:
-		DevWidgets.add_label(_rows,
+		DevWidgets.add_label(_tab_rows[_tab_titles()[0]],
 			"No 3D host attached - the flat 2D game has no look stack to tune.")
 		return
 	var group := ""
 	for knob: Dictionary in KNOBS:
 		var knob_group: String = knob["group"]
+		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
 			group = knob_group
-			_add_heading(group)
-		_build_row(knob)
-	_add_heading(LAYER_KNOBS[0]["group"])
+			_add_heading(rows, group)
+		_build_row(rows, knob)
+	var layer_group: String = LAYER_KNOBS[0]["group"]
+	var layer_rows := _rows_for_group(layer_group)
+	_add_heading(layer_rows, layer_group)
 	for knob: Dictionary in LAYER_KNOBS:
 		var value: Variant = read_layer(knob)
 		if typeof(value) != TYPE_COLOR:
-			DevWidgets.add_label(_rows, "%s - UNRESOLVED" % knob["label"])
+			DevWidgets.add_label(layer_rows, "%s - UNRESOLVED" % knob["label"])
 			push_error("LookTool layer knob does not resolve: %s" % knob["label"])
 			continue
-		DevWidgets.add_color(_rows, knob["label"], value,
+		DevWidgets.add_color(layer_rows, knob["label"], value,
 			func(picked: Color) -> void: write_layer(knob, picked))
+	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
 
 
-func _build_row(knob: Dictionary) -> void:
+func _build_row(rows: VBoxContainer, knob: Dictionary) -> void:
 	var value: Variant = read(knob)
 	var label: String = knob["label"]
 	# An unresolved knob is a table entry pointing at a renamed or moved property. Say so on the
 	# panel AND in the log rather than drawing a row that edits nothing.
 	if typeof(value) == TYPE_NIL:
-		DevWidgets.add_label(_rows, "%s - UNRESOLVED (%s:%s)" % [label, knob["node"], knob["prop"]])
+		DevWidgets.add_label(rows, "%s - UNRESOLVED (%s:%s)" % [label, knob["node"], knob["prop"]])
 		push_error("LookTool knob does not resolve: %s:%s" % [knob["node"], knob["prop"]])
 		return
 	if knob.has("options"):
 		var options: Array = knob["options"]
 		var current: int = int(value)
 		var current_label: String = options[current] if current >= 0 and current < options.size() else ""
-		DevWidgets.add_option(_rows, label, options, current_label,
+		DevWidgets.add_option(rows, label, options, current_label,
 			func(picked: String) -> void: write(knob, options.find(picked)))
 		return
 	match typeof(value):
 		TYPE_BOOL:
-			DevWidgets.add_checkbox(_rows, label, value,
+			DevWidgets.add_checkbox(rows, label, value,
 				func(on: bool) -> void: write(knob, on))
 		TYPE_COLOR:
-			DevWidgets.add_color(_rows, label, value,
+			DevWidgets.add_color(rows, label, value,
 				func(picked: Color) -> void: write(knob, picked))
 		_:
 			var low: float = knob["min"]
 			var high: float = knob["max"]
 			var step: float = knob["step"]
-			DevWidgets.add_slider(_rows, label, value, low, high, step,
+			DevWidgets.add_slider(rows, label, value, low, high, step,
 				func(moved: float) -> void: write(knob, moved))
 
 
-func _add_heading(text: String) -> void:
-	if _rows.get_child_count() > 0:
-		_rows.add_child(HSeparator.new())
+func _add_heading(rows: VBoxContainer, text: String) -> void:
+	if rows.get_child_count() > 0:
+		rows.add_child(HSeparator.new())
 	var heading := Label.new()
 	heading.text = text
 	heading.add_theme_color_override("font_color", HEADING_COLOR)
-	_rows.add_child(heading)
+	rows.add_child(heading)
 
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:

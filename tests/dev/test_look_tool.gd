@@ -135,15 +135,51 @@ func _slider_for(label_text: String) -> HSlider:
 	return _row_for(label_text).get_child(1) as HSlider
 
 
+# Walks the whole panel rather than one container: rows live under per-group SUB-TABS now, and a
+# search that knows the layout would need updating every time the layout does.
 func _row_for(label_text: String) -> HBoxContainer:
-	for row in _look._rows.get_children():
-		var box := row as HBoxContainer
-		if box == null:
-			continue
-		var label := box.get_child(0) as Label
-		if label != null and label.text == label_text:
-			return box
+	return _find_row(_look, label_text)
+
+
+func _find_row(node: Node, label_text: String) -> HBoxContainer:
+	for child in node.get_children():
+		var box := child as HBoxContainer
+		if box != null and box.get_child_count() > 0:
+			var label := box.get_child(0) as Label
+			if label != null and label.text == label_text:
+				return box
+		var found := _find_row(child, label_text)
+		if found != null:
+			return found
 	return null
+
+
+# Every group must land on a sub-tab. An unmapped group draws nowhere the dev would look, which is
+# indistinguishable from the knob not existing.
+func test_every_knob_group_has_a_sub_tab() -> void:
+	var orphans: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		var group: String = knob["group"]
+		if not LookTool.GROUP_TABS.has(group) and not orphans.has(group):
+			orphans.append(group)
+	assert_array(orphans).override_failure_message(
+		"Knob groups with no sub-tab (their rows would vanish): %s" % ", ".join(orphans)).is_empty()
+
+
+# Every row is reachable: the panel builds one container per tab and fills it from the map, so a
+# broken mapping shows up as a knob whose row exists nowhere.
+func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
+	var missing: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS:
+		if knob.has("options") or typeof(_look.read(knob)) == TYPE_BOOL:
+			continue   # dropdowns and checkboxes are not HBox-with-label rows
+		if _row_for(knob["label"]) == null:
+			missing.append(knob["label"])
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		if _row_for(knob["label"]) == null:
+			missing.append(knob["label"])
+	assert_array(missing).override_failure_message(
+		"Knobs with no row drawn anywhere: %s" % ", ".join(missing)).is_empty()
 
 
 # A colour knob is FOUR sliders and a swatch, not a picker. ColorPickerButton froze the dev window
