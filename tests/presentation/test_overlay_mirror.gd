@@ -218,6 +218,88 @@ func test_hover_path_preview_mirrors_while_sweeping() -> void:
 			first.global_position.x / 16.0, 1.0, first.global_position.y / 16.0))
 
 
+# --- Path arrows over elevation (#281) ---------------------------------------------
+
+# The RENDERED heights, straight off the layer's own node pool — the quads that actually draw,
+# not the entry dictionaries feeding them. Only the visible ones: the pool is retained and
+# extras from a longer previous path are hidden rather than freed.
+func _arrow_heights() -> Array[float]:
+	var ys: Array[float] = []
+	for node: Node3D in _overlays._markers.get(BoardOverlays.Layer.PATH_ARROWS, []):
+		if node.visible:
+			ys.append(node.position.y)
+	return ys
+
+
+# #281's claim, pinned on the real trigger. Board: flat at (2,2), a ramp at (3,2) whose LOW side
+# is level 0, a level-1 terrace at (4,2)/(5,2). Every expectation is hand-derived from the board's
+# own geometry — a block is one cell tall, so one level of climb is exactly 1.0 world unit, and a
+# ramp's surface is half a level between its two platforms. Differences, never absolutes, so the
+# marker lift (a tuning knob) cancels out instead of being pinned here.
+func test_path_arrows_climb_a_ramp_onto_a_terrace() -> void:
+	var heights: BoardHeights = game.board_heights
+	heights.set_cell(Vector2i(3, 2), 0, Terrain.RampRise.EAST)
+	heights.set_cell(Vector2i(4, 2), 1)
+	heights.set_cell(Vector2i(5, 2), 1)
+	_scene.rebuild()
+	var standing := _spawn(PLAYER, Vector2i(5, 2))   # the independent height reference
+	var walker := _spawn(PLAYER, Vector2i(2, 2), {Stats.Stat.DEX: 40})
+	game.enter_move_mode(walker)
+	game.selected_unit = walker
+	game.hover_presenter._hover_choosing_move(Vector2i(4, 2))
+	await _settle()
+	var preview: MoveAction = _om().hover_move_preview
+	assert_object(preview).is_not_null()
+	# The case proves nothing if the path never crossed the ramp — the rules refuse a climb that
+	# does not run up a ramp's own slope, so a mis-authored fixture would silently route around.
+	assert_that(preview.get_move_path()).override_failure_message(
+			"the fixture path never climbed — nothing about elevation was exercised") \
+		.is_equal([Vector2i(2, 2), Vector2i(3, 2), Vector2i(4, 2)] as Array[Vector2i])
+
+	var ys := _arrow_heights()
+	assert_int(ys.size()).is_equal(3)
+	assert_float(ys[2] - ys[0]).override_failure_message(
+			"the arrow on the terrace is not one level above the arrow on the flat") \
+		.is_equal_approx(1.0, 0.0001)
+	assert_bool(ys[0] < ys[1] and ys[1] < ys[2]).override_failure_message(
+			"the ramp's arrow does not sit between its two platforms") .is_true()
+	# Cross-checked against a SECOND placement path: UnitMirror._sync puts a standing unit on the
+	# terrace by its own arithmetic. The arrow over the neighbouring terrace cell must land there
+	# too, within the markup's ground clearance — well under a level, so a level-sized error fails.
+	var stand_y: float = _unit_mirror.sprite_for(standing).position.y
+	assert_float(absf(ys[2] - stand_y)).override_failure_message(
+			"the terrace arrow and a unit standing on the terrace disagree about the surface") \
+		.is_less(0.2)
+
+
+# The ordering half: heights change AFTER the arrows are on screen, which is exactly what painting
+# elevation in the 3D view does with a path preview up. The 2D sprites do not move, so the anchor
+# has to be re-resolved from the live heights every frame — a marker cache keyed on anything but
+# the resolved position would sit stale here and this case is the only thing that would notice.
+func test_an_arrow_re_anchors_when_the_ground_under_it_rises() -> void:
+	var walker := _spawn(PLAYER, Vector2i(2, 2), {Stats.Stat.DEX: 40})
+	game.enter_move_mode(walker)
+	game.selected_unit = walker
+	game.hover_presenter._hover_choosing_move(Vector2i(5, 2))
+	await _settle()
+	var before := _arrow_heights()
+	assert_int(before.size()).is_equal(4)
+	assert_float(before[2] - before[0]).is_equal_approx(0.0, 0.0001)   # a flat board, flat arrows
+
+	game.board_heights.set_cell(Vector2i(4, 2), 1)   # the dev brush's own writer
+	_scene.rebuild()
+	await _settle()
+	assert_object(_om().hover_move_preview).override_failure_message(
+			"the 2D preview was rebuilt, so nothing about re-anchoring was tested").is_not_null()
+	var after := _arrow_heights()
+	assert_int(after.size()).is_equal(4)
+	assert_float(after[2] - before[2]).override_failure_message(
+			"the arrow over the raised cell stayed at the old level") .is_equal_approx(1.0, 0.0001)
+	assert_float(after[0] - before[0]).override_failure_message(
+			"an arrow off the raised cell moved with it") .is_equal_approx(0.0, 0.0001)
+	assert_float(after[3] - before[3]).is_equal_approx(0.0, 0.0001)
+
+
 func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
 	var shoves: Array = [{"target": foe, "from": Vector2i(3, 2), "to": Vector2i(5, 2)}]
