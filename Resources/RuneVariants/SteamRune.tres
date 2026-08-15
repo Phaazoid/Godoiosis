@@ -4,7 +4,7 @@
 [ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="1_krjn7"]
 [ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="2_7d53w"]
 [ext_resource type="Resource" path="res://Resources/TransmutationData/Fireball.tres" id="3_jtvju"]
-[ext_resource type="Resource" uid="uid://dkweset762aec" path="res://Resources/TransmutationData/Splash.tres" id="4_ht21o"]
+[ext_resource type="Resource" path="res://Resources/TransmutationData/Splash.tres" id="4_ht21o"]
 
 [resource]
 script = ExtResource("2_7d53w")
