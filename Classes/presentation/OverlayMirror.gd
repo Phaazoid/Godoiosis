@@ -27,7 +27,6 @@ class_name OverlayMirror
 # It also owns the fire poll: BoardMirror's flame markers are board markup with the
 # same cadence question, and this is the node that already runs every frame.
 
-const TOP := UnitMirror.COLUMN_TOP       # flat mirror boards: anchors at y 1.0
 
 var game: Node2D            # the hidden Game coordinator; set by battle3d._ready
 var overlays: BoardOverlays
@@ -87,7 +86,8 @@ func _fire() -> void:
 	if _last_fire == burning:
 		return
 	_last_fire = burning
-	board_mirror.refresh_states(burning)
+	var heights: BoardHeights = game.board_heights
+	board_mirror.refresh_states(heights, burning)
 
 
 # --- Fills -------------------------------------------------------------------------
@@ -107,10 +107,28 @@ func _fill_gated(layer: BoardOverlays.Layer, source, wanted: bool) -> void:
 	_fill(layer, cells)
 
 
+# Which level a marked cell's overlay lies on (#273) — a move-range tile on a terrace has to sit
+# ON the terrace. Read off the hidden game rather than passed, unlike BoardMirror.sync: this class
+# already POLLS the game for everything it draws, and nothing here takes board state as an
+# argument. Null-guarded for the headless Play boards that never set `game`.
+func _level_of(cell: Vector2i) -> int:
+	var heights := _heights()
+	return heights.elevation_at(cell) if heights != null else 0
+
+
+# Null on the headless Play boards that never set `game`; BoardSpace.surface_point reads that as
+# flat, so every anchor keeps working on a board with no heights wired.
+func _heights() -> BoardHeights:
+	if game == null:
+		return null
+	var heights: BoardHeights = game.board_heights
+	return heights
+
+
 func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	var cells: Array[Vector3i] = []
 	for cell in used:
-		cells.append(BoardSpace.of_flat(cell))
+		cells.append(BoardSpace.of_cell(cell, _level_of(cell)))
 	cells.sort()
 	if _last_cells.get(layer, Array()) == cells:
 		return
@@ -127,7 +145,7 @@ func _attack(om: OverlayManager) -> void:
 		if om.attack_overlay.get_cell_atlas_coords(cell) == OverlayManager.TARGET_ATLAS_COORDS:
 			picks.append(_marker(_anchor(cell), _target_pick_texture(om), Color.WHITE))
 		else:
-			reach.append(BoardSpace.of_flat(cell))
+			reach.append(BoardSpace.of_cell(cell, _level_of(cell)))
 	reach.sort()
 	if _last_cells.get(BoardOverlays.Layer.ATTACK, Array()) != reach:
 		_last_cells[BoardOverlays.Layer.ATTACK] = reach
@@ -247,11 +265,15 @@ func _marker(pos: Vector3, texture: Texture2D, tint: Color) -> Dictionary:
 	return {"pos": pos, "texture": texture, "modulate": tint}
 
 
-# A cell's top-face center — the marker anchor convention.
+# A cell's top-face center — the marker anchor convention, now on the cell's own SURFACE (#273)
+# so a marker on a terrace rides the terrace. BoardSpace.surface_point is the one answer; a ramp's
+# half-level lift comes along with it.
 func _anchor(cell: Vector2i) -> Vector3:
-	return Vector3(cell.x + 0.5, TOP, cell.y + 0.5)
+	return BoardSpace.surface_point(cell, _heights())
 
 
-# A 2D world position's top-face anchor (sprites sit at cell centers).
+# A 2D world position's top-face anchor (sprites sit at cell centers). The LEVEL comes from the
+# cell those pixels fall in, so a ghost or arrow over a terrace lifts with it.
 func _anchor_px(px: Vector2) -> Vector3:
-	return BoardSpace.of_pixels(px, TOP)
+	var cell := Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))
+	return BoardSpace.of_pixels(px, BoardSpace.surface_point(cell, _heights()).y)

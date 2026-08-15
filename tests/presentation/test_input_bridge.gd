@@ -80,7 +80,7 @@ func _under_ui(screen_pos: Vector2) -> bool:
 
 
 func _screen_of(cell: Vector2i) -> Vector2:
-	return _camera3d.unproject_position(BoardSpace.standing_point(BoardSpace.of_flat(cell)))
+	return _camera3d.unproject_position(BoardSpace.standing_point(BoardSpace.of_cell(cell, 0)))
 
 
 func _parse_motion(screen_pos: Vector2) -> void:
@@ -284,7 +284,7 @@ func test_hover_reaches_cells_the_hidden_camera_cannot_see() -> void:
 
 	assert_that(_game.hover_presenter.last_hovered_cell).is_equal(far)
 	assert_bool(seen.has(far)).is_true()
-	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([BoardSpace.of_flat(far)])
+	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([BoardSpace.of_cell(far, 0)])
 
 
 # --- Camera ownership (#176 stage 4d) ---------------------------------------------------
@@ -343,7 +343,7 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	mirrored.sort()
 	var expected: Array[Vector3i] = []
 	for cell: Vector2i in _game.grid.get_used_cells():
-		expected.append(BoardSpace.of_flat(cell))
+		expected.append(BoardSpace.of_cell(cell, 0))
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))

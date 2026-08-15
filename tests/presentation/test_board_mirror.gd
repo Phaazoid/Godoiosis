@@ -249,7 +249,7 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_flat(cell)
+	var at := BoardSpace.of_cell(cell, 0)
 	var before := board.get_cell_item(at)
 	var other := _a_tile_of_a_different_kind(cell)
 	assert_bool(other.source >= 0).override_failure_message(
@@ -268,7 +268,7 @@ func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_flat(cell)
+	var at := BoardSpace.of_cell(cell, 0)
 	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
 	_game.grid.erase_cell(cell)
 	await _settle()
@@ -352,8 +352,8 @@ func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
 	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
 	await _settle()
 
-	var item_a := board.get_cell_item(BoardSpace.of_flat(a))
-	var item_b := board.get_cell_item(BoardSpace.of_flat(b))
+	var item_a := board.get_cell_item(BoardSpace.of_cell(a, 0))
+	var item_b := board.get_cell_item(BoardSpace.of_cell(b, 0))
 	assert_int(item_a).override_failure_message(
 			"two tiles of the same kind (%s and %s) render as the SAME block — the board is still keyed on Kind" \
 			% [pair[0].coords, pair[1].coords]).is_not_equal(item_b)
@@ -410,7 +410,7 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	_game.grid.set_cell(cell, entry.source, entry.coords)
 	await _settle()
 
-	var item := board.get_cell_item(BoardSpace.of_flat(cell))
+	var item := board.get_cell_item(BoardSpace.of_cell(cell, 0))
 	assert_int(item).override_failure_message(
 			"a skipped tile left the cell EMPTY — the 2D paints a tile there and the 3D shows a hole" \
 			).is_not_equal(GridMap.INVALID_CELL_ITEM)
@@ -1030,3 +1030,95 @@ func test_the_flame_never_sits_in_the_ground_plane() -> void:
 	assert_float(mirror.flame_base_lift()).override_failure_message(
 			"the clamp moved the flame even with depth-write off, so the revert is not exact" \
 			).is_equal_approx(0.35, 0.0001)
+
+
+# --- Elevation (#273) --------------------------------------------------------------
+
+# All three drive the AUTHORITY (game.board_heights) and never call sync() themselves — the same
+# rule the #231 live cases follow, so a mirror that only works when a test pokes it goes red.
+
+func test_a_raised_cell_fills_its_whole_column() -> void:
+	# A terrace is a slab with a FACE, not a floating tile: the surface block repeats down to the
+	# floor. A mirror that writes only the top leaves the board hovering.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	var surface := board.get_cell_item(BoardSpace.of_cell(cell, 0))
+
+	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NONE)
+	await _settle()
+
+	for level in [0, 1, 2]:
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, level))) \
+			.override_failure_message("level %d of the column is missing" % level) \
+			.is_equal(surface)
+	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, 3))) \
+		.override_failure_message("the column runs past the level it was painted at") \
+		.is_equal(GridMap.INVALID_CELL_ITEM)
+
+
+func test_lowering_a_cell_clears_the_column_it_used_to_fill() -> void:
+	# The stranding case: a 3-level cut leaves 3 orphans if the erase assumes one stale block.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.board_heights.set_cell(cell, 3, Terrain.RampRise.NONE)
+	await _settle()
+
+	_game.board_heights.set_cell(cell, 0, Terrain.RampRise.NONE)
+	await _settle()
+
+	for level in [1, 2, 3]:
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, level))) \
+			.override_failure_message("level %d survived the cut" % level) \
+			.is_equal(GridMap.INVALID_CELL_ITEM)
+
+
+func test_a_ramp_puts_its_wedge_one_level_above_its_own() -> void:
+	# The off-by-one that is INVISIBLE on a flat board: a level-E block occupies [E..E+1], so E's
+	# surface is E+1 and a ramp whose elevation is its LOW side must slope from E+1 to E+2.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var mirror: BoardMirror = _scene._board_mirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	_game.board_heights.set_cell(cell, 1, Terrain.RampRise.NORTH)
+	await _settle()
+
+	assert_int(mirror.ramp_item()).override_failure_message(
+			"the meshlib has no '%s'; the case is vacuous" % BoardMirror.RAMP_ITEM_NAME) \
+		.is_not_equal(GridMap.INVALID_CELL_ITEM)
+	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, 2))) \
+		.override_failure_message("the wedge is not one level above the ramp's own") \
+		.is_equal(mirror.ramp_item())
+
+
+func test_each_rise_points_the_wedges_high_side_the_way_it_names() -> void:
+	# The orientation is DERIVED from Terrain.rise_direction, so this asserts the GEOMETRY rather
+	# than a magic orthogonal index: rotating the authored wedge's high side by the basis the
+	# mirror chose must land on the direction the rise names.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for rise: Terrain.RampRise in [Terrain.RampRise.NORTH, Terrain.RampRise.EAST,
+			Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
+		_game.board_heights.set_cell(cell, 0, rise)
+		await _settle()
+		var basis := board.get_cell_item_basis(BoardSpace.of_cell(cell, 1))
+		var high := basis * BoardMirror.RAMP_MESH_HIGH_SIDE
+		var want := Terrain.rise_direction(rise)
+		assert_float(high.x).override_failure_message(
+			"%s rises the wrong way on X" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.x), 0.01)
+		assert_float(high.z).override_failure_message(
+			"%s rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.y), 0.01)

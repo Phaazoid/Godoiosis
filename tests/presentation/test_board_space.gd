@@ -35,10 +35,10 @@ func test_no_cell_sits_outside_any_real_board() -> void:
 	assert_bool(BoardSpace.NO_CELL.y < -100).is_true()
 
 
-func test_flat_and_of_flat_bridge_the_flat_board_convention() -> void:
+func test_flat_and_of_cell_bridge_the_sim_and_mirror_conventions() -> void:
 	assert_that(BoardSpace.flat(Vector3i(5, 2, 8))).is_equal(Vector2i(5, 8))
-	assert_that(BoardSpace.of_flat(Vector2i(5, 8))).is_equal(Vector3i(5, 0, 8))
-	assert_that(BoardSpace.flat(BoardSpace.of_flat(Vector2i(-3, 7)))).is_equal(Vector2i(-3, 7))
+	assert_that(BoardSpace.of_cell(Vector2i(5, 8), 0)).is_equal(Vector3i(5, 0, 8))
+	assert_that(BoardSpace.flat(BoardSpace.of_cell(Vector2i(-3, 7), 0))).is_equal(Vector2i(-3, 7))
 
 
 func test_flat_maps_the_no_cell_sentinel_onto_the_2d_one() -> void:
@@ -48,12 +48,41 @@ func test_flat_maps_the_no_cell_sentinel_onto_the_2d_one() -> void:
 
 
 func test_a_flat_boards_top_level_is_one_cell_up_not_zero() -> void:
-	# The y=0-vs-y=1 trap (#231). of_flat parks every cell at y-index 0, so the face
-	# things sit on is FLAT_TOP_LEVEL cells up. A picker fallback plane at y=0 would be
-	# the slab's BOTTOM and would resolve the wrong column at grazing angles.
-	var cell := BoardSpace.of_flat(Vector2i(4, 7))
+	# The y=0-vs-y=1 trap (#231). A level-0 cell sits at y-index 0, so the face things stand on
+	# is FLAT_TOP_LEVEL cells up. A picker fallback plane at y=0 would be the slab's BOTTOM and
+	# would resolve the wrong column at grazing angles.
+	var cell := BoardSpace.of_cell(Vector2i(4, 7), 0)
 	assert_that(BoardSpace.standing_point(cell).y) \
 		.override_failure_message("the flat standing face moved off FLAT_TOP_LEVEL") \
 		.is_equal(BoardSpace.FLAT_TOP_LEVEL * BoardSpace.CELL_SIZE)
-	# The derivation, not a second literal: UnitMirror must not drift from the constant.
-	assert_float(UnitMirror.COLUMN_TOP).is_equal(BoardSpace.FLAT_TOP_LEVEL * BoardSpace.CELL_SIZE)
+	# The two spellings of that face must agree (#273): surface_y is what the mirrors read, and
+	# FLAT_TOP_LEVEL is what the picker's fallback plane reads. Drift here puts units and the
+	# pointer on different faces.
+	assert_float(BoardSpace.surface_y(0)).is_equal(BoardSpace.FLAT_TOP_LEVEL * BoardSpace.CELL_SIZE)
+
+
+func test_a_surface_sits_on_top_of_its_own_level() -> void:
+	# A level-E block occupies [E .. E+1], so E's surface is E+1 — the arithmetic every column,
+	# unit and overlay in the 3D stack is built on.
+	assert_float(BoardSpace.surface_y(2)).is_equal(3.0 * BoardSpace.CELL_SIZE)
+	assert_float(BoardSpace.surface_y(-1)).is_equal(0.0)   # a dip's floor, not a hole
+	assert_float(BoardSpace.standing_point(BoardSpace.of_cell(Vector2i(1, 1), 3)).y) \
+		.is_equal(BoardSpace.surface_y(3))
+
+
+func test_a_ramp_stands_things_half_a_level_up_its_slope() -> void:
+	# The one place presentation and rules deliberately disagree: the RULES call a ramp its low
+	# side, and verticality.md rules the visual midpoint presentational. Anything standing on one
+	# rides the slope rather than sinking into its low edge.
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(2, 2), 1, Terrain.RampRise.NONE)
+	heights.set_cell(Vector2i(3, 2), 1, Terrain.RampRise.EAST)
+
+	assert_float(BoardSpace.surface_point(Vector2i(2, 2), heights).y).is_equal(BoardSpace.surface_y(1))
+	assert_float(BoardSpace.surface_point(Vector2i(3, 2), heights).y) \
+		.is_equal(BoardSpace.surface_y(1) + BoardSpace.CELL_SIZE * 0.5)
+
+
+func test_a_board_with_no_heights_wired_reads_as_flat() -> void:
+	# The headless Play boards never set one, and every anchor still has to resolve.
+	assert_float(BoardSpace.surface_point(Vector2i(4, 4), null).y).is_equal(BoardSpace.surface_y(0))
