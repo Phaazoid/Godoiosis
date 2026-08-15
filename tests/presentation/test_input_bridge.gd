@@ -338,12 +338,18 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
 	var board: GridMap = _scene.get_node("Board")
-	var mirrored: Array[Vector3i] = []
-	mirrored.assign(board.get_used_cells())
+	# COLUMNS, not cells. This case asks whether the mirror is aimed at the NEW board; how tall
+	# each column is belongs to test_board_mirror. It compared raw cells against every cell at
+	# level 0 until 2026-08-15, which silently depended on Level_1 being FLAT -- painting
+	# elevation into it (b057f6e) turned #273's correct multi-cell columns into a red case.
+	var mirrored: Array[Vector2i] = []
+	for cell: Vector3i in board.get_used_cells():
+		var column := BoardSpace.flat(cell)
+		if not mirrored.has(column):
+			mirrored.append(column)
 	mirrored.sort()
-	var expected: Array[Vector3i] = []
-	for cell: Vector2i in _game.grid.get_used_cells():
-		expected.append(BoardSpace.of_cell(cell, 0))
+	var expected: Array[Vector2i] = []
+	expected.assign(_game.grid.get_used_cells())
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
