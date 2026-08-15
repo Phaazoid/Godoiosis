@@ -437,6 +437,24 @@ func _tiles_that_stand(standing: bool) -> Array[Dictionary]:
 	return out
 
 
+# Tiles carrying one specific shape, in atlas order. The shape-blind _tiles_that_stand above stays
+# for the cases that only care WHETHER a tile stands; a case asserting HOW it is built must name
+# the shape, or it silently depends on which tile the atlas happens to list first.
+func _tiles_with_shape(shape: GridUtils.PropShape) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			if GridUtils.prop_shape_of(source.get_tile_data(coords, 0)) == shape:
+				out.append({"source": source_id, "coords": coords})
+	return out
+
+
 func _tile_named(name: String) -> Dictionary:
 	var tiles: TileSet = _game.grid.tile_set
 	for s in tiles.get_source_count():
@@ -500,8 +518,17 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	if art.is_compressed():
 		art.decompress()
 
-	var prop := _tile_named("Tree")
-	assert_bool(not prop.is_empty()).override_failure_message("no Tree tile; the case is vacuous").is_true()
+	# The prop must be an OPAQUE one, and that is not a detail — it is the whole reason this case
+	# has teeth. The art is BLENDED over the kind base, so wherever the art is transparent the bake
+	# shows the base through it and the regions differ no matter what. A 43%-open tile (Tree, which
+	# this case used until #264) therefore cannot match its art even when the bug is present:
+	# measured by falsification, a mutant that baked every prop's art passed against it. Picking the
+	# most opaque standing tile off the tileset keeps that true through an atlas swap.
+	var prop := _most_opaque_standing_tile(source, art)
+	assert_bool(not prop.is_empty()).override_failure_message("no standing tile; the case is vacuous").is_true()
+	assert_int(prop.clear).override_failure_message(
+			"the most opaque standing tile still has %s see-through pixels — this case cannot tell a " \
+			% [prop.clear] + "baked prop from a based one, and would pass against the bug").is_equal(0)
 	assert_bool(_regions_match(baked, art, source.get_tile_texture_region(prop.coords, 0))) \
 			.override_failure_message("the prop's own art is baked onto its top face — it will render twice") \
 			.is_false()
@@ -523,6 +550,27 @@ func _baked_atlas(board: GridMap) -> Image:
 	if material == null or material.albedo_texture == null:
 		return null
 	return material.albedo_texture.get_image()
+
+
+# The standing tile with the fewest see-through pixels, and how many it has. Measured rather than
+# named, so the case above states its own precondition instead of trusting a tile to stay opaque.
+func _most_opaque_standing_tile(source: TileSetAtlasSource, art: Image) -> Dictionary:
+	var best: Dictionary = {}
+	for i in source.get_tiles_count():
+		var coords := source.get_tile_id(i)
+		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+			continue
+		if not GridUtils.stands_up_of(source.get_tile_data(coords, 0)):
+			continue
+		var region := source.get_tile_texture_region(coords, 0)
+		var clear := 0
+		for y in range(region.position.y, region.end.y):
+			for x in range(region.position.x, region.end.x):
+				if art.get_pixel(x, y).a < 1.0:
+					clear += 1
+		if best.is_empty() or clear < int(best.clear):
+			best = {"coords": coords, "clear": clear}
+	return best
 
 
 func _regions_match(a: Image, b: Image, region: Rect2i) -> bool:
@@ -620,7 +668,9 @@ func test_props_write_depth_so_units_sort_against_them() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
 	_game.game_state = _game.GameState.DEV_MODE
-	var standing := _tiles_that_stand(true)
+	var standing := _tiles_with_shape(GridUtils.PropShape.BILLBOARD)
+	assert_bool(not standing.is_empty()).override_failure_message(
+			"no BILLBOARD tile; the case is vacuous").is_true()
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 	_game.grid.set_cell(cell, standing[0].source, standing[0].coords)
 	await _settle()
@@ -630,6 +680,124 @@ func test_props_write_depth_so_units_sort_against_them() -> void:
 			"a prop that does not write depth loses its sort against unit sprites" \
 			).is_equal(SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS)
 	assert_int(sprite.layers).is_equal(BoardOverlays.WORLD_RENDER_LAYER)
+
+
+# --- #264: solid props get real geometry -----------------------------------------------------
+
+# The DEFAULT is the whole reason a retype from a bool was safe: every tile that was never authored
+# has to keep reading as ground. A null TileData is the same question asked from the other end —
+# item_for_cell reaches it on an empty cell.
+func test_an_unauthored_tile_reads_flat() -> void:
+	assert_int(GridUtils.prop_shape_of(null)).override_failure_message(
+			"a tile with no data does not read FLAT — empty cells would sprout props" \
+			).is_equal(GridUtils.PropShape.FLAT)
+	var ground := _tile_named("Grass Basic")
+	assert_bool(not ground.is_empty()).override_failure_message("no grass tile; the case is vacuous").is_true()
+	var source := _game.grid.tile_set.get_source(ground.source) as TileSetAtlasSource
+	assert_int(GridUtils.prop_shape_of(source.get_tile_data(ground.coords, 0))).override_failure_message(
+			"an unauthored GROUND tile no longer reads FLAT — the retype changed what it means" \
+			).is_equal(GridUtils.PropShape.FLAT)
+
+
+# THE wire this issue exists for: the authored column has to reach the RENDERER, not merely be
+# readable. Both halves matter — a mirror that built geometry for everything would pass the first
+# assert alone, and that is exactly the failure #255 shipped in reverse.
+func test_a_solid_tile_builds_geometry_and_a_thin_one_builds_a_sprite() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var crate := _tile_named("Crate")
+	var tree := _tile_named("Tree")
+	assert_bool(not crate.is_empty() and not tree.is_empty()).override_failure_message(
+			"Crate or Tree missing from the tileset; the case is vacuous").is_true()
+
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	_game.grid.set_cell(cells[0], crate.source, crate.coords)
+	_game.grid.set_cell(cells[1], tree.source, tree.coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	assert_object(mirror.prop_at(cells[0]).get_child(0) as MeshInstance3D).override_failure_message(
+			"a CUBE tile did not build geometry — it is still the billboard the dev rejected" \
+			).is_not_null()
+	assert_object(mirror.prop_at(cells[1]).get_child(0) as Sprite3D).override_failure_message(
+			"a BILLBOARD tile built geometry — every prop is solid, so the column is not being read" \
+			).is_not_null()
+
+
+# A prop's mesh is sized by its ART's opaque bounds, not by the cell. Measured here from the atlas
+# independently rather than read back off the generator, so the case can disagree with it: a rock
+# is 32% clear, and a cell-wide box around it would be mostly air. The base sitting at y = 0 is the
+# other half — the mesh is planted on the tile's top face, so a centred one would be half buried.
+func test_a_prop_block_is_sized_by_its_art_not_by_the_cell() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var tiles: TileSet = _game.grid.tile_set
+	var checked := 0
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		var art := source.texture.get_image()
+		if art.is_compressed():
+			art.decompress()
+		for entry in _solid_entries(source, source_id):
+			var item_name: String = BoardMirror.prop_item_name(source_id, entry.coords)
+			var mesh := _mesh_named(board, item_name)
+			assert_object(mesh).override_failure_message(
+					"no geometry item '%s' — the generator skipped a solid tile" % item_name).is_not_null()
+			var bounds := _opaque_bounds(art, source.get_tile_texture_region(entry.coords, 0))
+			var aabb := mesh.get_aabb()
+			# HEIGHT is the exact one across all three shapes: a prism's cap sits at the full height
+			# while its jittered footprint is INSCRIBED in the width, so only the vertical extent is
+			# the measurement itself rather than something inside it.
+			assert_float(aabb.size.y).override_failure_message(
+					"'%s' is %s tall but its art measures %s — the bounds are not being read" \
+					% [item_name, aabb.size.y, float(bounds.size.y) / GridUtils.TILE_SIZE]) \
+					.is_equal_approx(float(bounds.size.y) / GridUtils.TILE_SIZE, 0.001)
+			assert_bool(aabb.size.x <= float(bounds.size.x) / GridUtils.TILE_SIZE + 0.001) \
+					.override_failure_message("'%s' is wider than its own art (%s vs %s)" \
+					% [item_name, aabb.size.x, float(bounds.size.x) / GridUtils.TILE_SIZE]).is_true()
+			assert_float(aabb.position.y).override_failure_message(
+					"'%s' starts at y=%s — a prop must stand ON the tile, not sink into it" \
+					% [item_name, aabb.position.y]).is_equal_approx(0.0, 0.001)
+			checked += 1
+	assert_int(checked).override_failure_message(
+			"no solid tiles authored; the case is vacuous").is_greater(0)
+
+
+func _solid_entries(source: TileSetAtlasSource, source_id: int) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for i in source.get_tiles_count():
+		var coords := source.get_tile_id(i)
+		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+			continue
+		if GridUtils.SOLID_SHAPES.has(GridUtils.prop_shape_of(source.get_tile_data(coords, 0))):
+			out.append({"source": source_id, "coords": coords})
+	return out
+
+
+func _mesh_named(board: GridMap, item_name: String) -> Mesh:
+	for id: int in board.mesh_library.get_item_list():
+		if board.mesh_library.get_item_name(id) == item_name:
+			return board.mesh_library.get_item_mesh(id)
+	return null
+
+
+# The test's OWN measurement of the art's opaque extent — deliberately a second implementation, so
+# the case is evidence about the generator rather than a restatement of it.
+func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
+	var min_p := region.size
+	var max_p := Vector2i(-1, -1)
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if image.get_pixel(x, y).a < 0.5:
+				continue
+			var p := Vector2i(x, y) - region.position
+			min_p = Vector2i(mini(min_p.x, p.x), mini(min_p.y, p.y))
+			max_p = Vector2i(maxi(max_p.x, p.x), maxi(max_p.y, p.y))
+	if max_p.x < 0:
+		return Rect2i(Vector2i.ZERO, region.size)
+	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
 
 
 func test_the_flame_never_sits_in_the_ground_plane() -> void:

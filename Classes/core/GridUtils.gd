@@ -81,16 +81,44 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 	var raw: int = data.get_custom_data("terrain_type")
 	return raw as Terrain.Kind
 
-# Does this tile's ART depict an object STANDING ON the ground, rather than the ground itself
-# (#255)? A presentation fact with no existing answer, which is why it is authored rather than
-# inferred -- every candidate rule has a counterexample in the sheet we ship: crate carries no
-# kind and is a prop, pot is walkable and is a prop, hole carries no kind and is NOT one, and
-# chest reads opaque while pot reads 48% open. Read by the 3D mirror (which stands it up) and by
-# the meshlib generator (which then bakes that cell's top face as bare ground).
+# What FORM this tile's art wants in 3D (#264, widening #255's `stands_up` bool). A presentation
+# fact with no existing answer, which is why it is authored rather than inferred -- every candidate
+# rule has a counterexample in the sheet we ship: crate carries no kind and is a prop, pot is
+# walkable and is a prop, hole carries no kind and is NOT one, and chest reads opaque while pot
+# reads 48% open.
+#
+# FLAT is the ground itself. Everything else STANDS ON the ground, and the member says how it is
+# built: BILLBOARD is a camera-facing sprite (thin, symmetric -- lamps, trees), the rest are real
+# geometry (volumetric -- crates, rocks, pots). The split is the dev's measured ruling on #255:
+# "anything that's thin already works in this style"; blocky things "really want to be textures on
+# a 3D model". #263's oriented plane -- thin but DIRECTIONAL -- lands here as a further member.
+#
+# APPEND-ONLY: the values are persisted in the tileset.
+enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND }
+
+# Which shapes are real geometry rather than a sprite. Declared as a set so the renderer and the
+# meshlib generator agree on what needs a mesh built for it, and adding a member is one line.
+const SOLID_SHAPES: Array[PropShape] = [PropShape.CUBE, PropShape.FACETED, PropShape.ROUND]
+
+
+# Read by the 3D mirror (which stands the tile up in the right form) and by the meshlib generator
+# (which then bakes that cell's top face as bare ground, and builds the mesh). An unauthored tile
+# reads FLAT -- the same default the missing bool gave, so an untouched tile is unchanged.
+static func prop_shape_of(data: TileData) -> PropShape:
+	if data == null or not data.has_custom_data("prop_shape"):
+		return PropShape.FLAT
+	var raw: int = data.get_custom_data("prop_shape")
+	return raw as PropShape
+
+
+static func prop_shape_at_cell(grid: TileMapLayer, cell: Vector2i) -> PropShape:
+	return prop_shape_of(grid.get_cell_tile_data(cell))
+
+
+# Does this tile stand on the ground rather than BE it? The question #255 asked, now derived from
+# the shape rather than stored beside it -- the two could otherwise disagree.
 static func stands_up_of(data: TileData) -> bool:
-	if data == null or not data.has_custom_data("stands_up"):
-		return false
-	return data.get_custom_data("stands_up")
+	return prop_shape_of(data) != PropShape.FLAT
 
 
 static func stands_up_at_cell(grid: TileMapLayer, cell: Vector2i) -> bool:

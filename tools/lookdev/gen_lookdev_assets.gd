@@ -16,6 +16,13 @@
 # A cell's SURFACE comes from its atlas coords (id 7+); what it is MADE OF -- the
 # side/wall material -- still comes from its Terrain.Kind. Two questions, and Kind
 # was answering both until #250.
+#
+# SOLID PROPS (#264) ride the same ids: a tile whose authored PropShape is CUBE/FACETED/ROUND
+# also gets a `prop_` item holding real geometry. Its SIDES wear the tile's own sprite and its
+# TOP is GENERATED, because that top face is the entire reason a blocky prop could not be a
+# billboard -- one 3/4 drawing cannot supply it, and at the board's ~40 degree pitch you see
+# plenty of it. Both faces are packed into extra rows of the same composited atlas, so the whole
+# board is still one texture.
 extends SceneTree
 
 const ART_DIR := "res://Art/LookDev"
@@ -254,8 +261,9 @@ func _gen_meshlib() -> int:
 	return 0
 
 
-# One block per real tileset tile, top face wearing that tile's own art -- except a stands_up
-# tile, whose top face is the bare ground it stands on (#255). Returns how many items were
+# One block per real tileset tile, top face wearing that tile's own art -- except a tile that
+# STANDS UP, whose top face is the bare ground it stands on (#255). A tile whose shape is solid
+# gets a second item as well, holding its prop geometry (#264). Returns how many items were
 # added, or -1 on failure.
 #
 # Two classes are SKIPPED entirely, and BoardMirror falls back to the Kind blocks for both:
@@ -271,7 +279,12 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		return -1
 
 	var next_id := FIRST_TILE_ITEM
+	var props := 0
 	var translucent: PackedStringArray = []
+	# Seeded, like every other generated texture here, so an unchanged tileset regenerates an
+	# identical meshlib and a re-run produces no diff.
+	var rng := RandomNumberGenerator.new()
+	rng.seed = hash("iosis-props-v1")
 	for i in ts.get_source_count():
 		var source_id := ts.get_source_id(i)
 		var atlas := ts.get_source(source_id) as TileSetAtlasSource
@@ -288,14 +301,31 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# would cut a hole clean through it (measured: rock 32% open, tree 43%, fences up to 56%).
 		# A diorama's answer is that the rock SITS ON ground, so that is what gets baked. Ground
 		# tiles are already opaque, so for them this is a no-op -- no branch, one rule.
-		var ground := Image.create_empty(source_image.get_width(), source_image.get_height(),
-				false, Image.FORMAT_RGBA8)
+		#
+		# It also grows EXTRA ROWS below the source art (#264), two per solid prop: its SIDE (its
+		# own sprite, which the composite above has just replaced with bare ground) and its
+		# GENERATED TOP. Counting the props BEFORE the walk is what lets a UV be computed inside
+		# it -- the finished atlas height has to be known before the first one is written.
+		var patch: Vector2i = atlas.texture_region_size
+		var columns := maxi(1, source_image.get_width() / patch.x)
+		var extra_rows := ceili(float(_solid_tile_count(atlas) * 2) / float(columns))
+		var ground := Image.create_empty(source_image.get_width(),
+				source_image.get_height() + extra_rows * patch.y, false, Image.FORMAT_RGBA8)
+		var next_patch := 0
 		var base_cache: Dictionary[Terrain.Kind, Image] = {}
 		# ONE material for every top face in this source: the items differ by UV, not by
 		# material, so the whole board's ground is one texture and one shader. Opaque, because
 		# the compositing above leaves nothing to blend.
 		var atlas_mat := _mat(null)
-		var atlas_size := Vector2(source_image.get_width(), source_image.get_height())
+		# The props' own material over the SAME texture: cut-out alpha (a pot's handle gap must be a
+		# hole, not a smear) and backface culling ON, because a prop is a closed solid and its far
+		# faces would otherwise show through that hole. Scissor rather than blended alpha so it stays
+		# in the opaque pass and writes depth, which is how the billboard props already sort.
+		var prop_mat := _mat(null)
+		prop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		prop_mat.alpha_scissor_threshold = 0.5
+		prop_mat.cull_mode = BaseMaterial3D.CULL_BACK
+		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 				continue
@@ -311,7 +341,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# A prop's top face is the ground it STANDS ON, so its art is left off (#255) --
 			# BoardMirror puts that art on a billboard instead, and baking it here as well would
 			# render the tree twice, once flat and once standing.
-			var stands_up := GridUtils.stands_up_of(data)
+			var shape := GridUtils.prop_shape_of(data)
+			var stands_up := shape != GridUtils.PropShape.FLAT
 			if not stands_up:
 				ground.blend_rect(source_image, region, region.position)
 
@@ -324,6 +355,27 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
 					_block_mesh(atlas_mat, side, top_uv, side_uv))
 			next_id += 1
+
+			# The solid prop's own item: real geometry sized by the art, sides wearing the sprite,
+			# top generated. A billboard prop gets none -- BoardMirror builds its sprite directly.
+			if GridUtils.SOLID_SHAPES.has(shape):
+				var side_slot := _patch_slot(next_patch, columns, patch, source_image.get_height())
+				var top_slot := _patch_slot(next_patch + 1, columns, patch, source_image.get_height())
+				next_patch += 2
+				ground.blit_rect(source_image, region, side_slot.position)
+				ground.blit_rect(_prop_top(rng, shape, _palette_of(source_image, region), patch),
+						Rect2i(Vector2i.ZERO, patch), top_slot.position)
+				# The mesh is sized to the art's OPAQUE BOUNDS, not to the tile: a rock is 32% clear
+				# (measured in #250), so a full cell-wide cube would be a box of mostly empty air.
+				# The side UV names the same bounds inside the patch, so art and geometry line up by
+				# construction rather than by a tuned offset.
+				var bounds := _opaque_bounds(source_image, region)
+				_add_item(ml, next_id, BoardMirror.prop_item_name(source_id, coords),
+						_prop_mesh(shape, prop_mat, _uv_rect(top_slot, atlas_size),
+								_uv_rect(Rect2i(side_slot.position + bounds.position, bounds.size), atlas_size),
+								bounds, patch, rng))
+				next_id += 1
+				props += 1
 			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
 			# and its art never reaches a top face), while an open ground tile is the surprising
 			# case -- it is being based over a kind colour that nobody chose deliberately.
@@ -335,14 +387,17 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# would be imported with detect_3d on and silently re-imported to VRAM compression with
 		# MIPMAPS the first time it rendered -- and mipmaps on an atlas bleed neighbouring tiles
 		# into each other at distance, which is the one thing the half-texel UV inset cannot fix.
-		atlas_mat.albedo_texture = ImageTexture.create_from_image(ground)
+		var composited := ImageTexture.create_from_image(ground)
+		atlas_mat.albedo_texture = composited
+		prop_mat.albedo_texture = composited
 
 	var added := next_id - FIRST_TILE_ITEM
-	print("Tileset items %d..%d (%d tiles) from %s" % [FIRST_TILE_ITEM, next_id - 1, added, TILESET_PATH])
+	print("Tileset items %d..%d (%d ground + %d prop) from %s" \
+			% [FIRST_TILE_ITEM, next_id - 1, added - props, props, TILESET_PATH])
 	if not translucent.is_empty():
 		# A report, not an error. A GROUND tile this open is a sprite on an empty field wearing a
-		# kind colour behind it -- either it wants stands_up ticked, or its base was never chosen.
-		print("  mostly-open GROUND tiles (%d) (candidates for stands_up): %s" \
+		# kind colour behind it -- either it wants a prop_shape authored, or its base was never chosen.
+		print("  mostly-open GROUND tiles (%d) (candidates for prop_shape): %s" \
 				% [translucent.size(), ", ".join(translucent)])
 	return added
 
@@ -421,32 +476,39 @@ func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:
 	ml.set_item_mesh(id, mesh)
 
 
-# A 1x1x1 cell block: surface 0 = top (terrain face), surface 1 = sides + bottom.
+# A box: surface 0 = top (terrain face), surface 1 = sides + bottom.
 # The UV rects default to the whole texture (the Kind blocks, whose textures are one
 # tile each); an atlas-backed item passes the tile's own region instead.
+# `size`/`center_y` default to the 1x1x1 cell block centred on the origin, which is what every
+# GROUND item is. A prop (#264) passes its measured size and lifts the box so its BASE sits at
+# y = 0, because BoardMirror plants it on the cell's top face rather than inside the cell.
 func _block_mesh(top_mat: Material, side_mat: Material,
-		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
+		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1),
+		size := Vector3.ONE, center_y := 0.0) -> ArrayMesh:
+	var h := size * 0.5
+	var up := center_y + h.y
+	var down := center_y - h.y
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
-	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, 0.5, 0.5), Vector3(-0.5, 0.5, 0.5), Vector3.UP, top_uv)
+	_quad(st, Vector3(-h.x, up, -h.z), Vector3(h.x, up, -h.z),
+			Vector3(h.x, up, h.z), Vector3(-h.x, up, h.z), Vector3.UP, top_uv)
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
-	_quad(st, Vector3(-0.5, 0.5, 0.5), Vector3(0.5, 0.5, 0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), Vector3.BACK, side_uv)      # south
-	_quad(st, Vector3(0.5, 0.5, -0.5), Vector3(-0.5, 0.5, -0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD, side_uv) # north
-	_quad(st, Vector3(0.5, 0.5, 0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(0.5, -0.5, 0.5), Vector3.RIGHT, side_uv)     # east
-	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, 0.5, 0.5),
-			Vector3(-0.5, -0.5, 0.5), Vector3(-0.5, -0.5, -0.5), Vector3.LEFT, side_uv)    # west
-	_quad(st, Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN, side_uv)    # bottom
+	_quad(st, Vector3(-h.x, up, h.z), Vector3(h.x, up, h.z),
+			Vector3(h.x, down, h.z), Vector3(-h.x, down, h.z), Vector3.BACK, side_uv)      # south
+	_quad(st, Vector3(h.x, up, -h.z), Vector3(-h.x, up, -h.z),
+			Vector3(-h.x, down, -h.z), Vector3(h.x, down, -h.z), Vector3.FORWARD, side_uv) # north
+	_quad(st, Vector3(h.x, up, h.z), Vector3(h.x, up, -h.z),
+			Vector3(h.x, down, -h.z), Vector3(h.x, down, h.z), Vector3.RIGHT, side_uv)     # east
+	_quad(st, Vector3(-h.x, up, -h.z), Vector3(-h.x, up, h.z),
+			Vector3(-h.x, down, h.z), Vector3(-h.x, down, -h.z), Vector3.LEFT, side_uv)    # west
+	_quad(st, Vector3(-h.x, down, h.z), Vector3(h.x, down, h.z),
+			Vector3(h.x, down, -h.z), Vector3(-h.x, down, -h.z), Vector3.DOWN, side_uv)    # bottom
 	st.commit(mesh)
 	return mesh
 
@@ -497,3 +559,168 @@ func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3) 
 		st.set_normal(normal)
 		st.set_uv(uvs[i])
 		st.add_vertex(points[i])
+
+
+# --- Solid props (#264) ------------------------------------------------------
+
+# How many 1x1 tiles in this source want real geometry. Counted ahead of the walk because the
+# atlas has to be allocated at its finished height before the first UV inside the walk is taken.
+func _solid_tile_count(atlas: TileSetAtlasSource) -> int:
+	var count := 0
+	for coords in _sorted_tile_coords(atlas):
+		if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+			continue
+		if GridUtils.SOLID_SHAPES.has(GridUtils.prop_shape_of(atlas.get_tile_data(coords, 0))):
+			count += 1
+	return count
+
+
+# Where patch N lands in the rows appended below the source art — a plain grid in the atlas's own
+# tile size, so the existing half-texel UV inset works on it unchanged.
+func _patch_slot(index: int, columns: int, patch: Vector2i, base_y: int) -> Rect2i:
+	return Rect2i(Vector2i((index % columns) * patch.x, base_y + (index / columns) * patch.y), patch)
+
+
+# The art's opaque extent inside its tile, in tile-local pixels. This is what sizes a prop's mesh:
+# a sprite drawn small in its cell should become a small object, not a cell-wide box of air.
+# Falls back to the whole tile when nothing is opaque, so a blank tile cannot produce a zero mesh.
+func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
+	var min_p := region.size
+	var max_p := Vector2i(-1, -1)
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if image.get_pixel(x, y).a < 0.5:
+				continue
+			var p := Vector2i(x, y) - region.position
+			min_p = Vector2i(mini(min_p.x, p.x), mini(min_p.y, p.y))
+			max_p = Vector2i(maxi(max_p.x, p.x), maxi(max_p.y, p.y))
+	if max_p.x < 0:
+		return Rect2i(Vector2i.ZERO, region.size)
+	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
+
+
+# Three shades taken from the sprite's OWN opaque pixels — dark, mid, light. The generated top
+# face has to sit beside the art on the same object, so its colours are measured from that art
+# rather than authored; a hand-picked palette would be a second answer to "what colour is this".
+func _palette_of(image: Image, region: Rect2i) -> Array[Color]:
+	var total := Color(0, 0, 0, 1)
+	var count := 0
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var c := image.get_pixel(x, y)
+			if c.a < 0.5:
+				continue
+			total += Color(c.r, c.g, c.b, 0)
+			count += 1
+	var mid := Color(0.5, 0.5, 0.5) if count == 0 \
+			else Color(total.r / count, total.g / count, total.b / count)
+	return [mid.darkened(0.28), mid, mid.lightened(0.18)]
+
+
+# The face one 3/4 drawing cannot supply. One pattern per shape family, because the pattern IS the
+# object's identity read from above: planks on a crate lid, speckle on a boulder, rings on a pot's
+# mouth. Flat-lit and nearest-filtered like every other texture here.
+func _prop_top(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
+		size: Vector2i) -> Image:
+	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
+	var dark: Color = palette[0]
+	var mid: Color = palette[1]
+	var light: Color = palette[2]
+	var center := Vector2(size) * 0.5
+	var plank := maxi(3, size.y / 4)
+	for y in size.y:
+		for x in size.x:
+			var c := mid
+			match shape:
+				GridUtils.PropShape.CUBE:
+					c = dark if y % plank == 0 else (light if (y / plank) % 2 == 0 else mid)
+				GridUtils.PropShape.ROUND:
+					var d := (Vector2(x, y) + Vector2(0.5, 0.5) - center).length()
+					var rim := float(mini(size.x, size.y)) * 0.5
+					c = dark if d > rim * 0.62 else (mid if d > rim * 0.34 else light)
+				_:
+					c = mid
+			if rng.randf() < 0.10:
+				c = c.darkened(0.10)
+			elif rng.randf() > 0.92:
+				c = c.lightened(0.08)
+			img.set_pixel(x, y, c)
+	return img
+
+
+# The prop's geometry, sized by the art's opaque bounds. A tile is one cell wide by definition, so
+# a pixel is 1/patch of a world unit — the same density rule the billboard props use.
+# The footprint is SQUARE (depth = width): a 3/4 sprite says nothing about how deep the object is,
+# so inventing a second number would be a guess dressed as a measurement.
+func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_uv: Rect2,
+		bounds: Rect2i, patch: Vector2i, rng: RandomNumberGenerator) -> ArrayMesh:
+	var w := float(bounds.size.x) / float(patch.x)
+	var h := float(bounds.size.y) / float(patch.y)
+	var size := Vector3(w, h, w)
+	match shape:
+		GridUtils.PropShape.CUBE:
+			return _block_mesh(mat, mat, top_uv, side_uv, size, h * 0.5)
+		GridUtils.PropShape.ROUND:
+			return _prism_mesh(mat, mat, top_uv, side_uv, 10, size, 0.78, 0.0, rng)
+		_:
+			return _prism_mesh(mat, mat, top_uv, side_uv, 7, size, 0.55, 0.30, rng)
+
+
+# A tapered prism standing on y = 0 — the faceted lump and the round pot are the same solid with
+# different side counts and jitter. Every side face wears the WHOLE sprite rather than a slice of
+# it wrapped around: a seventh of a rock drawing per facet reads as smeared texture, while the
+# whole drawing on each facet reads as a rock from any orbit angle.
+func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_uv: Rect2,
+		sides: int, size: Vector3, taper: float, jitter: float,
+		rng: RandomNumberGenerator) -> ArrayMesh:
+	var base: Array[Vector3] = []
+	var cap: Array[Vector3] = []
+	for i in sides:
+		var a := TAU * float(i) / float(sides)
+		var wobble := 1.0 - rng.randf() * jitter
+		var x := cos(a) * size.x * 0.5 * wobble
+		var z := sin(a) * size.z * 0.5 * wobble
+		base.append(Vector3(x, 0.0, z))
+		var t := taper * (1.0 - rng.randf() * jitter)
+		cap.append(Vector3(x * t, size.y, z * t))
+
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(top_mat)
+	var center := Vector3(0.0, size.y, 0.0)
+	for i in sides:
+		var j := (i + 1) % sides
+		# Increasing angle, matching the winding _block_mesh's top quad uses.
+		_cap_vertex(st, center, size, top_uv, Vector3.UP)
+		_cap_vertex(st, cap[i], size, top_uv, Vector3.UP)
+		_cap_vertex(st, cap[j], size, top_uv, Vector3.UP)
+	st.commit(mesh)
+
+	st = SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(side_mat)
+	for i in sides:
+		var j := (i + 1) % sides
+		# j is screen-LEFT of i seen from outside, so this is the clockwise order _quad wants.
+		var normal := (base[i] - base[j]).cross(cap[j] - base[j]).normalized()
+		if normal.dot(base[i] + base[j]) < 0.0:
+			normal = -normal   # the jitter can flip a degenerate face; point it outward
+		_quad(st, cap[j], cap[i], base[i], base[j], normal, side_uv)
+	for i in sides:
+		var j := (i + 1) % sides
+		_cap_vertex(st, Vector3.ZERO, size, side_uv, Vector3.DOWN)
+		_cap_vertex(st, base[j], size, side_uv, Vector3.DOWN)
+		_cap_vertex(st, base[i], size, side_uv, Vector3.DOWN)
+	st.commit(mesh)
+	return mesh
+
+
+# One vertex of a cap fan, its UV taken from where the point sits in the footprint.
+func _cap_vertex(st: SurfaceTool, point: Vector3, size: Vector3, uv_rect: Rect2,
+		normal: Vector3) -> void:
+	var uv := Vector2(clampf(0.5 + point.x / size.x, 0.0, 1.0),
+			clampf(0.5 + point.z / size.z, 0.0, 1.0))
+	st.set_normal(normal)
+	st.set_uv(uv_rect.position + uv * uv_rect.size)
+	st.add_vertex(point)
