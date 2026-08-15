@@ -161,6 +161,91 @@ func test_frame_adopts_the_fit_as_home_so_reset_returns_to_it() -> void:
 	assert_float(rig._target_distance).is_equal_approx(framed_distance, 0.001)
 
 
+# --- The authored pose (#234) ------------------------------------------------------
+
+const BOARD := AABB(Vector3.ZERO, Vector3(64, 1, 40))
+
+
+func test_pose_lands_the_camera_exactly_where_it_was_authored() -> void:
+	# An authored start is not solved from anything — it is the three numbers you flew to.
+	var rig := _rig()
+	rig.pose(Vector3(20, 1, 14), 37.0, 16.0, BOARD)
+	await await_idle_frame()
+
+	assert_that(rig.position).is_equal(Vector3(20, 1, 14))
+	# 37 degrees on purpose: free orbit is the contract (#176 stage 4d), so an off-detent
+	# authored yaw must survive rather than being tidied to 0.
+	assert_float(rig.rotation_degrees.y).is_equal_approx(37.0, 0.001)
+	assert_float(_camera().position.z).is_equal_approx(16.0, 0.001)
+
+
+func test_pose_snaps_both_smoothed_axes_rather_than_easing_to_them() -> void:
+	# frame()'s reason, applied to yaw as well: a rig still lerping unprojects at one basis
+	# and picks at another. Deliberately NOT awaiting a frame — the smoothing would hide it.
+	var rig := _rig()
+	rig.rotation_degrees.y = 0.0
+	rig.pose(Vector3(20, 1, 14), 130.0, 16.0, BOARD)
+
+	assert_float(rig.rotation_degrees.y).override_failure_message(
+			"yaw is still easing toward the authored pose — screen-space reads desync on the way" \
+			).is_equal_approx(130.0, 0.001)
+	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
+
+
+func test_pose_leaves_the_ceiling_and_pan_on_the_board_exactly_as_framing_does() -> void:
+	# "An authored start replaces the SHOT and nothing else moves." Asserted by equivalence
+	# against frame(), not by numbers, so the rig's knobs stay the dev's.
+	var rig := _rig()
+	rig.pose(Vector3(20, 1, 14), 45.0, 16.0, BOARD)
+	var posed_ceiling: float = rig.max_distance
+	var posed_pan: Rect2 = rig.pan_limit
+	# Non-vacuous: the authored shot really is closer than fitting the whole board.
+	assert_float(rig._target_distance).is_less(posed_ceiling)
+
+	rig.frame(BOARD)
+	assert_float(posed_ceiling).override_failure_message(
+			"the ceiling was solved off the authored shot — the rest of the board is unreachable" \
+			).is_equal_approx(rig.max_distance, 0.001)
+	assert_that(posed_pan).override_failure_message(
+			"panning was bounded to the authored shot, not the board").is_equal(rig.pan_limit)
+
+
+func test_pose_adopts_the_authored_yaw_as_home_unlike_framing() -> void:
+	# R means "back to the opening shot", and an authored opening shot INCLUDES its yaw —
+	# the one place pose() and frame() deliberately differ.
+	var rig := _rig()
+	rig.pose(Vector3(20, 1, 14), 135.0, 16.0, BOARD)
+
+	rig.position = Vector3(5, 1, 5)
+	rig._target_yaw_degrees = 0.0
+	rig.set_zoom(rig.min_distance)
+	_key(KEY_R)
+
+	assert_that(rig.position).is_equal(Vector3(20, 1, 14))
+	assert_float(rig._target_yaw_degrees).override_failure_message(
+			"R dropped the authored yaw and returned to the scene's" \
+			).is_equal_approx(135.0, 0.001)
+	assert_float(rig._target_distance).is_equal_approx(16.0, 0.001)
+
+
+func test_an_authored_aim_off_the_board_is_clamped_back_onto_it() -> void:
+	# The dev's ruling (2026-08-15): a stale authored start is CLAMPED, silently, and there is
+	# deliberately no validity predicate — it rides the pan_limit clamp _process already runs.
+	# Asserted as the property (inside the limit), never as the clamped coordinate.
+	var rig := _rig()
+	rig.pose(Vector3(500, 1, -400), 0.0, 16.0, BOARD)
+	# Non-vacuous: the aim really is outside, so a no-op clamp cannot pass this.
+	assert_bool(rig.position.x > rig.pan_limit.end.x).is_true()
+	await await_idle_frame()
+
+	# Inclusive bounds, not Rect2.has_point — the clamp lands the far axis exactly ON end.x, which
+	# has_point (half-open) reports as outside. The rule being pinned is "back onto the board".
+	assert_bool(rig.position.x >= rig.pan_limit.position.x and rig.position.x <= rig.pan_limit.end.x) \
+		.override_failure_message("an off-board authored aim escaped the pan limit in x").is_true()
+	assert_bool(rig.position.z >= rig.pan_limit.position.y and rig.position.z <= rig.pan_limit.end.y) \
+		.override_failure_message("an off-board authored aim escaped the pan limit in z").is_true()
+
+
 # --- Orbit and detents -------------------------------------------------------------
 
 func test_dragging_the_orbit_button_rotates_freely() -> void:

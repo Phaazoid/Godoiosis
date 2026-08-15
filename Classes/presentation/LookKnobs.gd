@@ -115,7 +115,7 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Camera", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
 		"tip": "Field of view. Low values flatten perspective toward an orthographic, model-railway look (the HD-2D diorama trick); high values exaggerate depth and bend the board's edges. Press Re-fit camera after moving it."},
 	{"group": "Camera", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,
-		"tip": "How many cells wide the view is when a mission OPENS, centred on your own units. It does not limit zoom -- the whole board still does -- it only decides where the game starts you."},
+		"tip": "How many cells wide the view is when a mission OPENS, centred on your own units. It does not limit zoom -- the whole board still does -- it only decides where the game starts you.\n\nInert on a board that authors its own camera start (Scenario tab, #234): an authored pose says where, which way and how far, so there is no width left to derive."},
 	{"group": "Camera", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
 		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
 	{"group": "Camera", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
