@@ -32,6 +32,22 @@ class_name ScenarioData
 # unit_data. Empty = the default look. Resolved by LookKnobs.resolve, applied by battle3d.
 @export var look_preset := ""
 
+# Where the camera OPENS on this board (#234). Null = derive it -- battle3d frames the player's own
+# units, which is the right default and the wrong authored answer for a handcrafted level. Authored
+# is AUTHORITATIVE; the derivation is the fallback for a board that says nothing (Law #4, same shape
+# as objectives-vs-painted-zones above).
+#
+# A REFERENCE here, unlike look_preset's name-only rule right above, and the difference is the point:
+# a LookPreset is a file with a life of its own, so a ref can dangle or silently embed (the #177
+# unit_data trap). A CameraPose has no file and no existence outside this board -- embedding it as a
+# sub-resource is exactly what should happen on save. Do not "fix" this to a name.
+#
+# The obvious worry -- load board A, Save As board B, and B holds an ext_resource pointing into A's
+# sub-resources -- was MEASURED and does not happen (2026-08-15): a loaded pose carries the path
+# "A.tres::Resource_xxx", and ResourceSaver still writes it into B as a fresh [sub_resource]. So no
+# defensive duplicate() on the capture side, and no dangling reference between two boards.
+@export var camera_start: CameraPose = null
+
 # Which factions the computer plays on this board (#150). Empty = every faction is manual, which
 # is the hotseat/dev-scratch default; an authored mission lists its ENEMY here or the player is
 # handed both sides. Applied exhaustively on load via AIController.set_ai_factions, so a board

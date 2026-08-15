@@ -27,6 +27,8 @@
 # fitting the whole board opened the game unplayably far out): the first box is what
 # to look at now, the second the box the view may never leave, which is what sets the
 # zoom ceiling and the pan limit. One box means both, i.e. the original behaviour.
+# pose() is frame()'s AUTHORED twin (#234) -- same bounds half, but the shot is given as a pose
+# instead of solved from a volume, which is the only way an authored yaw can be expressed.
 #
 # align_to_detent() exists for the AI turn: an enemy phase plays out square-on however
 # the player left the camera. It is the only realign the rig does not owe to a keypress.
@@ -211,6 +213,46 @@ func frame(volume: AABB, bounds := AABB()) -> void:
 	# R means "back to the opening shot". Position and distance are board facts and come
 	# from the fit; yaw is a scene fact and stays whatever the scene authored.
 	_home_position = position
+	_home_distance = _target_distance
+
+
+# The AUTHORED twin of frame()'s SHOT half (#234): a pose someone flew to, rather than a volume
+# solved into one. frame() cannot express this -- it DERIVES position and distance from a box and
+# deliberately never touches yaw ("yaw is a scene fact", below) -- so the shot half needs its own
+# door. The bounds half is the same rebound() call, which is what keeps an authored start replacing
+# the shot and nothing else: zoom ceiling and pan limit stay derived from the board.
+#
+# Nothing here validates the pose. An aim off the board is CLAMPED, silently, by the pan_limit
+# clamp _process already runs on every frame, and the distance by set_zoom -- the same doors every
+# other writer goes through (dev call 2026-08-15). There is deliberately no second answer to
+# "where may the camera be".
+func pose(aim: Vector3, yaw_degrees: float, distance: float, bounds: AABB) -> void:
+	# YAW FIRST, and snapped, because rebound() solves the ceiling and the pan limit through the
+	# CAMERA'S OWN BASIS (_fit_distance projects the box corners onto it) -- so a bounds fit taken
+	# at the previous yaw is a fit for an orientation this shot will never be seen at. frame() never
+	# meets this: it does not author yaw, so its rebound is always already at the viewing angle.
+	var previous_yaw := rotation_degrees.y
+	var previous_target_yaw := _target_yaw_degrees
+	# Snapping is also frame()'s own rule, applied to the axis it never had to: a rig still lerping
+	# unprojects at one basis and picks at another, desyncing every screen-space read on the way in.
+	_target_yaw_degrees = yaw_degrees
+	rotation_degrees.y = yaw_degrees
+
+	if not rebound(bounds):
+		# No valid projection yet; leave the current framing exactly as frame() does -- which means
+		# putting back the yaw this function had already moved.
+		rotation_degrees.y = previous_yaw
+		_target_yaw_degrees = previous_target_yaw
+		return
+
+	position = aim
+	set_zoom(distance)
+	_camera.position.z = _target_distance
+
+	# R means "back to the opening shot", and an authored opening shot INCLUDES its yaw -- so unlike
+	# frame(), which leaves yaw to the scene, this adopts all three.
+	_home_position = position
+	_home_yaw_degrees = _target_yaw_degrees
 	_home_distance = _target_distance
 
 
