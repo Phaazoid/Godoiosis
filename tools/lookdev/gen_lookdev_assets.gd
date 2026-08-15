@@ -581,11 +581,11 @@ func _facets_of(shape: GridUtils.PropShape) -> int:
 
 # A prism's silhouette, as rings of (height fraction, radius fraction) bottom to top.
 #
-# ROUND came back for the pot (dev, 2026-08-15): *"the pots don't really look like pots, the geometry
-# needs to come back to a central point on the bottom to make them look round."* Two rings made a
-# truncated cone standing on its widest part, which is the opposite of a vessel — a pot is narrow at
-# the foot, widest at the belly, and drawn back in at the rim. FACETED keeps two rings, so the rock
-# is unchanged in shape.
+# ROUND came back for the barrel, which was still authored `pot` when the dev said this (2026-08-15):
+# *"the pots don't really look like pots, the geometry needs to come back to a central point on the
+# bottom to make them look round."* Two rings made a truncated cone standing on its widest part,
+# which is the opposite of a vessel — narrow at the foot, widest at the belly, drawn back in at the
+# rim. FACETED keeps two rings, so the rock is unchanged in shape.
 #
 # These numbers are a FEEL value, not a measurement. Nothing pins them, and there is no runtime knob
 # because the mesh is baked — rounder is a line here plus a regenerate.
@@ -603,7 +603,7 @@ const PRISM_PROFILE: Dictionary[GridUtils.PropShape, Array] = {
 # first UV inside the walk is taken.
 #
 # A prism's side run is one patch PER FACET, and that is a resolution requirement rather than a
-# convenience: slicing a single 16px patch into a pot's ten facets would leave 1.6 texels each.
+# convenience: slicing a single 16px patch into a barrel's ten facets would leave 1.6 texels each.
 func _solid_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
 	var widths: Array[int] = []
 	for coords in _sorted_tile_coords(atlas):
@@ -705,8 +705,8 @@ func _pad_palette(shades: Array[Color]) -> Array[Color]:
 
 
 # The face one 3/4 drawing cannot supply. One pattern per shape family, because the pattern IS the
-# object's identity read from above: planks on a crate lid, speckle on a boulder, rings on a pot's
-# mouth. Flat-lit and nearest-filtered like every other texture here.
+# object's identity read from above: planks on a crate lid, speckle on a boulder, rings on a
+# barrel's head. Flat-lit and nearest-filtered like every other texture here.
 func _prop_top(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
 		size: Vector2i) -> Image:
 	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)

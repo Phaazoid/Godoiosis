@@ -112,6 +112,7 @@ func _ready() -> void:
 		_update_help()
 	_board_mirror.board = $Board
 	_unit_mirror.units_root = game.units_root
+	_unit_mirror.heights = game.board_heights
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -158,7 +159,7 @@ func _apply_board_look() -> void:
 
 
 func rebuild() -> void:
-	_board_mirror.rebuild(game.grid, game.terrain_states.burning_cells())
+	_board_mirror.rebuild(game.grid, game.board_heights, game.terrain_states.burning_cells())
 	_refresh_tops()
 
 
@@ -183,7 +184,7 @@ func _refresh_tops() -> void:
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
-	_board_mirror.sync(game.grid)
+	_board_mirror.sync(game.grid, game.board_heights)
 	var before := _board_rect
 	_refresh_tops()
 	if _board_rect != before:
@@ -513,7 +514,7 @@ func _sync_brush_ghost() -> void:
 	if cell == GridUtils.NO_CELL:
 		_board_mirror.hide_brush_ghost()
 		return
-	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_layer())
+	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_layer(), game.board_heights)
 
 
 # The brush erases on RIGHT, so orbit steps aside to MIDDLE while it is armed — 2D and 3D keep

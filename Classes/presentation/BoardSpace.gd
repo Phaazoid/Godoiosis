@@ -24,7 +24,33 @@ static func cell_center(cell: Vector3i) -> Vector3:
 
 # Center of the cell's TOP face: where a unit stands, an overlay lies, a highlight sits.
 static func standing_point(cell: Vector3i) -> Vector3:
-	return Vector3(cell.x + 0.5, cell.y + 1.0, cell.z + 0.5) * CELL_SIZE
+	return Vector3((cell.x + 0.5) * CELL_SIZE, surface_y(cell.y), (cell.z + 0.5) * CELL_SIZE)
+
+
+# The world Y of a surface at `level` — the top face of that level's block, since a level-E block
+# occupies [E .. E+1]. The ONE spelling of it (#273): the live board's unit placement
+# (UnitMirror) and the walk demo's injected stand_at both read this, so the mirrored board and
+# the demo cannot drift about where the ground is.
+static func surface_y(level: int) -> float:
+	return float(level + 1) * CELL_SIZE
+
+
+# Where a thing STANDING on this 2D cell sits — a unit, a flame, a crate (#273). ONE answer for
+# every such caller, because three of them eyeballing the same offset is how a flame ends up half a
+# level off the crate on its own tile. It lives here rather than on either mirror so neither has to
+# reach for the other.
+#
+# A ramp's surface SLOPES, and verticality.md rules its visual midpoint purely presentational — so
+# anything on one rides half a level up rather than sinking into the low edge the RULES call its
+# level. That is the one place presentation and rules deliberately disagree, and it is why
+# UnitSprite3D.stand_at was made injectable in the first place.
+static func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
+	if heights == null:
+		return standing_point(of_cell(cell, 0))
+	var point := standing_point(of_cell(cell, heights.elevation_at(cell)))
+	if heights.is_ramp(cell):
+		point.y += CELL_SIZE * 0.5
+	return point
 
 
 # The cell containing a world position (floor per axis — see the boundary rule above).
@@ -36,23 +62,25 @@ static func cell_of(position: Vector3) -> Vector3i:
 	)
 
 
-# The TOP LEVEL of a flat-board column: of_flat puts every cell at y-index 0, so the
-# face a unit stands on — and the plane BoardPicker falls back to over an erased cell
-# (#231) — sits one CELL_SIZE up, never at y = 0. Named because y=0 is the slab's
-# BOTTOM and reads plausible: a fallback plane there returns the wrong cell at grazing
-# angles. UnitMirror.COLUMN_TOP derives from this rather than restating it.
+# The TOP of a GROUND-LEVEL column, in cells — what BoardPicker's fallback plane sits on over an
+# erased cell (#231), since y=0 is the slab's BOTTOM and a plane there returns the wrong cell at
+# grazing angles. Elevation (#273) did NOT retire this: an unpainted column is still exactly one
+# cell tall, so this is the top of level 0 and nothing more. It equals surface_y(0), and
+# test_board_space pins the two spellings together.
 const FLAT_TOP_LEVEL := 1
 
-# The flat-board bridge (#222): sim cells are 2D (x, y), mirror cells are (x, 0, y)
-# until real elevation arrives — the ONE spelling of that pair. Not for columns with
-# a real height (BoardPicker._top_cell keeps its own y). flat(NO_CELL) equals
-# GridUtils.NO_CELL by value — pinned, the pointer source relies on it.
+# The sim<->mirror cell pair (#222): sim cells are 2D (x, y), mirror cells are (x, level, y).
+# The ONE spelling of it. flat(NO_CELL) equals GridUtils.NO_CELL by value — pinned, the pointer
+# source relies on it.
 static func flat(cell: Vector3i) -> Vector2i:
 	return Vector2i(cell.x, cell.z)
 
 
-static func of_flat(cell: Vector2i) -> Vector3i:
-	return Vector3i(cell.x, 0, cell.y)
+# Every caller states the LEVEL it means (#273 — this took no argument and hardcoded 0 while the
+# sim had no elevation). Passing beats looking up, and a required argument is what makes the old
+# flat assumption unrepresentable rather than merely discouraged.
+static func of_cell(cell: Vector2i, level: int) -> Vector3i:
+	return Vector3i(cell.x, level, cell.y)
 
 
 # A 2D-game world POSITION (pixels) as a 3D position at height `y`. The one spelling of

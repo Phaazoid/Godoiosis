@@ -98,7 +98,7 @@ func test_an_erased_cell_inside_the_board_is_still_pickable() -> void:
 	assert_that(BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, Rect2i())) \
 		.override_failure_message("the fixture's hole is not actually a hole").is_equal(BoardSpace.NO_CELL)
 	var cell := BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, _apron_of(_holed_tops))
-	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 0)))
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), 0))
 
 
 func test_the_ground_plane_sits_on_the_top_face_not_the_slab_bottom() -> void:
@@ -107,7 +107,7 @@ func test_the_ground_plane_sits_on_the_top_face_not_the_slab_bottom() -> void:
 	# would travel a further cell and come down on the far column instead.
 	var cell := BoardPicker.pick_cell(Vector3(-1.5, 3.0, 0.5), Vector3(3.0, -2.0, 0.0),
 			_holed_tops, _apron_of(_holed_tops))
-	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 0)))
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), 0))
 	assert_int(cell.y).override_failure_message("the plane cell came back at the wrong level").is_equal(0)
 
 
@@ -129,7 +129,7 @@ func test_the_apron_bounds_where_the_plane_ends() -> void:
 	var inside := plane.end - Vector2i.ONE
 	var outside := plane.end
 	var hit := BoardPicker.pick_cell(Vector3(inside.x + 0.5, 5.0, inside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
-	assert_that(hit).is_equal(BoardSpace.of_flat(inside))
+	assert_that(hit).is_equal(BoardSpace.of_cell(inside, 0))
 	var miss := BoardPicker.pick_cell(Vector3(outside.x + 0.5, 5.0, outside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
 	assert_that(miss).is_equal(BoardSpace.NO_CELL)
 
@@ -140,7 +140,7 @@ func test_an_empty_board_is_still_pickable_under_a_plane() -> void:
 	var empty: Dictionary[Vector2i, int] = {}
 	var plane := Rect2i(0, 0, 4, 4)
 	var cell := BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, plane)
-	assert_that(cell).is_equal(BoardSpace.of_flat(Vector2i(1, 1)))
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 1), 0))
 	assert_that(BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, Rect2i())) \
 		.is_equal(BoardSpace.NO_CELL)
 
