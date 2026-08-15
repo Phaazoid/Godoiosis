@@ -1122,3 +1122,90 @@ func test_each_rise_points_the_wedges_high_side_the_way_it_names() -> void:
 		assert_float(high.z).override_failure_message(
 			"%s rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
 			.is_equal_approx(float(want.y), 0.01)
+
+
+# ---- the brush ghost at height (#285) ----
+#
+# The 3D preview of what an elevation click would produce. The level is the BRUSH's, not the
+# cell's current one, which is the whole point: hovering a flat cell with the wheel at 3 has to
+# show a block three levels up, or the ghost is previewing the thing you are replacing.
+
+func _ghost_node() -> MeshInstance3D:
+	return (_scene._board_mirror as BoardMirror)._brush_ghost
+
+
+func test_the_ghost_hangs_at_the_level_the_click_would_produce() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	# A DELTA, so no item's authored offset can be mistaken for the level -- and so the mutant
+	# that reads heights.elevation_at(cell) instead reports 0 rather than a near-miss.
+	mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid))
+	var at_zero: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 3, _game.grid))
+	var at_three: float = _ghost_node().position.y
+
+	assert_float(at_three - at_zero).override_failure_message(
+			"three levels of BRUSH height moved the ghost %s, not three cells -- it is reading the "
+			% (at_three - at_zero) + "cell's own elevation").is_equal_approx(
+			3.0 * BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wears_the_art_the_cell_already_has() -> void:
+	# Raising a cell keeps its tile, so the preview resolves off the GRID -- the same call the
+	# real column uses, which is what stops the two disagreeing about what a cell looks like.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+
+	var want: Mesh = board.mesh_library.get_item_mesh(mirror.item_for_cell(_game.grid, cell))
+	assert_object(_ghost_node().mesh).is_same(want)
+
+
+func test_a_rise_previews_the_wedge_one_level_above_its_own() -> void:
+	# _write_column's rule, mirrored: a level-E block occupies [E..E+1], so the slope that starts
+	# at E's surface sits at E+1. Preview it at E and the ramp appears to sink into the terrace.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+	var flat_y: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST))
+	var wedge_y: float = _ghost_node().position.y
+
+	assert_object(_ghost_node().mesh).override_failure_message(
+			"a rise still previewed the flat block").is_same(
+			board.mesh_library.get_item_mesh(mirror.ramp_item()))
+	assert_float(wedge_y - flat_y).override_failure_message(
+			"the wedge did not sit one level above the block it climbs from").is_equal_approx(
+			BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:
+	# The geometry, not a magic orthogonal index -- the same shape the real wedge's case asserts.
+	# A ghost that previews the slope climbing the wrong way is worse than no ghost.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for rise: Terrain.RampRise in [Terrain.RampRise.NORTH, Terrain.RampRise.EAST,
+			Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
+		mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid, rise))
+		var high: Vector3 = _ghost_node().basis * BoardMirror.RAMP_MESH_HIGH_SIDE
+		var want := Terrain.rise_direction(rise)
+		assert_float(high.x).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on X" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.x), 0.01)
+		assert_float(high.z).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.y), 0.01)

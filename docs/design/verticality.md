@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #266 (2026-08-15).**
+**Canon checked through #285 (2026-08-15).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -347,8 +347,10 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
 only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then
-3D-native authoring — which the dev has said is the issue after
-[#231](https://github.com/Phaazoid/Godoiosis/issues/231), gated on this design landing.
+3D-native authoring, the issue the dev said would follow
+[#231](https://github.com/Phaazoid/Godoiosis/issues/231): filed and **BUILT as
+[#285](https://github.com/Phaazoid/Godoiosis/issues/285)**, once #273 gave it a board that renders
+height to paint onto.
 
 ### The preview must keep telling the truth
 
@@ -386,9 +388,9 @@ Godot emits a press *and* a release per notch. Four rulings worth keeping:
 - **The readout lights itself.** Entering the mode shows `HeightDebugOverlay` — painting height into
   an invisible store is blind. Its `visible` is **derived** from two named flags (F5, and the brush)
   rather than assigned by either, so leaving the mode cannot switch off a readout F5 asked for.
-- **Painting is a 2D-view job for now**, and that is stated rather than fixed: the readout is a child
-  of the flat grid and nothing renders elevation in 3D, so authoring in the 3D view is blind.
-  3D-native authoring stays [#231](https://github.com/Phaazoid/Godoiosis/issues/231).
+- **Painting was a 2D-view job until [#285](https://github.com/Phaazoid/Godoiosis/issues/285)
+  (2026-08-15)**, because the readout is a child of the flat grid and nothing rendered elevation in
+  3D. #273 removed the second half of that, and #285 the first. See *Painting it in 3D* below.
 
 Ramp painting is one 5-entry picker over `Terrain.RampRise`, not an axis plus a direction — the
 single field carries both, which is exactly why #257 replaced the sketched `{NONE, NS, EW}`. **Z and
@@ -418,6 +420,41 @@ questions have to be answered out loud rather than stumbled into:
 2. **Does a terrain click then also write a height?** Today the modes are independent, so repainting
    grass over a terrace leaves the terrace. Merged, it would flatten it to the brush's level unless
    the merged brush can say "texture only" — an authoring-feel call, not a code one.
+
+### Painting it in 3D [BUILT as #285]
+
+**BUILT 2026-08-15.** The premise the issue was filed on turned out to be half stale: painting
+elevation from the 3D view **already worked**, because `battle3d` routes to `handle_tile_brush` on
+`brush_armed()` alone, `_paint()` is not mode-aware, and the injected `cell_source` is the picked
+*column*, which `BoardPicker` already resolves against column tops. What was missing was the
+feedback and one binding. Four rulings, all the dev's:
+
+- **A click paints the brush's level, ABSOLUTELY** — the 2D model previewed in 3D, not a
+  voxel-editor stack and not Minecraft's clicked-face rule. Two reasons beat the alternatives.
+  The wheel stays the *one* authority for "what level", where a relative click would make the
+  cursor a second one; and `_paint()` re-fires on every mouse-**motion** event while held, so a
+  relative `+1` would run away down a drag, while an absolute level drag-paints a terrace
+  idempotently. (The face rule was cheap, not costly — `BoardPicker`'s DDA already distinguishes a
+  top hit from a cliff hit and knows which side it crossed. It was declined on feel, not price.)
+- **The ghost is the block that would become the column's new TOP** — the cell's own art, at the
+  level the click would produce; the **wedge at `level + 1`** when a rise is set, mirroring
+  `_write_column`'s own rule. Raising a cell keeps its texture, so the preview resolves its mesh
+  off the real grid via the same `item_for_cell` call the board uses.
+- **A groundless cell shows NO ghost.** *Elevation goes with the ground* already refuses the paint,
+  and the 3D picker answers over holes on purpose (#231's plane fallback), so without this the
+  click is a silent no-op. The ghost states the refusal before it happens.
+- **The wheel is the brush's only in ELEVATION mode.** The other three modes never read it, so
+  camera zoom is untouched there; while elevation is live, `Ctrl+wheel` zooms.
+
+Two structural notes worth keeping. **The ghost answers per MODE now** (`DevController.brush_ghost`
+returning a `BrushGhost`), replacing a TERRAIN-shaped predicate plus a separate layer getter — an
+elevation preview cannot be described by a bare cell, since the level is the brush's and the art
+comes off the grid rather than the tile-pick layer. And **the wheel suppression is DECLARATIVE, not
+a consume**: the camera rig is a *child* of `battle3d`, so it sees `_unhandled_input` first and
+`set_input_as_handled()` in the parent lands after the zoom has already happened (measured — the
+obvious fix is not the one that shipped). `battle3d` stands `look_dev_camera.wheel_zoom_enabled`
+down every frame, the same way it borrows the orbit button, and drives the `Ctrl+wheel` notch
+itself.
 
 ---
 

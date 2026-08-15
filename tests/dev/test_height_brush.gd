@@ -211,6 +211,44 @@ func test_erase_returns_the_cell_to_flat() -> void:
 	assert_int(game.board_heights.ramp_rise_at(cell)).is_equal(NONE)
 
 
+# ---- painting from the 3D view (#285) ----
+#
+# The 3D host paints by INJECTING the picked column as cell_source (#231); handle_tile_brush is
+# routed on brush_armed() alone and _paint() is not mode-aware, so elevation should already land on
+# the picked cell. These two pin that, because the ghost work built on top of it assumes it.
+
+func test_the_injected_cell_is_where_elevation_lands() -> void:
+	var picked := Vector2i(12, 9)
+	var by_mouse := _hover_cell()
+	assert_that(picked).override_failure_message(
+			"fixture broken: the picked cell must differ from the headless hover cell"
+			).is_not_equal(by_mouse)
+	_give_ground(picked)
+	_dc.cell_source = func() -> Vector2i: return picked
+	_brush.set_elevation(3)
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(WEST))
+
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
+
+	assert_int(game.board_heights.elevation_at(picked)).override_failure_message(
+			"the 3D view's picked column took no elevation").is_equal(3)
+	assert_int(game.board_heights.ramp_rise_at(picked)).is_equal(WEST)
+	assert_int(game.board_heights.elevation_at(by_mouse)).override_failure_message(
+			"painted the raw mouse cell instead of the picked column").is_equal(0)
+
+
+func test_the_injected_cell_is_where_erase_lands() -> void:
+	var picked := Vector2i(12, 9)
+	_give_ground(picked)
+	game.board_heights.set_cell(picked, 4, EAST)
+	_dc.cell_source = func() -> Vector2i: return picked
+
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_RIGHT, true))
+
+	assert_int(game.board_heights.elevation_at(picked)).is_equal(0)
+	assert_int(game.board_heights.ramp_rise_at(picked)).is_equal(NONE)
+
+
 # ---- elevation goes with the ground (#245's rule, #260's store) ----
 
 func test_a_groundless_cell_takes_no_elevation() -> void:
