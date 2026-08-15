@@ -599,10 +599,61 @@ func test_the_lantern_stands_two_cells_tall() -> void:
 	assert_object(prop).override_failure_message("the lantern did not stand up").is_not_null()
 	var sprite := prop.get_child(0) as Sprite3D
 	assert_object(sprite).is_not_null()
+	# TALLER THAN ONE CELL is the property, not exactly two. The point of this case is that
+	# multi-cell art survives instead of being cropped onto a 1x1 face — and since the sprite is now
+	# planted by its DRAWN pixels rather than by its region, the exact height is the art's, not the
+	# region's. Asserted against the art itself so a crop-to-one-cell mutant still reds it.
 	var height: float = sprite.texture.region.size.y * sprite.pixel_size
+	assert_bool(height > BoardSpace.CELL_SIZE * 1.05).override_failure_message(
+			"the lantern stands %s cells tall — its multi-cell art was cropped to a single cell" \
+			% [height / BoardSpace.CELL_SIZE]).is_true()
+	var source := _game.grid.tile_set.get_source(lantern.source) as TileSetAtlasSource
+	var drawn := _opaque_bounds(_readable(source.texture), source.get_tile_texture_region(lantern.coords, 0))
 	assert_float(height).override_failure_message(
-			"the lantern stands %s cells tall, not 2 — its multi-cell art was cropped" \
-			% [height / BoardSpace.CELL_SIZE]).is_equal_approx(2.0 * BoardSpace.CELL_SIZE, 0.001)
+			"the lantern is %s tall but its art measures %s" \
+			% [height, drawn.size.y * sprite.pixel_size]) \
+			.is_equal_approx(drawn.size.y * sprite.pixel_size, 0.001)
+
+
+# The lamp floated for months and nobody could say why: the quad was planted correctly and its ART
+# was not. A tile region may carry transparent padding — the lantern's stops 5 rows above its
+# region's bottom edge — so planting by the REGION leaves the visible sprite hanging 5/16 of a cell
+# in the air. Stated as a property of every billboard rather than as that one measurement.
+func test_a_billboard_is_planted_by_its_art_not_by_its_region() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var tiles: TileSet = _game.grid.tile_set
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var checked := 0
+	for entry in _tiles_with_shape(GridUtils.PropShape.BILLBOARD):
+		var cell: Vector2i = cells[checked]
+		_game.grid.set_cell(cell, entry.source, entry.coords)
+		await _settle()
+		var sprite := mirror.prop_at(cell).get_child(0) as Sprite3D
+		assert_object(sprite).override_failure_message("a BILLBOARD tile did not build a sprite").is_not_null()
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var art := _readable(source.texture)
+		var region := Rect2i(sprite.texture.region)
+		var drawn := 0
+		for x in range(region.position.x, region.end.x):
+			if art.get_pixel(x, region.end.y - 1).a >= 0.5:
+				drawn += 1
+		assert_int(drawn).override_failure_message(
+				"'%s' is planted by a rectangle whose bottom row is empty — its art floats above " \
+				% [GridUtils.authored_tile_display_name(source.get_tile_data(entry.coords, 0))] \
+				+ "the tile instead of standing on it").is_greater(0)
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no BILLBOARD tiles authored; the case is vacuous").is_greater(0)
+
+
+func _readable(texture: Texture2D) -> Image:
+	var image := texture.get_image()
+	if image.is_compressed():
+		image.decompress()
+	return image
 
 
 # Test the WIRE: a light table nothing reads looks exactly like a table with no entries. The
@@ -894,19 +945,31 @@ func _prism_entries() -> Array[Dictionary]:
 	return out
 
 
-# Each facet's [min u, max u], read off the side surface. Nine vertices per facet: a 6-vertex quad
-# for the face itself, then a 3-vertex bottom-cap triangle appended after all the quads.
+# Each facet's [min u, max u], read off the side surface as the set of DISTINCT triangle u-spans.
+#
+# Derived rather than counted: a facet is one quad per profile band, so the vertices-per-facet is
+# whatever the mesh's silhouette needs and cannot be assumed. What IS structural is that the side
+# surface holds facet quads and nothing else — both caps live on the top surface — so every triangle
+# spans exactly one facet's slice, and the distinct spans ARE the facets. That keeps the case
+# independent of the facet table it exists to check.
 func _facet_spans(mesh: Mesh) -> Array[Vector2]:
 	var uvs: PackedVector2Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_TEX_UV]
 	var spans: Array[Vector2] = []
-	for f in uvs.size() / 9:
+	for t in uvs.size() / 3:
 		var lo := 1.0
 		var hi := 0.0
-		for k in 6:
-			var u := uvs[f * 6 + k].x
+		for k in 3:
+			var u := uvs[t * 3 + k].x
 			lo = minf(lo, u)
 			hi = maxf(hi, u)
-		spans.append(Vector2(lo, hi))
+		var seen := false
+		for s: Vector2 in spans:
+			if absf(s.x - lo) < 0.0001 and absf(s.y - hi) < 0.0001:
+				seen = true
+				break
+		if not seen:
+			spans.append(Vector2(lo, hi))
+	spans.sort_custom(func(a: Vector2, b: Vector2) -> bool: return a.x < b.x)
 	return spans
 
 

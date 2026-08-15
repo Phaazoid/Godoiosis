@@ -579,6 +579,25 @@ func _facets_of(shape: GridUtils.PropShape) -> int:
 	return PRISM_FACETS.get(shape, 1)
 
 
+# A prism's silhouette, as rings of (height fraction, radius fraction) bottom to top.
+#
+# ROUND came back for the pot (dev, 2026-08-15): *"the pots don't really look like pots, the geometry
+# needs to come back to a central point on the bottom to make them look round."* Two rings made a
+# truncated cone standing on its widest part, which is the opposite of a vessel — a pot is narrow at
+# the foot, widest at the belly, and drawn back in at the rim. FACETED keeps two rings, so the rock
+# is unchanged in shape.
+#
+# These numbers are a FEEL value, not a measurement. Nothing pins them, and there is no runtime knob
+# because the mesh is baked — rounder is a line here plus a regenerate.
+const PRISM_PROFILE: Dictionary[GridUtils.PropShape, Array] = {
+	GridUtils.PropShape.FACETED: [Vector2(0.0, 1.0), Vector2(1.0, 0.55)],
+	GridUtils.PropShape.ROUND: [
+		Vector2(0.0, 0.32), Vector2(0.18, 0.80), Vector2(0.50, 1.0),
+		Vector2(0.80, 0.78), Vector2(1.0, 0.66),
+	],
+}
+
+
 # The patch-widths every solid tile in this source needs, in walk order: a SIDE run then a TOP.
 # Measured ahead of the walk because the atlas has to be allocated at its finished height before the
 # first UV inside the walk is taken.
@@ -626,20 +645,10 @@ func _pack_slots(widths: Array[int], columns: int, patch: Vector2i, base_y: int)
 
 # The art's opaque extent inside its tile, in tile-local pixels. This is what sizes a prop's mesh:
 # a sprite drawn small in its cell should become a small object, not a cell-wide box of air.
-# Falls back to the whole tile when nothing is opaque, so a blank tile cannot produce a zero mesh.
+# BoardMirror owns the rule because it asks the same question at runtime to PLANT a billboard --
+# one answer, two stacks, the shape tile_item_name already has.
 func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
-	var min_p := region.size
-	var max_p := Vector2i(-1, -1)
-	for y in range(region.position.y, region.end.y):
-		for x in range(region.position.x, region.end.x):
-			if image.get_pixel(x, y).a < 0.5:
-				continue
-			var p := Vector2i(x, y) - region.position
-			min_p = Vector2i(mini(min_p.x, p.x), mini(min_p.y, p.y))
-			max_p = Vector2i(maxi(max_p.x, p.x), maxi(max_p.y, p.y))
-	if max_p.x < 0:
-		return Rect2i(Vector2i.ZERO, region.size)
-	return Rect2i(min_p, max_p - min_p + Vector2i.ONE)
+	return BoardMirror.opaque_bounds(image, region)
 
 
 # How many shades a generated face is allowed to use, and how coarsely colours are bucketed when
@@ -791,9 +800,9 @@ func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_p
 		GridUtils.PropShape.CUBE:
 			return _block_mesh(mat, mat, top_uv, _uv_rect(side_px, atlas_size), size, h * 0.5)
 		GridUtils.PropShape.ROUND:
-			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.78, 0.0, rng, shape)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.0, rng, shape)
 		_:
-			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.55, 0.30, rng, shape)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.30, rng, shape)
 
 
 # A tapered prism standing on y = 0 — the faceted lump and the round pot are the same solid with
@@ -806,9 +815,12 @@ func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_p
 # and whether that reads as a continuous wrap (ROUND) or as distinct stone faces (FACETED) is
 # decided by the texture rather than by this loop.
 func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: Rect2i,
-		atlas_size: Vector2, size: Vector3, taper: float, jitter: float,
+		atlas_size: Vector2, size: Vector3, jitter: float,
 		rng: RandomNumberGenerator, shape: GridUtils.PropShape) -> ArrayMesh:
 	var sides := _facets_of(shape)
+	# Packed on read: a PackedVector2Array literal is not a constant expression, and the packed form
+	# is what makes every profile[i] a typed Vector2 rather than a Variant.
+	var profile := PackedVector2Array(PRISM_PROFILE[shape])
 	var facet_w := side_px.size.x / sides
 	# Each slice is inset by its own half texel. Insetting the strip once instead would leave every
 	# internal boundary sampling half a texel of the neighbouring facet.
@@ -816,29 +828,41 @@ func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: 
 	for i in sides:
 		facet_uv.append(_uv_rect(Rect2i(side_px.position + Vector2i(i * facet_w, 0),
 				Vector2i(facet_w, side_px.size.y)), atlas_size))
-	var side_uv := _uv_rect(side_px, atlas_size)   # the bottom cap, which no facet owns
-	var base: Array[Vector3] = []
-	var cap: Array[Vector3] = []
+
+	# rings[r][i] — one ring per profile entry. The wobble is drawn ONCE per angle and reused down
+	# the whole column, so a jittered facet stays a straight facet instead of twisting between rings.
+	var rings: Array[PackedVector3Array] = []
+	for r in profile.size():
+		rings.append(PackedVector3Array())
 	for i in sides:
 		var a := TAU * float(i) / float(sides)
 		var wobble := 1.0 - rng.randf() * jitter
-		var x := cos(a) * size.x * 0.5 * wobble
-		var z := sin(a) * size.z * 0.5 * wobble
-		base.append(Vector3(x, 0.0, z))
-		var t := taper * (1.0 - rng.randf() * jitter)
-		cap.append(Vector3(x * t, size.y, z * t))
+		for r in profile.size():
+			var step := profile[r]
+			rings[r].append(Vector3(cos(a) * size.x * 0.5 * step.y * wobble, step.x * size.y,
+					sin(a) * size.z * 0.5 * step.y * wobble))
 
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
-	var center := Vector3(0.0, size.y, 0.0)
+	# BOTH caps live on the top surface (#274 follow-up). The bottom one is invisible, both surfaces
+	# share one material on a prism, and it leaves the side surface meaning exactly "the facets" —
+	# which is what lets the facet-slicing test derive its count from the mesh rather than from the
+	# table it is checking.
+	var top_ring := rings[rings.size() - 1]
+	var base_ring := rings[0]
+	var apex := Vector3(0.0, size.y, 0.0)
+	var foot := Vector3(0.0, base_ring[0].y, 0.0)
 	for i in sides:
 		var j := (i + 1) % sides
 		# Increasing angle, matching the winding _block_mesh's top quad uses.
-		_cap_vertex(st, center, size, top_uv, Vector3.UP)
-		_cap_vertex(st, cap[i], size, top_uv, Vector3.UP)
-		_cap_vertex(st, cap[j], size, top_uv, Vector3.UP)
+		_cap_vertex(st, apex, size, top_uv, Vector3.UP)
+		_cap_vertex(st, top_ring[i], size, top_uv, Vector3.UP)
+		_cap_vertex(st, top_ring[j], size, top_uv, Vector3.UP)
+		_cap_vertex(st, foot, size, top_uv, Vector3.DOWN)
+		_cap_vertex(st, base_ring[j], size, top_uv, Vector3.DOWN)
+		_cap_vertex(st, base_ring[i], size, top_uv, Vector3.DOWN)
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
@@ -846,18 +870,24 @@ func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: 
 	st.set_material(side_mat)
 	for i in sides:
 		var j := (i + 1) % sides
-		# j is screen-LEFT of i seen from outside, so this is the clockwise order _quad wants.
-		var normal := (base[i] - base[j]).cross(cap[j] - base[j]).normalized()
-		if normal.dot(base[i] + base[j]) < 0.0:
-			normal = -normal   # the jitter can flip a degenerate face; point it outward
-		_quad(st, cap[j], cap[i], base[i], base[j], normal, facet_uv[i])
-	for i in sides:
-		var j := (i + 1) % sides
-		_cap_vertex(st, Vector3.ZERO, size, side_uv, Vector3.DOWN)
-		_cap_vertex(st, base[j], size, side_uv, Vector3.DOWN)
-		_cap_vertex(st, base[i], size, side_uv, Vector3.DOWN)
+		for b in profile.size() - 1:
+			var lower := rings[b]
+			var upper := rings[b + 1]
+			# j is screen-LEFT of i seen from outside, so this is the clockwise order _quad wants.
+			var normal := (lower[i] - lower[j]).cross(upper[j] - lower[j]).normalized()
+			if normal.dot(lower[i] + lower[j]) < 0.0:
+				normal = -normal   # the jitter can flip a degenerate face; point it outward
+			_quad(st, upper[j], upper[i], lower[i], lower[j], normal,
+					_band_uv(facet_uv[i], profile[b].x, profile[b + 1].x))
 	st.commit(mesh)
 	return mesh
+
+
+# A facet's slice narrowed to one band of the profile. v runs DOWN the texture while the profile
+# runs UP the mesh, so the band's top edge is the higher fraction.
+func _band_uv(facet: Rect2, low: float, high: float) -> Rect2:
+	return Rect2(facet.position.x, facet.position.y + facet.size.y * (1.0 - high),
+			facet.size.x, facet.size.y * (high - low))
 
 
 # One vertex of a cap fan, its UV taken from where the point sits in the footprint.
