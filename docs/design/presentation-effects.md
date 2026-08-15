@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #280 (2026-08-15).**
+**Canon checked through #286 (2026-08-15).**
 
 ---
 
@@ -77,12 +77,27 @@ That sentence is the convention, and it is the same split Octopath uses (billboa
 | Form | What it is | Renders as | Art it needs |
 |---|---|---|---|
 | **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, grass, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
-| **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | fixed-yaw quad, facing authored per piece | one front-on sprite **plus a facing** |
+| **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | thin slab, run authored per piece | one front-on sprite **plus a facing** |
 | **Block** | volumetric — crates, chests, rocks, barrels | real geometry standing on the ground block | a **top** texture and a **side** texture, minimum |
 
-**The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam. #263's oriented plane lands here as a further member.
+**The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam; `PLANE` is #263's oriented plane.
 
-**Shipped: billboards (#255) and blocks (#264).** The oriented plane is still unbuilt — it needs no new art but does need a piece→facing mapping, which is a *content convention* (Law #4's named hazard) and so is its own decision rather than a detail.
+**All three forms are shipped: billboards (#255), blocks (#264), oriented planes (#263).**
+
+#### The facing is a SET OF EDGES, and it is a second column (#263, 2026-08-15)
+
+`prop_shape` says what form a tile takes; it cannot say which way that form points, so the facing is its own authored column, `wall_edges` — a declared second representation per Law #4, because the two answer different questions. Folding direction into the shape would mean `PLANE_EW` / `PLANE_NS` / `PLANE_CORNER_ES`… for one concept.
+
+**It is a mask of cardinal edges, not a yaw**, because the pieces an artist draws include corners and a corner reaches *two* directions. Each authored edge becomes a half-length slab from the cell centre out to that edge, so **a straight run is two collinear halves — one wall — and a corner is two perpendicular halves — an L. One rule, no corner special case**, and it falls out that each half wears the matching half of its tile's art, so a straight run reassembles the whole sprite un-squashed.
+
+**The facing is per-TILE, and the payoff is that nothing at runtime holds a yaw**: the meshlib item is already keyed per tile, so the generator bakes each piece's orientation into its own mesh and `BoardMirror` plants a fence with the same `_make_prop_block` it plants a crate with. If a sheet ever needs one generic fence tile placed in both axes, the override belongs in the reader (`GridUtils.wall_edges_at_cell`), not in a second column — at the cost of that zero-runtime property.
+
+Two things were **measured** on the way, and both reversed an assumption the issue was filed on:
+
+- **Godot's own alternative-tile transform flags cannot serve.** They were the recommended candidate — an existing-but-unused mechanism rather than an invented convention — but no authored board uses one (0 non-zero alternatives in 5,712 cells across all three), the in-game Tile Brush cannot write one, and a transform bit rotates the **2D** sprite too, so it cannot carry a 3D-only facing without drawing a front-on palisade lying on its side.
+- **Not every piece's art can be a wall face.** In this sheet the east-west pieces are drawn face-on (15×13, top-aligned) and are worn directly, keeping the #250 rule that the 3D shows the game's tiles. The north-south pieces are drawn edge-on — 7×16, successive posts stacked *down-screen* — which is a top-down foreshortening, not a picture of a wall; on a plane facing east it renders as a tower of logs. Those faces are **generated in the tile's own measured palette**, the same reconciliation #274 already made for solid props.
+
+A plane is also the one prop form NOT sized by its art's opaque bounds: it is thin by definition in the axis it does not run along, so its thickness and height are generator constants. Being baked, they get no Look-tab knob — the same call `PRISM_PROFILE` records.
 
 ### Block props are GENERATED, not commissioned (#264 + #274, 2026-08-15)
 

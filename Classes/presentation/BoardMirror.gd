@@ -32,7 +32,11 @@ class_name BoardMirror
 #   CUBE/FACETED/ROUND  real geometry from the meshlib, sides wearing the tile's own art and a
 #              GENERATED top face. Volumetric things: crates, chests, rocks, barrels — the class the
 #              dev judged "so odd" as billboards, because a 3/4 drawing has no top to show.
-# Same per-cell reconcile for both, and the lantern borrows the torch's light.
+#   PLANE      real geometry too, but thin and DIRECTIONAL: a fence (#263). Which way it runs is the
+#              tile's authored `wall_edges` mask, and the generator bakes that into the tile's OWN
+#              mesh — so nothing here holds a yaw, and a fence is planted by the same
+#              _make_prop_block that plants a crate.
+# Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. Which cells burn is

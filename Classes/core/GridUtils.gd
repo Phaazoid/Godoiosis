@@ -91,14 +91,37 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 # built: BILLBOARD is a camera-facing sprite (thin, symmetric -- lamps, trees), the rest are real
 # geometry (volumetric -- crates, rocks, barrels). The split is the dev's measured ruling on #255:
 # "anything that's thin already works in this style"; blocky things "really want to be textures on
-# a 3D model". #263's oriented plane -- thin but DIRECTIONAL -- lands here as a further member.
+# a 3D model". PLANE is #263's oriented plane -- thin but DIRECTIONAL, a fence -- and it says only
+# the FORM; which way it runs is the separate wall_edges question below.
 #
 # APPEND-ONLY: the values are persisted in the tileset.
-enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND }
+enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE }
 
 # Which shapes are real geometry rather than a sprite. Declared as a set so the renderer and the
 # meshlib generator agree on what needs a mesh built for it, and adding a member is one line.
-const SOLID_SHAPES: Array[PropShape] = [PropShape.CUBE, PropShape.FACETED, PropShape.ROUND]
+const SOLID_SHAPES: Array[PropShape] = [PropShape.CUBE, PropShape.FACETED, PropShape.ROUND,
+		PropShape.PLANE]
+
+# Which cell EDGES a PLANE's wall runs out to (#263). A FLAG SET rather than a yaw, because a corner
+# piece reaches TWO -- fence_tl runs east and south -- and one angle cannot say that. Each authored
+# edge becomes a half-length slab from the cell centre out to it, so a straight run is two collinear
+# halves (one wall) and a corner is two perpendicular ones (an L): one rule, no corner special case.
+#
+# A SECOND authored column beside prop_shape rather than more members on it, declared per Law #4:
+# they answer different questions -- what form, and which way it runs -- and folding direction into
+# the shape would mean PLANE_EW/PLANE_NS/PLANE_CORNER_ES... for one concept. The four cardinal
+# VECTORS are deliberately not stored here: turning an edge into an offset is mesh knowledge, so that
+# table lives beside the builder that consumes it (gen_lookdev_assets.gd), the way BoardMirror keeps
+# RAMP_MESH_HIGH_SIDE beside the wedge it orients.
+#
+# APPEND-ONLY, and stored as a MASK -- bit values, not an index.
+enum WallEdge { NORTH = 1, EAST = 2, SOUTH = 4, WEST = 8 }
+
+# The two axes, as masks. Pure derivations of the enum above, so they live WITH it rather than in
+# either reader: the meshlib generator asks which axis a slab runs along to decide whether it can wear
+# the tile's own sprite, and the presentation suite asks the same question to check that it did.
+const NS_EDGES := WallEdge.NORTH | WallEdge.SOUTH
+const EW_EDGES := WallEdge.EAST | WallEdge.WEST
 
 
 # Read by the 3D mirror (which stands the tile up in the right form) and by the meshlib generator
@@ -113,6 +136,22 @@ static func prop_shape_of(data: TileData) -> PropShape:
 
 static func prop_shape_at_cell(grid: TileMapLayer, cell: Vector2i) -> PropShape:
 	return prop_shape_of(grid.get_cell_tile_data(cell))
+
+
+# The WallEdge mask this tile carries, 0 when unauthored. Read by the meshlib generator, which bakes
+# the orientation into that tile's own mesh -- so nothing at runtime holds a yaw, and BoardMirror
+# plants a fence with the same _make_prop_block it plants a crate with.
+#
+# This is the seam if a facing ever has to vary per PLACEMENT (a sheet with one generic fence tile
+# used in both axes): the override lands HERE, in the reader, rather than as a second column.
+static func wall_edges_of(data: TileData) -> int:
+	if data == null or not data.has_custom_data("wall_edges"):
+		return 0
+	return data.get_custom_data("wall_edges")
+
+
+static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
+	return wall_edges_of(grid.get_cell_tile_data(cell))
 
 
 # Does this tile stand on the ground rather than BE it? The question #255 asked, now derived from
