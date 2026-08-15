@@ -142,9 +142,20 @@ func load_mission(path: String) -> void:
 # would otherwise eat the first repaint on a same-coordinate cell.
 func _on_board_loaded() -> void:
 	rebuild()
+	_apply_board_look()   # before fit_camera: the preset carries pitch/FOV, which framing reads
 	fit_camera()
 	_pointer_cell = BoardSpace.NO_CELL
 	_overlays.clear_all()
+
+
+# A board wears the look it names (#253 part 2). Deliberately "apply this preset" rather than
+# "apply the mission's look": weather (#277) and battle-effect flashes (#278) are meant to drive
+# the same seam later, and naming it after its first caller would fork a second applier.
+func _apply_board_look() -> void:
+	var preset := LookKnobs.resolve(game.scenario_manager.current_look_preset)
+	if preset == null:
+		return   # resolve already said so loudly; render whatever is loaded rather than crash
+	LookKnobs.apply(self, preset)
 
 
 func rebuild() -> void:

@@ -45,7 +45,7 @@ func after_test() -> void:
 # --- Helpers ---------------------------------------------------------------------------
 
 func _knob(node: String, prop: String) -> Dictionary:
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		if knob["node"] == node and knob["prop"] == prop:
 			return knob
 	return {}
@@ -78,7 +78,7 @@ func test_battle3d_hands_the_look_tab_its_host() -> void:
 
 func test_every_knob_resolves_against_the_real_scene() -> void:
 	var unresolved: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		if typeof(_look.read(knob)) == TYPE_NIL:
 			unresolved.append("%s:%s" % [knob["node"], knob["prop"]])
 	assert_array(unresolved).override_failure_message(
@@ -88,7 +88,7 @@ func test_every_knob_resolves_against_the_real_scene() -> void:
 func test_a_written_knob_survives_the_next_frame() -> void:
 	var wanted: Array = []
 	var inert: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		var value: Variant = _look.read(knob)
 		if typeof(value) == TYPE_NIL:
 			continue
@@ -158,7 +158,7 @@ func _find_row(node: Node, label_text: String) -> HBoxContainer:
 # regression rather than an oversight to notice later.
 func test_every_knob_has_a_tooltip() -> void:
 	var untipped: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
 		if String(knob.get("tip", "")).strip_edges() == "":
 			untipped.append(knob["label"])
 	assert_array(untipped).override_failure_message(
@@ -168,7 +168,7 @@ func test_every_knob_has_a_tooltip() -> void:
 # A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen.
 func test_no_tooltip_line_runs_too_long() -> void:
 	var wide: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
 		for line: String in _look.tip_for(knob).split("\n"):
 			if line.length() > 90:   # the wrapper targets 74; this catches a wrap that never ran
 				wide.append(knob["label"])
@@ -191,7 +191,7 @@ func test_the_tooltip_reaches_the_slider_you_hover() -> void:
 # indistinguishable from the knob not existing.
 func test_every_knob_group_has_a_sub_tab() -> void:
 	var orphans: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
 		var group: String = knob["group"]
 		if not LookTool.GROUP_TABS.has(group) and not orphans.has(group):
 			orphans.append(group)
@@ -203,7 +203,7 @@ func test_every_knob_group_has_a_sub_tab() -> void:
 # broken mapping shows up as a knob whose row exists nowhere.
 func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
 	var missing: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		if knob.has("options") or typeof(_look.read(knob)) == TYPE_BOOL:
 			continue   # dropdowns and checkboxes are not HBox-with-label rows
 		if _row_for(knob["label"]) == null:
@@ -296,7 +296,7 @@ func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
 		var stored: Variant = _look.read_layer(knob)
 		# An inert write would record the UNCHANGED colour as "wanted" and then sail through the
 		# survival check below, testing nothing. Same guard slice 1's property law carries.
-		if LookTool.same_value(stored, before):
+		if LookKnobs.same_value(stored, before):
 			inert.append(knob["label"])
 			continue
 		wanted.append({"knob": knob, "want": stored})
@@ -307,7 +307,7 @@ func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
 	var reverted: Array[String] = []
 	for entry: Dictionary in wanted:
 		var knob: Dictionary = entry["knob"]
-		if not LookTool.same_value(_look.read_layer(knob), entry["want"]):
+		if not LookKnobs.same_value(_look.read_layer(knob), entry["want"]):
 			reverted.append(knob["label"])
 	assert_array(reverted).override_failure_message(
 		"Layers the mirror writes back (a knob here would lie): %s" % ", ".join(reverted)).is_empty()
@@ -383,7 +383,7 @@ func test_a_vector_component_knob_emits_the_whole_vector() -> void:
 
 
 func test_reset_puts_every_knob_back_to_its_authored_value() -> void:
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		var value: Variant = _look.read(knob)
 		if typeof(value) != TYPE_NIL:
 			_look.write(knob, _nudged(knob, value))
@@ -402,7 +402,7 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 	add_child(orphan)
 	await await_idle_frame()
 	assert_bool(orphan.has_host()).is_false()
-	assert_object(orphan.read(LookTool.KNOBS[0])).is_null()
+	assert_object(orphan.read(LookKnobs.KNOBS[0])).is_null()
 	assert_dict(orphan.changed_values()).is_empty()
 	orphan.queue_free()
 	await await_idle_frame()
@@ -432,7 +432,7 @@ const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height"]
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
-	for knob: Dictionary in LookTool.KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		var group: String = knob["group"]
 		var label: String = knob["label"]
 		var belongs := true
@@ -446,7 +446,7 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 		elif group == "Effects":
 			belongs = not EFFECTS_NOT_MOOD.has(label)   # dev chrome and prop geometry are not mood
 			because = "'%s' is not scene mood" % label if not belongs else "flame lights the world"
-		assert_bool(captured.has(LookTool.preset_key(knob))).override_failure_message(
+		assert_bool(captured.has(LookKnobs.preset_key(knob))).override_failure_message(
 			"'%s' should%s be captured -- %s" % [label, "" if belongs else " NOT", because]).is_equal(belongs)
 
 
@@ -456,8 +456,8 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
 	var in_scope: Array[String] = []
-	for knob: Dictionary in LookTool.preset_knobs():
-		in_scope.append(LookTool.preset_key(knob))
+	for knob: Dictionary in LookKnobs.preset_knobs():
+		in_scope.append(LookKnobs.preset_key(knob))
 	assert_int(captured.size()).is_equal(in_scope.size())
 	for key: String in captured:
 		assert_bool(in_scope.has(key)).override_failure_message(
@@ -468,9 +468,9 @@ func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void
 # anything, the new one is in nobody's list, and a camera-handling value quietly joins presets.
 func test_every_excluded_key_names_a_real_knob() -> void:
 	var live_keys: Array[String] = []
-	for knob: Dictionary in LookTool.KNOBS:
-		live_keys.append(LookTool.preset_key(knob))
-	for key: String in LookTool.PRESET_EXCLUDED:
+	for knob: Dictionary in LookKnobs.KNOBS:
+		live_keys.append(LookKnobs.preset_key(knob))
+	for key: String in LookKnobs.PRESET_EXCLUDED:
 		assert_bool(live_keys.has(key)).override_failure_message(
 			"PRESET_EXCLUDED names '%s', which is not a knob -- it has silently stopped excluding anything" % key).is_true()
 
@@ -484,15 +484,15 @@ func test_a_captured_preset_round_trips_through_apply() -> void:
 	var authored: Variant = _look.read(knob)
 	_look.write(knob, _nudged(knob, authored))
 	var accepted: Variant = _look.read(knob)
-	assert_bool(LookTool.same_value(accepted, authored)).override_failure_message(
+	assert_bool(LookKnobs.same_value(accepted, authored)).override_failure_message(
 		"the tuning write never registered, so this case would pass against an inert apply").is_false()
 
 	var preset := _look.capture_preset("roundtrip")
-	_look._load_authored()
-	assert_bool(LookTool.same_value(_look.read(knob), authored)).is_true()
+	_look._on_default_pressed()
+	assert_bool(LookKnobs.same_value(_look.read(knob), authored)).is_true()
 
 	_look.apply_preset(preset)
-	assert_bool(LookTool.same_value(_look.read(knob), accepted)).is_true()
+	assert_bool(LookKnobs.same_value(_look.read(knob), accepted)).is_true()
 	await await_idle_frame()
 
 
@@ -503,15 +503,15 @@ func test_reset_returns_to_the_loaded_preset_not_the_authored_scene() -> void:
 	var authored: Variant = _look.read(knob)
 	_look.write(knob, _nudged(knob, authored))
 	var preset := _look.capture_preset("mood")
-	_look._load_authored()
+	_look._on_default_pressed()
 	_look.apply_preset(preset)
 	var in_preset: Variant = _look.read(knob)
-	assert_bool(LookTool.same_value(in_preset, authored)).is_false()
+	assert_bool(LookKnobs.same_value(in_preset, authored)).is_false()
 
 	_look.write(knob, _nudged(knob, in_preset))
-	assert_bool(LookTool.same_value(_look.read(knob), in_preset)).is_false()
+	assert_bool(LookKnobs.same_value(_look.read(knob), in_preset)).is_false()
 	_look._on_reset_pressed()
-	assert_bool(LookTool.same_value(_look.read(knob), in_preset)).is_true()
+	assert_bool(LookKnobs.same_value(_look.read(knob), in_preset)).is_true()
 	await await_idle_frame()
 
 
@@ -521,7 +521,7 @@ func test_copy_values_measures_the_authored_scene_even_with_a_preset_loaded() ->
 	var knob := _knob("WorldEnvironment", "environment:tonemap_exposure")
 	_look.write(knob, _nudged(knob, _look.read(knob)))
 	var preset := _look.capture_preset("mood")
-	_look._load_authored()
+	_look._on_default_pressed()
 	_look.apply_preset(preset)
 	var entries: Dictionary = _look.changed_values()["Battle3D.tscn -> WorldEnvironment.environment"]
 	assert_dict(entries).contains_keys(["tonemap_exposure"])
@@ -534,12 +534,12 @@ func test_a_preset_missing_a_knob_leaves_it_authored_and_says_so() -> void:
 	var knob := _knob("Sun", "shadow_opacity")
 	var authored: Variant = _look.read(knob)
 	var preset := _look.capture_preset("partial")
-	preset.values.erase(LookTool.preset_key(knob))
+	preset.values.erase(LookKnobs.preset_key(knob))
 	_look.write(knob, _nudged(knob, authored))   # so "left at authored" is a real claim
 
 	var report := _look.apply_preset(preset)
 	assert_array(report["missing"]).contains([knob["label"]])
-	assert_bool(LookTool.same_value(_look.read(knob), authored)).override_failure_message(
+	assert_bool(LookKnobs.same_value(_look.read(knob), authored)).override_failure_message(
 		"a knob the preset predates must land on the authored value, not on the last look").is_true()
 	await await_idle_frame()
 
@@ -561,11 +561,29 @@ func test_update_refuses_a_preset_that_is_not_the_loaded_one() -> void:
 	assert_str(_look.update_block_reason()).is_not_empty()
 
 
-# The authored row is why falling back to index 0 is safe here while the same auto-select is a
-# trap everywhere else: row 0 is not a file, so it can never be a write target.
-func test_the_authored_row_is_never_a_write_target() -> void:
-	assert_str(_look._preset_dropdown.get_item_text(0)).is_equal(LookTool.AUTHORED_ENTRY)
-	_look._preset_dropdown.select(0)
-	_look._refresh_preset_buttons()
+# EVERY dropdown row is a file now that #253 part 2 gave the way back its own Default button, so
+# nothing may fall back to index 0 -- that row is a write target Update and Delete would aim at.
+# Part 1 shipped exactly that fallback and it was safe only because row 0 was the authored scene.
+func test_the_dropdown_selects_nothing_when_no_preset_is_loaded() -> void:
+	_look.refresh_preset_dropdown()
+	assert_int(_look._preset_dropdown.selected).override_failure_message(
+		"the dropdown fell back to a real preset file, which Update and Delete would then aim at"
+	).is_equal(-1)
 	assert_bool(_look._update_button.disabled).is_true()
 	assert_bool(_look._delete_button.disabled).is_true()
+
+
+# Default is the ONE way back (dev, 2026-08-15), replacing the "(authored scene)" row.
+func test_default_loads_the_fallback_look_and_becomes_the_baseline() -> void:
+	var knob := _knob("Sun", "light_energy")
+	var default_look := LookKnobs.default_preset()
+	assert_object(default_look).is_not_null()
+	_look.write(knob, _nudged(knob, _look.read(knob)))
+	_look._on_default_pressed()
+	var expected: Variant = default_look.values[LookKnobs.preset_key(knob)]
+	assert_bool(LookKnobs.same_value(_look.read(knob), expected)).is_true()
+	# ...and Reset now holds there rather than snapping somewhere else.
+	_look.write(knob, _nudged(knob, _look.read(knob)))
+	_look._on_reset_pressed()
+	assert_bool(LookKnobs.same_value(_look.read(knob), expected)).is_true()
+	await await_idle_frame()

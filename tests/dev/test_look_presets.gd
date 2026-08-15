@@ -37,17 +37,17 @@ func after_test() -> void:
 # The precondition every case below leans on. A scan that returned nothing would otherwise make
 # each loop pass by never running.
 func _names() -> Array[String]:
-	var names := LookTool.saved_presets()
+	var names := LookKnobs.saved_presets()
 	assert_array(names).override_failure_message(
-		"no presets found under %s -- every case in this file would pass vacuously" % LookTool.PRESET_DIR
+		"no presets found under %s -- every case in this file would pass vacuously" % LookKnobs.PRESET_DIR
 	).is_not_empty()
 	return names
 
 
 func _in_scope_keys() -> Array[String]:
 	var keys: Array[String] = []
-	for knob: Dictionary in LookTool.preset_knobs():
-		keys.append(LookTool.preset_key(knob))
+	for knob: Dictionary in LookKnobs.preset_knobs():
+		keys.append(LookKnobs.preset_key(knob))
 	return keys
 
 
@@ -55,7 +55,7 @@ func _in_scope_keys() -> Array[String]:
 
 func test_every_shipped_preset_loads_and_owns_its_filename() -> void:
 	for name: String in _names():
-		var preset := load(LookTool.preset_path(name)) as LookPreset
+		var preset := load(LookKnobs.preset_path(name)) as LookPreset
 		assert_object(preset).override_failure_message(
 			"%s did not load as a LookPreset" % name).is_not_null()
 		# The dropdown shows the FILENAME and Update writes back to it, so a preset_name that has
@@ -69,7 +69,7 @@ func test_every_shipped_preset_loads_and_owns_its_filename() -> void:
 func test_every_shipped_preset_names_every_in_scope_knob() -> void:
 	var expected := _in_scope_keys()
 	for name: String in _names():
-		var preset := load(LookTool.preset_path(name)) as LookPreset
+		var preset := load(LookKnobs.preset_path(name)) as LookPreset
 		var missing: Array[String] = []
 		for key: String in expected:
 			if not preset.values.has(key):
@@ -84,7 +84,7 @@ func test_every_shipped_preset_names_every_in_scope_knob() -> void:
 func test_no_shipped_preset_carries_an_out_of_scope_value() -> void:
 	var expected := _in_scope_keys()
 	for name: String in _names():
-		var preset := load(LookTool.preset_path(name)) as LookPreset
+		var preset := load(LookKnobs.preset_path(name)) as LookPreset
 		for key: String in preset.values:
 			assert_bool(expected.has(key)).override_failure_message(
 				"preset '%s' carries '%s', which a preset does not cover" % [name, key]).is_true()
@@ -94,13 +94,13 @@ func test_no_shipped_preset_carries_an_out_of_scope_value() -> void:
 # apply path have nothing to complain about", against the real scene the dev actually loads onto.
 func test_every_shipped_preset_applies_cleanly_to_the_real_scene() -> void:
 	for name: String in _names():
-		var preset := load(LookTool.preset_path(name)) as LookPreset
+		var preset := load(LookKnobs.preset_path(name)) as LookPreset
 		var report := _look.apply_preset(preset)
 		assert_array(report["missing"]).override_failure_message(
 			"applying '%s' left knobs at the authored value: %s" % [name, report["missing"]]).is_empty()
 		assert_array(report["unknown"]).override_failure_message(
 			"applying '%s' skipped dead keys: %s" % [name, report["unknown"]]).is_empty()
-	_look._load_authored()
+	_look._on_default_pressed()
 	# apply_preset rebuilds every row; a detached-then-queue_free'd node reads as a gdUnit orphan
 	# until a frame processes the queue (#215's lesson).
 	await await_idle_frame()

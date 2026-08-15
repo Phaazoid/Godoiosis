@@ -24,8 +24,10 @@ var _objective_warning: Label
 # and re-read their files on every load. OFF: the exact #87 mid-battle snapshot, cast included.
 # Ad-hoc units snapshot fully either way.
 var authored_save := true
+var _look_row: HBoxContainer
 
 const NO_ZONE_LABEL := "(no zone)"
+const NO_LOOK_LABEL := "(none - default)"
 
 func init(p_scenario_manager: ScenarioManager, p_game):
 	scenario_manager = p_scenario_manager
@@ -47,6 +49,35 @@ func init(p_scenario_manager: ScenarioManager, p_game):
 		+ "Use for save-and-resume of a fight in progress.\n\n"
 		+ "Bug reports (F3) ignore this and always snapshot.")
 	move_child(get_child(get_child_count() - 1), 0)
+	refresh_look_row()
+
+
+# The board's look (#253 part 2). Code-built and moved to the top, exactly like the checkbox above
+# -- the tab's fixed controls live in the .tscn, anything data-shaped is generated.
+func refresh_look_row() -> void:
+	if _look_row != null:
+		remove_child(_look_row)
+		_look_row.queue_free()
+	var options: Array[String] = [NO_LOOK_LABEL]
+	options.append_array(LookKnobs.saved_presets())
+	var current: String = scenario_manager.current_look_preset
+	# A board naming a since-deleted preset keeps the stale name selectable, so the binding stays
+	# VISIBLE rather than silently reading as "(none)" -- the same call the squad zone row makes.
+	if current != "" and not options.has(current):
+		options.append(current)
+	_look_row = DevWidgets.add_option(self, "Look preset", options,
+		current if current != "" else NO_LOOK_LABEL, _on_look_picked)
+	move_child(_look_row, 0)
+
+
+func _on_look_picked(picked: String) -> void:
+	scenario_manager.current_look_preset = "" if picked == NO_LOOK_LABEL else picked
+	# Apply live so the pick is visible at once, and route it through the Look tab so ITS baseline
+	# stays in step -- that tab is also the only thing here holding the pushed-in 3D host.
+	var overlay: DevOverlay = game.dev_overlay
+	if overlay == null or not overlay.look_tool.has_host():
+		return
+	overlay.look_tool.apply_preset(LookKnobs.resolve(scenario_manager.current_look_preset))
 
 # select_name is a dropdown-relative name ("fixtures/Foo"), not a path. Load and Save As hand it
 # whatever they just touched; the empty default re-selects what was already showing, so a rebuild
@@ -83,6 +114,7 @@ func refresh_on_show() -> void:
 	refresh_objectives()
 	refresh_ai_toggles()
 	refresh_loaded_label()
+	refresh_look_row()   # a board load changes which preset this board wears
 	# Aim the dropdown at the loaded scenario (dev ask 2026-08-11): with the load-gate it is the
 	# only target Update can act on, so finding it by hand every visit was pure friction. Nothing
 	# loaded leaves the selection alone; refresh_dropdown re-evaluates the Update button either way.
@@ -191,6 +223,7 @@ func _on_load_pressed() -> void:
 	refresh_ai_toggles()
 	refresh_dropdown(target)
 	refresh_loaded_label()
+	refresh_look_row()   # a board load changes which preset this board wears
 
 func _on_update_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
@@ -212,6 +245,7 @@ func _update_confirmed(target: String) -> void:
 	scenario_manager.save_scenario(target, status_label, authored_save)
 	refresh_dropdown(target)
 	refresh_loaded_label()
+	refresh_look_row()   # a board load changes which preset this board wears
 
 func _on_delete_pressed() -> void:
 	var target := DevWidgets.selected_name(scenario_dropdown)
@@ -240,6 +274,7 @@ func _on_save_as_pressed() -> void:
 	scenario_name_input.text = ""
 	refresh_dropdown(entered)
 	refresh_loaded_label()
+	refresh_look_row()   # a board load changes which preset this board wears
 
 func _on_load_dropdown_item_selected(_index: int) -> void:
 	_refresh_update_button()

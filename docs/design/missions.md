@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #144 (2026-08-11).**
+**Canon checked through #278 (2026-08-15).**
 
 ## What a mission is
 
@@ -17,6 +17,7 @@ The loop lives in four places, and the split is load-bearing:
 | **what a mission requires** | `ScenarioData.objectives` | Authored content, saved with the board. |
 | **where a requirement IS** | `ScenarioData.zones` (via `ZoneManager.Kind`) | Geometry. A capture point is a zone of size one. |
 | **who the computer plays** | `ScenarioData.ai_factions` (#150) | Authored content, saved with the board — same shelf as `objectives`. Commanding is hotseat-gated, so a mission that declares nobody hands the player its own enemies rather than stalling. |
+| **what it LOOKS like** | `ScenarioData.look_preset` (#253 part 2) | A preset NAME, not a `LookPreset` reference — a dangling `ext_resource` can fail the whole load rather than degrade, and a Resource field risks embedding the preset on save (#177's trap). Empty, or a name that no longer resolves, falls back to `Resources/DefaultLook.tres`, loudly. `battle3d` applies it off `board_loaded`; a flat 2D launch has no host and applies nothing. |
 
 Plus two UI surfaces: `MissionSelectScreen` (`ui/`) is the game's front door, and `MissionEndBanner` (`ui/`) is the card at the end.
 
