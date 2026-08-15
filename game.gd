@@ -317,11 +317,34 @@ func _on_left_click(cell: Vector2i) -> void:
 		GameState.PICKING_TARGET:
 			_click_picking_target(cell)
 
+# Right-click carries TWO meanings, and the open mode wins (#228, dev call): it leaves whatever
+# is open -- an aim, a move pick, a target pick -- and only from a board already at rest does it
+# undo the last order. One button unwinding in the exact reverse order the player built it up,
+# and it can never eat a queued order out from under someone mid-aim. Position-blind either way.
+# Both callers gate on _board_locked_for_player (_unhandled_input, battle3d._cancel), so this is
+# unreachable during an AI turn -- do not add a third guard here.
 func _on_right_click() -> void:
 	if game_state == GameState.CHOOSING_MOVE:
 		overlay_manager.clear_planned_path(selected_unit)
+	# Read BEFORE exiting, since exit_current_mode is what returns the board to rest.
+	var was_at_rest := game_state == _base_state()
 	exit_current_mode()
 	unit_info_panel.clear()   #TODO Add close button to this panel
+	if was_at_rest:
+		_pop_last_gesture()
+
+# The LIFO undo. Thin caller by design (Law #4): every removal goes through the queue panel's own
+# cancel, so the move-before-main cascade, the plan revalidate and the hold-only deactivation are
+# ITS answers, not a second set beside them. The has() guard is real, not belt-and-braces --
+# cancelling the last real order fires revert_if_only_hold, which clears the whole queue out from
+# under this loop, and a stale entry would otherwise re-queue a hold and reactivate the squad.
+func _pop_last_gesture() -> void:
+	var squad: Squad = squad_manager.active_squad
+	if squad == null:
+		return
+	for action in squad_manager.last_gesture_actions(squad):
+		if squad.action_queue.has(action):
+			_on_queue_cancel_requested(action)
 
 # Clicking a unit selects it and opens its action menu. Controlling enemies is deliberately
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.

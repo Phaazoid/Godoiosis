@@ -7,6 +7,14 @@ class_name BaseAction
 var actor: Unit
 var action_type: ActionType
 
+# Which orders were ONE player decision -- SquadManager.batching made durable, so a LIFO undo
+# (#228) can pop a group move whole. Stamped only by queue_action, the Law #3 chokepoint, so
+# 0 means "never went through it": the hold-position fillers, which are not orders anybody gave.
+# Declared second representation (Law #4): AttackAction.volley answers the same question for
+# RESOLVE-DERIVED actions inside a ResolvedPlan. In action_queue this is the authority -- a
+# volley never enters the queue.
+var batch_id := 0
+
 var execution_complete := false
 var is_valid := true
 var validation_errors: Array[String] = []

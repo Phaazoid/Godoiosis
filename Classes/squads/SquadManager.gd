@@ -24,6 +24,10 @@ var active_squad: Squad = null
 # ONLY safe while a batch stays synchronous — docs/performance.md has the invariants.
 var batching := false
 
+# Allocates BaseAction.batch_id -- the durable half of `batching`, so a LIFO undo (#228) can tell
+# a five-member formation from five separate orders. Pre-incremented, so 0 stays "unstamped".
+var _next_batch_id := 0
+
 # The live board the cohesion rule reads (#151) -- a Callable returning a FRESH BoardContext, never
 # a stored one: terrain state changes mid-battle (FROZEN water melts), and a cached board would
 # validate against a world that no longer exists. Wired once per bootstrap: game._ready -> _board,
@@ -243,6 +247,12 @@ func queue_action(squad: Squad, action: BaseAction) -> bool:
 		return false
 
 	active_squad = squad
+	# One gesture, one id: a batch wears the id its opener allocated, a lone order takes a fresh
+	# one. Stamped HERE because this is the only door a player order comes through (Law #3), which
+	# is exactly what leaves the hold-position fillers at 0 -- they call squad._queue_action direct.
+	if not batching:
+		_next_batch_id += 1
+	action.batch_id = _next_batch_id
 	squad._queue_action(action)
 	if batching:
 		return true   # the batch re-validates and redraws once, after the last order
@@ -355,6 +365,25 @@ func remove_action(squad: Squad, action: BaseAction):
 		return
 	validate_squad_plan(squad)
 	overlay_manager.redraw_planned_paths()
+
+# What one right-click undoes (#228): the most recent player GESTURE — a lone order normally, a
+# whole formation for a group move, since that is one decision. Hold-position fillers can never
+# BE the newest gesture: the player never gave them, and cancelling one only makes
+# cancel_move_for_unit queue another. Empty means there is nothing left to undo.
+func last_gesture_actions(squad: Squad) -> Array[BaseAction]:
+	var newest := 0
+	for action in squad.action_queue:
+		if action is MoveAction and (action as MoveAction).is_hold_position:
+			continue
+		newest = maxi(newest, action.batch_id)
+	if newest == 0:
+		return []
+
+	var gesture: Array[BaseAction] = []
+	for action in squad.action_queue:
+		if action.batch_id == newest:
+			gesture.append(action)
+	return gesture
 
 func squad_has_invalid_actions(squad: Squad) -> bool:
 	for action in squad.action_queue:
@@ -686,6 +715,9 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 
 	# One player action, so one fan-out. Note `batching` also covers the hold-position moves that
 	# setup_hold_move_actions queues when the squad first activates — those fire the same signal.
+	# The id is allocated BEFORE the window opens: queue_action only advances the counter when it
+	# is NOT batching, so every member of this formation stamps the one id (#228 pops it whole).
+	_next_batch_id += 1
 	batching = true
 	var queued: Array[MoveAction] = []
 	for move in moves:

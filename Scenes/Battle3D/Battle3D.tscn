@@ -91,4 +91,12 @@ offset_bottom = 28.0
 theme_override_font_sizes/font_size = 13
 text = "Battle3D mirror (stage 4a, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
 
+[node name="Checkout" type="Label" parent="UI" unique_id=1734820956]
+modulate = Color(1, 1, 1, 0.7)
+offset_left = 8.0
+offset_top = 26.0
+offset_right = 900.0
+offset_bottom = 44.0
+theme_override_font_sizes/font_size = 12
+
 [node name="Main" parent="." unique_id=933466344 instance=ExtResource("7")]

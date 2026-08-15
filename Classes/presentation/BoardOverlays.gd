@@ -104,7 +104,11 @@ func _ready() -> void:
 # Replaces the layer's cells wholesale (idempotent — calling twice with the same
 # set changes nothing; extras from a previous, larger set are hidden, not leaked).
 # FILL/BRACKET layers only — variant layers go through set_markers.
-func set_cells(layer: Layer, cells: Array[Vector3i]) -> void:
+#
+# `heights` is what lets a fill LIE ON a ramp rather than hang level through it (#281). Taken as a
+# parameter rather than held, the way BoardMirror.sync takes it: null reads as flat, which is what
+# the headless Play boards and the pooled-clear path both want.
+func set_cells(layer: Layer, cells: Array[Vector3i], heights: BoardHeights = null) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.FILL and spec["kind"] != Kind.BRACKET:
 		push_error("set_cells on a %s layer — use set_markers" % Kind.keys()[spec["kind"]])
@@ -117,13 +121,14 @@ func set_cells(layer: Layer, cells: Array[Vector3i]) -> void:
 		var marker := pool[i] as Node3D
 		if i < cells.size():
 			marker.visible = true
-			marker.position = _marker_position(spec, cells[i])
+			marker.transform = _marker_transform(spec, cells[i], heights)
 		else:
 			marker.visible = false
 
 
 # Replaces a variant layer wholesale: one entry per marker, {"pos": Vector3 (the
-# cell's top-face anchor), "texture": Texture2D, "modulate": Color}. Same
+# cell's top-face anchor), "texture": Texture2D, "modulate": Color, "basis": Basis
+# (optional — how the surface under it is tilted, identity on flat ground)}. Same
 # idempotent-pool contract as set_cells. SPRITE/BILLBOARD layers only.
 func set_markers(layer: Layer, markers: Array[Dictionary]) -> void:
 	var spec: Dictionary = LAYERS[layer]
@@ -215,10 +220,16 @@ func _pool_for(layer: Layer) -> Array:
 	return _markers[layer]
 
 
-func _marker_position(spec: Dictionary, cell: Vector3i) -> Vector3:
+# A BRACKET marks a cell VOLUME, so it keeps the centre and stays axis-aligned; a FILL is ground
+# markup and rides the surface, tilt included (#281). The clearance is applied along the surface's
+# OWN normal, so stacked coplanar layers stay parallel to what they sit on rather than shearing
+# apart on a slope.
+func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) -> Transform3D:
 	if spec["kind"] == Kind.BRACKET:
-		return BoardSpace.cell_center(cell)
-	return BoardSpace.standing_point(cell) + Vector3(0.0, _lift_of(spec), 0.0)
+		return Transform3D(Basis.IDENTITY, BoardSpace.cell_center(cell))
+	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(BoardSpace.flat(cell))
+	var surface := BoardSpace.lie_on(cell, rise)
+	return Transform3D(surface.basis, surface.origin + surface.basis.y * _lift_of(spec))
 
 
 # Per-sort spacing keeps coplanar stacked fills apart; render_priority (set at
@@ -237,14 +248,20 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 		sprite.texture = texture
 		sprite.modulate = tint
 		return
+	# Orientation and art scale are ONE write: a basis carries scale, so assigning them separately
+	# would have whichever came second wipe the other. Both are set unconditionally because the
+	# marker nodes are POOLED — a quad that was on a ramp and is now on flat ground, or that had art
+	# and now has none, would otherwise keep the tilt and the size of whatever it drew last.
 	var quad := node as MeshInstance3D
-	quad.position = pos + Vector3(0.0, _lift_of(spec), 0.0)
+	var tilt: Basis = marker.get("basis", Basis.IDENTITY)
+	var art := Vector3.ONE
+	if texture != null:
+		var size: Vector2 = texture.get_size() / ART_PIXELS_PER_CELL
+		art = Vector3(size.x, 1.0, size.y)
+	quad.transform = Transform3D(tilt * Basis.from_scale(art), pos + tilt.y * _lift_of(spec))
 	var material := quad.material_override as StandardMaterial3D
 	material.albedo_texture = texture
 	material.albedo_color = tint
-	if texture != null:
-		var art: Vector2 = texture.get_size() / ART_PIXELS_PER_CELL
-		quad.scale = Vector3(art.x, 1.0, art.y)
 
 
 func _make_marker(layer: Layer) -> Node3D:
