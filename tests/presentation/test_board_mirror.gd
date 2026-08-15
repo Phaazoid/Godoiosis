@@ -500,8 +500,8 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	if art.is_compressed():
 		art.decompress()
 
-	var prop := _tile_named("Rock")
-	assert_bool(not prop.is_empty()).override_failure_message("no Rock tile; the case is vacuous").is_true()
+	var prop := _tile_named("Tree")
+	assert_bool(not prop.is_empty()).override_failure_message("no Tree tile; the case is vacuous").is_true()
 	assert_bool(_regions_match(baked, art, source.get_tile_texture_region(prop.coords, 0))) \
 			.override_failure_message("the prop's own art is baked onto its top face — it will render twice") \
 			.is_false()
@@ -558,25 +558,26 @@ func test_the_lantern_stands_two_cells_tall() -> void:
 
 
 # Test the WIRE: a light table nothing reads looks exactly like a table with no entries. The
-# negative half is what gives it teeth — every prop lighting up would also pass the first.
-func test_the_lantern_carries_a_light_and_the_crate_does_not() -> void:
+# negative half is what gives it teeth — every prop lighting up would also pass the first, so the
+# pairing must be two things that BOTH stand up and differ only in whether they glow.
+func test_the_lantern_carries_a_light_and_the_tree_does_not() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
 	_game.game_state = _game.GameState.DEV_MODE
 	var lantern := _tile_named("Lantern")
-	var crate := _tile_named("Crate")
-	assert_bool(not lantern.is_empty() and not crate.is_empty()).override_failure_message(
-			"Lantern or Crate missing from the tileset; the case is vacuous").is_true()
+	var tree := _tile_named("Tree")
+	assert_bool(not lantern.is_empty() and not tree.is_empty()).override_failure_message(
+			"Lantern or Tree missing from the tileset; the case is vacuous").is_true()
 
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
 	_game.grid.set_cell(cells[0], lantern.source, lantern.coords)
-	_game.grid.set_cell(cells[1], crate.source, crate.coords)
+	_game.grid.set_cell(cells[1], tree.source, tree.coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_object(_light_under(mirror.prop_at(cells[0]))).override_failure_message(
 			"the lantern casts no light — LIT_PROPS is inert").is_not_null()
 	assert_object(_light_under(mirror.prop_at(cells[1]))).override_failure_message(
-			"the crate casts light — every prop is lit, so the table is not being consulted").is_null()
+			"the tree casts light — every prop is lit, so the table is not being consulted").is_null()
 
 
 # A prop REPLACED on a cell must be rebuilt, and a prop merely re-seen must be left standing.
