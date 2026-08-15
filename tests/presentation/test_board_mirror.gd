@@ -855,7 +855,7 @@ func _opaque_bounds(image: Image, region: Rect2i) -> Rect2i:
 
 # THE bug this issue exists for, stated directly. #264 put the whole texture on EVERY facet, because
 # that texture was the tile's sprite and a sprite cannot wrap -- so a 10-sided pot rendered as ten
-# overlapping pots. Every facet must now own a DISTINCT, contiguous, equal slice of the side strip.
+# overlapping copies of itself. Every facet must own a DISTINCT, contiguous, equal slice of the strip.
 #
 # The facet count is derived from the mesh rather than read from the generator's table: a prism's
 # side surface is one 6-vertex quad plus one 3-vertex bottom-cap triangle per facet, so the vertex

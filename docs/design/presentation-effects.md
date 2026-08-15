@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #274 (2026-08-15).**
+**Canon checked through #280 (2026-08-15).**
 
 ---
 
@@ -90,7 +90,7 @@ The block form looked blocked on art, and it was — but on *one face*. **The bl
 
 So the generator supplies the missing half. **Every face is generated in that sprite's own measured palette** — planks on a crate, staves on a pot, per-facet stone on a boulder — packed into extra rows of the same composited atlas the ground already uses, so the board is still one texture and no PNG is written (which would re-import to VRAM with mipmaps and bleed the atlas — the #250 trap).
 
-**The sides started as the sprite and that lasted one playtest (#274).** A sprite cannot *wrap*, so #264 put the whole sprite on every facet — and the dev's verdict was precise: *"the rocks and the pots need it most, their sprites do not map to their models."* A crate is a box, so a box-shaped drawing lands on its four sides tolerably; a ten-sided pot rendered as **ten overlapping pots**. Generating the strip fixes it structurally rather than cosmetically:
+**The sides started as the sprite and that lasted one playtest (#274).** A sprite cannot *wrap*, so #264 put the whole sprite on every facet — and the dev's verdict was precise: *"the rocks and the pots need it most, their sprites do not map to their models."* A crate is a box, so a box-shaped drawing lands on its four sides tolerably; a ten-sided barrel rendered as **ten overlapping copies of itself**. Generating the strip fixes it structurally rather than cosmetically:
 
 - **Each facet owns a distinct, equal, contiguous slice of the side strip**, inset by its own half texel. One UV rule for both prisms — whether the slices read as a continuous wrap (a pot) or as separate stone faces (a boulder) is decided by the *texture*, not by the mesh code.
 - A prism's strip is therefore one atlas patch **per facet**: slicing a single 16px patch into ten facets would leave 1.6 texels each.
@@ -98,7 +98,9 @@ So the generator supplies the missing half. **Every face is generated in that sp
 
 **This is the one place the 3D deliberately does NOT show the game's tile art**, which is worth declaring because #250's whole finding was the opposite. The reconciliation is that the *colours are still measured from that art* — a prop's palette is its own sprite's dominant shades, read back rather than invented — and that a volumetric object genuinely cannot wear one 3/4 drawing, which #264 measured rather than assumed. A billboard is the one form a sprite maps onto correctly, and billboards still wear theirs.
 
-**Material is not yet a question the data can answer.** Crate and chest are both `CUBE` and share one plank recipe; they are both wooden boxes, so that is honest until something complains. Note that `terrain_type` **cannot** be pressed into service for it — pot, chest, rock and lantern all carry `Terrain.Kind.ROCK` and crate carries no kind at all, the same counterexample set that stopped `stands_up` being inferred from kind in #255.
+**Material is not yet a question the data can answer.** Crate and chest are both `CUBE` and share one plank recipe; they are both wooden boxes, so that is honest until something complains. Note that `terrain_type` **cannot** be pressed into service for it — barrel, chest, rock and lantern all carry `Terrain.Kind.ROCK` and crate carries no kind at all, the same counterexample set that stopped `stands_up` being inferred from kind in #255.
+
+**The `ROUND` prop was authored `pot` until 2026-08-15**, and several dev quotes above still say so. The profile made it read as a barrel and he kept the reading rather than re-tuning toward a pot: *"those pots resemble barrels now. And I'm going to make the call — that's actually better. Pots were just a random texture in the sheet I was using. Barrels make more sense in the context."* Worth recording because it is the tile that changed to match the geometry, not the other way round — **the generated form settled what the content was**, which is a thing procedural greybox can do and a commission cannot.
 
 Two rules worth keeping:
 

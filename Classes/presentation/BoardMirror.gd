@@ -22,7 +22,7 @@ class_name BoardMirror
 # ONCE, standing, not also lying flat under itself — and this mirror plants the object on it:
 #   BILLBOARD  a camera-facing sprite. Thin, symmetric things: lamps, trees.
 #   CUBE/FACETED/ROUND  real geometry from the meshlib, sides wearing the tile's own art and a
-#              GENERATED top face. Volumetric things: crates, chests, rocks, pots — the class the
+#              GENERATED top face. Volumetric things: crates, chests, rocks, barrels — the class the
 #              dev judged "so odd" as billboards, because a 3/4 drawing has no top to show.
 # Same per-cell reconcile for both, and the lantern borrows the torch's light.
 #
