@@ -1,8 +1,8 @@
 # Presentation & effects — the HD-2D idea wall
 
-**Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real.
+**Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #255 (2026-08-15).**
+**Canon checked through #260 (2026-08-15).**
 
 ---
 
@@ -97,7 +97,7 @@ Proven Squeenix-style ingredients Stage 0 didn't include. All stage-5 material.
 - God rays through interior windows (volumetric fog + tight shafts).
 - Animated pixel water with real reflections and foam edges (Octopath 2's showpiece).
 - Weather: rain/snow with wet-tile specular response; per-preset lighting already exists to receive it.
-- Per-map color grades; the four look-dev presets are the seed.
+- Per-map color grades; the four look-dev presets are the seed. **The machinery is half-built:** the Look tab already tunes the whole grade live (tonemap, exposure, saturation, fog, sun), and [#253](https://github.com/Phaazoid/Godoiosis/issues/253) is the other half — saving a tuned set as a preset resource and attaching one to a mission, with a default preset when a mission names none. Dev rulings on it, 2026-08-14: a preset stores the **whole table** (a diff-preset would let a later scene re-tune silently re-skin every mission that never mentioned that knob), and the default preset becomes the authority at load, so `Battle3D.tscn`'s inline values stop being a second source of truth for "what does this board look like".
 - Camera micro-sway; tasteful, deterministic impact shake.
 - Emissive pixel art (see Conventions above).
 
