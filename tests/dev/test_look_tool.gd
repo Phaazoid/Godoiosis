@@ -19,9 +19,13 @@ const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 
 var _scene: Node3D
 var _look: LookTool
+# The reach colours are STATIC vars, i.e. process-global: a case that tunes one would leak into
+# every later case AND every later suite in the run. Snapshot and restore around each case.
+var _reach_snapshot: Array[Color] = []
 
 
 func before_test() -> void:
+	_reach_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE]
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property
@@ -32,6 +36,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	OverlayManager.ATTACK_MODULATE = _reach_snapshot[0]
+	OverlayManager.HEAL_ATTACK_MODULATE = _reach_snapshot[1]
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -129,15 +135,84 @@ func _slider_for(label_text: String) -> HSlider:
 	return _row_for(label_text).get_child(1) as HSlider
 
 
+# Walks the whole panel rather than one container: rows live under per-group SUB-TABS now, and a
+# search that knows the layout would need updating every time the layout does.
 func _row_for(label_text: String) -> HBoxContainer:
-	for row in _look._rows.get_children():
-		var box := row as HBoxContainer
-		if box == null:
-			continue
-		var label := box.get_child(0) as Label
-		if label != null and label.text == label_text:
-			return box
+	return _find_row(_look, label_text)
+
+
+func _find_row(node: Node, label_text: String) -> HBoxContainer:
+	for child in node.get_children():
+		var box := child as HBoxContainer
+		if box != null and box.get_child_count() > 0:
+			var label := box.get_child(0) as Label
+			if label != null and label.text == label_text:
+				return box
+		var found := _find_row(child, label_text)
+		if found != null:
+			return found
 	return null
+
+
+# The dev asked for a tooltip on every knob (2026-08-14), so a knob shipping without one is a
+# regression rather than an oversight to notice later.
+func test_every_knob_has_a_tooltip() -> void:
+	var untipped: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		if String(knob.get("tip", "")).strip_edges() == "":
+			untipped.append(knob["label"])
+	assert_array(untipped).override_failure_message(
+		"Knobs with no tooltip: %s" % ", ".join(untipped)).is_empty()
+
+
+# A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen.
+func test_no_tooltip_line_runs_too_long() -> void:
+	var wide: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		for line: String in _look.tip_for(knob).split("\n"):
+			if line.length() > 90:   # the wrapper targets 74; this catches a wrap that never ran
+				wide.append(knob["label"])
+				break
+	assert_array(wide).override_failure_message(
+		"Tooltips with an unwrapped line: %s" % ", ".join(wide)).is_empty()
+
+
+# The wire: the tip has to reach the control you actually hover, not just the row's label. A
+# slider has mouse_filter STOP, so Godot asks IT for the tooltip and never walks up to the label.
+func test_the_tooltip_reaches_the_slider_you_hover() -> void:
+	var knob := _knob("BoardOverlays", "fill_lift")
+	var slider := _slider_for(knob["label"])
+	assert_object(slider).is_not_null()
+	assert_str(slider.tooltip_text).is_equal(_look.tip_for(knob))
+	assert_str(slider.tooltip_text).is_not_empty()
+
+
+# Every group must land on a sub-tab. An unmapped group draws nowhere the dev would look, which is
+# indistinguishable from the knob not existing.
+func test_every_knob_group_has_a_sub_tab() -> void:
+	var orphans: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS + LookTool.LAYER_KNOBS:
+		var group: String = knob["group"]
+		if not LookTool.GROUP_TABS.has(group) and not orphans.has(group):
+			orphans.append(group)
+	assert_array(orphans).override_failure_message(
+		"Knob groups with no sub-tab (their rows would vanish): %s" % ", ".join(orphans)).is_empty()
+
+
+# Every row is reachable: the panel builds one container per tab and fills it from the map, so a
+# broken mapping shows up as a knob whose row exists nowhere.
+func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
+	var missing: Array[String] = []
+	for knob: Dictionary in LookTool.KNOBS:
+		if knob.has("options") or typeof(_look.read(knob)) == TYPE_BOOL:
+			continue   # dropdowns and checkboxes are not HBox-with-label rows
+		if _row_for(knob["label"]) == null:
+			missing.append(knob["label"])
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		if _row_for(knob["label"]) == null:
+			missing.append(knob["label"])
+	assert_array(missing).override_failure_message(
+		"Knobs with no row drawn anywhere: %s" % ", ".join(missing)).is_empty()
 
 
 # A colour knob is FOUR sliders and a swatch, not a picker. ColorPickerButton froze the dev window
@@ -187,6 +262,97 @@ func test_typing_a_colour_channel_moves_the_live_property_and_the_slider() -> vo
 	assert_float(slider.value).is_equal_approx(64.0, 0.001)   # the two never disagree
 
 
+# --- Board-markup colours (slice 2) --------------------------------------------------------
+
+func _layer_knob(key: String, value: Variant) -> Dictionary:
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		if knob.get(key) == value:
+			return knob
+	return {}
+
+
+func test_every_layer_knob_resolves() -> void:
+	var unresolved: Array[String] = []
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		if typeof(_look.read_layer(knob)) != TYPE_COLOR:
+			unresolved.append(knob["label"])
+	assert_array(unresolved).override_failure_message(
+		"Layer knobs pointing at nothing: %s" % ", ".join(unresolved)).is_empty()
+
+
+# THE LAW, and the reason the layer list is measured rather than chosen. `set_layer_modulate`
+# REPLACES a layer's albedo, so a layer something drives per frame would take a knob that
+# silently reverts. Two frames, because process_frame resumes this coroutine before any node
+# _process runs -- OverlayMirror._process is exactly what has to get a turn here.
+func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
+	var wanted: Array = []
+	var inert: Array[String] = []
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		if knob.has("reach"):
+			continue   # asserted separately below: the 2D owns it, so it round-trips differently
+		var before: Color = _look.read_layer(knob)
+		var target := Color(before.r, before.g, before.b, fposmod(before.a + 0.3, 1.0))
+		_look.write_layer(knob, target)
+		var stored: Variant = _look.read_layer(knob)
+		# An inert write would record the UNCHANGED colour as "wanted" and then sail through the
+		# survival check below, testing nothing. Same guard slice 1's property law carries.
+		if LookTool.same_value(stored, before):
+			inert.append(knob["label"])
+			continue
+		wanted.append({"knob": knob, "want": stored})
+	assert_array(inert).override_failure_message(
+		"Layer knobs that did not take a write at all: %s" % ", ".join(inert)).is_empty()
+	await await_idle_frame()
+	await await_idle_frame()
+	var reverted: Array[String] = []
+	for entry: Dictionary in wanted:
+		var knob: Dictionary = entry["knob"]
+		if not LookTool.same_value(_look.read_layer(knob), entry["want"]):
+			reverted.append(knob["label"])
+	assert_array(reverted).override_failure_message(
+		"Layers the mirror writes back (a knob here would lie): %s" % ", ".join(reverted)).is_empty()
+
+
+# ATTACK has no 3D-only value: the mirror pushes the 2D's modulate into the 3D every poll, so the
+# knob's real target is the 2D static var and BOTH stacks move. Asserted end to end.
+func test_the_attack_reach_knob_moves_both_stacks() -> void:
+	var knob := _layer_knob("reach", "ATTACK_MODULATE")
+	var tuned := Color(0.2, 0.4, 0.9, 0.6)
+	_look.write_layer(knob, tuned)
+	assert_that(OverlayManager.attack_reach_color(null)).is_equal(tuned)   # the authority
+	var om: OverlayManager = _scene.game.overlay_manager
+	assert_that(om.attack_overlay.modulate).is_equal(tuned)                # the 2D, refreshed
+	await await_idle_frame()
+	await await_idle_frame()
+	var overlays := _scene.get_node("BoardOverlays") as BoardOverlays
+	assert_that(overlays.layer_modulate(BoardOverlays.Layer.ATTACK)).is_equal(tuned)   # the 3D
+
+
+func test_copy_values_emits_a_paste_ready_layers_row() -> void:
+	var knob := _layer_knob("layer", BoardOverlays.Layer.MOVE)
+	_look.write_layer(knob, Color(1, 1, 0, 0.35))
+	var entries: Dictionary = _look.changed_values()["BoardOverlays.gd -> LAYERS"]
+	assert_str(entries["MOVE"]).is_equal(
+		'Layer.MOVE: {"color": Color(1.0, 1.0, 0.0, 0.35), "sort": 0, "kind": Kind.FILL},')
+
+
+func test_copy_values_emits_a_static_var_line_for_a_reach_colour() -> void:
+	var knob := _layer_knob("reach", "ATTACK_MODULATE")
+	_look.write_layer(knob, Color(0.2, 0.4, 0.9, 0.6))
+	var entries: Dictionary = _look.changed_values()["OverlayManager.gd"]
+	assert_str(entries["ATTACK_MODULATE"]).is_equal(
+		"static var ATTACK_MODULATE := Color(0.2, 0.4, 0.9, 0.6)")
+
+
+func test_reset_restores_every_layer_colour() -> void:
+	for knob: Dictionary in LookTool.LAYER_KNOBS:
+		_look.write_layer(knob, Color(0.1, 0.2, 0.3, 0.4))
+	assert_dict(_look.changed_values()).is_not_empty()
+	_look._on_reset_pressed()
+	assert_dict(_look.changed_values()).is_empty()
+	await await_idle_frame()   # the rebuild's detached rows, or they read as orphans
+
+
 # --- The handoff --------------------------------------------------------------------------
 
 func test_nothing_is_reported_changed_until_something_moves() -> void:
@@ -211,7 +377,9 @@ func test_a_vector_component_knob_emits_the_whole_vector() -> void:
 	_look.write(knob, _nudged(knob, _look.read(knob)))
 	var entries: Dictionary = _look.changed_values()["Battle3D.tscn -> BoardMirror"]
 	assert_dict(entries).contains_keys(["flame_size"])
-	assert_str(entries["flame_size"]).starts_with("Vector2(")
+	# The stored value is the finished paste LINE, not a bare literal (slice 2 unified both
+	# knob kinds on that, since a layer colour has no "prop = value" shape to build from).
+	assert_str(entries["flame_size"]).starts_with("flame_size = Vector2(")
 
 
 func test_reset_puts_every_knob_back_to_its_authored_value() -> void:
