@@ -41,6 +41,7 @@ The view **opens close on your own squad**, not on the whole board (`opening_vie
 | Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile — works in **both** views; the 3D one previews the real block under the cursor |
 | Right-click | (DEV_MODE, Tile Brush active) Erase a tile. In the 3D view this is why orbit steps aside to middle-drag while the brush is armed |
 | Mouse wheel | (DEV_MODE, Tile Brush in **Elevation** mode) Raise / lower the level the brush paints at ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)). Negative levels are dips. Inert in every other paint mode; the tab's *Reset to flat (0)* button returns the brush to level 0 with no ramp. Entering Elevation mode lights the F5 readout on its own — **paint heights in the 2D view (F4)**, since nothing renders elevation in 3D yet |
+| Z / C | (DEV_MODE, Tile Brush in **Elevation** mode) Turn the ramp rise one step, the way Q/E turn the board — None → North → East → South → West and around. Holding the key does not spin it. Same gate as the wheel: inert with the brush down or in another paint mode |
 
 ## Claude slash commands
 Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.claude/commands/`](../.claude/commands/) — the filename *is* the command name, and the file is the instructions Claude follows when you run it. Anything after the command is passed in as an argument to scope the run.

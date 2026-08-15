@@ -43,6 +43,25 @@ func _input(event: InputEvent) -> void:
 		var state_name: String = game.GameState.keys()[game.game_state]
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
+	_handle_rise_keys(event)
+
+# Z / C turn the elevation brush's ramp rise (#260 follow-up), the Q/E detent idiom applied to
+# authoring. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
+# in look_dev_camera -- and project.godot is the one file concurrent PRs reliably collide on.
+# Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
+# dev-layer exactly like F1/F2/F3.
+func _handle_rise_keys(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo:
+		return   # echo: holding the key must not spin the rise
+	var brush := _elevation_brush()
+	if brush == null:
+		return
+	match key.physical_keycode:
+		KEY_Z:
+			brush.cycle_rise(-1)
+		KEY_C:
+			brush.cycle_rise(1)
 
 func _toggle_dev_overlay() -> void:
 	var overlay: DevOverlay = game.dev_overlay
@@ -218,14 +237,21 @@ func _ensure_brush_ghost() -> void:
 	_brush_ghost.visible = false
 	game.grid.add_child(_brush_ghost)
 
-# The scroll wheel sets the level the elevation brush places at (#260). Mode-gated: the wheel is
-# unbound everywhere else in the 2D game, and silently retuning a brush you can't see would be a
-# surprise the next time you switched to Elevation.
-func _nudge_elevation(delta: int) -> void:
+# The elevation brush, or null when it is not the live tool. ONE predicate, so the wheel and the
+# Z/C keys cannot drift about when they apply: both would silently retune a brush you cannot see
+# otherwise -- the wheel and Z/C are unbound everywhere else in the 2D game, and a key that does
+# something invisible is worse than one that does nothing.
+func _elevation_brush() -> TileBrushTool:
+	if not brush_armed():
+		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	if brush.paint_mode != TileBrushTool.PaintMode.ELEVATION:
-		return
-	brush.nudge_elevation(delta)
+	return brush if brush.paint_mode == TileBrushTool.PaintMode.ELEVATION else null
+
+# The scroll wheel sets the level the elevation brush places at (#260).
+func _nudge_elevation(delta: int) -> void:
+	var brush := _elevation_brush()
+	if brush != null:
+		brush.nudge_elevation(delta)
 
 func _paint() -> void:
 	var cell := _mouse_cell()

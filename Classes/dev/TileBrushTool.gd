@@ -50,7 +50,20 @@ var _elevation_row: HBoxContainer
 var _elevation_spin: SpinBox
 var _rise_row: HBoxContainer
 var _rise_option: OptionButton
-var _rise_values: Array[Terrain.RampRise] = []
+
+# COMPASS order, not enum order, and it is both the picker's row order and the Z/C cycle order —
+# one list, so the dropdown and the keys cannot disagree about what comes next. Turning has to read
+# as turning (N -> E -> S -> W), where the enum declares N/S then E/W; NONE rides along so flat
+# ground is reachable without a menu trip, which is the whole point of the keys.
+# tests/dev/test_height_brush.gd pins it against Terrain.RampRise, so a new direction cannot ship
+# missing from the picker.
+const RISE_CYCLE: Array[Terrain.RampRise] = [
+	Terrain.RampRise.NONE,
+	Terrain.RampRise.NORTH,
+	Terrain.RampRise.EAST,
+	Terrain.RampRise.SOUTH,
+	Terrain.RampRise.WEST
+]
 
 # Parallel to the dropdown: the atlas source + coords each entry paints. Built by scanning
 # every atlas source for tiles that say what they ARE -- a terrain_type kind, an authored
@@ -290,36 +303,23 @@ func _build_extra_controls() -> void:
 		"Scroll the mouse wheel over the board to change the level the brush paints at. "
 		+ "Reset returns the brush to flat ground: level 0, no ramp. Negative levels are dips."))
 
-	_build_rise_options()
 	_rise_row = HBoxContainer.new()
 	var rise_label := Label.new()
 	rise_label.text = "Ramp Rise"
 	_rise_row.add_child(rise_label)
 	_rise_option = OptionButton.new()
-	for label in _rise_labels():
-		_rise_option.add_item(label)
-	_rise_option.select(0)
-	_rise_option.item_selected.connect(func(idx: int): _rise = _rise_values[idx])
+	for rise in RISE_CYCLE:
+		_rise_option.add_item(Terrain.ramp_rise_display_name(rise))
+	_rise_option.select(RISE_CYCLE.find(_rise))
+	_rise_option.item_selected.connect(func(idx: int): set_rise(RISE_CYCLE[idx]))
 	_rise_row.add_child(_rise_option)
 	add_child(_rise_row)
 	DevWidgets.apply_tooltip(_rise_row, DevWidgets.wrap_tooltip(
-		"Which way this cell RISES. A ramp's own level is its LOW side, so a ramp at level 2 "
-		+ "rising North connects level 2 to level 3 to the north. None = ordinary flat ground."))
+		"Which way this cell RISES — Z and C turn it, the way Q and E turn the board. A ramp's own "
+		+ "level is its LOW side, so a ramp at level 2 rising North connects level 2 to level 3 to "
+		+ "the north. None = ordinary flat ground."))
 
 	_set_paint_mode(PaintMode.TERRAIN)
-
-# Scanned from the enum, so a new rise direction shows up here with no edit — _build_state_options'
-# shape. NONE is kept (unlike NONE in the state picker): "not a ramp" is a thing you paint.
-func _build_rise_options() -> void:
-	_rise_values.clear()
-	for i in Terrain.RampRise.size():
-		_rise_values.append(Terrain.RampRise.values()[i])
-
-func _rise_labels() -> Array[String]:
-	var out: Array[String] = []
-	for rise in _rise_values:
-		out.append(Terrain.ramp_rise_display_name(rise))
-	return out
 
 func selected_elevation() -> int:
 	return _elevation
@@ -338,13 +338,26 @@ func set_elevation(value: int) -> void:
 func nudge_elevation(delta: int) -> void:
 	set_elevation(_elevation + delta)
 
+# The ONE writer of the rise, the set_elevation twin: the dropdown, the Z/C keys and Reset all land
+# here, so the picker always shows what the next click will paint.
+func set_rise(rise: Terrain.RampRise) -> void:
+	_rise = rise
+	if _rise_option != null:
+		_rise_option.select(RISE_CYCLE.find(rise))
+
+# Turn the rise one step (dev ask 2026-08-15: a menu trip per direction is the wrong cost for
+# something you change constantly). Wraps, so the keys alone reach every value including flat.
+func cycle_rise(delta: int) -> void:
+	var index := RISE_CYCLE.find(_rise)
+	if index == -1:
+		index = 0
+	set_rise(RISE_CYCLE[posmod(index + delta, RISE_CYCLE.size())])
+
 # Back to plain flat ground, which is BOTH fields: a reset that left the rise armed would still
 # paint ramps, and "flat" is what the button is for.
 func reset_elevation() -> void:
 	set_elevation(0)
-	_rise = Terrain.RampRise.NONE
-	if _rise_option != null:
-		_rise_option.select(_rise_values.find(Terrain.RampRise.NONE))
+	set_rise(Terrain.RampRise.NONE)
 
 func _build_state_options() -> void:
 	for i in Terrain.TileState.size():

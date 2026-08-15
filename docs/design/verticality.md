@@ -391,7 +391,33 @@ Godot emits a press *and* a release per notch. Four rulings worth keeping:
   3D-native authoring stays [#231](https://github.com/Phaazoid/Godoiosis/issues/231).
 
 Ramp painting is one 5-entry picker over `Terrain.RampRise`, not an axis plus a direction — the
-single field carries both, which is exactly why #257 replaced the sketched `{NONE, NS, EW}`.
+single field carries both, which is exactly why #257 replaced the sketched `{NONE, NS, EW}`. **Z and
+C turn it**, the Q/E detent idiom applied to authoring (dev ask, same day: a menu trip per direction
+is the wrong cost for something you change constantly). The cycle is **compass order, not enum
+order** — turning has to read as turning, where the enum declares N/S then E/W — and `RISE_CYCLE` is
+one list serving both the picker's rows and the keys, pinned against the enum so a new direction
+cannot ship missing from either.
+
+**Terrain-tile orientation on the same keys is DEFERRED, and not for cost.** The dev asked for it in
+the same breath (*"voxel direction is about to matter"*), and the painting half is nearly free —
+`set_cell` already takes an `alternative`, and `TileMapLayer.tile_map_data` serializes it. Two things
+put it in the render slice instead: it would settle
+[#263](https://github.com/Phaazoid/Godoiosis/issues/263)'s open question (*where a facing comes
+from*) by fait accompli, that issue having explicitly listed the alternative-tile flags as the
+candidate to *investigate first*; and `BoardMirror.item_for_tile` returns no item for any
+`alternative != 0`, so a rotated tile silently falls back to its generic Kind block and loses its art
+in the view the game boots into.
+
+**When the palette absorbs elevation** (the dev's plan for the render slice: scrolling sets the
+level, the highlighted terrain is what you paint, and *"Ramp will just be another terrain"*), two
+questions have to be answered out loud rather than stumbled into:
+
+1. **Ramp rise vs tile orientation is one question with two candidate homes.** If a ramp is a terrain
+   tile turned by Z/C, then `Terrain.RampRise` on `BoardHeights` and the tile's own orientation both
+   claim it. Law #4: one is authoritative or one is retired.
+2. **Does a terrain click then also write a height?** Today the modes are independent, so repainting
+   grass over a terrace leaves the terrace. Merged, it would flatten it to the brush's level unless
+   the merged brush can say "texture only" — an authoring-feel call, not a code one.
 
 ---
 

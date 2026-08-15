@@ -12,6 +12,7 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const NONE := Terrain.RampRise.NONE
 const NORTH := Terrain.RampRise.NORTH
 const EAST := Terrain.RampRise.EAST
+const WEST := Terrain.RampRise.WEST
 
 var _main: Node
 var game: Node2D
@@ -66,6 +67,13 @@ func _motion() -> InputEventMouseMotion:
 	return InputEventMouseMotion.new()
 
 
+func _key(code: Key) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.physical_keycode = code
+	event.pressed = true
+	return event
+
+
 # ---- the wheel sets the level ----
 
 func test_the_wheel_moves_the_brush_level_both_ways() -> void:
@@ -95,7 +103,7 @@ func test_the_wheel_is_inert_in_the_other_paint_modes() -> void:
 
 func test_reset_returns_the_brush_to_flat_ground() -> void:
 	_brush.set_elevation(4)
-	_brush._rise_option.item_selected.emit(_brush._rise_values.find(EAST))
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(EAST))
 	assert_int(_brush.selected_rise()).is_equal(EAST)
 
 	_brush.reset_elevation()
@@ -104,12 +112,74 @@ func test_reset_returns_the_brush_to_flat_ground() -> void:
 	assert_int(_brush.selected_rise()).is_equal(NONE)
 
 
+# ---- Z / C turn the rise ----
+
+func test_z_and_c_turn_the_rise_like_a_compass() -> void:
+	# Turning must READ as turning, which enum order (N, S, E, W) does not: C from North lands East.
+	_dc._input(_key(KEY_C))
+	assert_int(_brush.selected_rise()).is_equal(NORTH)
+	_dc._input(_key(KEY_C))
+	assert_int(_brush.selected_rise()).is_equal(EAST)
+
+	_dc._input(_key(KEY_Z))
+	assert_int(_brush.selected_rise()).is_equal(NORTH)
+	_dc._input(_key(KEY_Z))
+	assert_int(_brush.selected_rise()).is_equal(NONE)
+
+
+func test_the_cycle_wraps_so_the_keys_alone_reach_every_value() -> void:
+	# Z from flat wraps backwards to the last direction; a full C lap comes home to flat. Without
+	# the wrap the keys would strand the brush at an end and force the menu trip back.
+	_dc._input(_key(KEY_Z))
+	assert_int(_brush.selected_rise()).is_equal(WEST)
+
+	for i in TileBrushTool.RISE_CYCLE.size():
+		_dc._input(_key(KEY_C))
+	assert_int(_brush.selected_rise()).is_equal(WEST)
+
+
+func test_turning_moves_the_picker_too() -> void:
+	# One writer: the dropdown must always show what the next click will paint.
+	_dc._input(_key(KEY_C))
+	assert_int(TileBrushTool.RISE_CYCLE[_brush._rise_option.selected]).is_equal(NORTH)
+
+
+func test_a_held_key_does_not_spin_the_rise() -> void:
+	var repeat := _key(KEY_C)
+	repeat.echo = true
+
+	_dc._input(repeat)
+
+	assert_int(_brush.selected_rise()).is_equal(NONE)
+
+
+func test_the_rise_keys_are_inert_outside_elevation_mode() -> void:
+	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	_dc._input(_key(KEY_C))
+	assert_int(_brush.selected_rise()).is_equal(NONE)
+
+
+func test_the_rise_keys_are_inert_when_the_brush_is_down() -> void:
+	_brush.brush_active = false
+	_dc._input(_key(KEY_C))
+	assert_int(_brush.selected_rise()).is_equal(NONE)
+
+
+func test_every_rise_direction_is_reachable_from_the_picker() -> void:
+	# The cycle list is hand-declared (compass order), so a new Terrain.RampRise member would
+	# silently miss the picker AND the keys. This is the pin that refuses that.
+	assert_int(TileBrushTool.RISE_CYCLE.size()).is_equal(Terrain.RampRise.size())
+	for i in Terrain.RampRise.size():
+		var rise: Terrain.RampRise = Terrain.RampRise.values()[i]
+		assert_bool(TileBrushTool.RISE_CYCLE.has(rise)).is_true()
+
+
 # ---- painting ----
 
 func test_painting_writes_the_level_and_the_rise_together() -> void:
 	var cell := _hover_cell()
 	_brush.set_elevation(2)
-	_brush._rise_option.item_selected.emit(_brush._rise_values.find(NORTH))
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(NORTH))
 
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 
