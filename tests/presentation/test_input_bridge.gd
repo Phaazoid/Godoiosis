@@ -400,18 +400,16 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
 	var board: GridMap = _scene.get_node("Board")
-	# COLUMNS, not cells. This case asks whether the mirror is aimed at the NEW board; how tall
-	# each column is belongs to test_board_mirror. It compared raw cells against every cell at
-	# level 0 until 2026-08-15, which silently depended on Level_1 being FLAT -- painting
-	# elevation into it (b057f6e) turned #273's correct multi-cell columns into a red case.
+	# Compared as FOOTPRINTS — the set of columns, never their heights. The claim here is "the
+	# rebuild ran", and a cell-for-cell compare answered it by hand-listing what the mission happens
+	# to be painted to, so a height-brush stroke reddened a case about the load funnel (it did:
+	# b057f6e). What a column CONTAINS is BoardMirror's business, pinned by test_board_mirror's #273
+	# cases against game.board_heights. column_tops_from is keyed by column, so its keys are the
+	# footprint — the production seam already answers this, and the next assert uses the same call.
 	var mirrored: Array[Vector2i] = []
-	for cell: Vector3i in board.get_used_cells():
-		var column := BoardSpace.flat(cell)
-		if not mirrored.has(column):
-			mirrored.append(column)
+	mirrored.assign(BoardPicker.column_tops_from(board).keys())
 	mirrored.sort()
-	var expected: Array[Vector2i] = []
-	expected.assign(_game.grid.get_used_cells())
+	var expected: Array[Vector2i] = _game.grid.get_used_cells()
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
