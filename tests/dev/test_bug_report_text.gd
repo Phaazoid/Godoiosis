@@ -195,6 +195,33 @@ func test_the_report_and_the_summary_name_the_build() -> void:
 	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
 	assert_str(summary).contains("v%s" % Build.version())
 
+# ---- which checkout produced it (#295) ----
+
+func test_the_report_and_the_summary_name_the_checkout() -> void:
+	# Same convention as the version case above and for the same reason: interpolated off
+	# Checkout.describe(), never a pinned branch or SHA. What is pinned is that the report reads
+	# THE one git reader -- a second reader is the Law #4 failure this is guarding, not the value.
+	assert_bool(DevTools.enabled()).is_true()   # the gate; without it both asserts pass on ""
+	var expected := Checkout.describe()
+	assert_str(expected).is_not_equal("")
+
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null, no_units, "log")
+	assert_str(text).contains("Checkout: **%s**" % expected)
+
+	var summary := BugReporter.build_summary("stamp", "IDLE", BugReporter.Kind.BUG, "note")
+	assert_str(summary).contains(expected)
+
+func test_the_checkout_does_not_displace_the_version() -> void:
+	# Two facts, two lines. The version answers "which release", the checkout "which code" -- a
+	# report that traded one for the other would lose the half every existing triage habit reads.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null, no_units, "log")
+
+	assert_str(text).contains("Build: **%s**" % Build.version())
+	assert_str(text).contains("Checkout: **%s**" % Checkout.describe())
+	assert_int(text.find("Build:")).is_less(text.find("Checkout:"))
+
 # ---- where it was seen from (#240) ----
 
 func test_the_report_names_the_view_and_the_look_it_was_seen_under() -> void:

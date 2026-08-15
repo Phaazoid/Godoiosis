@@ -186,8 +186,14 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 	elif trimmed.length() > NOTE_IN_MESSAGE:
 		trimmed = trimmed.substr(0, NOTE_IN_MESSAGE) + " ... (full text in report.md)"
 	# The version appears in the channel line too -- a second RENDER of Build.version()'s one fact
-	# (declared, Law #4), so reports can be matched to builds without opening the attachment.
-	return "**%s** - state `%s` - %s - v%s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, Build.version(), trimmed]
+	# (declared, Law #4), so reports can be matched to builds without opening the attachment. The
+	# checkout rides along for the same reason and is the sharper of the two in triage: every
+	# branch off a base shares its version, so only "branch @ sha" says which code ran (#295).
+	var build := "v%s" % Build.version()
+	var checkout := Checkout.describe()
+	if checkout != "":
+		build += " -- %s" % checkout
+	return "**%s** - state `%s` - %s - %s\n>>> %s" % [Kind.keys()[kind], state_name, stamp, build, trimmed]
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
@@ -200,6 +206,12 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 
 	out += "Game state: **%s**\n\n" % state_name
 	out += "Build: **%s**\n\n" % Build.version()
+	# WHICH CHECKOUT produced it (#295), beside the version rather than instead of it: they answer
+	# different questions and a report outlives the session that could have answered either by
+	# hand. Omitted entirely outside a dev build, where the question has no answer.
+	var checkout := Checkout.describe()
+	if checkout != "":
+		out += "Checkout: **%s**\n\n" % checkout
 	# WHERE it was seen from (#240). A 3D report whose angle nobody knows is a much weaker
 	# report, and the two facts have two homes on purpose: the view is the 3D host's, pushed
 	# in, while the look is the BOARD's own (ScenarioData.look_preset, #253 part 2).
