@@ -64,6 +64,7 @@ enum View {
 # What the help label was last built for. The label is only worth rebuilding on a change.
 var _help_brush_armed := false
 var _help_dev_mode := false
+var _help_wheel_is_level := false
 # Where the cursor was at the last poll. Seeded from the REAL position so the first frame
 # cannot fire a move that never happened and yank the pointer off its starting cell.
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
@@ -446,6 +447,8 @@ func _unhandled_input(event: InputEvent) -> void:
 	# through: paint and erase are hold-to-drag, and forwarding presses only would strand the
 	# drag flag TRUE and paint for ever.
 	if (motion != null or click != null) and game.dev_controller.brush_armed():
+		if _handle_brush_zoom(click):
+			return
 		game.dev_controller.handle_tile_brush(event)
 		return
 	if motion != null:
@@ -460,6 +463,25 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if click.pressed and click.button_index == MOUSE_BUTTON_LEFT:
 		_click_pointer_cell()
+
+
+# Ctrl+wheel zooms while the elevation brush owns the plain wheel (#285). The rig cannot answer
+# this one itself: _sync_brush_bindings has stood its wheel down for the duration, because it is a
+# CHILD of this node and sees _unhandled_input FIRST — consuming the event up here lands after the
+# zoom has already happened (measured, and it is why the obvious fix is not the one that shipped).
+# Returns true when the notch was spent here.
+func _handle_brush_zoom(click: InputEventMouseButton) -> bool:
+	if click == null or not click.pressed or not click.ctrl_pressed:
+		return false
+	if not game.dev_controller.elevation_brush_live():
+		return false
+	if click.button_index == MOUSE_BUTTON_WHEEL_UP:
+		_rig.zoom_by(-1)
+	elif click.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+		_rig.zoom_by(1)
+	else:
+		return false
+	return true
 
 
 # Cancel fires on PRESS — the meaning right-click carries everywhere else in the game —
@@ -522,17 +544,19 @@ func _sync_bracket_tint() -> void:
 
 # The 3D half of the brush preview. POLLED off the brush's own intent, never hooked at the
 # paint site — the mirror stack's zero-hooks doctrine, and the same call PR 1 made for terrain.
-# The 2D ghost keeps running underneath as the kind source; it simply draws under a hidden
-# board here, which is why this asks brush_ghost_cell() and not that layer's `.visible`.
+# The 2D ghost keeps running underneath as the tile source; it simply draws under a hidden board
+# here, which is why this asks brush_ghost() and not that layer's `.visible`. Since #285 that
+# answer is per MODE, so an ELEVATION preview — a block at the level the wheel is set to — comes
+# through the same call rather than needing a second one.
 func _sync_brush_ghost() -> void:
 	if demo_mode or view == View.FLAT_2D:
 		_board_mirror.hide_brush_ghost()   # the flat view has the 2D ghost for this
 		return
-	var cell: Vector2i = game.dev_controller.brush_ghost_cell()
-	if cell == GridUtils.NO_CELL:
+	var ghost: BrushGhost = game.dev_controller.brush_ghost()
+	if ghost == null:
 		_board_mirror.hide_brush_ghost()
 		return
-	_board_mirror.show_brush_ghost(cell, game.dev_controller.brush_ghost_layer(), game.board_heights)
+	_board_mirror.show_brush_ghost(ghost)
 
 
 # The brush erases on RIGHT, so orbit steps aside to MIDDLE while it is armed — 2D and 3D keep
@@ -545,11 +569,20 @@ func _sync_brush_bindings() -> void:
 		return   # no 2D game to ask, and the demo label is not this function's to overwrite
 	var armed: bool = game.dev_controller.brush_armed()
 	var dev: bool = game.game_state == game.GameState.DEV_MODE
+	# The elevation brush paints at the WHEEL's level (#260), so the camera gives the wheel up for
+	# as long as that mode is live — scoped to it, because the other three paint modes never read
+	# the wheel and would be losing zoom for nothing. Ctrl+wheel is where zoom goes meanwhile.
+	var wheel_is_level: bool = game.dev_controller.elevation_brush_live()
 	_rig.orbit_button = MOUSE_BUTTON_MIDDLE if armed else _orbit_button_default
-	if armed == _help_brush_armed and dev == _help_dev_mode:
+	_rig.wheel_zoom_enabled = not wheel_is_level
+	# The help line names the wheel, so the MODE it depends on joins the edge — a one-shot label
+	# goes stale the moment its input starts varying, which is the trap this label already fell
+	# into once over the orbit button.
+	if armed == _help_brush_armed and dev == _help_dev_mode and wheel_is_level == _help_wheel_is_level:
 		return
 	_help_brush_armed = armed
 	_help_dev_mode = dev
+	_help_wheel_is_level = wheel_is_level
 	_update_help()
 
 
@@ -564,7 +597,8 @@ func _update_help() -> void:
 	# the queued orders.
 	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel aim"
 	var space := "SPACE spawn" if game.game_state == game.GameState.DEV_MODE else "SPACE centre"
-	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  wheel zoom  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, space]
+	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
+	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
 
 
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves

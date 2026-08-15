@@ -59,6 +59,30 @@ func _settle() -> void:
 	await await_idle_frame()
 
 
+# Where a thing STANDING on this cell sits, through the seam UnitMirror places sprites with
+# (BoardSpace.surface_point). Never level 0: Level_1 carries eight raised cells since b057f6e, and
+# the day one of them holds a player unit an of_cell(..., 0) frustum check silently asks about a
+# point in the air below them.
+func _stand(cell: Vector2i) -> Vector3:
+	var heights: BoardHeights = _game.board_heights
+	return BoardSpace.surface_point(cell, heights)
+
+
+# The screen point for a cell, off the picker's own column tops — the twin of test_input_bridge's
+# _screen_of, and correct for a ramp for the same reason.
+func _screen_of(cell: Vector2i) -> Vector2:
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	var level: int = tops.get(cell, BoardSpace.FLAT_TOP_LEVEL)
+	return _camera3d.unproject_position(Vector3((cell.x + 0.5) * BoardSpace.CELL_SIZE,
+			level * BoardSpace.CELL_SIZE, (cell.y + 0.5) * BoardSpace.CELL_SIZE))
+
+
+# The mirror cell the 3D pointer reports for a 2D cell — the picker's answer, not an assumed level.
+func _picked(cell: Vector2i) -> Vector3i:
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	return BoardSpace.of_cell(cell, tops.get(cell, BoardSpace.FLAT_TOP_LEVEL) - 1)
+
+
 # --- Following the action ----------------------------------------------------------
 
 func test_the_3d_camera_follows_the_ai_camera() -> void:
@@ -92,7 +116,7 @@ func test_hovering_does_not_drag_the_3d_camera() -> void:
 	var before := _rig.position
 	var cell: Vector2i = unit.movement.cell
 	var motion := InputEventMouseMotion.new()
-	var screen := _camera3d.unproject_position(BoardSpace.standing_point(BoardSpace.of_cell(cell, 0)))
+	var screen := _screen_of(cell)
 	motion.position = screen
 	motion.global_position = screen
 	Input.parse_input_event(motion)
@@ -100,7 +124,7 @@ func test_hovering_does_not_drag_the_3d_camera() -> void:
 	await _settle()
 
 	# The 2D camera DID move (non-vacuous: the snap is what the hover card rides on)...
-	assert_that(_scene._pointer_cell).is_equal(BoardSpace.of_cell(cell, 0))
+	assert_that(_scene._pointer_cell).is_equal(_picked(cell))
 	# ...and the 3D did not.
 	assert_that(_rig.position).override_failure_message(
 			"a hover dragged the 3D camera — the mirror is not gated on ai_locked").is_equal(before)
@@ -136,8 +160,7 @@ func test_a_locked_board_refuses_the_players_camera_but_keeps_the_rig_running() 
 func test_a_menu_leaves_the_pointer_alone() -> void:
 	_game.game_state = _game.GameState.MENU
 	var unit := _player_unit()
-	var screen := _camera3d.unproject_position(
-			BoardSpace.standing_point(BoardSpace.of_cell(unit.movement.cell, 0)))
+	var screen := _screen_of(unit.movement.cell)
 	var motion := InputEventMouseMotion.new()
 	motion.position = screen
 	motion.global_position = screen
@@ -168,7 +191,7 @@ func test_both_authored_missions_open_on_the_players_own_squad() -> void:
 			seen += 1
 			lo = lo.min(Vector2(unit.movement.cell))
 			hi = hi.max(Vector2(unit.movement.cell))
-			var point := BoardSpace.standing_point(BoardSpace.of_cell(unit.movement.cell, 0))
+			var point := _stand(unit.movement.cell)
 			assert_bool(_camera3d.is_position_in_frustum(point)).override_failure_message(
 					"%s: player unit at %s is off-camera at load" % [path, unit.movement.cell]).is_true()
 		assert_int(seen).override_failure_message(
@@ -218,7 +241,9 @@ func test_zooming_fully_out_still_shows_the_whole_board() -> void:
 			rect.position + rect.size - Vector2i.ONE,
 		]
 		for corner in corners:
-			var point := BoardSpace.standing_point(BoardSpace.of_cell(corner, 0))
+			# The corner's real surface, not an assumed floor — a corner standing on a terrace is
+			# HIGHER, i.e. nearer the top of the frustum, which is exactly the case that would fail.
+			var point := _stand(corner)
 			assert_bool(_camera3d.is_position_in_frustum(point)).override_failure_message(
 					"%s: board corner %s is off-camera even zoomed fully out" % [path, corner]).is_true()
 
@@ -253,8 +278,7 @@ func test_an_ai_turn_squares_the_camera_up() -> void:
 func test_space_recentres_the_diorama_on_the_pointer() -> void:
 	var unit := _player_unit()
 	var cell: Vector2i = unit.movement.cell
-	_scene._update_pointer(_camera3d.unproject_position(
-			BoardSpace.standing_point(BoardSpace.of_cell(cell, 0))))
+	_scene._update_pointer(_screen_of(cell))
 	_rig.position = Vector3(_rig.position.x + 12.0, _rig.position.y, _rig.position.z + 12.0)
 	var before := _rig.position
 

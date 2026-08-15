@@ -44,8 +44,18 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 	await await_idle_frame()
 	var board := _scene.get_node("Board") as GridMap
 	var grid_cells: Array[Vector2i] = _game.grid.get_used_cells()
-	assert_int(board.get_used_cells().size()).is_equal(grid_cells.size())
-	assert_bool(grid_cells.size() > 100).is_true()  # Prolog is a real board, not a stub
+	assert_bool(grid_cells.is_empty()).override_failure_message(
+			"the mission painted no tiles; a footprint compare over nothing proves nothing").is_false()
+	# FOOTPRINTS, not a cell count. `used_cells.size()` on both sides was an equality that only
+	# holds while the board is FLAT — one raised cell writes a whole column — so painting three
+	# tiles onto Prolog reddened this and aborted the other 31 cases in this file (measured).
+	# column_tops_from is keyed by column, so its keys are the footprint.
+	var mirrored: Array[Vector2i] = []
+	mirrored.assign(BoardPicker.column_tops_from(board).keys())
+	mirrored.sort()
+	var expected_columns := grid_cells.duplicate()
+	expected_columns.sort()
+	assert_that(mirrored).is_equal(expected_columns)
 	# Spot-check: every mirrored block is the block for THAT TILE, named off the 2D cell's own
 	# atlas coords. Deliberately not asked through item_for_cell — that would assert the mirror
 	# against itself. Prolog paints only single-cell tiles, so every one has an item of its own.
@@ -54,10 +64,20 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 		var source_id: int = _game.grid.get_cell_source_id(cell)
 		var coords: Vector2i = _game.grid.get_cell_atlas_coords(cell)
 		var expected := BoardMirror.tile_item_name(source_id, coords)
-		var item := board.get_cell_item(Vector3i(cell.x, 0, cell.y))
+		var item := board.get_cell_item(_surface_of(cell))
 		assert_str(board.mesh_library.get_item_name(item)).override_failure_message(
 				"cell %s paints tile %s but got block '%s'" \
 				% [cell, coords, board.mesh_library.get_item_name(item)]).is_equal(expected)
+
+
+# The mirror cell holding this 2D cell's SURFACE block, at whatever level the board is painted to.
+# Every case below that inspects "the block for this cell" goes through here rather than assuming
+# level 0 — that assumption is a bet on the fixture staying flat, and it is exactly the bet that
+# broke when the height brush reached Level_1 (b057f6e). Deliberately the elevation and NOT the
+# column top: a ramp's top block is the generated wedge, not the cell's own tile.
+func _surface_of(cell: Vector2i) -> Vector3i:
+	var heights: BoardHeights = _game.board_heights
+	return BoardSpace.of_cell(cell, heights.elevation_at(cell))
 
 
 # Which cells burn comes off the ONE enumeration form (Terrain.gd: "no reader may
@@ -73,7 +93,8 @@ func test_fire_markers_match_the_games_own_burning_cells() -> void:
 	var expected := _burning().size()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_int(mirror.fire_marker_count()).is_equal(expected)
-	assert_bool(expected > 0).is_true()  # Prolog authors BLAZE content; a zero here means the load broke
+	assert_bool(expected > 0).override_failure_message(
+			"nothing on this board burns, so marker parity is a comparison of two zeroes").is_true()
 
 
 func test_the_flame_actually_carries_the_flame_priority() -> void:
@@ -249,7 +270,7 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_cell(cell, 0)
+	var at := _surface_of(cell)
 	var before := board.get_cell_item(at)
 	var other := _a_tile_of_a_different_kind(cell)
 	assert_bool(other.source >= 0).override_failure_message(
@@ -268,7 +289,7 @@ func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var at := BoardSpace.of_cell(cell, 0)
+	var at := _surface_of(cell)
 	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
 	_game.grid.erase_cell(cell)
 	await _settle()
@@ -352,8 +373,8 @@ func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
 	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
 	await _settle()
 
-	var item_a := board.get_cell_item(BoardSpace.of_cell(a, 0))
-	var item_b := board.get_cell_item(BoardSpace.of_cell(b, 0))
+	var item_a := board.get_cell_item(_surface_of(a))
+	var item_b := board.get_cell_item(_surface_of(b))
 	assert_int(item_a).override_failure_message(
 			"two tiles of the same kind (%s and %s) render as the SAME block — the board is still keyed on Kind" \
 			% [pair[0].coords, pair[1].coords]).is_not_equal(item_b)
@@ -410,7 +431,7 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	_game.grid.set_cell(cell, entry.source, entry.coords)
 	await _settle()
 
-	var item := board.get_cell_item(BoardSpace.of_cell(cell, 0))
+	var item := board.get_cell_item(_surface_of(cell))
 	assert_int(item).override_failure_message(
 			"a skipped tile left the cell EMPTY — the 2D paints a tile there and the 3D shows a hole" \
 			).is_not_equal(GridMap.INVALID_CELL_ITEM)
@@ -779,6 +800,11 @@ func test_a_solid_tile_builds_geometry_and_a_thin_one_builds_a_sprite() -> void:
 # independently rather than read back off the generator, so the case can disagree with it: a rock
 # is 32% clear, and a cell-wide box around it would be mostly air. The base sitting at y = 0 is the
 # other half — the mesh is planted on the tile's top face, so a centred one would be half buried.
+#
+# PLANE is excluded, and the exclusion is the rule rather than a concession (#263): a wall is thin BY
+# DEFINITION in the axis it does not run along, so a bound measured off its sprite is not what sizes
+# it. The half of the rule a plane DOES obey — standing at y = 0 — is asserted in its own case below,
+# so nothing is dropped by narrowing this one.
 func test_a_prop_block_is_sized_by_its_art_not_by_the_cell() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var tiles: TileSet = _game.grid.tile_set
@@ -822,7 +848,10 @@ func _solid_entries(source: TileSetAtlasSource, source_id: int) -> Array[Diction
 		var coords := source.get_tile_id(i)
 		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if GridUtils.SOLID_SHAPES.has(GridUtils.prop_shape_of(source.get_tile_data(coords, 0))):
+		var shape := GridUtils.prop_shape_of(source.get_tile_data(coords, 0))
+		if shape == GridUtils.PropShape.PLANE:
+			continue   # sized by the wall convention, not by its art — see the caller
+		if GridUtils.SOLID_SHAPES.has(shape):
 			out.append({"source": source_id, "coords": coords})
 	return out
 
@@ -1045,7 +1074,7 @@ func test_a_raised_cell_fills_its_whole_column() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var surface := board.get_cell_item(BoardSpace.of_cell(cell, 0))
+	var surface := board.get_cell_item(_surface_of(cell))
 
 	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NONE)
 	await _settle()
@@ -1121,4 +1150,215 @@ func test_each_rise_points_the_wedges_high_side_the_way_it_names() -> void:
 			.is_equal_approx(float(want.x), 0.01)
 		assert_float(high.z).override_failure_message(
 			"%s rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.y), 0.01)
+
+
+# --- #263: oriented planes ---------------------------------------------------------------------
+
+# Every tile authored PLANE in this atlas, with the mask it carries. A content law's input, so it is
+# read off the tileset rather than listed here — the point is that an ATLAS SWAP cannot slip a
+# directionless plane past the cases below.
+func _plane_entries() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if GridUtils.prop_shape_of(data) != GridUtils.PropShape.PLANE:
+				continue
+			out.append({"source": source_id, "coords": coords,
+					"edges": GridUtils.wall_edges_of(data),
+					"name": GridUtils.authored_tile_display_name(data)})
+	return out
+
+
+# A PLANE is real geometry, not the billboard #255 shipped and the dev rejected: *"the fences don't
+# work at all."* The mirror needs no code of its own for this — the generator bakes each piece's
+# orientation into that tile's mesh — so what this really pins is that PLANE reaches _make_prop_block
+# rather than falling through to the sprite branch.
+func test_a_plane_tile_builds_geometry_not_a_billboard() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var planes := _plane_entries()
+	assert_bool(not planes.is_empty()).override_failure_message(
+			"no PLANE tiles authored; the case is vacuous").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, planes[0].source, planes[0].coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var prop := mirror.prop_at(cell)
+	assert_object(prop).override_failure_message("a PLANE tile did not stand up").is_not_null()
+	assert_object(prop.get_child(0) as MeshInstance3D).override_failure_message(
+			"a PLANE tile built a sprite — it is still the billboard a camera turns to face" \
+			).is_not_null()
+
+
+# THE case #263 exists for, in the issue's own words: *a horizontal run and a vertical run must be
+# visibly different.* A billboard cannot satisfy this from any angle, which is the whole ticket.
+#
+# Asserted as a RELATIONSHIP between each piece's authored mask and its geometry, never against a
+# measured extent: a wall is thin across the axis it does not run along, so an east-west piece is thin
+# in Z and a north-south one is thin in X. Nothing here pins PLANE_THICKNESS, so the dev can retune
+# the look without reddening it — only IGNORING the mask reddens it.
+func test_a_plane_is_thin_across_the_axis_it_runs_along() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var checked := 0
+	for entry in _plane_entries():
+		var item_name: String = BoardMirror.prop_item_name(entry.source, entry.coords)
+		var mesh := _mesh_named(board, item_name)
+		assert_object(mesh).override_failure_message(
+				"no geometry item '%s' — the generator skipped a PLANE tile" % item_name).is_not_null()
+		var size := mesh.get_aabb().size
+		var runs_ew: bool = (entry.edges & GridUtils.EW_EDGES) != 0
+		var runs_ns: bool = (entry.edges & GridUtils.NS_EDGES) != 0
+		if runs_ew and not runs_ns:
+			assert_bool(size.x > size.z).override_failure_message(
+					"'%s' runs east-west but is not wider than it is deep (%s)" \
+					% [entry.name, size]).is_true()
+		elif runs_ns and not runs_ew:
+			assert_bool(size.z > size.x).override_failure_message(
+					"'%s' runs north-south but is not deeper than it is wide (%s)" \
+					% [entry.name, size]).is_true()
+		else:
+			# A corner runs BOTH ways, so it is thin in neither — that is what makes it an L rather
+			# than a wall, and it is the clause a "treat every plane as one axis" mutant cannot meet.
+			assert_bool(absf(size.x - size.z) < 0.001).override_failure_message(
+					"'%s' is a corner but reaches further one way than the other (%s)" \
+					% [entry.name, size]).is_true()
+		# The half of the block rule a plane still obeys: it stands ON the tile, never sunk into it.
+		assert_float(mesh.get_aabb().position.y).override_failure_message(
+				"'%s' starts at y=%s — a wall must stand on the tile" \
+				% [entry.name, mesh.get_aabb().position.y]).is_equal_approx(0.0, 0.001)
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no PLANE tiles authored; the case is vacuous").is_greater(0)
+
+
+# The two straight runs must differ from EACH OTHER, not merely each match its own mask. Stated
+# separately because the case above is satisfied by any consistent rule — including one that reads the
+# mask and then builds every piece the same way, which is precisely the bug a billboard has.
+func test_a_horizontal_run_and_a_vertical_run_are_different_meshes() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var ew: Array[Vector3] = []
+	var ns: Array[Vector3] = []
+	for entry in _plane_entries():
+		var mesh := _mesh_named(board, BoardMirror.prop_item_name(entry.source, entry.coords))
+		if mesh == null:
+			continue
+		if entry.edges == GridUtils.EW_EDGES:
+			ew.append(mesh.get_aabb().size)
+		elif entry.edges == GridUtils.NS_EDGES:
+			ns.append(mesh.get_aabb().size)
+	assert_bool(not ew.is_empty() and not ns.is_empty()).override_failure_message(
+			"the atlas has no straight run in both axes; the case is vacuous").is_true()
+	assert_bool(absf(ew[0].x - ns[0].x) > 0.001).override_failure_message(
+			"a horizontal run and a vertical one measure the same (%s vs %s) — they read identically " \
+			% [ew[0], ns[0]] + "from every angle, which is the billboard behaviour #263 replaces").is_true()
+
+
+# A content law over the tileset (#263). A PLANE with no authored edges has no geometry to build, and
+# the generator refuses it loudly — but a refusal at generate time is only a backstop, and the sheet
+# itself is where the mistake would be made. The non-empty guard is load-bearing, not decoration: the
+# loop passes over zero tiles otherwise.
+func test_every_plane_tile_declares_which_way_it_runs() -> void:
+	var checked := 0
+	for entry in _plane_entries():
+		assert_int(entry.edges).override_failure_message(
+				"'%s' is a PLANE with no wall_edges — it declares a form but not a facing, so nothing " \
+				% [entry.name] + "can say which way it points").is_greater(0)
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no PLANE tiles authored; the case is vacuous").is_greater(0)
+
+# ---- the brush ghost at height (#285) ----
+#
+# The 3D preview of what an elevation click would produce. The level is the BRUSH's, not the
+# cell's current one, which is the whole point: hovering a flat cell with the wheel at 3 has to
+# show a block three levels up, or the ghost is previewing the thing you are replacing.
+
+func _ghost_node() -> MeshInstance3D:
+	return (_scene._board_mirror as BoardMirror)._brush_ghost
+
+
+func test_the_ghost_hangs_at_the_level_the_click_would_produce() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	# A DELTA, so no item's authored offset can be mistaken for the level -- and so the mutant
+	# that reads heights.elevation_at(cell) instead reports 0 rather than a near-miss.
+	mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid))
+	var at_zero: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 3, _game.grid))
+	var at_three: float = _ghost_node().position.y
+
+	assert_float(at_three - at_zero).override_failure_message(
+			"three levels of BRUSH height moved the ghost %s, not three cells -- it is reading the "
+			% (at_three - at_zero) + "cell's own elevation").is_equal_approx(
+			3.0 * BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wears_the_art_the_cell_already_has() -> void:
+	# Raising a cell keeps its tile, so the preview resolves off the GRID -- the same call the
+	# real column uses, which is what stops the two disagreeing about what a cell looks like.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+
+	var want: Mesh = board.mesh_library.get_item_mesh(mirror.item_for_cell(_game.grid, cell))
+	assert_object(_ghost_node().mesh).is_same(want)
+
+
+func test_a_rise_previews_the_wedge_one_level_above_its_own() -> void:
+	# _write_column's rule, mirrored: a level-E block occupies [E..E+1], so the slope that starts
+	# at E's surface sits at E+1. Preview it at E and the ramp appears to sink into the terrace.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
+	var flat_y: float = _ghost_node().position.y
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST))
+	var wedge_y: float = _ghost_node().position.y
+
+	assert_object(_ghost_node().mesh).override_failure_message(
+			"a rise still previewed the flat block").is_same(
+			board.mesh_library.get_item_mesh(mirror.ramp_item()))
+	assert_float(wedge_y - flat_y).override_failure_message(
+			"the wedge did not sit one level above the block it climbs from").is_equal_approx(
+			BoardSpace.CELL_SIZE, 0.01)
+
+
+func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:
+	# The geometry, not a magic orthogonal index -- the same shape the real wedge's case asserts.
+	# A ghost that previews the slope climbing the wrong way is worse than no ghost.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene._board_mirror as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for rise: Terrain.RampRise in [Terrain.RampRise.NORTH, Terrain.RampRise.EAST,
+			Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
+		mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid, rise))
+		var high: Vector3 = _ghost_node().basis * BoardMirror.RAMP_MESH_HIGH_SIDE
+		var want := Terrain.rise_direction(rise)
+		assert_float(high.x).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on X" % Terrain.ramp_rise_display_name(rise)) \
+			.is_equal_approx(float(want.x), 0.01)
+		assert_float(high.z).override_failure_message(
+			"the ghost's %s wedge rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
 			.is_equal_approx(float(want.y), 0.01)

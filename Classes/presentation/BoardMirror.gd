@@ -32,7 +32,11 @@ class_name BoardMirror
 #   CUBE/FACETED/ROUND  real geometry from the meshlib, sides wearing the tile's own art and a
 #              GENERATED top face. Volumetric things: crates, chests, rocks, barrels — the class the
 #              dev judged "so odd" as billboards, because a 3/4 drawing has no top to show.
-# Same per-cell reconcile for both, and the lantern borrows the torch's light.
+#   PLANE      real geometry too, but thin and DIRECTIONAL: a fence (#263). Which way it runs is the
+#              tile's authored `wall_edges` mask, and the generator bakes that into the tile's OWN
+#              mesh — so nothing here holds a yaw, and a fence is planted by the same
+#              _make_prop_block that plants a crate.
+# Same per-cell reconcile for all of them, and the lantern borrows the torch's light.
 #
 # Fire-state cells (BURNING / BLAZE) get a flame billboard + a real OmniLight —
 # the torch recipe, and the dev's "fire casts light" wish. Which cells burn is
@@ -308,19 +312,28 @@ func _ensure_item_index() -> void:
 # WYSIWYG beat the bracket I recommended). It runs item_for_cell against the 2D GHOST LAYER,
 # which is the same function sync() runs against the real grid — so the preview physically
 # cannot disagree with the paint that follows it; only the material differs.
-func show_brush_ghost(cell: Vector2i, ghost: TileMapLayer, heights: BoardHeights) -> void:
-	if ghost == null:
+func show_brush_ghost(ghost: BrushGhost) -> void:
+	if ghost == null or ghost.source == null:
 		hide_brush_ghost()
 		return
 	_ensure_brush_ghost()
-	var item := item_for_cell(ghost, cell)
+	# A ramp previews as the WEDGE one level above its own, the rule _write_column paints by: a
+	# level-E block occupies [E..E+1], so the slope that starts at E's surface sits at E+1. A flat
+	# paint previews the block that would become the column's new top.
+	var ramping := ghost.rise != Terrain.RampRise.NONE
+	var item := ramp_item() if ramping else item_for_cell(ghost.source, ghost.cell)
+	var level := ghost.level + 1 if ramping else ghost.level
 	var mesh: Mesh = board.mesh_library.get_item_mesh(item)
 	if _brush_ghost.mesh != mesh:
 		_brush_ghost.mesh = mesh
-	# The item's own transform carries any authored offset/rotation; the cell supplies where.
+	# The item's own transform carries any authored offset/rotation; the cell supplies where. A
+	# wedge needs the same yaw the real one gets, or the ghost previews a slope climbing elsewhere.
 	var item_xform: Transform3D = board.mesh_library.get_item_mesh_transform(item)
-	var at := BoardSpace.of_cell(cell, heights.elevation_at(cell))
-	_brush_ghost.transform = Transform3D(item_xform.basis, BoardSpace.cell_center(at) + item_xform.origin)
+	var basis := item_xform.basis
+	if ramping:
+		basis = board.get_basis_with_orthogonal_index(_ramp_orientation(ghost.rise)) * basis
+	var at := BoardSpace.of_cell(ghost.cell, level)
+	_brush_ghost.transform = Transform3D(basis, BoardSpace.cell_center(at) + item_xform.origin)
 	_brush_ghost.visible = true
 
 

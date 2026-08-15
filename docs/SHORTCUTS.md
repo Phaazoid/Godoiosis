@@ -21,7 +21,7 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 | Right-click | Cancel the current mode — an open aim or move pick. It does **not** unqueue orders (that is [#228](https://github.com/Phaazoid/Godoiosis/issues/228)), so with no mode open it does nothing |
 | Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press). While the Tile Brush is armed the brush takes right-click to erase, so orbit falls back to **middle**-drag on its own and the help bar reads whichever is live |
 | Q / E | Snap to the next 90° detent — one press realigns from any angle |
-| Mouse wheel | Zoom (clamped so you cannot pull back past the whole board) |
+| Mouse wheel | Zoom (clamped so you cannot pull back past the whole board). While the Tile Brush is armed in **Elevation** mode the brush takes the wheel for its paint level and **Ctrl+wheel** zooms instead ([#285](https://github.com/Phaazoid/Godoiosis/issues/285)) — scoped to that one mode, since the other three never read the wheel. The help bar reads whichever is live |
 | W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
 | Space | Recentre the diorama on the pointer cell — **unless dev mode is up**, where it spawns instead, the same precedence the flat game gives it |
 | R | Reset to the opening shot (the framing the board loaded with) |
@@ -40,7 +40,7 @@ The view **opens close on your own squad**, not on the whole board (`opening_vie
 | Left-click a unit | (DEV_MODE) Edit that unit in the Unit Editor |
 | Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile — works in **both** views; the 3D one previews the real block under the cursor |
 | Right-click | (DEV_MODE, Tile Brush active) Erase a tile. In the 3D view this is why orbit steps aside to middle-drag while the brush is armed |
-| Mouse wheel | (DEV_MODE, Tile Brush in **Elevation** mode) Raise / lower the level the brush paints at ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)). Negative levels are dips. Inert in every other paint mode; the tab's *Reset to flat (0)* button returns the brush to level 0 with no ramp. Entering Elevation mode lights the F5 readout on its own — **paint heights in the 2D view (F4)**, since nothing renders elevation in 3D yet |
+| Mouse wheel | (DEV_MODE, Tile Brush in **Elevation** mode) Raise / lower the level the brush paints at ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)). Negative levels are dips. Inert in every other paint mode; the tab's *Reset to flat (0)* button returns the brush to level 0 with no ramp. Entering Elevation mode lights the F5 readout on its own. **Works in the 3D view too as of [#285](https://github.com/Phaazoid/Godoiosis/issues/285)**, where a ghost block hangs at the level the next click would produce (the wedge, when a rise is set) and the wheel is the brush's — Ctrl+wheel zooms there instead |
 | Z / C | (DEV_MODE, Tile Brush in **Elevation** mode) Turn the ramp rise one step, the way Q/E turn the board — None → North → East → South → West and around. Holding the key does not spin it. Same gate as the wheel: inert with the brush down or in another paint mode |
 
 ## Claude slash commands

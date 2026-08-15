@@ -322,11 +322,18 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# the compositing above leaves nothing to blend.
 		var atlas_mat := _mat(null)
 		# The props' own material over the SAME texture. Backface culling ON, because a prop is a
-		# closed solid. Fully OPAQUE as of #274: every face is now generated and paints every pixel,
-		# so there is no cut-out left to do -- the alpha scissor #264 needed existed only because the
-		# sides wore a sprite with holes in it.
+		# closed solid.
+		#
+		# The ALPHA SCISSOR is back for #263, reversing #274's simplification. That reasoning still
+		# holds for the solids -- every generated face paints every pixel, so this is a no-op for
+		# them -- but a PLANE wears the tile's own sprite, and the gaps between a fence's logs ARE
+		# the art: opaque, a palisade renders as a solid board and stops being a fence. Cut-out
+		# rather than blended, matching the unit sprites' discipline so it writes depth and needs no
+		# hand-maintained render_priority.
 		var prop_mat := _mat(null)
 		prop_mat.cull_mode = BaseMaterial3D.CULL_BACK
+		prop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
+		prop_mat.alpha_scissor_threshold = 0.5
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
@@ -362,20 +369,44 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
 			# sprite directly, and a billboard is the one form a sprite maps onto correctly.
 			if GridUtils.SOLID_SHAPES.has(shape):
-				var side_slot: Rect2i = slots[next_slot]
-				var top_slot: Rect2i = slots[next_slot + 1]
-				next_slot += 2
+				var edges := GridUtils.wall_edges_of(data)
 				var palette := _palette_of(source_image, region)
-				ground.blit_rect(_prop_side(rng, shape, palette, side_slot.size, _facets_of(shape)),
-						Rect2i(Vector2i.ZERO, side_slot.size), side_slot.position)
-				ground.blit_rect(_prop_top(rng, shape, palette, top_slot.size),
-						Rect2i(Vector2i.ZERO, top_slot.size), top_slot.position)
-				# The mesh is sized to the art's OPAQUE BOUNDS, not to the tile: a rock is 32% clear
-				# (measured in #250), so a full cell-wide cube would be a box of mostly empty air.
-				var bounds := _opaque_bounds(source_image, region)
-				_add_item(ml, next_id, BoardMirror.prop_item_name(source_id, coords),
-						_prop_mesh(shape, prop_mat, _uv_rect(top_slot, atlas_size), side_slot,
-								atlas_size, bounds, patch, rng))
+				var mesh: ArrayMesh = null
+				if shape == GridUtils.PropShape.PLANE:
+					# A plane is sized by PLANE_HEIGHT/THICKNESS rather than by opaque bounds: it is
+					# thin BY DEFINITION in the axis it does not run along, and the bounds of a
+					# foreshortened north-south piece measure a run, not a wall (#263).
+					var own_uv := Rect2()
+					var face_uv := Rect2()
+					if edges & EW_EDGES != 0:
+						var own_slot: Rect2i = slots[next_slot]
+						next_slot += 1
+						# blit, not blend: an UNBASED copy, so the gaps between the logs stay
+						# transparent and the prop material scissors them out.
+						ground.blit_rect(source_image, region, own_slot.position)
+						own_uv = _uv_rect(own_slot, atlas_size)
+					if edges & NS_EDGES != 0:
+						var face_slot: Rect2i = slots[next_slot]
+						next_slot += 1
+						ground.blit_rect(_prop_side(rng, shape, palette, face_slot.size, 1),
+								Rect2i(Vector2i.ZERO, face_slot.size), face_slot.position)
+						face_uv = _uv_rect(face_slot, atlas_size)
+					mesh = _plane_mesh(prop_mat, edges, own_uv, face_uv)
+				else:
+					var side_slot: Rect2i = slots[next_slot]
+					var top_slot: Rect2i = slots[next_slot + 1]
+					next_slot += 2
+					ground.blit_rect(_prop_side(rng, shape, palette, side_slot.size, _facets_of(shape)),
+							Rect2i(Vector2i.ZERO, side_slot.size), side_slot.position)
+					ground.blit_rect(_prop_top(rng, shape, palette, top_slot.size),
+							Rect2i(Vector2i.ZERO, top_slot.size), top_slot.position)
+					# The mesh is sized to the art's OPAQUE BOUNDS, not to the tile: a rock is 32%
+					# clear (measured in #250), so a cell-wide cube would be a box of mostly air.
+					mesh = _prop_mesh(shape, prop_mat, _uv_rect(top_slot, atlas_size), side_slot,
+							atlas_size, _opaque_bounds(source_image, region), patch, rng)
+				if mesh == null:
+					return -1
+				_add_item(ml, next_id, BoardMirror.prop_item_name(source_id, coords), mesh)
 				next_id += 1
 				props += 1
 			# Only GROUND tiles are worth reporting now: an open prop is expected (it stands up
@@ -515,6 +546,73 @@ func _block_mesh(top_mat: Material, side_mat: Material,
 	return mesh
 
 
+# #263's oriented plane: one HALF-LENGTH slab per authored edge, running from the cell centre out to
+# that edge. A straight piece is two collinear halves -- one wall -- and a corner is two perpendicular
+# ones -- an L. One rule, no corner special case, and it falls out that each half wears the MATCHING
+# half of its tile's art, so a straight run reassembles the whole sprite un-squashed.
+#
+# An east/west slab wears the tile's own sprite (the sheet draws those walls face-on, so #250 holds);
+# a north/south one wears the generated face, because its art is a top-down foreshortening rather than
+# a picture of that wall. Its own builder rather than a widened _block_mesh, which centres on the
+# origin and takes one UV for all five non-top faces -- a half-slab needs neither.
+#
+# Every face of a slab takes the same rect: the narrow ends and the top are a PLANE_THICKNESS sliver,
+# and reserving atlas patches to dress 3 pixels would cost more than it could show.
+func _plane_mesh(mat: Material, edges: int, own_uv: Rect2, generated_uv: Rect2) -> ArrayMesh:
+	var mesh := ArrayMesh.new()
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	st.set_material(mat)
+	var half := PLANE_THICKNESS * 0.5
+	var built := 0
+	for edge: GridUtils.WallEdge in WALL_EDGE_STEPS:
+		if edges & edge == 0:
+			continue
+		var step: Vector3 = WALL_EDGE_STEPS[edge]
+		var lo: Vector3
+		var hi: Vector3
+		var uv: Rect2
+		if absf(step.z) > 0.5:
+			lo = Vector3(-half, 0.0, minf(step.z * 0.5, 0.0))
+			hi = Vector3(half, PLANE_HEIGHT, maxf(step.z * 0.5, 0.0))
+			uv = generated_uv
+		else:
+			lo = Vector3(minf(step.x * 0.5, 0.0), 0.0, -half)
+			hi = Vector3(maxf(step.x * 0.5, 0.0), PLANE_HEIGHT, half)
+			uv = _uv_half(own_uv, step.x > 0.0)
+		_box(st, lo, hi, uv)
+		built += 1
+	if built == 0:
+		push_error("A PLANE tile authored no wall_edges — it would render as nothing")
+		return null
+	st.commit(mesh)
+	return mesh
+
+
+# An axis-aligned box between two corners, every face wearing one rect. Same face order, winding and
+# normals as _block_mesh, which is the point of writing it out rather than sharing a helper: the two
+# differ only in that this one is not centred on the origin.
+func _box(st: SurfaceTool, lo: Vector3, hi: Vector3, uv: Rect2) -> void:
+	_quad(st, Vector3(lo.x, hi.y, lo.z), Vector3(hi.x, hi.y, lo.z),
+			Vector3(hi.x, hi.y, hi.z), Vector3(lo.x, hi.y, hi.z), Vector3.UP, uv)          # top
+	_quad(st, Vector3(lo.x, hi.y, hi.z), Vector3(hi.x, hi.y, hi.z),
+			Vector3(hi.x, lo.y, hi.z), Vector3(lo.x, lo.y, hi.z), Vector3.BACK, uv)        # south
+	_quad(st, Vector3(hi.x, hi.y, lo.z), Vector3(lo.x, hi.y, lo.z),
+			Vector3(lo.x, lo.y, lo.z), Vector3(hi.x, lo.y, lo.z), Vector3.FORWARD, uv)     # north
+	_quad(st, Vector3(hi.x, hi.y, hi.z), Vector3(hi.x, hi.y, lo.z),
+			Vector3(hi.x, lo.y, lo.z), Vector3(hi.x, lo.y, hi.z), Vector3.RIGHT, uv)       # east
+	_quad(st, Vector3(lo.x, hi.y, lo.z), Vector3(lo.x, hi.y, hi.z),
+			Vector3(lo.x, lo.y, hi.z), Vector3(lo.x, lo.y, lo.z), Vector3.LEFT, uv)        # west
+	_quad(st, Vector3(lo.x, lo.y, hi.z), Vector3(hi.x, lo.y, hi.z),
+			Vector3(hi.x, lo.y, lo.z), Vector3(lo.x, lo.y, lo.z), Vector3.DOWN, uv)        # bottom
+
+
+# The east or west half of a UV rect — the half of the sprite that belongs to that half-slab.
+func _uv_half(uv: Rect2, east: bool) -> Rect2:
+	var w := uv.size.x * 0.5
+	return Rect2(Vector2(uv.position.x + (w if east else 0.0), uv.position.y), Vector2(w, uv.size.y))
+
+
 # A wedge: high edge at -Z falling to -0.5 at +Z. Slope face wears the terrain
 # texture; GridMap orientation (yaw steps) points the high side at the upper level.
 func _ramp_mesh(top_mat: Material, side_mat: Material) -> ArrayMesh:
@@ -589,6 +687,32 @@ func _facets_of(shape: GridUtils.PropShape) -> int:
 #
 # These numbers are a FEEL value, not a measurement. Nothing pins them, and there is no runtime knob
 # because the mesh is baked — rounder is a line here plus a regenerate.
+# How thick a wall stands and how tall, as fractions of a cell (#263). FEEL values, and there is no
+# runtime knob for the same reason PRISM_PROFILE has none: the mesh is baked, so a slider would move
+# nothing. The height is the measured extent of this sheet's face-on fence art (13 of its 16 rows) and
+# is applied to EVERY plane rather than read per tile -- a north-south piece's art is a foreshortened
+# RUN, so its 16-row extent measures the wrong thing, and reading it would step a pen's side walls
+# 3/16 of a cell above its corners. The thickness is chosen, not measured: a palisade log is about
+# 7px across and rendering that literally reads as a barricade.
+const PLANE_THICKNESS := 3.0 / 16.0
+const PLANE_HEIGHT := 13.0 / 16.0
+
+# The world direction of each authored edge. Board -Z is north, the same convention
+# BoardMirror.RAMP_MESH_HIGH_SIDE states for the ramp wedge. Kept beside the builder that consumes it
+# rather than on the enum, because turning an edge into an offset is mesh knowledge.
+const WALL_EDGE_STEPS: Dictionary[GridUtils.WallEdge, Vector3] = {
+	GridUtils.WallEdge.NORTH: Vector3(0, 0, -1),
+	GridUtils.WallEdge.EAST: Vector3(1, 0, 0),
+	GridUtils.WallEdge.SOUTH: Vector3(0, 0, 1),
+	GridUtils.WallEdge.WEST: Vector3(-1, 0, 0),
+}
+
+# Which edges run which way is GridUtils.NS_EDGES / EW_EDGES — a property of the vocabulary, not of
+# this generator, so it is read rather than restated here.
+const NS_EDGES := GridUtils.NS_EDGES
+const EW_EDGES := GridUtils.EW_EDGES
+
+
 const PRISM_PROFILE: Dictionary[GridUtils.PropShape, Array] = {
 	GridUtils.PropShape.FACETED: [Vector2(0.0, 1.0), Vector2(1.0, 0.55)],
 	GridUtils.PropShape.ROUND: [
@@ -598,22 +722,44 @@ const PRISM_PROFILE: Dictionary[GridUtils.PropShape, Array] = {
 }
 
 
-# The patch-widths every solid tile in this source needs, in walk order: a SIDE run then a TOP.
-# Measured ahead of the walk because the atlas has to be allocated at its finished height before the
-# first UV inside the walk is taken.
+# The generated patches ONE tile needs, in the order the walk consumes them. Both the pre-pass that
+# sizes the atlas and the walk that fills it call this, so they cannot disagree -- #274 collapsed a
+# counter consulted twice into one function for exactly that reason, and #263 is why it had to become
+# a function of the tile rather than of the shape: a plane's count depends on its authored edges.
 #
 # A prism's side run is one patch PER FACET, and that is a resolution requirement rather than a
 # convenience: slicing a single 16px patch into a barrel's ten facets would leave 1.6 texels each.
+func _patch_widths_for(shape: GridUtils.PropShape, edges: int) -> Array[int]:
+	if not GridUtils.SOLID_SHAPES.has(shape):
+		return []
+	if shape == GridUtils.PropShape.PLANE:
+		# Up to two, and which ones depends on how this piece runs. An east-west wall is drawn FACE-ON
+		# in the sheet, so its slab wears the tile's own sprite and #250 holds -- but it needs a patch
+		# anyway, because the ground square under a standing tile holds only its BASE (the sprite is
+		# deliberately not baked there, or the fence would render twice) and an UNBASED copy is the
+		# only place the gaps between the logs survive. A north-south wall is drawn edge-on -- a
+		# top-down foreshortening whose posts stack DOWN-screen, which on a plane facing east renders
+		# as a tower of logs rather than a row (measured, #263) -- so its face is generated instead.
+		# No top patch either way: a slab's top is a PLANE_THICKNESS sliver.
+		var widths: Array[int] = []
+		if (edges & EW_EDGES) != 0:
+			widths.append(1)   # the tile's own sprite, copied unbased
+		if (edges & NS_EDGES) != 0:
+			widths.append(1)   # the generated north-south face
+		return widths
+	return [_facets_of(shape), 1]   # side run, then top
+
+
+# Measured ahead of the walk because the atlas has to be allocated at its finished height before the
+# first UV inside the walk is taken.
 func _solid_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
 	var widths: Array[int] = []
 	for coords in _sorted_tile_coords(atlas):
 		if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		var shape := GridUtils.prop_shape_of(atlas.get_tile_data(coords, 0))
-		if not GridUtils.SOLID_SHAPES.has(shape):
-			continue
-		widths.append(_facets_of(shape))   # side
-		widths.append(1)                   # top
+		var data := atlas.get_tile_data(coords, 0)
+		widths.append_array(_patch_widths_for(GridUtils.prop_shape_of(data),
+				GridUtils.wall_edges_of(data)))
 	return widths
 
 
@@ -733,7 +879,10 @@ func _prop_top(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: 
 #   CUBE     one cell, four congruent sides — vertical planks between end rails
 #   ROUND    a continuous band, one stave per facet, so it wraps the pot exactly once
 #   FACETED  one INDEPENDENT cell per facet, each a different stone tone, so the lump reads faceted
-# The last two are the same UV rule; only the texture differs, which is the point.
+#   PLANE    a palisade — upright logs with a gap between them, capped by a rail (#263)
+# ROUND and FACETED are the same UV rule; only the texture differs, which is the point. PLANE keeps
+# its own arm rather than borrowing ROUND's staves, which it happens to resemble: the pattern IS the
+# object's identity here, and welding a fence to a barrel would make either one untunable alone.
 func _prop_side(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
 		size: Vector2i, facets: int) -> Image:
 	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
@@ -761,6 +910,15 @@ func _prop_side(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette:
 						shade = 1
 					else:
 						shade = 3 if (x / stave) % 2 == 0 else 2
+				GridUtils.PropShape.PLANE:
+					# A gap between logs, not a seam: the darkest shade, so the wall reads as
+					# see-through even though the face itself is opaque.
+					if x % stave == 0:
+						shade = 0
+					elif y < rail:
+						shade = 3                      # the rounded, lit tops
+					else:
+						shade = 2 if (x / stave) % 2 == 0 else 1
 				_:
 					# A tone per facet, walked so neighbours differ; the real sun does the shading,
 					# so this is albedo variation only and nothing is baked in.

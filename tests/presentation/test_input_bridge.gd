@@ -63,9 +63,18 @@ func _pickable_player_unit() -> Unit:
 	for unit in _live_units():
 		if unit.get_faction() != Team.Faction.PLAYER:
 			continue
-		if not _under_ui(_screen_of(unit.movement.cell)):
+		if not _under_ui(_screen_of(unit.movement.cell)) and _click_lands_on(unit.movement.cell):
 			return unit
 	return null
+
+
+# Does a click aimed at this cell actually resolve TO it? Asked of the real picker, because that is
+# the only thing that knows: a taller column standing between the camera and the cell shadows it,
+# and the click lands on the blocker instead. Invisible while every board is flat, routine the
+# moment one is not — which is why "is this cell reachable by the pointer" stopped being answerable
+# by a UI-overlap check alone.
+func _click_lands_on(cell: Vector2i) -> bool:
+	return BoardSpace.flat(_scene._pick(_screen_of(cell))) == cell
 
 
 func _under_ui(screen_pos: Vector2) -> bool:
@@ -79,8 +88,61 @@ func _under_ui(screen_pos: Vector2) -> bool:
 	return false
 
 
+# Where this cell's surface appears on screen. Read off _scene._tops — the SAME table the picker
+# resolves against — rather than assuming level 0: BoardPicker._top_cell returns
+# Vector3i(x, level - 1, z), whose standing_point y is exactly `level * CELL_SIZE`, so aiming here
+# cannot drift from what a click actually hits, ramps included. Hardcoding 0 was a bet on the
+# fixture staying flat, and painting three tiles onto Prolog aborted this whole suite (measured).
 func _screen_of(cell: Vector2i) -> Vector2:
-	return _camera3d.unproject_position(BoardSpace.standing_point(BoardSpace.of_cell(cell, 0)))
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	var level: int = tops.get(cell, BoardSpace.FLAT_TOP_LEVEL)
+	var point := Vector3((cell.x + 0.5) * BoardSpace.CELL_SIZE, level * BoardSpace.CELL_SIZE,
+			(cell.y + 0.5) * BoardSpace.CELL_SIZE)
+	return _camera3d.unproject_position(point)
+
+
+# The mirror cell an overlay marker on this 2D cell lands on. Derived through the elevation store
+# the way OverlayMirror._level_of derives it — the seam that actually chose the level — so a repaint
+# moves the expectation and the assertion together.
+func _marked(cell: Vector2i) -> Vector3i:
+	var heights: BoardHeights = _game.board_heights
+	return BoardSpace.of_cell(cell, heights.elevation_at(cell))
+
+
+# A cell this unit can ACTUALLY be ordered into, taken from the game's own move range — the very set
+# enter_move_mode paints and the click handler accepts.
+#
+# `cell + (1, 0)` was a bet on two things at once: that the mission paints ground to the east, and
+# that stepping onto it is legal. Elevation falsified the second (a terrace is a height step the
+# mover may refuse), so a hill painted three tiles away made a case about INPUT DELEGATION queue no
+# move at all — measured, and it is what this helper replaces. Nearest-first so the cell stays in
+# frame and the click has something to land on.
+func _reachable_destination(unit: Unit) -> Vector2i:
+	var reachable: Array[Vector2i] = _game.get_move_range(_game.compute_move_range(unit), unit)
+	var from: Vector2i = unit.movement.cell
+	reachable.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return absi(a.x - from.x) + absi(a.y - from.y) < absi(b.x - from.x) + absi(b.y - from.y))
+	for cell in reachable:
+		if not _under_ui(_screen_of(cell)) and _click_lands_on(cell):
+			return cell
+	return GridUtils.NO_CELL
+
+
+# A player unit the pointer can reach that ALSO has somewhere legal to go, paired with that
+# destination. The two halves are searched together on purpose: the first clickable unit is not
+# necessarily one that can move — a unit standing on a terrace with no ramp off it is genuinely
+# stuck — and asking the questions separately leaves the case driving a unit that cannot be ordered
+# anywhere, which reads as "the click queued no move" and blames the input wire.
+func _unit_with_a_destination() -> Array:
+	for unit in _live_units():
+		if unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		if _under_ui(_screen_of(unit.movement.cell)):
+			continue
+		var destination := _reachable_destination(unit)
+		if destination != GridUtils.NO_CELL:
+			return [unit, destination]
+	return []
 
 
 func _parse_motion(screen_pos: Vector2) -> void:
@@ -264,7 +326,7 @@ func test_3d_hover_drives_the_real_hover_presenter() -> void:
 
 	assert_that(_game.hover_presenter.last_hovered_cell).is_equal(cell)
 	assert_bool(seen.has(cell)).is_true()
-	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([Vector3i(cell.x, 0, cell.y)])
+	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([_marked(cell)])
 
 
 func test_hover_reaches_cells_the_hidden_camera_cannot_see() -> void:
@@ -284,7 +346,7 @@ func test_hover_reaches_cells_the_hidden_camera_cannot_see() -> void:
 
 	assert_that(_game.hover_presenter.last_hovered_cell).is_equal(far)
 	assert_bool(seen.has(far)).is_true()
-	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([BoardSpace.of_cell(far, 0)])
+	assert_that(_overlays.cells_of(BoardOverlays.Layer.HOVER)).is_equal([_marked(far)])
 
 
 # --- Camera ownership (#176 stage 4d) ---------------------------------------------------
@@ -338,12 +400,16 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
 	var board: GridMap = _scene.get_node("Board")
-	var mirrored: Array[Vector3i] = []
-	mirrored.assign(board.get_used_cells())
+	# Compared as FOOTPRINTS — the set of columns, never their heights. The claim here is "the
+	# rebuild ran", and a cell-for-cell compare answered it by hand-listing what the mission happens
+	# to be painted to, so a height-brush stroke reddened a case about the load funnel (it did:
+	# b057f6e). What a column CONTAINS is BoardMirror's business, pinned by test_board_mirror's #273
+	# cases against game.board_heights. column_tops_from is keyed by column, so its keys are the
+	# footprint — the production seam already answers this, and the next assert uses the same call.
+	var mirrored: Array[Vector2i] = []
+	mirrored.assign(BoardPicker.column_tops_from(board).keys())
 	mirrored.sort()
-	var expected: Array[Vector3i] = []
-	for cell: Vector2i in _game.grid.get_used_cells():
-		expected.append(BoardSpace.of_cell(cell, 0))
+	var expected: Array[Vector2i] = _game.grid.get_used_cells()
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
@@ -428,9 +494,11 @@ func test_the_delegation_gate_stops_the_2d_board_acting_twice() -> void:
 	#
 	# Asserted on the QUEUE, never on the end-state selection: a second dispatch would
 	# simply overwrite the selection and the case would read green through the bug.
-	var unit := _pickable_player_unit()
-	var destination := unit.movement.cell + Vector2i(1, 0)
-	assert_bool(_game.grid.get_cell_tile_data(destination) != null).is_true()   # fixture sanity
+	var pair := _unit_with_a_destination()
+	assert_bool(pair.is_empty()).override_failure_message(
+			"no player unit has a clickable destination; the case cannot be driven").is_false()
+	var unit: Unit = pair[0]
+	var destination: Vector2i = pair[1]
 	_game.selected_unit = unit
 	_game.enter_move_mode(unit)
 
@@ -603,3 +671,81 @@ func test_the_dev_overlay_resolves_while_the_game_is_hosted_in_3d() -> void:
 			"game.dev_overlay is null while hosted under Battle3D — the lookup is mount-dependent again").is_not_null()
 	# It really is the one hanging off the hosted Main, not some other tree's.
 	assert_object(overlay).is_same(_scene.get_node("Main/DevOverlay"))
+
+
+# ---- the wheel: brush level vs camera zoom (#285) ----
+#
+# The fourth binding collision in this arc, after RMB and SPACE. battle3d routes the wheel to the
+# brush and RETURNS -- but a bare return does not CONSUME, and the rig reads the wheel in its own
+# _unhandled_input, so one notch did both jobs. These are wire cases on purpose: asserting only
+# that the level moved is exactly the blind spot that let this ship.
+
+func _rig() -> Node3D:
+	return _scene.get_node("CameraRig") as Node3D
+
+
+func _elevation_brush() -> TileBrushTool:
+	_arm_brush()
+	var brush: TileBrushTool = _game.dev_overlay.tile_brush
+	brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	brush.set_elevation(0)
+	return brush
+
+
+# A notch is a press AND a release, the way Godot emits it.
+func _parse_wheel(button: MouseButton, ctrl := false) -> void:
+	var at := Vector2(get_tree().root.size) * 0.5
+	for pressed in [true, false]:
+		var event := InputEventMouseButton.new()
+		event.position = at
+		event.global_position = at
+		event.button_index = button
+		event.pressed = pressed
+		event.ctrl_pressed = ctrl
+		Input.parse_input_event(event)
+
+
+func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void:
+	var brush := _elevation_brush()
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
+	await _pump()
+
+	assert_int(brush.selected_elevation()).override_failure_message(
+			"the notch never reached the brush").is_equal(1)
+	assert_float(_rig()._target_distance).override_failure_message(
+			"the same notch ALSO zoomed the camera: the brush is not suppressing the rig's wheel"
+			).is_equal_approx(zoom_before, 0.001)
+
+
+func test_ctrl_hands_the_notch_back_to_the_camera() -> void:
+	# Zoom needs somewhere to live while the wheel is the level.
+	var brush := _elevation_brush()
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP, true)
+	await _pump()
+
+	assert_int(brush.selected_elevation()).override_failure_message(
+			"Ctrl+wheel moved the brush level as well as the camera").is_equal(0)
+	assert_float(_rig()._target_distance).override_failure_message(
+			"Ctrl+wheel did not zoom").is_less(zoom_before)
+
+
+func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
+	# The consume is scoped to ELEVATION: the other three modes never read the wheel, so
+	# suppressing zoom for them would cost the 3D view its most-used gesture for nothing.
+	_arm_brush()
+	var brush: TileBrushTool = _game.dev_overlay.tile_brush
+	brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	await _pump()
+	var zoom_before: float = _rig()._target_distance
+
+	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
+	await _pump()
+
+	assert_float(_rig()._target_distance).override_failure_message(
+			"an armed TERRAIN brush swallowed the camera's zoom").is_less(zoom_before)
