@@ -116,6 +116,37 @@ static func _write_channel(state: Dictionary, index: int, value_255: float,
 	on_change.call(color)
 
 
+# Godot's tooltip does NOT reliably walk up to a parent -- a slider or SpinBox under the cursor
+# has mouse_filter STOP and answers for itself -- so a row's tooltip has to be set on every
+# control in it, or hovering the handle (the thing you are actually dragging) shows nothing.
+static func apply_tooltip(node: Node, text: String) -> void:
+	var control := node as Control
+	if control != null:
+		control.tooltip_text = text
+	for child in node.get_children():
+		apply_tooltip(child, text)
+
+
+# A tooltip is a plain Label with no autowrap, so a long one renders as one very wide line off
+# the edge of the screen. Wrapping is done HERE rather than by hand-typed newlines in the text so
+# the width holds no matter how the wording is later edited. Existing newlines are kept as
+# paragraph breaks.
+static func wrap_tooltip(text: String, width := 74) -> String:
+	var out: PackedStringArray = PackedStringArray()
+	for paragraph: String in text.split("\n"):
+		var line := ""
+		for word: String in paragraph.split(" ", false):
+			if line == "":
+				line = word
+			elif line.length() + 1 + word.length() <= width:
+				line += " " + word
+			else:
+				out.append(line)
+				line = word
+		out.append(line)
+	return "\n".join(out)
+
+
 # How many decimals a step implies -- 0.005 prints 3, 1.0 prints 0. Derived rather than declared
 # so a knob's precision cannot disagree with the step it moves in.
 static func format_decimals(value: float, step: float) -> String:

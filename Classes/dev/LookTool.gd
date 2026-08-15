@@ -25,99 +25,216 @@ class_name LookTool
 # options = an int-backed enum, labels in declaration order.
 const KNOBS: Array[Dictionary] = [
 	# --- Lighting ---
-	{"group": "Lighting", "node": "Sun", "prop": "light_energy", "label": "Sun energy", "min": 0.0, "max": 6.0, "step": 0.01},
-	{"group": "Lighting", "node": "Sun", "prop": "light_color", "label": "Sun colour"},
-	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:x", "label": "Sun elevation", "min": -90.0, "max": 0.0, "step": 0.5},
-	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:y", "label": "Sun azimuth", "min": -180.0, "max": 180.0, "step": 0.5},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_enabled", "label": "Shadows"},
+	{"group": "Lighting", "node": "Sun", "prop": "light_energy", "label": "Sun energy", "min": 0.0, "max": 6.0, "step": 0.01,
+		"tip": "How bright the sun is. Multiplies its colour rather than replacing it, and the whole scene's exposure keys off this -- a big move here usually wants Exposure re-checked too."},
+	{"group": "Lighting", "node": "Sun", "prop": "light_color", "label": "Sun colour",
+		"tip": "The sun's tint. Warm reads as late day, cool as overcast or moonlight. Brightness is Sun energy, not here -- keep this near white unless you want the light itself coloured."},
+	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:x", "label": "Sun elevation", "min": -90.0, "max": 0.0, "step": 0.5,
+		"tip": "How high the sun sits. Near 0 is on the horizon, throwing long raking shadows; -90 is directly overhead, giving short shadows and flat-reading surfaces."},
+	{"group": "Lighting", "node": "Sun", "prop": "rotation_degrees:y", "label": "Sun azimuth", "min": -180.0, "max": 180.0, "step": 0.5,
+		"tip": "Which direction the sun comes FROM. Swings shadows around the board without changing how long they are -- that is Sun elevation's job."},
+	{"group": "Lighting", "node": "Sun", "prop": "shadow_enabled", "label": "Shadows",
+		"tip": "Whether the sun casts shadows at all. A useful A/B when judging whether a shape reads because of the lighting or because of the sprite itself."},
 	# The #226 pair: units reading as hovering is most likely peter-panning, chased by eye.
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_bias", "label": "Shadow bias", "min": 0.0, "max": 0.5, "step": 0.001},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_normal_bias", "label": "Shadow normal bias", "min": 0.0, "max": 4.0, "step": 0.01},
-	{"group": "Lighting", "node": "Sun", "prop": "shadow_opacity", "label": "Shadow opacity", "min": 0.0, "max": 1.0, "step": 0.01},
-	{"group": "Lighting", "node": "Sun", "prop": "directional_shadow_max_distance", "label": "Shadow draw distance", "min": 10.0, "max": 300.0, "step": 1.0},
+	{"group": "Lighting", "node": "Sun", "prop": "shadow_bias", "label": "Shadow bias", "min": 0.0, "max": 0.5, "step": 0.001,
+		"tip": "Pushes a shadow away from the surface casting it, to stop that surface shadowing itself (acne -- a stippled, crawling look). Too high and the shadow detaches from the feet, which is what makes units read as hovering (#226)."},
+	{"group": "Lighting", "node": "Sun", "prop": "shadow_normal_bias", "label": "Shadow normal bias", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "The same trade as Shadow bias, but offsetting along the surface's facing instead of toward the light. Tuned together with it: one fixes acne on flat ground, the other on slopes."},
+	{"group": "Lighting", "node": "Sun", "prop": "shadow_opacity", "label": "Shadow opacity", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How dark a shadow goes. 1 is as dark as the ambient light allows; 0 makes shadows invisible without turning the shadow pass off."},
+	{"group": "Lighting", "node": "Sun", "prop": "directional_shadow_max_distance", "label": "Shadow draw distance", "min": 10.0, "max": 300.0, "step": 1.0,
+		"tip": "How far from the camera the sun still draws shadows. Lower concentrates the same shadow resolution on what is near, so shadows sharpen -- but push it too low and distant shadows vanish outright."},
 
 	# --- Sky ---
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_top_color", "label": "Sky top"},
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_horizon_color", "label": "Sky horizon"},
-	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:ground_horizon_color", "label": "Ground horizon"},
+	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_top_color", "label": "Sky top",
+		"tip": "The sky straight overhead. It feeds AMBIENT light as well as the visible sky, so it tints everything the sun does not hit directly -- the shadows most of all."},
+	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:sky_horizon_color", "label": "Sky horizon",
+		"tip": "The sky at the horizon line. The gradient between this and Sky top carries most of a sky's mood; a warm horizon under a cool top reads as dawn or dusk."},
+	{"group": "Sky", "node": "WorldEnvironment", "prop": "environment:sky:sky_material:ground_horizon_color", "label": "Ground horizon",
+		"tip": "The half of the procedural sky BELOW the horizon. Barely visible at this camera pitch, but it still bounces into ambient, so it warms or cools the underside of everything."},
 
 	# --- Post ---
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_mode", "label": "Tonemap", "options": ["Linear", "Reinhard", "Filmic", "ACES", "AgX"]},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_exposure", "label": "Exposure", "min": 0.1, "max": 4.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_white", "label": "White point", "min": 0.1, "max": 4.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_enabled", "label": "Glow"},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_intensity", "label": "Glow intensity", "min": 0.0, "max": 4.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_strength", "label": "Glow strength", "min": 0.0, "max": 2.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_bloom", "label": "Glow bloom", "min": 0.0, "max": 1.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_hdr_threshold", "label": "Glow HDR threshold", "min": 0.0, "max": 4.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_enabled", "label": "SSAO"},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_radius", "label": "SSAO radius", "min": 0.1, "max": 8.0, "step": 0.05},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_intensity", "label": "SSAO intensity", "min": 0.0, "max": 8.0, "step": 0.05},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_power", "label": "SSAO power", "min": 0.1, "max": 8.0, "step": 0.05},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_enabled", "label": "Colour adjust"},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_brightness", "label": "Brightness", "min": 0.1, "max": 3.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_contrast", "label": "Contrast", "min": 0.1, "max": 3.0, "step": 0.01},
-	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_saturation", "label": "Saturation", "min": 0.0, "max": 3.0, "step": 0.01},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_mode", "label": "Tonemap", "options": ["Linear", "Reinhard", "Filmic", "ACES", "AgX"],
+		"tip": "How light brighter than white gets squeezed into a displayable image. Linear just clips, so highlights blow out flat. Reinhard is soft and slightly washed. Filmic and ACES roll highlights off with more contrast. AgX is the flattest and most modern, and desaturates bright colour least."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_exposure", "label": "Exposure", "min": 0.1, "max": 4.0, "step": 0.01,
+		"tip": "Overall brightness applied BEFORE tonemapping, like a camera's exposure. Prefer this over Brightness for a general 'more light' -- it keeps the highlight roll-off intact instead of flattening it."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:tonemap_white", "label": "White point", "min": 0.1, "max": 4.0, "step": 0.01,
+		"tip": "Which input brightness maps to pure white. Raise it to keep detail in bright areas for longer; lower it to blow highlights out sooner and harder."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_enabled", "label": "Glow",
+		"tip": "Whether bright areas bleed light into their surroundings at all. The whole bloom stack on or off -- the four dials below do nothing while this is off."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_intensity", "label": "Glow intensity", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "How strong the bloom is on anything that passes the threshold. The 'how much' dial."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_strength", "label": "Glow strength", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How far the bloom spreads before fading out. The 'how wide' dial -- bigger values give a softer, hazier halo around the same bright pixel."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_bloom", "label": "Glow bloom", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Adds glow to EVERYTHING, not just what passes the threshold. Small values only, unless a hazy dream look is what you are after -- this is the one that quietly fogs the whole image."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:glow_hdr_threshold", "label": "Glow HDR threshold", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "How bright a pixel must be before it glows at all. Lower catches more of the scene (and can make ordinary lit ground shimmer); raise it to keep glow on genuine highlights like the flame."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_enabled", "label": "SSAO",
+		"tip": "Screen-space ambient occlusion: darkens creases and contact points that ambient light would struggle to reach. A cheap, strong cue for where things MEET -- especially a sprite's feet and the ground."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_radius", "label": "SSAO radius", "min": 0.1, "max": 8.0, "step": 0.05,
+		"tip": "How far around a point the effect looks for things blocking ambient light, in world units. Small values darken only tight corners; large values shade broad areas and start to look like dirt."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_intensity", "label": "SSAO intensity", "min": 0.0, "max": 8.0, "step": 0.05,
+		"tip": "How dark the occlusion goes. The most visible SSAO dial and the easiest to overdo -- past a point everything looks smudged with soot."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:ssao_power", "label": "SSAO power", "min": 0.1, "max": 8.0, "step": 0.05,
+		"tip": "The falloff curve. Higher values keep the darkening tight to the contact point instead of spreading it evenly across the radius."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_enabled", "label": "Colour adjust",
+		"tip": "Whether the final brightness / contrast / saturation pass runs. The three dials below do nothing while this is off."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_brightness", "label": "Brightness", "min": 0.1, "max": 3.0, "step": 0.01,
+		"tip": "Flat multiplier on the FINISHED image. Blunter than Exposure because it lifts blacks along with everything else -- reach for Exposure first."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_contrast", "label": "Contrast", "min": 0.1, "max": 3.0, "step": 0.01,
+		"tip": "Pushes the finished image away from mid-grey. Above 1 deepens shadows and brightens highlights; below 1 flattens toward grey."},
+	{"group": "Post", "node": "WorldEnvironment", "prop": "environment:adjustment_saturation", "label": "Saturation", "min": 0.0, "max": 3.0, "step": 0.01,
+		"tip": "Colour intensity of the finished image. 0 is greyscale, 1 is untouched. A small lift is the cheapest way to make pixel art pop; too much and the palette turns to candy."},
 
 	# --- Fog ---
 	# The sunset preset reading as a forest fire is the case #212 was filed over.
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_enabled", "label": "Volumetric fog"},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_density", "label": "Fog density", "min": 0.0, "max": 0.2, "step": 0.001},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_albedo", "label": "Fog albedo"},
-	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_anisotropy", "label": "Fog anisotropy", "min": -0.9, "max": 0.9, "step": 0.01},
+	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_enabled", "label": "Volumetric fog",
+		"tip": "A real volume of fog that light scatters THROUGH, not a flat colour laid over the image -- which is why lights carry visible shafts through it. Forward+ only, and the reason the renderer is not Mobile."},
+	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_density", "label": "Fog density", "min": 0.0, "max": 0.2, "step": 0.001,
+		"tip": "How thick the fog is. Tiny numbers go a long way -- this is the dial that made the sunset preset read as a forest fire, which is what got this whole panel filed (#212)."},
+	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_albedo", "label": "Fog albedo",
+		"tip": "The fog's own colour -- what it scatters back at you. Warm fog under a low sun reads as smoke or dust; cool fog reads as mist."},
+	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_anisotropy", "label": "Fog anisotropy", "min": -0.9, "max": 0.9, "step": 0.01,
+		"tip": "Which way the fog throws light. Positive scatters it forward, so a bright haze gathers around whatever is lighting it; negative scatters back toward the source; 0 scatters evenly in all directions."},
 
 	# --- Camera ---
-	{"group": "Camera", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5},
-	{"group": "Camera", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5},
-	{"group": "Camera", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0},
-	{"group": "Camera", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05},
-	{"group": "Camera", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5},
-	{"group": "Camera", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5},
-	{"group": "Camera", "node": "CameraRig", "prop": "fit_margin_cells", "label": "Fit margin (cells)", "min": 0.0, "max": 8.0, "step": 0.25},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05},
+	{"group": "Camera", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
+		"tip": "How far the camera looks DOWN at the board. Shallow shows more of the sprites' faces and more sky; steep reads like a map. Press Re-fit camera after moving it -- the framing maths only re-runs on a board load."},
+	{"group": "Camera", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
+		"tip": "Field of view. Low values flatten perspective toward an orthographic, model-railway look (the HD-2D diorama trick); high values exaggerate depth and bend the board's edges. Press Re-fit camera after moving it."},
+	{"group": "Camera", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,
+		"tip": "How many cells wide the view is when a mission OPENS, centred on your own units. It does not limit zoom -- the whole board still does -- it only decides where the game starts you."},
+	{"group": "Camera", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
+		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
+	{"group": "Camera", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
+		"tip": "How far one notch of the mouse wheel moves the camera."},
+	{"group": "Camera", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
+		"tip": "How fast the camera catches up to where it has been told to go. Higher is snappier and more responsive; lower glides, which reads as cinematic until you are trying to play."},
+	{"group": "Camera", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5,
+		"tip": "How fast WASD slides the camera across the board, in world units per second."},
+	{"group": "Camera", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01,
+		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit."},
+	{"group": "Camera", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
+		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
+	{"group": "Camera", "node": "CameraRig", "prop": "fit_margin_cells", "label": "Fit margin (cells)", "min": 0.0, "max": 8.0, "step": 0.25,
+		"tip": "Breathing room left around the board whenever the camera frames it, so the edge tiles are not flush against the screen."},
+	{"group": "Camera", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
+		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
 
 	# --- Depth of field ---
 	# The BANDS are the knobs; the distances they produce are re-derived per frame off the live
 	# camera distance, which is what stopped close zooms drifting the board into the near blur.
-	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_near", "label": "Near band", "min": 0.5, "max": 20.0, "step": 0.1},
-	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_far", "label": "Far band", "min": 0.5, "max": 20.0, "step": 0.1},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_amount", "label": "Blur amount", "min": 0.0, "max": 0.5, "step": 0.005},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_enabled", "label": "Near blur"},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_transition", "label": "Near transition", "min": 0.1, "max": 20.0, "step": 0.1},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_enabled", "label": "Far blur"},
-	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_transition", "label": "Far transition", "min": 0.1, "max": 20.0, "step": 0.1},
+	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_near", "label": "Near band", "min": 0.5, "max": 20.0, "step": 0.1,
+		"tip": "How far IN FRONT of the focus point stays sharp; the near blur begins past it. The rig re-derives the actual focus distances every frame from the live camera distance, which is why those are not knobs -- static ones drifted the board into the near blur on a close zoom."},
+	{"group": "Depth of field", "node": "CameraRig", "prop": "focus_band_far", "label": "Far band", "min": 0.5, "max": 20.0, "step": 0.1,
+		"tip": "The same, BEHIND the focus point: how far back stays sharp before the far blur begins. Narrow both bands for the strongest miniature effect."},
+	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_amount", "label": "Blur amount", "min": 0.0, "max": 0.5, "step": 0.005,
+		"tip": "How strong the blur gets once a pixel is outside the sharp band. The headline tilt-shift / miniature-diorama dial, and the one most worth sweeping slowly."},
+	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_enabled", "label": "Near blur",
+		"tip": "Whether anything CLOSER than the sharp band blurs at all. Off is worth trying -- near blur is the half most likely to read as a smeared foreground rather than as depth."},
+	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_near_transition", "label": "Near transition", "min": 0.1, "max": 20.0, "step": 0.1,
+		"tip": "How gradually the near blur ramps in. Small values give a hard edge where sharp becomes blurred; large values fade it in over distance."},
+	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_enabled", "label": "Far blur",
+		"tip": "Whether anything BEYOND the sharp band blurs at all. This is the half that sells the diorama, by making the far edge of the board read as distant."},
+	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_transition", "label": "Far transition", "min": 0.1, "max": 20.0, "step": 0.1,
+		"tip": "How gradually the far blur ramps in. Too abrupt and you can see the band's edge crossing the board as a line."},
 
 	# --- Board markup ---
 	# fill_lift and lift_step raise every ground marker together, arrows included. A lift the
 	# ARROWS own alone (#227) needs its own export on BoardOverlays -- not in this slice.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint"},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001,
+		"tip": "How far every ground marker floats above the tile's top face. Enough to beat z-fighting (the flickering where two surfaces share a plane) and no more -- too much and the markup visibly hovers."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005,
+		"tip": "Extra lift per sort layer, so stacked markers never land on exactly the same plane and fight. Also what keeps path arrows drawing over the move fill rather than through it."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005,
+		"tip": "Length of each arm of the corner bracket that marks the hovered cell. Short arms read as corner ticks; long ones close into a full box."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001,
+		"tip": "How chunky the hover bracket's arms are. Thin reads precise, thick reads legible at a distance."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
+		"tip": "Size of the whole hover bracket relative to one cell. Just above 1 makes it sit proud of the tile edge so it is not swallowed by the tile art."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
+		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
+		"tip": "How high a selection icon floats above the cell it marks. High enough to clear the unit standing there, low enough not to read as belonging to the cell behind."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
+		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
 	# --- Effects ---
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth"},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1},
-	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How high the fire billboard's centre sits above a burning tile. Raising it makes fire read as standing up off the ground rather than lying on it."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01,
+		"tip": "Width of the fire billboard in world units, where 1.0 is exactly one cell across."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01,
+		"tip": "Height of the fire billboard in world units. Taller than wide reads as a flame; square reads as a scorch."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
+		"tip": "Gap between the base of the flame and the tile surface. A small gap stops the flame z-fighting the ground it stands on; too large and the fire floats."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",
+		"tip": "Whether the flame writes into the depth buffer. On, it occludes what is behind it correctly but can cut a hard edge against overlapping sprites; off, it always draws as a soft overlay and never clips."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05,
+		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
+		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
+	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
+]
+
+# Board-markup colours (#212 slice 2). A DECLARED second table rather than a widening of KNOBS:
+# those entries address a property path through get_indexed/set_indexed, these address a LAYER
+# through an accessor pair, and one table meaning both would hide the difference that matters.
+#
+# Which layers appear here is measured, not chosen. `set_layer_modulate` REPLACES a layer's albedo,
+# so any layer something already drives per frame would take a knob that silently reverts -- the
+# lying-slider class. Excluded for that reason: ATTACK's 3D side and AIM (OverlayMirror rewrites
+# both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL/ZONE_HIGHLIGHT
+# are excluded as authoring-only -- invisible during real play, and they READ OverlayManager's
+# constants, so a knob would fork a value that is deliberately one (dev call).
+#
+# `reach` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
+# the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
+const LAYER_KNOBS: Array[Dictionary] = [
+	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
+		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
+	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
+		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
+	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
+		"tip": "Marks the members of the currently selected squad."},
+	{"group": "Board markup colours", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
+		"tip": "The leader's cohesion range -- how far squadmates may stray before the plan is refused. Shares its colour with Squad fill by default, since they are two halves of the same idea."},
+	{"group": "Board markup colours", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
+		"tip": "A painted objective zone that can be captured. Stays visible for the whole battle -- this is live objective information, not authoring scaffolding."},
+	{"group": "Board markup colours", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
+		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
+	{"group": "Board markup colours", "label": "Attack reach (2D+3D)", "reach": "ATTACK_MODULATE",
+		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
+	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "reach": "HEAL_ATTACK_MODULATE",
+		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
 ]
 
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Scenario tab's heading gold
 
+# Which SUB-TAB each group lands on (dev, 2026-08-14: ~60 rows in one scroll is too much for a
+# 900x360 window, so split to about a windowful each). A map rather than a key on every knob, so
+# adding a knob stays one line and adding a GROUP is one line here -- and a group with no tab is a
+# group that silently vanishes from the panel, which is why a law test pins the mapping complete.
+# Declaration order below is the tab order.
+const GROUP_TABS: Dictionary[String, String] = {
+	"Lighting": "Lighting",
+	"Sky": "Lighting",
+	"Post": "Post",
+	"Fog": "Fog & DoF",
+	"Depth of field": "Fog & DoF",
+	"Camera": "Camera",
+	"Board markup": "Markup",
+	"Board markup colours": "Markup",
+	"Effects": "Effects",
+}
+
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
 var _baseline: Array = []        # the authored value per KNOBS index, read once on attach
-var _rows: VBoxContainer
+var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index
+var _tabs: TabContainer
+var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
 
 
@@ -135,13 +252,20 @@ func _ready() -> void:
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status)
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	add_child(scroll)
-	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_rows)
+	# Buttons and status sit ABOVE the sub-tabs and outside them, so they are reachable from every
+	# tab (dev ask) -- Reset and Re-fit are panel-wide, not per-group.
+	_tabs = TabContainer.new()
+	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	add_child(_tabs)
+	for tab_title: String in _tab_titles():
+		var scroll := ScrollContainer.new()
+		scroll.name = tab_title
+		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+		_tabs.add_child(scroll)
+		var rows := VBoxContainer.new()
+		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		scroll.add_child(rows)
+		_tab_rows[tab_title] = rows
 	_rebuild()
 
 
@@ -152,7 +276,68 @@ func attach_host(host: Node3D) -> void:
 	_baseline.clear()
 	for knob: Dictionary in KNOBS:
 		_baseline.append(read(knob))   # authored by definition: nothing has moved one yet
+	_layer_baseline.clear()
+	for knob: Dictionary in LAYER_KNOBS:
+		_layer_baseline.append(read_layer(knob))
 	_rebuild()
+
+
+# --- Board-markup colours ---------------------------------------------------------------
+
+func _overlays() -> BoardOverlays:
+	if _host == null:
+		return null
+	return _host.get_node_or_null(^"BoardOverlays") as BoardOverlays
+
+
+# A reach colour is a STATIC var, and Object.get/set are instance methods -- there is no reflecting
+# on the class, so the two names are matched explicitly. An unknown one is a loud failure rather
+# than a silently dead knob.
+func read_layer(knob: Dictionary) -> Variant:
+	if knob.has("reach"):
+		match knob["reach"]:
+			"ATTACK_MODULATE": return OverlayManager.ATTACK_MODULATE
+			"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
+		push_error("LookTool: unknown reach colour %s" % knob["reach"])
+		return null
+	var overlays := _overlays()
+	if overlays == null:
+		return null
+	return overlays.layer_modulate(knob["layer"])
+
+
+func write_layer(knob: Dictionary, color: Color) -> void:
+	if knob.has("reach"):
+		# The static var IS the authority; the live 2D fill is re-derived from it so the tuned
+		# colour shows now rather than at the next aim (the 3D mirrors that fill, not the var).
+		match knob["reach"]:
+			"ATTACK_MODULATE": OverlayManager.ATTACK_MODULATE = color
+			"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = color
+			_:
+				push_error("LookTool: unknown reach colour %s" % knob["reach"])
+				return
+		var om: OverlayManager = _overlay_manager()
+		if om != null:
+			om.refresh_attack_reach_color()
+		return
+	var overlays := _overlays()
+	if overlays != null:
+		overlays.set_layer_modulate(knob["layer"], color)
+
+
+func _overlay_manager() -> OverlayManager:
+	if _host == null:
+		return null
+	var game: Node2D = _host.game
+	if game == null:
+		return null
+	return game.overlay_manager as OverlayManager
+
+
+func layer_baseline_of(index: int) -> Variant:
+	if index < 0 or index >= _layer_baseline.size():
+		return null
+	return _layer_baseline[index]
 
 
 func has_host() -> bool:
@@ -192,61 +377,116 @@ func baseline_of(index: int) -> Variant:
 
 # --- Building the rows ------------------------------------------------------------------
 
+# Tab titles in GROUP_TABS declaration order, de-duplicated -- the order the sub-tabs appear in.
+func _tab_titles() -> Array[String]:
+	var titles: Array[String] = []
+	for group: String in GROUP_TABS:
+		var title: String = GROUP_TABS[group]
+		if not titles.has(title):
+			titles.append(title)
+	return titles
+
+
+# Where a group's rows go. A group missing from GROUP_TABS would otherwise draw nowhere at all,
+# so it lands on the first tab and says so; the law test is what stops that shipping.
+func _rows_for_group(group: String) -> VBoxContainer:
+	if not GROUP_TABS.has(group):
+		push_error("LookTool: group '%s' has no tab in GROUP_TABS" % group)
+		return _tab_rows[_tab_titles()[0]]
+	return _tab_rows[GROUP_TABS[group]]
+
+
 func _rebuild() -> void:
-	for child in _rows.get_children():
-		_rows.remove_child(child)
-		child.queue_free()
+	var showing := _tabs.current_tab   # a Reset must not bounce you off the tab you were tuning
+	for rows: VBoxContainer in _tab_rows.values():
+		for child in rows.get_children():
+			rows.remove_child(child)
+			child.queue_free()
 	if _host == null:
-		DevWidgets.add_label(_rows,
+		DevWidgets.add_label(_tab_rows[_tab_titles()[0]],
 			"No 3D host attached - the flat 2D game has no look stack to tune.")
 		return
 	var group := ""
 	for knob: Dictionary in KNOBS:
 		var knob_group: String = knob["group"]
+		var rows := _rows_for_group(knob_group)
 		if knob_group != group:
 			group = knob_group
-			_add_heading(group)
-		_build_row(knob)
+			_add_heading(rows, group)
+		_build_row(rows, knob)
+	var layer_group: String = LAYER_KNOBS[0]["group"]
+	var layer_rows := _rows_for_group(layer_group)
+	_add_heading(layer_rows, layer_group)
+	for knob: Dictionary in LAYER_KNOBS:
+		var value: Variant = read_layer(knob)
+		if typeof(value) != TYPE_COLOR:
+			DevWidgets.add_label(layer_rows, "%s - UNRESOLVED" % knob["label"])
+			push_error("LookTool layer knob does not resolve: %s" % knob["label"])
+			continue
+		var first := layer_rows.get_child_count()
+		DevWidgets.add_color(layer_rows, knob["label"], value,
+			func(picked: Color) -> void: write_layer(knob, picked))
+		_apply_tip(layer_rows, first, tip_for(knob))
+	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
 
 
-func _build_row(knob: Dictionary) -> void:
+# The which-stack note is appended per KIND rather than typed into each tip, so it cannot drift
+# out of step with the table it describes.
+func tip_for(knob: Dictionary) -> String:
+	var tip: String = knob.get("tip", "")
+	if knob.has("layer"):
+		tip += "\n\n3D ONLY -- the flat 2D board keeps its own colour. A declared divergence, and provisional: tune it, look at it, then decide whether 2D should follow."
+	elif knob.has("reach"):
+		tip += "\n\nMOVES BOTH STACKS -- the 3D mirrors the 2D's fill rather than holding a colour of its own, so this tunes OverlayManager and the flat 2D game changes with it."
+	return DevWidgets.wrap_tooltip(tip)
+
+
+# Every control the row added, so hovering the slider handle answers as well as the label.
+func _apply_tip(rows: VBoxContainer, first_index: int, tip: String) -> void:
+	for i in range(first_index, rows.get_child_count()):
+		DevWidgets.apply_tooltip(rows.get_child(i), tip)
+
+
+func _build_row(rows: VBoxContainer, knob: Dictionary) -> void:
 	var value: Variant = read(knob)
 	var label: String = knob["label"]
 	# An unresolved knob is a table entry pointing at a renamed or moved property. Say so on the
 	# panel AND in the log rather than drawing a row that edits nothing.
 	if typeof(value) == TYPE_NIL:
-		DevWidgets.add_label(_rows, "%s - UNRESOLVED (%s:%s)" % [label, knob["node"], knob["prop"]])
+		DevWidgets.add_label(rows, "%s - UNRESOLVED (%s:%s)" % [label, knob["node"], knob["prop"]])
 		push_error("LookTool knob does not resolve: %s:%s" % [knob["node"], knob["prop"]])
 		return
+	var first := rows.get_child_count()
 	if knob.has("options"):
 		var options: Array = knob["options"]
 		var current: int = int(value)
 		var current_label: String = options[current] if current >= 0 and current < options.size() else ""
-		DevWidgets.add_option(_rows, label, options, current_label,
+		DevWidgets.add_option(rows, label, options, current_label,
 			func(picked: String) -> void: write(knob, options.find(picked)))
-		return
-	match typeof(value):
-		TYPE_BOOL:
-			DevWidgets.add_checkbox(_rows, label, value,
-				func(on: bool) -> void: write(knob, on))
-		TYPE_COLOR:
-			DevWidgets.add_color(_rows, label, value,
-				func(picked: Color) -> void: write(knob, picked))
-		_:
-			var low: float = knob["min"]
-			var high: float = knob["max"]
-			var step: float = knob["step"]
-			DevWidgets.add_slider(_rows, label, value, low, high, step,
-				func(moved: float) -> void: write(knob, moved))
+	else:
+		match typeof(value):
+			TYPE_BOOL:
+				DevWidgets.add_checkbox(rows, label, value,
+					func(on: bool) -> void: write(knob, on))
+			TYPE_COLOR:
+				DevWidgets.add_color(rows, label, value,
+					func(picked: Color) -> void: write(knob, picked))
+			_:
+				var low: float = knob["min"]
+				var high: float = knob["max"]
+				var step: float = knob["step"]
+				DevWidgets.add_slider(rows, label, value, low, high, step,
+					func(moved: float) -> void: write(knob, moved))
+	_apply_tip(rows, first, tip_for(knob))
 
 
-func _add_heading(text: String) -> void:
-	if _rows.get_child_count() > 0:
-		_rows.add_child(HSeparator.new())
+func _add_heading(rows: VBoxContainer, text: String) -> void:
+	if rows.get_child_count() > 0:
+		rows.add_child(HSeparator.new())
 	var heading := Label.new()
 	heading.text = text
 	heading.add_theme_color_override("font_color", HEADING_COLOR)
-	_rows.add_child(heading)
+	rows.add_child(heading)
 
 
 func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
@@ -275,6 +515,10 @@ func _on_reset_pressed() -> void:
 		var authored: Variant = baseline_of(i)
 		if typeof(authored) != TYPE_NIL:
 			write(KNOBS[i], authored)
+	for i in LAYER_KNOBS.size():
+		var authored_color: Variant = layer_baseline_of(i)
+		if typeof(authored_color) == TYPE_COLOR:
+			write_layer(LAYER_KNOBS[i], authored_color)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
 	_status.text = "Every knob is back at its authored value."
 
@@ -299,13 +543,42 @@ func changed_values() -> Dictionary:
 		var authored: Variant = baseline_of(i)
 		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or same_value(live, authored):
 			continue
-		var split := _paste_split(knob)
-		var header: String = split[0]
-		if not groups.has(header):
-			groups[header] = {}
-		var entries: Dictionary = groups[header]
-		entries[split[1]] = split[2]
+		_record(groups, _paste_split(knob))
+	for i in LAYER_KNOBS.size():
+		var knob: Dictionary = LAYER_KNOBS[i]
+		var live: Variant = read_layer(knob)
+		var authored: Variant = layer_baseline_of(i)
+		if typeof(live) != TYPE_COLOR or typeof(authored) != TYPE_COLOR or same_value(live, authored):
+			continue
+		_record(groups, _layer_paste_split(knob, live))
 	return groups
+
+
+# split = [paste header, dedup key, the finished line]. The key exists only so two knobs that
+# emit the SAME line (flame_size:x and :y) collapse to one entry.
+func _record(groups: Dictionary, split: Array) -> void:
+	var header: String = split[0]
+	if not groups.has(header):
+		groups[header] = {}
+	var entries: Dictionary = groups[header]
+	entries[split[1]] = split[2]
+
+
+# A layer colour is not authored at a property path, so it gets its own paste shape: the whole
+# LAYERS row (sort and kind read off the live table, so the line is paste-ready as-is), or the
+# static var declaration for a reach colour.
+func _layer_paste_split(knob: Dictionary, live: Color) -> Array:
+	if knob.has("reach"):
+		var name: String = knob["reach"]
+		return ["OverlayManager.gd", name,
+			"static var %s := %s" % [name, literal_for(live)]]
+	var layer: BoardOverlays.Layer = knob["layer"]
+	var spec: Dictionary = BoardOverlays.LAYERS[layer]
+	var layer_name: String = BoardOverlays.Layer.keys()[layer]
+	var kind_name: String = BoardOverlays.Kind.keys()[spec["kind"]]
+	return ["BoardOverlays.gd -> LAYERS", layer_name,
+		'Layer.%s: {"color": %s, "sort": %d, "kind": Kind.%s},'
+			% [layer_name, literal_for(live), spec["sort"], kind_name]]
 
 
 func _paste_split(knob: Dictionary) -> Array:
@@ -325,7 +598,8 @@ func _paste_split(knob: Dictionary) -> Array:
 	var header := "Battle3D.tscn -> %s" % ("Battle3D" if node_path == "." else node_path)
 	if owner_bits.size() > 0:
 		header += ".%s" % ".".join(owner_bits)
-	return [header, segments[i], literal_for(current.get(segments[i]))]
+	var prop: String = segments[i]
+	return [header, prop, "%s = %s" % [prop, literal_for(current.get(prop))]]
 
 
 func _format(groups: Dictionary) -> String:
@@ -333,8 +607,8 @@ func _format(groups: Dictionary) -> String:
 	for header: String in groups:
 		out.append("# %s" % header)
 		var entries: Dictionary = groups[header]
-		for prop: String in entries:
-			out.append("%s = %s" % [prop, entries[prop]])
+		for key: String in entries:
+			out.append(entries[key])   # the split already built the finished line
 		out.append("")
 	return "\n".join(out).strip_edges()
 
