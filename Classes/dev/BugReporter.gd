@@ -27,7 +27,17 @@ const LOG_TAIL_LINES := 80
 # Discord caps a message at 2000 characters, and the untruncated note is in report.md regardless.
 const NOTE_IN_MESSAGE := 400
 
+# What the two stamped lines say when nothing answered them (#240). Named so a test can assert
+# the honest sentence rather than the absence of a section.
+const NO_3D_VIEW := "flat 2D (no 3D host)"
+const DEFAULT_LOOK := "(default)"
+
 var game   # untyped back-ref: game.gd has no class_name
+
+# What the 3D host is showing, PUSHED in by battle3d._ready (#240) rather than looked up: the game
+# subtree keeps no upward path to the 3D scene, which is why the Look host and HoverPresenter's
+# pointer source arrive the same way. Unset = a flat Main.tscn launch, which the report says.
+var view_source: Callable
 
 var _uploader: ReportUploader
 var _card: ReportPanel
@@ -112,7 +122,9 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	if md == null:
 		push_error("Report: could not write report.md")
 		return {"dir": "", "sent": false}
-	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail()))
+	var look: String = game.scenario_manager.current_look_preset
+	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
+		_view_note(), look))
 	md.close()
 
 	if frame == null:
@@ -136,12 +148,33 @@ func capture_frame() -> Image:
 	if DisplayServer.get_name() == "headless":
 		return null
 	await RenderingServer.frame_post_draw
-	# Explicitly typed: `game` has no class_name, so everything reached through it is Variant and
-	# := cannot infer (CLAUDE.md, the untyped back-ref rule).
-	var texture: ViewportTexture = game.get_viewport().get_texture()
+	var texture: ViewportTexture = capture_viewport().get_texture()
 	if texture == null:
 		return null
 	return texture.get_image()
+
+# WHERE the picture comes from, and it is always the window's own viewport (#240).
+#
+# game.get_viewport() is the SubViewport the 2D game lives in, and since #222 that viewport is
+# transparent with the board visuals hidden -- the 2D game is the UI layer drawn OVER the 3D
+# world -- so a frame grabbed there is UI on nothing, with the diorama and every visual bug in
+# it missing. The root is the COMPOSITED frame in every hosting mode by construction: HD_2D
+# draws that UI over the diorama, FLAT_2D covers the window opaquely, CORNER adds the PiP,
+# demo_mode hides the container, and a bare Main.tscn launch fills the window with the 2D game.
+# So this is one answer rather than a fork on Battle3D's view, and the reporter never has to
+# learn whether it is being hosted.
+#
+# Explicitly typed: `game` has no class_name, so everything reached through it is Variant and
+# := cannot infer (CLAUDE.md, the untyped back-ref rule).
+func capture_viewport() -> Viewport:
+	var tree: SceneTree = game.get_tree()
+	return tree.root
+
+func _view_note() -> String:
+	if not view_source.is_valid():
+		return ""
+	var note: String = view_source.call()
+	return note
 
 # The Discord message body, derived from the same four facts report() writes into report.md so the
 # channel and the attachment can never disagree. The note is truncated HERE only -- the full text
@@ -158,7 +191,8 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
-		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String) -> String:
+		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
+		view_note := "", look_note := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
@@ -166,6 +200,11 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 
 	out += "Game state: **%s**\n\n" % state_name
 	out += "Build: **%s**\n\n" % Build.version()
+	# WHERE it was seen from (#240). A 3D report whose angle nobody knows is a much weaker
+	# report, and the two facts have two homes on purpose: the view is the 3D host's, pushed
+	# in, while the look is the BOARD's own (ScenarioData.look_preset, #253 part 2).
+	out += "View: **%s**\n\n" % (NO_3D_VIEW if view_note == "" else view_note)
+	out += "Look: **%s**\n\n" % (DEFAULT_LOOK if look_note == "" else look_note)
 	if units.is_empty():
 		out += "No units on the board -- sent from a menu, so there is no `board.tres` beside this.\n\n"
 	else:
