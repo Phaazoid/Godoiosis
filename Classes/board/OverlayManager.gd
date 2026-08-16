@@ -55,7 +55,9 @@ const SOURCE_ID = 0
 # The overlay tileset's atlas coordinates, and the single home for them: game.gd used to keep a
 # duplicate `OVERLAY_DEFAULT_ATLAS = Vector2i(0,0)` plus five more that were never referenced.
 const ATLAS_COORDS = Vector2i(0,0)          # plain fill — what every overlay layer draws with
-const TARGET_ATLAS_COORDS = Vector2i(3, 0)  # the "pick this unit" marker (PICKING_TARGET)
+# (1,0) is the marker tile on the AttackOverlay's sheet — #316: this read (3,0) since before the
+# reorg, a coord the one-tile sheet never had, so the highlight drew in NEITHER view.
+const TARGET_ATLAS_COORDS = Vector2i(1, 0)  # the "pick this unit" marker (PICKING_TARGET)
 const ICON_Z_INDEX = 15
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint

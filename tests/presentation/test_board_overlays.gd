@@ -445,3 +445,57 @@ func test_a_unit_sprite_actually_carries_that_priority() -> void:
 			"UnitSprite3D does not apply UNIT_RENDER_PRIORITY — the constant is inert").is_equal(
 			BoardOverlays.UNIT_RENDER_PRIORITY)
 	sprite.free()
+
+
+# --- Atlas cuts on a marker quad (#316) ---------------------------------------------
+
+# A synthetic sheet, never the real overlay art: what a marker's tile looks like is authored
+# content, and the rule under test is the UV arithmetic, which any two-cell sheet exercises.
+func _atlas_cut(sheet: Vector2i, region: Rect2) -> AtlasTexture:
+	var image := Image.create_empty(sheet.x, sheet.y, false, Image.FORMAT_RGBA8)
+	image.fill(Color.WHITE)
+	var cut := AtlasTexture.new()
+	cut.atlas = ImageTexture.create_from_image(image)
+	cut.region = region
+	return cut
+
+
+func _only_visible_quad(overlays: BoardOverlays) -> MeshInstance3D:
+	for child in overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible:
+			return quad
+	return null
+
+
+func test_an_atlas_cut_draws_its_own_tile_and_not_the_whole_sheet() -> void:
+	# #316: a StandardMaterial3D ignores an AtlasTexture's region, so the target-pick marker
+	# came out as the ENTIRE 32x16 sheet squashed into one cell -- half the plain fill, half
+	# the marker, both at 2:1. The quad's SIZE was right all along (AtlasTexture.get_size()
+	# reports the region), which is exactly why this reads as a stretch rather than a miss.
+	var overlays: BoardOverlays = auto_free(BoardOverlays.new())
+	add_child(overlays)
+	var cut := _atlas_cut(Vector2i(32, 16), Rect2(16, 0, 16, 16))
+	overlays.set_markers(BoardOverlays.Layer.TARGET_PICK,
+			[{"pos": Vector3(2.5, 1.0, 2.5), "texture": cut, "modulate": Color.WHITE}])
+	var material := _only_visible_quad(overlays).material_override as StandardMaterial3D
+	assert_that(material.uv1_scale).is_equal(Vector3(0.5, 1.0, 1.0))
+	assert_that(material.uv1_offset).is_equal(Vector3(0.5, 0.0, 0.0))
+
+
+func test_a_pooled_quad_drops_the_cut_uvs_when_it_next_draws_a_plain_texture() -> void:
+	# The pooling trap the tilt and the art scale are already written against: the node that
+	# drew the cut is REUSED, so UVs left behind would crop whatever art lands on it next.
+	var overlays: BoardOverlays = auto_free(BoardOverlays.new())
+	add_child(overlays)
+	var cut := _atlas_cut(Vector2i(32, 16), Rect2(16, 0, 16, 16))
+	overlays.set_markers(BoardOverlays.Layer.TARGET_PICK,
+			[{"pos": Vector3(2.5, 1.0, 2.5), "texture": cut, "modulate": Color.WHITE}])
+	var quad := _only_visible_quad(overlays)
+	overlays.set_markers(BoardOverlays.Layer.TARGET_PICK,
+			[{"pos": Vector3(3.5, 1.0, 2.5), "texture": GridUtils.ERROR_ICON, "modulate": Color.WHITE}])
+	assert_object(_only_visible_quad(overlays)).override_failure_message(
+			"the pool grew instead of reusing — this case no longer tests reuse").is_same(quad)
+	var material := quad.material_override as StandardMaterial3D
+	assert_that(material.uv1_scale).is_equal(Vector3.ONE)
+	assert_that(material.uv1_offset).is_equal(Vector3.ZERO)
