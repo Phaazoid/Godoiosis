@@ -12,6 +12,12 @@ what you learn here so the next person doesn't repeat the run.
 2560 cells). Almost nothing is slow because of *data volume*. It's slow because a cheap operation
 is being repeated far more often than anyone intended — usually via a signal fan-out.
 
+**One measured exception, added 2026-08-16 — the 3D authoring poll (#319).** It is O(board) *per
+frame*, so it is the one place where data volume alone is the whole cost, and at 2560 cells it is
+already over a 60 fps frame budget. See that section below before assuming the paragraph above
+covers something you are looking at. The resize tool can also author boards **15× larger** than the
+2560 the sentence is written against.
+
 ---
 
 ## How to re-measure
@@ -235,3 +241,83 @@ A cheaper half-measure, if the cache looks like too much: flip `followable_desti
 to iterate *destinations × diamond* rather than *standable cells × diamond*. Same answer, and the
 single-cell query stops paying for the whole footprint — worth ~2.6 ms of the 6.8. It does not touch
 the duplicated `compute_move_range`, which is the real cost.
+
+---
+
+## 2026-08-16 — board size and the 3D authoring poll (#319)
+
+Reported as *"Resize Map does not work in 3D"*. It does — the dev re-tested and the board updates.
+What he actually hit is that a 200×200 board **lags the game to a crawl**, and the diagnosis he
+produced in play is what made this measurable: *dev mode on* → severe lag, *dev mode off* → mild,
+*zoom in* → gone. So the residual is rendering (GridMap frustum culling doing its job on 40,000
+visible tiles — correct behaviour, no fix owed), and the severe half is the poll.
+
+`battle3d._sync_terrain_while_authoring` runs **every frame** while `game_state == DEV_MODE` and
+performs **three full-board walks with no change detection**: `BoardMirror.sync`'s walk over
+`grid.get_used_cells()`, `sync`'s erase sweep over `board.get_used_cells()`, and `_refresh_tops()`'s
+third `get_used_cells()` inside `BoardPicker.column_tops_from` + `used_rect`.
+
+Re-measure with `tools/profile_board_scale.gd`. Three runs, agreeing inside this harness's usual
+~25% spread; ranges below span all three.
+
+| board | cells | poll per frame | µs/cell |
+|---|---|---|---|
+| **Prolog, as authored** | 2,560 (1,400 props) | **17.3 – 21.2 ms** | 7.4 |
+| 20×12 flat | 240 | 1.3 – 2.0 ms | 6.9 |
+| 40×40 flat | 1,600 | 9.3 – 11.5 ms | 6.5 |
+| 60×60 flat | 3,600 | 20.7 – 22.1 ms | 5.9 |
+| 80×80 flat | 6,400 | 38.3 – 42.4 ms | 6.3 |
+| 100×100 flat | 10,000 | 58.9 – 81.1 ms | 6.6 |
+| 150×150 flat | 22,500 | 136.2 – 203.0 ms | 6.7 |
+| 200×200 flat | 40,000 | 248.1 – 265.2 ms | 6.4 |
+| 100×100 all fence props | 10,000 | 80.2 – 106.6 ms | 8.6 |
+| 60×60 all tufts | 3,600 | 29.0 – 32.1 ms | 8.5 |
+
+**It is flatly linear at ~6.5 µs/cell**, props adding ~2 µs/cell on top. There is no algorithmic
+cliff to find and no cache-shaped surprise — the cost *is* the cell count, so the only levers are
+"walk fewer cells" or "walk them less often".
+
+### The number that matters: the authored board is already over budget
+
+**Prolog costs 17–21 ms per frame, and one 60 fps frame is 16.7 ms.** The 16.7 ms line falls at
+**~2,600 flat cells (≈51×51)**, and Prolog is 2,560 cells with 1,400 props. So this is not a
+200×200-only problem discovered by stress-testing: **sitting in dev mode on the shipped mission
+already spends a whole frame budget on a diff that usually finds nothing changed.** 200×200 is the
+same curve continued — ~255 ms/frame, about 15 frames of work per frame, which is the reported
+crawl and is exactly what linear scaling predicts.
+
+**This falsifies the natural first answer**, which was to cap the resize SpinBox
+(`TileBrushTool._build_extra_controls`, `max_value = 200`) and leave the poll alone. A cap set
+honestly against this curve would have to land near 50×50 — below sizes the dev may well want, and
+*still* leaving the authored board at 100% of frame budget. The cap is a guardrail; it is not the
+fix.
+
+**FIRST vs STEADY, because they are different costs.** The `sync` that actually writes a resized
+board is a one-off hitch (243 ms at 200×200, 304 ms for a 10,000-cell prop fill) — that one is
+inherent, it is the work of building the board. The steady figure above is the same walk on an
+**unchanged** board, i.e. pure tax. At 200×200 they are within a few percent of each other: the
+diff finds nothing and costs virtually the same as doing everything.
+
+### Reading these numbers honestly
+
+- **They are a FLOOR.** Headless does no drawing; a real frame also pays the render the dev's
+  zoom-in test isolated. The true knee sits at or below where this puts it.
+- **Debug build.** Measured through the Godot binary, not an export template, and GDScript is
+  slower in debug. An exported build would be cheaper by some unmeasured factor — but the dev
+  plays the debug build, so these are the numbers he experiences.
+- **Direct calls, not real frames**, so this cannot see a cost that only appears with
+  `OverlayMirror` and `_poll_pointer` running alongside. Both are proportional to overlay cells and
+  pointer movement rather than board size, so they should not bend the *shape* of the curve.
+
+### Why the poll is a poll (do not "fix" this by hooking the paint sites blindly)
+
+The `DEV_MODE` gate and the polling design are both deliberate and documented at
+`battle3d.gd:179`: `TileMapLayer.changed` does **not** fire on `set_cell`/`erase_cell` in 4.7
+(measured, with a property write as the control), so there was no engine signal to hang this on,
+and polling means no trigger site to remember when a future writer appears. That reasoning is
+still sound — what it never did was *bound* the cost, because every board it was designed against
+was small.
+
+If this is fixed by a dirty flag, note the writers it must cover: `DevController._paint`/`_erase`
+(terrain, states, zones, elevation) and `DevController.resize_map`. Board swaps do **not** need it
+— they already route through `board_loaded` → `battle3d.rebuild()`.
