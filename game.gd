@@ -48,6 +48,10 @@ enum GameState {
 }
 
 var game_state: GameState = GameState.IDLE
+# The dev INTENT changed. ONE notification path for it: set_dev_mode used to push straight into
+# dev_overlay.sync_dev_mode_button, and a second consumer (the 3D badge) would have made that push
+# one of two ways the same fact travels. Both listeners connect; nothing polls.
+signal dev_mode_changed(active: bool)
 # Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
 # RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
@@ -559,8 +563,7 @@ func set_dev_mode(active: bool):
 	# Intent first: exit_current_mode's clear_selection rests the board on _base_state.
 	dev_mode_enabled = active
 	exit_current_mode()
-	if dev_overlay != null:
-		dev_overlay.sync_dev_mode_button(active)
+	dev_mode_changed.emit(active)
 
 func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:

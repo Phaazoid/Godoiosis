@@ -17,6 +17,15 @@ class_name DevOverlay
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var look_tool: LookTool = get_node("%Look")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
+@onready var dev_mode_banner: PanelContainer = %DevModeBanner
+
+# The banner's two faces. Dev chrome, not the HD-2D look stack -- no mission wears these and
+# LookKnobs has no business holding them, so they are consts here rather than Look-tab knobs.
+const DEV_MODE_ON_BG := Color(0.55, 0.16, 0.62)
+const DEV_MODE_OFF_BG := Color(0.14, 0.14, 0.16)
+
+var _banner_on: StyleBoxFlat
+var _banner_off: StyleBoxFlat
 
 # The running Battle3D, pushed in by attach_3d_host below; null under a flat Main.tscn launch.
 # Any tab needing the 3D world reads it from here.
@@ -26,6 +35,11 @@ func _ready() -> void:
 	if not DevTools.enabled():
 		queue_free()   # a demo build constructs no dev tools (#132)
 		return
+	_build_banner_styles()
+	# The toggle FOLLOWS the intent rather than being pushed at. set_dev_mode called this directly
+	# until the 3D badge needed the same fact; one emit, every listener.
+	game.dev_mode_changed.connect(sync_dev_mode_button)
+	sync_dev_mode_button(game.dev_mode_enabled)
 	scenario_tool.init(scenario_manager, game)
 	spawn.init(game)
 	unit_editor.init(game)
@@ -117,8 +131,26 @@ func show_beside():
 	show()
 	_update_zone_visibility()
 
+# The banner SAYS its state three ways -- switch position, word, and background colour -- because
+# the switch alone was what the dev could not read at a glance. The word is the load-bearing one.
 func sync_dev_mode_button(active: bool):
 	dev_mode_toggle.set_pressed_no_signal(active)
+	dev_mode_toggle.text = "DEV MODE: ON" if active else "DEV MODE: OFF        (F1)"
+	dev_mode_banner.add_theme_stylebox_override("panel", _banner_on if active else _banner_off)
+
+# Built rather than authored: a StyleBoxFlat in the scene would be one resource, and the banner
+# needs two to swap between. NOT a ColorPicker in sight -- that family is banned from this window
+# (CLAUDE.md "Sharp edges", #212).
+func _build_banner_styles() -> void:
+	_banner_on = _banner_style(DEV_MODE_ON_BG)
+	_banner_off = _banner_style(DEV_MODE_OFF_BG)
+
+func _banner_style(bg: Color) -> StyleBoxFlat:
+	var box := StyleBoxFlat.new()
+	box.bg_color = bg
+	box.set_content_margin_all(6.0)
+	box.set_corner_radius_all(4)
+	return box
 
 func _on_dev_mode_toggled(pressed: bool):
 	game.set_dev_mode(pressed)

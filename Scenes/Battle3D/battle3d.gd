@@ -71,6 +71,7 @@ var _help_wheel_is_level := false
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
 @onready var _help: Label = $UI/Help
 @onready var _checkout: Label = $UI/Checkout
+@onready var _dev_badge: Label = $UI/DevMode
 
 var game: Node2D
 var _game_container: SubViewportContainer
@@ -106,6 +107,8 @@ func _ready() -> void:
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_3d_host(self)
 	_show_checkout()
+	game.dev_mode_changed.connect(_show_dev_badge)
+	_show_dev_badge(game.dev_mode_enabled)
 	if demo_mode:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
@@ -647,6 +650,18 @@ func _show_checkout() -> void:
 	var stamp := Checkout.describe()
 	_checkout.visible = stamp != ""
 	_checkout.text = stamp
+
+
+# IS DEV MODE ON — the badge is PRESENT or it is not, so there is no off-state to misread. Reads
+# the INTENT off game.dev_mode_changed, never game_state == DEV_MODE: that one is derived and
+# drops out the moment any other mode is entered, so a badge on it would blink off mid-click.
+#
+# A third label in the same stack for _show_checkout's reason: this CanvasLayer draws above the 2D
+# game's container in every hosting view, so one node covers HD_2D and FLAT_2D alike (#292) --
+# and a word appended to the help line is invisible in a 140-character string, which is the
+# problem this is fixing rather than a shape to copy.
+func _show_dev_badge(active: bool) -> void:
+	_dev_badge.visible = active
 
 
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves
