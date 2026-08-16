@@ -245,7 +245,7 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 		_clear_column(cell, floor_level)
 		_free_prop_at(cell)
 		return
-	_write_column(cell, item_for_cell(grid, cell), heights, floor_level)
+	_write_column(cell, grid, item_for_cell(grid, cell), heights, floor_level)
 	if GridUtils.stands_up_at_cell(grid, cell):
 		_reconcile_prop(grid, cell, heights)
 	else:
@@ -281,7 +281,11 @@ func floor_level_of(heights: BoardHeights) -> int:
 # surface is at E+1, and a ramp whose own elevation is its LOW side must slope from E+1 up to E+2.
 # That makes a ramp column read one cell taller than its flat neighbour, which is exactly what
 # BoardPicker's "ramps count as full blocks" already assumes.
-func _write_column(cell: Vector2i, item: int, heights: BoardHeights, floor_level: int) -> void:
+# The grid is taken so the wedge can wear the cell's own art (#340). Asked INSIDE the rise branch
+# rather than resolved beside `item` at the caller: it costs a name format per lookup, and a flat
+# cell -- almost every cell -- has no wedge to pick art for.
+func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: BoardHeights,
+		floor_level: int) -> void:
 	var level := heights.elevation_at(cell)
 	var rise := heights.ramp_rise_at(cell)
 	for y in range(floor_level, level + 1):
@@ -292,9 +296,10 @@ func _write_column(cell: Vector2i, item: int, heights: BoardHeights, floor_level
 	if rise != Terrain.RampRise.NONE:
 		var wedge := Vector3i(cell.x, level + 1, cell.y)
 		var orientation := _ramp_orientation(rise)
-		if board.get_cell_item(wedge) != ramp_item() \
+		var wedge_item := ramp_item_for_cell(grid, cell)
+		if board.get_cell_item(wedge) != wedge_item \
 				or board.get_cell_item_orientation(wedge) != orientation:
-			board.set_cell_item(wedge, ramp_item(), orientation)
+			board.set_cell_item(wedge, wedge_item, orientation)
 		top = level + 1
 	# LOWERING a cell strands everything the column used to hold above its new top. Walk up until
 	# the column is genuinely clear rather than assuming one stale cell — a 5-level cut leaves 5.
@@ -310,6 +315,26 @@ func _write_column(cell: Vector2i, item: int, heights: BoardHeights, floor_level
 func ramp_item() -> int:
 	_ensure_item_index()
 	return _item_by_name.get(RAMP_ITEM_NAME, GridMap.INVALID_CELL_ITEM)
+
+
+# The wedge wearing THIS cell's own art (#340) — item_for_cell's twin, and it degrades the same way.
+# A ramp used to be one hardcoded dirt mesh whatever was painted under it, so a stone ramp read as
+# dirt; the generator now emits a variant per FLAT tile and this picks it.
+#
+# The generic wedge stays as the fallback rather than as dead scaffolding: the three cases
+# item_for_tile already documents (empty cell, rotated alternative, multi-cell art) reach here too,
+# and so does a standing prop, which is refused a rise at the brush but can still be painted onto a
+# cell that already slopes.
+func ramp_item_for_cell(grid: TileMapLayer, cell: Vector2i) -> int:
+	var source_id := grid.get_cell_source_id(cell)
+	if source_id != -1 and grid.get_cell_alternative_tile(cell) == 0:
+		_ensure_item_index()
+		var own: int = _item_by_name.get(
+				ramp_item_name(source_id, grid.get_cell_atlas_coords(cell)),
+				GridMap.INVALID_CELL_ITEM)
+		if own != GridMap.INVALID_CELL_ITEM:
+			return own
+	return ramp_item()
 
 
 # The generator draws the wedge with its high edge at -Z and notes that "GridMap orientation (yaw
@@ -390,6 +415,13 @@ static func prop_item_name(source_id: int, coords: Vector2i) -> String:
 	return "prop_%d_%d_%d" % [source_id, coords.x, coords.y]
 
 
+# And the same contract for the tile's own ramp wedge (#340). A third namespace, not a flag on the
+# ground item: a cell can be flat or sloped and the two need different geometry off one tile.
+# Only FLAT tiles get one — a rock cannot slope — which is what makes the fallback below load-bearing.
+static func ramp_item_name(source_id: int, coords: Vector2i) -> String:
+	return "ramp_%d_%d_%d" % [source_id, coords.x, coords.y]
+
+
 func _ensure_item_index() -> void:
 	if _item_index_built or board == null or board.mesh_library == null:
 		return
@@ -411,7 +443,8 @@ func show_brush_ghost(ghost: BrushGhost) -> void:
 	# level-E block occupies [E..E+1], so the slope that starts at E's surface sits at E+1. A flat
 	# paint previews the block that would become the column's new top.
 	var ramping := ghost.rise != Terrain.RampRise.NONE
-	var item := ramp_item() if ramping else item_for_cell(ghost.source, ghost.cell)
+	var item := ramp_item_for_cell(ghost.source, ghost.cell) if ramping \
+			else item_for_cell(ghost.source, ghost.cell)
 	var level := ghost.level + 1 if ramping else ghost.level
 	var mesh: Mesh = board.mesh_library.get_item_mesh(item)
 	if _brush_ghost.mesh != mesh:

@@ -715,10 +715,12 @@ func _rig() -> Node3D:
 	return _scene.get_node("CameraRig") as Node3D
 
 
+# The brush whose level the wheel moves. That is TERRAIN since #340 merged the elevation mode into
+# it; the binding fight these cases pin is unchanged, only which mode picks it.
 func _elevation_brush() -> TileBrushTool:
 	_arm_brush()
 	var brush: TileBrushTool = _game.dev_overlay.tile_brush
-	brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
+	brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 	brush.set_elevation(0)
 	return brush
 
@@ -767,16 +769,18 @@ func test_ctrl_hands_the_notch_back_to_the_camera() -> void:
 
 
 func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
-	# The consume is scoped to ELEVATION: the other three modes never read the wheel, so
-	# suppressing zoom for them would cost the 3D view its most-used gesture for nothing.
-	_arm_brush()
-	var brush: TileBrushTool = _game.dev_overlay.tile_brush
-	brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
-	await _pump()
-	var zoom_before: float = _rig()._target_distance
+	# The consume is scoped to the brush that OWNS a level -- TERRAIN since #340. ZONE and STATE never
+	# read the wheel, so suppressing zoom for them would cost the 3D view its most-used gesture for
+	# nothing. Both, because a fix aimed at one mode is how the scoping drifts.
+	for mode in [TileBrushTool.PaintMode.ZONE, TileBrushTool.PaintMode.STATE]:
+		_arm_brush()
+		var brush: TileBrushTool = _game.dev_overlay.tile_brush
+		brush._set_paint_mode(mode)
+		await _pump()
+		var zoom_before: float = _rig()._target_distance
 
-	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
-	await _pump()
+		_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
+		await _pump()
 
-	assert_float(_rig()._target_distance).override_failure_message(
-			"an armed TERRAIN brush swallowed the camera's zoom").is_less(zoom_before)
+		assert_float(_rig()._target_distance).override_failure_message(
+				"an armed brush in mode %d swallowed the camera's zoom" % mode).is_less(zoom_before)

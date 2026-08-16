@@ -9,17 +9,21 @@ class_name TileBrushTool
 # Zone mode carries a picker (2026-08-12): a dropdown of every painted zone, so authoring can
 # see what exists and continue a zone instead of accidentally forking a new one; the picked
 # zone's cells are lifted on the board via OverlayManager.redraw_zone_highlight.
-# Elevation mode (#260) is a paint MODE rather than a palette expansion for the reason the design
-# put height in a per-cell store at all: a per-tile elevation would need one grass tile per level.
+# Elevation is NOT a mode (#340, reversing #260's shape): the level and the ramp rise ride the
+# TERRAIN brush, so one click paints a tile AT a height. Height stays in a per-cell store for the
+# reason #260 gave — a per-tile elevation would need one grass tile per level — but "how high" was
+# never a different QUESTION from "which tile", only a different store, and a mode per store made
+# authoring a raised cell two gestures. Raising a cell is now repainting it at a new level.
+# The rise is refused for a tile that stands up (see selected_rise): a rock has no face to tilt.
 
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
-const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Elevation"]   # index == PaintMode value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var selected_source := 0
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE, STATE, ELEVATION }
+enum PaintMode { TERRAIN, ZONE, STATE }
 var paint_mode := PaintMode.TERRAIN
 const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
@@ -40,7 +44,8 @@ var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
 
-# Elevation brush (#260): the level the next click places at, and whether that cell is a ramp.
+# The terrain brush's elevation half (#260, merged in by #340): the level the next click places at,
+# and whether that cell is a ramp.
 # One click writes BOTH, because BoardHeights.set_cell takes both — two brushes would be two ways
 # to author one cell. NOT clamped at 0: a dip has to be authorable without lifting the whole map
 # (dev, 2026-08-15).
@@ -131,6 +136,7 @@ func _populate_tile_dropdown() -> void:
 	if not _tile_coords.is_empty():
 		selected_source = _tile_sources[0]
 		selected_tile = _tile_coords[0]
+	_sync_rise_availability()
 
 # A tile earns a palette slot by saying what it IS: a non-NONE terrain_type kind, an authored
 # terrain_name, or both. Unnamed bare decoration stays unpaintable. Labels prefer the authored
@@ -180,6 +186,14 @@ func _on_tile_dropdown_item_selected(index: int):
 	if index >= 0 and index < _tile_coords.size():
 		selected_tile = _tile_coords[index]
 		selected_source = _tile_sources[index]
+		_sync_rise_availability()
+
+# Grey the rise picker for a tile that cannot slope, so selected_rise's refusal is VISIBLE rather
+# than a setting that silently does nothing.
+func _sync_rise_availability() -> void:
+	if _rise_option == null:
+		return
+	_rise_option.disabled = not selected_tile_is_flat()
 
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
@@ -317,15 +331,34 @@ func _build_extra_controls() -> void:
 	DevWidgets.apply_tooltip(_rise_row, DevWidgets.wrap_tooltip(
 		"Which way this cell RISES — Z and C turn it, the way Q and E turn the board. A ramp's own "
 		+ "level is its LOW side, so a ramp at level 2 rising North connects level 2 to level 3 to "
-		+ "the north. None = ordinary flat ground."))
+		+ "the north. None = ordinary flat ground. Greyed out for a tile that stands up (a rock, a "
+		+ "lantern): only flat ground can slope, and the ramp wears whatever ground you paint on it."))
 
 	_set_paint_mode(PaintMode.TERRAIN)
 
 func selected_elevation() -> int:
 	return _elevation
 
+# What the next click would actually SLOPE — not simply the picker's value (#340). A standing tile
+# has no top face to tilt, so a rock or a lantern paints flat however the picker is set.
+#
+# The gate lives HERE rather than at the paint site because the GHOST reads this too: gated one level
+# down, the preview would show a sloping rock that the paint then refuses, which is #285's rule that
+# a preview must answer "what would this click PRODUCE". `_rise` itself is untouched, so picking a
+# prop and coming back to grass restores the direction you had.
 func selected_rise() -> Terrain.RampRise:
-	return _rise
+	return _rise if selected_tile_is_flat() else Terrain.RampRise.NONE
+
+# Whether the PICKED tile is ground rather than something standing on it. GridUtils.stands_up_of is
+# the one answer (derived from prop_shape); an unresolvable pick reads flat, the same permissive
+# default an unauthored tile gets there.
+func selected_tile_is_flat() -> bool:
+	if game == null or game.grid == null or game.grid.tile_set == null:
+		return true
+	var source := game.grid.tile_set.get_source(selected_source) as TileSetAtlasSource
+	if source == null or not source.has_tile(selected_tile):
+		return true
+	return not GridUtils.stands_up_of(source.get_tile_data(selected_tile, 0))
 
 # The ONE writer of the brush level: the wheel, the SpinBox and Reset all land here, so the widget
 # and the value the brush paints with cannot drift. set_value_no_signal, or the SpinBox's own
@@ -449,19 +482,21 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_zone_name_row.visible = mode == PaintMode.ZONE
 	_state_row.visible = mode == PaintMode.STATE
 	_clear_states_button.visible = mode == PaintMode.STATE
-	_elevation_row.visible = mode == PaintMode.ELEVATION
-	_rise_row.visible = mode == PaintMode.ELEVATION
+	# Level and rise ride the TERRAIN brush rather than a mode of their own (#340): a tile is painted
+	# AT a height, so asking how high is part of asking which tile, not a separate question.
+	_elevation_row.visible = mode == PaintMode.TERRAIN
+	_rise_row.visible = mode == PaintMode.TERRAIN
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
-	update_height_readout()   # the same, for ELEVATION mode
+	update_height_readout()   # the same, for the terrain brush's level
 
-# Painting height into an invisible store is blind, so entering ELEVATION mode lights the height
-# readout — the twin of update_zone_highlight above. The overlay derives its own visibility from
-# this AND F5, so leaving the mode cannot switch off a readout F5 asked for. Null in a build with
-# dev tools stripped, and while _build_extra_controls runs before init() hands us the game.
+# Painting height into an invisible store is blind, so the readout lights with the brush that writes
+# it — the twin of update_zone_highlight above. The overlay derives its own visibility from this AND
+# F5, so leaving the mode cannot switch off a readout F5 asked for. Null in a build with dev tools
+# stripped, and while _build_extra_controls runs before init() hands us the game.
 func update_height_readout() -> void:
 	if game == null or game.height_debug_overlay == null:
 		return
-	game.height_debug_overlay.set_brush_active(paint_mode == PaintMode.ELEVATION)
+	game.height_debug_overlay.set_brush_active(paint_mode == PaintMode.TERRAIN)
 
 # The board-wide wipe (dev ask 2026-08-11); per-cell erase stays right-click. Confirmed because
 # unsaved paint dies with it; the wipe pair is clear_board's own (clear + full redraw).

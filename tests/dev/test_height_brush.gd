@@ -1,5 +1,11 @@
-# The Tile Brush ELEVATION mode (#260): the scroll wheel sets the level the brush places at, a
-# button resets it to flat, and one click writes both the level and the ramp rise.
+# The Tile Brush's LEVEL and RISE (#260, merged into the terrain brush by #340): the scroll wheel
+# sets the level the brush places at, Z/C turn the rise, a button resets both to flat, and one click
+# writes the tile, the level and the rise together.
+#
+# These used to pin a mode of their own, so several cases here read "inert in the other modes" with
+# TERRAIN as the example of an other mode. TERRAIN is now the mode that OWNS the level, so those
+# cases were re-aimed at ZONE/STATE rather than deleted -- the rule they guard (a key that retunes a
+# brush you cannot see is worse than a dead key) is unchanged, only which modes can see it.
 #
 # Cases drive real InputEvents through DevController.handle_tile_brush -- and one drives
 # game._unhandled_input -- because the ROUTING is what a controller-level test cannot see: a wheel
@@ -31,8 +37,9 @@ func before_test() -> void:
 	_brush = game.dev_overlay.tile_brush
 	_dc = game.dev_controller
 	_brush.brush_active = true
-	_brush._set_paint_mode(TileBrushTool.PaintMode.ELEVATION)
-	# Elevation refuses a groundless cell, so the hover cell has to have a tile under it.
+	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	# Most cases here read a height back off a cell that already exists, so the hover cell starts
+	# with ground. Painting one no longer REQUIRES it -- a paint creates the ground it raises.
 	_give_ground(_hover_cell())
 
 
@@ -96,9 +103,15 @@ func test_the_wheel_writes_through_the_spinbox_too() -> void:
 
 
 func test_the_wheel_is_inert_in_the_other_paint_modes() -> void:
-	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
-	_wheel(MOUSE_BUTTON_WHEEL_UP)
-	assert_int(_brush.selected_elevation()).is_equal(0)
+	# Both of them, not one: the level rows are hidden in each, so a notch that moved the level there
+	# would retune a brush the dev cannot see.
+	for mode in [TileBrushTool.PaintMode.ZONE, TileBrushTool.PaintMode.STATE]:
+		_brush.set_elevation(0)
+		_brush._set_paint_mode(mode)
+		_wheel(MOUSE_BUTTON_WHEEL_UP)
+		assert_int(_brush.selected_elevation()).override_failure_message(
+				"the wheel moved the level in mode %d, where the level row is hidden" % mode
+				).is_equal(0)
 
 
 func test_reset_returns_the_brush_to_flat_ground() -> void:
@@ -153,10 +166,14 @@ func test_a_held_key_does_not_spin_the_rise() -> void:
 	assert_int(_brush.selected_rise()).is_equal(NONE)
 
 
-func test_the_rise_keys_are_inert_outside_elevation_mode() -> void:
-	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
-	_dc._input(_key(KEY_C))
-	assert_int(_brush.selected_rise()).is_equal(NONE)
+func test_the_rise_keys_are_inert_outside_the_terrain_brush() -> void:
+	for mode in [TileBrushTool.PaintMode.ZONE, TileBrushTool.PaintMode.STATE]:
+		_brush.set_rise(NONE)
+		_brush._set_paint_mode(mode)
+		_dc._input(_key(KEY_C))
+		assert_int(_brush.selected_rise()).override_failure_message(
+				"Z/C turned the rise in mode %d, where the rise row is hidden" % mode
+				).is_equal(NONE)
 
 
 func test_the_rise_keys_are_inert_when_the_brush_is_down() -> void:
@@ -176,14 +193,21 @@ func test_every_rise_direction_is_reachable_from_the_picker() -> void:
 
 # ---- painting ----
 
-func test_painting_writes_the_level_and_the_rise_together() -> void:
+func test_painting_writes_the_tile_the_level_and_the_rise_together() -> void:
+	# The whole point of #340: ONE click, all three. The tile assertion is the half that reds if the
+	# height write is bolted onto a path that stopped painting, and the height half reds if the merge
+	# only moved the UI rows.
 	var cell := _hover_cell()
+	game.grid.erase_cell(cell)
 	_brush.set_elevation(2)
 	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(NORTH))
 
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(2)
+	assert_int(game.grid.get_cell_source_id(cell)).override_failure_message(
+			"the merged brush stopped painting the tile").is_equal(_brush.selected_source)
+	assert_int(game.board_heights.elevation_at(cell)).override_failure_message(
+			"the tile landed but its level did not").is_equal(2)
 	assert_int(game.board_heights.ramp_rise_at(cell)).is_equal(NORTH)
 
 
@@ -201,14 +225,9 @@ func test_a_wheel_notch_mid_drag_does_not_end_the_drag() -> void:
 	assert_int(game.board_heights.elevation_at(cell)).is_equal(2)
 
 
-func test_erase_returns_the_cell_to_flat() -> void:
-	var cell := _hover_cell()
-	game.board_heights.set_cell(cell, 3, EAST)
-
-	_dc.handle_tile_brush(_press(MOUSE_BUTTON_RIGHT, true))
-
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(0)
-	assert_int(game.board_heights.ramp_rise_at(cell)).is_equal(NONE)
+# NB there is no separate "erase returns the cell to flat" case any more. Erase has ONE meaning in
+# the merged brush -- take the tile away, and the height goes with it (#245's rule) -- which is
+# exactly what test_erasing_the_ground_takes_the_elevation_with_it below drives.
 
 
 # ---- painting from the 3D view (#285) ----
@@ -251,14 +270,21 @@ func test_the_injected_cell_is_where_erase_lands() -> void:
 
 # ---- elevation goes with the ground (#245's rule, #260's store) ----
 
-func test_a_groundless_cell_takes_no_elevation() -> void:
+func test_painting_an_empty_cell_gives_it_ground_AND_the_brushs_level() -> void:
+	# The REVERSAL #340 makes: a height write used to be refused on a groundless cell, because the
+	# elevation brush could not create ground. The merged brush paints the tile first, so the guard
+	# is answered by ORDERING rather than by a refusal -- and raising virgin board is now one click.
 	var cell := Vector2i(80, 80)
 	game.grid.erase_cell(cell)
+	_dc.cell_source = func() -> Vector2i: return cell
 	_brush.set_elevation(3)
 
-	_dc._paint_elevation(cell)
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(0)
+	assert_int(game.grid.get_cell_source_id(cell)).override_failure_message(
+			"painting an empty cell left it empty").is_equal(_brush.selected_source)
+	assert_int(game.board_heights.elevation_at(cell)).override_failure_message(
+			"the height was refused on a cell this very click had just given ground").is_equal(3)
 
 
 func test_erasing_the_ground_takes_the_elevation_with_it() -> void:
@@ -285,25 +311,92 @@ func test_shrinking_the_map_prunes_stranded_elevation() -> void:
 	assert_int(game.board_heights.elevation_at(inside)).is_equal(2)   # still has ground
 
 
+# ---- only flat ground can slope (#340) ----
+
+# Which tile stands up is ASKED of the tileset, never named by coords: authored content is not
+# pinnable (the content razor), and prop_shape is the same fact the gate itself reads.
+func _find_tile(standing: bool) -> Vector2i:
+	var source := game.grid.tile_set.get_source(_brush.selected_source) as TileSetAtlasSource
+	for i in source.get_tiles_count():
+		var coords := source.get_tile_id(i)
+		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+			continue
+		if GridUtils.stands_up_of(source.get_tile_data(coords, 0)) == standing:
+			return coords
+	return Vector2i(-1, -1)
+
+
+func test_a_tile_that_stands_up_paints_flat_however_the_rise_is_set() -> void:
+	# The dev's rule: "only tiles that are flat, not things like rocks, lanterns". A rock has no top
+	# face to tilt. The FLAT half is the control -- without it this case also passes against a gate
+	# that simply refused every rise.
+	var prop := _find_tile(true)
+	var ground := _find_tile(false)
+	assert_bool(prop != Vector2i(-1, -1) and ground != Vector2i(-1, -1)).override_failure_message(
+			"fixture: this source needs both a standing and a flat tile to tell the two apart"
+			).is_true()
+	var cell := _hover_cell()
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(NORTH))
+
+	_brush.selected_tile = prop
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
+	assert_int(game.board_heights.ramp_rise_at(cell)).override_failure_message(
+			"a tile that stands up was painted as a ramp").is_equal(NONE)
+
+	_brush.selected_tile = ground
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
+	assert_int(game.board_heights.ramp_rise_at(cell)).override_failure_message(
+			"the gate refused a rise to flat ground too, so it is not a gate").is_equal(NORTH)
+
+
 # ---- the readout ----
 
-func test_the_height_readout_lights_with_the_elevation_brush() -> void:
+func test_the_height_readout_lights_with_the_terrain_brush() -> void:
 	var readout: HeightDebugOverlay = game.height_debug_overlay
 	assert_object(readout).is_not_null()
-	assert_bool(readout.visible).is_true()   # before_test entered ELEVATION mode
+	assert_bool(readout.visible).is_true()   # before_test entered TERRAIN mode
 
-	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
 	assert_bool(readout.visible).is_false()
 
 
-func test_an_f5_readout_survives_leaving_elevation_mode() -> void:
+func test_an_f5_readout_survives_leaving_the_terrain_brush() -> void:
 	# Visibility is DERIVED from both reasons, not assigned by either: a brush that switched off a
 	# readout F5 asked for is the second-authority bug this shape exists to prevent.
 	var readout: HeightDebugOverlay = game.height_debug_overlay
 	readout.toggle()                                           # F5 on, on top of the brush's own
-	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
+	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
 
 	assert_bool(readout.visible).is_true()
+
+
+# ---- the dev keys reach the brush from EITHER OS window (#340 follow-up) ----
+
+func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
+	# Found in play. The project runs two real OS windows and a key reaches only the FOCUSED one;
+	# DevController lives in the GAME subtree, so Z/C were dead exactly where authoring puts you --
+	# in the dev-tools window, having just picked a tile. The dev: "maybe the 5th time this issue
+	# has bit us". This drives the overlay's own arm, so the FORWARD is asserted, not assumed.
+	game.dev_overlay._input(_key(KEY_C))
+
+	assert_int(_brush.selected_rise()).override_failure_message(
+			"a dev key pressed in the dev-tools window never reached the brush").is_equal(NORTH)
+
+
+func test_typing_in_a_dev_field_does_not_fire_the_dev_keys() -> void:
+	# The cost of forwarding: a name field in the dev window would otherwise reset the board every
+	# time you typed an 'r'. Godot consumes a focused LineEdit's keys before _input in most paths,
+	# but not all, so the guard is explicit.
+	var field := LineEdit.new()
+	game.dev_overlay.add_child(field)
+	field.grab_focus()
+	await await_idle_frame()
+
+	game.dev_overlay._input(_key(KEY_C))
+
+	assert_int(_brush.selected_rise()).override_failure_message(
+			"typing in a dev-tools text field turned the ramp rise").is_equal(NONE)
+	field.free()
 
 
 # ---- the wire ----

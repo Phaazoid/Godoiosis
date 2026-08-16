@@ -31,6 +31,22 @@ var _banner_off: StyleBoxFlat
 # Any tab needing the 3D world reads it from here.
 var host_3d: Node3D = null
 
+# The dev keys work from THIS window too (#340 follow-up, found in play). This is a real second OS
+# window, and a key event reaches only the focused one — so every dev binding was dead exactly when
+# the dev was standing in the tool that arms it. Forwarded to DevController's one public entry, never
+# reimplemented: two windows are two input SOURCES for one set of bindings.
+#
+# A text field must win first, or typing a scenario name would toggle the overlay and reset the
+# board. gui_input is consumed by a focused LineEdit before _input ever runs here, so the guard is
+# only needed for the case Godot cannot answer for us.
+func _input(event: InputEvent) -> void:
+	if event is InputEventKey:
+		var focused := get_viewport().gui_get_focus_owner()
+		if focused is LineEdit or focused is TextEdit:
+			return   # a SpinBox edits through a LineEdit too, so this covers the level/size fields
+	game.dev_controller.handle_dev_key(event)
+
+
 func _ready() -> void:
 	if not DevTools.enabled():
 		queue_free()   # a demo build constructs no dev tools (#132)
@@ -52,7 +68,7 @@ func _ready() -> void:
 	tabs.set_tab_tooltip(2, "Author items — weapons and runes. Load a preset or start new, edit, name, save.")
 	tabs.set_tab_tooltip(3, "Author attacks — Transmutation, Weapon Attack, or Family Mains (edit an established family's main in place); toggle at top.")
 	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
-	tabs.set_tab_tooltip(5, "Paint the board — Terrain, Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases.")
+	tabs.set_tab_tooltip(5, "Paint the board — Terrain (with its level and ramp rise), Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases.")
 	tabs.set_tab_tooltip(6, "Tune the 3D look live — lighting, post, fog, camera, markup. Copy Values hands back what you moved.")
 	var authoring_tabs: TabContainer = %AuthoringTabs
 	authoring_tabs.tab_changed.connect(_on_authoring_tab_changed)

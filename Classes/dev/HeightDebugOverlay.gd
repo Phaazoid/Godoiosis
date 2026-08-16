@@ -29,11 +29,11 @@ var grid: TileMapLayer
 var heights: BoardHeights
 
 # TWO independent reasons to be lit, and `visible` is DERIVED from both rather than assigned by
-# either (#260) — ModalLock's shape. Painting height into an invisible store is blind, so the
-# elevation brush lights this on its own; but if F5 already asked for it, leaving that paint mode
-# must not silently switch it off.
+# either (#260) — ModalLock's shape. Painting height into an invisible store is blind, so the brush
+# that carries a level lights this on its own; but if F5 already asked for it, leaving that paint
+# mode must not silently switch it off.
 var _toggled := false        # F5
-var _brush_active := false   # the Tile Brush is in Elevation mode
+var _brush_active := false   # the Tile Brush is in Terrain mode, which carries the level (#340)
 
 func _ready() -> void:
 	visible = false
