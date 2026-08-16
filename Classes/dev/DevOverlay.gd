@@ -16,6 +16,7 @@ class_name DevOverlay
 @onready var unit_authoring: MarginContainer = get_node("%Unit Authoring")
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var look_tool: LookTool = get_node("%Look")
+@onready var object_tool: ObjectTool = get_node("%Objects")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 
@@ -70,6 +71,7 @@ func _ready() -> void:
 	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
 	tabs.set_tab_tooltip(5, "Paint the board — Terrain (with its level and ramp rise), Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases.")
 	tabs.set_tab_tooltip(6, "Tune the 3D look live — lighting, post, fog, camera, markup. Copy Values hands back what you moved.")
+	tabs.set_tab_tooltip(7, "Terrain objects — how tall props, tufts and cover bumps stand. Game-wide, not per mission: Save to source writes the value into the script that declares it.")
 	var authoring_tabs: TabContainer = %AuthoringTabs
 	authoring_tabs.tab_changed.connect(_on_authoring_tab_changed)
 	authoring_tabs.set_tab_tooltip(0, "Spawn units — configure here, then hover the board + Space to place.")
@@ -88,6 +90,7 @@ func attach_3d_host(host: Node3D) -> void:
 		return
 	host_3d = host
 	look_tool.attach_host(host)
+	object_tool.attach_host(host)
 
 
 # What the dev was looking at, for a bug report (#328). The WINDOW answers it, because the tabs are

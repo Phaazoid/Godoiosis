@@ -303,37 +303,12 @@ func _apply_tip(rows: VBoxContainer, first_index: int, tip: String) -> void:
 		DevWidgets.apply_tooltip(rows.get_child(i), tip)
 
 
+# The row itself is DevWidgets.add_knob_row since #272 -- the Object tab draws the same kind of row
+# and "how is a knob a control" is one question. What stays here is what is this panel's: which host
+# the write lands on, and the which-stack note the tip carries.
 func _build_row(rows: VBoxContainer, knob: Dictionary) -> void:
-	var value: Variant = read(knob)
-	var label: String = knob["label"]
-	# An unresolved knob is a table entry pointing at a renamed or moved property. Say so on the
-	# panel AND in the log rather than drawing a row that edits nothing.
-	if typeof(value) == TYPE_NIL:
-		DevWidgets.add_label(rows, "%s - UNRESOLVED (%s:%s)" % [label, knob["node"], knob["prop"]])
-		push_error("LookTool knob does not resolve: %s:%s" % [knob["node"], knob["prop"]])
-		return
-	var first := rows.get_child_count()
-	if knob.has("options"):
-		var options: Array = knob["options"]
-		var current: int = int(value)
-		var current_label: String = options[current] if current >= 0 and current < options.size() else ""
-		DevWidgets.add_option(rows, label, options, current_label,
-			func(picked: String) -> void: write(knob, options.find(picked)))
-	else:
-		match typeof(value):
-			TYPE_BOOL:
-				DevWidgets.add_checkbox(rows, label, value,
-					func(on: bool) -> void: write(knob, on))
-			TYPE_COLOR:
-				DevWidgets.add_color(rows, label, value,
-					func(picked: Color) -> void: write(knob, picked))
-			_:
-				var low: float = knob["min"]
-				var high: float = knob["max"]
-				var step: float = knob["step"]
-				DevWidgets.add_slider(rows, label, value, low, high, step,
-					func(moved: float) -> void: write(knob, moved))
-	_apply_tip(rows, first, tip_for(knob))
+	DevWidgets.add_knob_row(rows, knob, read(knob),
+		func(value: Variant) -> void: write(knob, value), tip_for(knob))
 
 
 func _add_heading(rows: VBoxContainer, text: String) -> void:
@@ -647,14 +622,14 @@ func _layer_paste_split(knob: Dictionary, live: Color) -> Array:
 	if knob.has("reach"):
 		var name: String = knob["reach"]
 		return ["OverlayManager.gd", name,
-			"static var %s := %s" % [name, literal_for(live)]]
+			"static var %s := %s" % [name, DevWidgets.literal_for(live)]]
 	var layer: BoardOverlays.Layer = knob["layer"]
 	var spec: Dictionary = BoardOverlays.LAYERS[layer]
 	var layer_name: String = BoardOverlays.Layer.keys()[layer]
 	var kind_name: String = BoardOverlays.Kind.keys()[spec["kind"]]
 	return ["BoardOverlays.gd -> LAYERS", layer_name,
 		'Layer.%s: {"color": %s, "sort": %d, "kind": Kind.%s},'
-			% [layer_name, literal_for(live), spec["sort"], kind_name]]
+			% [layer_name, DevWidgets.literal_for(live), spec["sort"], kind_name]]
 
 
 func _paste_split(knob: Dictionary) -> Array:
@@ -675,7 +650,7 @@ func _paste_split(knob: Dictionary) -> Array:
 	if owner_bits.size() > 0:
 		header += ".%s" % ".".join(owner_bits)
 	var prop: String = segments[i]
-	return [header, prop, "%s = %s" % [prop, literal_for(current.get(prop))]]
+	return [header, prop, "%s = %s" % [prop, DevWidgets.literal_for(current.get(prop))]]
 
 
 func _format(groups: Dictionary) -> String:
@@ -697,21 +672,6 @@ func _value_count(groups: Dictionary) -> int:
 	return total
 
 
-static func literal_for(value: Variant) -> String:
-	match typeof(value):
-		TYPE_BOOL:
-			return "true" if value else "false"
-		TYPE_FLOAT:
-			return String.num(value, 4)
-		TYPE_COLOR:
-			var color: Color = value
-			return "Color(%s, %s, %s, %s)" % [String.num(color.r, 4), String.num(color.g, 4),
-				String.num(color.b, 4), String.num(color.a, 4)]
-		TYPE_VECTOR2:
-			var vec2: Vector2 = value
-			return "Vector2(%s, %s)" % [String.num(vec2.x, 4), String.num(vec2.y, 4)]
-		TYPE_VECTOR3:
-			var vec3: Vector3 = value
-			return "Vector3(%s, %s, %s)" % [String.num(vec3.x, 4), String.num(vec3.y, 4),
-				String.num(vec3.z, 4)]
-	return str(value)
+# literal_for moved to DevWidgets in #272 -- the Object tab writes the same literals into a script
+# rather than onto the clipboard, so "what is the GDScript spelling of this value" gained a second
+# reader and stopped being this panel's private business.

@@ -428,17 +428,15 @@ const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit marg
 # immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
 # rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
 # ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
-# #280's tuft scale reddened it a second time, the same day, and is out for the same reason: it is
-# prop geometry, an art convention matched to the tile art once. #326's cover bumps are the third,
-# and by then the rule was doing its job: the exclusion was written and this case reddened anyway,
-# which is precisely the "state it twice" the list exists for.
-# #324's two are the fourth and fifth, and each is a NEW reason rather than another prop-geometry
-# case: "Flame animated" is an ACCESSIBILITY switch (#217's tenant), so a mission must never be able
-# to turn a player's photosensitivity choice back on, and "Flame camera push" is a plane-separation
-# clearance defending against a geometric coincidence (#298) -- markup's family, not mood's. Every
-# other flame knob IS mood and stays in.
-const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height", "Grass tuft scale",
-	"Cover bump scale", "Flame camera push", "Flame animated"]
+# #280's tuft scale reddened it a second time and #326's cover bumps a third, all three for one
+# reason: prop geometry is an art convention matched to the tile art once.
+# THOSE THREE HAVE LEFT KNOBS ENTIRELY (#272) -- they are ObjectKnobs rows now, so the ruling is
+# structural and this list no longer has to state it. What remains is #324's pair, and each is a
+# different reason rather than another prop-geometry case: "Flame animated" is an ACCESSIBILITY
+# switch (#217's tenant), so a mission must never be able to turn a player's photosensitivity choice
+# back on, and "Flame camera push" is a plane-separation clearance defending against a geometric
+# coincidence (#298) -- markup's family, not mood's. Every other flame knob IS mood and stays in.
+const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Flame camera push", "Flame animated"]
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
@@ -478,6 +476,19 @@ func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void
 	for key: String in captured:
 		assert_bool(in_scope.has(key)).override_failure_message(
 			"'%s' reached a preset without being an in-scope knob" % key).is_true()
+
+
+# The same guard, for the OTHER list stating the ruling. EFFECTS_NOT_MOOD exists to notice a silent
+# widening, so a label that has stopped matching any knob -- a reworded row, or one that moved to
+# another table the way prop geometry did in #272 -- leaves it quietly toothless rather than red.
+func test_every_not_mood_label_names_a_real_effects_knob() -> void:
+	var labels: Array[String] = []
+	for knob: Dictionary in LookKnobs.KNOBS:
+		if knob["group"] == "Effects":
+			labels.append(knob["label"])
+	for label: String in EFFECTS_NOT_MOOD:
+		assert_bool(labels.has(label)).override_failure_message(
+			"EFFECTS_NOT_MOOD names '%s', which is not an Effects knob -- it has silently stopped excluding anything" % label).is_true()
 
 
 # A property rename would otherwise silently un-exclude its knob: the old key stops matching

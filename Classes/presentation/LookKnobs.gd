@@ -201,12 +201,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
 	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "block_height_scale", "label": "Prop block height", "min": 0.2, "max": 2.5, "step": 0.01,
-		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
+	# Prop GEOMETRY -- block height, tuft scale, cover-bump scale -- used to sit here and moved to
+	# ObjectKnobs (#272). They are world construction rather than mood, so they were PRESET_EXCLUDED
+	# anyway; leaving is what makes that ruling structural instead of a list entry, and it is what
+	# gives them a Save that writes their authored default rather than a clipboard line.
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
 	# --- Unit HUD (#229) ---
@@ -255,14 +253,14 @@ const KNOBS: Array[Dictionary] = [
 #     shot/fit margin ARE framing and stay in.
 #   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
 #   * the brush ghost -- dev chrome; players never see it.
-#   * PROP GEOMETRY -- prop block height, tuft scale and cover-bump scale are art conventions
-#     matched to the art once, the same family as icon pixel size; the same authored block, tuft or
-#     bump reading taller in one mission than another is world construction drifting, not mood.
-#     Per OBJECT is #272.
+# PROP GEOMETRY used to be a fourth reason and is now OUT OF THIS TABLE ENTIRELY (#272): block
+# height, tuft scale and cover-bump scale live in ObjectKnobs, so "a mission cannot restyle world
+# construction" is structural rather than three names on this list. #264's block_height_scale is
+# what proved the default-IN rule has teeth -- it self-joined presets and had to be ruled on -- and
+# that ruling is why those three left rather than why they are listed.
 # The default is IN: a knob added later joins presets unless someone lists it here, which is right
 # for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
-# a renamed property fails loudly instead of silently un-excluding itself. #264's block_height_scale
-# is what proved the default has teeth -- it self-joined presets and had to be ruled on.
+# a renamed property fails loudly instead of silently un-excluding itself.
 const PRESET_EXCLUDED: Array[String] = [
 	"CameraRig|min_distance",
 	"CameraRig|zoom_step",
@@ -287,9 +285,6 @@ const PRESET_EXCLUDED: Array[String] = [
 	# A plane-separation constant, the same family as BoardOverlays|fill_lift above -- it defends
 	# against a geometric coincidence, so it is markup, not mood.
 	"BoardMirror|flame_camera_offset",
-	"BoardMirror|block_height_scale",
-	"BoardMirror|tuft_scale",
-	"BoardMirror|cover_scale",
 	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
 	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
 	# by wearing a look. Excluded wholesale, which also keeps the shipped presets valid under
