@@ -26,6 +26,13 @@ var _holed_tops: Dictionary[Vector2i, int] = {
 	Vector2i(0, 0): 1, Vector2i(2, 0): 1,
 }
 
+# The same strip with (1, 0) DIPPED one deep — #260's negative elevation, and the shape a top
+# level of 0 could not describe while 0 also meant "nothing here". Note it is a different fixture
+# from _holed_tops on purpose: a dip and a hole are the two answers the sentinel used to conflate.
+var _dipped_tops: Dictionary[Vector2i, int] = {
+	Vector2i(0, 0): 1, Vector2i(1, 0): 0, Vector2i(2, 0): 1,
+}
+
 
 func _apron_of(tops: Dictionary[Vector2i, int]) -> Rect2i:
 	return BoardPicker.used_rect(tops).grow(APRON)
@@ -156,6 +163,39 @@ func test_used_rect_and_max_top_describe_the_tops_table() -> void:
 	assert_int(BoardPicker.max_top(empty)).is_equal(0)
 
 
+# --- A dip is a column, not a miss (#294) --------------------------------------
+#
+# Level 0 used to be BOTH a legitimate top (a cell one deep: it occupies [-1..0], so its surface
+# sits at 0) and the "no column here" answer, which made a dip unrepresentable by construction.
+# NO_COLUMN is the separation; these are the cases that can tell the two apart.
+
+func test_a_one_deep_dip_is_a_column_and_not_a_hole() -> void:
+	# Columns only, so no plane can answer on the dip's behalf — a top of 0 has to stand alone.
+	var cell := BoardPicker.pick_cell(Vector3(1.5, 10.0, 0.5), Vector3.DOWN, _dipped_tops, Rect2i())
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+
+
+func test_a_dip_inside_the_plane_reads_as_the_dip_and_not_as_flat() -> void:
+	# The dev-authoring case, and the one that fails PLAUSIBLY rather than loudly: with the column
+	# missing from the table, _top_level falls through to the plane's FLAT_TOP_LEVEL and the click
+	# resolves one level too high. A wrong cell, not a miss — so the brush paints the wrong thing.
+	var cell := BoardPicker.pick_cell(Vector3(1.5, 10.0, 0.5), Vector3.DOWN, _dipped_tops,
+			_apron_of(_dipped_tops))
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+	assert_int(cell.y).override_failure_message(
+			"the dip resolved at its flat neighbours' level").is_equal(-1)
+
+
+func test_a_ray_clearing_the_rim_strikes_the_dips_own_cell() -> void:
+	# The walk's hit test at h == 0, reached the way a real camera reaches it: over the near rim
+	# (both ends above the neighbours' top, so they do not answer) and down through the dip's
+	# surface. Skipping the column entirely walks the ray on to the FAR rim, which is a wrong
+	# answer rather than a miss.
+	var cell := BoardPicker.pick_cell(Vector3(0.0, 3.2, 0.5), Vector3(1.0, -2.0, 0.0),
+			_dipped_tops, Rect2i())
+	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+
+
 # --- The seam where it lives: the look-dev scene -------------------------------
 
 var _scene: Node3D
@@ -247,3 +287,41 @@ func test_occluded_cell_yields_the_blocker_not_the_hidden_cell() -> void:
 	assert_that(BoardPicker.pick_cell(
 			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops,
 			BoardPicker.used_rect(tops).grow(APRON))).is_equal(picked)
+
+
+# --- The two adapters, against a real GridMap (#294) ---------------------------
+
+# One cell written at `level` in a column clear of everything the board already holds. The
+# column is DERIVED from the board's own footprint and the item id read off a real cell, so
+# nothing authored is named or asserted — and the scene is instantiated per test and freed
+# after, so nothing authored is mutated either.
+func _dip_a_fresh_column(board: GridMap, level: int) -> Vector2i:
+	var used := board.get_used_cells()
+	assert_bool(used.is_empty()).override_failure_message(
+			"the look-dev board is empty, so writing beside it proves nothing").is_false()
+	var column := BoardPicker.used_rect(BoardPicker.column_tops_from(board)).end + Vector2i(2, 2)
+	board.set_cell_item(BoardSpace.of_cell(column, level), board.get_cell_item(used[0]))
+	return column
+
+
+func test_column_tops_from_reads_a_column_that_dips_below_zero() -> void:
+	# A cell at y = -1 tops out at 0, which is a real surface. The accumulator seeded at 0 and
+	# compared with `>` dropped exactly the columns whose top IS 0, and only those.
+	var board := _scene.get_node("Board") as GridMap
+	var column := _dip_a_fresh_column(board, -1)
+	var tops := BoardPicker.column_tops_from(board)
+	assert_bool(tops.has(column)).override_failure_message(
+			"the dipped column is missing from the tops table").is_true()
+	assert_int(tops[column]).is_equal(0)
+
+
+func test_top_of_answers_a_dip_and_keeps_no_column_a_separate_answer() -> void:
+	# The incremental twin (#319) carried the same sentinel, and its caller ERASES on it — so a
+	# dip painted onto an already-dipped board was actively removed, not merely never added.
+	# The pair is the claim: a real top of 0 and "nothing here" must not be the same int.
+	var board := _scene.get_node("Board") as GridMap
+	var column := _dip_a_fresh_column(board, -1)
+	assert_int(BoardPicker.top_of(board, column, -1)).override_failure_message(
+			"a column one cell deep read as no column at all").is_equal(0)
+	assert_int(BoardPicker.top_of(board, column + Vector2i(1, 0), -1)).override_failure_message(
+			"an empty column stopped saying it was empty").is_equal(BoardPicker.NO_COLUMN)
