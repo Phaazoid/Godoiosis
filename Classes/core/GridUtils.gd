@@ -195,6 +195,10 @@ static func cell_world(grid: TileMapLayer, cell: Vector2i) -> Vector2:
 static func tile_sprite(source: TileSetAtlasSource, coords: Vector2i) -> Texture2D:
 	if source == null:
 		return null
+	# #316: without this the getter errors and hands back an empty Rect2i, so a wrong coord
+	# returns a non-null texture that draws NOTHING -- a failure that reads as success.
+	if not source.has_tile(coords):
+		return null
 	var icon := AtlasTexture.new()
 	icon.atlas = source.texture
 	icon.region = Rect2(source.get_tile_texture_region(coords))

@@ -252,7 +252,11 @@ func test_target_pick_markers_split_from_the_reach_fill() -> void:
 	var picks := _overlays.markers_of(BoardOverlays.Layer.TARGET_PICK)
 	assert_int(picks.size()).is_equal(1)
 	assert_that(picks[0]["pos"]).is_equal(Vector3(3.5, 1.0, 2.5))
-	assert_object(picks[0]["texture"]).is_not_null()
+	# #316: a cut from a coord the atlas lacks used to return a non-null AtlasTexture with an
+	# EMPTY region -- invisible, and `is_not_null` alone is exactly what passes against that.
+	var pick_art := picks[0]["texture"] as AtlasTexture
+	assert_object(pick_art).is_not_null()
+	assert_bool(pick_art.region.has_area()).is_true()
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.ATTACK).size()).is_equal(0)
 
 
