@@ -40,11 +40,18 @@ var _last_fire: Array[Vector2i] = []
 var _last_cover: Array[Vector2i] = []
 var _pick_texture: Texture2D   # the (3,0) "pick this unit" tile art, cut lazily
 
+# Every value-diff below is blind to the board's HEIGHTS (#308): a fill's tilt and a flame's
+# footing both come from BoardHeights, and neither is in the cells being compared. Gated on the
+# source changing rather than folded into every key -- one int compare per frame.
+var _last_heights_version := -1
+var _heights_moved := false
+
 
 func _process(_delta: float) -> void:
 	if game == null or overlays == null:
 		return
 	var om: OverlayManager = game.overlay_manager
+	_heights_moved = _poll_heights()   # once per frame, ahead of every diff that reads it
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
@@ -75,6 +82,19 @@ func _process(_delta: float) -> void:
 	_standing_states()
 
 
+# Did the board's height data move since the last frame? BoardHeights.dirty.version is the
+# non-consuming read — it never takes the cell list away from battle3d's authoring poll, which is
+# what that store's ONE-CONSUMER rule protects. Null heights (the headless Play boards) hold at -1,
+# so a board with no store never reports a move.
+func _poll_heights() -> bool:
+	var heights := _heights()
+	var version: int = -1 if heights == null else heights.dirty.version
+	if version == _last_heights_version:
+		return false
+	_last_heights_version = version
+	return true
+
+
 # Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled
 # rather than wired because a states_changed signal would fire inside the resolver's per-effect
 # loop and churn markers many times within a single pass; the poll coalesces a frame into one
@@ -86,7 +106,9 @@ func _standing_states() -> void:
 	burning.sort()
 	var covered: Array[Vector2i] = game.terrain_states.cells_with(Terrain.TileState.COVER)
 	covered.sort()
-	if _last_fire == burning and _last_cover == covered:
+	# A marker STANDS on its cell's surface, so raising that cell moves it while the burning set
+	# stays byte-identical (#308).
+	if not _heights_moved and _last_fire == burning and _last_cover == covered:
 		return
 	_last_fire = burning
 	_last_cover = covered
@@ -129,12 +151,16 @@ func _heights() -> BoardHeights:
 	return heights
 
 
+# The cell list is only PART of the key: how a fill lies on its cell also depends on that cell's
+# ramp rise (#281), and a Vector3i carries the level but not the rise. So a rise painted onto a
+# cell whose elevation did not change leaves this array identical while the render must move —
+# hence the heights gate rather than a per-cell rise lookup in the comparison (#308).
 func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	var cells: Array[Vector3i] = []
 	for cell in used:
 		cells.append(BoardSpace.of_cell(cell, _level_of(cell)))
 	cells.sort()
-	if _last_cells.get(layer, Array()) == cells:
+	if not _heights_moved and _last_cells.get(layer, Array()) == cells:
 		return
 	_last_cells[layer] = cells
 	overlays.set_cells(layer, cells, _heights())
@@ -142,18 +168,18 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 
 # ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (3,0) on the
 # same layer — split by atlas coords; the heal-green arrives as the layer modulate.
+#
+# The reach half hands its cells to _fill rather than lifting and diffing them here: a hand-copied
+# diff is a second copy of whatever _fill's key gets wrong, which is exactly how #308 had two homes.
 func _attack(om: OverlayManager) -> void:
-	var reach: Array[Vector3i] = []
+	var reach: Array[Vector2i] = []
 	var picks: Array[Dictionary] = []
 	for cell: Vector2i in om.attack_overlay.get_used_cells():
 		if om.attack_overlay.get_cell_atlas_coords(cell) == OverlayManager.TARGET_ATLAS_COORDS:
 			picks.append(_marker(_anchor(cell), _target_pick_texture(om), Color.WHITE))
 		else:
-			reach.append(BoardSpace.of_cell(cell, _level_of(cell)))
-	reach.sort()
-	if _last_cells.get(BoardOverlays.Layer.ATTACK, Array()) != reach:
-		_last_cells[BoardOverlays.Layer.ATTACK] = reach
-		overlays.set_cells(BoardOverlays.Layer.ATTACK, reach, _heights())
+			reach.append(cell)
+	_fill(BoardOverlays.Layer.ATTACK, reach)
 	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK, om.attack_overlay.modulate)
 	_markers(BoardOverlays.Layer.TARGET_PICK, picks)
 

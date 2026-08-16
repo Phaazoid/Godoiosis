@@ -365,3 +365,14 @@ Two things are worth knowing before touching this again:
 The guarantee the old poll got for free — *it caught every writer, because it re-read everything* —
 is now `tests/law/test_board_writes_announce.gd`. `tile_map_data` is the declared exception: a bulk
 property assignment cannot be doored, and `board_loaded` → `rebuild()` covers it.
+
+### The announcement grew a second, non-consuming reader (#308, 2026-08-16)
+
+`OverlayMirror`'s per-frame fill poll draws THROUGH `BoardHeights` — a fill's tilt (#281) and a
+flame's footing come from there — while its value-diff compares only cell lists, so a rise painted
+onto a cell whose elevation did not change never re-pushed. The fix reads `BoardHeights.dirty.version`
+instead of folding the rise into the key, which keeps the steady-state cost at **one int compare per
+frame** rather than one dictionary lookup per cell per layer per frame; the push itself happens on the
+frame a height edit lands, and it is coarse (every fill layer) because a height edit is an authoring
+event, not a per-frame one. `version` is monotonic and `clear()` leaves it alone, so it does **not**
+weaken `DirtyCells`' ONE-CONSUMER rule — that rule is about the cell *list*, which `clear()` steals.

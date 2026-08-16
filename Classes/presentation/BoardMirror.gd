@@ -363,12 +363,18 @@ func refresh_states(heights: BoardHeights, burning: Array[Vector2i],
 # one with teeth: a marker that is rebuilt every frame looks identical through the counts below,
 # so the pin is node identity. One loop for every standing state — the invariant is the thing
 # worth having in a single place.
+#
+# Standing is not the same as UNMOVED, though (#308): the ground under a survivor can be raised
+# while its cell keeps burning, so its footing is re-read every pass. Same expression the builder
+# is handed, and it costs the marker nothing it was relying on — identity is untouched.
 func _reconcile_state(markers: Dictionary[Vector2i, Node3D], cells: Array[Vector2i],
 		heights: BoardHeights, make: Callable) -> void:
 	var wanted: Dictionary[Vector2i, bool] = {}
 	for cell in cells:
 		wanted[cell] = true
-		if not markers.has(cell):
+		if markers.has(cell):
+			markers[cell].position = surface_point(cell, heights)
+		else:
 			var built: Node3D = make.call(surface_point(cell, heights))
 			if built != null:
 				markers[cell] = built
