@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #346 (2026-08-16).**
+**Canon checked through #350 (2026-08-16).**
 
 ## Principles
 
@@ -243,6 +243,12 @@ Three things that generalise past this ticket:
 `resolved_plan_for` guards on squad identity, so an AI squad's own resolve never matches the
 player's active squad. Enemy plans were not previewed before either; this keeps it that way.
 
+Successor filed the same day: [#350](https://github.com/Phaazoid/Godoiosis/issues/350) — a player
+toggle pinning **every** bar on, which is one more disjunct in the same visibility expression and
+then almost entirely a legibility problem. Note also that the predicted-down alarm is a **pulse**,
+so it joins [#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry the
+moment that registry exists.
+
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 
 The volume above finally has a rule about what may occupy it, and it came from measuring rather
@@ -269,7 +275,8 @@ someone had patched that one screen. And **the first real occupant of the freed 
 on art, not on design** — a unit's `element_states` are hover-only today (`StateIcons.populate`,
 called from the two panels and nowhere else), so a Wet unit and a dry one are identical on the
 board; `StateIcons.ICONS` carries art for WET alone and everything else falls back to a text label.
-Making it always-on is also exactly the trigger #229 named for the crowding question it deferred.
+Making it always-on is also exactly the trigger #229 named for the crowding question it deferred —
+the same trigger [#350](https://github.com/Phaazoid/Godoiosis/issues/350) pulls for health.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
