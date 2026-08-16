@@ -31,6 +31,20 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 func _input(event: InputEvent) -> void:
+	handle_dev_key(event)
+
+# EVERY dev key, in one PUBLIC entry, because this node can only ever hear HALF of them.
+#
+# The project runs two real OS windows (dev tools unembedded), and a key event reaches only the
+# FOCUSED one. This node lives in the game subtree, so F1/F2/F3 and Z/C were all dead whenever the
+# dev-tools window had focus -- which is exactly where authoring puts you: pick a tile from the
+# palette, then press Z to turn the rise, and nothing happens until you click the game window back.
+# Reported in play against #340 (dev: "maybe the 5th time this issue has bit us").
+#
+# DevOverlay._input forwards here rather than reimplementing anything: two windows are two INPUT
+# SOURCES for one set of bindings, never two sets. Idempotent by construction -- only one window has
+# focus, so exactly one caller fires per event.
+func handle_dev_key(event: InputEvent) -> void:
 	if not DevTools.enabled():
 		return
 	if event.is_action_pressed("toggle_dev_overlay"):

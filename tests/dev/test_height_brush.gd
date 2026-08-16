@@ -370,6 +370,35 @@ func test_an_f5_readout_survives_leaving_the_terrain_brush() -> void:
 	assert_bool(readout.visible).is_true()
 
 
+# ---- the dev keys reach the brush from EITHER OS window (#340 follow-up) ----
+
+func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
+	# Found in play. The project runs two real OS windows and a key reaches only the FOCUSED one;
+	# DevController lives in the GAME subtree, so Z/C were dead exactly where authoring puts you --
+	# in the dev-tools window, having just picked a tile. The dev: "maybe the 5th time this issue
+	# has bit us". This drives the overlay's own arm, so the FORWARD is asserted, not assumed.
+	game.dev_overlay._input(_key(KEY_C))
+
+	assert_int(_brush.selected_rise()).override_failure_message(
+			"a dev key pressed in the dev-tools window never reached the brush").is_equal(NORTH)
+
+
+func test_typing_in_a_dev_field_does_not_fire_the_dev_keys() -> void:
+	# The cost of forwarding: a name field in the dev window would otherwise reset the board every
+	# time you typed an 'r'. Godot consumes a focused LineEdit's keys before _input in most paths,
+	# but not all, so the guard is explicit.
+	var field := LineEdit.new()
+	game.dev_overlay.add_child(field)
+	field.grab_focus()
+	await await_idle_frame()
+
+	game.dev_overlay._input(_key(KEY_C))
+
+	assert_int(_brush.selected_rise()).override_failure_message(
+			"typing in a dev-tools text field turned the ramp rise").is_equal(NONE)
+	field.free()
+
+
 # ---- the wire ----
 
 func test_a_wheel_notch_reaches_the_brush_through_the_games_own_input() -> void:

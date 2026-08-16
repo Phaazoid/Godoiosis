@@ -1435,6 +1435,50 @@ func test_a_tile_with_no_ramp_variant_falls_back_to_the_generic_wedge() -> void:
 			).is_equal(mirror.ramp_item())
 
 
+# The UV rect a surface actually occupies. Surface 0 is the top face and surface 1 the sides, for
+# both _block_mesh and _ramp_mesh.
+func _uv_bounds(mesh: Mesh, surface: int) -> Rect2:
+	var uvs: PackedVector2Array = mesh.surface_get_arrays(surface)[Mesh.ARRAY_TEX_UV]
+	var bounds := Rect2(uvs[0], Vector2.ZERO)
+	for uv in uvs:
+		bounds = bounds.expand(uv)
+	return bounds
+
+
+func test_a_ramp_variant_wears_the_same_atlas_REGIONS_its_block_does() -> void:
+	# Found in play (#340): the wedge took a top_uv but no side_uv, so its sides fell back to the
+	# whole 0..1 sheet. Harmless for dirt and stone, whose side material IS one tile -- but WATER
+	# wears its own surface down the sides, where the material is the composited atlas, so every
+	# water slope was papered with a copy of the entire tilesheet.
+	#
+	# A LAW over every emitted variant rather than a water case: both meshes are handed the same
+	# pair by the same loop, so any divergence is the bug, and a tile that grows an atlas-backed
+	# side later is covered without anyone remembering to add a case.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var lib: MeshLibrary = (_scene.get_node("Board") as GridMap).mesh_library
+	var by_name: Dictionary[String, int] = {}
+	for id in lib.get_item_list():
+		by_name[lib.get_item_name(id)] = id
+
+	var checked := 0
+	for tile in _tiles_that_stand(false):
+		var ramp: String = BoardMirror.ramp_item_name(tile.source, tile.coords)
+		var block: String = BoardMirror.tile_item_name(tile.source, tile.coords)
+		if not by_name.has(ramp) or not by_name.has(block):
+			continue
+		var ramp_mesh: Mesh = lib.get_item_mesh(by_name[ramp])
+		var block_mesh: Mesh = lib.get_item_mesh(by_name[block])
+		for surface in [0, 1]:
+			assert_vector(_uv_bounds(ramp_mesh, surface).size).override_failure_message(
+					"%s surface %d spans a different atlas region than its block: %s vs %s"
+					% [ramp, surface, _uv_bounds(ramp_mesh, surface), _uv_bounds(block_mesh, surface)]
+					).is_equal_approx(_uv_bounds(block_mesh, surface).size, Vector2(0.001, 0.001))
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no tile had BOTH a block and a ramp variant; the law is vacuous").is_greater(0)
+
+
 func test_each_rise_points_the_wedges_high_side_the_way_it_names() -> void:
 	# The orientation is DERIVED from Terrain.rise_direction, so this asserts the GEOMETRY rather
 	# than a magic orthogonal index: rotating the authored wedge's high side by the basis the

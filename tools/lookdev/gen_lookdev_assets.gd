@@ -379,7 +379,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# wore the one generated dirt wedge, so a stone ramp read as dirt.
 			if not stands_up:
 				_add_item(ml, next_id, BoardMirror.ramp_item_name(source_id, coords),
-						_ramp_mesh(atlas_mat, side, top_uv))
+						_ramp_mesh(atlas_mat, side, top_uv, side_uv))
 				next_id += 1
 
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
@@ -634,10 +634,16 @@ func _uv_half(uv: Rect2, east: bool) -> Rect2:
 
 # A wedge: high edge at -Z falling to -0.5 at +Z. Slope face wears the terrain
 # texture; GridMap orientation (yaw steps) points the high side at the upper level.
-# top_uv defaults to the whole texture (the Stage-0 dirt_ramp, whose material is one tile), and an
-# atlas-backed wedge passes the tile's own region instead — the same fork _block_mesh already makes,
-# so a ramp wears the ground painted on it (#340).
-func _ramp_mesh(top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
+# Both UVs default to the whole texture (the Stage-0 dirt_ramp, whose materials are one tile each);
+# an atlas-backed wedge passes the tile's own regions instead — the same pair _block_mesh already
+# takes, so a ramp wears the ground painted on it (#340).
+#
+# side_uv is NOT optional in practice, and shipping it as a default cost a bug: a WATER tile wears
+# its own surface down the sides (side_mat is the composited atlas, not the one-tile dirt strip), so
+# an unpassed side_uv mapped the ENTIRE tilesheet onto every water slope. Whenever side_mat can be
+# the atlas, side_uv has to travel with it.
+func _ramp_mesh(top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1),
+		side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var slope_normal := Vector3(0.0, 1.0, 1.0).normalized()
 	var st := SurfaceTool.new()
@@ -651,13 +657,13 @@ func _ramp_mesh(top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
 	_tri(st, Vector3(0.5, 0.5, -0.5), Vector3(0.5, -0.5, -0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3.RIGHT)                               # east
+			Vector3(0.5, -0.5, 0.5), Vector3.RIGHT, side_uv)                               # east
 	_tri(st, Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, -0.5, 0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3.LEFT)                              # west
+			Vector3(-0.5, -0.5, -0.5), Vector3.LEFT, side_uv)                              # west
 	_quad(st, Vector3(0.5, 0.5, -0.5), Vector3(-0.5, 0.5, -0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD) # back
+			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD, side_uv) # back
 	_quad(st, Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN)    # bottom
+			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN, side_uv)    # bottom
 	st.commit(mesh)
 	return mesh
 
@@ -674,12 +680,13 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, norm
 		st.add_vertex(points[i])
 
 
-func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3) -> void:
+func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3,
+		uv_rect := Rect2(0, 0, 1, 1)) -> void:
 	var uvs: Array[Vector2] = [Vector2(0.5, 0), Vector2(1, 1), Vector2(0, 1)]
 	var points: Array[Vector3] = [a, b, c]
 	for i in points.size():
 		st.set_normal(normal)
-		st.set_uv(uvs[i])
+		st.set_uv(uv_rect.position + uvs[i] * uv_rect.size)
 		st.add_vertex(points[i])
 
 
