@@ -64,6 +64,10 @@ func _init() -> void:
 	_label = Label3D.new()
 	_label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	_label.shaded = false
+	# The back face of a billboarded label is coplanar with its front and blends over it, which is
+	# the other way text on a billboard ghosts itself. Nothing ever sees the reverse of a sprite
+	# that always faces the camera, so there is nothing to lose by dropping it.
+	_label.double_sided = false
 	_label.font_size = FONT_RESOLUTION
 	_label.outline_modulate = OUTLINE_COLOR
 	_label.render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4

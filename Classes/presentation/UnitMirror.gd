@@ -34,9 +34,14 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Look-tab entries. They live on this node rather than on UnitHealthBar because a knob may only
 # name a property of a node that exists in Battle3D.tscn, and the bars are built at runtime.
 # Height above the unit's STAND POINT, not above its head — a 32px sprite at the default density
-# stands one cell tall, so the clearance over the head is this minus about 1.0. 1.35 read as
-# floating (dev, 2026-08-15); 1.18 halves that clearance.
-@export var hud_lift := 1.18
+# stands one cell tall, so the clearance over the head is this minus about 1.0.
+#
+# It must stay BELOW BoardOverlays.billboard_lift (1.1), which is where the selection icons — crown,
+# squad member, target — hang. The dev's stacking order is icons on top, health readout tucked under
+# them just clear of the head. The two are separate knobs on separate nodes, so nothing enforces
+# that; a test pinning it would be pinning one tuning value against another, which the tuning razor
+# forbids. If the icons ever move, this moves with them by hand.
+@export var hud_lift := 1.04
 @export var bar_width_texels := 26.0
 @export var bar_height_texels := 5.0
 @export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
@@ -49,7 +54,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
 # have meant a 4px font to reach the size asked for, which renders to mush.
 @export var number_height_cells := 0.13
-@export var number_outline_size := 6.0   # glyph-atlas units, so it tracks the fixed FONT_RESOLUTION
+# Glyph-atlas units, so it tracks the fixed FONT_RESOLUTION. Keep it SMALL relative to that: the
+# outline is a dilation of each glyph, so at 6 against a 32-unit atlas (~19%) the black copy reads
+# as a second offset character and neighbouring digits' outlines merge — reported in play as the
+# numbers "appearing double and overlapping each other" (dev, 2026-08-15).
+@export var number_outline_size := 2.0
 @export var number_color := Color.WHITE
 @export var number_gap := 0.01           # inset from the bar's left edge; the number sits ON the bar
 # Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
