@@ -679,7 +679,7 @@ func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3) 
 # if they disagreed the art would land on the wrong facets. A shape absent here is a box, whose four
 # sides are congruent and share one whole-rect slice.
 const PRISM_FACETS: Dictionary[GridUtils.PropShape, int] = {
-	GridUtils.PropShape.FACETED: 7,
+	GridUtils.PropShape.FACETED: 6,
 	GridUtils.PropShape.ROUND: 10,
 }
 
@@ -688,16 +688,6 @@ func _facets_of(shape: GridUtils.PropShape) -> int:
 	return PRISM_FACETS.get(shape, 1)
 
 
-# A prism's silhouette, as rings of (height fraction, radius fraction) bottom to top.
-#
-# ROUND came back for the barrel, which was still authored `pot` when the dev said this (2026-08-15):
-# *"the pots don't really look like pots, the geometry needs to come back to a central point on the
-# bottom to make them look round."* Two rings made a truncated cone standing on its widest part,
-# which is the opposite of a vessel — narrow at the foot, widest at the belly, drawn back in at the
-# rim. FACETED keeps two rings, so the rock is unchanged in shape.
-#
-# These numbers are a FEEL value, not a measurement. Nothing pins them, and there is no runtime knob
-# because the mesh is baked — rounder is a line here plus a regenerate.
 # How thick a wall stands and how tall, as fractions of a cell (#263). FEEL values, and there is no
 # runtime knob for the same reason PRISM_PROFILE has none: the mesh is baked, so a slider would move
 # nothing. The height is the measured extent of this sheet's face-on fence art (13 of its 16 rows) and
@@ -724,13 +714,61 @@ const NS_EDGES := GridUtils.NS_EDGES
 const EW_EDGES := GridUtils.EW_EDGES
 
 
+# A prism's silhouette, as rings of (height fraction, radius fraction) bottom to top.
+#
+# ROUND came back for the barrel, which was still authored `pot` when the dev said this (2026-08-15):
+# *"the pots don't really look like pots, the geometry needs to come back to a central point on the
+# bottom to make them look round."* Two rings made a truncated cone standing on its widest part,
+# which is the opposite of a vessel — narrow at the foot, widest at the belly, drawn back in at the
+# rim.
+#
+# FACETED got the same treatment for the rock (#323): two rings is one straight run of facets from a
+# wide base to a flat top disc, which reads as a pillar however much the footprint is jittered. It is
+# now widest BELOW its crown and drawn back in above it.
+#
+# No radius may exceed 1.0 and the top ring must sit at height 1.0 — the mesh is inscribed in its own
+# art's footprint and its cap defines its height, and both are asserted.
+#
+# These numbers are a FEEL value, not a measurement. Nothing pins them, and there is no runtime knob
+# because the mesh is baked — rounder is a line here plus a regenerate.
 const PRISM_PROFILE: Dictionary[GridUtils.PropShape, Array] = {
-	GridUtils.PropShape.FACETED: [Vector2(0.0, 1.0), Vector2(1.0, 0.55)],
+	GridUtils.PropShape.FACETED: [
+		Vector2(0.00, 0.78), Vector2(0.28, 1.00), Vector2(0.62, 0.94),
+		Vector2(0.86, 0.72), Vector2(1.00, 0.36),
+	],
 	GridUtils.PropShape.ROUND: [
 		Vector2(0.0, 0.32), Vector2(0.18, 0.80), Vector2(0.50, 1.0),
 		Vector2(0.80, 0.78), Vector2(1.0, 0.66),
 	],
 }
+
+
+# How irregular a prism is, as three fractions — FACET, RING, ANGLE.
+#
+#   FACET  a radius wobble drawn once per facet, so the footprint is an irregular polygon.
+#   RING   a further wobble drawn per facet PER RING. This is what stops a facet's edges running
+#          dead vertical, and it deliberately reverses #279's "draw it once per angle so a jittered
+#          facet stays a straight facet" — a straight vertical edge is exactly what made the rock
+#          read as a column (#323).
+#   ANGLE  how far a facet's angle may slip, as a share of the even step, so the facets are not
+#          evenly spaced around the axis.
+#
+# ROUND takes none of it: a barrel is turned, and irregularity is the opposite of what it wants.
+# FEEL values, and baked, so no runtime knob — the same call PRISM_PROFILE records.
+const PRISM_JITTER: Dictionary[GridUtils.PropShape, Vector3] = {
+	GridUtils.PropShape.FACETED: Vector3(0.30, 0.18, 0.10),
+	GridUtils.PropShape.ROUND: Vector3.ZERO,
+}
+
+
+# How tall a FACETED lump stands, as a fraction of its own footprint width (#323).
+#
+# Every other solid takes its height from the art's opaque vertical extent, and that is right only
+# where the art is drawn UPRIGHT — a crate and a barrel are. The rock sprite is a top-down cluster of
+# boulders, so its 16 rows are mostly DEPTH into the cell; read as height they build a thing taller
+# than it is wide, which is the pillar the dev saw. A shape whose art cannot answer "how tall" has to
+# declare it. Same reading error as #263's foreshortened fence and #280's flowerbed.
+const FACETED_HEIGHT_OF_WIDTH := 0.64
 
 
 # The generated patches ONE tile needs, in the order the walk consumes them. Both the pre-pass that
@@ -996,10 +1034,15 @@ func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_p
 	match shape:
 		GridUtils.PropShape.CUBE:
 			return _block_mesh(mat, mat, top_uv, _uv_rect(side_px, atlas_size), size, h * 0.5)
+		GridUtils.PropShape.FACETED:
+			# The one solid whose height is NOT the art's vertical extent -- see
+			# FACETED_HEIGHT_OF_WIDTH. The footprint is still measured.
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size,
+					Vector3(w, w * FACETED_HEIGHT_OF_WIDTH, w), rng, shape)
 		GridUtils.PropShape.ROUND:
-			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.0, rng, shape)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, rng, shape)
 		_:
-			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, 0.30, rng, shape)
+			return _prism_mesh(mat, mat, top_uv, side_px, atlas_size, size, rng, shape)
 
 
 # A tapered prism standing on y = 0 — the faceted lump and the round pot are the same solid with
@@ -1012,9 +1055,10 @@ func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_p
 # and whether that reads as a continuous wrap (ROUND) or as distinct stone faces (FACETED) is
 # decided by the texture rather than by this loop.
 func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: Rect2i,
-		atlas_size: Vector2, size: Vector3, jitter: float,
+		atlas_size: Vector2, size: Vector3,
 		rng: RandomNumberGenerator, shape: GridUtils.PropShape) -> ArrayMesh:
 	var sides := _facets_of(shape)
+	var jitter: Vector3 = PRISM_JITTER.get(shape, Vector3.ZERO)
 	# Packed on read: a PackedVector2Array literal is not a constant expression, and the packed form
 	# is what makes every profile[i] a typed Vector2 rather than a Variant.
 	var profile := PackedVector2Array(PRISM_PROFILE[shape])
@@ -1026,18 +1070,21 @@ func _prism_mesh(top_mat: Material, side_mat: Material, top_uv: Rect2, side_px: 
 		facet_uv.append(_uv_rect(Rect2i(side_px.position + Vector2i(i * facet_w, 0),
 				Vector2i(facet_w, side_px.size.y)), atlas_size))
 
-	# rings[r][i] — one ring per profile entry. The wobble is drawn ONCE per angle and reused down
-	# the whole column, so a jittered facet stays a straight facet instead of twisting between rings.
+	# rings[r][i] — one ring per profile entry. A facet's ANGLE and its base wobble are drawn once,
+	# so the facet stays one face; the per-ring wobble on top is what tilts its edges off vertical.
+	# Every factor is <= 1, which is what keeps the mesh inside the footprint its art measured.
 	var rings: Array[PackedVector3Array] = []
 	for r in profile.size():
 		rings.append(PackedVector3Array())
+	var step_angle := TAU / float(sides)
 	for i in sides:
-		var a := TAU * float(i) / float(sides)
-		var wobble := 1.0 - rng.randf() * jitter
+		var a := step_angle * (float(i) + rng.randf_range(-jitter.z, jitter.z))
+		var wobble := 1.0 - rng.randf() * jitter.x
 		for r in profile.size():
 			var step := profile[r]
-			rings[r].append(Vector3(cos(a) * size.x * 0.5 * step.y * wobble, step.x * size.y,
-					sin(a) * size.z * 0.5 * step.y * wobble))
+			var radius := wobble * (1.0 - rng.randf() * jitter.y)
+			rings[r].append(Vector3(cos(a) * size.x * 0.5 * step.y * radius, step.x * size.y,
+					sin(a) * size.z * 0.5 * step.y * radius))
 
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
