@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #180 (2026-08-11).**
+**Canon checked through #314 (2026-08-15).**
 
 ## Principles
 
@@ -156,10 +156,53 @@ you read it *afterwards*. Both are #44 children.
   terrain deposits. Those are precisely the events players miss, and they are invisible to the queue
   by construction.
 
+## The volume above a unit ([#229](https://github.com/Phaazoid/Godoiosis/issues/229), BUILT 2026-08-15)
+
+4c's move to billboarded selection icons opened real estate the flat board never had, and the dev's
+read was that it is *better* than the 2D placement and worth building on. **The first deliberate
+occupant is a health readout**, and until it shipped **nothing showed HP on the board in either
+view** — the hover card was the only answer, which costs a glance away from the diorama.
+
+The rulings, all dev calls, all made before building:
+
+- **Hover-only, and health alone.** Status icons, Will and turn state stayed out. At most one unit
+  is hovered, so the crowding question the umbrella worried about does not arise yet — it returns
+  the moment anything here becomes always-on.
+- **A bar AND a number**, world-scaled like the icons beside it rather than screen-constant: it
+  belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
+- **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
+  A bar that also changes hue as it shortens says the same thing twice.
+- **It stacks UNDER the selection icons.** Crown/squadmate/target on top, health tucked beneath.
+
+Three findings that generalise past this ticket:
+
+1. **`shaded = false` is not "unlit".** It skips direct lighting only; volumetric fog, glow, filmic
+   tonemap and DoF all still run. Gameplay markup that must not be atmospheric needs
+   `disable_fog`/`disable_ambient_light` on an explicit material — which means `Sprite3D` and
+   `Label3D` cannot do it, since neither exposes one. **Whole-frame post has no per-object
+   exemption at all**; true immunity needs a separate render pass, which nothing has paid for yet.
+2. **One display means ONE billboard.** Per-object billboarding rebuilds each element's basis about
+   its own origin, so any world-space displacement shears as the camera orbits, and the in-plane
+   offsets that survive it are not applied identically by every node type (a `Label3D` moves its
+   glyphs and its outline by different amounts, which renders as a doubled, overlapping copy).
+   Rotate the parent; lay the children out in ordinary local space.
+3. **Anything hung over a unit's head must MEASURE the art, not assume a height.** Map sprites carry
+   transparent padding — the same fact [#279](https://github.com/Phaazoid/Godoiosis/issues/279)
+   pinned a floating lamp on — and it differs per sprite, so a fixed offset from the feet sits at a
+   different apparent height on every unit. `UnitSprite3D.art_top_height()` is the one answer.
+
+**The flat view has no counterpart and that is a real gap, not a design** — filed to
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292). Successors already filed:
+[#313](https://github.com/Phaazoid/Godoiosis/issues/313) (predicted HP as a ghost bar, which is
+Law #2 made visible) and [#314](https://github.com/Phaazoid/Godoiosis/issues/314) (Fire Emblem-style
+tick blocks that explosively fall away). [#188](https://github.com/Phaazoid/Godoiosis/issues/188)
+wants damage numbers in the same volume and should share whatever event seam #313 needs.
+
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
-enemy attack-range on hover during player turn; real HP/Will bars on panels; squad-target
+enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
+landed as #229 above; the PANEL half and Will are both still open); squad-target
 cursor color-coding; muted squad icons when another squad is active; simultaneous-movement
 legibility (needs design first — the umbrella's core problem).
 
