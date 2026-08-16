@@ -784,3 +784,38 @@ func test_the_other_paint_modes_leave_the_wheel_to_the_camera() -> void:
 
 		assert_float(_rig()._target_distance).override_failure_message(
 				"an armed brush in mode %d swallowed the camera's zoom" % mode).is_less(zoom_before)
+
+
+# ---- a dip stays on the board (#294) ----
+#
+# Driven through the AUTHORITY -- game.board_heights -> DirtyCells -> the DEV_MODE authoring poll
+# -> BoardPicker.top_of -> battle3d._update_tops. Poking _tops or calling _update_tops by hand
+# would prove both ends and not the wire, which is #103's shape.
+#
+# TWO cells, in this order, and the order is the whole point: the FIRST dip lowers the shared
+# floor, and a moved floor is the one edit no cell list can describe, so the poll full-syncs
+# through column_tops_from. Only the SECOND dip -- floor already negative -- is reconciled
+# incrementally, which is the only way to reach top_of at all.
+
+func test_painting_a_dip_leaves_its_column_on_the_board() -> void:
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	assert_bool(cells.size() > 1).override_failure_message(
+			"the mission paints fewer than two cells, so the two-dip ordering proves nothing").is_true()
+	var floor_first := cells[0]
+	var incremental := cells[1]
+	_game.game_state = _game.GameState.DEV_MODE
+
+	_game.board_heights.set_cell(floor_first, -1, Terrain.RampRise.NONE)
+	await _pump()
+	_game.board_heights.set_cell(incremental, -1, Terrain.RampRise.NONE)
+	await _pump()
+
+	# A cell one deep occupies [-1..0], so its top level IS 0 -- the value that used to mean
+	# "no column here" and take the column out of the picker's reach.
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	assert_bool(tops.has(floor_first)).override_failure_message(
+			"the first dip left the tops table: column_tops_from dropped it on the full sync").is_true()
+	assert_int(tops[floor_first]).is_equal(0)
+	assert_bool(tops.has(incremental)).override_failure_message(
+			"the second dip left the tops table: the incremental poll erased it").is_true()
+	assert_int(tops[incremental]).is_equal(0)

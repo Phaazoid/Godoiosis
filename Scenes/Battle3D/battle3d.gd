@@ -249,7 +249,9 @@ func _update_tops(columns: Array[Vector2i], floor_level: int) -> void:
 	var shrank := false
 	for column in columns:
 		var top := BoardPicker.top_of($Board, column, floor_level)
-		if top > 0:
+		# NO_COLUMN, never `> 0` (#294): a dipped column's top IS 0, so the old gate sent it down
+		# the erase branch — the poll did not merely miss a dip, it removed one already in _tops.
+		if top != BoardPicker.NO_COLUMN:
 			var known := _tops.has(column)
 			_tops[column] = top
 			if not known:

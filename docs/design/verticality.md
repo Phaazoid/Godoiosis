@@ -389,7 +389,11 @@ Godot emits a press *and* a release per notch. Four rulings worth keeping:
 
 - **Negative levels are reachable, deliberately.** The dev: *"if I start designing a level and want a
   dip, without allowing negatives, I would have to shift everything up. no bueno."* Nothing in
-  `can_step` cares — its only arithmetic is equality and ±1, which is symmetric about zero.
+  `can_step` cares — its only arithmetic is equality and ±1, which is symmetric about zero. The 3D
+  PICKER did care, until [#294](https://github.com/Phaazoid/Godoiosis/issues/294): a column one
+  deep tops out at level `0`, which was also its "there is no column here" answer, so a dip read as
+  flat inside the authoring apron and was unclickable outside it. `BoardPicker.NO_COLUMN` separates
+  the two — **a level is a number, not a truth value**, and nothing may gate on `level > 0`.
 - **Elevation goes with the ground.** `BoardHeights.prune_groundless` runs at both sites the tile-state
   sweep does (brush erase, `resize_map`), because a height under no tile is invisible junk that
   resurrects the moment ground is repainted there. The predicate is a **parameter**, not an injected

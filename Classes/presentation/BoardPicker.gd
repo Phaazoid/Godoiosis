@@ -20,6 +20,16 @@ class_name BoardPicker
 #   as an analytic plane intersection before or after it, so a real column in front
 #   of a hole still wins by ray order rather than by a hand-written comparison.
 #   The rect is the caller's policy (board + authoring apron), never derived here.
+# - A LEVEL IS A NUMBER, NOT A TRUTH VALUE (#294): "nothing here" is NO_COLUMN, so every level in
+#   range — 0 and below included — is an ordinary answer. Nothing may gate on `level > 0`.
+
+# "There is no column here" (#294). A DECLARED sentinel because 0 is a legitimate top — a cell one
+# deep occupies [-1..0], so its surface sits at 0 — and while 0 meant both, a dip was
+# unrepresentable: inside the plane it read as flat, outside it it was unclickable. Widening the
+# comparisons instead would only move the collision down to -1. -999 is BoardSpace.NO_CELL's
+# convention on the level axis (far outside any authorable board; the brush spans -99..99), and
+# _top_cell already turns a level near it into a cell whose y IS NO_CELL.y.
+const NO_COLUMN := -999
 
 const _EPS := 1e-8
 const _MAX_STEPS := 4096
@@ -32,8 +42,9 @@ static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 	for cell in board.get_used_cells():
 		var column := BoardSpace.flat(cell)
 		var top := cell.y + 1
-		var existing: int = tops.get(column, 0)
-		if top > existing:
+		# ABSENCE is the table's own "no column", so the seed has to be the key test rather than a
+		# value: seeded at 0, a dipped column's top of 0 lost `0 > 0` and never entered the table.
+		if not tops.has(column) or top > tops[column]:
 			tops[column] = top
 	return tops
 
@@ -43,13 +54,13 @@ static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 #
 # Walks UP from the shared floor and stops at the first gap. That is exact rather than approximate
 # because BoardMirror._write_column fills floor..level contiguously; a column with a hole in it
-# would be a bug there, not a case to tolerate here. Returns 0 for "no column", matching the
-# absent-key reading the tops table already has.
+# would be a bug there, not a case to tolerate here. Returns NO_COLUMN for "no column" — the
+# scalar twin of the absent key the tops table uses, and never a level a real column could have.
 static func top_of(board: GridMap, column: Vector2i, floor_level: int) -> int:
 	var y := floor_level
 	while board.get_cell_item(Vector3i(column.x, y, column.y)) != GridMap.INVALID_CELL_ITEM:
 		y += 1
-	return y if y > floor_level else 0
+	return y if y > floor_level else NO_COLUMN
 
 
 # The columns a tops table covers, as a rect — position = lowest column, and the rect
@@ -66,7 +77,11 @@ static func used_rect(tops: Dictionary[Vector2i, int]) -> Rect2i:
 	return Rect2i(lo, hi - lo + Vector2i.ONE)
 
 
-# The tallest column's top level; 0 for an empty table (no column, no height).
+# The tallest column's top level, never below 0 — an empty table has no height, and an all-dipped
+# board rises no further than the ground plane it was cut into. That floor is a DECLARED clamp and
+# not the #294 sentinel: both readers want it. pick_cell uses this as an early-out ceiling, where
+# over-estimating costs a few walk steps and under-estimating loses hits; battle3d._board_volume
+# measures its AABB upward from 0, and a negative height is not a volume.
 static func max_top(tops: Dictionary[Vector2i, int]) -> int:
 	var tallest := 0
 	for column: Vector2i in tops.keys():
@@ -107,7 +122,7 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 	if absf(dir.x) < _EPS and absf(dir.z) < _EPS:
 		var column := Vector2i(floori(ray_origin.x / cs), floori(ray_origin.z / cs))
 		var level := _top_level(column, tops, plane)
-		if level == 0:
+		if level == NO_COLUMN:
 			return BoardSpace.NO_CELL
 		var h: float = level * cs
 		if ray_origin.y <= h or dir.y < 0.0:
@@ -128,7 +143,7 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 			return BoardSpace.NO_CELL  # level or rising, already above every top
 		var t_exit := minf(t_max_x, t_max_z)
 		var level := _top_level(col, tops, plane)
-		if level > 0:
+		if level != NO_COLUMN:
 			var h: float = level * cs
 			var y_exit := ray_origin.y + dir.y * t_exit
 			if y_enter <= h or y_exit <= h:
@@ -147,13 +162,13 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 
 
 # What the ray can hit in this column: the painted column's top level, else the plane's
-# implicit floor, else 0 = nothing here. The one place the fallback is decided.
+# implicit floor, else NO_COLUMN = nothing here. The one place the fallback is decided.
 static func _top_level(column: Vector2i, tops: Dictionary[Vector2i, int], plane: Rect2i) -> int:
 	if tops.has(column):
 		return tops[column]
 	if plane.has_point(column):
 		return BoardSpace.FLAT_TOP_LEVEL
-	return 0
+	return NO_COLUMN
 
 
 # The columns the walk may visit. Generous is safe (the hit test still needs a level),
