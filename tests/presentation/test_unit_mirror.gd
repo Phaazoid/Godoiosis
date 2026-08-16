@@ -159,6 +159,97 @@ func test_the_faction_tint_reaches_the_diorama() -> void:
 			"both factions mirror the same colour — the tint discriminates nothing").is_false()
 
 
+# --- The attack lunge (#321) -----------------------------------------------------------
+# UnitVisuals expresses the lunge (and the invalid-order shake) as a LOCAL offset on the Unit's
+# child sprite, which unit.position never sees — so the mirror was faithful and blind at once.
+
+# The lunge as the game plays it, then FROZEN mid-flight. Deliberately not awaited (the real
+# method awaits its own tween, and the claims below are about the displaced moment), and killed
+# rather than sampled live: the tween keeps moving between the mirror's sync and the assertion,
+# so a live read compares two different instants of the same animation. The displacement is
+# still whatever the real tween produced — only the clock stops.
+func _lunge_frozen(unit: Unit, direction: Vector2) -> void:
+	unit.visuals.play_attack_lunge(direction)
+	await _settle()
+	unit.visuals.visual_tween.kill()
+	await _settle()
+
+
+func test_the_attack_lunge_reaches_the_diorama() -> void:
+	var unit := _live_units()[0]
+	var sprite := _mirror.sprite_for(unit)
+	await _lunge_frozen(unit, Vector2.RIGHT)
+
+	var offset := unit.visuals.animation_offset()
+	assert_bool(offset.length_squared() > 0.0).override_failure_message(
+			"the 2D tween never displaced the art, so a mirror that ignores it would pass here"
+			).is_true()
+	# The IDENTITY, not a distance: whatever the 2D animation holds at this instant is what the
+	# diorama shows. True at every frame of the tween, so no timing makes it flaky.
+	var shown := sprite.position - _sprite_seat(unit.movement.cell)
+	assert_vector(shown).override_failure_message(
+			"the lunge did not cross: 2D art at %s, 3D sprite %s off its stand point" % [offset, shown]
+			).is_equal_approx(Vector3(offset.x, 0.0, offset.y) / UnitMirror.PIXELS_PER_CELL,
+					Vector3.ONE * 0.0001)
+
+	# ...and it comes home. A mirrored offset that never zeroed would leave the board permanently
+	# skewed by whoever swung last — so this half runs a whole lunge, unfrozen, to its end.
+	# Counted frames, never `await tween.finished`: a tween that has already completed never emits
+	# again, and that await would hang the whole run rather than fail (tests/README).
+	unit.visuals.play_attack_lunge(Vector2.RIGHT)
+	var tween := unit.visuals.visual_tween
+	# The TWEEN's own liveness, not the offset: play_attack_lunge zeroes the art before it starts,
+	# so an offset check breaks on the very first pass, before the swing has begun.
+	for _frame in 600:
+		if not tween.is_valid():
+			break
+		await await_idle_frame()
+	await _settle()
+	assert_vector(sprite.position).override_failure_message(
+			"the swing ended and the sprite is still %s from its stand point"
+			% (sprite.position - _sprite_seat(unit.movement.cell))
+			).is_equal_approx(_sprite_seat(unit.movement.cell), Vector3.ONE * 0.0001)
+
+
+func test_a_lunge_along_board_y_moves_the_sprite_in_depth() -> void:
+	# A 2D y is DEPTH INTO the board, never height — the same misreading that cost #263 a fence
+	# and #280 a flowerbed. A lunge south is a step toward the camera, not a hop.
+	var unit := _live_units()[0]
+	var sprite := _mirror.sprite_for(unit)
+	var seat := _sprite_seat(unit.movement.cell)
+	await _lunge_frozen(unit, Vector2.DOWN)
+
+	assert_float(sprite.position.z - seat.z).override_failure_message(
+			"a lunge down-screen moved the sprite %s in depth" % (sprite.position.z - seat.z)
+			).is_greater(0.0)
+	assert_float(sprite.position.y).override_failure_message(
+			"the lunge lifted the sprite off its surface — the 2D y was read as height"
+			).is_equal_approx(seat.y, 0.0001)
+
+
+func test_a_lunge_is_not_a_step() -> void:
+	# The regression the obvious version of this fix ships: `step` and `cell` are both derived from
+	# the sprite's position, so an offset folded in there makes a lunge out-and-back read as two
+	# steps — the unit ends the swing facing backwards — and puts it on the next cell mid-swing.
+	var unit := _live_units()[0]
+	var sprite := _mirror.sprite_for(unit)
+	await _settle()
+	var facing_before := sprite.last_step
+	var cell_before := sprite.cell
+
+	await _lunge_frozen(unit, Vector2.RIGHT)
+	var art := unit.visuals.animation_offset() / UnitMirror.PIXELS_PER_CELL
+	# Non-vacuity: the displacement must clear the epsilon `_sync` gates a step on, or the naive
+	# version would pass this case too.
+	assert_bool(art.length_squared() > 0.000001).override_failure_message(
+			"the lunge moved less than _sync's own step epsilon; the case proves nothing").is_true()
+
+	assert_vector(sprite.last_step).override_failure_message(
+			"the lunge registered as a step — the sprite will face the way it swung").is_equal(facing_before)
+	assert_vector(sprite.cell).override_failure_message(
+			"a mid-lunge unit reports the cell it is leaning into").is_equal(cell_before)
+
+
 func test_clear_board_empties_the_mirror() -> void:
 	assert_bool(_mirror.mirrored_count() > 0).is_true()
 	_game.scenario_manager.clear_board()
