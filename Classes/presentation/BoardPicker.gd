@@ -38,6 +38,20 @@ static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 	return tops
 
 
+# ONE column's top level, without walking the board (#319) — the incremental twin of
+# column_tops_from, for a caller reconciling the handful of columns a writer announced.
+#
+# Walks UP from the shared floor and stops at the first gap. That is exact rather than approximate
+# because BoardMirror._write_column fills floor..level contiguously; a column with a hole in it
+# would be a bug there, not a case to tolerate here. Returns 0 for "no column", matching the
+# absent-key reading the tops table already has.
+static func top_of(board: GridMap, column: Vector2i, floor_level: int) -> int:
+	var y := floor_level
+	while board.get_cell_item(Vector3i(column.x, y, column.y)) != GridMap.INVALID_CELL_ITEM:
+		y += 1
+	return y if y > floor_level else 0
+
+
 # The columns a tops table covers, as a rect — position = lowest column, and the rect
 # INCLUDES the highest (Rect2i.has_point is half-open, hence the +1). The bbox derivation
 # lived here inline and again in battle3d._board_volume; one spelling now (Law #4).

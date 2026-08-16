@@ -16,7 +16,7 @@ extends Node2D
 # Still the heaviest file in the project. Prefer moving domain logic out to the system that
 # owns it when you touch this, rather than adding here.
 
-@onready var grid : TileMapLayer = $Grid
+@onready var grid : BoardGrid = $Grid
 @onready var units_root: Node2D = $Units
 @onready var turn_manager = $TurnManager
 @onready var turn_banner = $TurnBanner

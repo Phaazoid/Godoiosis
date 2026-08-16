@@ -321,3 +321,44 @@ was small.
 If this is fixed by a dirty flag, note the writers it must cover: `DevController._paint`/`_erase`
 (terrain, states, zones, elevation) and `DevController.resize_map`. Board swaps do **not** need it
 — they already route through `board_loaded` → `battle3d.rebuild()`.
+
+### FIXED the same day — the writers announce, and the poll reconciles what they named
+
+A dirty **flag** was the obvious fix and would not have worked: at 200×200 the first `sync` (243 ms,
+writing a whole new board) and the steady `sync` (238–257 ms, finding nothing) are the same number,
+so a flag makes idling free and leaves a brush drag paying the full walk every frame, one cell at a
+time. It had to be a dirty **cell set**.
+
+`BoardGrid` (`Classes/board/BoardGrid.gd`) is now the door — `paint()` / `erase()` / `reset()`, each
+marking a shared `DirtyCells`; `BoardHeights.set_cell` marks its own. `battle3d` consumes both,
+reconciles just those cells through `BoardMirror.sync_cells`, and updates `_tops`/`_board_rect` per
+changed column. Same three walks remain for a board swap, where they belong.
+
+| board | cells | the full walk (what the poll used to run every frame) | **poll, idle** | **poll, painting one cell** |
+|---|---|---|---|---|
+| **Prolog, as authored** | 2,560 | 20.8 – 22.6 ms | **0.001 – 0.002 ms** | **0.040 – 0.133 ms** |
+| 40×40 flat | 1,600 | 10.6 – 11.2 ms | 0.001 – 0.007 ms | 0.012 – 0.024 ms |
+| 100×100 flat | 10,000 | 71.1 – 76.9 ms | 0.001 – 0.010 ms | 0.013 – 0.052 ms |
+| 200×200 flat | 40,000 | 304.2 – 318.3 ms | 0.001 – 0.012 ms | 0.013 – 0.069 ms |
+| 100×100 all props | 10,000 | 88.8 – 90.8 ms | 0.001 – 0.046 ms | 0.014 – 0.106 ms |
+
+**The poll's cost is now flat in board size** — painting on a 200×200 board costs what painting on a
+20×12 board costs, because both reconcile one cell. That is the whole claim, and it is why no cap
+on the resize SpinBox was added: the number stopped being load-bearing.
+
+Two things are worth knowing before touching this again:
+
+- **A lowered floor still full-syncs, and must.** Every column reaches down to one shared floor, so
+  an edit that moves it invalidates the whole board. `battle3d` compares
+  `BoardMirror.floor_level_of` frame to frame and falls back to `sync()`; `BoardHeights` caches the
+  minimum so asking is O(1) rather than a walk over every painted cell.
+- **The rect grows in place but shrinks by re-deriving.** A column added merges into `_board_rect`;
+  a column *removed* cannot, because only a full pass knows the new edge. Getting that backwards
+  leaves the camera panning to an edge that is gone and the paint plane answering clicks out there
+  — and **the suite could not see it**: disabling the shrink re-derive left all 239 presentation
+  cases green. `test_painting_past_the_edge_grows_the_board_rect_and_erasing_shrinks_it_back` exists
+  because that mutant passed.
+
+The guarantee the old poll got for free — *it caught every writer, because it re-read everything* —
+is now `tests/law/test_board_writes_announce.gd`. `tile_map_data` is the declared exception: a bulk
+property assignment cannot be doored, and `board_loaded` → `rebuild()` covers it.

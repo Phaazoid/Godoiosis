@@ -25,7 +25,10 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 	root.name = root_name
 	parent.add_child(root)
 
-	var grid := TileMapLayer.new()
+	# A BoardGrid rather than a bare TileMapLayer even though nothing mirrors a headless board: it
+	# is the same authority the real game paints, so it takes the same door and the write law needs
+	# no exemption for play/ (#319).
+	var grid := BoardGrid.new()
 	grid.name = "Grid"
 	grid.tile_set = load(TILESET_PATH)
 	root.add_child(grid)
@@ -87,13 +90,13 @@ static func build(parent: Node, root_name := "PlayRoot") -> Dictionary:
 		"board_heights": board_heights,
 	}
 
-static func paint_rect(grid: TileMapLayer, rect: Rect2i) -> void:
+static func paint_rect(grid: BoardGrid, rect: Rect2i) -> void:
 	for x in range(rect.position.x, rect.end.x):
 		for y in range(rect.position.y, rect.end.y):
-			grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+			grid.paint(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
 
-static func paint_cell(grid: TileMapLayer, cell: Vector2i, atlas: Vector2i) -> void:
-	grid.set_cell(cell, GRASS_SOURCE, atlas)
+static func paint_cell(grid: BoardGrid, cell: Vector2i, atlas: Vector2i) -> void:
+	grid.paint(cell, GRASS_SOURCE, atlas)
 
 # Spawn a unit onto the board in its own solo squad (mirrors game.spawn_unit's contract).
 static func spawn(board: Dictionary, data: UnitData, cell: Vector2i) -> Unit:

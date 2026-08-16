@@ -77,6 +77,10 @@ var game: Node2D
 var _game_container: SubViewportContainer
 var _game_view: SubViewport
 var _tops: Dictionary[Vector2i, int] = {}
+# The shared column floor the mirror last drew against (#319). Held here rather than asked of the
+# mirror because the question is "has it MOVED since the last pass", which only a caller that runs
+# every frame can answer.
+var _floor_level := 0
 # The painted footprint, cached beside _tops and written wherever it is (#231): the
 # picker needs it grown by the apron on every motion event, and deriving it per pick
 # would walk every column of the board each time the mouse moves.
@@ -176,9 +180,16 @@ func _apply_board_look() -> void:
 
 func rebuild() -> void:
 	var states: TerrainStateManager = game.terrain_states
-	_board_mirror.rebuild(game.grid, game.board_heights, states.burning_cells(),
+	var heights: BoardHeights = game.board_heights
+	_board_mirror.rebuild(game.grid, heights, states.burning_cells(),
 			states.cells_with(Terrain.TileState.COVER))
 	_refresh_tops()
+	# A rebuild IS the full sync every pending announcement was asking for, so it consumes them
+	# rather than leaving the next poll to redo the whole board (#319). The floor is adopted here
+	# for the same reason: a board swap moves it, and nothing has drawn against the old one since.
+	_floor_level = _board_mirror.floor_level_of(heights)
+	game.grid.dirty.clear()
+	heights.dirty.clear()
 
 
 # _tops and _board_rect are one fact in two shapes — never write one without the other.
@@ -202,11 +213,54 @@ func _refresh_tops() -> void:
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
-	_board_mirror.sync(game.grid, game.board_heights)
+	var grid_dirty: DirtyCells = game.grid.dirty
+	var height_dirty: DirtyCells = game.board_heights.dirty
+	if not grid_dirty.pending() and not height_dirty.pending():
+		return
+	var heights: BoardHeights = game.board_heights
+	var floor_level: int = _board_mirror.floor_level_of(heights)
+	# A LOWERED (or raised) floor moves the bottom of every column on the board, so it is the one
+	# edit no cell list can describe -- full sync, same as a bulk write that never had one.
+	var whole_board: bool = grid_dirty.all or height_dirty.all or floor_level != _floor_level
+	var cells: Array[Vector2i] = grid_dirty.cells()
+	cells.append_array(height_dirty.cells())
+	grid_dirty.clear()
+	height_dirty.clear()
+	_floor_level = floor_level
+
 	var before := _board_rect
-	_refresh_tops()
+	if whole_board:
+		_board_mirror.sync(game.grid, heights)
+		_refresh_tops()
+	else:
+		_board_mirror.sync_cells(game.grid, cells, heights, floor_level)
+		_update_tops(cells, floor_level)
 	if _board_rect != before:
 		_rig.rebound(_board_volume())
+
+
+# The incremental twin of _refresh_tops, and it must keep the SAME invariant that one states:
+# _tops and _board_rect are one fact in two shapes, never written apart.
+#
+# Growing the rect is O(1) (a merge), shrinking is not — a column removed from the middle changes
+# nothing, one removed from an edge changes everything — so a removal pays for the full re-derive
+# and a paint never does. Getting that backwards leaves panning and picking reaching a stale edge.
+func _update_tops(columns: Array[Vector2i], floor_level: int) -> void:
+	var shrank := false
+	for column in columns:
+		var top := BoardPicker.top_of($Board, column, floor_level)
+		if top > 0:
+			var known := _tops.has(column)
+			_tops[column] = top
+			if not known:
+				var one := Rect2i(column, Vector2i.ONE)
+				# An empty rect is Rect2i(), whose position is the ORIGIN rather than "nowhere", so
+				# merging into it would drag every board's bounds back to (0,0).
+				_board_rect = one if not _board_rect.has_area() else _board_rect.merge(one)
+		elif _tops.erase(column):
+			shrank = true
+	if shrank:
+		_board_rect = BoardPicker.used_rect(_tops)
 
 
 # Public because the Look tab's Re-fit button calls it (#212): pitch and FOV feed the framing

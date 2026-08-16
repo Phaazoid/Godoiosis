@@ -107,8 +107,11 @@ func _measure_as_loaded() -> void:
 	var tops := BoardPicker.column_tops_from(_board)
 	BoardPicker.used_rect(tops)
 	var tops_usec := Time.get_ticks_usec() - t2
-	print("  %-44s %8.2f - %.2f ms" % ["POLL TOTAL per frame", (lo + tops_usec) / 1000.0,
-		(hi + tops_usec) / 1000.0])
+	print("  %-44s %8.2f - %.2f ms" % ["FULL-BOARD primitives (sync + tops + rect)",
+		(lo + tops_usec) / 1000.0, (hi + tops_usec) / 1000.0])
+	var first: Vector2i = _game.grid.get_used_cells()[0]
+	_measure_poll({"source": _game.grid.get_cell_source_id(first),
+		"coords": _game.grid.get_cell_atlas_coords(first)})
 	print("    2D cells = %d   3D cells = %d   props = %d" % [
 		_game.grid.get_used_cells().size(), _board.get_used_cells().size(), _mirror.prop_count()])
 
@@ -148,10 +151,50 @@ func _measure(size: Vector2i, fill: Dictionary, label: String) -> void:
 	var rect_usec := Time.get_ticks_usec() - t
 	_stamp("used_rect", rect_usec)
 
-	print("  %-44s %8.2f - %.2f ms" % ["POLL TOTAL per frame (steady + tops + rect)",
+	print("  %-44s %8.2f - %.2f ms" % ["FULL-BOARD primitives (sync + tops + rect)",
 		(lo + tops_usec + rect_usec) / 1000.0, (hi + tops_usec + rect_usec) / 1000.0])
+	_measure_poll(fill)
 	print("    2D cells = %d   3D cells = %d   props = %d" % [
 		_game.grid.get_used_cells().size(), _board.get_used_cells().size(), _mirror.prop_count()])
+
+
+# THE REAL CLAIM (#319). Everything above times the full-board primitives by hand, which is the
+# BEFORE shape and is what the poll used to run unconditionally. This times the poll ITSELF, in the
+# two states that actually occur in play:
+#
+#   IDLE     nothing was announced -- what sitting in dev mode costs.
+#   PAINTING one cell announced through the door -- what a brush drag costs, one cell per frame.
+#
+# The painting figure is the one that matters, and the one a dirty FLAG could never have fixed: at
+# 200x200 the full walk costs the same whether or not anything changed, so a flag would leave a
+# drag exactly as slow as before.
+func _measure_poll(fill: Dictionary) -> void:
+	_scene._sync_terrain_while_authoring()   # drain anything the resize announced
+
+	var idle_lo := 1 << 62
+	var idle_hi := 0
+	for i in range(STEADY_SAMPLES):
+		var t := Time.get_ticks_usec()
+		_scene._sync_terrain_while_authoring()
+		var spent := Time.get_ticks_usec() - t
+		idle_lo = mini(idle_lo, spent)
+		idle_hi = maxi(idle_hi, spent)
+
+	# Repaint an existing cell with the tile it already has: it announces exactly as a drag does,
+	# while leaving the board identical so repeated samples measure the same work.
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var paint_lo := 1 << 62
+	var paint_hi := 0
+	for i in range(STEADY_SAMPLES):
+		_game.grid.paint(cells[i % cells.size()], fill.source, fill.coords)
+		var t := Time.get_ticks_usec()
+		_scene._sync_terrain_while_authoring()
+		var spent := Time.get_ticks_usec() - t
+		paint_lo = mini(paint_lo, spent)
+		paint_hi = maxi(paint_hi, spent)
+
+	print("  %-44s %8.3f - %.3f ms" % ["POLL, idle", idle_lo / 1000.0, idle_hi / 1000.0])
+	print("  %-44s %8.3f - %.3f ms" % ["POLL, painting one cell", paint_lo / 1000.0, paint_hi / 1000.0])
 
 
 func _run() -> void:

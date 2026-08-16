@@ -305,11 +305,11 @@ func _erase() -> void:
 
 func _paint_tile(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	game.grid.set_cell(cell, brush.selected_source, brush.selected_tile)
+	game.grid.paint(cell, brush.selected_source, brush.selected_tile)
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _erase_tile(cell: Vector2i) -> void:
-	game.grid.erase_cell(cell)
+	game.grid.erase(cell)
 	# The states go with the ground (#245). The forbid stops NEW deposits on a groundless cell but
 	# says nothing about ones already sitting there when the tile is taken away. The REDRAW is not
 	# optional either: without it the store is correct and the icon stays on screen, which is how
@@ -384,10 +384,10 @@ func _erase_state(cell: Vector2i) -> void:
 func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) -> void:
 	width = maxi(1, width)
 	height = maxi(1, height)
-	game.grid.clear()
+	game.grid.reset()
 	for x in range(width):
 		for y in range(height):
-			game.grid.set_cell(Vector2i(x, y), fill_source, fill_tile)
+			game.grid.paint(Vector2i(x, y), fill_source, fill_tile)
 	# The SECOND way to take ground away (#245), and the one a per-cell clear at the erase site
 	# would have missed: shrinking strands every state that sat outside the new rectangle.
 	if game.terrain_states.prune_groundless():
