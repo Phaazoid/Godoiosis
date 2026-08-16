@@ -95,6 +95,18 @@ Three things were decided here rather than discovered later:
 
 A 2D y is board **DEPTH**, never height, here as everywhere else on this stack (#263's fence, #280's flowerbed).
 
+### A terrain STATE whose art draws objects takes FIRE's route ([#326](https://github.com/Phaazoid/Godoiosis/issues/326), 2026-08-16)
+
+Burrow's COVER pops up as three mud bumps — the dev's ask, twice: *"cover should POP UP as three individual mud bumps cropping up, NOT the whole sprite rotating vertical"*, then *"burrow terrain should pop like the flowers do."*
+
+**A state is not a tile, so `prop_shape` cannot answer for it** — cover is deposited at runtime through `TerrainStateManager` and has no meshlib entry to bake a form into. The question that *is* already answered is the one fire asked: what does a terrain state look like in a diorama? `BoardMirror` owns the standing form (the flame + light IS fire) and `OverlayMirror` skips that state's flat icon on the LIVE channel while keeping it on the PREVIEW channel, where the ghost is the only warning a queued order gets. Cover is now the second member of that rule; **FROZEN is genuinely flat and stays a ground quad**. So `Layer.TERRAIN` grew no "this state stands up" fork — the state left the layer instead. `OverlayMirror.STANDING_STATES` is the declared list, and it earned being a list at exactly two members.
+
+**The bumps themselves are #280's decomposition, unchanged**: split the drawn pixels into 8-connected clusters and stand each one up at its own place — x from its centre column, z from its **bottom** row, because a top-down drawing's y is depth. One difference is worth stating, because it is where the two arts differ: a **tile** is opaque ground with things drawn on it, so its background colour has to be measured and keyed out; an **icon** already carries its own alpha and is clustered as drawn.
+
+**The art had to answer "three" before the code could.** Measured before building, and it reversed the issue's own premise: `Cover.png`'s three mounds *touched* — one cluster 8-connected, two 4-connected — so the mechanism as shipped would have stood the whole icon up, which is the exact outcome the dev vetoed. Three pixels of seam were erased (dev's call). The general rule: **a decomposition can only find the objects the art separates**, so before reusing one, count the clusters in the art you are pointing it at.
+
+Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** Look knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first.
+
 ### Conventions the art commission must carry (pending look-dev experiments)
 
 Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments to run in the look-dev scene **before** any commission, then locked into #176's conventions list:

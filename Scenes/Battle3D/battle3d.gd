@@ -175,7 +175,9 @@ func _apply_board_look() -> void:
 
 
 func rebuild() -> void:
-	_board_mirror.rebuild(game.grid, game.board_heights, game.terrain_states.burning_cells())
+	var states: TerrainStateManager = game.terrain_states
+	_board_mirror.rebuild(game.grid, game.board_heights, states.burning_cells(),
+			states.cells_with(Terrain.TileState.COVER))
 	_refresh_tops()
 
 

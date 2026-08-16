@@ -315,6 +315,112 @@ func test_a_drag_of_paints_inside_one_frame_costs_one_sync_pass() -> void:
 			"8 writes in one frame cost %s sync passes" % spent).is_less_equal(2)
 
 
+# --- COVER bumps (#326) ----------------------------------------------------------------------
+#
+# Cover is a runtime terrain STATE that stands objects up, so it takes fire's route: this mirror
+# owns its 3D form and OverlayMirror keeps only the preview icon. Every case here deposits through
+# terrain_states.apply — the sim's own seam, the same one Burrow uses — and never calls
+# refresh_states, so a form that only appears when a test pokes it goes red.
+
+func _cover_cells() -> Array[Vector2i]:
+	return _game.terrain_states.cells_with(Terrain.TileState.COVER)
+
+
+func _dig_in(cell: Vector2i) -> void:
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.COVER])
+	_game.terrain_states.apply(effect)
+
+
+# The bumps of a cover marker, in build order.
+func _bumps_of(marker: Node3D) -> Array[Sprite3D]:
+	var out: Array[Sprite3D] = []
+	for child in marker.get_children():
+		var sprite := child as Sprite3D
+		if sprite != null:
+			out.append(sprite)
+	return out
+
+
+func test_cover_dug_mid_turn_stands_up_without_a_turn_boundary() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var before := mirror.cover_marker_count()
+	var cell := _a_cell_that_is_not_burning()
+	_dig_in(cell)
+	await _settle()
+	assert_int(mirror.cover_marker_count()).override_failure_message(
+			"a dug-in Cover tile did not reach the diorama").is_equal(before + 1)
+	assert_int(mirror.cover_marker_count()).is_equal(_cover_cells().size())
+
+
+func test_cover_stands_up_one_bump_per_drawn_cluster_at_its_own_place() -> void:
+	# The dev's whole ask: THREE MUD BUMPS, not the icon rotating vertical. The count comes off
+	# the ART, so this asserts the property rather than the number — more than one bump, each at
+	# its own spot on the cell, each planted ON the surface. A single popped sprite of the whole
+	# icon satisfies none of those, and that is exactly the outcome being ruled out.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cell := _a_cell_that_is_not_burning()
+	_dig_in(cell)
+	await _settle()
+	var marker := mirror.cover_marker_at(cell)
+	assert_object(marker).override_failure_message("no marker for a covered cell").is_not_null()
+	var bumps := _bumps_of(marker)
+	assert_int(bumps.size()).override_failure_message(
+			"cover popped as ONE sprite — the whole icon standing vertical is the thing this replaces"
+	).is_greater(1)
+	var seen: Array[Vector2] = []
+	for bump in bumps:
+		var spot := Vector2(bump.position.x, bump.position.z)
+		assert_bool(seen.has(spot)).override_failure_message(
+				"two bumps share a spot — the art's own places were not read").is_false()
+		seen.append(spot)
+		assert_float(bump.position.y).override_failure_message(
+				"a bump hangs off the ground; a top-down icon's y is DEPTH, never height"
+		).is_equal_approx(0.0, 0.001)
+		# The density RELATIONSHIP, never a tuned number: the knob scales the art through
+		# pixel_size, which is what keeps a bump's PLACE out of the knob's reach.
+		assert_float(bump.pixel_size).is_equal_approx(
+				mirror.cover_scale / BoardOverlays.ART_PIXELS_PER_CELL, 0.0001)
+
+
+func test_the_cover_scale_knob_resizes_bumps_already_standing() -> void:
+	# What makes it a knob rather than a value baked into whatever was built last: cover markers
+	# are only rebuilt when the state changes, so a build-time read would need a re-dig to show.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cell := _a_cell_that_is_not_burning()
+	_dig_in(cell)
+	await _settle()
+	var bump := _bumps_of(mirror.cover_marker_at(cell))[0]
+	var before := bump.pixel_size
+	mirror.cover_scale = mirror.cover_scale * 2.0
+	assert_float(bump.pixel_size).override_failure_message(
+			"the knob does not reach bumps that are already standing").is_equal_approx(before * 2.0, 0.0001)
+
+
+func test_cover_cleared_frees_its_bumps() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cell := _a_cell_that_is_not_burning()
+	_dig_in(cell)
+	await _settle()
+	assert_object(mirror.cover_marker_at(cell)).is_not_null()
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_removed.assign([Terrain.TileState.COVER])
+	_game.terrain_states.apply(effect)
+	await _settle()
+	assert_object(mirror.cover_marker_at(cell)).override_failure_message(
+			"the reconcile adds but never removes").is_null()
+
+
 func _a_tile_of_a_different_kind(cell: Vector2i) -> Dictionary:
 	var current := GridUtils.get_terrain_kind_at_cell(_game.grid, cell)
 	var tiles: TileSet = _game.grid.tile_set
