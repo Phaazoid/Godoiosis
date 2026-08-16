@@ -21,6 +21,19 @@ class_name BoardHeights
 var _elevations: Dictionary[Vector2i, int] = {}
 var _ramps: Dictionary[Vector2i, Terrain.RampRise] = {}
 
+# Which cells changed since the 3D mirror last reconciled (#319) — the BoardGrid.dirty twin, same
+# single-consumer contract. Height is terrain to the mirror: it decides how tall a column is drawn,
+# so a height edit has to reach it exactly the way a repaint does.
+var dirty := DirtyCells.new()
+
+# The board's lowest painted elevation, CACHED. BoardMirror needs it per sync (every column reaches
+# down to a shared floor, or a dip would be a hole) and re-deriving it walked painted_cells() each
+# time -- O(board) on a fully-painted board, in the frame path this ticket exists to empty.
+# Recomputed lazily and only when a write could have RAISED it; a write that lowers it is answered
+# in place.
+var _lowest := 0
+var _lowest_stale := false
+
 # An ABSENT cell is elevation 0, and that is a decision rather than a gap: a flat board is the
 # overwhelmingly common case, so it is stored as nothing at all. This method is the ONE place that
 # default is applied -- no caller re-derives it, and no caller reads the dictionaries directly.
@@ -36,6 +49,7 @@ func is_ramp(cell: Vector2i) -> bool:
 # The one writer. Defaults are PRUNED rather than stored so to_dict stays sparse and two boards
 # painted to the same shape compare equal regardless of how they got there.
 func set_cell(cell: Vector2i, elevation: int, rise: Terrain.RampRise = Terrain.RampRise.NONE) -> void:
+	var previous := elevation_at(cell)
 	if elevation == 0:
 		_elevations.erase(cell)
 	else:
@@ -44,10 +58,32 @@ func set_cell(cell: Vector2i, elevation: int, rise: Terrain.RampRise = Terrain.R
 		_ramps.erase(cell)
 	else:
 		_ramps[cell] = rise
+	dirty.mark(cell)
+	# Lowering is answered in place; only RAISING the cell that WAS the floor can move it, and only
+	# a rescan knows where to. Both branches, or a dip filled back in leaves every column reaching
+	# down to a floor nothing sits on.
+	if elevation < _lowest:
+		_lowest = elevation
+	elif previous == _lowest and elevation > previous:
+		_lowest_stale = true
 
 func clear() -> void:
 	_elevations.clear()
 	_ramps.clear()
+	dirty.mark_all()
+	_lowest = 0
+	_lowest_stale = false
+
+# The lowest elevation anywhere on the board, which is 0 or below: an ABSENT cell is elevation 0
+# (see elevation_at), so a board with nothing painted -- and any board with one unpainted cell --
+# genuinely has 0 as its minimum. That is why the scan starts at 0 rather than clamping afterwards.
+func lowest_elevation() -> int:
+	if _lowest_stale:
+		_lowest = 0
+		for cell: Vector2i in _elevations:
+			_lowest = mini(_lowest, _elevations[cell])
+		_lowest_stale = false
+	return _lowest
 
 # Elevation goes with the ground (#260), the rule TerrainStateManager.prune_groundless already holds
 # for tile states: a height under no tile is junk that resurrects the moment ground is repainted
@@ -99,3 +135,7 @@ func load_dicts(elevations: Dictionary, ramps: Dictionary) -> void:
 		var rise: Terrain.RampRise = ramps[cell]
 		if rise != Terrain.RampRise.NONE:
 			_ramps[cell] = rise
+	# These write the stores DIRECTLY rather than through set_cell (a load restores a result, it
+	# does not replay edits), so the floor cache has to be invalidated by hand. clear() above
+	# already marked the dirty set.
+	_lowest_stale = true

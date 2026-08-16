@@ -8,6 +8,15 @@
 # the diorama without an F2 or a turn boundary. Those cases drive the AUTHORITY —
 # game.grid / terrain_states.apply — and never call sync()/refresh_states themselves,
 # so a mirror that only works when a test pokes it goes red rather than green.
+#
+# WHAT THOSE CASES NO LONGER PROVE, said out loud because it was deliberate (#319). They used to
+# write through the raw TileMapLayer API, which meant they also proved the poll caught a writer
+# that announced nothing — the poll re-walked the whole board, so there was nothing TO announce.
+# That walk was O(board) per frame and cost Prolog a whole 60fps frame budget, so writes now go
+# through BoardGrid's paint()/erase() doors and the mirror reconciles only what was announced.
+# These cases still drive the authority and still fail if the wire breaks; the guarantee that a
+# NEW writer cannot forget the door moved to tests/law/test_board_writes_announce.gd.
+# (Heights need no such rename: BoardHeights.set_cell IS its own door.)
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -277,7 +286,7 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 	var other := _a_tile_of_a_different_kind(cell)
 	assert_bool(other.source >= 0).override_failure_message(
 			"the tileset offers no second kind; the case is vacuous").is_true()
-	_game.grid.set_cell(cell, other.source, other.coords)
+	_game.grid.paint(cell, other.source, other.coords)
 	await _settle()
 	var after := board.get_cell_item(at)
 	assert_int(after).override_failure_message("the paint never reached the 3D board").is_not_equal(before)
@@ -293,10 +302,49 @@ func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 	var at := _surface_of(cell)
 	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
-	_game.grid.erase_cell(cell)
+	_game.grid.erase(cell)
 	await _settle()
 	assert_int(board.get_cell_item(at)).override_failure_message(
 			"sync paints but never erases").is_equal(GridMap.INVALID_CELL_ITEM)
+
+
+# The FOOTPRINT half of the incremental poll (#319), and it exists because a mutant found nothing:
+# disabling the shrink re-derive left all 239 presentation cases green. _board_rect is not
+# decoration — it is the camera's pan limit (_board_volume) and the authoring paint plane the 3D
+# pointer can hit (_paint_plane), so a stale one lets you pan past an edge that is no longer there
+# and paint on empty space, which is exactly the "panning stops at the old edge" failure the poll's
+# own comment warns about in the other direction.
+#
+# Both directions in one case on purpose: growing merges in place while shrinking re-derives, so
+# they are different branches and a case covering one says nothing about the other. Every
+# coordinate is DERIVED from the live rect rather than named, per the content razor — this runs on
+# a real mission whose shape is authored and free to change.
+func test_painting_past_the_edge_grows_the_board_rect_and_erasing_shrinks_it_back() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+
+	var start: Rect2i = _scene._board_rect
+	assert_bool(start.has_area()).override_failure_message(
+			"the mission painted no columns; a footprint comparison over nothing proves nothing").is_true()
+
+	# One cell beyond the right edge, on a row the board already occupies.
+	var outside := Vector2i(start.end.x, start.position.y)
+	var donor: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(outside, _game.grid.get_cell_source_id(donor),
+			_game.grid.get_cell_atlas_coords(donor))
+	await _settle()
+	assert_bool(_scene._board_rect.has_point(outside)).override_failure_message(
+			"painting at %s left the board rect at %s — the new column is unreachable by the "
+			% [outside, _scene._board_rect]
+			+ "pointer and outside the camera's pan limit").is_true()
+
+	_game.grid.erase(outside)
+	await _settle()
+	assert_that(_scene._board_rect).override_failure_message(
+			"erasing the only cell of the outermost column left the rect at %s instead of "
+			% [_scene._board_rect] + "returning to %s — the camera still pans to a column that is "
+			% [start] + "gone, and the paint plane still answers clicks out there").is_equal(start)
 
 
 func test_a_drag_of_paints_inside_one_frame_costs_one_sync_pass() -> void:
@@ -308,7 +356,7 @@ func test_a_drag_of_paints_inside_one_frame_costs_one_sync_pass() -> void:
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
 	var before := mirror.sync_passes
 	for i in 8:
-		_game.grid.erase_cell(cells[i])
+		_game.grid.erase(cells[i])
 	await await_idle_frame()
 	var spent := mirror.sync_passes - before
 	assert_int(spent).override_failure_message(
@@ -477,8 +525,8 @@ func test_two_tiles_of_one_kind_render_as_two_different_blocks() -> void:
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
 	var a: Vector2i = cells[0]
 	var b: Vector2i = cells[1]
-	_game.grid.set_cell(a, pair[0].source, pair[0].coords)
-	_game.grid.set_cell(b, pair[1].source, pair[1].coords)
+	_game.grid.paint(a, pair[0].source, pair[0].coords)
+	_game.grid.paint(b, pair[1].source, pair[1].coords)
 	await _settle()
 
 	var item_a := board.get_cell_item(_surface_of(a))
@@ -536,7 +584,7 @@ func test_a_tile_with_no_block_of_its_own_falls_back_to_its_kind() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 	var entry: Dictionary = multi[0]
-	_game.grid.set_cell(cell, entry.source, entry.coords)
+	_game.grid.paint(cell, entry.source, entry.coords)
 	await _settle()
 
 	var item := board.get_cell_item(_surface_of(cell))
@@ -623,8 +671,8 @@ func test_a_standing_tile_stands_up_and_a_ground_tile_does_not() -> void:
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
 	var prop_cell: Vector2i = cells[0]
 	var ground_cell: Vector2i = cells[1]
-	_game.grid.set_cell(prop_cell, standing[0].source, standing[0].coords)
-	_game.grid.set_cell(ground_cell, flat[0].source, flat[0].coords)
+	_game.grid.paint(prop_cell, standing[0].source, standing[0].coords)
+	_game.grid.paint(ground_cell, flat[0].source, flat[0].coords)
 	await _settle()
 
 	assert_object(mirror.prop_at(prop_cell)).override_failure_message(
@@ -736,7 +784,7 @@ func test_the_lantern_stands_two_cells_tall() -> void:
 	assert_bool(not lantern.is_empty()).override_failure_message("no Lantern tile; the case is vacuous").is_true()
 
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.grid.set_cell(cell, lantern.source, lantern.coords)
+	_game.grid.paint(cell, lantern.source, lantern.coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	var prop := mirror.prop_at(cell)
@@ -773,7 +821,7 @@ func test_a_billboard_is_planted_by_its_art_not_by_its_region() -> void:
 	var checked := 0
 	for entry in _tiles_with_shape(GridUtils.PropShape.BILLBOARD):
 		var cell: Vector2i = cells[checked]
-		_game.grid.set_cell(cell, entry.source, entry.coords)
+		_game.grid.paint(cell, entry.source, entry.coords)
 		await _settle()
 		var sprite := mirror.prop_at(cell).get_child(0) as Sprite3D
 		assert_object(sprite).override_failure_message("a BILLBOARD tile did not build a sprite").is_not_null()
@@ -813,8 +861,8 @@ func test_the_lantern_carries_a_light_and_the_tree_does_not() -> void:
 			"Lantern or Tree missing from the tileset; the case is vacuous").is_true()
 
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
-	_game.grid.set_cell(cells[0], lantern.source, lantern.coords)
-	_game.grid.set_cell(cells[1], tree.source, tree.coords)
+	_game.grid.paint(cells[0], lantern.source, lantern.coords)
+	_game.grid.paint(cells[1], tree.source, tree.coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_object(_light_under(mirror.prop_at(cells[0]))).override_failure_message(
@@ -836,7 +884,7 @@ func test_a_prop_is_rebuilt_only_when_its_tile_changes() -> void:
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 
-	_game.grid.set_cell(cell, standing[0].source, standing[0].coords)
+	_game.grid.paint(cell, standing[0].source, standing[0].coords)
 	await _settle()
 	var first := mirror.prop_at(cell)
 	assert_object(first).is_not_null()
@@ -845,12 +893,12 @@ func test_a_prop_is_rebuilt_only_when_its_tile_changes() -> void:
 	assert_object(mirror.prop_at(cell)).override_failure_message(
 			"the prop is rebuilt every frame").is_same(first)
 
-	_game.grid.set_cell(cell, standing[1].source, standing[1].coords)
+	_game.grid.paint(cell, standing[1].source, standing[1].coords)
 	await _settle()
 	assert_object(mirror.prop_at(cell)).override_failure_message(
 			"painting a DIFFERENT prop left the old one standing").is_not_same(first)
 
-	_game.grid.erase_cell(cell)
+	_game.grid.erase(cell)
 	await _settle()
 	assert_object(mirror.prop_at(cell)).override_failure_message(
 			"erasing the tile left its prop standing").is_null()
@@ -867,7 +915,7 @@ func test_props_write_depth_so_units_sort_against_them() -> void:
 	assert_bool(not standing.is_empty()).override_failure_message(
 			"no BILLBOARD tile; the case is vacuous").is_true()
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.grid.set_cell(cell, standing[0].source, standing[0].coords)
+	_game.grid.paint(cell, standing[0].source, standing[0].coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	var sprite := mirror.prop_at(cell).get_child(0) as Sprite3D
@@ -907,8 +955,8 @@ func test_a_solid_tile_builds_geometry_and_a_thin_one_builds_a_sprite() -> void:
 			"Crate or Tree missing from the tileset; the case is vacuous").is_true()
 
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
-	_game.grid.set_cell(cells[0], crate.source, crate.coords)
-	_game.grid.set_cell(cells[1], tree.source, tree.coords)
+	_game.grid.paint(cells[0], crate.source, crate.coords)
+	_game.grid.paint(cells[1], tree.source, tree.coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_object(mirror.prop_at(cells[0]).get_child(0) as MeshInstance3D).override_failure_message(
@@ -1313,7 +1361,7 @@ func test_a_plane_tile_builds_geometry_not_a_billboard() -> void:
 			"no PLANE tiles authored; the case is vacuous").is_true()
 
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.grid.set_cell(cell, planes[0].source, planes[0].coords)
+	_game.grid.paint(cell, planes[0].source, planes[0].coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	var prop := mirror.prop_at(cell)
@@ -1464,7 +1512,7 @@ func test_every_plant_in_a_tuft_stands_on_the_tile_and_faces_the_camera() -> voi
 			+ "and would pass against it").is_true()
 
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.grid.set_cell(cell, richest.source, richest.coords)
+	_game.grid.paint(cell, richest.source, richest.coords)
 	await _settle()
 
 	var root := mirror.prop_at(cell)
@@ -1515,7 +1563,7 @@ func test_a_tuft_stands_up_one_plant_per_cluster_the_art_draws() -> void:
 		var wanted := _drawn_clusters(_readable(source.texture),
 				source.get_tile_texture_region(entry.coords, 0))
 		var cell: Vector2i = cells[checked]
-		_game.grid.set_cell(cell, entry.source, entry.coords)
+		_game.grid.paint(cell, entry.source, entry.coords)
 		await _settle()
 
 		var root := mirror.prop_at(cell)
@@ -1602,7 +1650,7 @@ func test_the_tuft_knob_resizes_a_tuft_that_is_already_standing() -> void:
 			"no TUFT tiles authored; the case is vacuous").is_true()
 
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.grid.set_cell(cell, tufts[0].source, tufts[0].coords)
+	_game.grid.paint(cell, tufts[0].source, tufts[0].coords)
 	await _settle()
 	var root := mirror.prop_at(cell)
 	var sprite := root.get_child(0) as Sprite3D

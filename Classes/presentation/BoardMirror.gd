@@ -204,32 +204,72 @@ func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
 # mirror has no business reaching into the game for the store the caller is already holding.
 func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	sync_passes += 1
-	var floor_level := _floor_level(heights)
+	var floor_level := floor_level_of(heights)
 	var live: Dictionary[Vector2i, bool] = {}
-	var propped: Dictionary[Vector2i, bool] = {}
 	for cell in grid.get_used_cells():
 		live[cell] = true
-		_write_column(cell, item_for_cell(grid, cell), heights, floor_level)
-		# Props ride the SAME walk rather than a second pass over the same cells — this is the
-		# terrain diff, and whether a cell carries a standing object is a terrain fact.
-		if GridUtils.stands_up_at_cell(grid, cell):
-			propped[cell] = true
-			_reconcile_prop(grid, cell, heights)
-	_free_props_except(propped)
+		reconcile_cell(grid, cell, heights, floor_level)
+	# A prop on a cell that lost its ground entirely: reconcile_cell's own else-branch covers a cell
+	# repainted from prop to flat, but this walk only visits cells that still HAVE ground.
+	_free_props_except(live)
 	# get_used_cells returns a copy, so erasing inside the walk is safe.
 	for cell: Vector3i in board.get_used_cells():
 		if not live.has(BoardSpace.flat(cell)):
 			board.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
 
 
+# The INCREMENTAL door (#319), and the whole reason sync() above was split. Same reconcile, over the
+# cells a writer announced through BoardGrid.dirty / BoardHeights.dirty instead of over the board.
+#
+# It has NO erase sweep and needs none: a cell that lost its ground is IN the announced set, and
+# reconcile_cell clears its column. The sweep in sync() exists only to catch cells nobody named,
+# which is exactly the case an announcement rules out.
+#
+# The floor is PASSED, not re-derived, because the caller has to compare it anyway: a lowered floor
+# invalidates every column on the board, so that case is the caller's cue to call sync() instead.
+func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeights,
+		floor_level: int) -> void:
+	sync_passes += 1
+	for cell in cells:
+		reconcile_cell(grid, cell, heights, floor_level)
+
+
+# ONE cell, in whatever direction it moved — the single implementation both sync() and sync_cells()
+# run, so the full and incremental paths physically cannot draw a cell differently (Law #4).
+#
+# Props ride the SAME call rather than a second pass: whether a cell carries a standing object is a
+# terrain fact, and splitting it would be two answers to "what is on this cell".
+func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
+		floor_level: int) -> void:
+	if not GridUtils.has_ground(grid, cell):
+		_clear_column(cell, floor_level)
+		_free_prop_at(cell)
+		return
+	_write_column(cell, item_for_cell(grid, cell), heights, floor_level)
+	if GridUtils.stands_up_at_cell(grid, cell):
+		_reconcile_prop(grid, cell, heights)
+	else:
+		_free_prop_at(cell)   # repainted from a tree to bare grass
+
+
+# Erase a whole column. Walks UP from the shared floor and stops at the first gap, which is exact
+# rather than approximate: _write_column fills floor..level contiguously (plus the ramp wedge one
+# above), so a column can never have a hole for this to stop early on. The same contiguity is what
+# _write_column's own walk-up cleanup already assumes.
+func _clear_column(cell: Vector2i, floor_level: int) -> void:
+	var y := floor_level
+	while board.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
+		board.set_cell_item(Vector3i(cell.x, y, cell.y), GridMap.INVALID_CELL_ITEM)
+		y += 1
+
+
 # The lowest surface any column has to reach down to. A dip must have a bottom rather than a hole,
-# and every column shares one floor so the board's underside stays flat. Clamped at 0 so an
-# all-flat board writes exactly the one layer it always did.
-func _floor_level(heights: BoardHeights) -> int:
-	var lowest := 0
-	for cell in heights.painted_cells():
-		lowest = mini(lowest, heights.elevation_at(cell))
-	return lowest
+# and every column shares one floor so the board's underside stays flat.
+#
+# Public since #319: the authoring poll compares it frame to frame, because a LOWERED floor is the
+# one edit that invalidates every column at once and so cannot be reconciled incrementally.
+func floor_level_of(heights: BoardHeights) -> int:
+	return heights.lowest_elevation()
 
 
 # One cell's whole COLUMN (#273): the surface block repeated down to the shared floor, which is the
@@ -522,8 +562,16 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 	for cell: Vector2i in _props.keys():
 		if not wanted.has(cell):
-			_props[cell].queue_free()
-			_props.erase(cell)
+			_free_prop_at(cell)
+
+
+# The single-cell twin, which is what the incremental path can use — the sweep above cannot answer
+# "this one cell stopped standing up" without a set of every cell that still does.
+func _free_prop_at(cell: Vector2i) -> void:
+	if not _props.has(cell):
+		return
+	_props[cell].queue_free()
+	_props.erase(cell)
 
 
 # The object standing on the cell that paints it, in whatever form its art asks for. The FORM is
