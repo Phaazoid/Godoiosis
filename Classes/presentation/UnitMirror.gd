@@ -16,6 +16,16 @@ class_name UnitMirror
 # exactly one answer elsewhere — hovered_unit_source asks the question HoverPresenter._process asks,
 # and HP comes off the Unit — so this adds a SURFACE, not a seam.
 #
+# Since #313 a readout has a SECOND reason to be up: the queued plan is about to change this unit's
+# HP. That number is the resolver's, threaded across the whole pass and read through
+# PlanResolver.projected_hp — never recomputed here, and never the per-hit target_hp_after, which
+# answers a different question for a unit struck twice. This node computes no damage; if it ever
+# needs to, that is the bug.
+#
+# It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
+# authority" that #229 already made, and for the same reason: the flat view draws no HP over units
+# at all, so there is no retained 2D state to mirror.
+#
 # Since #321 it also mirrors UnitVisuals' effect OFFSET (the attack lunge, the invalid-order shake),
 # which is expressed on the Unit's child sprite rather than on the Unit — the one fact of that class
 # the position read above cannot see. The rule the ticket settled: anything a 2D effect writes on the
@@ -75,10 +85,32 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # belongs over a head, and the bar already carries the fraction either way.
 @export var number_shows_max := true
 
+# --- The predicted readout (#313) ------------------------------------------------------
+# The span between what a unit HAS and what the plan leaves it with. Two colours because the span
+# means opposite things in the two directions and the geometry cannot say which.
+@export var bar_doomed_color := Color(1.0, 0.75, 0.1, 1.0)
+@export var bar_heal_color := Color(0.4, 0.9, 1.0, 1.0)
+@export var notch_color := Color.WHITE
+@export var notch_texels := 1.0
+# What the doomed span pulses TO when the plan predicts a named rung — a down, a kill, or Crisis.
+# Only the peak is a knob: the resting colour is bar_doomed_color, so the alarm cannot drift away
+# from the thing it is alarming about.
+@export var alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
+# Whether a bar that is up only because of a PLAN also carries the number. Off by default: a
+# prediction can put a readout over half the board at once, and hovering still reveals the digits.
+@export var ghost_shows_number := false
+
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
 # question single-sourced: it returns whatever HoverPresenter's own derivation returns.
 var hovered_unit_source: Callable
+
+# The plan whose consequences are being previewed, injected by battle3d beside the hover source
+# (#313). Returns SquadManager's last resolve for the active squad — the same object the queue rows
+# and the board's knockback/terrain preview are drawn from, so all three can only agree. Unset on a
+# bare Main.tscn launch or a headless fixture, which reads as "no plan": the prediction is simply
+# absent rather than wrong.
+var plan_source: Callable
 
 var units_root: Node2D
 
@@ -126,6 +158,7 @@ func reconcile() -> void:
 	# Asked ONCE per frame, not once per unit: it is a board-wide question, and calling it per unit
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
+	var plan := _plan()   # board-wide for the same reason, and a dictionary read per unit after
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
 		var unit := child as Unit
@@ -142,7 +175,7 @@ func reconcile() -> void:
 			add_child(bar)
 			_bars[id] = bar
 		_sync(unit, _mirrored[id])
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered)
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan)
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
@@ -253,18 +286,60 @@ func _hovered_unit() -> Unit:
 	return hovered_unit_source.call() as Unit
 
 
-func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool) -> void:
-	bar.set_shown(hovered)
-	if not hovered:
-		return   # one bar is up at a time, so everything below is per-FRAME work, not per-unit
+func _plan() -> ResolvedPlan:
+	if not plan_source.is_valid():
+		return null
+	return plan_source.call() as ResolvedPlan
+
+
+# What the plan leaves this unit at, ALREADY CLAMPED for display — the raw threaded number goes
+# negative on a fatal hit, and LethalityRules.displayed_hp is the one answer to what a preview shows
+# for it, shared with the queue panel's own "before -> after" (#313). The clamp is also what makes
+# this readout put itself away: once the pass has run, a downed unit really is at 1, so the
+# "differs from current" test below goes false on its own.
+func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
+	return LethalityRules.displayed_hp(PlanResolver.projected_hp(unit, plan.hypo),
+			PlanResolver.projected_lifecycle(unit, plan.hypo))
+
+
+# The alarm asks whether the plan CHANGES where a unit stands, not where it stands now: a unit
+# already down or already in Crisis must not pulse for staying there. That is exactly the three
+# named rungs — DOWNED and MAIMED move the lifecycle, KILLED moves it further, and CRISIS moves
+# neither (it is never DOWNED, #158), which is why in_crisis is asked separately.
+func _plan_fells(unit: Unit, plan: ResolvedPlan) -> bool:
+	if PlanResolver.projected_lifecycle(unit, plan.hypo) != unit.lifecycle_state:
+		return true
+	return PlanResolver.projected_in_crisis(unit, plan.hypo) and not unit.in_crisis
+
+
+func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
+		plan: ResolvedPlan) -> void:
+	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
+	# because a plan is about to happen to it. "Predicted differs from current" is the rule — which
+	# reaches everyone the plan touches, enemies your own attack will hit included, and reaches
+	# nobody it doesn't.
+	var predicted := unit.get_current_hp()   # no plan is the same answer as a plan that changes nothing
+	if plan != null:
+		predicted = _predicted_hp(unit, plan)
+	var foretold := predicted != unit.get_current_hp()
+	bar.set_shown(hovered or foretold)
+	if not (hovered or foretold):
+		return
 	bar.set_style(bar_width_texels, bar_height_texels, bar_outline_texels, bar_fill_color,
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
+	bar.set_prediction_style(bar_doomed_color, bar_heal_color, notch_color, notch_texels,
+			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
+	bar.set_number_shown(hovered or ghost_shows_number)
+	if foretold:
+		bar.set_prediction(predicted, _plan_fells(unit, plan))
+	else:
+		bar.clear_prediction()
 	bar.position = _bar_anchor(unit, sprite)
-	# The readout turns as ONE object rather than four that each billboard themselves — see
-	# UnitHealthBar.face(). Only the hovered bar is ever visible, so this is one camera read and one
-	# rotation per frame, not per unit.
+	# The readout turns as ONE object rather than five that each billboard themselves — see
+	# UnitHealthBar.face(). One camera read for the whole frame; the rotation is per SHOWN bar, which
+	# is the hovered one plus whoever the plan is about to change.
 	if is_inside_tree():
 		var camera := get_viewport().get_camera_3d()
 		if camera != null:

@@ -167,7 +167,8 @@ The rulings, all dev calls, all made before building:
 
 - **Hover-only, and health alone.** Status icons, Will and turn state stayed out. At most one unit
   is hovered, so the crowding question the umbrella worried about does not arise yet — it returns
-  the moment anything here becomes always-on.
+  the moment anything here becomes always-on. **#313 below is that moment**, and it answered the
+  crowding question by folding the prediction into the SAME bar rather than adding a second one.
 - **A bar AND a number**, world-scaled like the icons beside it rather than screen-constant: it
   belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
 - **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
@@ -192,11 +193,54 @@ Three findings that generalise past this ticket:
    different apparent height on every unit. `UnitSprite3D.art_top_height()` is the one answer.
 
 **The flat view has no counterpart and that is a real gap, not a design** — filed to
-[#292](https://github.com/Phaazoid/Godoiosis/issues/292). Successors already filed:
-[#313](https://github.com/Phaazoid/Godoiosis/issues/313) (predicted HP as a ghost bar, which is
-Law #2 made visible) and [#314](https://github.com/Phaazoid/Godoiosis/issues/314) (Fire Emblem-style
-tick blocks that explosively fall away). [#188](https://github.com/Phaazoid/Godoiosis/issues/188)
-wants damage numbers in the same volume and should share whatever event seam #313 needs.
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292); #313 below inherits that gap rather than
+widening it, and its 3D-only scope is declared there. Successor still open:
+[#314](https://github.com/Phaazoid/Godoiosis/issues/314) (Fire Emblem-style tick blocks that
+explosively fall away). [#188](https://github.com/Phaazoid/Godoiosis/issues/188) wants damage
+numbers in the same volume and should share whatever seam #313 settled.
+
+## The same bar shows the FUTURE ([#313](https://github.com/Phaazoid/Godoiosis/issues/313), BUILT 2026-08-16)
+
+Law #2 says the queue never lies and Law #1 says there is no randomness, so a queued plan does not
+*forecast* a unit's HP — it *is* what that HP will be. This draws it: while a plan is queued, every
+unit it changes wears a readout with a **notch** at the predicted HP and the span between there and
+now filled in. **Presentation only.** It computes no damage; if it ever needs to, that is the bug.
+
+The rulings, all dev calls, all made before building:
+
+- **A notch on ONE bar**, not a ghost twin beside it. Current and predicted are one fact about one
+  unit, and a second bar over everybody the plan touches is exactly the crowding #229 deferred.
+- **Anyone the plan CHANGES** — predicted HP differs from current. That reaches enemies your own
+  attack will hit, allies caught in splash, and anyone a derived counter strikes, which is most of
+  the value; and it reaches nobody the plan leaves alone, with no second rule to maintain.
+- **The alarm is the NAMED RUNGS ONLY** — predicted DOWNED, KILLED or CRISIS. "Too low" as a
+  fraction would have been a new game rule needing a home and a justified number; the ladder
+  already names the outcomes worth flinching at.
+- **3D only, declared** rather than drifted — the flat view has no health readout of any kind to
+  diverge from, which is #229's gap and not a new one.
+
+Three things that generalise past this ticket:
+
+1. **The plan-level number is the HYPO, not an outcome's `target_hp_after`.** That field is per HIT;
+   a unit struck twice has two of them and neither is what the pass leaves behind.
+   `PlanResolver.projected_hp` / `projected_lifecycle` — kept alive on the plan by #124 for exactly
+   this class of question — is the whole-pass answer, and it covers derived counters for free.
+2. **The display clamp is a SEAM, and it had one user before this.** The threaded HP goes negative
+   on a fatal hit; the queue panel had been clamping that to 1-for-a-down and 0-for-a-kill inline.
+   A second spelling over the unit's head is Law #2 broken at the point it is being rendered, so the
+   ladder moved to `LethalityRules.displayed_hp` and both surfaces read it. It **mirrors execution**
+   (`_go_downed` clings at exactly 1), which is also what makes the readout put itself away: once
+   the pass has run, predicted equals current and the "differs" test goes false on its own.
+3. **A pulse must not become a second writer of the thing it pulses.** The existing rule is that a
+   live pulse OWNS `sprite.modulate`; a 3D readout has no modulate, its colour is a material. So
+   `Pulse` now takes the PROPERTY name (the cadence is the one thing every "look at this" cue must
+   agree on) and the bar exposes a colour property the tween drives, leaving its own `_paint` the
+   single writer of albedo. The redraw had to become value-diffed for the same reason — an
+   unguarded rebuild repainted over the tween sixty times a second.
+
+**No prediction during an AI turn**, and that falls out rather than being enforced:
+`resolved_plan_for` guards on squad identity, so an AI squad's own resolve never matches the
+player's active squad. Enemy plans were not previewed before either; this keeps it that way.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

@@ -118,10 +118,10 @@ func set_execute_state(state: ExecuteState) -> void:
 			_start_flash()
 
 func _start_flash() -> void:
-	_flash_tween = Pulse.start(self, execute_button, EXECUTE_BRIGHT, EXECUTE_FLASH)
+	_flash_tween = Pulse.start(self, execute_button, &"modulate", EXECUTE_BRIGHT, EXECUTE_FLASH)
 
 func _stop_flash() -> void:
-	Pulse.stop(_flash_tween, execute_button, EXECUTE_BRIGHT)
+	Pulse.stop(_flash_tween, execute_button, &"modulate", EXECUTE_BRIGHT)
 	_flash_tween = null
 
 func _start_section(title: String) -> VBoxContainer:

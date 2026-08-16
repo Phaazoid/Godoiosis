@@ -152,17 +152,16 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same call
 	# Unit.take_damage makes at execution time — one ladder, two callers.
 	outcome.lethality = LethalityRules.predict(target_hypo, outcome.damage)
+	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
+	# the same one. What a rung SPENDS stays here: it differs per rung and it is spent from the hypo.
+	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
 	if outcome.lethality == ResolvedOutcome.Lethality.DOWNED:
-		target_hypo.lifecycle = Unit.LifecycleState.DOWNED
 		target_hypo.will -= UnitInstance.DOWN_WILL_COST
 	elif outcome.lethality == ResolvedOutcome.Lethality.MAIMED:
-		target_hypo.lifecycle = Unit.LifecycleState.DOWNED   # a maim IS a down — same lifecycle
 		target_hypo.will = 0
 	elif outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
 		target_hypo.in_crisis = true                          # the gambit: no safety net from here on
 		target_hypo.will = 0
-	elif outcome.lethality == ResolvedOutcome.Lethality.KILLED:
-		target_hypo.lifecycle = Unit.LifecycleState.DEAD
 
 	target_hypo.hp -= outcome.damage
 	if outcome.lethality == ResolvedOutcome.Lethality.CRISIS:
@@ -294,6 +293,15 @@ static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleS
 	if not hypo.has(unit):
 		return unit.lifecycle_state
 	return (hypo[unit] as _Hypo).lifecycle
+
+# The gambit's own rung, which lifecycle cannot report: a CRISIS target is never DOWNED (#158), so
+# a readout asking "does this plan change where the unit stands" has to ask here too (#313).
+static func projected_in_crisis(unit: Unit, hypo: Dictionary) -> bool:
+	if unit == null or not is_instance_valid(unit):
+		return false
+	if not hypo.has(unit):
+		return unit.in_crisis
+	return (hypo[unit] as _Hypo).in_crisis
 
 static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 	if not hypo.has(unit):

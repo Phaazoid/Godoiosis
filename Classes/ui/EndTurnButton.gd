@@ -39,8 +39,8 @@ func set_active(active: bool) -> void:
 		_stop_flash()
 
 func _start_flash() -> void:
-	_flash_tween = Pulse.start(self, _button, SquadActionQueueControl.EXECUTE_BRIGHT, SquadActionQueueControl.EXECUTE_FLASH)
+	_flash_tween = Pulse.start(self, _button, &"modulate", SquadActionQueueControl.EXECUTE_BRIGHT, SquadActionQueueControl.EXECUTE_FLASH)
 
 func _stop_flash() -> void:
-	Pulse.stop(_flash_tween, _button, SquadActionQueueControl.EXECUTE_BRIGHT)
+	Pulse.stop(_flash_tween, _button, &"modulate", SquadActionQueueControl.EXECUTE_BRIGHT)
 	_flash_tween = null

@@ -96,3 +96,31 @@ static func predict(s: Situation, damage: int) -> ResolvedOutcome.Lethality:
 	if s.will < UnitInstance.DOWN_WILL_COST:
 		return ResolvedOutcome.Lethality.MAIMED if s.can_maim else ResolvedOutcome.Lethality.DOWNED
 	return ResolvedOutcome.Lethality.DOWNED
+
+# Which lifecycle a rung LEAVES its target in — the resolver's threading and any preview holding
+# only an outcome ask the same map. What a rung SPENDS is deliberately not here: the Will cost
+# differs per rung and stays beside the hypothetical it is spent from.
+static func lifecycle_for(rung: ResolvedOutcome.Lethality,
+		current := Unit.LifecycleState.ACTIVE) -> Unit.LifecycleState:
+	match rung:
+		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:
+			return Unit.LifecycleState.DOWNED   # a maim IS a down — same lifecycle
+		ResolvedOutcome.Lethality.KILLED:
+			return Unit.LifecycleState.DEAD
+	return current
+
+# What a PREVIEW shows for HP the ladder has already sentenced. The threaded number goes NEGATIVE
+# on a fatal hit — that is the ladder's arithmetic, not a readout — so every surface drawing a
+# predicted HP asks here. One answer on purpose: the queue panel and the board readout showing
+# different numbers for one plan is Law #2 broken at the point it is being rendered.
+#
+# It mirrors execution rather than inventing a convention — _go_downed clings at 1, a kill leaves
+# the board — which is also what makes a prediction converge with the live value once the pass has
+# run, so a readout gated on "predicted differs from current" puts itself away.
+static func displayed_hp(raw_hp: int, lifecycle: Unit.LifecycleState) -> int:
+	match lifecycle:
+		Unit.LifecycleState.DEAD:
+			return 0
+		Unit.LifecycleState.DOWNED:
+			return 1
+	return maxi(raw_hp, 0)

@@ -46,12 +46,12 @@ func _ready():
 func start_pulse() -> void:
 	if sprite == null or pulse_tween != null:
 		return
-	pulse_tween = Pulse.start(self, sprite, base_modulate, TARGET_PULSE_MODULATE)
+	pulse_tween = Pulse.start(self, sprite, &"modulate", base_modulate, TARGET_PULSE_MODULATE)
 
 func stop_pulse() -> void:
 	if pulse_tween == null:
 		return
-	Pulse.stop(pulse_tween, sprite, base_modulate)
+	Pulse.stop(pulse_tween, sprite, &"modulate", base_modulate)
 	pulse_tween = null
 
 func reset_visuals():
