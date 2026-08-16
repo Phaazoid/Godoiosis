@@ -60,6 +60,17 @@ func attach_3d_host(host: Node3D) -> void:
 	look_tool.attach_host(host)
 
 
+# What the dev was looking at, for a bug report (#328). The WINDOW answers it, because the tabs are
+# its own -- BugReporter reaching into %DevTabs would be a second reader of this window's layout.
+# Unit Authoring is a container of two, so it names the sub-tab as well or the answer is half of one.
+func current_tab_title() -> String:
+	var tabs: TabContainer = %DevTabs
+	var title := tabs.get_tab_title(tabs.current_tab)
+	if tabs.get_current_tab_control() == unit_authoring:
+		var authoring_tabs: TabContainer = %AuthoringTabs
+		title += " / %s" % authoring_tabs.get_tab_title(authoring_tabs.current_tab)
+	return title
+
 func _on_close_requested():
 	hide()
 	game.set_dev_mode(false)

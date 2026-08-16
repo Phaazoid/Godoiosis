@@ -244,3 +244,23 @@ func test_a_flat_launch_says_so_rather_than_stamping_a_blank() -> void:
 
 	assert_str(text).contains("View: **%s**" % BugReporter.NO_3D_VIEW)
 	assert_str(text).contains("Look: **%s**" % BugReporter.DEFAULT_LOOK)
+
+# ---- what the dev tools were showing (#328) ----
+
+func test_the_report_names_the_dev_tab_that_was_open() -> void:
+	# Passed like the view and the look, and for the same reason: the window is outside the game
+	# subtree. Free next to the screenshot, and it outlives Discord's CDN expiry as the picture does not.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log", "", "", "Tile Brush")
+
+	assert_str(text).contains("Dev tools: **Tile Brush**")
+
+func test_a_closed_dev_tools_window_is_stated_rather_than_left_blank() -> void:
+	# A report with no devtools.png beside it must say WHY, or the missing file reads as a broken
+	# reporter -- the "sent from a menu" rule again.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log")
+
+	assert_str(text).contains("Dev tools: **%s**" % BugReporter.NO_DEVTOOLS)
