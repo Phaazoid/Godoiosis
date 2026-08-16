@@ -421,8 +421,8 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 
 # The ruling restated in its OWN terms, deliberately not by re-reading PRESET_EXCLUDED -- a case
 # that asks the same const it is checking is blind to the const changing, which is the one edit
-# most likely to widen this quietly. Everything is scene mood by default; the three carve-outs
-# below are the dev's, and changing one has to change this list too, i.e. has to be noticed.
+# most likely to widen this quietly. Everything is scene mood by default; the carve-outs below
+# are the dev's, and changing one has to change this list too, i.e. has to be noticed.
 const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit margin (cells)"]
 # The Effects group is flame plus three things that are not mood at all. This list earned its keep
 # immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
@@ -442,6 +442,12 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 		if group == "Board markup":
 			belongs = false                          # gameplay legibility, learned once
 			because = "board markup is a game setting"
+		elif group == "Unit HUD":
+			# #229, the same ruling reached for the same reason one ticket later: a health readout
+			# is how the player reads the board, so a mission must not be able to restyle or hide
+			# it by wearing a look.
+			belongs = false
+			because = "a unit's health readout is a game setting"
 		elif group == "Camera":
 			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
 			because = "camera handling is a game setting" if not belongs else "camera framing is look"

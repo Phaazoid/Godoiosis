@@ -192,6 +192,29 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
+	# --- Unit HUD (#229) ---
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "Gap between the top of the unit's visible ART and the bottom of the readout, in cells. Measured from the sprite's topmost opaque pixel rather than from its feet, so units drawn with different amounts of empty space above their heads all wear it at the same apparent height. The selection icons sit higher still; keep this well under their lift or the readout climbs past them."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_width_texels", "label": "Bar width", "min": 4.0, "max": 128.0, "step": 1.0,
+		"tip": "Width of the health bar in texels, at the same pixel density as every sprite -- 16 is one cell wide. The bar is pixel-snapped, so this also decides how finely it can show a fraction: at 20 wide, one texel is 5% of a unit's health."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_height_texels", "label": "Bar height", "min": 1.0, "max": 16.0, "step": 1.0,
+		"tip": "Thickness of the health bar in texels. Thin reads as a delicate HUD line and can vanish at distance; thick reads as a solid gauge and starts competing with the unit sprite for attention."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_outline_texels", "label": "Bar outline", "min": 0.0, "max": 8.0, "step": 1.0,
+		"tip": "Thickness of the black border around the bar, in texels. This is what separates the bar from whatever it happens to be floating over; 0 removes it, and on a busy board that usually costs more than it saves."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_fill_color", "label": "Bar fill",
+		"tip": "The health a unit still HAS. Flat -- it does not change hue as the bar shortens, since the length already says how hurt the unit is. Fully opaque by design: this is a gameplay descriptor, not scenery."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_missing_color", "label": "Bar missing",
+		"tip": "The health a unit has LOST, showing behind the fill. Read together, fill against missing is the whole gauge, so these two want to be as far apart as the palette allows."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_height_cells", "label": "Number size", "min": 0.02, "max": 0.6, "step": 0.005,
+		"tip": "How tall the HP digits stand, in cells -- a size in the SCENE, not on screen, so it shrinks with the unit as you zoom out. The glyphs are rendered at a fixed high resolution and scaled down to this, so small stays crisp instead of turning to mush."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_outline_size", "label": "Number outline", "min": 0.0, "max": 24.0, "step": 1.0,
+		"tip": "Thickness of the black outline behind the number, in GLYPH units -- so it holds its proportion when Number size changes, but what lands on screen is this scaled down with the text. Around 8 is one pixel of the game's own art and 16 is two; anything under about 5 is thinner than a single art pixel and will not separate white digits from a bright bar at all. Push it far enough and neighbouring digits bleed together, and at that point a black backing plate is the better answer than more outline."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
+		"tip": "Colour of the HP digits. The outline is always black, so this is the fill; a tint here is the cheapest way to make the number read as part of the bar rather than as separate text."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number inset", "min": 0.0, "max": 0.5, "step": 0.005,
+		"tip": "How far in from the bar's left edge the digits start, in cells. The number sits ON the bar, so this is padding inside it rather than a gap beside it -- zero puts the first digit flush against the outline."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
+		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
 ]
 
 # A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
@@ -228,6 +251,21 @@ const PRESET_EXCLUDED: Array[String] = [
 	"BoardMirror|brush_ghost_alpha",
 	"BoardMirror|block_height_scale",
 	"BoardMirror|tuft_scale",
+	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
+	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
+	# by wearing a look. Excluded wholesale, which also keeps the shipped presets valid under
+	# test_look_presets' "names every in-scope knob" law.
+	"UnitMirror|hud_lift",
+	"UnitMirror|bar_width_texels",
+	"UnitMirror|bar_height_texels",
+	"UnitMirror|bar_outline_texels",
+	"UnitMirror|bar_fill_color",
+	"UnitMirror|bar_missing_color",
+	"UnitMirror|number_height_cells",
+	"UnitMirror|number_outline_size",
+	"UnitMirror|number_color",
+	"UnitMirror|number_gap",
+	"UnitMirror|number_shows_max",
 ]
 
 # --- Identity ---------------------------------------------------------------------------

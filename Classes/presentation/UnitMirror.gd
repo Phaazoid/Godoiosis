@@ -10,6 +10,11 @@ class_name UnitMirror
 # dies on the type-check before any null guard runs). Since #222 it also hosts the
 # planning-ghost pool (set_ghosts) and copies each 2D sprite's own modulate per frame,
 # so pulse/highlight/tint parity comes by copy rather than by reimplementation.
+#
+# Since #229 it also hosts the per-unit health readout: one UnitHealthBar per mirrored unit, shown
+# only for whichever unit the pointer currently resolves to. Both facts it needs already have
+# exactly one answer elsewhere — hovered_unit_source asks the question HoverPresenter._process asks,
+# and HP comes off the Unit — so this adds a SURFACE, not a seam.
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 
@@ -24,6 +29,52 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # an eye call, so it is a dial rather than a guess.
 @export var texels_per_unit := 32.0
 
+# --- The hover health readout (#229) -------------------------------------------------
+# Eye-knobs, all of them read in _sync_bar and never written back, which is what makes them legal
+# Look-tab entries. They live on this node rather than on UnitHealthBar because a knob may only
+# name a property of a node that exists in Battle3D.tscn, and the bars are built at runtime.
+# CLEARANCE above the art's topmost opaque pixel — not a height above the feet. It was the latter
+# for two rounds and read as floating both times, because a map sprite's visible head is wherever
+# its transparent padding ends and no single number is right for every piece of art.
+#
+# The selection icons (crown, squad member, target) hang at BoardOverlays.billboard_lift, measured
+# from the CELL, and the dev's stacking is icons on top with the readout tucked under them. Nothing
+# enforces that: a test would be pinning one tuning value against another, which the tuning razor
+# forbids, so if the icons move this moves by hand.
+@export var hud_lift := 0.06
+@export var bar_width_texels := 26.0
+@export var bar_height_texels := 5.0
+@export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
+# Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
+# missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
+# gameplay descriptor, meant to sit on top of the scene rather than blend into it.
+@export var bar_fill_color := Color(0.15, 1.0, 0.2, 1.0)
+@export var bar_missing_color := Color(0.9, 0.05, 0.05, 1.0)
+# The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
+# resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
+# have meant a 4px font to reach the size asked for, which renders to mush.
+@export var number_height_cells := 0.13
+# Glyph-atlas units, so what reaches the screen is this times pixel_size. That indirection is why
+# the first two values were far too thin to read: at 5 against FONT_RESOLUTION 32 and a 0.13-cell
+# glyph, the outline came out 0.020 world units — under ONE art texel (0.031), i.e. thinner than a
+# single pixel of the game's own art. Roughly 8 buys one texel, 16 buys two.
+#
+# The ratio to FONT_RESOLUTION is what decides thickness RELATIVE to the glyphs, and at this display
+# size a readable outline is a large fraction of the letter height, so pushed far enough the digits
+# will start to bleed into one another. If that runs out before it reads, the answer is not more
+# outline — it is a dark backing plate behind the number, or inverting to black digits.
+@export var number_outline_size := 10.0
+@export var number_color := Color.WHITE
+@export var number_gap := 0.01           # inset from the bar's left edge; the number sits ON the bar
+# Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
+# belongs over a head, and the bar already carries the fraction either way.
+@export var number_shows_max := true
+
+# Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
+# board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
+# question single-sourced: it returns whatever HoverPresenter's own derivation returns.
+var hovered_unit_source: Callable
+
 var units_root: Node2D
 
 # The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
@@ -32,6 +83,7 @@ var units_root: Node2D
 var heights: BoardHeights
 
 var _mirrored: Dictionary[int, UnitSprite3D] = {}
+var _bars: Dictionary[int, UnitHealthBar] = {}   # #229; keyed like _mirrored, never by object ref
 var _ghosts: Array[UnitSprite3D] = []
 var _camera_right := Vector3.ZERO   # last camera basis facing was judged against
 
@@ -66,6 +118,9 @@ func _refresh_facing_on_camera_turn() -> void:
 
 
 func reconcile() -> void:
+	# Asked ONCE per frame, not once per unit: it is a board-wide question, and calling it per unit
+	# would re-derive every other unit's projected cell for each unit on the board.
+	var hovered := _hovered_unit()
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
 		var unit := child as Unit
@@ -77,11 +132,19 @@ func reconcile() -> void:
 			var sprite := UnitSprite3D.for_unit_data(unit.unit_data)
 			add_child(sprite)
 			_mirrored[id] = sprite
+		if not _bars.has(id):
+			var bar := UnitHealthBar.new()
+			add_child(bar)
+			_bars[id] = bar
 		_sync(unit, _mirrored[id])
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered)
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
 			_mirrored.erase(id)
+			if _bars.has(id):
+				_bars[id].queue_free()
+				_bars.erase(id)
 
 
 func mirrored_count() -> int:
@@ -90,6 +153,10 @@ func mirrored_count() -> int:
 
 func sprite_for(unit: Unit) -> UnitSprite3D:
 	return _mirrored.get(unit.get_instance_id())
+
+
+func bar_for(unit: Unit) -> UnitHealthBar:
+	return _bars.get(unit.get_instance_id())
 
 
 # Planning ghosts (#222): the 2D projected/knockback stand-ins, mirrored as pooled
@@ -155,3 +222,50 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	if Vector2(step.x, step.z).length_squared() > 0.000001:
 		sprite.last_step = step
 		sprite.flip_h = sprite.facing_flip_for(step)
+
+
+# --- The hover health readout (#229) -------------------------------------------------
+
+# Whichever unit the pointer is over, straight off HoverPresenter's own derivation. Unset on a
+# host that never injects it (a bare Main.tscn launch, or a headless fixture), which reads as
+# "nothing hovered" — so the readout is simply absent rather than wrong.
+func _hovered_unit() -> Unit:
+	if not hovered_unit_source.is_valid():
+		return null
+	return hovered_unit_source.call() as Unit
+
+
+func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool) -> void:
+	bar.set_shown(hovered)
+	if not hovered:
+		return   # one bar is up at a time, so everything below is per-FRAME work, not per-unit
+	bar.set_style(bar_width_texels, bar_height_texels, bar_outline_texels, bar_fill_color,
+			bar_missing_color, number_height_cells, number_outline_size, number_color,
+			number_gap, number_shows_max)
+	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
+	bar.position = _bar_anchor(unit, sprite)
+	# The readout turns as ONE object rather than four that each billboard themselves — see
+	# UnitHealthBar.face(). Only the hovered bar is ever visible, so this is one camera read and one
+	# rotation per frame, not per unit.
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			bar.face(camera.global_position)
+
+
+# The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a
+# sprite behind a planning ghost, asked again rather than re-decided: hovering resolves at the
+# PROJECTED cell (game.unit_at_pointer), so a unit with a queued move is picked while its own
+# sprite is hidden — and a bar parented to that sprite would vanish exactly when a hovered unit
+# most needs one. Reading the projected cell also covers the knockback ghost, whose 2D preview
+# sprites carry no unit identity to hang anything off.
+func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
+	# Measured, not assumed: hud_lift is clearance above the ART's topmost opaque pixel, so units
+	# whose sprites carry different amounts of transparent padding still wear the readout at the
+	# same apparent height. Anchoring it a fixed distance off the FEET is what left it looking too
+	# high twice over (dev, 2026-08-15), because the head is not one cell up — #279's lamp float
+	# was this same padding.
+	var lift := Vector3(0.0, sprite.art_top_height() + hud_lift, 0.0)
+	if not unit.visuals.projected:
+		return sprite.position + lift
+	return BoardSpace.surface_point(unit.get_projected_destination(), heights) + lift

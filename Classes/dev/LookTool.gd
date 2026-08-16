@@ -66,6 +66,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Board markup": "Markup",
 	"Board markup colours": "Markup",
 	"Effects": "Effects",
+	# #229's health readout. Shares the Markup tab rather than taking its own: it is HUD hung on a
+	# unit, i.e. the same "gameplay legibility, not scene mood" family as the board overlays, and
+	# both are excluded from presets for that one reason.
+	"Unit HUD": "Markup",
 }
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
