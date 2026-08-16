@@ -246,6 +246,31 @@ func test_a_queued_move_mirrors_ghost_hide_and_arrows() -> void:
 	assert_that(markers[0]["modulate"]).is_equal(move.preview[0].modulate)
 
 
+func test_a_ghost_sorts_where_its_priority_is_actually_read() -> void:
+	# #317, found in play: arrows and freeze icons drew over planning ghosts even though every
+	# UnitSprite3D carries UNIT_RENDER_PRIORITY. A ghost is TRANSLUCENT, and OPAQUE_PREPASS writes
+	# depth only above the prepass threshold — so a ghost wrote none, and priority does not
+	# arbitrate outside the alpha queue. Driven through the real ghost path, because the POOL is
+	# what shipped wrong; the constructor was always carrying the number.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	game.enter_move_mode(unit)
+	game.selected_unit = unit
+	game._on_left_click(Vector2i(3, 2))
+	await _settle()
+	assert_int(_unit_mirror.ghost_count()).is_equal(1)
+	var ghost: UnitSprite3D = _unit_mirror._ghosts[0]
+	assert_bool(ghost.modulate.a < 1.0).override_failure_message(
+			"the ghost tint is opaque, so this case no longer covers the translucent path").is_true()
+	assert_int(ghost.alpha_cut).override_failure_message(
+			"a translucent ghost on OPAQUE_PREPASS writes no depth and is not priority-sorted, so "
+			+ "board markup draws over it (#317)").is_equal(SpriteBase3D.ALPHA_CUT_DISABLED)
+	# ...and the priority now doing the work really does outrank what was drawing over it.
+	for layer: BoardOverlays.Layer in [BoardOverlays.Layer.PATH_ARROWS, BoardOverlays.Layer.TERRAIN]:
+		var sort: int = BoardOverlays.LAYERS[layer]["sort"]
+		assert_int(ghost.render_priority).override_failure_message(
+				"layer %d sorts at %d, at or above the ghost" % [layer, sort]).is_greater(sort)
+
+
 func test_hover_path_preview_mirrors_while_sweeping() -> void:
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
 	game.enter_move_mode(unit)
