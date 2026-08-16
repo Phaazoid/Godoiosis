@@ -99,8 +99,10 @@ func execute_orders(unit):
 #
 # set_has_acted does most of the visual work for free -- Squad._set_has_acted clears the queue, and
 # every action_cancelled hop lands in game._on_unit_action_cancelled, which is what pulls a move's
-# ghost and arrow. The icon clear ahead of it is for the TARGET markers a queued attack drew; the
-# success path also clears them before it animates, and clearing twice is idempotent.
+# ghost and arrow. The icon clear ahead of it is for the crown/squadmate markers the squad's own
+# display left; the success path also clears them before it animates, and clearing twice is
+# idempotent. (It read "the TARGET markers a queued attack drew" until #346 -- TARGET was never
+# drawn by an attack, only by Squad Up, and it is retired now.)
 func _end_squad_turn(squad: Squad) -> void:
 	game.clear_selection_icons()
 	for action in squad.action_queue.duplicate():

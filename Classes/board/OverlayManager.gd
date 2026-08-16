@@ -58,7 +58,6 @@ const ATLAS_COORDS = Vector2i(0,0)          # plain fill — what every overlay 
 # (1,0) is the marker tile on the AttackOverlay's sheet — #316: this read (3,0) since before the
 # reorg, a coord the one-tile sheet never had, so the highlight drew in NEITHER view.
 const TARGET_ATLAS_COORDS = Vector2i(1, 0)  # the "pick this unit" marker (PICKING_TARGET)
-const ICON_Z_INDEX = 15
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
@@ -93,10 +92,7 @@ enum OverlayType {
 }
 
 const ICON_TEXTURES = {
-	OverlayIcon.IconType.CURSOR: preload("res://Art/Icons/BoardIcons/CursorIcon.png"),
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
-	OverlayIcon.IconType.TARGET: preload("res://Art/Icons/BoardIcons/SelectedIcon.png"),
-	OverlayIcon.IconType.INVALID: preload("res://Art/Icons/BoardIcons/NegativeIcon.png"),
 	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadHighlightIcon.png")
 }
 
@@ -405,7 +401,7 @@ func redraw_planned_paths():
 	for action in planned_move_by_unit.values():
 		draw_path_arrows(action)
 
-func create_unit_icon(unit: Unit, type: OverlayIcon.IconType, offset := Vector2i.ZERO) -> OverlayIcon:
+func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 	if unit == null:
 		return null
 		
@@ -419,7 +415,7 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType, offset := Vector2i
 	icon_overlay.add_child(icon)
 	var cell := unit.get_projected_destination()
 	icon.setup(ICON_TEXTURES[type], cell, type)
-	icon.position = board_tilemap.map_to_local(cell) #+ offset
+	icon.position = board_tilemap.map_to_local(cell)
 	
 	icons_by_unit[unit][type] = icon
 	return icon

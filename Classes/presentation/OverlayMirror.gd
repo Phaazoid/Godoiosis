@@ -38,7 +38,7 @@ var _last_markers: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_ghosts: Array[Dictionary] = []
 var _last_fire: Array[Vector2i] = []
 var _last_cover: Array[Vector2i] = []
-var _pick_texture: Texture2D   # the (3,0) "pick this unit" tile art, cut lazily
+var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
 
 # Every value-diff below is blind to the board's HEIGHTS (#308): a fill's tilt and a flame's
 # footing both come from BoardHeights, and neither is in the cells being compared. Gated on the
@@ -166,7 +166,7 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	overlays.set_cells(layer, cells, _heights())
 
 
-# ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (3,0) on the
+# ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (1,0) on the
 # same layer — split by atlas coords; the heal-green arrives as the layer modulate.
 #
 # The reach half hands its cells to _fill rather than lifting and diffing them here: a hand-copied
