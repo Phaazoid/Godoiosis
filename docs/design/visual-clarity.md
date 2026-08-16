@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #314 (2026-08-15).**
+**Canon checked through #346 (2026-08-16).**
 
 ## Principles
 
@@ -172,7 +172,8 @@ The rulings, all dev calls, all made before building:
   belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
 - **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
   A bar that also changes hue as it shortens says the same thing twice.
-- **It stacks UNDER the selection icons.** Crown/squadmate/target on top, health tucked beneath.
+- **It stacks UNDER the selection icons.** Crown/squadmate on top, health tucked beneath. (The
+  target reticle was in that list until #346 retired it to the ground channel — see below.)
 
 Three findings that generalise past this ticket:
 
@@ -197,6 +198,34 @@ Three findings that generalise past this ticket:
 Law #2 made visible) and [#314](https://github.com/Phaazoid/Godoiosis/issues/314) (Fire Emblem-style
 tick blocks that explosively fall away). [#188](https://github.com/Phaazoid/Godoiosis/issues/188)
 wants damage numbers in the same volume and should share whatever event seam #313 needs.
+
+## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
+
+The volume above finally has a rule about what may occupy it, and it came from measuring rather
+than arguing. [#316](https://github.com/Phaazoid/Godoiosis/issues/316) made the target-pick GROUND
+marker visible for the first time (it had pointed at an atlas coord the sheet never had), and Squad
+Up then marked every candidate twice — a tile under the recruit and an `IconType.TARGET` billboard
+over its head. Seeing both at once, the dev's call was that **the ground one reads better**.
+
+- **Ground / tile = what this INTERACTION is about.** Transient, mode-scoped, cursor-driven:
+  pickable candidates, reach, selection, the cells a thing would affect.
+- **Above the head = what this UNIT IS.** Persistent, mode-independent: element states, downed /
+  maimed, Crisis, and the hover health readout #229 already put there.
+
+**Retired by this rule:** `IconType.TARGET`, whose only producer was `draw_create_squad` — the
+target-pick ground marker is now the single answer to *which unit may I pick*. `CURSOR` and
+`INVALID` went with it as never-produced leftovers. **Not decided here:** `CROWN` and
+`SQUADMEMBER`, which are [#325](https://github.com/Phaazoid/Godoiosis/issues/325)'s call — that
+ticket picks squad membership's 3D form, and this rule is an input to it, not a ruling over it.
+
+Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
+general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
+their candidates marked *nowhere in either view* until #316, and Squad Up only looked right because
+someone had patched that one screen. And **the first real occupant of the freed channel is blocked
+on art, not on design** — a unit's `element_states` are hover-only today (`StateIcons.populate`,
+called from the two panels and nowhere else), so a Wet unit and a dry one are identical on the
+board; `StateIcons.ICONS` carries art for WET alone and everything else falls back to a text label.
+Making it always-on is also exactly the trigger #229 named for the crowding question it deferred.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

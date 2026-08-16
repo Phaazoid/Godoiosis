@@ -195,3 +195,31 @@ func test_a_two_tile_shove_draws_an_unbroken_arrow_trail() -> void:
 	for cell in [BODY_CELL, Vector2i(2, 0), LANDING_CELL]:
 		assert_bool(drawn.has(cell)) \
 			.override_failure_message("no arrow sprite on %s -- the trail has a gap" % cell).is_true()
+
+
+# One fact, one marking (#346). Squad Up used to hang an IconType.TARGET billboard over every
+# recruit AND mark its cell through enter_target_pick_mode -- invisible while #316 had the ground
+# marker pointing at an atlas coord the sheet never had, and two markings the moment it wasn't.
+# Driven through game.create_squad rather than the overlay calls, because the duplicate lived in
+# the ORDER of one flow's two halves, which is exactly what a direct call skips.
+func test_squad_up_marks_a_candidate_on_the_ground_and_not_over_its_head() -> void:
+	var leader := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var recruit := _spawn(Team.Faction.PLAYER, Vector2i(3, 0))
+	await await_idle_frame()
+
+	game.create_squad(leader)
+	await await_idle_frame()
+
+	assert_int(game.game_state).override_failure_message(
+			"Squad Up did not open the pick mode -- the rest of this case proves nothing") \
+			.is_equal(game.GameState.PICKING_TARGET)
+	assert_array(game.target_pick_cells).override_failure_message(
+			"the recruit is not a candidate -- fixture, not the rule under test") \
+			.contains([recruit.movement.cell])
+
+	var om: OverlayManager = game.overlay_manager
+	assert_that(om.attack_overlay.get_cell_atlas_coords(recruit.movement.cell)) \
+		.override_failure_message("the recruit's cell carries no ground marker") \
+		.is_equal(OverlayManager.TARGET_ATLAS_COORDS)
+	assert_bool(om.icons_by_unit.has(recruit)).override_failure_message(
+			"the recruit is ALSO marked over the head -- two markings of one fact").is_false()

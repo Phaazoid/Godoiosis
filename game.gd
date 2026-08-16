@@ -937,14 +937,13 @@ func draw_squad_leader_range(squad: Squad, cell: Vector2i):
 
 func draw_create_squad(unit: Unit):
 	var cells: Array[Vector2i] = []
-	# Subject = the forming leader; the per-RECRUIT gate is can_squad_up below, which asks the
-	# recruit's own path. The bubble is where a squad could stand, the icons are who may join.
+	# Subject = the forming leader; the per-RECRUIT gate is can_squad_up, asked by the
+	# enter_target_pick_mode candidate query below. The bubble is where a squad could stand;
+	# WHO may join is marked on the ground by that mode (#346 -- this loop used to hang a
+	# TARGET icon over each recruit as well, two markings of one fact).
 	for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination(), unit, _board()):
-		var target_unit = get_unit_at_cell(cell)
 		if cell != unit.movement.cell:
 			cells.append(cell)
-		if target_unit != null and squad_manager.can_squad_up(target_unit, unit.squad):
-			overlay_manager.create_unit_icon(target_unit, OverlayIcon.IconType.TARGET)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OverlayManager.ATLAS_COORDS)
 
 func draw_joinable_squads(joining_unit: Unit):
@@ -977,7 +976,7 @@ func clear_icons(icons: Array[OverlayIcon.IconType]):
 # literal sent that way never gets coerced to clear_icons' typed parameter (it fails at
 # runtime, not at parse time). Keeping the literal on this side of the boundary avoids it.
 func clear_selection_icons() -> void:
-	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.TARGET])
+	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
 
 # ==============================================================================
 #  Board queries
