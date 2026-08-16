@@ -976,6 +976,13 @@ func test_a_solid_tile_builds_geometry_and_a_thin_one_builds_a_sprite() -> void:
 # DEFINITION in the axis it does not run along, so a bound measured off its sprite is not what sizes
 # it. The half of the rule a plane DOES obey — standing at y = 0 — is asserted in its own case below,
 # so nothing is dropped by narrowing this one.
+#
+# The HEIGHT half is narrower still (#323): the art's vertical extent is a height only where the art
+# is drawn UPRIGHT. A crate and a barrel are, so they are held to it exactly. A rock sprite is a
+# top-down cluster of boulders whose rows are mostly DEPTH into the cell, so FACETED declares its own
+# height instead — and what is asserted for it is the DESIGN, that a boulder is shorter than its own
+# footprint is wide, which is precisely what the pillar violated. That survives any retune of
+# FACETED_HEIGHT_OF_WIDTH below 1.0, so it pins the rule and not the feel value.
 func test_a_prop_block_is_sized_by_its_art_not_by_the_cell() -> void:
 	var board := _scene.get_node("Board") as GridMap
 	var tiles: TileSet = _game.grid.tile_set
@@ -995,16 +1002,26 @@ func test_a_prop_block_is_sized_by_its_art_not_by_the_cell() -> void:
 					"no geometry item '%s' — the generator skipped a solid tile" % item_name).is_not_null()
 			var bounds := _opaque_bounds(art, source.get_tile_texture_region(entry.coords, 0))
 			var aabb := mesh.get_aabb()
-			# HEIGHT is the exact one across all three shapes: a prism's cap sits at the full height
-			# while its jittered footprint is INSCRIBED in the width, so only the vertical extent is
-			# the measurement itself rather than something inside it.
-			assert_float(aabb.size.y).override_failure_message(
-					"'%s' is %s tall but its art measures %s — the bounds are not being read" \
-					% [item_name, aabb.size.y, float(bounds.size.y) / GridUtils.TILE_SIZE]) \
-					.is_equal_approx(float(bounds.size.y) / GridUtils.TILE_SIZE, 0.001)
-			assert_bool(aabb.size.x <= float(bounds.size.x) / GridUtils.TILE_SIZE + 0.001) \
+			var width := float(bounds.size.x) / GridUtils.TILE_SIZE
+			if GridUtils.prop_shape_of(source.get_tile_data(entry.coords, 0)) \
+					== GridUtils.PropShape.FACETED:
+				# Not held to the art's vertical extent -- see the header. What it IS held to is
+				# being squatter than its own footprint, the property a column cannot have.
+				assert_bool(aabb.size.y < width).override_failure_message(
+						"'%s' is %s tall against a %s footprint — a boulder that is taller than it " \
+						% [item_name, aabb.size.y, width] + "is wide reads as a column (#323)") \
+						.is_true()
+			else:
+				# HEIGHT is the exact one for upright art: a prism's cap sits at the full height
+				# while its jittered footprint is INSCRIBED in the width, so only the vertical extent
+				# is the measurement itself rather than something inside it.
+				assert_float(aabb.size.y).override_failure_message(
+						"'%s' is %s tall but its art measures %s — the bounds are not being read" \
+						% [item_name, aabb.size.y, float(bounds.size.y) / GridUtils.TILE_SIZE]) \
+						.is_equal_approx(float(bounds.size.y) / GridUtils.TILE_SIZE, 0.001)
+			assert_bool(aabb.size.x <= width + 0.001) \
 					.override_failure_message("'%s' is wider than its own art (%s vs %s)" \
-					% [item_name, aabb.size.x, float(bounds.size.x) / GridUtils.TILE_SIZE]).is_true()
+					% [item_name, aabb.size.x, width]).is_true()
 			assert_float(aabb.position.y).override_failure_message(
 					"'%s' starts at y=%s — a prop must stand ON the tile, not sink into it" \
 					% [item_name, aabb.position.y]).is_equal_approx(0.0, 0.001)
@@ -1069,9 +1086,18 @@ func test_every_facet_of_a_prism_owns_a_distinct_slice_of_its_side_strip() -> vo
 		assert_object(mesh).override_failure_message(
 				"no geometry item '%s'" % item_name).is_not_null()
 		var spans := _facet_spans(mesh)
-		assert_bool(spans.size() >= 7).override_failure_message(
-				"'%s' reports %d facets; the side surface is not the expected shape" \
-				% [item_name, spans.size()]).is_true()
+		# How many facets there SHOULD be, read off the mesh rather than off the table this case
+		# exists to check: the top surface is both caps, one apex triangle plus one foot triangle per
+		# facet, so it holds exactly twice the facet count. A hardcoded floor here used to stand in
+		# for that, and it silently encoded the old count of 7 (#323).
+		var facets := _cap_triangles(mesh) / 2
+		assert_int(facets).override_failure_message(
+				"'%s' has %d cap triangles; a prism needs at least three sides" \
+				% [item_name, facets * 2]).is_greater_equal(3)
+		assert_int(spans.size()).override_failure_message(
+				"'%s' cuts its side strip into %d slices for %d facets — the strip and the geometry " \
+				% [item_name, spans.size(), facets] + "disagree about how many faces there are") \
+				.is_equal(facets)
 
 		var texel := 1.0 / _atlas_size(mesh).x
 		var width: float = spans[0].y - spans[0].x
@@ -1125,6 +1151,54 @@ func test_a_generated_face_only_wears_colours_from_its_own_sprite() -> void:
 					% [c, entry.coords] + "palette is not being read off the art").is_true()
 		checked += 1
 	assert_int(checked).is_greater(0)
+
+
+# #323: a rock read as a column, and the geometric fact behind that was a single straight run from a
+# wide base to a narrow top — a truncated cone, which is what any TWO-ring profile must be. A boulder
+# is widest somewhere in its middle, so the widest ring is neither the bottom one nor the top one.
+#
+# Asserted as a property of the vertices, never against the profile table: a case that restated the
+# numbers would agree with any shape the generator happened to build, including the pillar.
+#
+# ROUND rides along on purpose — the barrel earned the same silhouette in #279, so the property is
+# genuinely shared and a case that held it for only one shape would be the narrower claim.
+func test_a_prism_is_widest_between_its_base_and_its_crown() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var checked := 0
+	for entry in _prism_entries():
+		var item_name: String = BoardMirror.prop_item_name(entry.source, entry.coords)
+		var mesh := _mesh_named(board, item_name)
+		assert_object(mesh).override_failure_message("no geometry item '%s'" % item_name).is_not_null()
+		var verts: PackedVector3Array = mesh.surface_get_arrays(1)[Mesh.ARRAY_VERTEX]
+		var top := 0.0
+		for v in verts:
+			top = maxf(top, v.y)
+		assert_float(top).override_failure_message(
+				"'%s' has no height at all" % item_name).is_greater(0.0)
+
+		var widest_y := 0.0
+		var widest := -1.0
+		for v in verts:
+			var r := Vector2(v.x, v.z).length()
+			if r > widest:
+				widest = r
+				widest_y = v.y
+		assert_bool(widest_y > 0.0).override_failure_message(
+				"'%s' is widest at its base (y=%s of %s) — that is a truncated cone, which is the " \
+				% [item_name, widest_y, top] + "shape that reads as a column (#323)").is_true()
+		assert_bool(widest_y < top).override_failure_message(
+				"'%s' is widest at its crown (y=%s of %s) — a prism standing on its narrow end" \
+				% [item_name, widest_y, top]).is_true()
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no FACETED or ROUND props authored; the case is vacuous").is_greater(0)
+
+
+# Triangles on the top surface, which carries BOTH caps and nothing else (#279) — so it is two per
+# facet, and that is how a case can know the facet count without reading the generator's table.
+func _cap_triangles(mesh: Mesh) -> int:
+	var verts: PackedVector3Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+	return verts.size() / 3
 
 
 func _prism_entries() -> Array[Dictionary]:
