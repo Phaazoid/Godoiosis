@@ -22,6 +22,7 @@ const ATTACHMENTS := {
 	"report.md": "text/markdown",
 	"board.tres": "text/plain",
 	"board.png": "image/png",
+	"devtools.png": "image/png",   # #328: only written while the dev-tools window is open
 }
 
 func _ready() -> void:

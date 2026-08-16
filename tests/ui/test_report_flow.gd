@@ -174,6 +174,52 @@ func test_the_screenshot_comes_from_the_window_and_not_the_hidden_subviewport() 
 	assert_object(chosen).is_not_same(game.get_viewport())
 
 
+func test_a_report_names_the_dev_tools_tab_that_was_open() -> void:
+	# #328. The dev-tools window is a real second OS window (embed_subwindows is off), so it is not
+	# in the composited frame board.png comes from -- but WHICH TAB was up costs no picture and
+	# survives Discord's CDN expiry. The expectation is derived from the window's own seam, never a
+	# pinned tab name: the tab list is authored in DevOverlay.tscn.
+	var overlay: DevOverlay = game.dev_overlay
+	assert_object(overlay).is_not_null()   # the gate: without it the whole case is vacuous
+	overlay.visible = true
+
+	var expected := overlay.current_tab_title()
+	assert_str(expected).is_not_equal("")
+
+	var result: Dictionary = await game.bug_reporter.report(
+		"IDLE", BugReporter.Kind.BUG, "", null)
+	_written.append(result["dir"])
+	overlay.visible = false
+
+	var text := FileAccess.get_file_as_string(result["dir"] + "report.md")
+	assert_str(text).contains("Dev tools: **%s**" % expected)
+
+
+func test_a_closed_dev_tools_window_writes_no_picture_and_says_so() -> void:
+	# The gate, and the twin of "sent from a menu". The IMAGE cannot be the subject headless --
+	# capture_devtools_frame() returns null there by design, exactly as capture_frame() does -- so
+	# pin the CHOICE that feeds both it and the line. Falsify by dropping the `visible` check from
+	# devtools_panel(): this case reds, the one above stays green.
+	var overlay: DevOverlay = game.dev_overlay
+	assert_object(overlay).is_not_null()
+	overlay.visible = false
+	assert_object(game.bug_reporter.devtools_panel()).is_null()
+
+	overlay.visible = true
+	assert_object(game.bug_reporter.devtools_panel()).is_same(overlay)
+	# Two questions, two answers: the composited frame is still the root's (#240), never this window.
+	assert_object(game.bug_reporter.devtools_panel()).is_not_same(game.bug_reporter.capture_viewport())
+	overlay.visible = false
+
+	var result: Dictionary = await game.bug_reporter.report(
+		"IDLE", BugReporter.Kind.BUG, "", null)
+	_written.append(result["dir"])
+
+	var text := FileAccess.get_file_as_string(result["dir"] + "report.md")
+	assert_str(text).contains("Dev tools: **%s**" % BugReporter.NO_DEVTOOLS)
+	assert_bool(FileAccess.file_exists(result["dir"] + "devtools.png")).is_false()
+
+
 func test_a_menu_side_report_has_no_board_and_says_so() -> void:
 	# Feedback sent from mission select. Claiming "board.tres is the authoritative snapshot" beside
 	# a folder with no board.tres is the kind of small lie that wastes a triage session.

@@ -27,10 +27,11 @@ const LOG_TAIL_LINES := 80
 # Discord caps a message at 2000 characters, and the untruncated note is in report.md regardless.
 const NOTE_IN_MESSAGE := 400
 
-# What the two stamped lines say when nothing answered them (#240). Named so a test can assert
+# What the stamped lines say when nothing answered them (#240, #328). Named so a test can assert
 # the honest sentence rather than the absence of a section.
 const NO_3D_VIEW := "flat 2D (no 3D host)"
 const DEFAULT_LOOK := "(default)"
+const NO_DEVTOOLS := "closed"
 
 var game   # untyped back-ref: game.gd has no class_name
 
@@ -124,7 +125,7 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 		return {"dir": "", "sent": false}
 	var look: String = game.scenario_manager.current_look_preset
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
-		_view_note(), look))
+		_view_note(), look, _devtools_note()))
 	md.close()
 
 	if frame == null:
@@ -133,6 +134,13 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 	# file that isn't there -- so an unsized viewport degrades the report instead of killing it.
 	if frame != null and not frame.is_empty():
 		frame.save_png(dir + "board.png")
+
+	# The dev-tools window is a SECOND file, never a fork of the first (#328): it is a real OS
+	# window with its own viewport, so it is not in the composited frame above by construction.
+	# Nothing to grab when it is closed, which the report.md line above has already said.
+	var dev_frame := await capture_devtools_frame()
+	if dev_frame != null and not dev_frame.is_empty():
+		dev_frame.save_png(dir + "devtools.png")
 
 	print("Report written to %s" % ProjectSettings.globalize_path(dir))
 	var sent: bool = await _uploader.submit(dir, build_summary(stamp, state_name, kind, note))
@@ -170,6 +178,39 @@ func capture_viewport() -> Viewport:
 	var tree: SceneTree = game.get_tree()
 	return tree.root
 
+# Is there a dev-tools window to report on? (#328) ONE gate, read by both the report.md line and the
+# screenshot, so the two can never disagree about whether it was up. Null in a demo build (game.gd's
+# _find_dev_overlay returns null without DevTools.enabled()) and null while it is closed.
+#
+# Deliberately NOT a branch inside capture_viewport(): that answers where the COMPOSITED frame comes
+# from, and #240 forbids forking it. This is a different question with a different answer.
+func devtools_panel() -> DevOverlay:
+	var overlay: DevOverlay = game.dev_overlay
+	if overlay == null or not overlay.visible:
+		return null
+	return overlay
+
+# The second picture. Same headless escape as capture_frame() and for the same reason -- awaiting
+# frame_post_draw there never resumes and takes the calling coroutine with it.
+func capture_devtools_frame() -> Image:
+	if DisplayServer.get_name() == "headless":
+		return null
+	var panel := devtools_panel()
+	if panel == null:
+		return null
+	await RenderingServer.frame_post_draw
+	var texture: ViewportTexture = panel.get_texture()   # a Window IS a Viewport
+	if texture == null:
+		return null
+	return texture.get_image()
+
+# Which tab was up -- free, and the half that survives Discord's CDN expiry when the picture does not.
+func _devtools_note() -> String:
+	var panel := devtools_panel()
+	if panel == null:
+		return ""
+	return panel.current_tab_title()
+
 func _view_note() -> String:
 	if not view_source.is_valid():
 		return ""
@@ -198,7 +239,7 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
 		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
-		view_note := "", look_note := "") -> String:
+		view_note := "", look_note := "", devtools_note := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
@@ -217,6 +258,10 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 	# in, while the look is the BOARD's own (ScenarioData.look_preset, #253 part 2).
 	out += "View: **%s**\n\n" % (NO_3D_VIEW if view_note == "" else view_note)
 	out += "Look: **%s**\n\n" % (DEFAULT_LOOK if look_note == "" else look_note)
+	# WHICH DEV TAB was up (#328). Names the tab only, never devtools.png: a picture of a second OS
+	# window can fail where this line cannot, and a report naming a file it does not carry is the
+	# small lie that wastes a triage session.
+	out += "Dev tools: **%s**\n\n" % (NO_DEVTOOLS if devtools_note == "" else devtools_note)
 	if units.is_empty():
 		out += "No units on the board -- sent from a menu, so there is no `board.tres` beside this.\n\n"
 	else:
