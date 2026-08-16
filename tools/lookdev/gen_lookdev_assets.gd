@@ -374,6 +374,14 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 					_block_mesh(atlas_mat, side, top_uv, side_uv))
 			next_id += 1
 
+			# The same surface on a SLOPE (#340). FLAT tiles only: a rock or a fence has no top face
+			# to tilt, and the brush refuses them a rise for the same reason. Without this every ramp
+			# wore the one generated dirt wedge, so a stone ramp read as dirt.
+			if not stands_up:
+				_add_item(ml, next_id, BoardMirror.ramp_item_name(source_id, coords),
+						_ramp_mesh(atlas_mat, side, top_uv))
+				next_id += 1
+
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
 			# sprite directly, and a billboard is the one form a sprite maps onto correctly.
@@ -626,14 +634,17 @@ func _uv_half(uv: Rect2, east: bool) -> Rect2:
 
 # A wedge: high edge at -Z falling to -0.5 at +Z. Slope face wears the terrain
 # texture; GridMap orientation (yaw steps) points the high side at the upper level.
-func _ramp_mesh(top_mat: Material, side_mat: Material) -> ArrayMesh:
+# top_uv defaults to the whole texture (the Stage-0 dirt_ramp, whose material is one tile), and an
+# atlas-backed wedge passes the tile's own region instead — the same fork _block_mesh already makes,
+# so a ramp wears the ground painted on it (#340).
+func _ramp_mesh(top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var slope_normal := Vector3(0.0, 1.0, 1.0).normalized()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
 	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), slope_normal)
+			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), slope_normal, top_uv)
 	st.commit(mesh)
 
 	st = SurfaceTool.new()

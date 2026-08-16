@@ -178,9 +178,9 @@ func _sync_brush_ghost() -> void:
 	if game == null or game.process_mode == Node.PROCESS_MODE_DISABLED:
 		return   # modal freeze: painting is frozen, the ghost holds with it
 	var ghost := brush_ghost()
-	# The flat view can only draw a TILE, and only the TERRAIN answer carries a tile pick: an
-	# elevation preview is a HEIGHT, which 2D already reads out as numbers (HeightDebugOverlay).
-	# Not a second answer -- one description, each renderer drawing the half of it it can show.
+	# The flat view can only draw a TILE, and the answer also carries a level and a rise that 2D has
+	# no way to show -- it reads height out as numbers instead (HeightDebugOverlay). Not a second
+	# answer: one description, each renderer drawing the half of it it can show.
 	if ghost == null or ghost.source != _brush_ghost:
 		hide_brush_ghost()
 		return
@@ -192,25 +192,20 @@ func _sync_brush_ghost() -> void:
 # field has a second writer and a second meaning ("the 2D board draws at all"), which is the
 # #232/#238 trap exactly. Ask the question, not the field it happens to live in.
 #
-# Answered PER MODE (#285). It used to be one TERRAIN-shaped predicate returning a bare cell, and
-# an elevation preview cannot be described that way -- the level is the brush's, not the cell's,
-# and the art comes off the grid rather than the tile-pick layer. Modes that place nothing (ZONE,
-# STATE) still answer null.
+# Answered PER MODE (#285). It used to be one TERRAIN-shaped predicate returning a bare cell, and a
+# preview carrying a level cannot be described that way. Modes that place nothing (ZONE, STATE) still
+# answer null.
+#
+# TERRAIN now carries the BRUSH's level and rise rather than the cell's (#340) — the two modes became
+# one, so the ghost shows the tile you picked at the height you picked, which is what the click does.
+# The art comes off the tile-pick layer, as the paint reads it.
 func brush_ghost() -> BrushGhost:
 	if not brush_armed():
 		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	var cell := _mouse_cell()
-	match brush.paint_mode:
-		TileBrushTool.PaintMode.TERRAIN:
-			return BrushGhost.make(cell, game.board_heights.elevation_at(cell), _brush_ghost)
-		TileBrushTool.PaintMode.ELEVATION:
-			# Elevation goes with the ground (#245/#260), so a groundless cell previews NOTHING --
-			# the 3D picker answers over holes on purpose, and _paint_elevation refuses them. The
-			# ghost says so before the click instead of letting it no-op silently.
-			if not GridUtils.has_ground(game.grid, cell):
-				return null
-			return BrushGhost.make(cell, brush.selected_elevation(), game.grid, brush.selected_rise())
+	if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
+		return BrushGhost.make(cell, brush.selected_elevation(), _brush_ghost, brush.selected_rise())
 	return null
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
@@ -245,21 +240,24 @@ func _ensure_brush_ghost() -> void:
 	_brush_ghost.visible = false
 	game.grid.add_child(_brush_ghost)
 
-# The elevation brush, or null when it is not the live tool. ONE predicate, so the wheel and the
-# Z/C keys cannot drift about when they apply: both would silently retune a brush you cannot see
-# otherwise -- the wheel and Z/C are unbound everywhere else in the 2D game, and a key that does
-# something invisible is worse than one that does nothing.
+# The brush whose LEVEL the wheel and the Z/C keys move, or null when that is not the live tool.
+# ONE predicate, so the two cannot drift about when they apply: both would otherwise silently retune
+# a brush you cannot see -- the wheel and Z/C are unbound everywhere else in the 2D game, and a key
+# that does something invisible is worse than one that does nothing.
+#
+# The gate is TERRAIN since #340, where it was a mode of its own before: the level rows are visible
+# in exactly that mode, which is the "brush you can see" this predicate is really asking about.
 func _elevation_brush() -> TileBrushTool:
 	if not brush_armed():
 		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	return brush if brush.paint_mode == TileBrushTool.PaintMode.ELEVATION else null
+	return brush if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN else null
 
 # Does this wheel notch belong to the BRUSH rather than the camera? (#285) ONE answer, because a
 # 3D host has to suppress its own zoom on exactly the notches that move the level -- ask twice and
 # a notch both raises the brush and zooms the view, which is what shipped before this existed.
-# Ctrl hands the notch back to the camera: in ELEVATION mode the wheel is the level, so zoom needs
-# somewhere to live. Modes that never read the wheel (TERRAIN/ZONE/STATE) leave zoom alone.
+# Ctrl hands the notch back to the camera: while the terrain brush is armed the wheel is the level,
+# so zoom needs somewhere to live. Modes that never read the wheel (ZONE/STATE) leave zoom alone.
 func wheel_is_brush_level(event: InputEventMouseButton) -> bool:
 	if not elevation_brush_live() or event.ctrl_pressed:
 		return false
@@ -286,8 +284,6 @@ func _paint() -> void:
 			_paint_zone(cell)
 		TileBrushTool.PaintMode.STATE:
 			_paint_state(cell)
-		TileBrushTool.PaintMode.ELEVATION:
-			_paint_elevation(cell)
 		TileBrushTool.PaintMode.TERRAIN:
 			_paint_tile(cell)
 
@@ -298,14 +294,20 @@ func _erase() -> void:
 			_erase_zone(cell)
 		TileBrushTool.PaintMode.STATE:
 			_erase_state(cell)
-		TileBrushTool.PaintMode.ELEVATION:
-			_erase_elevation(cell)
 		TileBrushTool.PaintMode.TERRAIN:
 			_erase_tile(cell)
 
+# One click writes the tile AND where it sits (#340): the ground first, then the height, because
+# height goes with the ground (#245/#260) and a store write ahead of the tile would be writing under
+# a cell that has none. The old ELEVATION mode's groundless guard is gone with the ordering rather
+# than dropped -- this path CREATES the ground it then raises, which is how a new cell is authored.
+#
+# selected_rise() is already gated to flat tiles, so a rock paints flat however the picker reads.
 func _paint_tile(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	game.grid.paint(cell, brush.selected_source, brush.selected_tile)
+	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise())
+	_refresh_height_readout()
 	game.camera_controller.refresh_bounds(game.grid)
 
 func _erase_tile(cell: Vector2i) -> void:
@@ -352,18 +354,6 @@ func _paint_state(cell: Vector2i) -> void:
 # Elevation + ramp painting (#260). One click writes BOTH fields, because set_cell takes both and a
 # cell is one answer. Groundless cells are refused for the same reason a state deposit is (#245):
 # height under no tile is invisible junk that would resurrect the moment ground was repainted there.
-func _paint_elevation(cell: Vector2i) -> void:
-	if not GridUtils.has_ground(game.grid, cell):
-		return
-	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise())
-	_refresh_height_readout()
-
-# Right-click returns the cell to flat ground -- both fields, mirroring the whole-cell state erase.
-func _erase_elevation(cell: Vector2i) -> void:
-	game.board_heights.set_cell(cell, 0, Terrain.RampRise.NONE)
-	_refresh_height_readout()
-
 # Null in a build with dev tools stripped; BoardHeights has no signals to redraw off (it is a data
 # store, not a subject), so every writer here pushes.
 func _refresh_height_readout() -> void:

@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #285 (2026-08-15).**
+**Canon checked through #340 (2026-08-16).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -369,9 +369,19 @@ Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush
 dedicated button to reset it to 0.** Painting textures onto wall faces and other authoring niceties
 come later and do not gate anything.
 
-**BUILT 2026-08-15 ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)).** A fourth
-`TileBrushTool.PaintMode`, **ELEVATION** — a brush *mode* rather than a palette entry, which is the
-shape the per-cell store was chosen for in the first place. One click writes **both** fields, because
+**BUILT 2026-08-15 ([#260](https://github.com/Phaazoid/Godoiosis/issues/260)), then MERGED INTO THE
+TERRAIN BRUSH 2026-08-16 ([#340](https://github.com/Phaazoid/Godoiosis/issues/340)).** #260 shipped it
+as a fourth `TileBrushTool.PaintMode`, **ELEVATION** — a brush *mode* rather than a palette entry,
+which is the shape the per-cell store was chosen for. That half is unchanged and still right: a
+per-*tile* elevation would need one grass tile per level. What #340 reversed is the **mode**. The
+dev: *"I want the elevation brush and the tile brush to not be separate. Ramps are tiles, and tiles
+should be paintable at any elevation."* Height was never a different QUESTION from which tile, only a
+different STORE, and a mode per store made authoring a raised cell two gestures. So the level and the
+rise are now always-live rows on the TERRAIN brush, one click writes tile + level + rise, and
+**raising a cell means repainting it at a new level** — there is no height-only gesture. Two
+consequences fall out: a paint on virgin board now CREATES the ground it raises (the old groundless
+refusal is answered by ordering — tile first, then height), and a ramp wears the tile painted on it
+(*Ramps wear their ground* below). One click still writes both height fields, because
 `BoardHeights.set_cell` takes both and a cell is one answer; two brushes would be two ways to author
 one thing. The wheel is read **first** in `DevController.handle_tile_brush` and returns, so a notch
 mid-stroke changes the level without ending the stroke, and it is gated on `event.pressed` because
@@ -385,9 +395,10 @@ Godot emits a press *and* a release per notch. Four rulings worth keeping:
   resurrects the moment ground is repainted there. The predicate is a **parameter**, not an injected
   `ground_source` field like `TerrainStateManager`'s: that sibling needs one because attacks deposit
   states from many call sites, while this store has one writer and one pruner.
-- **The readout lights itself.** Entering the mode shows `HeightDebugOverlay` — painting height into
-  an invisible store is blind. Its `visible` is **derived** from two named flags (F5, and the brush)
-  rather than assigned by either, so leaving the mode cannot switch off a readout F5 asked for.
+- **The readout lights itself.** Arming the brush that carries a level shows `HeightDebugOverlay` —
+  painting height into an invisible store is blind. Its `visible` is **derived** from two named flags
+  (F5, and the brush) rather than assigned by either, so leaving the mode cannot switch off a readout
+  F5 asked for. That brush is TERRAIN since #340; the rule is unchanged, only which mode owns it.
 - **Painting was a 2D-view job until [#285](https://github.com/Phaazoid/Godoiosis/issues/285)
   (2026-08-15)**, because the readout is a child of the flat grid and nothing rendered elevation in
   3D. #273 removed the second half of that, and #285 the first. See *Painting it in 3D* below.
@@ -410,16 +421,42 @@ candidate to *investigate first*; and `BoardMirror.item_for_tile` returns no ite
 `alternative != 0`, so a rotated tile silently falls back to its generic Kind block and loses its art
 in the view the game boots into.
 
-**When the palette absorbs elevation** (the dev's plan for the render slice: scrolling sets the
-level, the highlighted terrain is what you paint, and *"Ramp will just be another terrain"*), two
-questions have to be answered out loud rather than stumbled into:
+**The palette absorbed elevation as [#340](https://github.com/Phaazoid/Godoiosis/issues/340)
+(2026-08-16)**, and both questions this section had parked were answered by the dev rather than
+stumbled into. Recorded here because the answers are not what the earlier sketch (*"Ramp will just be
+another terrain"*) assumed:
 
-1. **Ramp rise vs tile orientation is one question with two candidate homes.** If a ramp is a terrain
-   tile turned by Z/C, then `Terrain.RampRise` on `BoardHeights` and the tile's own orientation both
-   claim it. Law #4: one is authoritative or one is retired.
-2. **Does a terrain click then also write a height?** Today the modes are independent, so repainting
-   grass over a terrace leaves the terrace. Merged, it would flatten it to the brush's level unless
-   the merged brush can say "texture only" — an authoring-feel call, not a code one.
+1. **Ramp rise vs tile orientation — `Terrain.RampRise` on `BoardHeights` is AUTHORITATIVE, and the
+   tile-orientation candidate is RETIRED.** A ramp is *not* a palette entry. Two alternatives were
+   priced and declined: a `PropShape.RAMP` column (the `prop_shape`/`wall_edges` precedent) and four
+   tiles per ramp terrain with the facing baked in like `wall_edges`. Both put the direction on the
+   TILE, which is wrong for a ramp — direction varies per *placement*, and the ramp wedge is already
+   the one thing in the mirror that carries a runtime yaw. So Z/C keep turning a per-cell rise, and
+   `RulesService.can_step` is untouched.
+2. **Yes — a terrain click writes the height too, with no "texture only" escape.** The consequence
+   this section predicted is real and shipped: **repainting grass over a terrace flattens it to the
+   brush's level.** That is the merge working as asked (a tile is painted AT a height), and it is the
+   one part of #340 that is a feel call rather than a code one — the escape hatch, if it is ever
+   wanted, is a "texture only" toggle on the brush, not a second mode.
+
+**Ramps wear their ground (#340).** A ramp used to render as `dirt_ramp`, one hardcoded procedural
+wedge, whatever was painted under it — so a stone ramp read as dirt. This is the visible half of
+*"tiles should be paintable at any elevation"*: `gen_lookdev_assets.gd` now emits a wedge variant per
+**FLAT** tile alongside its block, wearing that tile's own atlas UV, and
+`BoardMirror.ramp_item_for_cell` picks it by name exactly as `item_for_cell` picks the block.
+Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two rules hold it together:
+
+- **Only FLAT tiles get a variant, and only flat tiles may slope.** The dev: *"only tiles that are
+  flat, not things like rocks, lanterns, etc. grass, mud, etc."* A rock has no top face to tilt. The
+  gate is `GridUtils.stands_up_of` — the existing `prop_shape` derivation, not a new predicate — and
+  it lives in `TileBrushTool.selected_rise()` so the GHOST reads it too; gated at the paint site
+  instead, the preview would show a sloping rock the click then refuses.
+- **`dirt_ramp` stays as the fallback, not as dead scaffolding.** The cases `item_for_tile` already
+  documents (empty cell, rotated alternative, multi-cell art) reach it, and so does a standing prop
+  painted onto a cell that already slopes. Without it those cells render as a hole.
+- **TUFT is excluded, deliberately and provisionally.** `stands_up_of` reads a flowery grass tuft as
+  standing, so it refuses a rise despite being walkable ground. Its plants would need planting on a
+  tilted face via #281's `BoardSpace.surface_transform` — real work, not an oversight.
 
 ### Painting it in 3D [BUILT as #285]
 
@@ -440,16 +477,20 @@ feedback and one binding. Four rulings, all the dev's:
   level the click would produce; the **wedge at `level + 1`** when a rise is set, mirroring
   `_write_column`'s own rule. Raising a cell keeps its texture, so the preview resolves its mesh
   off the real grid via the same `item_for_cell` call the board uses.
-- **A groundless cell shows NO ghost.** *Elevation goes with the ground* already refuses the paint,
-  and the 3D picker answers over holes on purpose (#231's plane fallback), so without this the
-  click is a silent no-op. The ghost states the refusal before it happens.
-- **The wheel is the brush's only in ELEVATION mode.** The other three modes never read it, so
-  camera zoom is untouched there; while elevation is live, `Ctrl+wheel` zooms.
+- **A groundless cell shows NO ghost** — *until #340 reversed it.* The elevation brush could not
+  create ground, so a click over a hole was a silent no-op and the ghost stated the refusal in
+  advance. The merged brush paints the tile first, so that click is now a real paint and the ghost
+  has to show it. The rule it enforced (*elevation goes with the ground*) is intact: erase still
+  takes the height with the tile.
+- **The wheel is the brush's only in TERRAIN mode.** Zones and Tile States never read it, so camera
+  zoom is untouched there; while the terrain brush is armed, `Ctrl+wheel` zooms.
 
-Two structural notes worth keeping. **The ghost answers per MODE now** (`DevController.brush_ghost`
-returning a `BrushGhost`), replacing a TERRAIN-shaped predicate plus a separate layer getter — an
-elevation preview cannot be described by a bare cell, since the level is the brush's and the art
-comes off the grid rather than the tile-pick layer. And **the wheel suppression is DECLARATIVE, not
+Two structural notes worth keeping. **The ghost answers what a click would PRODUCE**
+(`DevController.brush_ghost` returning a `BrushGhost`), replacing a TERRAIN-shaped predicate plus a
+separate layer getter — a preview carrying a level cannot be described by a bare cell, since the
+level is the brush's. (#285 made that answer per-MODE; #340 collapsed it back to one branch when the
+modes merged, and the art now comes off the tile-pick layer, because the paint writes a tile too.)
+And **the wheel suppression is DECLARATIVE, not
 a consume**: the camera rig is a *child* of `battle3d`, so it sees `_unhandled_input` first and
 `set_input_as_handled()` in the parent lands after the zoom has already happened (measured — the
 obvious fix is not the one that shipped). `battle3d` stands `look_dev_camera.wheel_zoom_enabled`
