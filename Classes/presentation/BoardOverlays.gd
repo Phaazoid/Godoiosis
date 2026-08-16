@@ -16,6 +16,12 @@ class_name BoardOverlays
 # the cell's top-face ANCHOR (the mirror's geometry), and the LAYER adds its own
 # lift — board shape stays the caller's business.
 #
+# The layers are PARTITIONED BY WRITER, which is why there is no whole-sink wipe: battle3d owns
+# HOVER (the pointer bracket, the one layer deliberately not mirrored) and OverlayMirror owns the
+# rest, caching what it has pushed. Emptying every layer at once is therefore always one writer
+# reaching across that line and desyncing the other's cache — the clear_all() this used to carry
+# did exactly that on every board load (#318). Clear the layers you own.
+#
 # The mask contract: fill/sprite quads render on WORLD_RENDER_LAYER only, and
 # UnitSprite3D lives on UNIT_RENDER_LAYER. Both constants live HERE; a drift test
 # pins them disjoint.
@@ -179,11 +185,6 @@ func clear(layer: Layer) -> void:
 		set_markers(layer, [])
 	else:
 		set_cells(layer, [])
-
-
-func clear_all() -> void:
-	for layer: Layer in LAYERS.keys():
-		clear(layer)
 
 
 func cells_of(layer: Layer) -> Array[Vector3i]:

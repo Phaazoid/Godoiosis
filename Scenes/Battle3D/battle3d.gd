@@ -147,12 +147,18 @@ func load_mission(path: String) -> void:
 # Load Game (any mission), F2/Restart, Mission Select, sandbox. Rebuild the mirror
 # world and drop pointer state aimed at the dead board — _update_pointer's dedup
 # would otherwise eat the first repaint on a same-coordinate cell.
+#
+# HOVER and nothing else: BoardOverlays is partitioned by writer — this file owns the pointer
+# bracket, OverlayMirror owns every other layer AND caches what it has pushed there. The
+# clear_all() that used to sit here emptied the mirror's layers behind its back, so reloading an
+# UNCHANGED board diffed equal and never repainted (#318). Zones were the visible casualty for
+# being the only markup static across a whole board.
 func _on_board_loaded() -> void:
 	rebuild()
 	_apply_board_look()   # before fit_camera: the preset carries pitch/FOV, which framing reads
 	fit_camera()
 	_pointer_cell = BoardSpace.NO_CELL
-	_overlays.clear_all()
+	_overlays.clear(BoardOverlays.Layer.HOVER)
 
 
 # A board wears the look it names (#253 part 2). Deliberately "apply this preset" rather than

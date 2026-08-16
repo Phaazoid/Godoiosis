@@ -436,3 +436,35 @@ func test_exit_current_mode_clears_the_mirrored_layers() -> void:
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.INVALID_MOVE).size()).is_equal(0)
 	assert_int(_overlays.cells_of(BoardOverlays.Layer.AIM).size()).is_equal(0)
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.TARGET_PICK).size()).is_equal(0)
+
+
+# --- Board reload (#318) ------------------------------------------------------------
+
+# battle3d._on_board_loaded used to empty EVERY 3D layer while the mirror's push cache went on
+# saying it had already drawn them. apply_scenario is synchronous end to end, so the mirror never
+# observes the intermediate empty — it sees the same cells before and after, diffs equal, and the
+# wiped layer stays wiped for the life of the board. Zones are the visible casualty for being the
+# only markup static across a whole board; a gameplay layer self-heals within a click or two.
+#
+# Asserting the settled end state of a FIRST load passes against that bug (the cache starts empty),
+# so this reloads an UNCHANGED board through the real funnel: capture_scenario -> apply_scenario ->
+# board_loaded -> battle3d. The zones are hand-built rather than read off a mission, so nothing here
+# pins authored content — they round-trip through ScenarioData.zones like any other board content.
+func test_a_reload_of_an_unchanged_board_leaves_the_zone_fills_drawn() -> void:
+	game.zone_manager.load_dict({
+		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},
+	})
+	_om().redraw_zones(game.zone_manager)
+	await _settle()
+	var drawn := _sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)
+	assert_array(drawn).override_failure_message(
+			"nothing was drawn before the reload, so the reload could not lose it").is_not_empty()
+
+	var manager: ScenarioManager = game.scenario_manager
+	manager.apply_scenario(manager.capture_scenario("reload-test"))
+	await _settle()
+	# The 2D kept them, or the 3D would be right to be empty — assert the authority first.
+	assert_that(_lifted(_om().capture_overlay)).override_failure_message(
+			"the 2D lost the zones on reload, which is a different bug").is_equal(drawn)
+	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)).override_failure_message(
+			"the board reloaded and its zones never came back in 3D").is_equal(drawn)
