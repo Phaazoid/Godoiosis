@@ -12,11 +12,14 @@ what you learn here so the next person doesn't repeat the run.
 2560 cells). Almost nothing is slow because of *data volume*. It's slow because a cheap operation
 is being repeated far more often than anyone intended — usually via a signal fan-out.
 
-**One measured exception, added 2026-08-16 — the 3D authoring poll (#319).** It is O(board) *per
-frame*, so it is the one place where data volume alone is the whole cost, and at 2560 cells it is
-already over a 60 fps frame budget. See that section below before assuming the paragraph above
-covers something you are looking at. The resize tool can also author boards **15× larger** than the
-2560 the sentence is written against.
+**The rule held, but only after it was enforced — 2026-08-16, #319.** The 3D authoring poll was the
+one place data volume alone *was* the whole cost: O(board) per frame, over a 60 fps budget at 2,560
+cells, and the resize tool can author boards **15× larger** than the number that sentence is written
+against. It was fixed rather than accepted (writers announce which cells changed), so the paragraph
+above is true again — but note **which half was wrong**. The operation was not being repeated more
+often than intended; it was repeating exactly as designed, over a board nobody had re-checked the
+design against. **When a per-frame cost scales with the map, this file's rule of thumb is the thing
+to distrust first.** Full story and numbers in that section below.
 
 ---
 
