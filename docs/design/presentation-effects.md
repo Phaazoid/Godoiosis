@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #308 (2026-08-15).**
+**Canon checked through #328 (2026-08-16).**
 
 ---
 
@@ -80,6 +80,20 @@ Two rules this settled, both general:
 
 - **A repaint can add or erase a COLUMN**, which is what the picker table and the camera bounds derive from — refresh them with it, or the cell you just painted is unclickable. Bounds only, never a re-frame: painting a tile must not yank the camera, matching what `CameraController.refresh_bounds` has always done in 2D.
 - **Authoring scaffolding mirrors only while the 2D shows it.** `ZONE_PATROL` (the brush's default kind) and the picked-zone highlight had no 3D twin at all; giving them one means mirroring *cells and visibility*, because the 2D reveals those layers solely while the Tile Brush tab is up. Mirror the question — "should this be on screen" — never the field the cells happen to live in.
+
+### What mirrors for free, and what needs a channel ([#321](https://github.com/Phaazoid/Godoiosis/issues/321), 2026-08-16)
+
+The attack lunge never reached the diorama, and the reason generalizes past this one effect. `UnitMirror` keys on **`unit.position`** — the Unit node — while `UnitVisuals` plays the lunge on **`$MapSprite.position`**, a local offset inside that node. The mirror was faithful and blind at once: it reproduced where the unit *is*, and the lunge deliberately never moves where the unit is. The walk is the counter-example that always worked, because `MovementComponent` moves the Unit node.
+
+**The rule: anything a 2D effect expresses on the Unit node mirrors for free; anything it expresses as a child-sprite offset arrives through `UnitVisuals.animation_offset()`, and that is the whole of the offset channel.** Measured rather than assumed — the rest of the class's vocabulary is `modulate` (already mirrored as the product of both nodes, #222), `visible`/`projected`, `z_index` and `scale`, none of which needs a second answer. The only other writer of that offset is the invalid-order shake, which now crosses too.
+
+Three things were decided here rather than discovered later:
+
+- **Mirroring the offset, not giving the 3D its own playback.** The lunge direction is a **board cardinal** (`GridUtils.cardinal_direction_between`), not a screen axis — in the flat view those are the same thing — so the offset reproduces exactly under any camera yaw, and the 2D stays the one animation authority (#222's ruling). A second playback off the same `AttackAction` beat is what an eventual *real* attack animation wants; it is not what a half-cell lunge needs.
+- **The lunge distance stays a 2D value** (`GridUtils.TILE_SIZE / 2`). There is deliberately **no 3D-side multiplier**: a view-local scale would mean the two views disagree about how far a lunge goes, which is the same second-authority problem one layer down. If it reads weakly at the pitched view, move the 2D constant and both views move — the same shape as `OverlayManager`'s attack-reach colour, which the 3D mirrors rather than duplicating.
+- **The offset is added LAST, after the step, facing and cell derivations.** Those all read the sprite's position, so folding the lunge in earlier makes an out-and-back swing register as two steps — the unit ends facing backwards — and puts a mid-swing unit on the cell it is leaning into. `UnitSprite3D.art_offset` exists so the board point stays recoverable: position is always *board point + art offset*, one writer.
+
+A 2D y is board **DEPTH**, never height, here as everywhere else on this stack (#263's fence, #280's flowerbed).
 
 ### Conventions the art commission must carry (pending look-dev experiments)
 

@@ -246,6 +246,9 @@ func test_a_lunge_is_not_a_step() -> void:
 
 	assert_vector(sprite.last_step).override_failure_message(
 			"the lunge registered as a step — the sprite will face the way it swung").is_equal(facing_before)
+	# The cell half is an invariant rather than a proven one: a lunge is exactly half a cell, so it
+	# reaches the boundary without crossing it, and the naive version passes this line. Kept because
+	# the claim is about the derivation, and the next effect on this channel may travel further.
 	assert_vector(sprite.cell).override_failure_message(
 			"a mid-lunge unit reports the cell it is leaning into").is_equal(cell_before)
 
