@@ -33,9 +33,12 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Eye-knobs, all of them read in _sync_bar and never written back, which is what makes them legal
 # Look-tab entries. They live on this node rather than on UnitHealthBar because a knob may only
 # name a property of a node that exists in Battle3D.tscn, and the bars are built at runtime.
-@export var hud_lift := 1.35            # the readout's height above the unit's stand point
-@export var bar_width_texels := 32.0
-@export var bar_height_texels := 6.0
+# Height above the unit's STAND POINT, not above its head — a 32px sprite at the default density
+# stands one cell tall, so the clearance over the head is this minus about 1.0. 1.35 read as
+# floating (dev, 2026-08-15); 1.18 halves that clearance.
+@export var hud_lift := 1.18
+@export var bar_width_texels := 26.0
+@export var bar_height_texels := 5.0
 @export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
 # missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
@@ -48,7 +51,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var number_height_cells := 0.13
 @export var number_outline_size := 6.0   # glyph-atlas units, so it tracks the fixed FONT_RESOLUTION
 @export var number_color := Color.WHITE
-@export var number_gap := 0.04           # clear space between the number and the bar's left edge
+@export var number_gap := 0.01           # inset from the bar's left edge; the number sits ON the bar
 # Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
 # belongs over a head, and the bar already carries the fraction either way.
 @export var number_shows_max := true

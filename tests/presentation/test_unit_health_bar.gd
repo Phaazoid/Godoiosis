@@ -143,6 +143,43 @@ func test_the_readout_rides_the_ghost_when_a_move_is_planned() -> void:
 			"the readout stayed on the cell the unit is vacating").is_true()
 
 
+func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
+	# Found in play (dev, 2026-08-15): the number "kinda floats apart depending on the angle".
+	# Every element billboards INDEPENDENTLY, so a displacement written to node `position` is a
+	# WORLD offset — the bar turns under orbit while the number stays put, and they shear apart.
+	# The invariant that fixes it: displacement lives in billboard-LOCAL space (QuadMesh's
+	# center_offset, Label3D's offset), so every child sits at local origin.
+	#
+	# Asserting the invariant rather than a rendered position, because the drift only appears at
+	# camera angles a headless run does not have — this is the property the angle can't move.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	unit.set_current_hp(int(unit.get_max_hp() * 0.5))   # part-full, so the fill is displaced too
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).override_failure_message(
+			"the readout never appeared, so its parts cannot be checked").is_true()
+
+	var displaced := 0
+	for child in bar.get_children():
+		var element := child as Node3D
+		assert_that(element.position).override_failure_message(
+				"'%s' is displaced by node position, which does not ride the billboard"
+				% element.name).is_equal(Vector3.ZERO)
+		var quad := child as MeshInstance3D
+		if quad != null and absf((quad.mesh as QuadMesh).center_offset.x) > 0.0001:
+			displaced += 1
+		var label := child as Label3D
+		if label != null and absf(label.offset.x) > 0.0001:
+			displaced += 1
+	# Non-vacuity, and it is the whole point: "everything sits at the origin" is trivially true of a
+	# readout that displaces nothing at all. The half-full fill and the inset number must BOTH be
+	# off-centre, and both in local space.
+	assert_int(displaced).override_failure_message(
+			"nothing was displaced, so displacing it in the right space proves nothing"
+			).is_greater_equal(2)
+
+
 func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 	# A relationship, not values: the readout describes a unit, so it can never sort behind one,
 	# and units already sort above all board markup. Pins the band the way the existing consts are

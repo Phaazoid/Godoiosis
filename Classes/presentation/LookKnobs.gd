@@ -209,8 +209,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Thickness of the black outline behind the number, in glyph units rather than cells -- so it holds its proportion when Number size changes. The board can be any colour underneath, and this is what keeps the digits readable over a bright tile or a lit flame."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
 		"tip": "Colour of the HP digits. The outline is always black, so this is the fill; a tint here is the cheapest way to make the number read as part of the bar rather than as separate text."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number gap", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Clear space between the digits and the bar's left edge, in cells. Zero puts them touching; a gap makes the number read as a separate label rather than as part of the gauge."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number inset", "min": 0.0, "max": 0.5, "step": 0.005,
+		"tip": "How far in from the bar's left edge the digits start, in cells. The number sits ON the bar, so this is padding inside it rather than a gap beside it -- zero puts the first digit flush against the outline."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
 		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
 ]

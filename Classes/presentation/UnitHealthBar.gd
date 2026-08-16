@@ -155,12 +155,19 @@ func _rebuild() -> void:
 	_label.pixel_size = maxf(_number_height, 0.001) / float(FONT_RESOLUTION)
 	_label.outline_size = int(_number_outline)
 	_label.modulate = _number_color
-	# Snapped to the LEFT of the bar (dev, 2026-08-15), right-aligned against its edge and centred
-	# on it vertically. Label3D centres its mesh on its own origin and offers no anchor, so the
-	# shift is half the rendered width — measured, because the digit count changes with the HP.
+	# ONE display, locked at every camera angle (dev feel-check, 2026-08-15: the number "kinda floats
+	# apart depending on the angle"). Every element billboards INDEPENDENTLY, so a displacement
+	# written to node `position` is a WORLD offset: the bar spins in place under orbit while the
+	# number stays put, and the two shear apart. Label3D.offset is applied in the label's own plane
+	# BEFORE the billboard rebuilds the basis — the same space QuadMesh.center_offset lives in — so
+	# it turns with the bar instead. Nothing here may ever move a child by `position`.
+	#
+	# Sits ON the bar, inset from its left edge. get_aabb() is read for the text's WIDTH, which is
+	# offset-independent, so this cannot feed back on itself frame to frame; the digit count changes
+	# with the HP, which is why it is measured rather than assumed.
 	var half_text: float = _label.get_aabb().size.x * 0.5
-	var bar_left := track_w * 0.5 * texel + edge * texel
-	_label.position = Vector3(-(bar_left + _gap + half_text), 0.0, 0.0)
+	var inside_left := -track_w * 0.5 * texel + _gap + half_text
+	_label.offset = Vector2(inside_left / _label.pixel_size, 0.0)
 
 
 func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: float) -> void:
