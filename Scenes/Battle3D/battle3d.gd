@@ -127,6 +127,7 @@ func _ready() -> void:
 	_unit_mirror.units_root = game.units_root
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
+	_unit_mirror.plan_source = _previewed_plan
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -790,6 +791,15 @@ func _hovered_unit() -> Unit:
 	var presenter: HoverPresenter = game.hover_presenter
 	var hovered: Unit = game.unit_at_pointer(presenter.last_hovered_cell)
 	return hovered
+
+
+# The plan being previewed, for UnitMirror's predicted readout (#313). resolved_plan_for guards on
+# squad identity, so this is null whenever nothing is being commanded — no active squad, and an AI
+# squad's own resolve (which never matches the player's active squad) — and the ghosts are simply
+# absent rather than showing somebody else's intentions.
+func _previewed_plan() -> ResolvedPlan:
+	var squads: SquadManager = game.squad_manager
+	return squads.resolved_plan_for(squads.active_squad)
 
 
 func _cancel() -> void:

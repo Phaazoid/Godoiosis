@@ -217,6 +217,19 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far in from the bar's left edge the digits start, in cells. The number sits ON the bar, so this is padding inside it rather than a gap beside it -- zero puts the first digit flush against the outline."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
 		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
+	# --- The predicted readout (#313) ---
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_doomed_color", "label": "Predicted loss",
+		"tip": "The health the queued plan is about to TAKE, drawn over the fill between where the bar is now and where the plan leaves it. It has to read as a warning against the fill beside it without reading as damage that has already landed -- the notch is what says 'not yet'."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_heal_color", "label": "Predicted gain",
+		"tip": "The same span in the other direction: health a queued heal is about to give back, drawn over the missing backing. Wants to be unmistakably not-the-loss-colour, since the shape of the span is identical either way and only the colour says which."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "notch_color", "label": "Prediction notch",
+		"tip": "The marker sitting AT the health the plan predicts. This is the one mark that says the bar is showing a future as well as a present, so it wants to stand off both the fill and the loss colour."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "notch_texels", "label": "Notch width", "min": 1.0, "max": 8.0, "step": 1.0,
+		"tip": "Thickness of the prediction marker in texels, at the same pixel density as the bar. One texel is a hairline that can disappear at distance; wide enough and it stops reading as a mark on the bar and starts reading as a third segment of it."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
+		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "ghost_shows_number", "label": "Prediction shows number",
+		"tip": "Whether a readout that is up only because of a QUEUED PLAN also carries the HP digits. Off by default: a plan can put a bar over half the board at once, and pointing at any of them reveals its number anyway."},
 ]
 
 # A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
@@ -258,7 +271,8 @@ const PRESET_EXCLUDED: Array[String] = [
 	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
 	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
 	# by wearing a look. Excluded wholesale, which also keeps the shipped presets valid under
-	# test_look_presets' "names every in-scope knob" law.
+	# test_look_presets' "names every in-scope knob" law. #313's prediction rides the same bar and
+	# answers the same way: a plan's consequences are the least hideable thing on the board.
 	"UnitMirror|hud_lift",
 	"UnitMirror|bar_width_texels",
 	"UnitMirror|bar_height_texels",
@@ -270,6 +284,12 @@ const PRESET_EXCLUDED: Array[String] = [
 	"UnitMirror|number_color",
 	"UnitMirror|number_gap",
 	"UnitMirror|number_shows_max",
+	"UnitMirror|bar_doomed_color",
+	"UnitMirror|bar_heal_color",
+	"UnitMirror|notch_color",
+	"UnitMirror|notch_texels",
+	"UnitMirror|alarm_peak_color",
+	"UnitMirror|ghost_shows_number",
 ]
 
 # --- Identity ---------------------------------------------------------------------------

@@ -257,9 +257,9 @@ func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
 	_pulsing_units = units.duplicate()
 
 	if pulse_tiles and _tile_pulse == null:
-		_tile_pulse = Pulse.start(self, hover_overlay, HOVER_MODULATE, HOVER_PULSE_MODULATE)
+		_tile_pulse = Pulse.start(self, hover_overlay, &"modulate", HOVER_MODULATE, HOVER_PULSE_MODULATE)
 	elif not pulse_tiles and _tile_pulse != null:
-		Pulse.stop(_tile_pulse, hover_overlay, HOVER_MODULATE)
+		Pulse.stop(_tile_pulse, hover_overlay, &"modulate", HOVER_MODULATE)
 		_tile_pulse = null
 
 # The typed local is load-bearing: a bare [] literal passed to an Array[Unit] parameter fails at

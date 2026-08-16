@@ -111,14 +111,11 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
 	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
 	# DISPLAYED "after" is clamped by the lifecycle result -- a down/maim leaves HP at 1, a kill at 0.
-	var raw_after: int = atk.resolved.target_hp_after
+	# That clamp is LethalityRules' since #313: the ghost readout over the unit draws the same
+	# prediction, and two spellings of it would let this panel and the board disagree.
 	var hp_before: int = atk.resolved.hp_before
-	var hp_after: int = raw_after
-	match atk.resolved.lethality:
-		ResolvedOutcome.Lethality.DOWNED, ResolvedOutcome.Lethality.MAIMED:
-			hp_after = 1
-		ResolvedOutcome.Lethality.KILLED:
-			hp_after = 0
+	var hp_after: int = LethalityRules.displayed_hp(atk.resolved.target_hp_after,
+			LethalityRules.lifecycle_for(atk.resolved.lethality))
 
 	var hp_label := Label.new()
 	hp_label.text = "%d->%d" % [hp_before, hp_after]

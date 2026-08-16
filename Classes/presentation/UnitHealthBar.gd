@@ -1,11 +1,17 @@
 extends Node3D
 class_name UnitHealthBar
 
-# The hover health readout (#229): a black-outlined bar with the number snapped to its left, in the
+# The health readout (#229): a black-outlined bar with the number snapped to its left, in the
 # volume above a unit. That volume opened up mechanically when 4c moved the selection icons off the
 # cell and onto billboards; this is the first thing to occupy it DELIBERATELY. Nothing showed HP on
 # the board before it, in either view — the hover card was the only answer, and reading it costs a
 # glance away from the diorama.
+#
+# Since #313 the same bar also carries the PREDICTION: a notch at the HP the queued plan leaves the
+# unit at, with the span between there and now filled in a third colour — doomed if the plan is
+# taking HP, a heal colour if it is giving it back. One bar rather than a second ghost beside it:
+# current and predicted are one fact about one unit, and stacking a twin over every unit the plan
+# touches crowds a volume the selection icons already share.
 #
 # GAMEPLAY DESCRIPTOR, NOT SCENERY (dev feel-check, 2026-08-15). The first pass set `shaded = false`
 # and called that unlit; it is not. Unshaded only skips direct lighting, while volumetric fog, glow,
@@ -18,9 +24,9 @@ class_name UnitHealthBar
 # World-scaled, not screen-constant (dev, 2026-08-15): it shrinks with distance like the icons
 # beside it, because it belongs to the scene rather than to the glass.
 #
-# A dumb idempotent sink: it is TOLD a style and an HP pair and draws them. It never reads a Unit,
-# the board or the pointer — UnitMirror owns all of that, and owns the knobs too, since the Look
-# panel can only address nodes that exist in the scene.
+# A dumb idempotent sink: it is TOLD a style, an HP pair and a prediction, and draws them. It never
+# reads a Unit, the plan, the board or the pointer — UnitMirror owns all of that, and owns the knobs
+# too, since the Look panel can only address nodes that exist in the scene.
 #
 # Width comes from the quad MESH plus center_offset, never from node scale: a billboarded quad's
 # local axes are rebuilt in the vertex shader, so scaling one is a bet on shader internals, while
@@ -37,6 +43,8 @@ const FONT_RESOLUTION := 32
 var _outline: MeshInstance3D
 var _missing: MeshInstance3D
 var _fill: MeshInstance3D
+var _doomed: MeshInstance3D    # #313: the span between current HP and what the plan predicts
+var _notch: MeshInstance3D     # #313: the marker AT the predicted level
 var _label: Label3D
 
 var _width := 32.0
@@ -52,15 +60,45 @@ var _shows_max := true
 var _current := 0
 var _maximum := 1
 
+var _doomed_color := Color(1.0, 0.75, 0.1, 1.0)
+var _heal_color := Color(0.4, 0.9, 1.0, 1.0)
+var _notch_color := Color.WHITE
+var _notch_texels := 1.0
+var _alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
+var _predicted := 0
+var _has_prediction := false
+var _number_shown := true
+
+var _alarm: Tween
+# Every input the drawing reads, snapshotted (#313). UnitMirror pushes style, HP and prediction
+# every frame for every SHOWN bar, and a redraw resizes five meshes and measures the label's AABB —
+# fine for the single hovered bar #229 shipped, N times a frame once a plan puts one over everybody.
+# It is also what lets the alarm own the doomed colour: an unguarded redraw repainted over the tween
+# sixty times a second. Same value-diff-before-push idiom OverlayMirror uses.
+var _drawn: Array = []
+
+
+# The pulsing colour of the doomed segment (#313). Written by the alarm TWEEN rather than by the
+# tween writing a material directly, so _paint stays the single writer of albedo and the pulse never
+# becomes a second owner of it — the rule a live pulse already follows for sprite.modulate.
+var alarm_color := Color.WHITE:
+	set(value):
+		alarm_color = value
+		if _doomed != null:
+			_paint(_doomed, value)
+
 
 func _init() -> void:
-	# Priority ascends outline -> missing -> fill. All three are coplanar and there is no depth
-	# write to separate them, so priority IS the relationship. They are TRANSPARENCY_ALPHA despite
-	# being fully opaque colours: an opaque material sorts by depth, which coplanar quads cannot do,
-	# while the alpha queue honours render_priority. "No transparency" is about the alpha value.
+	# Priority ascends outline -> missing -> fill -> doomed -> notch. All are coplanar and there is
+	# no depth write to separate them, so priority IS the relationship. They are TRANSPARENCY_ALPHA
+	# despite being fully opaque colours: an opaque material sorts by depth, which coplanar quads
+	# cannot do, while the alpha queue honours render_priority. "No transparency" is about the alpha
+	# value.
 	_outline = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
 	_missing = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 1)
 	_fill = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 2)
+	_doomed = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 3)
+	_notch = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4)
 	_label = Label3D.new()
 	# NOT billboarded, like everything else here — face() turns the whole group instead. Label3D
 	# draws its glyphs and its outline as two surfaces, and displacing it with Label3D.offset (the
@@ -71,20 +109,23 @@ func _init() -> void:
 	_label.double_sided = false
 	_label.font_size = FONT_RESOLUTION
 	_label.outline_modulate = OUTLINE_COLOR
-	_label.render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4
-	_label.outline_render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 3
+	_label.render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6
+	_label.outline_render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 5
 	_label.layers = BoardOverlays.UNIT_RENDER_LAYER
 	_label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	add_child(_outline)
 	add_child(_missing)
 	add_child(_fill)
+	add_child(_doomed)
+	add_child(_notch)
 	add_child(_label)
 	visible = false
 	_rebuild()
 
 
 # The knob values, pushed by UnitMirror. Explicit parameters rather than public fields because this
-# is one call site and a signature is what keeps it typed end to end.
+# is one call site and a signature is what keeps it typed end to end. The PREDICTION's own knobs sit
+# in their own setter below rather than growing this one past the point a call site can be read.
 func set_style(width: float, height: float, outline: float, fill: Color, missing: Color,
 		number_height: float, number_outline: float, number_color: Color, gap: float,
 		shows_max: bool) -> void:
@@ -101,14 +142,63 @@ func set_style(width: float, height: float, outline: float, fill: Color, missing
 	_rebuild()
 
 
+func set_prediction_style(doomed: Color, heal: Color, notch: Color, notch_texels: float,
+		alarm_peak: Color) -> void:
+	_doomed_color = doomed
+	_heal_color = heal
+	_notch_color = notch
+	_notch_texels = notch_texels
+	_alarm_peak_color = alarm_peak
+	_rebuild()
+
+
 func set_hp(current: int, maximum: int) -> void:
 	_current = current
 	_maximum = maximum
 	_rebuild()
 
 
+# What the queued plan leaves this unit at (#313), already run through the display clamp — this node
+# never sees a raw resolver number. `alarm` raises the pulse for a predicted DOWN or KILL.
+func set_prediction(predicted: int, alarm: bool) -> void:
+	_predicted = predicted
+	_has_prediction = true
+	_rebuild()
+	set_alarm(alarm)
+
+
+func clear_prediction() -> void:
+	if not _has_prediction:
+		return
+	_has_prediction = false
+	_rebuild()
+	set_alarm(false)
+
+
+# Crowding, not styling: an unhovered ghost is bar-only by default, and hovering it reveals the
+# number. Two reasons to be up (#313), so the number follows the reason rather than the bar.
+func set_number_shown(shown: bool) -> void:
+	_number_shown = shown
+	_rebuild()
+
+
 func set_shown(shown: bool) -> void:
 	visible = shown
+	if not shown:
+		set_alarm(false)   # a tween on a hidden bar is invisible work, and outlives what raised it
+
+
+# Idempotent because it is TOLD every frame: start once, stop once. Pulse.stop writes the base value
+# back through alarm_color's setter, so the segment lands on its resting colour with no extra paint.
+func set_alarm(on: bool) -> void:
+	if on == (_alarm != null):
+		return
+	if on:
+		alarm_color = _segment_color()
+		_alarm = Pulse.start(self, self, &"alarm_color", _segment_color(), _alarm_peak_color)
+	else:
+		Pulse.stop(_alarm, self, &"alarm_color", _segment_color())
+		_alarm = null
 
 
 # Turn the WHOLE readout to face the camera, once, instead of letting each part billboard itself.
@@ -133,8 +223,28 @@ func face(camera_position: Vector3) -> void:
 func fill_fraction() -> float:
 	if not _fill.visible:
 		return 0.0
-	var full: float = (_missing.mesh as QuadMesh).size.x
-	return (_fill.mesh as QuadMesh).size.x / maxf(full, 0.0001)
+	return _quad_width(_fill) / maxf(_quad_width(_missing), 0.0001)
+
+
+# Where the notch SITS, as a fraction of the track — read off the mesh for the same reason
+# fill_fraction is. -1.0 when no prediction is up, which is a different answer from 0.0 (a kill).
+func notch_fraction() -> float:
+	if not _notch.visible:
+		return -1.0
+	var track := maxf(_quad_width(_missing), 0.0001)
+	var centre: float = (_notch.mesh as QuadMesh).center_offset.x
+	return clampf((centre + track * 0.5) / track, 0.0, 1.0)
+
+
+# How much of the track the plan is about to take (or give back), rendered.
+func doomed_fraction() -> float:
+	if not _doomed.visible:
+		return 0.0
+	return _quad_width(_doomed) / maxf(_quad_width(_missing), 0.0001)
+
+
+func alarm_running() -> bool:
+	return _alarm != null
 
 
 func track_texels() -> float:
@@ -146,14 +256,24 @@ func number_text() -> String:
 
 
 func _rebuild() -> void:
+	var signature: Array = [_width, _height, _outline_texels, _fill_color, _missing_color,
+			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
+			_doomed_color, _heal_color, _notch_color, _notch_texels,
+			_current, _maximum, _predicted, _has_prediction]
+	if signature == _drawn:
+		return
+	_drawn = signature
+	_draw()
+
+
+func _draw() -> void:
 	var texel := _texel()
 	var track_w: float = maxf(roundf(_width), 1.0)
 	var bar_h: float = maxf(roundf(_height), 1.0)
 	var edge: float = maxf(roundf(_outline_texels), 0.0)
 	var safe_max := maxi(1, _maximum)
 	var shown := clampi(_current, 0, safe_max)
-	var fraction := float(shown) / float(safe_max)
-	var fill_w := roundf(track_w * fraction)
+	var fill_w := roundf(track_w * (float(shown) / float(safe_max)))
 
 	_size_quad(_outline, (track_w + edge * 2.0) * texel, (bar_h + edge * 2.0) * texel, 0.0)
 	_paint(_outline, OUTLINE_COLOR)
@@ -172,6 +292,9 @@ func _rebuild() -> void:
 	_size_quad(_fill, maxf(fill_w, 1.0) * texel, bar_h * texel, -(track_w - fill_w) * 0.5 * texel)
 	_paint(_fill, _fill_color)
 
+	_draw_prediction(texel, track_w, bar_h, safe_max, fill_w)
+
+	_label.visible = _number_shown
 	if _shows_max:
 		_label.text = "%d/%d" % [shown, safe_max]
 	else:
@@ -188,10 +311,47 @@ func _rebuild() -> void:
 	_label.position = Vector3(-track_w * 0.5 * texel + _gap + half_text, 0.0, texel)
 
 
+# The prediction (#313). The SPAN runs between where the bar is now and where the plan leaves it,
+# so the same two quads say "this much is coming off" and "this much is coming back" — the colour is
+# what names the direction, because the geometry cannot.
+func _draw_prediction(texel: float, track_w: float, bar_h: float, safe_max: int, fill_w: float) -> void:
+	if not _has_prediction:
+		_doomed.visible = false
+		_notch.visible = false
+		return
+	var predicted_w := roundf(track_w * (float(clampi(_predicted, 0, safe_max)) / float(safe_max)))
+	var left: float = minf(fill_w, predicted_w)
+	var right: float = maxf(fill_w, predicted_w)
+
+	_doomed.visible = right - left > 0.0
+	_size_quad(_doomed, maxf(right - left, 1.0) * texel, bar_h * texel,
+			((left + right) * 0.5 - track_w * 0.5) * texel)
+	# The alarm owns this colour while it runs; otherwise the resting one. Reading alarm_color here
+	# rather than skipping the paint keeps _paint the only writer either way.
+	_paint(_doomed, alarm_color if _alarm != null else _segment_color())
+
+	# Kept wholly inside the track: at a predicted 0 or a predicted full, half the marker would
+	# otherwise hang off the end and read as a shorter bar rather than as a mark on this one.
+	var notch_w: float = maxf(roundf(_notch_texels), 1.0)
+	var centre: float = clampf(predicted_w, notch_w * 0.5, track_w - notch_w * 0.5)
+	_notch.visible = true
+	_size_quad(_notch, notch_w * texel, bar_h * texel, (centre - track_w * 0.5) * texel)
+	_paint(_notch, _notch_color)
+
+
+# Losing HP or gaining it — the span is the same shape either way, and only this says which.
+func _segment_color() -> Color:
+	return _heal_color if _has_prediction and _predicted > _current else _doomed_color
+
+
 func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: float) -> void:
 	var mesh := quad.mesh as QuadMesh
 	mesh.size = Vector2(width, height)
 	mesh.center_offset = Vector3(offset_x, 0.0, 0.0)
+
+
+func _quad_width(quad: MeshInstance3D) -> float:
+	return (quad.mesh as QuadMesh).size.x
 
 
 func _paint(quad: MeshInstance3D, color: Color) -> void:
