@@ -91,8 +91,14 @@ func art_top_height() -> float:
 
 
 # Texels from the sprite's ORIGIN to the topmost opaque row. The sprite is centred on `offset`, so
-# its top edge sits at offset.y + height/2 and each transparent row scanned from the top walks that
-# down. Fully transparent art falls back to the top edge rather than collapsing to zero.
+# its top edge sits at offset.y + height/2, and the padding the art carries above its own content
+# walks that down.
+#
+# Where the visible art starts is BoardMirror.opaque_bounds' question, not a new one — it is what
+# plants a billboard prop and what sizes a block mesh, and presentation-effects.md calls it one rule
+# read by both stacks. Asking it here rather than re-scanning also means one alpha threshold: a
+# second scan with its own cutoff would put a unit's head and a prop's base on subtly different
+# rules for no reason anyone could later reconstruct.
 static func _measure_art_top(art: Texture2D, offset_y: float) -> float:
 	var image := art.get_image()
 	if image == null:
@@ -100,12 +106,8 @@ static func _measure_art_top(art: Texture2D, offset_y: float) -> float:
 	if image.is_compressed():
 		image = image.duplicate()
 		image.decompress()
-	var top_edge := offset_y + float(image.get_height()) * 0.5
-	for row in image.get_height():
-		for col in image.get_width():
-			if image.get_pixel(col, row).a > 0.02:
-				return top_edge - float(row)
-	return top_edge
+	var bounds := BoardMirror.opaque_bounds(image, Rect2i(Vector2i.ZERO, image.get_size()))
+	return offset_y + float(image.get_height()) * 0.5 - float(bounds.position.y)
 
 
 static func for_unit_data(data: UnitData) -> UnitSprite3D:
