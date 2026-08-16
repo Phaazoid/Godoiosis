@@ -62,6 +62,18 @@ func _lifted(layer_2d: TileMapLayer) -> Array[Vector3i]:
 	return cells
 
 
+# How many fill quads are lying on something other than level ground -- the VISIBLE consequence of a
+# tilt, read off the live pool rather than off any helper the mirror also uses.
+func _tilted_fills() -> int:
+	var tilted := 0
+	for child in _overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh \
+				and not quad.basis.y.normalized().is_equal_approx(Vector3.UP):
+			tilted += 1
+	return tilted
+
+
 func _sorted_3d(layer: BoardOverlays.Layer) -> Array[Vector3i]:
 	var cells := _overlays.cells_of(layer)
 	cells.sort()
@@ -89,8 +101,8 @@ func _squad_pair() -> Array[Unit]:
 # unit-level cases cannot see it -- they call set_cells themselves.
 #
 # The ramp is painted into the fixture's own hand-built board, so nothing here reads authored
-# content. It is painted BEFORE the mode is entered because _fill diffs on the CELL LIST: a rise
-# added under an already-drawn overlay does not change any cell, so it would not re-push.
+# content. It is painted BEFORE the mode is entered, which is the plain case; the rise-under-a-drawn
+# -fill ordering is #308's, and its own case is below.
 func test_a_fill_over_a_ramp_reaches_the_3d_tilted() -> void:
 	var pair := _squad_pair()
 	var mover: Unit = pair[1]
@@ -116,15 +128,74 @@ func test_a_fill_over_a_ramp_reaches_the_3d_tilted() -> void:
 	assert_bool(still_painted.has(ramp)).override_failure_message(
 			"the ramped cell fell out of range -- nothing tilted would be drawn").is_true()
 
-	var tilted := 0
-	for child in _overlays.get_children():
-		var quad := child as MeshInstance3D
-		if quad != null and quad.visible and quad.mesh is PlaneMesh \
-				and not quad.basis.y.normalized().is_equal_approx(Vector3.UP):
-			tilted += 1
-	assert_int(tilted).override_failure_message(
+	assert_int(_tilted_fills()).override_failure_message(
 			"every fill came through level -- the mirror is not handing its heights to set_cells") \
 		.is_greater(0)
+
+
+# #308: the same wire, driven in the order the dev's elevation brush actually produces. A rise
+# painted onto a cell whose ELEVATION does not change leaves BoardSpace.of_cell's Vector3i identical,
+# so _fill's cell-list diff short-circuits and the quad keeps the tilt it already had. Nothing about
+# the cell list can see this -- only the heights store moving can -- which is why the gate reads
+# BoardHeights.dirty.version rather than folding the rise into the compared value.
+#
+# The mode stays OPEN across the paint on purpose: that is what holds the 2D layer's cells fixed.
+func test_a_rise_painted_under_a_drawn_fill_re_tilts_it() -> void:
+	var pair := _squad_pair()
+	var mover: Unit = pair[1]
+
+	game.enter_move_mode(mover)
+	await _settle()
+	var painted: Array[Vector2i] = _om().move_overlay.get_used_cells()
+	assert_bool(painted.size() > 0).override_failure_message(
+			"nothing painted -- this case cannot see the gate").is_true()
+	assert_int(_tilted_fills()).override_failure_message(
+			"a fill was already tilted before the rise -- the case would pass vacuously").is_equal(0)
+
+	# Elevation stays 0, so the cell list the mirror builds is byte-identical to the one it pushed.
+	painted.sort()
+	game.board_heights.set_cell(painted[0], 0, Terrain.RampRise.EAST)
+	await _settle()
+
+	assert_int(_tilted_fills()).override_failure_message(
+			"the fill is still level -- a rise-only edit never reached set_cells").is_greater(0)
+
+
+# --- Standing states -----------------------------------------------------------------
+
+# #308's second surface. _standing_states diffs on the BURNING/COVER cell lists, and a flame does not
+# lie on its cell -- it stands on it -- so raising the ground moves it while that list holds still.
+# Asserted on the marker's own position against BoardSpace.surface_point, never a pinned number, and
+# on the SAME node, since re-seating a survivor must not become free-and-rebuild.
+func test_raising_the_ground_under_a_flame_re_seats_it() -> void:
+	var ground: Array[Vector2i] = game.grid.get_used_cells()
+	assert_bool(ground.size() > 0).override_failure_message(
+			"the fixture board has no ground; fire cannot be deposited").is_true()
+	ground.sort()
+	var cell: Vector2i = ground[0]
+
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BLAZE])
+	game.terrain_states.apply(effect)
+	await _settle()
+
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var marker := mirror.fire_marker_at(cell)
+	assert_object(marker).override_failure_message(
+			"no flame was ever stood up -- this case cannot see the gate").is_not_null()
+	var before := marker.position
+	var id := marker.get_instance_id()
+
+	game.board_heights.set_cell(cell, 2)
+	await _settle()
+
+	var after := mirror.fire_marker_at(cell)
+	assert_int(after.get_instance_id()).override_failure_message(
+			"the flame was rebuilt rather than re-seated").is_equal(id)
+	assert_vector(after.position).override_failure_message(
+			"the flame is still standing on the old surface").is_not_equal(before)
+	assert_vector(after.position).is_equal(BoardSpace.surface_point(cell, game.board_heights))
 
 
 func test_move_and_invalid_fills_mirror_the_2d_layers() -> void:
