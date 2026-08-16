@@ -429,8 +429,11 @@ const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit marg
 # rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
 # ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
 # #280's tuft scale reddened it a second time, the same day, and is out for the same reason: it is
-# prop geometry, an art convention matched to the tile art once.
-const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height", "Grass tuft scale"]
+# prop geometry, an art convention matched to the tile art once. #326's cover bumps are the third,
+# and by then the rule was doing its job: the exclusion was written and this case reddened anyway,
+# which is precisely the "state it twice" the list exists for.
+const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height", "Grass tuft scale",
+	"Cover bump scale"]
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()

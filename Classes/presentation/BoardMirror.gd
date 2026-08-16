@@ -47,6 +47,12 @@ class_name BoardMirror
 # TerrainStateManager.burning_cells — the one enumeration form (Terrain.gd: "no
 # reader may enumerate fire members itself").
 #
+# COVER cells (#326) stand up the same way, and that is why they live HERE rather than
+# on Layer.TERRAIN with the frost icon: a terrain STATE whose art draws OBJECTS takes
+# fire's route — this mirror owns its 3D form and OverlayMirror keeps only the plan-time
+# preview icon. The bumps themselves are #280's TUFT decomposition (one billboard per
+# drawn cluster, planted where the art puts it), pointed at the state's own icon.
+#
 # BOTH halves are LIVE as of #231, and both reconcile per cell rather than
 # rebuilding. refresh_states() used to be re-read only at a turn boundary — a
 # declared v1 approximation that made mid-pass ignitions late and made a flame
@@ -131,6 +137,11 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # failure that makes a tuning knob worthless.
 @export var tuft_scale := 0.25: set = _set_tuft_scale
 
+# The same, for the mud bumps a Burrow's COVER state stands up (#326). A SECOND knob rather than
+# a shared one, on the lantern-vs-flame rule: cover and grass are different objects drawn at
+# different sizes, so one number would force whoever tunes the second to un-tune the first.
+@export var cover_scale := 0.5: set = _set_cover_scale
+
 var board: GridMap
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
@@ -140,6 +151,11 @@ var sync_passes := 0
 # Keyed by cell, not a flat list: a reconcile has to answer "the marker for X", and the
 # positional array this replaced could only answer it by freeing everything (#149's shape).
 var _fire_markers: Dictionary[Vector2i, Node3D] = {}
+
+# The COVER bumps, keyed the same way and reconciled by the same loop (#326). A second store
+# rather than a state-keyed one: two states that both stand something up would otherwise share a
+# cell key, and a covered tile CAN also be burning.
+var _cover_markers: Dictionary[Vector2i, Node3D] = {}
 
 # The standing props, keyed by cell — the same reconcile shape as the fire markers. Each node
 # carries the TILE it was built from (PROP_TILE_META), because unlike fire a cell's prop can be
@@ -169,10 +185,11 @@ var _item_by_name: Dictionary[String, int] = {}
 var _item_index_built := false
 
 
-func rebuild(grid: TileMapLayer, heights: BoardHeights, burning: Array[Vector2i]) -> void:
+func rebuild(grid: TileMapLayer, heights: BoardHeights, burning: Array[Vector2i],
+		covered: Array[Vector2i]) -> void:
 	board.clear()
 	sync(grid, heights)
-	refresh_states(heights, burning)
+	refresh_states(heights, burning, covered)
 
 
 func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
@@ -268,19 +285,32 @@ func _ramp_orientation(rise: Terrain.RampRise) -> int:
 	return board.get_orthogonal_index_from_basis(Basis(Vector3.UP, angle))
 
 
-# Add what is newly alight, free what went out, LEAVE STANDING what still burns. The last
-# clause is the one with teeth: a marker that is rebuilt every frame looks identical
-# through fire_marker_count(), so the pin is node identity, not the count.
-func refresh_states(heights: BoardHeights, burning: Array[Vector2i]) -> void:
+# Every terrain state that STANDS something on its cell, reconciled in one pass. Both lists are
+# required rather than defaulted: a caller that forgot one would silently erase every marker of
+# that state, which is the failure #318 cost a release.
+func refresh_states(heights: BoardHeights, burning: Array[Vector2i],
+		covered: Array[Vector2i]) -> void:
+	_reconcile_state(_fire_markers, burning, heights, _make_fire)
+	_reconcile_state(_cover_markers, covered, heights, _make_cover)
+
+
+# Add what is newly there, free what went, LEAVE STANDING what remains. The last clause is the
+# one with teeth: a marker that is rebuilt every frame looks identical through the counts below,
+# so the pin is node identity. One loop for every standing state — the invariant is the thing
+# worth having in a single place.
+func _reconcile_state(markers: Dictionary[Vector2i, Node3D], cells: Array[Vector2i],
+		heights: BoardHeights, make: Callable) -> void:
 	var wanted: Dictionary[Vector2i, bool] = {}
-	for cell in burning:
+	for cell in cells:
 		wanted[cell] = true
-		if not _fire_markers.has(cell):
-			_fire_markers[cell] = _make_fire(surface_point(cell, heights))
-	for cell: Vector2i in _fire_markers.keys():
+		if not markers.has(cell):
+			var built: Node3D = make.call(surface_point(cell, heights))
+			if built != null:
+				markers[cell] = built
+	for cell: Vector2i in markers.keys():
 		if not wanted.has(cell):
-			_fire_markers[cell].queue_free()
-			_fire_markers.erase(cell)
+			markers[cell].queue_free()
+			markers.erase(cell)
 
 
 # Which meshlib item draws this cell — the SURFACE question, asked the way the 2D asks it.
@@ -383,6 +413,15 @@ func fire_marker_count() -> int:
 # The flame node standing on a cell, or null. The identity read the persistence pin needs.
 func fire_marker_at(cell: Vector2i) -> Node3D:
 	return _fire_markers.get(cell)
+
+
+func cover_marker_count() -> int:
+	return _cover_markers.size()
+
+
+# The bumps standing on a covered cell, or null — the fire reads' twin.
+func cover_marker_at(cell: Vector2i) -> Node3D:
+	return _cover_markers.get(cell)
 
 
 # Where the flame's CENTRE sits above the tile's top face, clamped so its bottom edge always
@@ -617,34 +656,40 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	add_child(root)
 	root.position = at
 	for rect: Rect2i in clusters:
-		root.add_child(_make_tuft_sprite(sheet, rect))
+		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(),
+				float(GridUtils.TILE_SIZE))
+		sprite.set_meta(TUFT_META, true)
+		root.add_child(sprite)
 	return root
 
 
-# One cluster, standing on the cell at the spot the art draws it.
-func _make_tuft_sprite(sheet: Texture2D, rect: Rect2i) -> Sprite3D:
+# One cluster, standing on the cell at the spot the art draws it — every caller that stands
+# decomposed art up builds its sprites here (a tile's tufts, a COVER state's bumps). The two
+# densities are separate parameters on purpose: `pixel_size` is knob-scaled and sizes the art,
+# `pixels_per_cell` is the art's own metric and places it, so a knob can never move a plant.
+func _make_cluster_sprite(sheet: Texture2D, rect: Rect2i, pixel_size: float,
+		pixels_per_cell: float) -> Sprite3D:
 	var texture := AtlasTexture.new()
 	texture.atlas = sheet
 	texture.region = Rect2(rect)
 
 	var sprite := Sprite3D.new()
 	sprite.texture = texture
-	sprite.set_meta(TUFT_META, true)
 	sprite.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
 	sprite.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	sprite.alpha_cut = SpriteBase3D.ALPHA_CUT_OPAQUE_PREPASS
 	sprite.shaded = true
 	sprite.layers = BoardOverlays.WORLD_RENDER_LAYER
 	sprite.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	sprite.pixel_size = _tuft_pixel_size()
+	sprite.pixel_size = pixel_size
 	sprite.offset = Vector2(0, rect.size.y * 0.5)   # planted at ITS OWN base, per cluster
 
-	# The cluster's FOOT, in tile pixels, placed on the cell: centre column and bottom edge, against
-	# the tile's own centre. A tile is one cell wide by definition, so a pixel is 1/TILE_SIZE of a
-	# cell — the same density pixel_size uses, and the reason the two cannot disagree.
-	var half := float(GridUtils.TILE_SIZE) * 0.5
+	# The cluster's FOOT, in art pixels, placed on the cell: centre column and bottom edge, against
+	# the art's own centre. The art covers exactly one cell by definition, so a pixel is
+	# 1/pixels_per_cell of it — the density the unscaled sprite would draw at.
+	var half := pixels_per_cell * 0.5
 	var foot := Vector2(rect.position.x + rect.size.x * 0.5, float(rect.end.y))
-	sprite.position = Vector3((foot.x - half), 0.0, (foot.y - half)) / float(GridUtils.TILE_SIZE)
+	sprite.position = Vector3((foot.x - half), 0.0, (foot.y - half)) / pixels_per_cell
 	return sprite
 
 
@@ -665,6 +710,85 @@ func _set_tuft_scale(value: float) -> void:
 			var sprite := child as Sprite3D
 			if sprite != null and sprite.has_meta(TUFT_META):
 				sprite.pixel_size = _tuft_pixel_size()
+
+
+# --- COVER (#326) -------------------------------------------------------------------------------
+#
+# The dev's ask, from the scratchpad and again in play: cover should pop up as THREE MUD BUMPS,
+# not as the whole icon rotating vertical. That is #280's tuft decomposition exactly — the icon
+# is drawn top-down, so a bump's y inside it is DEPTH INTO THE CELL and each cluster stands at its
+# own place — pointed at a runtime state's icon instead of a baked tile.
+#
+# It does NOT key a background out, and that is the one real difference: a tile is opaque ground
+# with things drawn on it, so the ground has to be measured and removed, while an icon already
+# carries its own alpha. Clustering runs on what is drawn either way.
+const COVER_ICON_MIN_CLUSTERS := 2
+
+# One decomposition for the whole board — cover art is fixed, unlike a tuft's per-tile answer.
+var _cover_art: Dictionary = {}
+var _cover_art_built := false
+
+
+# The bumps standing on a covered cell: a root on the surface with one billboard per drawn cluster.
+# No light and no shadow, for the tufts' reasons.
+func _make_cover(at: Vector3) -> Node3D:
+	var art := _cover_bumps()
+	var clusters: Array[Rect2i] = art.get("clusters", [] as Array[Rect2i])
+	var sheet: Texture2D = art.get("texture")
+	if sheet == null or clusters.is_empty():
+		return null
+
+	var root := Node3D.new()
+	add_child(root)
+	root.position = at
+	for rect: Rect2i in clusters:
+		root.add_child(_make_cluster_sprite(sheet, rect, _cover_pixel_size(),
+				BoardOverlays.ART_PIXELS_PER_CELL))
+	return root
+
+
+# The cover icon and the bumps drawn in it. The TEXTURE is the 2D's own icon — one answer to
+# "what does cover look like", so a re-drawn icon reaches both views — and the clusters are read
+# off its decoded image.
+func _cover_bumps() -> Dictionary:
+	if _cover_art_built:
+		return _cover_art
+	_cover_art_built = true
+	var icon: Texture2D = OverlayManager.TERRAIN_STATE_ICONS.get(Terrain.TileState.COVER)
+	if icon == null:
+		return _cover_art
+	var image := icon.get_image()
+	if image == null:
+		return _cover_art
+	if image.is_compressed():
+		image.decompress()
+	if image.get_format() != Image.FORMAT_RGBA8:
+		image.convert(Image.FORMAT_RGBA8)
+	var clusters := _clusters_of(image)
+	if clusters.size() < COVER_ICON_MIN_CLUSTERS:
+		# The art stopped answering "several bumps" — one popped sprite of the whole icon is the
+		# thing this exists to avoid, so say so rather than shipping it.
+		push_warning("Cover icon decomposes into %d cluster(s): the bumps are touching (#326)"
+				% clusters.size())
+	_cover_art = {"texture": icon, "clusters": clusters}
+	return _cover_art
+
+
+# How many world units one icon pixel covers. The ICON's metric, not the tileset's: cover is
+# markup art, and BoardOverlays already declares that a 16px texture covers one cell.
+func _cover_pixel_size() -> float:
+	return cover_scale / BoardOverlays.ART_PIXELS_PER_CELL
+
+
+# Re-size every standing bump — what makes cover_scale a live knob. Every child of a cover marker
+# IS a bump, so this needs no mark of its own, unlike the tufts sharing the props tree.
+func _set_cover_scale(value: float) -> void:
+	cover_scale = value
+	for root: Node3D in _cover_markers.values():
+		for child in root.get_children():
+			var sprite := child as Sprite3D
+			if sprite != null:
+				sprite.pixel_size = _cover_pixel_size()
 
 
 # This tile's tuft art: {"texture": the tile with its background keyed out, "clusters": each

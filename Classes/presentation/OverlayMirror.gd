@@ -37,6 +37,7 @@ var _last_cells: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_markers: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_ghosts: Array[Dictionary] = []
 var _last_fire: Array[Vector2i] = []
+var _last_cover: Array[Vector2i] = []
 var _pick_texture: Texture2D   # the (3,0) "pick this unit" tile art, cut lazily
 
 
@@ -71,23 +72,26 @@ func _process(_delta: float) -> void:
 	_icons(om)
 	_terrain(om)
 	_ghost_sync(om, kb_ghosts)
-	_fire()
+	_standing_states()
 
 
-# Which cells are alight, straight off the ONE enumeration form. Polled rather than wired
-# because a states_changed signal would fire inside the resolver's per-effect loop and
-# churn markers many times within a single pass; the poll coalesces a frame into one
+# Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled
+# rather than wired because a states_changed signal would fire inside the resolver's per-effect
+# loop and churn markers many times within a single pass; the poll coalesces a frame into one
 # reconcile, and covers the sim, the dev brush, tick_states and load alike (#231).
-func _fire() -> void:
+func _standing_states() -> void:
 	if board_mirror == null:
 		return
 	var burning: Array[Vector2i] = game.terrain_states.burning_cells()
 	burning.sort()
-	if _last_fire == burning:
+	var covered: Array[Vector2i] = game.terrain_states.cells_with(Terrain.TileState.COVER)
+	covered.sort()
+	if _last_fire == burning and _last_cover == covered:
 		return
 	_last_fire = burning
+	_last_cover = covered
 	var heights: BoardHeights = game.board_heights
-	board_mirror.refresh_states(heights, burning)
+	board_mirror.refresh_states(heights, burning, covered)
 
 
 # --- Fills -------------------------------------------------------------------------
@@ -216,15 +220,23 @@ func _icons(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.ICONS, entries)
 
 
-# Terrain live icons (FROZEN / COVER) + plan-time preview ghosts. Fire is skipped on
-# the LIVE channel — BoardMirror's flame + light IS fire's 3D form (#174: one Fire
-# texture covers BURNING and BLAZE) — but kept on the PREVIEW channel, where no 3D
-# flame preview exists and the ghosted icon is the only warning.
+# Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is
+# skipped on the LIVE channel, because BoardMirror stands its 3D form on the cell: the flame +
+# light IS fire (#174: one Fire texture covers BURNING and BLAZE), and the mud bumps ARE cover
+# (#326). Both are kept on the PREVIEW channel, where no 3D preview exists and the ghosted icon
+# is the only warning a queued Burrow or ignite gets. FROZEN is genuinely flat and stays here.
+const STANDING_STATES: Array[Terrain.TileState] = [
+	Terrain.TileState.BURNING, Terrain.TileState.COVER,
+]
+
+
 func _terrain(om: OverlayManager) -> void:
-	var fire: Texture2D = OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.BURNING]
+	var standing: Array[Texture2D] = []
+	for state in STANDING_STATES:
+		standing.append(OverlayManager.TERRAIN_STATE_ICONS[state])
 	var live: Array[Dictionary] = []
 	for sprite in om.terrain_live_sprites:
-		if not is_instance_valid(sprite) or sprite.texture == fire:
+		if not is_instance_valid(sprite) or standing.has(sprite.texture):
 			continue
 		live.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.TERRAIN, live)

@@ -401,28 +401,36 @@ func test_the_2d_zone_layers_stay_dark_in_3d_while_the_mirror_draws_them() -> vo
 			"the 2D zone layer never came back in the flat view").is_true()
 
 
-func test_terrain_icons_mirror_with_the_fire_exception() -> void:
+func test_terrain_icons_mirror_with_the_standing_state_exception() -> void:
 	game.terrain_states.load_state_dict({
 		Vector2i(1, 1): [Terrain.TileState.FROZEN],
 		Vector2i(2, 1): [Terrain.TileState.BURNING],
+		Vector2i(4, 1): [Terrain.TileState.COVER],
 	})
 	_om().redraw_terrain_live(game.terrain_states)
 	await _settle()
-	# FROZEN mirrors as an icon; fire does NOT — BoardMirror's flame + light IS
-	# fire's 3D form (#174: one Fire texture covers BURNING and BLAZE).
+	# FROZEN mirrors as a flat icon; a state whose art draws OBJECTS does NOT — BoardMirror
+	# stands its 3D form on the cell instead (the flame + light IS fire, #174: one Fire texture
+	# covers BURNING and BLAZE; the mud bumps ARE cover, #326).
 	var fire: Texture2D = OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.BURNING]
 	var ice: Texture2D = OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.FROZEN]
 	var live := _overlays.markers_of(BoardOverlays.Layer.TERRAIN)
-	assert_int(live.size()).is_equal(1)
+	assert_int(live.size()).override_failure_message(
+			"a state with a standing 3D form is also lying flat on the tile").is_equal(1)
 	assert_that(live[0]["texture"]).is_equal(ice)
-	# The PREVIEW keeps its fire: a pending ignite has no 3D flame preview, so the
-	# ghosted icon is the only warning the player gets.
-	_om().show_terrain_preview([{"cell": Vector2i(3, 1), "state": Terrain.TileState.BURNING}])
+	# The PREVIEW keeps both: a pending ignite or Burrow has no 3D preview, so the ghosted
+	# icon is the only warning the player gets.
+	_om().show_terrain_preview([
+		{"cell": Vector2i(3, 1), "state": Terrain.TileState.BURNING},
+		{"cell": Vector2i(5, 1), "state": Terrain.TileState.COVER},
+	])
 	await _settle()
 	var preview := _overlays.markers_of(BoardOverlays.Layer.TERRAIN_PREVIEW)
-	assert_int(preview.size()).is_equal(1)
+	assert_int(preview.size()).is_equal(2)
 	assert_that(preview[0]["texture"]).is_equal(fire)
 	assert_that(preview[0]["modulate"]).is_equal(OverlayManager.TERRAIN_PREVIEW_MODULATE)
+	assert_that(preview[1]["texture"]).is_equal(
+			OverlayManager.TERRAIN_STATE_ICONS[Terrain.TileState.COVER])
 
 
 func test_exit_current_mode_clears_the_mirrored_layers() -> void:
