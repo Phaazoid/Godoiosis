@@ -92,10 +92,14 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 # geometry (volumetric -- crates, rocks, barrels). The split is the dev's measured ruling on #255:
 # "anything that's thin already works in this style"; blocky things "really want to be textures on
 # a 3D model". PLANE is #263's oriented plane -- thin but DIRECTIONAL, a fence -- and it says only
-# the FORM; which way it runs is the separate wall_edges question below.
+# the FORM; which way it runs is the separate wall_edges question below. TUFT is #280's: WALKABLE
+# GROUND with things growing on it -- flowers, a weed -- each standing up individually. It is the
+# one shape whose cell keeps a ground face of its own rather than the bare kind base: the generator
+# fills it with a speckle in the tile's own colours, because the plants were cut out of that tile
+# and the kind base is a different green.
 #
 # APPEND-ONLY: the values are persisted in the tileset.
-enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE }
+enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE, TUFT }
 
 # Which shapes are real geometry rather than a sprite. Declared as a set so the renderer and the
 # meshlib generator agree on what needs a mesh built for it, and adding a member is one line.

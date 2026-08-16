@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #303 (2026-08-15).**
+**Canon checked through #308 (2026-08-15).**
 
 ---
 
@@ -92,17 +92,45 @@ Two Tier-1/2 ideas below change *what art gets ordered*, so they are experiments
 
 Stage 5b stood every object-shaped tile up as a billboard and the dev judged the result: *"most of it looks awful… things that are supposed to be blocky, like the chest and the crates, look so odd like this, they really want to be textures on a 3D model. The fences don't work at all. The lamps, surprisingly, are fine. I think **anything that's thin already works in this style**."*
 
-That sentence is the convention, and it is the same split Octopath uses (billboarded foliage and lampposts; real geometry for crates, walls and buildings). **A prop therefore has three possible forms, and which one it is belongs to the ART, decided when it is drawn:**
+That sentence is the convention, and it is the same split Octopath uses (billboarded foliage and lampposts; real geometry for crates, walls and buildings). **A prop therefore has four possible forms, and which one it is belongs to the ART, decided when it is drawn:**
 
 | Form | What it is | Renders as | Art it needs |
 |---|---|---|---|
-| **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, grass, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
+| **Billboard** | thin, roughly symmetric about its vertical axis — lamps, trees, banners | camera-facing sprite, pivot at the base | one front-on sprite (what a tilesheet already gives) |
 | **Oriented plane** | thin but DIRECTIONAL — fences, railings, low walls | thin slab, run authored per piece | one front-on sprite **plus a facing** |
 | **Block** | volumetric — crates, chests, rocks, barrels | real geometry standing on the ground block | a **top** texture and a **side** texture, minimum |
+| **Tuft** | ground WITH things growing on it — flowers, weeds | one small camera-facing sprite **per plant the art draws**, over a generated speckle in the tile's own colours | the ground tile itself, nothing more |
 
-**The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam; `PLANE` is #263's oriented plane.
+**The form is ONE authored column, `prop_shape` on the tileset** (`GridUtils.PropShape`, read by `BoardMirror` and by `gen_lookdev_assets.gd`). It began as #255's `stands_up` bool and was widened by #264 rather than joined by a second column: a tile's shape and whether it stands up are one question, and two answers to it can disagree. `FLAT` is the ground itself; `BILLBOARD` is the thin form; `CUBE` / `FACETED` / `ROUND` are the block form, with the member naming the solid so a crate and a boulder differ without a second seam; `PLANE` is #263's oriented plane; `TUFT` is #280's.
 
-**All three forms are shipped: billboards (#255), blocks (#264), oriented planes (#263).**
+**All four forms are shipped: billboards (#255), blocks (#264), oriented planes (#263), tufts (#280).**
+
+#### A TUFT splits "does it stand up" from "does its art leave the ground" (#280, 2026-08-15)
+
+The dev's ask was *"I want grass to pop up a bit as well, have a tiny bit of 3D presence, similar to unit sprites… flowers and clover… on their respective tiles."*
+
+**A cell's top face has THREE possible answers, and a tuft is what forced the third.** The meshlib generator bakes a FLAT tile's own art, and a standing prop's face as the bare kind base — the ground it stands on, so a tree is drawn once rather than also lying flat under itself. A tuft is a prop by that rule, but the kind base is the wrong ground for it: those bases are the Stage-0 generated set (grass is a muted olive) while the sheet's grass is a bright green, so a tuft cell would read as a *patch* among its neighbours. So a tuft's face is **generated from the tile itself** — its own field colour, sparsely speckled in its own other colours. Same technique as a prop's generated faces (#274), same rule that only measured colours are worn, and it needs no *"which tile is this one's base?"* relationship.
+
+*(A first pass instead kept a tuft's whole art baked, on the theory that a tuft is still ground — the dev's feel-check killed it in one line: drawing the flowers flat AND standing them up "looks very silly", which is #255's double-render in miniature. The predicate that split had introduced was deleted with it.)*
+
+#### A tuft is ONE SPRITE PER PLANT, because a top-down tile's y is DEPTH
+
+The first build stood the whole tile up as one quad, and the dev's feel-check found two things wrong with it at once — one obvious and one structural.
+
+The obvious one: **the green behind the flowers stood up with them**, so the board grew squares with pictures of flowers on them. The fix is to key the background out, and the reason it does not need the *which tile is this one's base?* relationship the form ruling above avoids is that **the background is the tile's own most common colour**, measured — which holds by construction for a tuft, since ground with something on it is mostly ground (76–96% across the authored tiles, and the same flat green `grass_basic` is 100% made of). `BoardMirror.background_colour` is that one answer and both stacks call it: the mirror keys the colour OUT to cut the plants, the generator FILLS the cell's face with it, so the plants cannot end up standing on a field they were not cut from. **A veto on a mechanism is not a veto on the outcome** — masking was rejected at design time for needing a base tile, and the same result came back out of the tile alone.
+
+The structural one is the keeper. **A ground tile is drawn TOP-DOWN, so a flower's y inside it is depth into the cell, not height.** Standing the rectangle up silently converts every depth into an altitude: two flowers drawn at different depths come out one above the other, with the lower one hanging in the air. *This is the same reading error #263 made with the foreshortened `fence_ver` pieces, and it is worth stating as a general rule — **before standing any ground art up, ask what its vertical axis MEANS.***
+
+So a tuft decomposes its tile: background keyed out, what remains split into connected clusters, and **each cluster stands up at its own place in the cell** — x from its centre column, z from its **bottom row**, because in a top-down drawing the lowest drawn pixel is where the plant meets the ground. Each is planted on its own base, so every plant touches the tile.
+
+Two consequences worth knowing:
+
+- **Only clusters above `BoardMirror.TUFT_MIN_CLUSTER_PIXELS` stand up**, and the threshold is measured rather than picked: the shipped sheet's clusters are 2-px specks or 23-px-plus objects with nothing in between. A speck loses nothing by staying flat, because the tile keeps its full bake — it is still drawn, just not duplicated. Standing every speck up as well is [#311](https://github.com/Phaazoid/Godoiosis/issues/311), and needs one mesh per cell plus a per-quad billboard to stay affordable, because a whole-mesh billboard would swing the plants around the cell centre as the camera orbits.
+- **`grass_clover` is not a tuft**, and that is the art's own answer rather than a design call: its content is five 2-pixel dots. It is grass speckle, not clover.
+
+`BoardMirror.tuft_scale` is the Look-tab knob — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile changes.
+
+**Tufts are the one prop form that casts no shadow**, and that is a count rather than a look call: `Prolog` paints over a thousand tuft cells against a dozen lamps and trees.
 
 #### The facing is a SET OF EDGES, and it is a second column (#263, 2026-08-15)
 

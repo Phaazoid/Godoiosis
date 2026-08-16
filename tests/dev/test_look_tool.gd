@@ -424,11 +424,13 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 # most likely to widen this quietly. Everything is scene mood by default; the three carve-outs
 # below are the dev's, and changing one has to change this list too, i.e. has to be noticed.
 const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit margin (cells)"]
-# The Effects group is flame plus two things that are not mood at all. This list earned its keep
+# The Effects group is flame plus three things that are not mood at all. This list earned its keep
 # immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
 # rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
 # ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
-const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height"]
+# #280's tuft scale reddened it a second time, the same day, and is out for the same reason: it is
+# prop geometry, an art convention matched to the tile art once.
+const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height", "Grass tuft scale"]
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
