@@ -270,6 +270,26 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	var material := quad.material_override as StandardMaterial3D
 	material.albedo_texture = texture
 	material.albedo_color = tint
+	_apply_atlas_uv(material, texture)
+
+
+# A 3D material samples the WHOLE image behind an AtlasTexture -- a region is a 2D-only notion --
+# so a cut from a multi-tile sheet arrives as the entire sheet squeezed into one cell (#316). The
+# region is re-expressed as UVs here. The RESET on the plain-texture path is the load-bearing
+# half: the marker nodes are pooled, so a quad that drew a cut would keep those UVs over its next
+# art. Sprite3D is not affected -- it reads the region itself -- so BILLBOARD needs none of this.
+func _apply_atlas_uv(material: StandardMaterial3D, texture: Texture2D) -> void:
+	var cut := texture as AtlasTexture
+	var sheet := Vector2.ZERO
+	if cut != null and cut.atlas != null:
+		sheet = cut.atlas.get_size()
+	if sheet.x <= 0.0 or sheet.y <= 0.0:
+		material.uv1_scale = Vector3.ONE
+		material.uv1_offset = Vector3.ZERO
+		return
+	var region: Rect2 = cut.region
+	material.uv1_scale = Vector3(region.size.x / sheet.x, region.size.y / sheet.y, 1.0)
+	material.uv1_offset = Vector3(region.position.x / sheet.x, region.position.y / sheet.y, 0.0)
 
 
 func _make_marker(layer: Layer) -> Node3D:
