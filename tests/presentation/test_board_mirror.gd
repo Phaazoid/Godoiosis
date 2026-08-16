@@ -547,7 +547,7 @@ func test_a_prop_cell_bakes_ground_not_the_prop() -> void:
 	# this case used until #264) therefore cannot match its art even when the bug is present:
 	# measured by falsification, a mutant that baked every prop's art passed against it. Picking the
 	# most opaque standing tile off the tileset keeps that true through an atlas swap.
-	var prop := _most_opaque_standing_tile(source, art)
+	var prop := _most_opaque_tile_baked_as_bare_ground(source, art)
 	assert_bool(not prop.is_empty()).override_failure_message("no standing tile; the case is vacuous").is_true()
 	assert_int(prop.clear).override_failure_message(
 			"the most opaque standing tile still has %s see-through pixels — this case cannot tell a " \
@@ -575,25 +575,40 @@ func _baked_atlas(board: GridMap) -> Image:
 	return material.albedo_texture.get_image()
 
 
-# The standing tile with the fewest see-through pixels, and how many it has. Measured rather than
-# named, so the case above states its own precondition instead of trusting a tile to stay opaque.
-func _most_opaque_standing_tile(source: TileSetAtlasSource, art: Image) -> Dictionary:
+# The tile baked as BARE GROUND with the fewest see-through pixels, and how many it has. Measured
+# rather than named, so the case above states its own precondition instead of trusting a tile to
+# stay opaque.
+#
+# TUFT is excluded, and inline rather than behind a predicate because this is the only caller that
+# wants the distinction: a tuft stands up like a prop but its top face is SPECKLED rather than left
+# as the kind base (#280), and being 100% opaque grass it would otherwise win this search and quietly
+# move the case off the props it is about.
+func _most_opaque_tile_baked_as_bare_ground(source: TileSetAtlasSource, art: Image) -> Dictionary:
 	var best: Dictionary = {}
 	for i in source.get_tiles_count():
 		var coords := source.get_tile_id(i)
 		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if not GridUtils.stands_up_of(source.get_tile_data(coords, 0)):
+		var data := source.get_tile_data(coords, 0)
+		if not GridUtils.stands_up_of(data) \
+				or GridUtils.prop_shape_of(data) == GridUtils.PropShape.TUFT:
 			continue
-		var region := source.get_tile_texture_region(coords, 0)
-		var clear := 0
-		for y in range(region.position.y, region.end.y):
-			for x in range(region.position.x, region.end.x):
-				if art.get_pixel(x, y).a < 1.0:
-					clear += 1
+		var clear := _clear_pixels(art, source.get_tile_texture_region(coords, 0))
 		if best.is_empty() or clear < int(best.clear):
 			best = {"coords": coords, "clear": clear}
 	return best
+
+
+# How many pixels of a region are not fully opaque. The measurement both bake cases state their own
+# precondition with: a see-through tile is blended over its kind base, so its baked region differs
+# from its art whatever the code does.
+func _clear_pixels(art: Image, region: Rect2i) -> int:
+	var clear := 0
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			if art.get_pixel(x, y).a < 1.0:
+				clear += 1
+	return clear
 
 
 func _regions_match(a: Image, b: Image, region: Rect2i) -> bool:
@@ -1278,6 +1293,237 @@ func test_every_plane_tile_declares_which_way_it_runs() -> void:
 		checked += 1
 	assert_int(checked).override_failure_message(
 			"no PLANE tiles authored; the case is vacuous").is_greater(0)
+
+
+# --- #280: grass tufts -------------------------------------------------------------------------
+
+# A tuft's cell bakes GROUND, not its own plants — the dev's feel-check: drawing the flowers flat as
+# well as standing them up "looks very silly", which is #255's double-render in miniature. But it
+# cannot bake the bare KIND BASE either, because that base is a muted olive while the sheet's grass
+# is a bright green, so the cell would read as a patch among its neighbours. Three things, and the
+# middle one is the whole reason a tuft's ground is generated rather than left alone:
+#   * the plants are gone       — the baked region does not match the tile's art
+#   * it still looks like this tile's grass — its most common colour is the tile's OWN field colour,
+#     the same one BoardMirror keys out to cut the plants, so the plants stand on what they came from
+#   * it is not a flat mat      — more than one colour, i.e. actually speckled
+#
+# The opacity precondition is what gives the first comparison teeth: a see-through tile is blended
+# over its kind base, so its regions would differ no matter what the code did (measured on #264).
+func test_a_tuft_bakes_speckled_ground_and_not_its_own_plants() -> void:
+	var board := _scene.get_node("Board") as GridMap
+	var tiles: TileSet = _game.grid.tile_set
+	var baked := _baked_atlas(board)
+	assert_object(baked).override_failure_message("the meshlib carries no baked atlas").is_not_null()
+
+	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
+	assert_bool(not tufts.is_empty()).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_true()
+	for entry in tufts:
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var art := _readable(source.texture)
+		var region := source.get_tile_texture_region(entry.coords, 0)
+		var name: String = GridUtils.authored_tile_display_name(source.get_tile_data(entry.coords, 0))
+		assert_int(_clear_pixels(art, region)).override_failure_message(
+				"'%s' has see-through pixels, so its bake shows the kind base through them — this case " \
+				% [name] + "cannot tell a baked tuft from a based one").is_equal(0)
+		assert_bool(_regions_match(baked, art, region)).override_failure_message(
+				"'%s' bakes its own plants onto the ground as well as standing them up — the cell shows " \
+				% [name] + "the flowers twice").is_false()
+		var field := BoardMirror.background_colour(art, region)
+		assert_bool(BoardMirror.background_colour(baked, region) == field).override_failure_message(
+				"'%s' bakes a ground whose field colour is %s, not the tile's own %s — its plants stand " \
+				% [name, BoardMirror.background_colour(baked, region), field] \
+				+ "on a patch that does not match the grass they were cut out of").is_true()
+		assert_int(_distinct_colours(baked, region).size()).override_failure_message(
+				"'%s' bakes a flat mat of one colour — nothing was speckled onto it" % [name]) \
+				.is_greater(1)
+
+
+# EVERY plant on the tile stands on the tile. This is the case the first build got wrong and the
+# dev caught by eye: the art is a TOP-DOWN tile, so a flower's y inside it is DEPTH, and standing
+# the whole rectangle up turned each depth into an altitude — two flowers drawn at different depths
+# came out one above the other with the lower one hanging in the air.
+#
+# Stated over ALL of a tuft's sprites rather than the first, because one plant landing right is
+# exactly what the bug looked like. Measured off each sprite's own AABB, so no tuning of the scale
+# can move it (#279's planting rule, restated for quads whose size is a live knob).
+func test_every_plant_in_a_tuft_stands_on_the_tile_and_faces_the_camera() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant; this case cannot see the depth-as-height bug " \
+			+ "and would pass against it").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, richest.source, richest.coords)
+	await _settle()
+
+	var root := mirror.prop_at(cell)
+	assert_object(root).override_failure_message(
+			"a TUFT tile stood nothing up — its flowers are still lying flat in the ground").is_not_null()
+	var surface: float = mirror.surface_point(cell, _game.board_heights).y
+	var feet: Array[Vector2] = []
+	for child in root.get_children():
+		var sprite := child as Sprite3D
+		assert_object(sprite).override_failure_message(
+				"a TUFT built geometry instead of a sprite — a tuft is thin, and a solid one cannot " \
+				+ "face the camera").is_not_null()
+		assert_int(sprite.billboard).override_failure_message(
+				"a tuft that does not billboard shows its edge as the camera orbits").is_equal(
+				BaseMaterial3D.BILLBOARD_FIXED_Y)
+		assert_float(root.position.y + sprite.position.y + sprite.get_aabb().position.y) \
+				.override_failure_message("a plant on this tuft has its bottom edge at %s instead of the " \
+				% [root.position.y + sprite.position.y + sprite.get_aabb().position.y] \
+				+ "cell surface — its depth in the tile is being read as height") \
+				.is_equal_approx(surface, 0.001)
+		feet.append(Vector2(sprite.position.x, sprite.position.z))
+
+	# ...and they are not all in the same spot, which is the other half: planting them all correctly
+	# at the cell centre would satisfy every assert above and still be one stack of flowers.
+	assert_int(feet.size()).override_failure_message(
+			"the tile draws several plants but only %d stood up" % [feet.size()]).is_greater(1)
+	for i in feet.size():
+		for j in range(i + 1, feet.size()):
+			assert_bool(feet[i].distance_to(feet[j]) > 0.001).override_failure_message(
+					"two plants stand at the same spot %s — the art's own positions are being " \
+					% [feet[i]] + "discarded").is_true()
+
+
+# THE decomposition, asserted against a SECOND implementation of it written here — the same
+# discipline _opaque_bounds uses, so the case can disagree with the mirror rather than agree with
+# it by construction. Derived from the art, never from a pinned count, per the content razor: the
+# sheet may be re-drawn or swapped and this still states the rule.
+func test_a_tuft_stands_up_one_plant_per_cluster_the_art_draws() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var tiles: TileSet = _game.grid.tile_set
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var checked := 0
+	for entry in _tiles_with_shape(GridUtils.PropShape.TUFT):
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var wanted := _drawn_clusters(_readable(source.texture),
+				source.get_tile_texture_region(entry.coords, 0))
+		var cell: Vector2i = cells[checked]
+		_game.grid.set_cell(cell, entry.source, entry.coords)
+		await _settle()
+
+		var root := mirror.prop_at(cell)
+		var stood := 0 if root == null else root.get_child_count()
+		assert_int(stood).override_failure_message(
+				"'%s' draws %d cluster(s) big enough to stand up and produced %d sprite(s) — the tile " \
+				% [GridUtils.authored_tile_display_name(source.get_tile_data(entry.coords, 0)),
+				wanted, stood] + "is not being decomposed into the things drawn on it") \
+				.is_equal(wanted)
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_greater(0)
+
+
+# The TUFT tile whose art draws the most separate plants, or {} if none draws more than one.
+func _richest_tuft_tile() -> Dictionary:
+	var tiles: TileSet = _game.grid.tile_set
+	var best: Dictionary = {}
+	var most := 1
+	for entry in _tiles_with_shape(GridUtils.PropShape.TUFT):
+		var source := tiles.get_source(entry.source) as TileSetAtlasSource
+		var found := _drawn_clusters(_readable(source.texture),
+				source.get_tile_texture_region(entry.coords, 0))
+		if found > most:
+			most = found
+			best = entry
+	return best
+
+
+# How many stand-up-able clusters this tile's art holds — the suite's own decomposition, written
+# independently of BoardMirror's. It reads the SIZE THRESHOLD from the mirror on purpose (that
+# const is the rule, not the thing under test) but finds the background and walks the pixels itself.
+func _drawn_clusters(art: Image, region: Rect2i) -> int:
+	var counts: Dictionary[Color, int] = {}
+	var ground := Color(0, 0, 0, 0)
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var c := art.get_pixel(x, y)
+			counts[c] = counts.get(c, 0) + 1
+			if counts[c] > counts.get(ground, 0):
+				ground = c
+
+	var found := 0
+	var seen: Dictionary[Vector2i, bool] = {}
+	for y in range(region.position.y, region.end.y):
+		for x in range(region.position.x, region.end.x):
+			var start := Vector2i(x, y)
+			if seen.has(start) or art.get_pixel(x, y) == ground:
+				continue
+			seen[start] = true
+			var queue: Array[Vector2i] = [start]
+			var drawn := 0
+			while not queue.is_empty():
+				var p: Vector2i = queue.pop_back()
+				drawn += 1
+				for dy: int in [-1, 0, 1]:
+					for dx: int in [-1, 0, 1]:
+						var n := p + Vector2i(dx, dy)
+						if not region.has_point(n) or seen.has(n) or art.get_pixel(n.x, n.y) == ground:
+							continue
+						seen[n] = true
+						queue.push_back(n)
+			if drawn >= BoardMirror.TUFT_MIN_CLUSTER_PIXELS:
+				found += 1
+	return found
+
+
+# The KNOB is a wire, and this is the case that fires it. A tuft is a runtime Sprite3D, so unlike
+# the baked block props its size can be found by eye in play — but only if the setter reaches the
+# tufts that are ALREADY standing: props reconcile when their tile changes and sync() runs in
+# DEV_MODE alone, so a build-time-only read gives a slider that moves and changes nothing.
+#
+# Two values, both DERIVED from the knob, so nothing here pins a feel number and any scale the dev
+# settles on keeps the case green. The identity assert inside the loop is the case's guard against
+# going blind: a REBUILT tuft would pick the new scale up at build time and pass against exactly
+# the bug this exists for, so the sprite being measured has to be the one that was already standing.
+func test_the_tuft_knob_resizes_a_tuft_that_is_already_standing() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var tufts := _tiles_with_shape(GridUtils.PropShape.TUFT)
+	assert_bool(not tufts.is_empty()).override_failure_message(
+			"no TUFT tiles authored; the case is vacuous").is_true()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.set_cell(cell, tufts[0].source, tufts[0].coords)
+	await _settle()
+	var root := mirror.prop_at(cell)
+	var sprite := root.get_child(0) as Sprite3D
+	assert_object(sprite).override_failure_message("a TUFT tile stood no sprite up").is_not_null()
+
+	var art_height := float(sprite.texture.region.size.y)
+	var surface: float = mirror.surface_point(cell, _game.board_heights).y
+	var foot_at_default := Vector2(sprite.position.x, sprite.position.z).length()
+	for wanted: float in [0.2, 0.8]:
+		mirror.tuft_scale = wanted
+		# SpriteBase3D rebuilds its quad DEFERRED, so its AABB is a frame behind the write.
+		await await_idle_frame()
+		assert_object(mirror.prop_at(cell).get_child(0)).override_failure_message(
+				"the tuft was rebuilt between the write and the read — a rebuilt one picks the new " \
+				+ "scale up at build time, so this case can no longer see the bug it exists for" \
+				).is_same(sprite)
+		assert_float(sprite.get_aabb().size.y).override_failure_message(
+				"at tuft_scale %s the standing tuft is %s tall, not %s — the knob does not reach a tuft " \
+				% [wanted, sprite.get_aabb().size.y, art_height * wanted / GridUtils.TILE_SIZE] \
+				+ "that is already built, so tuning it does nothing until the cell is repainted") \
+				.is_equal_approx(art_height * wanted / GridUtils.TILE_SIZE, 0.001)
+		assert_float(root.position.y + sprite.position.y + sprite.get_aabb().position.y) \
+				.override_failure_message("resizing the tuft lifted it off its tile — the scale has to " \
+				+ "shrink each plant TOWARD the ground it stands on").is_equal_approx(surface, 0.001)
+		assert_float(Vector2(sprite.position.x, sprite.position.z).length()).override_failure_message(
+				"the knob moved the plant's place in the cell — scale is a size, and where a flower " \
+				+ "grows is not a matter of taste").is_equal_approx(foot_at_default, 0.001)
 
 # ---- the brush ghost at height (#285) ----
 #
