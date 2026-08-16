@@ -37,3 +37,4 @@ Thumbs.db
 # Wrangler CLI local cache (#131 report-worker) - not build output, and wrangler-account.json
 # carries the Cloudflare account id + owner email, which a public repo should not publish.
 tools/report-worker/.wrangler/
+/git flow.txt
