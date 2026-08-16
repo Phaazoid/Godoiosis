@@ -27,6 +27,14 @@ func _overlays() -> BoardOverlays:
 	return _scene.get_node("BoardOverlays") as BoardOverlays
 
 
+# The sink deliberately has no whole-board wipe (#318): its layers are partitioned by writer, so
+# emptying all of them is always one writer reaching across that line. A sweep over every visible
+# quad still needs isolation, and arranging that is this suite's own business, not the sink's.
+func _empty_every_layer(overlays: BoardOverlays) -> void:
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS.keys():
+		overlays.clear(layer)
+
+
 # --- Bracket tinting (#245) ---------------------------------------------------------
 
 func test_a_bracket_layer_can_be_recoloured_at_runtime() -> void:
@@ -117,7 +125,7 @@ func test_fill_quads_never_render_on_the_unit_layer() -> void:
 
 func test_set_cells_places_tinted_fills_at_the_cells() -> void:
 	var overlays := _overlays()
-	overlays.clear_all()  # the demo's zone patch legitimately coexists; isolate for the color sweep
+	_empty_every_layer(overlays)  # the demo's zone patch legitimately coexists; isolate for the color sweep
 	var cells: Array[Vector3i] = [Vector3i(2, 0, 2), Vector3i(3, 0, 2), Vector3i(9, 2, 3)]
 	overlays.set_cells(BoardOverlays.Layer.MOVE, cells)
 	assert_int(overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(3)
@@ -186,15 +194,16 @@ func test_a_smaller_set_replaces_the_previous_one() -> void:
 	assert_int(overlays.cells_of(BoardOverlays.Layer.MOVE).size()).is_equal(1)
 
 
-func test_clear_and_clear_all_empty_the_layers() -> void:
+# Clearing is PER LAYER and reaches no further — the property the writer partition rests on
+# (#318). A clear that spilled into a neighbouring layer would desync whichever writer caches
+# for it, which is exactly the board-load bug in miniature.
+func test_clear_empties_its_own_layer_and_leaves_the_others_standing() -> void:
 	var overlays := _overlays()
 	overlays.set_cells(BoardOverlays.Layer.MOVE, [Vector3i(2, 0, 2)])
 	overlays.set_cells(BoardOverlays.Layer.ATTACK, [Vector3i(3, 0, 2)])
 	overlays.clear(BoardOverlays.Layer.MOVE)
 	assert_int(overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(0)
 	assert_int(overlays.marker_count(BoardOverlays.Layer.ATTACK)).is_equal(1)
-	overlays.clear_all()
-	assert_int(overlays.marker_count(BoardOverlays.Layer.ATTACK)).is_equal(0)
 
 
 func test_hover_is_a_bracket_mesh_at_the_cell() -> void:

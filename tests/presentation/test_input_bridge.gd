@@ -77,6 +77,37 @@ func _click_lands_on(cell: Vector2i) -> bool:
 	return BoardSpace.flat(_scene._pick(_screen_of(cell))) == cell
 
 
+# A player unit that actually has somewhere to go. A different question from _pickable_player_unit
+# above (can the pointer reach it), and the one a case needs when it wants the move overlay PAINTED:
+# a unit stranded on a terrace with no ramp off it is perfectly clickable and produces no markup.
+func _mobile_player_unit() -> Unit:
+	for unit in _live_units():
+		if unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var reachable: Array[Vector2i] = _game.get_move_range(_game.compute_move_range(unit), unit)
+		if not reachable.is_empty():
+			return unit
+	return null
+
+
+# Markup aimed at the board that is about to die, painted through the MIRROR rather than poked into
+# the 3D sink by hand (#318): battle3d owns HOVER and nothing else now, so the guarantee that stale
+# markup does not survive a swap is carried by the mirror's own next push, and a precondition
+# reached by writing the sink directly would exercise a path production no longer has. MOVE is the
+# layer to watch precisely because no mission can paint one — "empty after" reads the swap, never
+# the content. selected_unit alongside enter_move_mode is the suite's idiom: the mode paints from
+# the unit it is handed, while HoverPresenter's own branch reads the stored selection every frame.
+func _paint_move_markup() -> void:
+	var unit := _mobile_player_unit()
+	assert_object(unit).is_not_null()   # fixture setup, not the claim under test
+	_game.selected_unit = unit
+	_game.enter_move_mode(unit)
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(_overlays.marker_count(BoardOverlays.Layer.MOVE) > 0).override_failure_message(
+			"no move markup to lose, so the swap assertion would pass vacuously").is_true()
+
+
 func _under_ui(screen_pos: Vector2) -> bool:
 	for node in _game.ui_layer.get_children():
 		var control := node as Control
@@ -395,7 +426,7 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	# closes: turn_started never fires on menu arrivals (#144), so before #222 the
 	# mirror, picker and pointer state stayed aimed at the dead board.
 	_scene._pointer_cell = Vector3i(0, 0, 0)   # stale pointer state aimed at Prolog
-	_overlays.set_cells(BoardOverlays.Layer.MOVE, [Vector3i(0, 0, 0)])
+	await _paint_move_markup()
 	_game.mission_controller.begin_mission(LEVEL_1)
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
@@ -421,7 +452,7 @@ func test_spawn_sandbox_emits_the_same_rebuild() -> void:
 	# The one board build outside apply_scenario — reachable from the 3D view via the
 	# hidden Mission Select's Sandbox row, so it must speak the same signal.
 	_scene._pointer_cell = Vector3i(0, 0, 0)
-	_overlays.set_cells(BoardOverlays.Layer.MOVE, [Vector3i(0, 0, 0)])
+	await _paint_move_markup()
 	_game.spawn_sandbox()
 	await await_idle_frame()
 	await await_idle_frame()
