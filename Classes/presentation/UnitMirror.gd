@@ -34,20 +34,21 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Look-tab entries. They live on this node rather than on UnitHealthBar because a knob may only
 # name a property of a node that exists in Battle3D.tscn, and the bars are built at runtime.
 @export var hud_lift := 1.35            # the readout's height above the unit's stand point
-@export var bar_width_texels := 24.0
-@export var bar_height_texels := 3.0
-@export var bar_back_color := Color(0.05, 0.04, 0.07, 0.85)
-# The fill lerps empty -> full by the HP fraction. One mechanism rather than a colour plus a
-# "should it ramp" flag: a flat bar is just setting both of these the same.
-@export var bar_full_color := Color(0.35, 0.85, 0.4, 1.0)
-@export var bar_empty_color := Color(0.85, 0.2, 0.2, 1.0)
-# Floats, though both are int properties on Label3D: every other numeric knob is a float slider,
-# and writing 12.5 into an int would store 12 and read back changed — the "moves and silently
-# reverts" failure test_look_tool.gd exists to catch. Cast at the point of use instead.
-@export var number_font_size := 12.0
-@export var number_outline_size := 2.0
+@export var bar_width_texels := 32.0
+@export var bar_height_texels := 6.0
+@export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
+# Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
+# missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
+# gameplay descriptor, meant to sit on top of the scene rather than blend into it.
+@export var bar_fill_color := Color(0.15, 1.0, 0.2, 1.0)
+@export var bar_missing_color := Color(0.9, 0.05, 0.05, 1.0)
+# The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
+# resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
+# have meant a 4px font to reach the size asked for, which renders to mush.
+@export var number_height_cells := 0.13
+@export var number_outline_size := 6.0   # glyph-atlas units, so it tracks the fixed FONT_RESOLUTION
 @export var number_color := Color.WHITE
-@export var number_gap := 0.05           # clear space between the bar's top edge and the glyphs
+@export var number_gap := 0.04           # clear space between the number and the bar's left edge
 # Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
 # belongs over a head, and the bar already carries the fraction either way.
 @export var number_shows_max := true
@@ -221,8 +222,8 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_shown(hovered)
 	if not hovered:
 		return   # one bar is up at a time, so everything below is per-FRAME work, not per-unit
-	bar.set_style(bar_width_texels, bar_height_texels, bar_back_color, bar_full_color,
-			bar_empty_color, int(number_font_size), int(number_outline_size), number_color,
+	bar.set_style(bar_width_texels, bar_height_texels, bar_outline_texels, bar_fill_color,
+			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.position = _bar_anchor(unit, sprite)
