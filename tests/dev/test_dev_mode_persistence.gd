@@ -57,3 +57,22 @@ func test_the_turn_handoff_returns_to_dev_mode() -> void:
 	await game.start_faction_turn(Team.Faction.PLAYER)
 
 	assert_int(game.game_state).is_equal(game.GameState.DEV_MODE)
+
+# The dev window's banner FOLLOWS the intent. set_dev_mode pushed straight into the overlay until
+# the 3D badge needed the same fact; it emits dev_mode_changed now and both listeners connect, so
+# this is a WIRE case -- drop DevOverlay's connect and the toggle silently stops tracking F1 while
+# every other case above still passes. The text is asserted only for the WORD, since the switch
+# graphic alone is what the dev could not read; nothing here pins wording beyond ON/OFF.
+func test_the_dev_window_banner_follows_the_toggle() -> void:
+	var overlay: DevOverlay = game.dev_overlay
+	assert_object(overlay).is_not_null()
+
+	game.set_dev_mode(true)
+
+	assert_bool(overlay.dev_mode_toggle.button_pressed).is_true()
+	assert_str(overlay.dev_mode_toggle.text).contains("ON")
+
+	game.set_dev_mode(false)
+
+	assert_bool(overlay.dev_mode_toggle.button_pressed).is_false()
+	assert_str(overlay.dev_mode_toggle.text).contains("OFF")
