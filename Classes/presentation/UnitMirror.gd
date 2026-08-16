@@ -167,6 +167,10 @@ func set_ghosts(ghosts: Array[Dictionary]) -> void:
 	while _ghosts.size() < ghosts.size():
 		var ghost := UnitSprite3D.new()
 		ghost.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF  # a translucent stand-in casts no shadow
+		# ...and it sorts by PRIORITY, not by depth (#317). OPAQUE_PREPASS writes depth only where
+		# alpha clears the prepass threshold, and a ghost's tint is 0.75 — so a ghost wrote none,
+		# and what holds markup behind a REAL sprite is that depth, never UNIT_RENDER_PRIORITY.
+		ghost.alpha_cut = SpriteBase3D.ALPHA_CUT_DISABLED
 		add_child(ghost)
 		_ghosts.append(ghost)
 	for i in _ghosts.size():

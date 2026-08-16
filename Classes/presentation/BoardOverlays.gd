@@ -33,7 +33,9 @@ const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets thi
 # Every unit sprite (real or planning ghost) sorts ABOVE every overlay layer, structurally
 # rather than by numeric luck — the 3D twin of the 2D's "tile overlays sit below
 # Unit.BASE_SPRITE_INDEX". Must stay greater than any LAYERS "sort"; pinned by a test.
-# Without it a ghost was just render_priority 0, so arrows and terrain icons drew over it.
+# It only ARBITRATES in the alpha queue, though (#317): an OPAQUE_PREPASS sprite is held above
+# markup by the depth it writes instead, and it writes none where alpha is under the prepass
+# threshold — which is why UnitMirror builds the translucent ghosts alpha_cut DISABLED.
 const UNIT_RENDER_PRIORITY := 32
 # Fire's 3D form is a STANDING effect, not markup lying on the tile face, so it sorts above every
 # overlay layer — the same structural claim units make, one band below them so the flame-vs-sprite

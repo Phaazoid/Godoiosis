@@ -63,8 +63,9 @@ func _init() -> void:
 	offset = Vector2(0, 16)  # pivot at the feet
 	layers = BoardOverlays.UNIT_RENDER_LAYER  # overlay fills never paint sprites (#213 mask contract)
 	# Board markup never draws OVER a unit — the mask above stops fills painting onto the
-	# sprite, this stops them sorting in front of it. Ghosts are UnitSprite3Ds too, which is
-	# what the freeze-icons-over-ghosts report came down to.
+	# sprite, this stops them sorting in front of it. An OPAQUE sprite is actually held there by
+	# the prepass depth above; the priority is what carries a TRANSLUCENT one, which writes no
+	# depth — see UnitMirror.set_ghosts (#317).
 	render_priority = BoardOverlays.UNIT_RENDER_PRIORITY
 
 
