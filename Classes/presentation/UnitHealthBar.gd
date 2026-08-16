@@ -177,7 +177,7 @@ func _rebuild() -> void:
 	else:
 		_label.text = str(shown)
 	_label.pixel_size = maxf(_number_height, 0.001) / float(FONT_RESOLUTION)
-	_label.outline_size = int(_number_outline)
+	_label.outline_size = roundi(_number_outline)
 	_label.modulate = _number_color
 	# Sits ON the bar, inset from its left edge, in the parent's local space. get_aabb() is read for
 	# the text's WIDTH only, which does not depend on where the label sits, so this cannot feed back

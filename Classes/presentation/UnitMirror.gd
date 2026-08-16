@@ -54,10 +54,16 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
 # have meant a 4px font to reach the size asked for, which renders to mush.
 @export var number_height_cells := 0.13
-# Glyph-atlas units, so it tracks the fixed FONT_RESOLUTION. Pushed back UP after briefly being
-# blamed for the doubling: the dev wants a heavier outline for readability, and thinning it changed
-# nothing, which is what ruled it out and pointed at Label3D.offset instead.
-@export var number_outline_size := 5.0
+# Glyph-atlas units, so what reaches the screen is this times pixel_size. That indirection is why
+# the first two values were far too thin to read: at 5 against FONT_RESOLUTION 32 and a 0.13-cell
+# glyph, the outline came out 0.020 world units — under ONE art texel (0.031), i.e. thinner than a
+# single pixel of the game's own art. Roughly 8 buys one texel, 16 buys two.
+#
+# The ratio to FONT_RESOLUTION is what decides thickness RELATIVE to the glyphs, and at this display
+# size a readable outline is a large fraction of the letter height, so pushed far enough the digits
+# will start to bleed into one another. If that runs out before it reads, the answer is not more
+# outline — it is a dark backing plate behind the number, or inverting to black digits.
+@export var number_outline_size := 10.0
 @export var number_color := Color.WHITE
 @export var number_gap := 0.01           # inset from the bar's left edge; the number sits ON the bar
 # Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
