@@ -33,15 +33,15 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Eye-knobs, all of them read in _sync_bar and never written back, which is what makes them legal
 # Look-tab entries. They live on this node rather than on UnitHealthBar because a knob may only
 # name a property of a node that exists in Battle3D.tscn, and the bars are built at runtime.
-# Height above the unit's STAND POINT, not above its head — a 32px sprite at the default density
-# stands one cell tall, so the clearance over the head is this minus about 1.0.
+# CLEARANCE above the art's topmost opaque pixel — not a height above the feet. It was the latter
+# for two rounds and read as floating both times, because a map sprite's visible head is wherever
+# its transparent padding ends and no single number is right for every piece of art.
 #
-# It must stay BELOW BoardOverlays.billboard_lift (1.1), which is where the selection icons — crown,
-# squad member, target — hang. The dev's stacking order is icons on top, health readout tucked under
-# them just clear of the head. The two are separate knobs on separate nodes, so nothing enforces
-# that; a test pinning it would be pinning one tuning value against another, which the tuning razor
-# forbids. If the icons ever move, this moves with them by hand.
-@export var hud_lift := 1.04
+# The selection icons (crown, squad member, target) hang at BoardOverlays.billboard_lift, measured
+# from the CELL, and the dev's stacking is icons on top with the readout tucked under them. Nothing
+# enforces that: a test would be pinning one tuning value against another, which the tuning razor
+# forbids, so if the icons move this moves by hand.
+@export var hud_lift := 0.06
 @export var bar_width_texels := 26.0
 @export var bar_height_texels := 5.0
 @export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
@@ -54,11 +54,10 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
 # have meant a 4px font to reach the size asked for, which renders to mush.
 @export var number_height_cells := 0.13
-# Glyph-atlas units, so it tracks the fixed FONT_RESOLUTION. Keep it SMALL relative to that: the
-# outline is a dilation of each glyph, so at 6 against a 32-unit atlas (~19%) the black copy reads
-# as a second offset character and neighbouring digits' outlines merge — reported in play as the
-# numbers "appearing double and overlapping each other" (dev, 2026-08-15).
-@export var number_outline_size := 2.0
+# Glyph-atlas units, so it tracks the fixed FONT_RESOLUTION. Pushed back UP after briefly being
+# blamed for the doubling: the dev wants a heavier outline for readability, and thinning it changed
+# nothing, which is what ruled it out and pointed at Label3D.offset instead.
+@export var number_outline_size := 5.0
 @export var number_color := Color.WHITE
 @export var number_gap := 0.01           # inset from the bar's left edge; the number sits ON the bar
 # Whether the number reads "12/20" or "12". A knob because it is a taste call about how much text
@@ -239,6 +238,13 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			number_gap, number_shows_max)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.position = _bar_anchor(unit, sprite)
+	# The readout turns as ONE object rather than four that each billboard themselves — see
+	# UnitHealthBar.face(). Only the hovered bar is ever visible, so this is one camera read and one
+	# rotation per frame, not per unit.
+	if is_inside_tree():
+		var camera := get_viewport().get_camera_3d()
+		if camera != null:
+			bar.face(camera.global_position)
 
 
 # The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a
@@ -248,7 +254,12 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 # most needs one. Reading the projected cell also covers the knockback ghost, whose 2D preview
 # sprites carry no unit identity to hang anything off.
 func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
-	var lift := Vector3(0.0, hud_lift, 0.0)
+	# Measured, not assumed: hud_lift is clearance above the ART's topmost opaque pixel, so units
+	# whose sprites carry different amounts of transparent padding still wear the readout at the
+	# same apparent height. Anchoring it a fixed distance off the FEET is what left it looking too
+	# high twice over (dev, 2026-08-15), because the head is not one cell up — #279's lamp float
+	# was this same padding.
+	var lift := Vector3(0.0, sprite.art_top_height() + hud_lift, 0.0)
 	if not unit.visuals.projected:
 		return sprite.position + lift
 	return BoardSpace.surface_point(unit.get_projected_destination(), heights) + lift

@@ -68,6 +68,46 @@ func _init() -> void:
 	render_priority = BoardOverlays.UNIT_RENDER_PRIORITY
 
 
+# How high this sprite's VISIBLE art reaches above its stand point, in world units (#229). Not the
+# texture's top edge: the map sprites carry transparent padding, which is what #279 finally pinned a
+# floating lamp on, so "one cell up" is wrong by a different amount for every piece of art. Anything
+# hung over a unit's head has to measure instead of assume, or it sits at a different apparent
+# height per unit.
+#
+# Cached per texture — get_image() on an imported texture is real work, and this is asked once per
+# frame for whichever unit is hovered.
+static var _art_top_cache: Dictionary[String, float] = {}
+
+
+func art_top_height() -> float:
+	if texture == null:
+		return 1.0
+	var key := texture.resource_path
+	if key.is_empty():
+		key = str(texture.get_instance_id())
+	if not _art_top_cache.has(key):
+		_art_top_cache[key] = _measure_art_top(texture, offset.y)
+	return _art_top_cache[key] * pixel_size
+
+
+# Texels from the sprite's ORIGIN to the topmost opaque row. The sprite is centred on `offset`, so
+# its top edge sits at offset.y + height/2 and each transparent row scanned from the top walks that
+# down. Fully transparent art falls back to the top edge rather than collapsing to zero.
+static func _measure_art_top(art: Texture2D, offset_y: float) -> float:
+	var image := art.get_image()
+	if image == null:
+		return offset_y + float(art.get_height()) * 0.5
+	if image.is_compressed():
+		image = image.duplicate()
+		image.decompress()
+	var top_edge := offset_y + float(image.get_height()) * 0.5
+	for row in image.get_height():
+		for col in image.get_width():
+			if image.get_pixel(col, row).a > 0.02:
+				return top_edge - float(row)
+	return top_edge
+
+
 static func for_unit_data(data: UnitData) -> UnitSprite3D:
 	var sprite := UnitSprite3D.new()
 	sprite.display_name = data.display_name

@@ -162,22 +162,36 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 
 	var displaced := 0
 	for child in bar.get_children():
-		var element := child as Node3D
-		assert_that(element.position).override_failure_message(
-				"'%s' is displaced by node position, which does not ride the billboard"
-				% element.name).is_equal(Vector3.ZERO)
-		var quad := child as MeshInstance3D
-		if quad != null and absf((quad.mesh as QuadMesh).center_offset.x) > 0.0001:
-			displaced += 1
 		var label := child as Label3D
-		if label != null and absf(label.offset.x) > 0.0001:
+		if label != null:
+			assert_int(label.billboard).override_failure_message(
+					"the number billboards itself, so it turns about its own origin and shears away "
+					+ "from the bar as the camera orbits").is_equal(BaseMaterial3D.BILLBOARD_DISABLED)
+			if absf(label.position.x) > 0.0001:
+				displaced += 1
+			continue
+		var quad := child as MeshInstance3D
+		if quad == null:
+			continue
+		var material := quad.material_override as StandardMaterial3D
+		assert_int(material.billboard_mode).override_failure_message(
+				"'%s' billboards itself; only the parent may carry the orientation"
+				% quad.name).is_equal(BaseMaterial3D.BILLBOARD_DISABLED)
+		if absf((quad.mesh as QuadMesh).center_offset.x) > 0.0001:
 			displaced += 1
-	# Non-vacuity, and it is the whole point: "everything sits at the origin" is trivially true of a
-	# readout that displaces nothing at all. The half-full fill and the inset number must BOTH be
-	# off-centre, and both in local space.
+	# Non-vacuity: "nothing billboards" is trivially true of a readout whose parts all sit dead
+	# centre. The half-full fill and the inset number must BOTH actually be off-centre.
 	assert_int(displaced).override_failure_message(
-			"nothing was displaced, so displacing it in the right space proves nothing"
+			"nothing was displaced, so laying it out in the parent's space proves nothing"
 			).is_greater_equal(2)
+
+	# And the other half: something has to turn it now that its parts do not turn themselves.
+	var camera := bar.get_viewport().get_camera_3d()
+	assert_object(camera).is_not_null()
+	var to_camera: Vector3 = camera.global_position - bar.global_position
+	assert_float(bar.global_rotation.y).override_failure_message(
+			"the readout does not face the camera").is_equal_approx(
+			atan2(to_camera.x, to_camera.z), 0.001)
 
 
 func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:

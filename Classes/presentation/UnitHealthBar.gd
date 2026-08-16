@@ -62,11 +62,12 @@ func _init() -> void:
 	_missing = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 1)
 	_fill = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 2)
 	_label = Label3D.new()
-	_label.billboard = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# NOT billboarded, like everything else here — face() turns the whole group instead. Label3D
+	# draws its glyphs and its outline as two surfaces, and displacing it with Label3D.offset (the
+	# only in-plane displacement a per-object billboard permits) moved them by different amounts,
+	# which is what the dev saw as the number "appearing double and overlapping" (2026-08-15).
+	_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
 	_label.shaded = false
-	# The back face of a billboarded label is coplanar with its front and blends over it, which is
-	# the other way text on a billboard ghosts itself. Nothing ever sees the reverse of a sprite
-	# that always faces the camera, so there is nothing to lose by dropping it.
 	_label.double_sided = false
 	_label.font_size = FONT_RESOLUTION
 	_label.outline_modulate = OUTLINE_COLOR
@@ -110,6 +111,22 @@ func set_shown(shown: bool) -> void:
 	visible = shown
 
 
+# Turn the WHOLE readout to face the camera, once, instead of letting each part billboard itself.
+# Per-object billboarding is what pulled this display apart: each element rebuilds its own basis
+# about its own origin, so any displacement written in world space shears as the camera orbits,
+# and the only displacement that does not — an in-plane offset — is not honoured identically by
+# every element (Label3D moves its glyphs and its outline by different amounts). Rotating the
+# parent makes every child's ordinary local position correct by construction, at any angle.
+#
+# Yaw only, matching the BILLBOARD_FIXED_Y the icons beside it use: atan2(x, z) points local +Z,
+# which is the face QuadMesh and Label3D present, at the camera.
+func face(camera_position: Vector3) -> void:
+	var to_camera := camera_position - global_position
+	if absf(to_camera.x) < 0.0001 and absf(to_camera.z) < 0.0001:
+		return   # camera directly overhead: any yaw is as good as another, so keep the last one
+	global_rotation = Vector3(0.0, atan2(to_camera.x, to_camera.z), 0.0)
+
+
 # What fraction of the bar the fill actually covers — the RENDERED fact, read off the mesh rather
 # than recomputed from the HP that produced it, so a test can catch a bar that agrees with itself
 # and not with the unit.
@@ -140,6 +157,9 @@ func _rebuild() -> void:
 
 	_size_quad(_outline, (track_w + edge * 2.0) * texel, (bar_h + edge * 2.0) * texel, 0.0)
 	_paint(_outline, OUTLINE_COLOR)
+	# Everything below lays out in ORDINARY local space. That is only safe because nothing here
+	# billboards on its own — face() turns the parent — so a local offset is a real offset at every
+	# camera angle rather than a world-space one that shears.
 	# The MISSING health is the backing, drawn full width; the fill covers what remains. Two flat
 	# colours rather than one lerping between them (dev, 2026-08-15) — a bar that changes hue as it
 	# shortens says the same thing twice and reads muddy in the middle.
@@ -159,19 +179,13 @@ func _rebuild() -> void:
 	_label.pixel_size = maxf(_number_height, 0.001) / float(FONT_RESOLUTION)
 	_label.outline_size = int(_number_outline)
 	_label.modulate = _number_color
-	# ONE display, locked at every camera angle (dev feel-check, 2026-08-15: the number "kinda floats
-	# apart depending on the angle"). Every element billboards INDEPENDENTLY, so a displacement
-	# written to node `position` is a WORLD offset: the bar spins in place under orbit while the
-	# number stays put, and the two shear apart. Label3D.offset is applied in the label's own plane
-	# BEFORE the billboard rebuilds the basis — the same space QuadMesh.center_offset lives in — so
-	# it turns with the bar instead. Nothing here may ever move a child by `position`.
-	#
-	# Sits ON the bar, inset from its left edge. get_aabb() is read for the text's WIDTH, which is
-	# offset-independent, so this cannot feed back on itself frame to frame; the digit count changes
-	# with the HP, which is why it is measured rather than assumed.
+	# Sits ON the bar, inset from its left edge, in the parent's local space. get_aabb() is read for
+	# the text's WIDTH only, which does not depend on where the label sits, so this cannot feed back
+	# on itself frame to frame; the digit count changes with the HP, which is why it is measured
+	# rather than assumed. Z nudges the text a hair toward the viewer, which is now a meaningful
+	# direction precisely because the group has one orientation.
 	var half_text: float = _label.get_aabb().size.x * 0.5
-	var inside_left := -track_w * 0.5 * texel + _gap + half_text
-	_label.offset = Vector2(inside_left / _label.pixel_size, 0.0)
+	_label.position = Vector3(-track_w * 0.5 * texel + _gap + half_text, 0.0, texel)
 
 
 func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: float) -> void:
@@ -191,7 +205,10 @@ func _make_quad(priority: int) -> MeshInstance3D:
 	var material := StandardMaterial3D.new()
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
+	# No per-object billboard: face() turns the group. See the note there for why one rotation for
+	# the whole display beats four that each rebuild their own basis.
+	material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED   # the group only yaws, so it can be edge-on
 	# The half of "not affected by lighting" that IS reachable per-object. Unshaded already skips
 	# direct light; without these two the volumetric fog still washes the bar toward the fog albedo,
 	# which is exactly what the first pass looked like.
