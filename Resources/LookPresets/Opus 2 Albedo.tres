@@ -7,12 +7,16 @@ script = ExtResource("1_26nvs")
 preset_name = "Opus 2 Albedo"
 values = {
 ".|opening_view_cells": 18.0,
+"BoardMirror|flame_count": 3,
+"BoardMirror|flame_flicker": 0.18,
+"BoardMirror|flame_fps": 10.0,
 "BoardMirror|flame_ground_gap": 0.03,
 "BoardMirror|flame_lift": 0.35,
 "BoardMirror|flame_light_energy": 2.0,
 "BoardMirror|flame_light_range": 4.0,
 "BoardMirror|flame_size:x": 0.5,
 "BoardMirror|flame_size:y": 0.7,
+"BoardMirror|flame_spread": 0.26,
 "BoardMirror|flame_writes_depth": false,
 "CameraRig/Pitch/Camera|attributes:dof_blur_amount": 0.08,
 "CameraRig/Pitch/Camera|attributes:dof_blur_far_enabled": true,

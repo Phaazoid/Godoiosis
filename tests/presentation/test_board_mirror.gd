@@ -1946,3 +1946,131 @@ func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:
 		assert_float(high.z).override_failure_message(
 			"the ghost's %s wedge rises the wrong way on Z" % Terrain.ramp_rise_display_name(rise)) \
 			.is_equal_approx(float(want.y), 0.01)
+
+
+# --- The fire EFFECT (#324) -------------------------------------------------------
+#
+# Structure only, said plainly: headless cannot see whether fire looks like fire, and every case
+# below is written so that a re-tune cannot redden it — no fps, no spread, no count is asserted as
+# a number (the tuning razor). What they pin is that a burning cell stands up MORE THAN ONE flame,
+# that each one clears the ground its own size says it must, that the clock reaches the material,
+# and that two cells do not burn in step.
+
+func _flames_of(mirror: BoardMirror, cell: Vector2i) -> Array[MeshInstance3D]:
+	var flames: Array[MeshInstance3D] = []
+	var marker := mirror.fire_marker_at(cell)
+	if marker == null:
+		return flames
+	for child in marker.get_children():
+		var mesh_child := child as MeshInstance3D
+		if mesh_child != null:
+			flames.append(mesh_child)
+	return flames
+
+
+func _frame_of(flame: MeshInstance3D) -> float:
+	return ((flame.mesh as QuadMesh).material as StandardMaterial3D).uv1_offset.x
+
+
+func test_a_burning_cell_stands_up_a_whole_fire_not_one_sprite() -> void:
+	# The ticket's own complaint: one quad in the middle of a 1x1 square. Asserted as "more than
+	# one", never as flame_count's value -- the count is a feel knob and the dev may set it to
+	# anything. An extinguished cell holding none is the other half, and is what says the flames
+	# belong to the marker rather than to the mirror.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	assert_int(_flames_of(mirror, burning[0]).size()).override_failure_message(
+			"a burning cell still stands up a single sprite").is_greater(1)
+	assert_int(_flames_of(mirror, _a_cell_that_is_not_burning()).size()).override_failure_message(
+			"an unlit cell has flames standing on it").is_equal(0)
+
+
+func test_every_flame_of_a_fire_clears_the_ground_it_stands_on() -> void:
+	# flame_base_lift's clamp, now owed per QUAD rather than once: the scatter's smaller flames sit
+	# proportionally lower, and a clearance that scaled with them would shrink toward zero. Driven
+	# through the depth switch because that is the only configuration where coplanarity costs
+	# anything -- which is the rule the clamp itself states.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	mirror.flame_writes_depth = true
+	await _settle()
+	var flames := _flames_of(mirror, burning[0])
+	assert_bool(not flames.is_empty()).override_failure_message(
+			"the depth switch left the cell with no flames at all").is_true()
+	for flame in flames:
+		var height: float = (flame.mesh as QuadMesh).size.y
+		var bottom := flame.position.y - height * 0.5
+		assert_float(bottom).override_failure_message(
+			"a %.2f-tall flame's base sits at %.3f, inside the tile it stands on" % [height, bottom]
+		).is_greater_equal(mirror.flame_ground_gap)
+
+
+func test_the_fire_animates_while_animated_and_holds_still_when_not() -> void:
+	# THE WIRE. A clock that ticks while nothing reads it is invisible to every other case in this
+	# file -- the marker count, the identity pin and the priority read are all identical against a
+	# fire that never moves, which is exactly the state #324 was filed about. Driven through the
+	# public step rather than by waiting frames, so the case measures the wire and not the
+	# scheduler.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var flame := _flames_of(mirror, burning[0])[0]
+
+	# Enough steps that a frame boundary is crossed whatever the authored fps is, and the frames
+	# are COLLECTED rather than compared end to end: a full loop lands back where it started.
+	var seen: Dictionary[float, bool] = {}
+	for i in 40:
+		mirror._flame_time += 1.0
+		mirror.advance_flames()
+		seen[_frame_of(flame)] = true
+	assert_int(seen.size()).override_failure_message(
+			"the fire never changed frame -- the clock reaches no material").is_greater(1)
+
+	mirror.flame_animated = false
+	mirror.advance_flames()
+	var still := _frame_of(flame)
+	for i in 40:
+		mirror._flame_time += 1.0
+		mirror.advance_flames()
+		assert_float(_frame_of(flame)).override_failure_message(
+			"the fire kept moving with flame_animated off -- #217's toggle would only hide it"
+		).is_equal(still)
+
+
+func test_two_burning_cells_do_not_burn_in_lockstep() -> void:
+	# The scatter and the phase are seeded from the CELL, so one tile always burns the same way and
+	# no two burn together. Reads the phases the mirror actually built rather than re-deriving them
+	# -- a case that hashed the cells itself would pass against a mirror that ignored the seed.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var lit := _a_cell_that_is_not_burning()
+	var effect := ResolvedCellEffect.new()
+	effect.cell = lit
+	effect.states_added.assign([Terrain.TileState.BLAZE])
+	_game.terrain_states.apply(effect)
+	await _settle()
+	var burning := _burning()
+	assert_bool(burning.size() > 1).override_failure_message(
+			"only one cell burns; two fires cannot be compared").is_true()
+	# Across the WHOLE set rather than one pair: the seed is a bucketed hash, so one unlucky
+	# collision between two particular authored cells is not the mirror flickering as one board.
+	var phases: Dictionary[float, bool] = {}
+	for cell: Vector2i in burning:
+		var flames := _flames_of(mirror, cell)
+		if not flames.is_empty():
+			phases[flames[0].get_meta(BoardMirror.FLAME_PHASE_META)] = true
+	assert_int(phases.size()).override_failure_message(
+			"every fire on the board starts on the same beat -- they flicker as one"
+	).is_greater(1)

@@ -62,6 +62,7 @@ func _gen_textures() -> int:
 	_save(_stone_top(rng), "stone_top.png")
 	_save(_stone_side(rng), "stone_side.png")
 	_save(_flame(rng), "torch_flame.png")
+	_save(_fire_sheet(), "fire_flame.png")
 	_save(_cell_fill(), "cell_fill.png")
 	_save(_speckled(rng, Color8(118, 86, 58), 0.10), "dirt_top.png")
 	_save(_speckled(rng, Color8(74, 58, 44), 0.14), "mud_top.png")
@@ -211,6 +212,74 @@ func _flame(rng: RandomNumberGenerator) -> Image:
 			elif d < 5.4:
 				img.set_pixel(x, y, Color(0.94, 0.45, 0.10))
 	return img
+
+
+# The TERRAIN fire sheet (#324): FIRE_FRAMES frames left to right, each FIRE_FRAME_W x
+# FIRE_FRAME_H. A separate asset from the torch blob above, because a cell on fire and a lamp
+# on a wall are different objects -- the torch keeps its own texture.
+#
+# Analytic and EXACTLY LOOPING rather than per-frame noise: every term is periodic in
+# t = frame / FIRE_FRAMES, so the last frame hands back to the first with no seam. Two upward
+# travelling harmonics sway the centreline, the height pulses on the same period, and the four
+# tones fall out of ONE heat value -- hottest at the base centre, cooling outward and upward.
+# That gradient is what makes the silhouette read as flame rather than as a wobbling triangle.
+const FIRE_FRAMES := 8
+const FIRE_FRAME_W := 16
+const FIRE_FRAME_H := 24
+
+
+func _fire_sheet() -> Image:
+	var img := Image.create_empty(FIRE_FRAME_W * FIRE_FRAMES, FIRE_FRAME_H, false,
+			Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	var core := Color8(255, 246, 214)
+	var hot := Color8(255, 198, 64)
+	var mid := Color8(240, 122, 24)
+	var edge := Color8(176, 48, 16)
+	var cx := FIRE_FRAME_W * 0.5
+	for f in FIRE_FRAMES:
+		var t := float(f) / float(FIRE_FRAMES)
+		# How much of the frame the flame fills this beat -- the whole body rises and settles.
+		var top: float = 0.82 + 0.18 * sin(TAU * (t + 0.15))
+		for y in FIRE_FRAME_H:
+			# h is measured from the BOTTOM: the art stands on the frame's lower edge.
+			var h := float(FIRE_FRAME_H - 1 - y) / float(FIRE_FRAME_H - 1)
+			if h > top:
+				continue
+			var u := h / top
+			# Anchored at the foot (the pow), free at the tip -- a flame does not slide sideways
+			# along the ground it burns on.
+			var sway: float = (2.2 * sin(TAU * (u - t))
+					+ 1.0 * sin(TAU * (2.0 * u - 2.0 * t) + 1.3)) * pow(u, 1.4)
+			var half: float = 5.2 * pow(1.0 - u, 0.7) * (0.7 + 0.3 * sin(PI * u))
+			half *= 1.0 + 0.18 * sin(TAU * (1.5 * u - t) + 0.7)
+			for x in FIRE_FRAME_W:
+				var d: float = absf(float(x) + 0.5 - (cx + sway))
+				if half <= 0.01 or d > half:
+					continue
+				var heat := (1.0 - d / half) * (1.0 - 0.55 * u)
+				var c := edge
+				if heat > 0.70:
+					c = core
+				elif heat > 0.48:
+					c = hot
+				elif heat > 0.24:
+					c = mid
+				img.set_pixel(f * FIRE_FRAME_W + x, y, c)
+		_fire_ember(img, f, t, cx, mid, edge)
+	return img
+
+
+# A spark leaving the tip. It RESTARTS at the loop point rather than travelling through it,
+# which is what a spark does -- one dies and the next goes up.
+func _fire_ember(img: Image, frame: int, t: float, cx: float, warm: Color, cool: Color) -> void:
+	var rise: float = 0.80 + 0.20 * t
+	var y := FIRE_FRAME_H - 1 - int(round(rise * float(FIRE_FRAME_H - 1)))
+	var x := int(round(cx + 1.6 * sin(TAU * (t + 0.25))))
+	if y < 0 or x < 0 or x >= FIRE_FRAME_W:
+		return
+	var c: Color = warm if t < 0.5 else cool
+	img.set_pixel(frame * FIRE_FRAME_W + x, y, c)
 
 
 # --- Phase 2: the MeshLibrary ------------------------------------------------
