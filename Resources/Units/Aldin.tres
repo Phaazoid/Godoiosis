@@ -1,0 +1,28 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Downed.png" id="1_bseq0"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_wx1g2"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest.png" id="3_bls4j"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Moving.png" id="4_fbf2d"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="5_5amud"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_s7xxc"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_aedfp"]
+[ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="8_t0fxs"]
+
+[resource]
+script = ExtResource("6_s7xxc")
+display_name = "Aldin"
+portrait = ExtResource("5_5amud")
+base_stats = Dictionary[int, int]({
+1: 5,
+2: 5,
+4: 5
+})
+map_sprite = ExtResource("3_bls4j")
+move_sprite = ExtResource("4_fbf2d")
+downed_sprite = ExtResource("1_bseq0")
+base_aura = Dictionary[int, int]({
+7: 1
+})
+base_affinity = Array[int]([7])
+starting_inventory = Array[ExtResource("7_aedfp")]([ExtResource("8_t0fxs")])

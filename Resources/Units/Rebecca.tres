@@ -1,0 +1,24 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="1_rbheq"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_ti56h"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="3_v7khi"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="4_pyl5k"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="5_7kq8x"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_aj7iu"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_0vfyr"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/vroom.tres" id="8_an8jc"]
+
+[resource]
+script = ExtResource("6_aj7iu")
+display_name = "Rebecca"
+portrait = ExtResource("5_7kq8x")
+base_stats = Dictionary[int, int]({
+1: 5,
+2: 5,
+4: 5
+})
+map_sprite = ExtResource("3_v7khi")
+move_sprite = ExtResource("4_pyl5k")
+downed_sprite = ExtResource("1_rbheq")
+starting_inventory = Array[ExtResource("7_0vfyr")]([ExtResource("8_an8jc")])

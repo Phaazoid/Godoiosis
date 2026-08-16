@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="1_cnods"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_8t8nh"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter.png" id="3_7bpd7"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="4_e3u22"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="5_f2ado"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_qce3k"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_filfp"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Smasher.tres" id="8_2twdy"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvArm.tres" id="9_lqayx"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvLeg.tres" id="10_ok1nu"]
+
+[resource]
+script = ExtResource("6_qce3k")
+display_name = "Torv"
+portrait = ExtResource("5_f2ado")
+base_stats = Dictionary[int, int]({
+1: 7,
+2: 6,
+4: 6
+})
+map_sprite = ExtResource("3_7bpd7")
+move_sprite = ExtResource("4_e3u22")
+downed_sprite = ExtResource("1_cnods")
+starting_inventory = Array[ExtResource("7_filfp")]([ExtResource("8_2twdy"), ExtResource("9_lqayx"), ExtResource("10_ok1nu")])
+starting_prosthetics = Dictionary[int, int]({
+1: 1,
+2: 2
+})
