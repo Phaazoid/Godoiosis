@@ -113,6 +113,14 @@ func set_projected(value: bool):
 	else:
 		sprite.show()
 		
+# How far an effect has displaced the art from where it rests, in the Unit node's own pixels.
+# The 3D mirror's one read of it (#321): everything else this class writes is either already
+# mirrored (modulate) or has no 3D meaning, so this is the whole of the offset channel.
+func animation_offset() -> Vector2:
+	if sprite == null:
+		return Vector2.ZERO
+	return sprite.position - base_position
+
 func play_attack_lunge(direction: Vector2):
 	if sprite == null:
 		return

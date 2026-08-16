@@ -34,6 +34,11 @@ var display_name := "Unit"
 # has stopped still needs its step remembered — otherwise an ORBIT leaves it facing the
 # way it faced under the old camera angle (#176 stage 4d).
 var last_step := Vector3.ZERO
+# The effect displacement riding on top of this sprite's board point (#321): position is
+# always `board point + art_offset`, one writer. Declared here rather than folded into
+# position because the mirror's step, facing and cell derivations all read the board point
+# alone — a lunge is art moving, not a unit moving.
+var art_offset := Vector3.ZERO
 
 # Texels per world unit — #176's "one pixel density, everywhere" convention, as a number
 # rather than a comment. STATIC, not @export: pixel_size is a Sprite3D property and cannot be

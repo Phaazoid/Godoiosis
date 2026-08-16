@@ -15,6 +15,11 @@ class_name UnitMirror
 # only for whichever unit the pointer currently resolves to. Both facts it needs already have
 # exactly one answer elsewhere — hovered_unit_source asks the question HoverPresenter._process asks,
 # and HP comes off the Unit — so this adds a SURFACE, not a seam.
+#
+# Since #321 it also mirrors UnitVisuals' effect OFFSET (the attack lunge, the invalid-order shake),
+# which is expressed on the Unit's child sprite rather than on the Unit — the one fact of that class
+# the position read above cannot see. The rule the ticket settled: anything a 2D effect writes on the
+# Unit node mirrors for free, anything it writes as a child offset arrives through animation_offset().
 
 const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local's metric
 
@@ -193,16 +198,25 @@ func ghost_count() -> int:
 
 
 func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
-	var previous := sprite.position
+	# The BOARD point, which is what every derivation below reads — never the written position,
+	# which since #321 also carries the effect offset.
+	var previous := sprite.position - sprite.art_offset
 	# The height comes from the cell the sprite is OVER, not from unit.movement.cell: mid-walk the
 	# pixel position is between cells, and reading the destination would pop the sprite to the new
 	# level before it arrives. Derived from the same pixels that place X and Z, so it steps up as
 	# the sprite crosses the edge.
 	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
 			floori(unit.position.y / PIXELS_PER_CELL))
-	sprite.position = Vector3(unit.position.x / PIXELS_PER_CELL,
+	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
 			BoardSpace.surface_point(over, heights).y, unit.position.y / PIXELS_PER_CELL)
-	sprite.cell = BoardSpace.cell_of(sprite.position + Vector3(0, -0.5, 0))
+	sprite.cell = BoardSpace.cell_of(stand + Vector3(0, -0.5, 0))
+	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which
+	# unit.position never sees — the one fact UnitVisuals expresses that the reads above cannot
+	# reach. Mapped through the same metric and the same axes as the stand point: a 2D y is board
+	# DEPTH, never height. Added last, so a lunge is not a step and does not change the cell.
+	var art := unit.visuals.animation_offset() / PIXELS_PER_CELL
+	sprite.art_offset = Vector3(art.x, 0.0, art.y)
+	sprite.position = stand + sprite.art_offset
 
 	var downed := unit.lifecycle_state == Unit.LifecycleState.DOWNED
 	if downed != sprite.is_downed():
@@ -222,7 +236,7 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# child alone is what left enemies un-reddened in 3D.
 	sprite.modulate = unit.modulate * unit.visuals.sprite.modulate
 
-	var step := sprite.position - previous
+	var step := stand - previous
 	if Vector2(step.x, step.z).length_squared() > 0.000001:
 		sprite.last_step = step
 		sprite.flip_h = sprite.facing_flip_for(step)
