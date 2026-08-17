@@ -71,7 +71,7 @@ func _ready() -> void:
 	tabs.set_tab_tooltip(4, "Save / load board scenarios. F2 resets the current one.")
 	tabs.set_tab_tooltip(5, "Paint the board — Terrain (with its level and ramp rise), Zones, or Tile States (fire/ice/cover); left-drag paints, right-drag erases.")
 	tabs.set_tab_tooltip(6, "Tune the 3D look live — lighting, post, fog, camera, markup. Copy Values hands back what you moved.")
-	tabs.set_tab_tooltip(7, "Terrain objects — how tall props, tufts and cover bumps stand. Game-wide, not per mission: Save to source writes the value into the script that declares it.")
+	tabs.set_tab_tooltip(7, "Terrain objects and effects — how props, tufts and cover bumps stand, and how fire is drawn. Game-wide, not per mission: Save to source writes the value into the script that declares it.")
 	var authoring_tabs: TabContainer = %AuthoringTabs
 	authoring_tabs.tab_changed.connect(_on_authoring_tab_changed)
 	authoring_tabs.set_tab_tooltip(0, "Spawn units — configure here, then hover the board + Space to place.")

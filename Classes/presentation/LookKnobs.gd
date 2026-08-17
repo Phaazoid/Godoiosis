@@ -172,39 +172,13 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
 	# --- Effects ---
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_lift", "label": "Flame lift", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How high the fire billboard's centre sits above a burning tile. Raising it makes fire read as standing up off the ground rather than lying on it."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width", "min": 0.1, "max": 2.0, "step": 0.01,
-		"tip": "Width of the fire billboard in world units, where 1.0 is exactly one cell across."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height", "min": 0.1, "max": 2.0, "step": 0.01,
-		"tip": "Height of the fire billboard in world units. Taller than wide reads as a flame; square reads as a scorch."},
-	# The only INT-backed knob in the table, and its range is load-bearing: a slider write is
-	# nudged by a tenth of the range, so anything narrower than 10 rounds back to where it started
-	# and the knob is inert. test_look_tool's write-back law says so out loud rather than in prose.
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_count", "label": "Flame count", "min": 1.0, "max": 12.0, "step": 1.0,
-		"tip": "How many separate flames a burning cell stands up. One is a sprite standing on a tile; three or more spread across the square is a tile that is on fire. Every flame is another quad and another draw, so this is the knob that costs something on a board with a lot of fire."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_spread", "label": "Flame spread", "min": 0.0, "max": 0.6, "step": 0.01,
-		"tip": "How far off the cell's centre the smaller flames sit, in cells -- 0.5 reaches the tile's edge. At zero they stack in the middle and the fire reads as one clump again."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_fps", "label": "Flame fps", "min": 0.0, "max": 30.0, "step": 0.5,
-		"tip": "How fast the flame's frames play. The art is eight looping frames, so this is the whole speed of the fire: low reads as a slow lick, high as a roar. Zero holds a frame without freezing the light."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_flicker", "label": "Flame flicker", "min": 0.0, "max": 0.6, "step": 0.01,
-		"tip": "How hard the fire's LIGHT breathes, as a fraction of its energy -- 0.2 swings it a fifth either way. This is what makes a burning tile feel lit by something alive rather than by a lamp; zero is a steady lamp."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_camera_offset", "label": "Flame camera push", "min": 0.0, "max": 0.5, "step": 0.005,
-		"tip": "How far each flame is pushed toward the camera, in cells. A flame and a unit sprite on one cell are the same camera-facing plane, so without this they speckle against each other wherever someone stands in fire; push too far and the fire visibly leaves its own tile."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_animated", "label": "Flame animated",
-		"tip": "Off holds the fire on one frame at steady light -- a still flame, not a missing one. This is the photosensitivity switch in its first home; when the game grows a settings menu it drives this rather than growing a second one."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
-		"tip": "Gap between the base of the flame and the tile surface. A small gap stops the flame z-fighting the ground it stands on; too large and the fire floats."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",
-		"tip": "Whether the flame writes into the depth buffer. On, it occludes what is behind it correctly but can cut a hard edge against overlapping sprites; off, it always draws as a soft overlay and never clips."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_energy", "label": "Flame light energy", "min": 0.0, "max": 8.0, "step": 0.05,
-		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
-	{"group": "Effects", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
-		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
-	# Prop GEOMETRY -- block height, tuft scale, cover-bump scale -- used to sit here and moved to
-	# ObjectKnobs (#272). They are world construction rather than mood, so they were PRESET_EXCLUDED
-	# anyway; leaving is what makes that ruling structural instead of a list entry, and it is what
-	# gives them a Save that writes their authored default rather than a clipboard line.
+	# What used to fill this group has MOVED to ObjectKnobs (#272), in two passes and for one
+	# reason: none of it was scene mood. Prop geometry (block height, tuft scale, cover-bump scale)
+	# went first as world construction; the whole FIRE block followed on the dev's ruling that a
+	# terrain effect's look is a game value like the rest -- *"stylistically, where it matters, it
+	# is part of this group"*. Leaving is what makes those rulings structural rather than entries on
+	# PRESET_EXCLUDED, and it is what gives them a Save that writes their authored default.
+	# What is left is dev chrome, which was never mood either but has nowhere better to be.
 	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
 	# --- Unit HUD (#229) ---
@@ -278,13 +252,10 @@ const PRESET_EXCLUDED: Array[String] = [
 	"BoardOverlays|billboard_lift",
 	"BoardOverlays|billboard_pixel_size",
 	"BoardMirror|brush_ghost_alpha",
-	# An ACCESSIBILITY switch, which is a fourth reason and the sharpest one: a preset is authored
-	# per mission, and a mission must never be able to turn a player's photosensitivity setting back
-	# on. #217 owns the switch itself; this line is what stops content reaching it.
-	"BoardMirror|flame_animated",
-	# A plane-separation constant, the same family as BoardOverlays|fill_lift above -- it defends
-	# against a geometric coincidence, so it is markup, not mood.
-	"BoardMirror|flame_camera_offset",
+	# The two flame carve-outs that used to sit here -- the #217 accessibility switch and the #298
+	# plane-separation clearance -- left with the rest of the fire block for ObjectKnobs (#272).
+	# Both reasons still hold and are simply no longer expressible here: a preset cannot reach a
+	# knob that is not in this table at all.
 	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
 	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
 	# by wearing a look. Excluded wholesale, which also keeps the shipped presets valid under

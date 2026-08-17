@@ -89,6 +89,21 @@ func test_a_component_path_is_refused() -> void:
 	assert_str(ObjectKnobs.rewrite_export_default(VECTOR, "flame_size:x", "0.4")).is_empty()
 
 
+# ...which is why the save path asks a different question first. A component knob's DECLARATION is
+# the vector's, so both axis knobs resolve to one line and one write.
+func test_a_component_knob_resolves_to_the_declaration_it_shares() -> void:
+	var width := {"node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width"}
+	var height := {"node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height"}
+	assert_str(ObjectKnobs.declaration_prop(width)).is_equal("flame_size")
+	assert_str(ObjectKnobs.declaration_prop(height)).is_equal(
+		ObjectKnobs.declaration_prop(width))
+
+
+func test_a_plain_knob_declares_itself() -> void:
+	assert_str(ObjectKnobs.declaration_prop(
+		{"node": "BoardMirror", "prop": "cover_scale"})).is_equal("cover_scale")
+
+
 # --- The laws ----------------------------------------------------------------------------
 
 func test_every_object_knob_is_declared_in_the_script_its_node_carries() -> void:
@@ -97,19 +112,23 @@ func test_every_object_knob_is_declared_in_the_script_its_node_carries() -> void
 		var path := _script_of_node(scene, knob["node"])
 		assert_str(path).override_failure_message(
 			"no script on node '%s' in Battle3D.tscn -- '%s' has nowhere to save to" % [knob["node"], knob["label"]]).is_not_empty()
+		# The DECLARATION prop, which is what Save writes -- a component knob (flame_size:x) tunes
+		# one axis of a property declared whole, and asking about the component here would red on a
+		# table that is perfectly correct.
+		var prop := ObjectKnobs.declaration_prop(knob)
 		var source := _read(path)
-		var rewritten := ObjectKnobs.rewrite_export_default(source, knob["prop"], "1.0")
+		var rewritten := ObjectKnobs.rewrite_export_default(source, prop, "1.0")
 		assert_str(rewritten).override_failure_message(
-			"'%s' names %s:%s, but %s declares no @export default for it -- Save would write nothing and report success"
-				% [knob["label"], knob["node"], knob["prop"], path]).is_not_empty()
+			"'%s' names %s:%s, but %s declares no @export default for %s -- Save would write nothing and report success"
+				% [knob["label"], knob["node"], knob["prop"], path, prop]).is_not_empty()
 		# And the line it produced is a line GDScript would accept. Finding the declaration is not
 		# the same as writing it back correctly, and the real file carries a comment block above it
 		# and a setter after it -- neither of which the hand-written fixtures above prove.
-		var line := _declaration(rewritten, knob["prop"])
+		var line := _declaration(rewritten, prop)
 		assert_str(line).override_failure_message(
-			"the rewrite of %s left no declaration behind" % knob["prop"]).is_not_empty()
+			"the rewrite of %s left no declaration behind" % prop).is_not_empty()
 		assert_bool(line.contains(":= 1.0") or line.contains("= 1.0")).override_failure_message(
-			"rewriting %s produced '%s', which does not carry the value asked for" % [knob["prop"], line]).is_true()
+			"rewriting %s produced '%s', which does not carry the value asked for" % [prop, line]).is_true()
 
 
 # The measured assumption the whole slice rests on. An override authored in the scene WINS over the
@@ -121,7 +140,7 @@ func test_the_scene_overrides_no_object_knob_property() -> void:
 		var section := _node_section(scene, knob["node"])
 		assert_bool(section.is_empty()).override_failure_message(
 			"Battle3D.tscn has no node '%s'" % knob["node"]).is_false()
-		var override := RegEx.create_from_string("(?m)^%s[ \\t]*=" % knob["prop"])
+		var override := RegEx.create_from_string("(?m)^%s[ \\t]*=" % ObjectKnobs.declaration_prop(knob))
 		assert_object(override.search(section)).override_failure_message(
 			"Battle3D.tscn overrides %s:%s -- the script default ObjectKnobs writes is no longer what the game reads"
 				% [knob["node"], knob["prop"]]).is_null()

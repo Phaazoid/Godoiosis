@@ -161,7 +161,13 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # art is drawn in 3/4: a crate sprite includes some of its own lid, so the height measured off the
 # sprite is always a little more than the object's front face really is. 1.0 is the measurement;
 # the right number is whatever looks like a crate.
-@export var block_height_scale := 1.0
+#
+# SOLID props only, by construction — a BILLBOARD (lantern, tree) has no block to stretch, so the
+# lantern is deliberately unmoved by this. The setter is what makes it a live knob rather than a
+# value baked into whatever was built last, the same reason tuft_scale and cover_scale below have
+# one; it shipped without in #264 and was therefore a slider that moved nothing until the tile
+# under it was repainted (found in play, 2026-08-16).
+@export var block_height_scale := 1.0: set = _set_block_height_scale
 
 # How tall a TUFT's plants stand relative to their own art (#280) — 1.0 would draw a flower at the
 # size the tile draws it, which is a flower the height of a unit's shin; 0.25 is the dev's eye
@@ -175,7 +181,7 @@ const LIT_PROPS: PackedStringArray = ["Lantern"]
 # The same, for the mud bumps a Burrow's COVER state stands up (#326). A SECOND knob rather than
 # a shared one, on the lantern-vs-flame rule: cover and grass are different objects drawn at
 # different sizes, so one number would force whoever tunes the second to un-tune the first.
-@export var cover_scale := 0.5: set = _set_cover_scale
+@export var cover_scale := 0.98: set = _set_cover_scale
 
 var board: GridMap
 
@@ -979,6 +985,18 @@ func _make_cluster_sprite(sheet: Texture2D, rect: Rect2i, pixel_size: float,
 # untouched by the knob, because where a flower grows is not a matter of taste.
 func _tuft_pixel_size() -> float:
 	return tuft_scale / float(GridUtils.TILE_SIZE)
+
+
+# Re-stretch every standing block. The MESH children are exactly what _make_prop_block built, so a
+# billboard prop and a tuft's sprites are excluded by their type rather than by a mark — the one
+# case where "which nodes did I build here" is answerable without one.
+func _set_block_height_scale(value: float) -> void:
+	block_height_scale = value
+	for root: Node3D in _props.values():
+		for child in root.get_children():
+			var mesh := child as MeshInstance3D
+			if mesh != null:
+				mesh.scale = Vector3(1.0, block_height_scale, 1.0)
 
 
 # Re-size every standing tuft. What makes tuft_scale a live knob rather than a value baked into

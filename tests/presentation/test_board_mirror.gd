@@ -1551,6 +1551,44 @@ func test_a_plane_tile_builds_geometry_not_a_billboard() -> void:
 			).is_not_null()
 
 
+# The block twin of the tuft and cover knob cases, and it shipped MISSING (#264 → found in play
+# 2026-08-16, "I can't see it changing things"). Props reconcile only when their tile changes, so a
+# value read at build time is a slider that moves nothing until you repaint under it.
+#
+# Asserted as the knob's own RATIO, never a height: what a crate measures is the art's business
+# (#323 above pins that), and doubling the knob must double whatever that came out as.
+func test_the_block_height_knob_restretches_props_already_standing() -> void:
+	_game.game_state = _game.GameState.DEV_MODE
+	var solids := _any_solid_entry()
+	assert_bool(not solids.is_empty()).override_failure_message(
+			"no solid tiles authored; the case is vacuous").is_true()
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, solids.source, solids.coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var block := mirror.prop_at(cell).get_child(0) as MeshInstance3D
+	assert_object(block).override_failure_message("a solid tile did not build a block").is_not_null()
+	var before := block.scale.y
+	mirror.block_height_scale = mirror.block_height_scale * 2.0
+	assert_float(block.scale.y).override_failure_message(
+			"the knob does not reach a block that is already standing — it is baked in at build time" \
+			).is_equal_approx(before * 2.0, 0.0001)
+
+
+# The first solid tile the tileset declares, or {} when it declares none.
+func _any_solid_entry() -> Dictionary:
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		var entries := _solid_entries(source, source_id)
+		if not entries.is_empty():
+			return entries[0]
+	return {}
+
+
 # THE case #263 exists for, in the issue's own words: *a horizontal run and a vertical run must be
 # visibly different.* A billboard cannot satisfy this from any angle, which is the whole ticket.
 #
