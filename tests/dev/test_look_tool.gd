@@ -372,14 +372,21 @@ func test_a_moved_knob_is_reported_under_its_paste_target() -> void:
 
 # A vector component has no resource between it and the node, so the whole vector is emitted:
 # "x = 0.6" would mean nothing pasted into a .tscn, and the x and y knobs share one line.
+#
+# Driven through a SYNTHETIC knob since #272, and that is the finding rather than a convenience:
+# flame_size:x was the only component knob in KNOBS, so with the fire block gone this branch has no
+# reachable caller from the table it serves. It is kept because it is the rule for the NEXT vector
+# look knob, not because something uses it today -- and a rule with no live caller is exactly the
+# kind that rots unwatched, so it keeps a case. The component knobs that do exist now are
+# ObjectKnobs', where the same rule is reached a different way (declaration_prop).
 func test_a_vector_component_knob_emits_the_whole_vector() -> void:
-	var knob := _knob("BoardMirror", "flame_size:x")
-	_look.write(knob, _nudged(knob, _look.read(knob)))
-	var entries: Dictionary = _look.changed_values()["Battle3D.tscn -> BoardMirror"]
-	assert_dict(entries).contains_keys(["flame_size"])
+	var knob := {"node": "BoardMirror", "prop": "flame_size:x", "label": "synthetic"}
+	var split: Array = _look._paste_split(knob)
+	assert_str(split[0]).is_equal("Battle3D.tscn -> BoardMirror")
+	assert_str(split[1]).is_equal("flame_size")
 	# The stored value is the finished paste LINE, not a bare literal (slice 2 unified both
 	# knob kinds on that, since a layer colour has no "prop = value" shape to build from).
-	assert_str(entries["flame_size"]).starts_with("flame_size = Vector2(")
+	assert_str(split[2]).starts_with("flame_size = Vector2(")
 
 
 func test_reset_puts_every_knob_back_to_its_authored_value() -> void:
@@ -428,17 +435,18 @@ const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit marg
 # immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
 # rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
 # ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
-# #280's tuft scale reddened it a second time, the same day, and is out for the same reason: it is
-# prop geometry, an art convention matched to the tile art once. #326's cover bumps are the third,
-# and by then the rule was doing its job: the exclusion was written and this case reddened anyway,
-# which is precisely the "state it twice" the list exists for.
-# #324's two are the fourth and fifth, and each is a NEW reason rather than another prop-geometry
-# case: "Flame animated" is an ACCESSIBILITY switch (#217's tenant), so a mission must never be able
-# to turn a player's photosensitivity choice back on, and "Flame camera push" is a plane-separation
-# clearance defending against a geometric coincidence (#298) -- markup's family, not mood's. Every
-# other flame knob IS mood and stays in.
-const EFFECTS_NOT_MOOD := ["Brush ghost alpha", "Prop block height", "Grass tuft scale",
-	"Cover bump scale", "Flame camera push", "Flame animated"]
+# #280's tuft scale reddened it a second time and #326's cover bumps a third, all three for one
+# reason: prop geometry is an art convention matched to the tile art once.
+# THOSE THREE HAVE LEFT KNOBS ENTIRELY (#272), and so has the whole FIRE block behind them (dev,
+# 2026-08-16: a terrain effect's look is a game value like the rest). Every ruling this list used to
+# state is now structural -- a preset cannot reach a knob that is not in this table -- which is why
+# only dev chrome is left to name. That is the list shrinking because the rule got stronger, not
+# weaker, and the law below is what stops it shrinking any other way.
+const EFFECTS_NOT_MOOD := ["Brush ghost alpha"]
+# The group those labels live in. It was "Effects" until #272 emptied that group entirely and the
+# survivor was re-filed as what it is; naming it here rather than inline is what made this a
+# one-line follow rather than a hunt.
+const NOT_MOOD_GROUP := "Dev chrome"
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
@@ -459,7 +467,7 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 		elif group == "Camera":
 			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
 			because = "camera handling is a game setting" if not belongs else "camera framing is look"
-		elif group == "Effects":
+		elif group == NOT_MOOD_GROUP:
 			belongs = not EFFECTS_NOT_MOOD.has(label)   # dev chrome and prop geometry are not mood
 			because = "'%s' is not scene mood" % label if not belongs else "flame lights the world"
 		assert_bool(captured.has(LookKnobs.preset_key(knob))).override_failure_message(
@@ -478,6 +486,19 @@ func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void
 	for key: String in captured:
 		assert_bool(in_scope.has(key)).override_failure_message(
 			"'%s' reached a preset without being an in-scope knob" % key).is_true()
+
+
+# The same guard, for the OTHER list stating the ruling. EFFECTS_NOT_MOOD exists to notice a silent
+# widening, so a label that has stopped matching any knob -- a reworded row, or one that moved to
+# another table the way prop geometry did in #272 -- leaves it quietly toothless rather than red.
+func test_every_not_mood_label_names_a_real_effects_knob() -> void:
+	var labels: Array[String] = []
+	for knob: Dictionary in LookKnobs.KNOBS:
+		if knob["group"] == NOT_MOOD_GROUP:
+			labels.append(knob["label"])
+	for label: String in EFFECTS_NOT_MOOD:
+		assert_bool(labels.has(label)).override_failure_message(
+			"EFFECTS_NOT_MOOD names '%s', which is not an Effects knob -- it has silently stopped excluding anything" % label).is_true()
 
 
 # A property rename would otherwise silently un-exclude its knob: the old key stops matching

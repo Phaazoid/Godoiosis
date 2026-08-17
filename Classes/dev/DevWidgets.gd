@@ -1,6 +1,63 @@
 extends Object
 class_name DevWidgets
 
+# One knob row, whichever panel is drawing it (#212's Look tab, #272's Object tab). The widget is
+# picked from the LIVE VALUE's type rather than from a column on the table, which is why one builder
+# serves both -- and why a knob whose property does not resolve draws a labelled failure instead of
+# a row that edits nothing. The value and the writer are PASSED, so this stays ignorant of which
+# host either panel is bound to.
+static func add_knob_row(rows: VBoxContainer, knob: Dictionary, value: Variant,
+		on_write: Callable, tip: String) -> void:
+	var label: String = knob["label"]
+	if typeof(value) == TYPE_NIL:
+		var where := "%s:%s" % [knob.get("node", "?"), knob.get("prop", "?")]
+		add_label(rows, "%s - UNRESOLVED (%s)" % [label, where])
+		push_error("knob does not resolve: %s" % where)
+		return
+	var first := rows.get_child_count()
+	if knob.has("options"):
+		var options: Array = knob["options"]
+		var current: int = int(value)
+		var current_label: String = options[current] if current >= 0 and current < options.size() else ""
+		add_option(rows, label, options, current_label,
+			func(picked: String) -> void: on_write.call(options.find(picked)))
+	else:
+		match typeof(value):
+			TYPE_BOOL:
+				add_checkbox(rows, label, value, func(on: bool) -> void: on_write.call(on))
+			TYPE_COLOR:
+				add_color(rows, label, value, func(picked: Color) -> void: on_write.call(picked))
+			_:
+				add_slider(rows, label, value, knob["min"], knob["max"], knob["step"],
+					func(moved: float) -> void: on_write.call(moved))
+	# Every control the row added, so hovering the slider handle answers as well as the label.
+	for i in range(first, rows.get_child_count()):
+		apply_tooltip(rows.get_child(i), tip)
+
+
+# The GDScript spelling of a tuned value. Two readers with different destinations -- LookTool's
+# Copy Values puts it on the clipboard, ObjectKnobs writes it into a script's @export default -- so
+# it belongs to neither panel.
+static func literal_for(value: Variant) -> String:
+	match typeof(value):
+		TYPE_BOOL:
+			return "true" if value else "false"
+		TYPE_FLOAT:
+			return String.num(value, 4)
+		TYPE_COLOR:
+			var color: Color = value
+			return "Color(%s, %s, %s, %s)" % [String.num(color.r, 4), String.num(color.g, 4),
+				String.num(color.b, 4), String.num(color.a, 4)]
+		TYPE_VECTOR2:
+			var vec2: Vector2 = value
+			return "Vector2(%s, %s)" % [String.num(vec2.x, 4), String.num(vec2.y, 4)]
+		TYPE_VECTOR3:
+			var vec3: Vector3 = value
+			return "Vector3(%s, %s, %s)" % [String.num(vec3.x, 4), String.num(vec3.y, 4),
+				String.num(vec3.z, 4)]
+	return str(value)
+
+
 static func add_label(container: Node, text: String) -> void:
 	var label := Label.new()
 	label.text = text
