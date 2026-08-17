@@ -443,6 +443,10 @@ const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit marg
 # only dev chrome is left to name. That is the list shrinking because the rule got stronger, not
 # weaker, and the law below is what stops it shrinking any other way.
 const EFFECTS_NOT_MOOD := ["Brush ghost alpha"]
+# The group those labels live in. It was "Effects" until #272 emptied that group entirely and the
+# survivor was re-filed as what it is; naming it here rather than inline is what made this a
+# one-line follow rather than a hunt.
+const NOT_MOOD_GROUP := "Dev chrome"
 
 func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
@@ -463,7 +467,7 @@ func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
 		elif group == "Camera":
 			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
 			because = "camera handling is a game setting" if not belongs else "camera framing is look"
-		elif group == "Effects":
+		elif group == NOT_MOOD_GROUP:
 			belongs = not EFFECTS_NOT_MOOD.has(label)   # dev chrome and prop geometry are not mood
 			because = "'%s' is not scene mood" % label if not belongs else "flame lights the world"
 		assert_bool(captured.has(LookKnobs.preset_key(knob))).override_failure_message(
@@ -490,7 +494,7 @@ func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void
 func test_every_not_mood_label_names_a_real_effects_knob() -> void:
 	var labels: Array[String] = []
 	for knob: Dictionary in LookKnobs.KNOBS:
-		if knob["group"] == "Effects":
+		if knob["group"] == NOT_MOOD_GROUP:
 			labels.append(knob["label"])
 	for label: String in EFFECTS_NOT_MOOD:
 		assert_bool(labels.has(label)).override_failure_message(

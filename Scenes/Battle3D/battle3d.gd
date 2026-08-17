@@ -179,6 +179,14 @@ func _apply_board_look() -> void:
 	LookKnobs.apply(self, preset)
 
 
+# Re-stand every prop against its tile's CURRENT fields (#272 slice 2) — the Objects tab's door
+# after editing a per-type value. It lives here rather than on the mirror because the grid and the
+# heights are this node's to hand over; the mirror is passed them per call and stores neither.
+func rebuild_props() -> void:
+	_board_mirror.drop_props()
+	rebuild()
+
+
 func rebuild() -> void:
 	var states: TerrainStateManager = game.terrain_states
 	var heights: BoardHeights = game.board_heights

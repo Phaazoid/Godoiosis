@@ -848,27 +848,67 @@ func _readable(texture: Texture2D) -> Image:
 	return image
 
 
-# Test the WIRE: a light table nothing reads looks exactly like a table with no entries. The
-# negative half is what gives it teeth — every prop lighting up would also pass the first, so the
-# pairing must be two things that BOTH stand up and differ only in whether they glow.
-func test_the_lantern_carries_a_light_and_the_tree_does_not() -> void:
+# Test the WIRE: a light rule nothing reads looks exactly like a rule with no entries. The negative
+# half is what gives it teeth — every prop lighting up would also pass the first, so the pairing must
+# be two things that BOTH stand up and differ only in whether they glow.
+#
+# The pair is DERIVED from the tileset's own prop_lit column since #272 slice 2, where the rule moved
+# off BoardMirror's LIT_PROPS name list. That is also what took the last authored name out of this
+# case: it used to ask for "Lantern" and "Tree" by name, i.e. pin content the dev may re-author.
+func test_an_object_authored_as_lit_carries_a_light_and_an_unlit_one_does_not() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
 	_game.game_state = _game.GameState.DEV_MODE
-	var lantern := _tile_named("Lantern")
-	var tree := _tile_named("Tree")
-	assert_bool(not lantern.is_empty() and not tree.is_empty()).override_failure_message(
-			"Lantern or Tree missing from the tileset; the case is vacuous").is_true()
+	var lit := _object_tile(true)
+	var unlit := _object_tile(false)
+	assert_bool(not lit.is_empty() and not unlit.is_empty()).override_failure_message(
+			"the tileset has no lit object, or no unlit one; the case is vacuous").is_true()
 
 	var cells: Array[Vector2i] = _game.grid.get_used_cells()
-	_game.grid.paint(cells[0], lantern.source, lantern.coords)
-	_game.grid.paint(cells[1], tree.source, tree.coords)
+	_game.grid.paint(cells[0], lit.source_id, lit.coords)
+	_game.grid.paint(cells[1], unlit.source_id, unlit.coords)
 	await _settle()
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_object(_light_under(mirror.prop_at(cells[0]))).override_failure_message(
-			"the lantern casts no light — LIT_PROPS is inert").is_not_null()
+			"an object authored prop_lit casts no light — the column is inert").is_not_null()
 	assert_object(_light_under(mirror.prop_at(cells[1]))).override_failure_message(
-			"the tree casts light — every prop is lit, so the table is not being consulted").is_null()
+			"an unlit object casts light — every prop is lit, so the column is not being read").is_null()
+
+
+# The first object tile whose prop_lit says what we are looking for, or {}.
+func _object_tile(lit: bool) -> Dictionary:
+	for entry: Dictionary in ObjectKnobs.object_tiles(_game.grid.tile_set):
+		if GridUtils.prop_lit_of(entry["data"]) == lit:
+			return entry
+	return {}
+
+
+# A per-TYPE field only reaches the board if something invalidates what is already standing:
+# _reconcile_prop's diff key is the TILE, so a prop whose tile is unchanged is deliberately left
+# alone — correct for painting, and blind to the tile itself gaining a value. This is the #308 shape
+# and drop_props is the same answer, invalidate at the source.
+func test_dropping_props_makes_the_next_reconcile_rebuild_them() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var standing := _tiles_that_stand(true)
+	assert_bool(not standing.is_empty()).override_failure_message(
+			"no standing tiles; the case is vacuous").is_true()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, standing[0].source, standing[0].coords)
+	await _settle()
+	var first := mirror.prop_at(cell)
+	assert_object(first).is_not_null()
+
+	mirror.drop_props()
+	_scene.rebuild()
+	var second := mirror.prop_at(cell)
+	assert_object(second).override_failure_message(
+			"the prop did not come back after being dropped").is_not_null()
+	assert_object(second).override_failure_message(
+			"the same node is still standing — a changed field would never reach the board"
+			).is_not_same(first)
 
 
 # A prop REPLACED on a cell must be rebuilt, and a prop merely re-seen must be left standing.

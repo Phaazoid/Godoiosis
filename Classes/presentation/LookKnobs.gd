@@ -171,15 +171,15 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
-	# --- Effects ---
-	# What used to fill this group has MOVED to ObjectKnobs (#272), in two passes and for one
-	# reason: none of it was scene mood. Prop geometry (block height, tuft scale, cover-bump scale)
-	# went first as world construction; the whole FIRE block followed on the dev's ruling that a
-	# terrain effect's look is a game value like the rest -- *"stylistically, where it matters, it
-	# is part of this group"*. Leaving is what makes those rulings structural rather than entries on
-	# PRESET_EXCLUDED, and it is what gives them a Save that writes their authored default.
-	# What is left is dev chrome, which was never mood either but has nowhere better to be.
-	{"group": "Effects", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
+	# --- Dev chrome ---
+	# There used to be an EFFECTS group here, and everything in it has MOVED to ObjectKnobs (#272),
+	# in two passes and for one reason: none of it was scene mood. Prop geometry went first as world
+	# construction; the whole FIRE block followed on the dev's ruling that a terrain effect's look is
+	# a game value like the rest. Leaving is what makes those rulings structural rather than entries
+	# on PRESET_EXCLUDED, and it is what gives them a Save that writes their authored default.
+	# The one survivor is dev chrome, so it is filed as that and rides the Markup sub-tab -- a group
+	# of one deserves a truthful heading, not a tab of its own.
+	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
 	# --- Unit HUD (#229) ---
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,

@@ -158,6 +158,67 @@ static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
 	return wall_edges_of(grid.get_cell_tile_data(cell))
 
 
+# --- Per-OBJECT presentation fields (#272 slice 2) --------------------------------------------
+#
+# A terrain object may carry its own light and its own size; a global on BoardMirror is the DEFAULT
+# it overrides (dev, 2026-08-16). These readers answer only "what did the author write", so the two
+# layers stay separable: BoardMirror is the only place that knows a global exists, and a future
+# second reader takes the RESOLVED value as a parameter rather than re-deriving the fallback.
+#
+# INHERIT IS A DECLARED SENTINEL, stated here and nowhere else, and it is ZERO because the storage
+# leaves no choice: `TileData.has_custom_data(name)` answers whether the LAYER exists, never whether
+# this tile authored a value, so an unauthored float reads the type's own 0.0. Any other sentinel
+# would have to be written onto every field of every object tile -- a migration with nothing
+# enforcing it for the next tile added.
+#
+# The cost is that a literal zero stops being authorable, and for these six fields that costs
+# nothing real: a prop scaled to 0 is invisible, and a light with no energy or reach is what
+# prop_lit = false already says, better. Measured against the alternative rather than assumed
+# (dev, 2026-08-16).
+const INHERIT := 0.0
+
+# Does this object emit light at all? Pure CONTENT, and the one field with no global behind it --
+# false is both the type default and the right answer for nearly every tile, which is what lets it
+# replace BoardMirror's old LIT_PROPS name list outright rather than sit beside it.
+static func prop_lit_of(data: TileData) -> bool:
+	if data == null or not data.has_custom_data("prop_lit"):
+		return false
+	return data.get_custom_data("prop_lit")
+
+
+# An authored float override, or INHERIT. One reader for all of them: the layer NAME is the only
+# thing that differs, so a per-field copy would be five spellings of one guard.
+static func prop_override_of(data: TileData, layer: String) -> float:
+	if data == null or not data.has_custom_data(layer):
+		return INHERIT
+	return data.get_custom_data(layer)
+
+
+# The colour twin, and it obeys the same storage rule the hard way: a Color layer's own default is
+# OPAQUE BLACK (Color() is 0,0,0,1), not transparent, so the sentinel is blackness rather than
+# alpha. A black light emits nothing, which is the same non-value a zero energy is -- so this costs
+# exactly as little, and it is one rule with the float above rather than two.
+static func prop_color_override_of(data: TileData, layer: String) -> Color:
+	if data == null or not data.has_custom_data(layer):
+		return INHERIT_COLOR
+	return data.get_custom_data(layer)
+
+
+const INHERIT_COLOR := Color(0, 0, 0, 1)
+
+
+# <= rather than ==, so a value nudged fractionally below zero by a slider cannot land between
+# "inherited" and "authored" and be neither.
+static func is_inherited(value: float) -> bool:
+	return value <= 0.0
+
+
+# Alpha is deliberately ignored: a black light is a non-light at any opacity, and reading only the
+# channels that matter means a stray alpha cannot strand a colour between the two states.
+static func is_inherited_color(value: Color) -> bool:
+	return value.r <= 0.0 and value.g <= 0.0 and value.b <= 0.0
+
+
 # Does this tile stand on the ground rather than BE it? The question #255 asked, now derived from
 # the shape rather than stored beside it -- the two could otherwise disagree.
 static func stands_up_of(data: TileData) -> bool:

@@ -65,7 +65,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Camera": "Camera",
 	"Board markup": "Markup",
 	"Board markup colours": "Markup",
-	"Effects": "Effects",
+	# The Effects sub-tab is gone (#272): its whole population moved to the Objects tab, and the one
+	# knob left is dev chrome, which shares Markup for the reason the Unit HUD does — neither is
+	# scene mood, and a tab holding a single row is a tab that has stopped meaning anything.
+	"Dev chrome": "Markup",
 	# #229's health readout. Shares the Markup tab rather than taking its own: it is HUD hung on a
 	# unit, i.e. the same "gameplay legibility, not scene mood" family as the board overlays, and
 	# both are excluded from presets for that one reason.

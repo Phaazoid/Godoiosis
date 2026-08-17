@@ -142,16 +142,18 @@ const FLAME_FRAMES := 8
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
 
-# Which props light the board, by the ONE authored naming policy
-# (GridUtils.authored_tile_display_name, so these are its capitalized forms). A SET rather than a
-# colour table: WHICH props glow is content, while what the glow looks like is a feel call and
-# lives in the knobs below. Keyed on the authored name because that is the identity that survives
-# an atlas re-layout — a coordinate would not.
-const LIT_PROPS: PackedStringArray = ["Lantern"]
-
+# WHICH props light the board was a name list here (LIT_PROPS = ["Lantern"]) until #272 slice 2.
+# Its own comment already said the quiet part — "which props glow is CONTENT" — and content keyed by
+# display name lived in a script, so it moved to the tile's own `prop_lit` column rather than gaining
+# a second seam beside it. GridUtils.prop_lit_of is the reader now.
+#
 # The lantern's light (#255, dev ask: "give it light like the torches"). Separate knobs from the
 # flame's on purpose — a steady lamp and a fire are different looks, and one shared number would
 # force whoever tunes the second to un-tune the first.
+#
+# These four are now DEFAULTS rather than the answer: a tile may override any of them, and this is
+# what it falls back to (dev's ruling, 2026-08-16). Resolving that layering is the *_for helpers
+# below, and it happens ONLY here — nothing downstream knows a global exists.
 @export var prop_light_color := Color(1, 0.8, 0.5)
 @export var prop_light_energy := 1.5
 @export var prop_light_range := 3.5
@@ -222,6 +224,12 @@ var _props: Dictionary[Vector2i, Node3D] = {}
 # node rather than a second dictionary keyed by cell: _props already tracks prop LIFETIME, and a
 # parallel store would have to be kept in step with every free.
 const TUFT_META := "tuft"
+
+# What the prop's own tile authored for its SIZE, carried on the prop root (#272 slice 2). The two
+# global setters have no grid to ask — the mirror is handed one per call and stores none — so the
+# override rides the node the same way TUFT_META does, for the same reason: a sweep has to find a
+# fact about a node it did not just build.
+const OVERRIDE_META := "size_override"
 
 # Where each tile's art actually sits, so a billboard is planted by its DRAWN pixels rather than by
 # its region. Both caches are pure derivations of the tileset — a decoded sheet per source, a
@@ -797,6 +805,18 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 	_props[cell] = built
 
 
+# Forget every standing prop, so the next reconcile rebuilds them (#272 slice 2). The dev tool's
+# door after editing a per-TYPE field, and it has to exist because _reconcile_prop's diff key is the
+# TILE: a prop whose tile is unchanged is left alone, which is right for painting and blind to a
+# field the tile itself just gained. Exactly the #308 shape — a poll that draws through a store its
+# own diff key cannot see — and the fix is the same, invalidate at the source rather than widen the
+# key into a copy of everything the build reads.
+func drop_props() -> void:
+	for cell: Vector2i in _props.keys():
+		_props[cell].queue_free()
+	_props.clear()
+
+
 func _free_props_except(wanted: Dictionary[Vector2i, bool]) -> void:
 	for cell: Vector2i in _props.keys():
 		if not wanted.has(cell):
@@ -836,13 +856,52 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	var root := Node3D.new()
 	add_child(root)
 	root.position = at
+	root.set_meta(OVERRIDE_META,
+		GridUtils.prop_override_of(grid.get_cell_tile_data(cell), "prop_height_scale"))
 	body.layers = BoardOverlays.WORLD_RENDER_LAYER
 	body.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	root.add_child(body)
 
-	if LIT_PROPS.has(GridUtils.authored_tile_display_name(grid.get_cell_tile_data(cell))):
-		_add_light(root, prop_light_color, prop_light_energy, prop_light_range, prop_light_height)
+	var data := grid.get_cell_tile_data(cell)
+	if GridUtils.prop_lit_of(data):
+		_add_light(root, light_color_for(data), light_energy_for(data),
+			light_range_for(data), light_height_for(data))
 	return root
+
+
+# --- Global default, per-object override (#272 slice 2) -----------------------------------------
+#
+# One shape, five times: an authored value wins, INHERIT falls back to this node's knob. Public
+# because the Objects tab shows what a field RESOLVES to beside what it is authored as -- an
+# "inherit" row that cannot say what it inherits is a row you have to go look up.
+
+func light_energy_for(data: TileData) -> float:
+	return _resolved(GridUtils.prop_override_of(data, "prop_light_energy"), prop_light_energy)
+
+
+func light_range_for(data: TileData) -> float:
+	return _resolved(GridUtils.prop_override_of(data, "prop_light_range"), prop_light_range)
+
+
+func light_height_for(data: TileData) -> float:
+	return _resolved(GridUtils.prop_override_of(data, "prop_light_height"), prop_light_height)
+
+
+func light_color_for(data: TileData) -> Color:
+	var authored := GridUtils.prop_color_override_of(data, "prop_light_color")
+	return prop_light_color if GridUtils.is_inherited_color(authored) else authored
+
+
+func block_height_for(data: TileData) -> float:
+	return _resolved(GridUtils.prop_override_of(data, "prop_height_scale"), block_height_scale)
+
+
+func tuft_scale_for(data: TileData) -> float:
+	return _resolved(GridUtils.prop_override_of(data, "prop_tuft_scale"), tuft_scale)
+
+
+func _resolved(authored: float, fallback: float) -> float:
+	return fallback if GridUtils.is_inherited(authored) else authored
 
 
 # Real geometry, built by the meshlib generator: the tile's own sprite on the sides, a generated
@@ -858,7 +917,8 @@ func _make_prop_block(grid: TileMapLayer, cell: Vector2i) -> MeshInstance3D:
 	var node := MeshInstance3D.new()
 	node.mesh = board.mesh_library.get_item_mesh(_item_by_name[item_name])
 	# The mesh stands on y = 0 with its measured height, so the knob is a pure vertical stretch.
-	node.scale = Vector3(1.0, block_height_scale, 1.0)
+	var data := grid.get_cell_tile_data(cell)
+	node.scale = Vector3(1.0, block_height_for(data), 1.0)
 	return node
 
 
@@ -941,8 +1001,12 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 	var root := Node3D.new()
 	add_child(root)
 	root.position = at
+	# The tile's own override rides on the ROOT (every sprite under it came off one tile), so the
+	# global setter below can re-derive rather than stomp an authored size. See OVERRIDE_META.
+	var authored := GridUtils.prop_override_of(grid.get_cell_tile_data(cell), "prop_tuft_scale")
+	root.set_meta(OVERRIDE_META, authored)
 	for rect: Rect2i in clusters:
-		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(),
+		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(authored),
 				float(GridUtils.TILE_SIZE))
 		sprite.set_meta(TUFT_META, true)
 		root.add_child(sprite)
@@ -983,31 +1047,45 @@ func _make_cluster_sprite(sheet: Texture2D, rect: Rect2i, pixel_size: float,
 # node's scale: a Y-billboard rebuilds its basis from the camera, and pixel_size also scales the
 # base offset, so a tuft shrinks toward the ground it stands on. Its POSITION in the cell is
 # untouched by the knob, because where a flower grows is not a matter of taste.
-func _tuft_pixel_size() -> float:
-	return tuft_scale / float(GridUtils.TILE_SIZE)
+func _tuft_pixel_size(authored: float) -> float:
+	return _resolved(authored, tuft_scale) / float(GridUtils.TILE_SIZE)
 
 
 # Re-stretch every standing block. The MESH children are exactly what _make_prop_block built, so a
 # billboard prop and a tuft's sprites are excluded by their type rather than by a mark — the one
 # case where "which nodes did I build here" is answerable without one.
+#
+# It RE-DERIVES from each prop's own authored override rather than writing the new global flat,
+# because since #272 slice 2 a global is only the default: a blanket sweep would silently stomp an
+# authored height the moment anyone touched the global slider, and the board would disagree with
+# the tileset until the next repaint. Both sides run the same _resolved(), so they cannot drift.
 func _set_block_height_scale(value: float) -> void:
 	block_height_scale = value
 	for root: Node3D in _props.values():
 		for child in root.get_children():
 			var mesh := child as MeshInstance3D
 			if mesh != null:
-				mesh.scale = Vector3(1.0, block_height_scale, 1.0)
+				mesh.scale = Vector3(1.0, _resolved(_override_on(root), value), 1.0)
 
 
 # Re-size every standing tuft. What makes tuft_scale a live knob rather than a value baked into
-# whatever was built last (see the export).
+# whatever was built last (see the export). Same re-derivation as the block sweep above.
 func _set_tuft_scale(value: float) -> void:
 	tuft_scale = value
 	for root: Node3D in _props.values():
 		for child in root.get_children():
 			var sprite := child as Sprite3D
 			if sprite != null and sprite.has_meta(TUFT_META):
-				sprite.pixel_size = _tuft_pixel_size()
+				sprite.pixel_size = _tuft_pixel_size(_override_on(root))
+
+
+# What the tile under a standing prop authored for its own size, INHERIT when it said nothing. Read
+# off the node because the sweeps above have no grid — the mirror is handed one per call and stores
+# none, deliberately (see sync).
+func _override_on(root: Node3D) -> float:
+	if not root.has_meta(OVERRIDE_META):
+		return GridUtils.INHERIT
+	return root.get_meta(OVERRIDE_META)
 
 
 # --- COVER (#326) -------------------------------------------------------------------------------
