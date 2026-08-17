@@ -2,7 +2,40 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #344 (2026-08-16).**
+**Canon checked through #350 (2026-08-16).**
+
+---
+
+## Where a presentation value is authored (#272, 2026-08-16)
+
+A tuned value has **three** possible homes, and picking the wrong one is how a value ends up with
+nowhere to live. The question to ask is *who is allowed to disagree about this?*
+
+| home | who may differ | surface | stored in |
+|---|---|---|---|
+| **mission mood** | one board vs another | Look tab | a `LookPreset` a `ScenarioData` names (#253) |
+| **game constant** | nobody, ever | Objects tab → *Save to source* | the `@export` default that declares it |
+| **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
+
+The middle row is the one that was missing until #272, and its absence is what the ticket was
+actually about: prop geometry and the whole fire block are world construction rather than mood, so a
+preset was never the right store for them — they are the same in every mission forever. They left
+`LookKnobs.KNOBS` entirely rather than being filtered out of presets by name, which is what makes
+"a mission cannot restyle world construction" structural instead of a list someone maintains.
+
+**A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
+place that resolves the two, so nothing downstream knows a global exists.
+
+**INHERIT is zero, and that is forced rather than chosen.** `TileData.has_custom_data` answers
+whether the *layer* exists, never whether *this tile* wrote to it, so an unauthored field arrives as
+its type's own default and the sentinel has to BE that default. A `Color` layer's default is opaque
+black, not transparent — so blackness means inherit there, since a black light is the same non-value
+a zero energy is. The cost is that a literal zero is not authorable, which for these fields is no
+cost: `prop_lit = false` already says "no light", and better.
+
+**Which props glow is CONTENT** — it lives in the tile's own `prop_lit` column. It used to be a
+hardcoded name list in `BoardMirror`, which is exactly the shape Law #4 warns about: a fact the
+content layer should hold, sitting in a script because that was where the first reader stood.
 
 ---
 
@@ -108,7 +141,7 @@ Burrow's COVER pops up as three mud bumps — the dev's ask, twice: *"cover shou
 
 **The art had to answer "three" before the code could.** Measured before building, and it reversed the issue's own premise: `Cover.png`'s three mounds *touched* — one cluster 8-connected, two 4-connected — so the mechanism as shipped would have stood the whole icon up, which is the exact outcome the dev vetoed. Three pixels of seam were erased (dev's call). The general rule: **a decomposition can only find the objects the art separates**, so before reusing one, count the clusters in the art you are pointing it at.
 
-Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** Look knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first.
+Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first. (Both were Look knobs until [#272](https://github.com/Phaazoid/Godoiosis/issues/272) moved them to the Objects tab — see *Where a presentation value is authored* below.)
 
 ### Fire is an EFFECT, not a sprite standing on a tile ([#324](https://github.com/Phaazoid/Godoiosis/issues/324), 2026-08-16)
 
@@ -172,7 +205,7 @@ Two consequences worth knowing:
 - **Only clusters above `BoardMirror.TUFT_MIN_CLUSTER_PIXELS` stand up**, and the threshold is measured rather than picked: the shipped sheet's clusters are 2-px specks or 23-px-plus objects with nothing in between. A speck loses nothing by staying flat, because the tile keeps its full bake — it is still drawn, just not duplicated. Standing every speck up as well is [#311](https://github.com/Phaazoid/Godoiosis/issues/311), and needs one mesh per cell plus a per-quad billboard to stay affordable, because a whole-mesh billboard would swing the plants around the cell centre as the camera orbits.
 - **`grass_clover` is not a tuft**, and that is the art's own answer rather than a design call: its content is five 2-pixel dots. It is grass speckle, not clover.
 
-`BoardMirror.tuft_scale` is the Look-tab knob — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile changes.
+`BoardMirror.tuft_scale` is the Objects-tab knob (#272; it was a Look knob until then) — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile changes.
 
 **Tufts are the one prop form that casts no shadow**, and that is a count rather than a look call: `Prolog` paints over a thousand tuft cells against a dozen lamps and trees.
 
@@ -189,7 +222,7 @@ Two things were **measured** on the way, and both reversed an assumption the iss
 - **Godot's own alternative-tile transform flags cannot serve.** They were the recommended candidate — an existing-but-unused mechanism rather than an invented convention — but no authored board uses one (0 non-zero alternatives in 5,712 cells across all three), the in-game Tile Brush cannot write one, and a transform bit rotates the **2D** sprite too, so it cannot carry a 3D-only facing without drawing a front-on palisade lying on its side.
 - **Not every piece's art can be a wall face.** In this sheet the east-west pieces are drawn face-on (15×13, top-aligned) and are worn directly, keeping the #250 rule that the 3D shows the game's tiles. The north-south pieces are drawn edge-on — 7×16, successive posts stacked *down-screen* — which is a top-down foreshortening, not a picture of a wall; on a plane facing east it renders as a tower of logs. Those faces are **generated in the tile's own measured palette**, the same reconciliation #274 already made for solid props.
 
-A plane is also the one prop form NOT sized by its art's opaque bounds: it is thin by definition in the axis it does not run along, so its thickness and height are generator constants. Being baked, they get no Look-tab knob — the same call `PRISM_PROFILE` records.
+A plane is also the one prop form NOT sized by its art's opaque bounds: it is thin by definition in the axis it does not run along, so its thickness and height are generator constants. Being baked, they get no live knob at all — the same call `PRISM_PROFILE` records.
 
 ### Block props are GENERATED, not commissioned (#264 + #274, 2026-08-15)
 
