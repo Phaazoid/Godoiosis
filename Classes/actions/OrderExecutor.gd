@@ -23,6 +23,14 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 # take_damage carries that rung out directly and the unit never goes DOWNED.)
 var _downed_pending: Array[Unit] = []
 
+# The plan THIS pass is playing out, non-null only while one is running (#354). It exists because
+# SquadManager._last_resolved_plan is not stable across a pass: a kill mid-pass fires unit_died ->
+# game._on_unit_died -> refresh_action_queue -> resolve_plan, which re-resolves a queue whose earlier
+# attacks have already landed. Anything PREVIEWING the pass has to read the plan being executed, not
+# whatever the last resolve left behind. Nothing here consumes it -- execute_orders holds its own
+# local -- so this is a published fact, not a second source of truth.
+var executing_plan: ResolvedPlan = null
+
 # ==============================================================================
 #  Resolving a plan
 # ==============================================================================
@@ -54,6 +62,7 @@ func execute_orders(unit):
 	# Explicit types throughout: `game` is untyped (game.gd has no class_name), so every
 	# game.* call reads as Variant and `:=` cannot infer from it.
 	var plan: ResolvedPlan = game.squad_manager.resolve_plan(squad, game._board())
+	executing_plan = plan
 	var move_actions := []
 	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
 
@@ -79,6 +88,10 @@ func execute_orders(unit):
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
 		await _execute_action_sequence(batch, beat)
+	# The last await has returned, so the pass is played out: released HERE rather than beside
+	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
+	# the squad-validity bail below skips that call entirely.
+	executing_plan = null
 	_process_downed_pending()
 	# Loss-of-contact ejection (#151), right after downed ejection and for the same reason: the
 	# pass has settled, and a member a shove displaced out of its leader's path-bubble is no
