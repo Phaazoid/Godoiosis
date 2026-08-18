@@ -96,6 +96,25 @@ const ICON_TEXTURES = {
 	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadHighlightIcon.png")
 }
 
+# --- Squad marker style (#325 experiment) --------------------------------------------------
+# Rings underfoot vs the legacy over-the-head squares. static, the ATTACK_MODULATE pattern, so
+# the Look tab's toggle reaches it without a node ref; read by _style_icon here and by
+# OverlayMirror._icons, so flipping it moves BOTH stacks. Style only -- icon LIFECYCLE (when a
+# marker exists) is untouched either way. The losing style gets deleted when the experiment ends.
+static var SQUAD_MARKER_RINGS := true
+static var SQUAD_RING_ALPHA := 0.9
+const SQUAD_RING_TEXTURE := preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
+# Per-squad hues, dealt by SquadManager at squad creation: cool for friendly squads, warm for
+# enemy ones, so "which squad" and "whose side" read from one glance.
+const SQUAD_HUES_FRIENDLY: Array[Color] = [
+	Color(0.3, 0.6, 1.0), Color(0.2, 0.9, 0.8), Color(0.65, 0.5, 1.0), Color(0.35, 0.9, 0.5),
+]
+const SQUAD_HUES_ENEMY: Array[Color] = [
+	Color(1.0, 0.35, 0.3), Color(1.0, 0.65, 0.2), Color(1.0, 0.4, 0.75), Color(1.0, 0.85, 0.3),
+]
+const RING_Z_INDEX := 2       # underfoot: above terrain state (1), below arrows (3) and units (4)
+const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the toggle round-trips
+
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 var planned_move_by_unit := {} #{Unit : MoveAction}
@@ -416,9 +435,39 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 	var cell := unit.get_projected_destination()
 	icon.setup(ICON_TEXTURES[type], cell, type)
 	icon.position = board_tilemap.map_to_local(cell)
-	
+	_style_icon(icon, unit)
+
 	icons_by_unit[unit][type] = icon
 	return icon
+
+# Presentation only (#325): which texture/tint/z an icon wears under the current marker style.
+# Rings lie under the unit in the squad's dealt hue; the crown decal keeps its authored gold so
+# it never fights the palette. Square mode is byte-for-byte the legacy look.
+func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
+	if SQUAD_MARKER_RINGS:
+		icon.sprite.z_index = RING_Z_INDEX
+		if icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
+			icon.sprite.texture = SQUAD_RING_TEXTURE
+			var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
+			icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
+		else:
+			icon.sprite.texture = ICON_TEXTURES[icon.icon_type]
+			icon.sprite.modulate = Color.WHITE
+	else:
+		icon.sprite.texture = ICON_TEXTURES[icon.icon_type]
+		icon.sprite.z_index = HEAD_ICON_Z_INDEX
+		icon.sprite.modulate = Color.WHITE
+
+# The Look-tab toggle restyles markers already on screen; walking the store here keeps the
+# panel ignorant of icon lifecycle.
+func restyle_squad_markers() -> void:
+	for unit in icons_by_unit.keys().duplicate():
+		if not is_instance_valid(unit):
+			_purge_unit_entry(unit)
+			continue
+		for icon: OverlayIcon in icons_by_unit[unit].values():
+			if is_instance_valid(icon):
+				_style_icon(icon, unit)
 
 func clear_unit_icon(unit: Unit, type: OverlayIcon.IconType):
 	if not icons_by_unit.has(unit):

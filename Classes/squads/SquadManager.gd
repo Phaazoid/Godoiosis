@@ -87,9 +87,10 @@ func faction_all_squads_acted(faction: Team.Faction) -> bool:
 func create_squad(leader: Unit) -> Squad:
 	var squad := Squad.new()
 	add_child(squad)
-	
+
 	squad.set_leader(leader)
-	
+	squad.ring_hue = _deal_ring_hue(leader.get_faction())
+
 	squads.append(squad)
 	_register_squad_signals(squad)
 	
@@ -224,10 +225,23 @@ func destroy_empty_squad(squad: Squad):
 	
 func clear_all_squads():
 	active_squad = null
+	_ring_hue_counters.clear()
 	for squad in squads.duplicate():
 		squads.erase(squad)
 		squad_deleted.emit(squad)
 		squad.queue_free()
+
+# #325: each squad is dealt a marker hue at creation -- cool palette for friendly factions, warm
+# for the enemy, cycling per faction so concurrently-alive squads stay distinct. Battle-scoped;
+# a reload re-deals in load order.
+var _ring_hue_counters: Dictionary[Team.Faction, int] = {}
+
+func _deal_ring_hue(faction: Team.Faction) -> Color:
+	var palette: Array[Color] = OverlayManager.SQUAD_HUES_ENEMY if faction == Team.Faction.ENEMY \
+			else OverlayManager.SQUAD_HUES_FRIENDLY
+	var index: int = _ring_hue_counters.get(faction, 0)
+	_ring_hue_counters[faction] = index + 1
+	return palette[index % palette.size()]
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
 	# Downed/dead units can't be ordered. This is the single order chokepoint (Law #3 —

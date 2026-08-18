@@ -30,7 +30,7 @@ enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
-	ZONE_PATROL, ZONE_HIGHLIGHT,
+	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
@@ -70,10 +70,16 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.INVALID_MOVE: {"color": Color(0.5, 0.36, 0.4, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.SQUAD: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
 	Layer.SQUAD_RANGE: {"color": Color(1, 0.5, 0, 0.5), "sort": -1, "kind": Kind.FILL},
-	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 3, "kind": Kind.FILL},
-	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 4, "kind": Kind.SPRITE},
-	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
-	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
+	Layer.AIM: {"color": Color(1, 1, 0, 1), "sort": 4, "kind": Kind.FILL},
+	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
+	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	# The ground form of the selection icons (#325 experiment): membership rings + the leader's
+	# crown decal lying on the cell surface. Above terrain state, below the aim pulse, pick
+	# markers and arrows (a ring must never eat an arrowhead) -- AIM/TARGET_PICK/arrows each
+	# moved up one to open this slot. Colour stays WHITE: the tint is per-entry (the squad hue,
+	# copied off the 2D sprite), which is also why this layer can never take a LAYER_KNOBS row.
+	Layer.GROUND_ICONS: {"color": Color.WHITE, "sort": 3, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.
