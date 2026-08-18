@@ -430,8 +430,8 @@ func _setup_corner() -> void:
 func _position_pip() -> void:
 	if view != View.CORNER:
 		return
-	var view: Vector2 = get_viewport().get_visible_rect().size
-	_game_container.position = view - _pip_native * pip_scale - pip_margin
+	var viewport_size: Vector2 = get_viewport().get_visible_rect().size
+	_game_container.position = viewport_size - _pip_native * pip_scale - pip_margin
 
 
 # The board-visual set, hidden as a unit so the 2D layer reads as pure UI.

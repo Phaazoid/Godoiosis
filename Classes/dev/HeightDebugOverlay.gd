@@ -33,7 +33,7 @@ var heights: BoardHeights
 # that carries a level lights this on its own; but if F5 already asked for it, leaving that paint
 # mode must not silently switch it off.
 var _toggled := false        # F5
-var _brush_active := false   # the Tile Brush is in Terrain mode, which carries the level (#340)
+var _brush_active := false   # the level brush is LIVE -- DevController.elevation_brush_live (#340)
 
 func _ready() -> void:
 	visible = false

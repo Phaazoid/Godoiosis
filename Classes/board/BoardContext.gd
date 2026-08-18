@@ -59,12 +59,6 @@ func projected_unit_at_cell(cell: Vector2i) -> Unit:
 func terrain_kind_at(cell: Vector2i) -> Terrain.Kind:
 	return GridUtils.get_terrain_kind_at_cell(grid, cell)
 
-# The rules' single read-point for "is there ground here" (#245) — sibling of terrain_kind_at,
-# same rationale: a method, not an inline grid read, so a fixture board can stub it. A tile state
-# modifies what happens when a unit WALKS on a tile, so a cell with no tile has nothing to modify.
-func has_ground(cell: Vector2i) -> bool:
-	return GridUtils.has_ground(grid, cell)
-
 # The rules' single read-point for a cell's terrain DEF (#84): a Burrow-dug COVER tile shelters
 # whoever stands on it. Sibling of terrain_kind_at, same rationale — the resolver's mitigation
 # stage and the inspect panel's DEF readout both come through here, so they can't drift.
