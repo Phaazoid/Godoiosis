@@ -1,6 +1,9 @@
 extends Node2D
 class_name CursorController
 
+# The 2D board cursor: one sprite marking the hovered cell, and what KIND of thing sits under the
+# pointer. A child of Game, written only by HoverPresenter -- one set_state per hover branch.
+
 @onready var sprite: Sprite2D = $CursorSprite
 @onready var board_tilemap = $"../Grid"
 
@@ -19,11 +22,10 @@ const CURSOR_TEXTURES = {
 	CursorState.VALID: preload("res://Art/Icons/BoardIcons/PositiveIcon.png")
 }
 
-# Called when the node enters the scene tree for the first time.
 func _ready() -> void:
 	sprite.texture = CURSOR_TEXTURES[CursorState.DEFAULT]
 
-func set_cursor_pos(cell: Vector2i):
+func set_cursor_pos(cell: Vector2i) -> void:
 	sprite.position = board_tilemap.map_to_local(cell)
 
 # The last state set. STORED, because the 3D bracket mirrors this answer instead of re-deriving
@@ -31,12 +33,12 @@ func set_cursor_pos(cell: Vector2i):
 # the #232 shape. This used to swap the texture and throw the fact away.
 var state: CursorState = CursorState.DEFAULT
 
-func set_state(new_state: CursorState):
+func set_state(new_state: CursorState) -> void:
 	state = new_state
 	sprite.texture = CURSOR_TEXTURES[new_state]
 
-func hide_cursor():
+func hide_cursor() -> void:
 	sprite.visible = false
-	
-func show_cursor():
+
+func show_cursor() -> void:
 	sprite.visible = true

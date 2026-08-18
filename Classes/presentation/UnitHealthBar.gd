@@ -70,6 +70,7 @@ var _has_prediction := false
 var _number_shown := true
 
 var _alarm: Tween
+var _alarm_peak_live := Color(1.0, 1.0, 1.0, 1.0)   # the peak the RUNNING tween was started with
 # Every input the drawing reads, snapshotted (#313). UnitMirror pushes style, HP and prediction
 # every frame for every SHOWN bar, and a redraw resizes five meshes and measures the label's AABB —
 # fine for the single hovered bar #229 shipped, N times a frame once a plan puts one over everybody.
@@ -190,15 +191,24 @@ func set_shown(shown: bool) -> void:
 
 # Idempotent because it is TOLD every frame: start once, stop once. Pulse.stop writes the base value
 # back through alarm_color's setter, so the segment lands on its resting colour with no extra paint.
+# A tween carries the peak it STARTED with, so a peak retuned mid-pulse restarts it -- a Look knob
+# that only lands at the next alarm reads as a dead slider.
 func set_alarm(on: bool) -> void:
+	if on and _alarm != null and _alarm_peak_live != _alarm_peak_color:
+		_stop_alarm()
 	if on == (_alarm != null):
 		return
 	if on:
 		alarm_color = _segment_color()
+		_alarm_peak_live = _alarm_peak_color
 		_alarm = Pulse.start(self, self, &"alarm_color", _segment_color(), _alarm_peak_color)
 	else:
-		Pulse.stop(_alarm, self, &"alarm_color", _segment_color())
-		_alarm = null
+		_stop_alarm()
+
+
+func _stop_alarm() -> void:
+	Pulse.stop(_alarm, self, &"alarm_color", _segment_color())
+	_alarm = null
 
 
 # Turn the WHOLE readout to face the camera, once, instead of letting each part billboard itself.

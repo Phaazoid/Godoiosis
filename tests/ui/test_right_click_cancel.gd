@@ -179,7 +179,7 @@ func test_a_group_move_pops_as_one_gesture() -> void:
 	# reason BaseAction.batch_id exists. Popping member-by-member would leave a half-dissolved
 	# formation the validator then has to refuse.
 	var units := _player_units()
-	assert_int(units.size()).is_greater(1)   # the sandbox must field a squad-able pair
+	assert_int(units.size()).is_greater(2)   # the sandbox must field units[1] and units[2]
 
 	# join_squad is the production call the squad-up target pick closes over (game.gd:792).
 	var leader := units[1]
@@ -211,7 +211,12 @@ func test_hold_fillers_are_never_what_a_press_pops() -> void:
 	# Activating a squad queues a hold for every member with no move. Those are not orders, and
 	# cancelling one only makes cancel_move_for_unit queue another -- a press that "undid" one
 	# would look like a dead button. Nothing to undo must stay nothing to undo.
+	#
+	# The FILTER is asserted directly below, and that is deliberate: a filler is stamped batch_id 0
+	# because setup_hold_move_actions calls squad._queue_action past queue_action's door, so
+	# last_gesture_actions is the whole rule. The press half cannot reach it -- see the note there.
 	var units := _player_units()
+	assert_int(units.size()).is_greater(2)   # the sandbox must field units[1] and units[2]
 	var leader := units[1]
 	game.squad_manager.join_squad(units[2], leader.squad)
 	game.squad_manager.setup_hold_move_actions(leader.squad)
@@ -220,6 +225,13 @@ func test_hold_fillers_are_never_what_a_press_pops() -> void:
 	assert_int(_real_orders(leader.squad).size()).is_equal(0)
 
 	assert_array(game.squad_manager.last_gesture_actions(leader.squad)).is_empty()
+
+	# A squad holding NOTHING BUT fillers is unreachable in play -- revert_if_only_hold clears the
+	# queue and drops active_squad the moment the last real order leaves. So this press runs against
+	# a null active_squad and returns at _pop_last_gesture's first guard; it pins that the outer
+	# guard holds, NOT that the filter does. Asserted rather than left implied, because a reader
+	# would otherwise take the untouched queue below for evidence the filter ran.
+	assert_object(game.squad_manager.active_squad).is_null()
 
 	game._on_right_click()
 
