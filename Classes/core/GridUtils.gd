@@ -56,8 +56,9 @@ static func cardinal_direction_i_between(from_cell: Vector2i, to_cell: Vector2i)
 	var dir := cardinal_direction_between(from_cell, to_cell)
 	return Vector2i(int(dir.x), int(dir.y))
 
-# Is there a tile here AT ALL (#245)? The one implementation of the question; BoardContext.has_ground
-# is the rules layer's read-point onto it and TerrainStateManager's ground_source is wired from it.
+# Is there a tile here AT ALL (#245)? The one implementation of the question, called directly by
+# everyone who asks it -- TerrainStateManager's ground_source is wired from it, and the dev pruner
+# and BoardMirror reach it from where they stand.
 # Deliberately the SOURCE id, not get_cell_tile_data: a headless fixture grid has cells placed but no
 # TileSet to read custom data from, so the tile-data form would call every fixture cell groundless.
 # A null grid cannot judge, so it does not — no board means no forbid, which is what keeps the
