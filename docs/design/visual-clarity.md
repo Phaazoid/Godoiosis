@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #350 (2026-08-16).**
+**Canon checked through #358 (2026-08-18).**
 
 ## Principles
 
@@ -264,19 +264,29 @@ over its head. Seeing both at once, the dev's call was that **the ground one rea
 
 **Retired by this rule:** `IconType.TARGET`, whose only producer was `draw_create_squad` — the
 target-pick ground marker is now the single answer to *which unit may I pick*. `CURSOR` and
-`INVALID` went with it as never-produced leftovers. **Not decided here:** `CROWN` and
-`SQUADMEMBER`, which are [#325](https://github.com/Phaazoid/Godoiosis/issues/325)'s call — that
-ticket picks squad membership's 3D form, and this rule is an input to it, not a ruling over it.
+`INVALID` went with it as never-produced leftovers. **`CROWN` and `SQUADMEMBER` got their ruling
+2026-08-18:** [#325](https://github.com/Phaazoid/Godoiosis/issues/325) is experimenting with a
+restyle of the `Layer.SQUAD` presence each member already has — a squad-colored ring underfoot,
+a leader variant instead of the crown — behind a Look-tab toggle against the current squares.
+The loser gets deleted, not kept as a second opinion.
 
 Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
 general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
 their candidates marked *nowhere in either view* until #316, and Squad Up only looked right because
-someone had patched that one screen. And **the first real occupant of the freed channel is blocked
-on art, not on design** — a unit's `element_states` are hover-only today (`StateIcons.populate`,
-called from the two panels and nowhere else), so a Wet unit and a dry one are identical on the
-board; `StateIcons.ICONS` carries art for WET alone and everything else falls back to a text label.
-Making it always-on is also exactly the trigger #229 named for the crowding question it deferred —
-the same trigger [#350](https://github.com/Phaazoid/Godoiosis/issues/350) pulls for health.
+someone had patched that one screen. And **the freed channel's first occupant is now filed, in two
+halves (dev direction, 2026-08-18):** [#357](https://github.com/Phaazoid/Godoiosis/issues/357)
+puts a `StateIcons` row just above each unit's health bar (riding #350's visibility gate, never
+growing its own), and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) makes the sprite
+itself wear its status — wet drip, frost sheen, Crisis — the channel that keeps states readable
+when [#350](https://github.com/Phaazoid/Godoiosis/issues/350)'s toggle hides the bars.
+`StateIcons.ICONS` still carries art for WET alone; a CHILLED icon is the open art ask. Always-on
+state icons remain the trigger #229 named for the crowding question it deferred — two states
+cannot crowd, a longer vocabulary can.
+
+The doctrine governing everything that enters these channels (dev, 2026-08-18): *"Having access to
+fancy effects doesn't necessitate using them. Using them in the correct places rather than
+everywhere makes them have more effect."* Unit status (#358) is a sanctioned place; a fancy effect
+everywhere is a fancy effect nowhere.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
@@ -290,6 +300,7 @@ legibility (needs design first — the umbrella's core problem).
 [#158](https://github.com/Phaazoid/Godoiosis/issues/158)'s ability re-homing):** the skull in the
 hover states-row is the only marker today, and a battle-long no-safety-net state deserves more —
 **the map sprite itself should reflect Crisis** (art-gated; needs a sprite/tint/overlay treatment
-per unit or a generic one). "It should be very obvious a unit is in crisis mode."
+per unit or a generic one). "It should be very obvious a unit is in crisis mode." Scoped as the
+third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s effect stack.
 
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
