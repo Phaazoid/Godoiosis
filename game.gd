@@ -75,6 +75,7 @@ var _target_pick_callback: Callable           # func(picked: Unit) -> void
 # back-ref set before anything touches it).
 var dev_controller: DevController
 var ai_controller: AIController
+var dialog_director: DialogDirector   # fires authored DialogBeats (#182)
 var terrain_states: TerrainStateManager
 var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
 var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
@@ -125,6 +126,10 @@ func _build_collaborators() -> void:
 	ai_controller = AIController.new()
 	ai_controller.game = self
 	add_child(ai_controller)
+
+	dialog_director = DialogDirector.new()
+	dialog_director.game = self
+	add_child(dialog_director)   # after @onready: _ready here connects turn_manager / squad_manager
 
 	terrain_states = TerrainStateManager.new()
 	terrain_states.name = "TerrainStateManager"
