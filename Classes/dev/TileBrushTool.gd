@@ -487,16 +487,10 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_elevation_row.visible = mode == PaintMode.TERRAIN
 	_rise_row.visible = mode == PaintMode.TERRAIN
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
-	update_height_readout()   # the same, for the terrain brush's level
 
-# Painting height into an invisible store is blind, so the readout lights with the brush that writes
-# it — the twin of update_zone_highlight above. The overlay derives its own visibility from this AND
-# F5, so leaving the mode cannot switch off a readout F5 asked for. Null in a build with dev tools
-# stripped, and while _build_extra_controls runs before init() hands us the game.
-func update_height_readout() -> void:
-	if game == null or game.height_debug_overlay == null:
-		return
-	game.height_debug_overlay.set_brush_active(paint_mode == PaintMode.TERRAIN)
+# NB the height readout is NOT lit from here. Painting height into an invisible store is blind, so it
+# follows the brush — but "is the level brush live?" is DevController's predicate, and it polls it
+# (_sync_height_readout). A mode compare here would be a second answer that cannot see the checkbox.
 
 # The board-wide wipe (dev ask 2026-08-11); per-cell erase stays right-click. Confirmed because
 # unsaved paint dies with it; the wipe pair is clear_board's own (clear + full redraw).

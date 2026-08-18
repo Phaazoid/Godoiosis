@@ -187,6 +187,18 @@ func _mouse_cell() -> Vector2i:
 # ghost shows exactly when a click would paint.
 func _process(_delta: float) -> void:
 	_sync_brush_ghost()
+	_sync_height_readout()
+
+# The height readout answers the SAME question the ghost does -- "is the level brush live?" -- so it
+# reads the one predicate instead of comparing the paint mode itself (#340). Polled for the same
+# reason the ghost is: brush_armed() has three inputs (DEV_MODE, the overlay, the checkbox) and not
+# one of them announces, so a push would need a caller at each. set_brush_active early-returns when
+# unchanged, so a frame that moved nothing costs one compare. Deliberately OUTSIDE the freeze guard
+# above -- a modal drops game_state out of DEV_MODE, and a readout under a card is worth nothing.
+func _sync_height_readout() -> void:
+	if game == null or game.height_debug_overlay == null:
+		return
+	game.height_debug_overlay.set_brush_active(elevation_brush_live())
 
 func _sync_brush_ghost() -> void:
 	if game == null or game.process_mode == Node.PROCESS_MODE_DISABLED:
