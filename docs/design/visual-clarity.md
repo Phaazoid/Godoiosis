@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #350 (2026-08-16).**
+**Canon checked through #355 (2026-08-18).**
 
 ## Principles
 
@@ -211,9 +211,10 @@ The rulings, all dev calls, all made before building:
 
 - **A notch on ONE bar**, not a ghost twin beside it. Current and predicted are one fact about one
   unit, and a second bar over everybody the plan touches is exactly the crowding #229 deferred.
-- **Anyone the plan CHANGES** — predicted HP differs from current. That reaches enemies your own
-  attack will hit, allies caught in splash, and anyone a derived counter strikes, which is most of
-  the value; and it reaches nobody the plan leaves alone, with no second rule to maintain.
+- **Anyone the plan CHANGES** — which reaches enemies your own attack will hit, allies caught in
+  splash, and anyone a derived counter strikes, which is most of the value; and it reaches nobody
+  the plan leaves alone, with no second rule to maintain. *(Spelled "predicted HP differs from
+  current" until #354 below, which is where that spelling failed.)*
 - **The alarm is the NAMED RUNGS ONLY** — predicted DOWNED, KILLED or CRISIS. "Too low" as a
   fraction would have been a new game rule needing a home and a justified number; the ladder
   already names the outcomes worth flinching at.
@@ -230,8 +231,8 @@ Three things that generalise past this ticket:
    on a fatal hit; the queue panel had been clamping that to 1-for-a-down and 0-for-a-kill inline.
    A second spelling over the unit's head is Law #2 broken at the point it is being rendered, so the
    ladder moved to `LethalityRules.displayed_hp` and both surfaces read it. It **mirrors execution**
-   (`_go_downed` clings at exactly 1), which is also what makes the readout put itself away: once
-   the pass has run, predicted equals current and the "differs" test goes false on its own.
+   (`_go_downed` clings at exactly 1) — which this ticket also read as a free teardown, *"the readout
+   puts itself away"*, and #354 below is that claim being wrong.
 3. **A pulse must not become a second writer of the thing it pulses.** The existing rule is that a
    live pulse OWNS `sprite.modulate`; a 3D readout has no modulate, its colour is a material. So
    `Pulse` now takes the PROPERTY name (the cadence is the one thing every "look at this" cue must
@@ -239,15 +240,61 @@ Three things that generalise past this ticket:
    single writer of albedo. The redraw had to become value-diffed for the same reason — an
    unguarded rebuild repainted over the tween sixty times a second.
 
-**No prediction during an AI turn**, and that falls out rather than being enforced:
-`resolved_plan_for` guards on squad identity, so an AI squad's own resolve never matches the
-player's active squad. Enemy plans were not previewed before either; this keeps it that way.
+**"No prediction during an AI turn" is what this ticket claimed, and it is FALSE — measured
+2026-08-18 while building #354.** The reasoning was that `resolved_plan_for` guards on squad
+identity so an AI squad's resolve never matches the player's active squad; but `active_squad` is set
+by `SquadManager.queue_action`, which Law #3 makes the AI's own door, and `execute_orders` resolves
+for whatever squad it is running. So both sides name the AI squad and they match: an enemy order
+puts a doomed bar over the player unit it is about to hit. Whether that is a leak or a *feature* (it
+lands during `Pacing.AI_PLAN_READ`, the beat that exists so a drawn AI plan can be read) is an open
+dev call, filed rather than decided.
 
 Successor filed the same day: [#350](https://github.com/Phaazoid/Godoiosis/issues/350) — a player
 toggle pinning **every** bar on, which is one more disjunct in the same visibility expression and
 then almost entirely a legibility problem. Note also that the predicted-down alarm is a **pulse**,
 so it joins [#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry the
 moment that registry exists.
+
+## The readout belongs to the PLAN, not to the board ([#354](https://github.com/Phaazoid/Godoiosis/issues/354), FIXED 2026-08-18)
+
+#313's readout was gated on *predicted HP differs from current*, and that one comparison was
+answering three questions at once. Two of its answers were wrong, and the dev found the loud one in
+play: **bars winked out one at a time, each at the exact moment of impact.** Nothing re-resolves
+during a pass, so the prediction stays frozen while live HP drains to meet it — and the instant a
+unit's hit lands the two numbers agree and *its* bar switches off, at the single moment the bar is
+most worth looking at. The quiet one was the same collision standing still: a unit at exactly 1 HP
+that the plan fells has a predicted HP of 1 (the display clamp mirrors `_go_downed`'s cling), so it
+never wore a bar at all and never raised the felling alarm.
+
+**Dev call: through the end of the resolution PASS**, not the mission — every bar that was up when
+Execute was pressed stays up until the whole exchange finishes, then they drop together. The
+mission-long reading would have been [#350](https://github.com/Phaazoid/Godoiosis/issues/350)
+arriving as a default rather than a toggle, inheriting its unanswered crowding problem.
+
+- **Membership is a question about the PLAN, so it is asked of the plan.** `PlanResolver.plan_changes`
+  compares the hypo's end state to the hypo's *own* baseline — `_Hypo.start_hp` was already threaded,
+  and `start_lifecycle`/`start_in_crisis` join it — so the answer is settled when the plan is and
+  cannot go false as execution applies the very damage it predicted. No latch, no new owner, no
+  "the pass is over" event to fire.
+- **Only the FILL tracks the board.** A bar now drains down to its notch as the hit lands, instead of
+  vanishing at impact. Membership, notch, span and alarm are all the plan's.
+- **Nothing new dismisses them**, because `OrderExecutor._end_squad_turn` already did: it is the one
+  terminal state of a pass and it always empties the queue, which nulls `active_squad` and takes the
+  previewed plan with it. That covers the AI concede (same call) and a mission ending mid-pass
+  (`MissionController.check()` is not awaited, so the end-of-turn still runs in the same frame).
+
+Two things that generalise past this ticket:
+
+1. **A display CLAMP can never also be a membership test.** `displayed_hp` exists to flatten a
+   sentenced unit's number onto what execution will really leave it at — which is exactly the
+   information a "did anything change?" question needs, destroyed. Ask the raw threaded value.
+2. **The previewed plan and the last resolve are different questions while a pass is running.** A
+   kill mid-pass fires `unit_died` → `game._on_unit_died` → `refresh_action_queue` → `resolve_plan`,
+   re-resolving a queue whose earlier attacks have already landed. `OrderExecutor.executing_plan` is
+   the plan being played out, and `battle3d._previewed_plan` prefers it. **That re-resolve is also a
+   live Law #2 break in EXECUTION** — it overwrites `AttackAction.resolved` on attacks that have not
+   run yet, and `execute` is pure playback of that field — filed separately; this change only makes
+   the readout immune to it.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 

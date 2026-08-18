@@ -115,8 +115,10 @@ static func lifecycle_for(rung: ResolvedOutcome.Lethality,
 # different numbers for one plan is Law #2 broken at the point it is being rendered.
 #
 # It mirrors execution rather than inventing a convention — _go_downed clings at 1, a kill leaves
-# the board — which is also what makes a prediction converge with the live value once the pass has
-# run, so a readout gated on "predicted differs from current" puts itself away.
+# the board. #313 read that convergence as a free teardown and #354 found it was a trap: the clamp
+# flattens a sentenced unit's prediction ONTO the HP it already has, so a readout gated on "predicted
+# differs from current" both put itself away mid-pass and never appeared for a unit at exactly 1 HP.
+# DRAW with this number; never decide with it — PlanResolver.plan_changes is the membership answer.
 static func displayed_hp(raw_hp: int, lifecycle: Unit.LifecycleState) -> int:
 	match lifecycle:
 		Unit.LifecycleState.DEAD:

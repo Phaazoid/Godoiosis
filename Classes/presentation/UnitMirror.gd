@@ -22,6 +22,11 @@ class_name UnitMirror
 # answers a different question for a unit struck twice. This node computes no damage; if it ever
 # needs to, that is the bug.
 #
+# #354 split that second reason in two. WHO wears one is PlanResolver.plan_changes, asked of the
+# plan's own hypothetical; WHAT it draws is the live HP under a frozen prediction. Only the fill
+# tracks the board, so a bar drains down to its notch as the hit lands instead of vanishing at the
+# moment of impact — and the readout leaves when the PASS does, because the plan does.
+#
 # It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
 # authority" that #229 already made, and for the same reason: the flat view draws no HP over units
 # at all, so there is no retained 2D state to mirror.
@@ -294,34 +299,24 @@ func _plan() -> ResolvedPlan:
 
 # What the plan leaves this unit at, ALREADY CLAMPED for display — the raw threaded number goes
 # negative on a fatal hit, and LethalityRules.displayed_hp is the one answer to what a preview shows
-# for it, shared with the queue panel's own "before -> after" (#313). The clamp is also what makes
-# this readout put itself away: once the pass has run, a downed unit really is at 1, so the
-# "differs from current" test below goes false on its own.
+# for it, shared with the queue panel's own "before -> after" (#313). Drawn ONLY; the clamp flattens
+# a felled unit's prediction onto the HP it already has, so it can never be asked who gets a bar
+# (#354) — that question goes to the hypo, which still knows the difference.
 func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 	return LethalityRules.displayed_hp(PlanResolver.projected_hp(unit, plan.hypo),
 			PlanResolver.projected_lifecycle(unit, plan.hypo))
 
 
-# The alarm asks whether the plan CHANGES where a unit stands, not where it stands now: a unit
-# already down or already in Crisis must not pulse for staying there. That is exactly the three
-# named rungs — DOWNED and MAIMED move the lifecycle, KILLED moves it further, and CRISIS moves
-# neither (it is never DOWNED, #158), which is why in_crisis is asked separately.
-func _plan_fells(unit: Unit, plan: ResolvedPlan) -> bool:
-	if PlanResolver.projected_lifecycle(unit, plan.hypo) != unit.lifecycle_state:
-		return true
-	return PlanResolver.projected_in_crisis(unit, plan.hypo) and not unit.in_crisis
-
-
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
 		plan: ResolvedPlan) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
-	# because a plan is about to happen to it. "Predicted differs from current" is the rule — which
-	# reaches everyone the plan touches, enemies your own attack will hit included, and reaches
-	# nobody it doesn't.
-	var predicted := unit.get_current_hp()   # no plan is the same answer as a plan that changes nothing
-	if plan != null:
-		predicted = _predicted_hp(unit, plan)
-	var foretold := predicted != unit.get_current_hp()
+	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
+	# own attack will hit included, and nobody it doesn't.
+	#
+	# WHO is a question about the plan and is asked of the plan (#354). It used to be "predicted
+	# differs from current", which made membership a function of LIVE HP — so every bar switched
+	# itself off at the instant its own hit landed, mid-pass, one at a time.
+	var foretold := plan != null and PlanResolver.plan_changes(unit, plan.hypo)
 	bar.set_shown(hovered or foretold)
 	if not (hovered or foretold):
 		return
@@ -333,7 +328,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or ghost_shows_number)
 	if foretold:
-		bar.set_prediction(predicted, _plan_fells(unit, plan))
+		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:
 		bar.clear_prediction()
 	bar.position = _bar_anchor(unit, sprite)

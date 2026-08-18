@@ -294,14 +294,31 @@ static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleS
 		return unit.lifecycle_state
 	return (hypo[unit] as _Hypo).lifecycle
 
-# The gambit's own rung, which lifecycle cannot report: a CRISIS target is never DOWNED (#158), so
-# a readout asking "does this plan change where the unit stands" has to ask here too (#313).
-static func projected_in_crisis(unit: Unit, hypo: Dictionary) -> bool:
-	if unit == null or not is_instance_valid(unit):
+# Does this pass MOVE the unit's rung -- the alarm's question (#313), re-asked against the hypo's own
+# baseline rather than the live unit (#354). DOWNED and MAIMED move the lifecycle, KILLED moves it
+# further, and CRISIS moves neither (it is never DOWNED, #158), which is why crisis is asked
+# separately. A unit already down, or already in Crisis, stays put and does not alarm.
+static func plan_fells(unit: Unit, hypo: Dictionary) -> bool:
+	if unit == null or not is_instance_valid(unit) or not hypo.has(unit):
 		return false
-	if not hypo.has(unit):
-		return unit.in_crisis
-	return (hypo[unit] as _Hypo).in_crisis
+	var h := hypo[unit] as _Hypo
+	return h.lifecycle != h.start_lifecycle or (h.in_crisis and not h.start_in_crisis)
+
+# Does this pass change the unit at all -- WHO the readout is for (#354). Wholly internal to the
+# hypo, so the answer is settled when the plan is and cannot go false as execution applies the very
+# damage it predicted. That is the whole bug: asked against live HP, each bar switched off at the
+# instant its own hit landed.
+#
+# Asking the RAW threaded number rather than the displayed one also fixes the boundary the display
+# clamp hides: a unit at 1 HP felled by this pass threads to zero-or-below and shows as 1, so the
+# two displayed numbers collide and "differs from current" reported no change at all. Same shape at
+# CRISIS_REVIVE_HP, where the hypo's hp lands back on the number it started from and only the crisis
+# flag moves -- which is what plan_fells is doing in this expression.
+static func plan_changes(unit: Unit, hypo: Dictionary) -> bool:
+	if unit == null or not is_instance_valid(unit) or not hypo.has(unit):
+		return false
+	var h := hypo[unit] as _Hypo
+	return h.hp != h.start_hp or plan_fells(unit, hypo)
 
 static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 	if not hypo.has(unit):
@@ -311,8 +328,10 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 		h.hp = unit.get_current_hp()
 		h.start_hp = unit.get_current_hp()
 		h.lifecycle = unit.lifecycle_state
+		h.start_lifecycle = unit.lifecycle_state
 		h.will = unit.unit_instance.get_current_will()
 		h.in_crisis = unit.in_crisis
+		h.start_in_crisis = unit.in_crisis
 		h.can_maim = unit.unit_instance.next_maim_slot() != -1
 		h.crisis_armed = LethalityRules.crisis_armed_for(unit)
 		hypo[unit] = h
@@ -341,6 +360,12 @@ static func _hypo_for(unit: Unit, hypo: Dictionary) -> _Hypo:
 class _Hypo extends LethalityRules.Situation:
 	var position: Vector2i
 	var states: Array[Elemental.State] = []
+	# The rung the unit stood at when this hypo was seeded, beside the base's start_hp (#354). The
+	# threaded lifecycle/in_crisis above are mutated as the pass resolves, so without these the
+	# question "did this pass MOVE the unit" can only be asked against the live board — which drifts
+	# the moment execution starts applying what the plan predicted.
+	var start_lifecycle: Unit.LifecycleState = Unit.LifecycleState.ACTIVE
+	var start_in_crisis := false
 
 # Cell-effect stage (#50 / the #47 cell-effect channel). A map-hitting attack deposits its
 # element(s) across EVERY cell of its blast footprint — AoE parity with damage, which already
