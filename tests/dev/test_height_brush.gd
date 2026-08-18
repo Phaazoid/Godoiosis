@@ -350,22 +350,59 @@ func test_a_tile_that_stands_up_paints_flat_however_the_rise_is_set() -> void:
 
 
 # ---- the readout ----
+#
+# These wait on a FRAME rather than reading straight back, because the readout is DevController's
+# per-frame derive off elevation_brush_live() and not a push from _set_paint_mode. That is the
+# point: the mode is only half the predicate, and the half these cases used to miss is the brush
+# being down -- see test_the_readout_goes_dark_when_the_brush_does.
+
+# Two frames, not one: process_frame can fire either side of DevController._process inside a single
+# idle frame, so one await races the poll it is waiting on.
+func _polled() -> void:
+	await await_idle_frame()
+	await await_idle_frame()
+
 
 func test_the_height_readout_lights_with_the_terrain_brush() -> void:
 	var readout: HeightDebugOverlay = game.height_debug_overlay
 	assert_object(readout).is_not_null()
+
+	await _polled()
 	assert_bool(readout.visible).is_true()   # before_test entered TERRAIN mode
 
 	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
+
+	await _polled()
 	assert_bool(readout.visible).is_false()
+
+
+func test_the_readout_goes_dark_when_the_brush_does() -> void:
+	# The twin of test_the_rise_keys_are_inert_when_the_brush_is_down. That one pins that the KEYS go
+	# inert with the brush down; this pins that the READOUT does. Both ask elevation_brush_live, and
+	# that is the whole fix -- a mode compare of its own left the glyphs painted over a board whose
+	# wheel and Z/C were already dead, until a paint-mode round trip happened to clear them.
+	var readout: HeightDebugOverlay = game.height_debug_overlay
+
+	await _polled()
+	assert_bool(readout.visible).override_failure_message(
+			"armed in TERRAIN, and the readout never lit").is_true()
+
+	_brush.brush_active = false
+
+	await _polled()
+	assert_bool(readout.visible).override_failure_message(
+			"the brush is down and the keys are inert, but the readout is still lit").is_false()
 
 
 func test_an_f5_readout_survives_leaving_the_terrain_brush() -> void:
 	# Visibility is DERIVED from both reasons, not assigned by either: a brush that switched off a
-	# readout F5 asked for is the second-authority bug this shape exists to prevent.
+	# readout F5 asked for is the second-authority bug this shape exists to prevent. Load-bearing
+	# against the poll too -- it runs every frame, so an assignment there would fight F5 forever.
 	var readout: HeightDebugOverlay = game.height_debug_overlay
 	readout.toggle()                                           # F5 on, on top of the brush's own
 	_brush._set_paint_mode(TileBrushTool.PaintMode.ZONE)
+
+	await _polled()
 
 	assert_bool(readout.visible).is_true()
 
