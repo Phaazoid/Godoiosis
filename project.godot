@@ -22,15 +22,8 @@ Dialogic="*uid://ds2q0uclmolvu"
 
 [dialogic]
 
-directories/dch_directory={
-"torv": "res://Scenarios/dialog/characters/torv.dch"
-}
-directories/dtl_directory={
-"prolog_intro": "res://Scenarios/dialog/prolog_intro.dtl",
-"prolog_step_complete": "res://Scenarios/dialog/prolog_step_complete.dtl",
-"prolog_step_first_join": "res://Scenarios/dialog/prolog_step_first_join.dtl",
-"prolog_step_selected": "res://Scenarios/dialog/prolog_step_selected.dtl"
-}
+directories/dch_directory={}
+directories/dtl_directory={}
 layout/style_directory={}
 
 [display]

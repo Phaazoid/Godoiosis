@@ -148,7 +148,9 @@ func _start() -> void:
 
 
 func load_mission(path: String) -> void:
-	game.mission_controller.begin_mission(path)  # board_loaded does the rest
+	# The scene knows whether a student is present: demo_mode is watch-only, so the #182 lesson
+	# and its dialog stay disarmed (#375).
+	game.mission_controller.begin_mission(path, not demo_mode)  # board_loaded does the rest
 
 
 # Every board swap lands here via ScenarioManager.board_loaded (#222): mission load,
