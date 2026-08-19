@@ -1,9 +1,15 @@
 [gd_resource type="Resource" script_class="ScenarioData" format=4]
 
+[ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_d2l1v"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_s6fbn"]
+[ext_resource type="Resource" path="res://Scenarios/dialog/prolog_intro.dtl" id="2_ayygx"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_jc5jw"]
 [ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_d7l08"]
+[ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_jbpcb"]
+[ext_resource type="Resource" path="res://Scenarios/dialog/prolog_step_selected.dtl" id="3_rivbd"]
+[ext_resource type="Resource" path="res://Scenarios/dialog/prolog_step_first_join.dtl" id="4_hangl"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="4_sox22"]
+[ext_resource type="Resource" path="res://Scenarios/dialog/prolog_step_complete.dtl" id="5_n3m7a"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_xnjrr"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="6_cgh5e"]
 [ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="7_ek4ng"]
@@ -23,6 +29,48 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="29_hangl"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="30_n3m7a"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="31_ek4ng"]
+
+[sub_resource type="Resource" id="Resource_68ohh"]
+script = ExtResource("1_d2l1v")
+step = 0
+timeline = ExtResource("2_ayygx")
+
+[sub_resource type="Resource" id="Resource_fgy5v"]
+script = ExtResource("1_d2l1v")
+trigger = 5
+timeline = ExtResource("3_rivbd")
+
+[sub_resource type="Resource" id="Resource_2hb56"]
+script = ExtResource("1_d2l1v")
+trigger = 5
+step = 2
+timeline = ExtResource("4_hangl")
+
+[sub_resource type="Resource" id="Resource_7u1b0"]
+script = ExtResource("1_d2l1v")
+trigger = 5
+step = 3
+timeline = ExtResource("5_n3m7a")
+
+[sub_resource type="Resource" id="Resource_igeaa"]
+script = ExtResource("3_jbpcb")
+text = "Select Torv."
+done_when = 3
+unit_name = "Torv"
+
+[sub_resource type="Resource" id="Resource_jpl85"]
+script = ExtResource("3_jbpcb")
+text = "Squad Up: add an ally to Torv's squad."
+done_when = 4
+unit_name = "Torv"
+squad_size = 2
+
+[sub_resource type="Resource" id="Resource_p5auv"]
+script = ExtResource("3_jbpcb")
+text = "Join Squad: bring the other two into Torv's squad."
+done_when = 4
+unit_name = "Torv"
+squad_size = 4
 
 [sub_resource type="Resource" id="Resource_d2l1v"]
 script = ExtResource("14_n3m7a")
@@ -490,3 +538,5 @@ Vector2i(7, -1): Array[int]([4])
 }
 objectives = Array[int]([0])
 ai_factions = Array[int]([1])
+dialog_beats = Array[ExtResource("1_d2l1v")]([SubResource("Resource_68ohh"), SubResource("Resource_fgy5v"), SubResource("Resource_2hb56"), SubResource("Resource_7u1b0")])
+tutorial_steps = Array[ExtResource("3_jbpcb")]([SubResource("Resource_igeaa"), SubResource("Resource_jpl85"), SubResource("Resource_p5auv")])
