@@ -68,7 +68,7 @@ const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
 # instead. Decided from the attack's own `heals` flag -- the one question, one answer this already
 # is (resolution-pipeline.md) -- not a new axis. Only the constant reach fill is heal-aware; the
 # MAP-footprint hover-pulse channel below is untouched since no heal in the game targets MAP yet.
-# static var, not const, so the Look tab can tune them live (#212 slice 2). attack_reach_color is
+# static var, not const, so the Moods tab can tune them live (#212 slice 2). attack_reach_color is
 # itself static and reads them, so this is the only form that works. Unlike the 3D-only layer
 # colours, tuning these moves BOTH stacks -- the 3D mirrors this modulate rather than holding an
 # answer of its own, so there is no 3D-only value here to tune (dev call: acceptable).
@@ -209,7 +209,7 @@ func set_attack_reach_color(attack: AttackData) -> void:
 	attack_overlay.modulate = attack_reach_color(attack)
 
 
-# Re-derive the reach fill from the attack it was last given. The Look tab calls this after tuning
+# Re-derive the reach fill from the attack it was last given. The Moods tab calls this after tuning
 # ATTACK_MODULATE: the 3D mirrors `attack_overlay.modulate` every frame rather than the constant,
 # so without this a tuned colour would not show until the player next entered targeting.
 func refresh_attack_reach_color() -> void:
@@ -466,7 +466,7 @@ func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
 		icon.sprite.modulate = Color.WHITE
 
-# The Look tab's ring-opacity slider restyles markers already on screen; walking the store here
+# The Moods tab's ring-opacity slider restyles markers already on screen; walking the store here
 # keeps the panel ignorant of icon lifecycle.
 func restyle_squad_markers() -> void:
 	for unit in icons_by_unit.keys().duplicate():

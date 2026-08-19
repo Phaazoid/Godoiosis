@@ -11,7 +11,7 @@ class_name DevOverlay
 # current_tab. LEAVES below is the one declaration of the tree; a law test pins it complete.
 #
 # Above the tree, always visible: ScenarioHeader — the scenario's file ops and the (modified)
-# marker, reachable from every leaf for the same reason the Look tab pinned its buttons above its
+# marker, reachable from every leaf for the same reason the Moods tab pinned its buttons above its
 # sub-tabs (dev ask, 2026-08-14). Wires each tool that needs external state to the live game;
 # Item Editor, Attack Editor and Character are self-sufficient (their own _ready() does all setup).
 
@@ -25,7 +25,7 @@ class_name DevOverlay
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var scenario_header: ScenarioHeader = get_node("%ScenarioHeader")
 @onready var squads_ai: SquadsAiTool = get_node("%SquadsAI")
-@onready var look_tool: LookTool = get_node("%Look")
+@onready var moods_tool: MoodsTool = get_node("%Moods")
 @onready var object_tool: ObjectTool = get_node("%Objects")
 @onready var game_tool: GameTool = get_node("%Game")
 @onready var tool_tree: Tree = get_node("%ToolTree")
@@ -57,8 +57,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Author attacks — Transmutation, Weapon Attack, or Family Mains (edit an established family's main in place); toggle at top."},
 	{"scope": "Project", "label": "Objects", "page": "%Objects",
 		"tip": "What a terrain object TYPE is — its own light, its own size — written into the tileset the tile itself carries."},
-	{"scope": "Project", "label": "Look", "page": "%Look",
-		"tip": "Scene mood, tuned live — lighting, post, fog, camera framing. Saves as a named preset a mission wears."},
+	{"scope": "Project", "label": "Moods", "page": "%Moods",
+		"tip": "Scene mood, tuned live — lighting, post, fog, camera framing. Saves as a named mood a mission wears, or rewrites the default every other board gets."},
 	{"scope": "Project", "label": "Game", "page": "%Game",
 		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, fire. Save to source writes each value into the declaration that authors it."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
@@ -121,15 +121,15 @@ func _ready() -> void:
 # Nothing under Game reaches up to Battle3D as a result, and a flat Main.tscn launch just never
 # calls this. A demo build has already queue_free()'d this window, so don't build 60-odd rows for it.
 #
-# The WINDOW holds it, not the Look tab (#234). It arrived for the Look tab (#212) and was named for
+# The WINDOW holds it, not the Moods tab (#234). It arrived for the Moods tab (#212) and was named for
 # it, and by #253 the Scenario tab was already borrowing it back off that panel -- which quietly made
 # a tuning panel the project's host registry. Second consumer, so it moves to the wiring hub that
-# every other tab is already wired from; look_tool keeps its own copy for the ~76 knob rows.
+# every other tab is already wired from; moods_tool keeps its own copy for the ~76 knob rows.
 func attach_3d_host(host: Node3D) -> void:
 	if not DevTools.enabled():
 		return
 	host_3d = host
-	look_tool.attach_host(host)
+	moods_tool.attach_host(host)
 	object_tool.attach_host(host)
 	game_tool.attach_host(host)
 

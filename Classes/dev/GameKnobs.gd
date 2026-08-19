@@ -11,7 +11,7 @@ class_name GameKnobs
 # so a board names a preset and wears it. Everything here is the same in every mission forever --
 # how high an icon floats, how thick a health bar is, how fast the camera pans -- so there is
 # nothing for a board to carry, and every one of these rows was already excluded from presets. What
-# they had no door to was PERSISTENCE: the Look tab's only "keep this" button writes a preset, which
+# they had no door to was PERSISTENCE: the Moods tab's only "keep this" button writes a preset, which
 # deliberately omits them, so tuning one and liking it left nowhere to put it. They live here now,
 # with a Save that writes the authored value, and LEAVING is what makes the preset exclusion
 # structural rather than a name on a list -- the shape #272 used when prop geometry left LookKnobs.

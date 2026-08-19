@@ -2,7 +2,7 @@ extends VBoxContainer
 class_name GameTool
 
 # The dev-tools Game tab (#373): where the game's own presentation constants are tuned AND KEPT.
-# LookTool's and ObjectTool's sibling, and deliberately the same shape -- rows over a table, a
+# MoodsTool's and ObjectTool's sibling, and deliberately the same shape -- rows over a table, a
 # baseline that Reset returns to, one Save.
 #
 # What separates the three is the QUESTION each answers about a tuned value, which is also the
@@ -45,7 +45,7 @@ func _ready() -> void:
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
 	add_child(_status)
 	# Buttons and status sit ABOVE the sub-tabs and outside them, so they are reachable from every
-	# tab -- Save and Reset are panel-wide, not per-group (the Look tab's dev ask, same answer).
+	# tab -- Save and Reset are panel-wide, not per-group (the Moods tab's dev ask, same answer).
 	_tabs = TabContainer.new()
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(_tabs)

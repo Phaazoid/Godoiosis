@@ -1,8 +1,8 @@
 # Presentation & effects — the HD-2D idea wall
 
-**Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
+**Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #380 (2026-08-19).**
+**Canon checked through #386 (2026-08-19).**
 
 ---
 
@@ -13,7 +13,7 @@ nowhere to live. The question to ask is *who is allowed to disagree about this?*
 
 | home | who may differ | surface | stored in |
 |---|---|---|---|
-| **mission mood** | one board vs another | Look tab | a `LookPreset` a `ScenarioData` names (#253) |
+| **mission mood** | one board vs another | Moods tab | a `LookPreset` a `ScenarioData` names (#253), or the DEFAULT every board with no named mood wears (#386) |
 | **game constant** | nobody, ever | Game tab → *Save to source* | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
 | **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
 
@@ -36,8 +36,10 @@ instead of waiting for a repaint (#264's born-dead slider, closed for lights).
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source
-save and the Objects tab's tileset save; `DevWidgets.confirm_overwrite` is the shared wording. Save
-As is the one save that never confirms, because `refuse_taken_name` makes it structurally unable to
+save, the Objects tab's tileset save, and the Moods tab's *Update default* (#386, confirmed but not
+load-gated: there is one default and it is always the target, so what the ask guards is "not yet"
+rather than "the wrong file"); `DevWidgets.confirm_overwrite` is the shared wording. Save
+As is the one save that never confirms, because `refuse_existing_file` makes it structurally unable to
 overwrite anything.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
@@ -282,7 +284,7 @@ Proven Squeenix-style ingredients Stage 0 didn't include. All stage-5 material.
 - God rays through interior windows (volumetric fog + tight shafts).
 - Animated pixel water with real reflections and foam edges (Octopath 2's showpiece).
 - Weather: rain/snow with wet-tile specular response; per-preset lighting already exists to receive it.
-- Per-map color grades; the four look-dev presets were the seed and are now **real** ([#253](https://github.com/Phaazoid/Godoiosis/issues/253) parts 1 and 3, 2026-08-15). The Look tab saves named `LookPreset`s to `Resources/LookPresets/`, and twelve ship: Day / Sunset / Night / Overcast ported from `look_dev.gd`, the un-tamed **Forest Fire** that got #212 filed, Dawn, Storm, a deliberately-overcooked **Diorama** that exists to show what the tilt-shift knobs do, and the four **Opus** grades below. Dev rulings, 2026-08-14/15: a preset stores the **whole table** (a diff-preset would let a later scene re-tune silently re-skin every mission that never mentioned that knob) — and it stores **scene mood, not game settings**, so camera *framing* rides along while camera handling, board markup and prop geometry do not (all three have since LEFT the look table outright — #272, then #373). **Part 2 landed the same day and CLOSED #253**: `ScenarioData.look_preset` names the board’s look, `battle3d` applies it on every board load, and `Resources/DefaultLook.tres` is what a board wears when it names nothing — so `Battle3D.tscn`’s inline values have stopped being a second source of truth for "what does this board look like". Everything ABOVE that base layer — weather overriding it, battle flashes interrupting and unwinding — is [#278](https://github.com/Phaazoid/Godoiosis/issues/278), and weather itself is [#277](https://github.com/Phaazoid/Godoiosis/issues/277).
+- Per-map color grades; the four look-dev presets were the seed and are now **real** ([#253](https://github.com/Phaazoid/Godoiosis/issues/253) parts 1 and 3, 2026-08-15). The Moods tab saves named `LookPreset`s to `Resources/LookPresets/`, and twelve ship: Day / Sunset / Night / Overcast ported from `look_dev.gd`, the un-tamed **Forest Fire** that got #212 filed, Dawn, Storm, a deliberately-overcooked **Diorama** that exists to show what the tilt-shift knobs do, and the four **Opus** grades below. Dev rulings, 2026-08-14/15: a preset stores the **whole table** (a diff-preset would let a later scene re-tune silently re-skin every mission that never mentioned that knob) — and it stores **scene mood, not game settings**, so camera *framing* rides along while camera handling, board markup and prop geometry do not (all three have since LEFT the look table outright — #272, then #373). **Part 2 landed the same day and CLOSED #253**: `ScenarioData.look_preset` names the board’s look, `battle3d` applies it on every board load, and `Resources/DefaultLook.tres` is what a board wears when it names nothing — so `Battle3D.tscn`’s inline values have stopped being a second source of truth for "what does this board look like". Everything ABOVE that base layer — weather overriding it, battle flashes interrupting and unwinding — is [#278](https://github.com/Phaazoid/Godoiosis/issues/278), and weather itself is [#277](https://github.com/Phaazoid/Godoiosis/issues/277).
 - Camera micro-sway; tasteful, deterministic impact shake.
 - Emissive pixel art (see Conventions above).
 

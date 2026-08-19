@@ -9,7 +9,7 @@
 [ext_resource type="Script" path="res://Classes/dev/CharacterEditorTool.gd" id="4_chr79"]
 [ext_resource type="Script" uid="uid://bgy2v6i3ovpuq" path="res://Classes/dev/AttackEditorTool.gd" id="5_qihyv"]
 [ext_resource type="ButtonGroup" uid="uid://6a8b7yuy02ce" path="res://Classes/dev/AttackTypeToggle.tres" id="6_p14e7"]
-[ext_resource type="Script" path="res://Classes/dev/LookTool.gd" id="7_look1"]
+[ext_resource type="Script" path="res://Classes/dev/MoodsTool.gd" id="7_look1"]
 [ext_resource type="Script" path="res://Classes/dev/ObjectTool.gd" id="8_objs1"]
 [ext_resource type="Script" path="res://Classes/dev/GameTool.gd" id="9_game1"]
 [ext_resource type="Script" path="res://Classes/dev/ScenarioHeader.gd" id="10_schdr"]
@@ -537,7 +537,7 @@ offset_bottom = 40.0
 layout_mode = 2
 text = "Tile Brush on/off"
 
-[node name="Look" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000050]
+[node name="Moods" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000050]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2

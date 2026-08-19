@@ -6,7 +6,7 @@ class_name LookKnobs
 #
 # It lives here rather than in Classes/dev/ because a MISSION carries a look now: ScenarioData
 # names a preset and battle3d applies it on every board load, which is shipping-build code. The
-# Look tab (Classes/dev/LookTool.gd) is a SURFACE onto this table, not its owner.
+# Moods tab (Classes/dev/MoodsTool.gd) is a SURFACE onto this table, not its owner.
 #
 # Every KNOBS entry names a property that ALREADY EXISTS on the running Battle3D world -- an
 # @export on a presentation node, or a field of a sub_resource authored in Battle3D.tscn -- and
@@ -15,7 +15,7 @@ class_name LookKnobs
 # A knob may only name a property that is authored and READ. Anything the game writes back per
 # frame -- the rig's yaw, dof_blur_near/far_distance (re-derived from focus_band_*), max_distance,
 # orbit_button, manual_input_enabled -- would give a slider that moves and silently reverts, the
-# one failure that makes a tuning panel untrustworthy. tests/dev/test_look_tool.gd pins that by
+# one failure that makes a tuning panel untrustworthy. tests/dev/test_moods_tool.gd pins that by
 # writing, waiting two frames, and reading back.
 #
 # WHAT IS NOT HERE, and where it went. This table is scene MOOD, entire -- so a preset captures
@@ -34,6 +34,10 @@ const PRESET_DIR := "res://Resources/LookPresets/"
 # It ships byte-identical to Day and is MEANT to diverge; they answer two different questions
 # (an editable day mood vs what every board falls back to), which is a declared duplication.
 const DEFAULT_PATH := "res://Resources/DefaultLook.tres"
+# The file's own preset_name. Named rather than typed at the one call site because the Moods tab's
+# Update default RE-CAPTURES this file (#386), and a capture under a different name would quietly
+# rename the default rather than overwrite it.
+const DEFAULT_NAME := "Default"
 
 # node = path relative to the host ("." = the host); prop = colon-joined property path.
 # A float knob carries min/max/step; bool and Color infer their widget from the live value;
@@ -269,7 +273,7 @@ static func apply(host: Node3D, preset: LookPreset) -> Dictionary:
 		if not applied.has(key):
 			unknown.append(key)
 	# Pitch and FOV feed framing maths that only re-runs on a board load -- the same reason the
-	# Look tab has a Re-fit button. Without this a loaded preset frames with the old camera.
+	# Moods tab has a Re-fit button. Without this a loaded preset frames with the old camera.
 	if host.has_method("fit_camera"):
 		host.fit_camera()
 	return {"missing": missing, "unknown": unknown}

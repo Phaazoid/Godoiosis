@@ -1,5 +1,5 @@
 # The SHIPPED starter presets (#253 part 3) -- a content law, not a mechanism test. The mechanism
-# is pinned next door in test_look_tool.gd; what these guard is that the twelve .tres files on disk
+# is pinned next door in test_moods_tool.gd; what these guard is that the twelve .tres files on disk
 # are structurally complete and still round-trip through the real apply path.
 #
 # EVERY case here is a "for each preset" loop, so an empty scan would make all of them vacuously
@@ -14,7 +14,7 @@ extends GdUnitTestSuite
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 
 var _scene: Node3D
-var _look: LookTool
+var _moods: MoodsTool
 
 
 func before_test() -> void:
@@ -24,7 +24,7 @@ func before_test() -> void:
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
-	_look = dev_overlay.look_tool
+	_moods = dev_overlay.moods_tool
 
 
 func after_test() -> void:
@@ -95,12 +95,12 @@ func test_no_shipped_preset_carries_an_out_of_scope_value() -> void:
 func test_every_shipped_preset_applies_cleanly_to_the_real_scene() -> void:
 	for name: String in _names():
 		var preset := load(LookKnobs.preset_path(name)) as LookPreset
-		var report := _look.apply_preset(preset)
+		var report := _moods.apply_preset(preset)
 		assert_array(report["missing"]).override_failure_message(
 			"applying '%s' left knobs at the authored value: %s" % [name, report["missing"]]).is_empty()
 		assert_array(report["unknown"]).override_failure_message(
 			"applying '%s' skipped dead keys: %s" % [name, report["unknown"]]).is_empty()
-	_look._on_default_pressed()
+	_moods._on_default_pressed()
 	# apply_preset rebuilds every row; a detached-then-queue_free'd node reads as a gdUnit orphan
 	# until a frame processes the queue (#215's lesson).
 	await await_idle_frame()
