@@ -437,6 +437,28 @@ func test_no_overlay_layer_can_sort_over_the_flame() -> void:
 			.is_less(BoardOverlays.UNIT_RENDER_PRIORITY)
 
 
+func test_markup_that_hangs_in_the_air_sorts_above_markup_that_lies_on_the_floor() -> void:
+	# A RELATIONSHIP, not a value (#325 follow-up, found in play: the crown drew under the
+	# squad rings). Every FILL/SPRITE layer is markup lying on the board face; a BILLBOARD
+	# stands in the volume above it, so it can never sort behind one -- the dev put it as
+	# rings are on the floor and should not draw above anything. Pinning the relation rather
+	# than the numbers leaves both free to be retuned.
+	var floor_top := -9999
+	var air_low := 9999
+	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
+		var spec: Dictionary = BoardOverlays.LAYERS[layer]
+		if spec["kind"] == BoardOverlays.Kind.BILLBOARD:
+			air_low = mini(air_low, spec["sort"])
+		else:
+			floor_top = maxi(floor_top, spec["sort"])
+	# Non-vacuity: with no billboard layer declared, the compare below is trivially true.
+	assert_int(air_low).override_failure_message(
+			"no BILLBOARD layer is declared, so this case proves nothing").is_not_equal(9999)
+	assert_int(air_low).override_failure_message(
+			"a layer hanging in the air sorts at %d, at or below floor markup at %d" \
+			% [air_low, floor_top]).is_greater(floor_top)
+
+
 func test_a_unit_sprite_actually_carries_that_priority() -> void:
 	# Test the wire: the constant is worth nothing if no sprite reads it, and ghosts are built
 	# by UnitMirror through the same plain constructor rather than for_unit_data.

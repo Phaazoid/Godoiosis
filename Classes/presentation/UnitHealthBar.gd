@@ -247,13 +247,17 @@ func _stop_alarm() -> void:
 # every element (Label3D moves its glyphs and its outline by different amounts). Rotating the
 # parent makes every child's ordinary local position correct by construction, at any angle.
 #
-# Yaw only, matching the BILLBOARD_FIXED_Y the icons beside it use: atan2(x, z) points local +Z,
-# which is the face QuadMesh and Label3D present, at the camera.
-func face(camera_position: Vector3) -> void:
-	var to_camera := camera_position - global_position
-	if absf(to_camera.x) < 0.0001 and absf(to_camera.z) < 0.0001:
-		return   # camera directly overhead: any yaw is as good as another, so keep the last one
-	global_rotation = Vector3(0.0, atan2(to_camera.x, to_camera.z), 0.0)
+# Yaw only, and it must MATCH BILLBOARD_FIXED_Y rather than merely resemble it (#325 follow-up).
+# FIXED_Y aligns a sprite to the VIEW PLANE, one yaw board-wide; pointing each readout at the
+# camera POSITION instead gives a slightly different angle per unit, agreeing only at screen
+# centre -- which read as the crown and the bar sitting on visibly different axes. Every sprite
+# in this stack is FIXED_Y, UnitSprite3D included, so the READOUT is what moves: the unit art is
+# the anchor anything hung on it must agree with. Camera basis +Z is the direction FIXED_Y faces.
+func face(camera_basis: Basis) -> void:
+	var facing := camera_basis.z
+	if absf(facing.x) < 0.0001 and absf(facing.z) < 0.0001:
+		return   # camera straight overhead: any yaw is as good as another, so keep the last one
+	global_rotation = Vector3(0.0, atan2(facing.x, facing.z), 0.0)
 
 
 # What fraction of the bar the fill actually covers — the RENDERED fact, read off the mesh rather
