@@ -2,11 +2,11 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #362 (2026-08-19).**
+**Canon checked through #373 (2026-08-19).**
 
 ---
 
-## Where a presentation value is authored (#272, 2026-08-16)
+## Where a presentation value is authored (#272, 2026-08-16; #373, 2026-08-19)
 
 A tuned value has **three** possible homes, and picking the wrong one is how a value ends up with
 nowhere to live. The question to ask is *who is allowed to disagree about this?*
@@ -14,14 +14,22 @@ nowhere to live. The question to ask is *who is allowed to disagree about this?*
 | home | who may differ | surface | stored in |
 |---|---|---|---|
 | **mission mood** | one board vs another | Look tab | a `LookPreset` a `ScenarioData` names (#253) |
-| **game constant** | nobody, ever | Objects tab → *Save to source* | the `@export` default that declares it |
+| **game constant** | nobody, ever | **Game tab** → *Save to source* (board markup, the unit readout, camera handling) or **Objects tab** → *Save to source* (world construction, terrain effects) | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
 | **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
 
-The middle row is the one that was missing until #272, and its absence is what the ticket was
+The middle row is the one that was missing until #272, and its absence is what both tickets were
 actually about: prop geometry and the whole fire block are world construction rather than mood, so a
-preset was never the right store for them — they are the same in every mission forever. They left
-`LookKnobs.KNOBS` entirely rather than being filtered out of presets by name, which is what makes
-"a mission cannot restyle world construction" structural instead of a list someone maintains.
+preset was never the right store for them — they are the same in every mission forever. #373 found
+the same hole one shelf along and closed it the same way, for everything that had been excluded from
+presets by name: board markup and its colours, the unit readout, camera *handling*, the brush ghost.
+Each population left `LookKnobs.KNOBS` entirely rather than being filtered out of presets, which is
+what makes "a mission cannot restyle the game" structural instead of a list someone maintains — and
+with the last of it gone, `PRESET_EXCLUDED` had nothing left to name and was deleted. The look table
+is now scene mood entire, so a knob added to it joins presets automatically and correctly.
+
+Two tabs share the middle row, and the split between them is only *what the value is about* — a
+board's furniture versus the markup drawn over it. They share one writer (`KnobSource`), so a value
+has exactly one way to persist whichever table holds it.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
@@ -92,7 +100,7 @@ Also settled here: **the camera follows the action by mirroring the 2D camera** 
 - **A pose, not a volume, which is why `frame()` could not be the insertion point.** `frame()` *derives* position and distance from a box and deliberately never touches yaw. Free orbit (above) makes yaw part of what a shot IS, so the shot half needed its own door — `pose(aim, yaw, distance, bounds)`. The **bounds half is the same `rebound()` call**, so an authored start replaces the shot and nothing else moves: ceiling and pan limit stay derived from the board.
 - **Yaw is set BEFORE the bounds are solved, and that is load-bearing.** `rebound()` solves the fit through the camera's own basis, so a ceiling computed at the previous yaw is a fit for an orientation the shot will never be seen at. Caught by the equivalence assertion in `test_camera_rig.gd`, not by reasoning. `pose()` also adopts yaw as **home** — R means "back to the opening shot", and an authored one includes its angle — which is the one place it deliberately differs from `frame()`.
 - **A REFERENCE on `ScenarioData`, unlike `look_preset`'s name-only rule (#253).** The difference is whether the resource has a life of its own: a `LookPreset` is a file, so a ref can dangle or silently embed (#177's `unit_data` trap). A `CameraPose` has no file and no existence outside its board — embedding it as a sub-resource on save is exactly the wanted behaviour.
-- **A board already authored how WIDE it opens.** `opening_view_cells` is a Look knob and is not in `PRESET_EXCLUDED`, so every `LookPreset` carries it and a board names a preset. `camera_start` is therefore a second influence over a *different* axis (where / which way / how far), not a duplicate — it simply retires the width knob for the boards that use it.
+- **A board already authored how WIDE it opens.** `opening_view_cells` is a Look knob, i.e. scene mood, so every `LookPreset` carries it and a board names a preset. `camera_start` is therefore a second influence over a *different* axis (where / which way / how far), not a duplicate — it simply retires the width knob for the boards that use it.
 
 **Nothing validates a start (dev call, 2026-08-15).** A stale aim — the board was edited after the shot was captured — is **clamped, silently**, by the `pan_limit` clamp `_process` already runs and by `set_zoom`'s existing bounds. There is deliberately no validity predicate, i.e. no second answer to "where may the camera be"; re-capture is the fix. Known consequence, accepted: an aim at a *deleted* cell that is still inside the board is not clamped at all, and simply looks at empty space.
 
@@ -265,7 +273,7 @@ Proven Squeenix-style ingredients Stage 0 didn't include. All stage-5 material.
 - God rays through interior windows (volumetric fog + tight shafts).
 - Animated pixel water with real reflections and foam edges (Octopath 2's showpiece).
 - Weather: rain/snow with wet-tile specular response; per-preset lighting already exists to receive it.
-- Per-map color grades; the four look-dev presets were the seed and are now **real** ([#253](https://github.com/Phaazoid/Godoiosis/issues/253) parts 1 and 3, 2026-08-15). The Look tab saves named `LookPreset`s to `Resources/LookPresets/`, and twelve ship: Day / Sunset / Night / Overcast ported from `look_dev.gd`, the un-tamed **Forest Fire** that got #212 filed, Dawn, Storm, a deliberately-overcooked **Diorama** that exists to show what the tilt-shift knobs do, and the four **Opus** grades below. Dev rulings, 2026-08-14/15: a preset stores the **whole table** (a diff-preset would let a later scene re-tune silently re-skin every mission that never mentioned that knob) — and it stores **scene mood, not game settings**, so camera *framing* rides along while camera handling, board markup and prop geometry do not. **Part 2 landed the same day and CLOSED #253**: `ScenarioData.look_preset` names the board’s look, `battle3d` applies it on every board load, and `Resources/DefaultLook.tres` is what a board wears when it names nothing — so `Battle3D.tscn`’s inline values have stopped being a second source of truth for "what does this board look like". Everything ABOVE that base layer — weather overriding it, battle flashes interrupting and unwinding — is [#278](https://github.com/Phaazoid/Godoiosis/issues/278), and weather itself is [#277](https://github.com/Phaazoid/Godoiosis/issues/277).
+- Per-map color grades; the four look-dev presets were the seed and are now **real** ([#253](https://github.com/Phaazoid/Godoiosis/issues/253) parts 1 and 3, 2026-08-15). The Look tab saves named `LookPreset`s to `Resources/LookPresets/`, and twelve ship: Day / Sunset / Night / Overcast ported from `look_dev.gd`, the un-tamed **Forest Fire** that got #212 filed, Dawn, Storm, a deliberately-overcooked **Diorama** that exists to show what the tilt-shift knobs do, and the four **Opus** grades below. Dev rulings, 2026-08-14/15: a preset stores the **whole table** (a diff-preset would let a later scene re-tune silently re-skin every mission that never mentioned that knob) — and it stores **scene mood, not game settings**, so camera *framing* rides along while camera handling, board markup and prop geometry do not (all three have since LEFT the look table outright — #272, then #373). **Part 2 landed the same day and CLOSED #253**: `ScenarioData.look_preset` names the board’s look, `battle3d` applies it on every board load, and `Resources/DefaultLook.tres` is what a board wears when it names nothing — so `Battle3D.tscn`’s inline values have stopped being a second source of truth for "what does this board look like". Everything ABOVE that base layer — weather overriding it, battle flashes interrupting and unwinding — is [#278](https://github.com/Phaazoid/Godoiosis/issues/278), and weather itself is [#277](https://github.com/Phaazoid/Godoiosis/issues/277).
 - Camera micro-sway; tasteful, deterministic impact shake.
 - Emissive pixel art (see Conventions above).
 
