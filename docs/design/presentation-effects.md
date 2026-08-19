@@ -2,11 +2,11 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Look tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #373 (2026-08-19).**
+**Canon checked through #380 (2026-08-19).**
 
 ---
 
-## Where a presentation value is authored (#272, 2026-08-16; #373, 2026-08-19)
+## Where a presentation value is authored (#272, #373; one-tab-per-row since #380, 2026-08-19)
 
 A tuned value has **three** possible homes, and picking the wrong one is how a value ends up with
 nowhere to live. The question to ask is *who is allowed to disagree about this?*
@@ -14,7 +14,7 @@ nowhere to live. The question to ask is *who is allowed to disagree about this?*
 | home | who may differ | surface | stored in |
 |---|---|---|---|
 | **mission mood** | one board vs another | Look tab | a `LookPreset` a `ScenarioData` names (#253) |
-| **game constant** | nobody, ever | **Game tab** → *Save to source* (board markup, the unit readout, camera handling) or **Objects tab** → *Save to source* (world construction, terrain effects) | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
+| **game constant** | nobody, ever | Game tab → *Save to source* | the declaration that authors it — an `@export` default, a `static var`, or one entry of `BoardOverlays.LAYERS` |
 | **per object type** | one tile type vs another | Objects tab → *Save object fields* | a TileSet custom-data column |
 
 The middle row is the one that was missing until #272, and its absence is what both tickets were
@@ -27,9 +27,18 @@ what makes "a mission cannot restyle the game" structural instead of a list some
 with the last of it gone, `PRESET_EXCLUDED` had nothing left to name and was deleted. The look table
 is now scene mood entire, so a knob added to it joins presets automatically and correctly.
 
-Two tabs share the middle row, and the split between them is only *what the value is about* — a
-board's furniture versus the markup drawn over it. They share one writer (`KnobSource`), so a value
-has exactly one way to persist whichever table holds it.
+The middle row briefly read "Game tab *or* Objects tab" while the Objects tab still held the
+world-construction globals; #380 moved those (and the fire block, and the four lamp defaults —
+which had NO surface anywhere) into the Game tab, so each row is one tab again. The Objects tab is
+purely per-type now: which object glows, how tall THIS one stands. The lamp defaults also gained
+the setter-plus-sweep the geometry globals already had, so tuning one re-lights every standing lamp
+instead of waiting for a repaint (#264's born-dead slider, closed for lights).
+
+**Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
+settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source
+save and the Objects tab's tileset save; `DevWidgets.confirm_overwrite` is the shared wording. Save
+As is the one save that never confirms, because `refuse_taken_name` makes it structurally unable to
+overwrite anything.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.

@@ -112,6 +112,13 @@ func _on_update_pressed():
 		push_warning(msg)
 		status_label.text = msg
 		return
+	# Confirmed as well as load-gated (#380's convention): the gate cannot catch a mis-click at
+	# the character you DID load.
+	DevWidgets.confirm_overwrite(self, "character '%s'" % target, "the editor's values",
+		func() -> void: _update_confirmed(path))
+
+
+func _update_confirmed(path: String) -> void:
 	_trim_kit()
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = current.display_name   # a rename moves the loaded identity with it

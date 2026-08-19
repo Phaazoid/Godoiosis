@@ -311,7 +311,7 @@ func _on_update_pressed() -> void:
 	# Confirmed like Delete (dev call 2026-08-12): the load-gate cannot catch a mis-click at the
 	# loaded file itself -- a wrecked board (accidental resize) one button away from Load is
 	# exactly how Level_1 died.
-	DevWidgets.confirm(self, "Overwrite scenario '%s' with the current board? The saved version is lost." % target,
+	DevWidgets.confirm_overwrite(self, "scenario '%s'" % target, "the current board",
 		func(): _update_confirmed(target))
 
 func _update_confirmed(target: String) -> void:

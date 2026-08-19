@@ -3,11 +3,10 @@ class_name KnobSource
 
 # HOW a tuned game constant gets written back to the place it is authored (#272, widened by #373).
 # Static and pure -- no table of its own, and that is the point: it is the one answer to "keep this
-# value", shared by the Objects tab (ObjectKnobs) and the Game tab (GameKnobs).
-#
-# It was ObjectKnobs' private half until #373 gave the second table a Save. Two panels writing
-# source through two copies of this would be a duplicate seam of the sharpest kind -- the copies
-# would agree right up until one of them was taught something the other was not.
+# value". Since #380 the Game tab is its one caller (the Objects tab saves per-type fields into the
+# TILESET instead), but the split stands on its own: the transform is testable without a table, and
+# the next table that wants a Save gets this one rather than a copy that agrees right up until one
+# of them is taught something the other is not.
 #
 # A tuned value has three destinations (#272): mission mood -> a LookPreset, per object type -> a
 # TileSet custom-data column, GAME CONSTANT -> here, the declaration line itself. One authority,
@@ -107,8 +106,7 @@ static func script_path_for(host: Node3D, knob: Dictionary) -> String:
 # --- Baselines ----------------------------------------------------------------------------------
 #
 # What is on disk, by definition: nothing has moved a knob at attach time, and after a save the
-# written ones are re-read so the two agree again. Both panels need this and neither should spell
-# it twice.
+# written ones are re-read so the two agree again.
 
 static func capture_baseline(host: Node3D, table: Array[Dictionary]) -> Array:
 	var baseline: Array = []
@@ -161,11 +159,6 @@ static func declaration_edits(host: Node3D, table: Array[Dictionary], indices: P
 		edits.append(edit(script_path_for(host, knob), Kind.DECLARATION, prop, literal,
 			knob["label"], i, source))
 	return edits
-
-
-static func save_to_source(host: Node3D, table: Array[Dictionary],
-		indices: PackedInt32Array) -> Dictionary:
-	return apply_edits(declaration_edits(host, table, indices))
 
 
 # Grouped by file so one script is read and written once however many edits it holds. Returns
