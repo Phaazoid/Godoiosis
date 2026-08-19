@@ -19,13 +19,9 @@ const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 
 var _scene: Node3D
 var _look: LookTool
-# The reach colours are STATIC vars, i.e. process-global: a case that tunes one would leak into
-# every later case AND every later suite in the run. Snapshot and restore around each case.
-var _reach_snapshot: Array[Color] = []
 
 
 func before_test() -> void:
-	_reach_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE]
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property
@@ -36,8 +32,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	OverlayManager.ATTACK_MODULATE = _reach_snapshot[0]
-	OverlayManager.HEAL_ATTACK_MODULATE = _reach_snapshot[1]
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -123,7 +117,7 @@ func test_a_written_knob_survives_the_next_frame() -> void:
 # could be built completely disconnected and the whole suite would stay green -- two ends, no
 # wire. A slider is what actually gets dragged.
 func test_dragging_a_slider_moves_the_live_property() -> void:
-	var knob := _knob("BoardOverlays", "fill_lift")
+	var knob := _knob("Sun", "light_energy")
 	var slider := _slider_for(knob["label"])
 	assert_object(slider).is_not_null()
 	var before: float = _look.read(knob)
@@ -158,7 +152,7 @@ func _find_row(node: Node, label_text: String) -> HBoxContainer:
 # regression rather than an oversight to notice later.
 func test_every_knob_has_a_tooltip() -> void:
 	var untipped: Array[String] = []
-	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		if String(knob.get("tip", "")).strip_edges() == "":
 			untipped.append(knob["label"])
 	assert_array(untipped).override_failure_message(
@@ -168,7 +162,7 @@ func test_every_knob_has_a_tooltip() -> void:
 # A tooltip is a plain Label with no autowrap, so an unwrapped one runs off the screen.
 func test_no_tooltip_line_runs_too_long() -> void:
 	var wide: Array[String] = []
-	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		for line: String in _look.tip_for(knob).split("\n"):
 			if line.length() > 90:   # the wrapper targets 74; this catches a wrap that never ran
 				wide.append(knob["label"])
@@ -180,7 +174,7 @@ func test_no_tooltip_line_runs_too_long() -> void:
 # The wire: the tip has to reach the control you actually hover, not just the row's label. A
 # slider has mouse_filter STOP, so Godot asks IT for the tooltip and never walks up to the label.
 func test_the_tooltip_reaches_the_slider_you_hover() -> void:
-	var knob := _knob("BoardOverlays", "fill_lift")
+	var knob := _knob("Sun", "light_energy")
 	var slider := _slider_for(knob["label"])
 	assert_object(slider).is_not_null()
 	assert_str(slider.tooltip_text).is_equal(_look.tip_for(knob))
@@ -191,7 +185,7 @@ func test_the_tooltip_reaches_the_slider_you_hover() -> void:
 # indistinguishable from the knob not existing.
 func test_every_knob_group_has_a_sub_tab() -> void:
 	var orphans: Array[String] = []
-	for knob: Dictionary in LookKnobs.KNOBS + LookTool.LAYER_KNOBS:
+	for knob: Dictionary in LookKnobs.KNOBS:
 		var group: String = knob["group"]
 		if not LookTool.GROUP_TABS.has(group) and not orphans.has(group):
 			orphans.append(group)
@@ -206,9 +200,6 @@ func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
 	for knob: Dictionary in LookKnobs.KNOBS:
 		if knob.has("options") or typeof(_look.read(knob)) == TYPE_BOOL:
 			continue   # dropdowns and checkboxes are not HBox-with-label rows
-		if _row_for(knob["label"]) == null:
-			missing.append(knob["label"])
-	for knob: Dictionary in LookTool.LAYER_KNOBS:
 		if _row_for(knob["label"]) == null:
 			missing.append(knob["label"])
 	assert_array(missing).override_failure_message(
@@ -260,97 +251,6 @@ func test_typing_a_colour_channel_moves_the_live_property_and_the_slider() -> vo
 	field.value = 64.0
 	assert_float(_look.read(knob).r).is_equal_approx(64.0 / 255.0, 0.005)
 	assert_float(slider.value).is_equal_approx(64.0, 0.001)   # the two never disagree
-
-
-# --- Board-markup colours (slice 2) --------------------------------------------------------
-
-func _layer_knob(key: String, value: Variant) -> Dictionary:
-	for knob: Dictionary in LookTool.LAYER_KNOBS:
-		if knob.get(key) == value:
-			return knob
-	return {}
-
-
-func test_every_layer_knob_resolves() -> void:
-	var unresolved: Array[String] = []
-	for knob: Dictionary in LookTool.LAYER_KNOBS:
-		if typeof(_look.read_layer(knob)) != TYPE_COLOR:
-			unresolved.append(knob["label"])
-	assert_array(unresolved).override_failure_message(
-		"Layer knobs pointing at nothing: %s" % ", ".join(unresolved)).is_empty()
-
-
-# THE LAW, and the reason the layer list is measured rather than chosen. `set_layer_modulate`
-# REPLACES a layer's albedo, so a layer something drives per frame would take a knob that
-# silently reverts. Two frames, because process_frame resumes this coroutine before any node
-# _process runs -- OverlayMirror._process is exactly what has to get a turn here.
-func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
-	var wanted: Array = []
-	var inert: Array[String] = []
-	for knob: Dictionary in LookTool.LAYER_KNOBS:
-		if knob.has("reach"):
-			continue   # asserted separately below: the 2D owns it, so it round-trips differently
-		var before: Color = _look.read_layer(knob)
-		var target := Color(before.r, before.g, before.b, fposmod(before.a + 0.3, 1.0))
-		_look.write_layer(knob, target)
-		var stored: Variant = _look.read_layer(knob)
-		# An inert write would record the UNCHANGED colour as "wanted" and then sail through the
-		# survival check below, testing nothing. Same guard slice 1's property law carries.
-		if LookKnobs.same_value(stored, before):
-			inert.append(knob["label"])
-			continue
-		wanted.append({"knob": knob, "want": stored})
-	assert_array(inert).override_failure_message(
-		"Layer knobs that did not take a write at all: %s" % ", ".join(inert)).is_empty()
-	await await_idle_frame()
-	await await_idle_frame()
-	var reverted: Array[String] = []
-	for entry: Dictionary in wanted:
-		var knob: Dictionary = entry["knob"]
-		if not LookKnobs.same_value(_look.read_layer(knob), entry["want"]):
-			reverted.append(knob["label"])
-	assert_array(reverted).override_failure_message(
-		"Layers the mirror writes back (a knob here would lie): %s" % ", ".join(reverted)).is_empty()
-
-
-# ATTACK has no 3D-only value: the mirror pushes the 2D's modulate into the 3D every poll, so the
-# knob's real target is the 2D static var and BOTH stacks move. Asserted end to end.
-func test_the_attack_reach_knob_moves_both_stacks() -> void:
-	var knob := _layer_knob("reach", "ATTACK_MODULATE")
-	var tuned := Color(0.2, 0.4, 0.9, 0.6)
-	_look.write_layer(knob, tuned)
-	assert_that(OverlayManager.attack_reach_color(null)).is_equal(tuned)   # the authority
-	var om: OverlayManager = _scene.game.overlay_manager
-	assert_that(om.attack_overlay.modulate).is_equal(tuned)                # the 2D, refreshed
-	await await_idle_frame()
-	await await_idle_frame()
-	var overlays := _scene.get_node("BoardOverlays") as BoardOverlays
-	assert_that(overlays.layer_modulate(BoardOverlays.Layer.ATTACK)).is_equal(tuned)   # the 3D
-
-
-func test_copy_values_emits_a_paste_ready_layers_row() -> void:
-	var knob := _layer_knob("layer", BoardOverlays.Layer.MOVE)
-	_look.write_layer(knob, Color(1, 1, 0, 0.35))
-	var entries: Dictionary = _look.changed_values()["BoardOverlays.gd -> LAYERS"]
-	assert_str(entries["MOVE"]).is_equal(
-		'Layer.MOVE: {"color": Color(1.0, 1.0, 0.0, 0.35), "sort": 0, "kind": Kind.FILL},')
-
-
-func test_copy_values_emits_a_static_var_line_for_a_reach_colour() -> void:
-	var knob := _layer_knob("reach", "ATTACK_MODULATE")
-	_look.write_layer(knob, Color(0.2, 0.4, 0.9, 0.6))
-	var entries: Dictionary = _look.changed_values()["OverlayManager.gd"]
-	assert_str(entries["ATTACK_MODULATE"]).is_equal(
-		"static var ATTACK_MODULATE := Color(0.2, 0.4, 0.9, 0.6)")
-
-
-func test_reset_restores_every_layer_colour() -> void:
-	for knob: Dictionary in LookTool.LAYER_KNOBS:
-		_look.write_layer(knob, Color(0.1, 0.2, 0.3, 0.4))
-	assert_dict(_look.changed_values()).is_not_empty()
-	_look._on_reset_pressed()
-	assert_dict(_look.changed_values()).is_empty()
-	await await_idle_frame()   # the rebuild's detached rows, or they read as orphans
 
 
 # --- The handoff --------------------------------------------------------------------------
@@ -426,90 +326,62 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 # out -- dev, 2026-08-15), and the only thing standing between that ruling and a silent widening
 # is the pair below.
 
-# The ruling restated in its OWN terms, deliberately not by re-reading PRESET_EXCLUDED -- a case
-# that asks the same const it is checking is blind to the const changing, which is the one edit
-# most likely to widen this quietly. Everything is scene mood by default; the carve-outs below
-# are the dev's, and changing one has to change this list too, i.e. has to be noticed.
-const CAMERA_FRAMING := ["Board pitch", "FOV", "Opening shot (cells)", "Fit margin (cells)"]
-# The Effects group is flame plus three things that are not mood at all. This list earned its keep
-# immediately: #264 added "Prop block height" to Effects, it self-joined presets via the default-IN
-# rule, and when the dev ruled it out (2026-08-15) THIS case went red -- because it states the
-# ruling independently instead of re-reading PRESET_EXCLUDED, which would have agreed silently.
-# #280's tuft scale reddened it a second time and #326's cover bumps a third, all three for one
-# reason: prop geometry is an art convention matched to the tile art once.
-# THOSE THREE HAVE LEFT KNOBS ENTIRELY (#272), and so has the whole FIRE block behind them (dev,
-# 2026-08-16: a terrain effect's look is a game value like the rest). Every ruling this list used to
-# state is now structural -- a preset cannot reach a knob that is not in this table -- which is why
-# only dev chrome is left to name. That is the list shrinking because the rule got stronger, not
-# weaker, and the law below is what stops it shrinking any other way.
-const EFFECTS_NOT_MOOD := ["Brush ghost alpha"]
-# The group those labels live in. It was "Effects" until #272 emptied that group entirely and the
-# survivor was re-filed as what it is; naming it here rather than inline is what made this a
-# one-line follow rather than a hunt.
-const NOT_MOOD_GROUP := "Dev chrome"
+# THE RULING, restated in its own terms rather than by re-reading whatever list the code keeps --
+# a case that asks the same const it is checking is blind to that const changing, which is the one
+# edit most likely to widen this quietly. It used to enumerate carve-outs from PRESET_EXCLUDED;
+# #373 emptied that list by MOVING its population to GameKnobs, so the ruling is now structural and
+# what this states is the other side of it: these nodes hold game settings, and a row on one of them
+# reappearing in the look table is the widening to catch.
+#
+# History worth keeping, because this list has earned its keep four times: #264's prop block height,
+# #280's tuft scale and #326's cover bumps each self-joined presets under the default-IN rule and
+# were each caught here, not by the exclusion list, which would have agreed silently. #272 moved all
+# three out of KNOBS entirely, and #373 did the same for markup, the readout and camera handling.
+const GAME_SETTING_NODES := ["BoardOverlays", "UnitMirror", "BoardMirror"]
+# CameraRig is the one node that holds BOTH, so it cannot be excluded wholesale: framing is mood and
+# handling is not, and only the property name separates them.
+const CAMERA_HANDLING := ["min_distance", "zoom_step", "smoothing", "pan_speed",
+	"orbit_sensitivity", "pan_margin_cells", "zoom_out_slack"]
 
-func test_a_preset_captures_scene_mood_and_no_game_setting() -> void:
-	var captured: Array = _look.capture_preset("law").values.keys()
+
+func test_the_look_table_holds_no_game_setting() -> void:
+	var strays: Array[String] = []
 	for knob: Dictionary in LookKnobs.KNOBS:
-		var group: String = knob["group"]
-		var label: String = knob["label"]
-		var belongs := true
-		var because := "scene mood"
-		if group == "Board markup":
-			belongs = false                          # gameplay legibility, learned once
-			because = "board markup is a game setting"
-		elif group == "Unit HUD":
-			# #229, the same ruling reached for the same reason one ticket later: a health readout
-			# is how the player reads the board, so a mission must not be able to restyle or hide
-			# it by wearing a look.
-			belongs = false
-			because = "a unit's health readout is a game setting"
-		elif group == "Camera":
-			belongs = CAMERA_FRAMING.has(label)      # framing rides along, handling never does
-			because = "camera handling is a game setting" if not belongs else "camera framing is look"
-		elif group == NOT_MOOD_GROUP:
-			belongs = not EFFECTS_NOT_MOOD.has(label)   # dev chrome and prop geometry are not mood
-			because = "'%s' is not scene mood" % label if not belongs else "flame lights the world"
-		assert_bool(captured.has(LookKnobs.preset_key(knob))).override_failure_message(
-			"'%s' should%s be captured -- %s" % [label, "" if belongs else " NOT", because]).is_equal(belongs)
+		var node: String = knob["node"]
+		var prop: String = knob["prop"]
+		if GAME_SETTING_NODES.has(node) or (node == "CameraRig" and CAMERA_HANDLING.has(prop)):
+			strays.append("%s (%s:%s)" % [knob["label"], node, prop])
+	assert_array(strays).override_failure_message(
+		"Game settings in the look table -- a mission would carry these (they belong in GameKnobs): %s"
+		% ", ".join(strays)).is_empty()
 
 
-# A preset only ever walks KNOBS -- board-markup COLOUR (the LAYER_KNOBS half) is out by
-# construction rather than by exclusion, which is the same ruling reached a different way. Nothing
-# may reach a preset that is not an in-scope KNOBS row, in either direction.
+# The guard on the list above, and the lesson #272 paid for: a list that exists to notice a widening
+# is silently disarmed when its names stop matching anything. CAMERA_HANDLING names rows that must
+# still be REAL somewhere, so a rename or a deletion reds this instead of quietly emptying the law.
+func test_every_camera_handling_name_is_a_real_game_knob() -> void:
+	var live: Array[String] = []
+	for knob: Dictionary in GameKnobs.KNOBS:
+		if knob["node"] == "CameraRig":
+			live.append(knob["prop"])
+	for prop: String in CAMERA_HANDLING:
+		assert_bool(live.has(prop)).override_failure_message(
+			"CAMERA_HANDLING names '%s', which is no longer a camera knob -- this law has stopped catching anything" % prop).is_true()
+
+
+# A preset walks the whole table now, so "in scope" and "the table" are the same set. Asserted in
+# both directions anyway: the filter surviving as a named function is what a future non-mood knob
+# would reach for, and this is what notices if it starts dropping rows.
 func test_a_preset_carries_exactly_the_in_scope_knobs_and_nothing_else() -> void:
 	var captured: Array = _look.capture_preset("law").values.keys()
 	var in_scope: Array[String] = []
 	for knob: Dictionary in LookKnobs.preset_knobs():
 		in_scope.append(LookKnobs.preset_key(knob))
+	assert_int(in_scope.size()).is_equal(LookKnobs.KNOBS.size())
 	assert_int(captured.size()).is_equal(in_scope.size())
 	for key: String in captured:
 		assert_bool(in_scope.has(key)).override_failure_message(
 			"'%s' reached a preset without being an in-scope knob" % key).is_true()
-
-
-# The same guard, for the OTHER list stating the ruling. EFFECTS_NOT_MOOD exists to notice a silent
-# widening, so a label that has stopped matching any knob -- a reworded row, or one that moved to
-# another table the way prop geometry did in #272 -- leaves it quietly toothless rather than red.
-func test_every_not_mood_label_names_a_real_effects_knob() -> void:
-	var labels: Array[String] = []
-	for knob: Dictionary in LookKnobs.KNOBS:
-		if knob["group"] == NOT_MOOD_GROUP:
-			labels.append(knob["label"])
-	for label: String in EFFECTS_NOT_MOOD:
-		assert_bool(labels.has(label)).override_failure_message(
-			"EFFECTS_NOT_MOOD names '%s', which is not an Effects knob -- it has silently stopped excluding anything" % label).is_true()
-
-
-# A property rename would otherwise silently un-exclude its knob: the old key stops matching
-# anything, the new one is in nobody's list, and a camera-handling value quietly joins presets.
-func test_every_excluded_key_names_a_real_knob() -> void:
-	var live_keys: Array[String] = []
-	for knob: Dictionary in LookKnobs.KNOBS:
-		live_keys.append(LookKnobs.preset_key(knob))
-	for key: String in LookKnobs.PRESET_EXCLUDED:
-		assert_bool(live_keys.has(key)).override_failure_message(
-			"PRESET_EXCLUDED names '%s', which is not a knob -- it has silently stopped excluding anything" % key).is_true()
 
 
 # Compared against what the property ACCEPTED, never against what was asked for: engine properties

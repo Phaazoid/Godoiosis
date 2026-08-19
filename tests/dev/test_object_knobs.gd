@@ -1,14 +1,11 @@
-# The Objects tab's save path (#272 slice 1). Two halves, and they fail in very different ways.
+# The Objects tab's save path (#272 slice 1) -- what is left of it here, which is the half that is
+# about THIS TABLE. The rewriter itself moved to KnobSource when #373 gave a second table the same
+# Save, and its cases went with it (tests/dev/test_knob_source.gd).
 #
-# The MECHANISM half is a pure string transform, so it is tested as one -- no file, no host. The bug
-# worth catching there is not a wrong write, it is a write that does not happen: a property the
-# rewriter cannot find must come back as "" so the caller reports a failure, never as the source
-# unchanged, which a caller would happily save and call success.
-#
-# The LAW half pins the two claims the whole feature rests on, both measured rather than assumed:
+# These pin the two claims the whole slice rests on, both measured rather than assumed:
 # every ObjectKnobs property really is declared as an @export default in its own script, and
 # Battle3D.tscn overrides none of them. If either stops being true, Save writes a line nobody reads
-# and the panel says it worked -- exactly the silent failure the mechanism half is shaped to avoid,
+# and the panel says it worked -- exactly the silent failure the rewriter is shaped to avoid,
 # arriving by the other door.
 #
 # The scene is read as TEXT rather than instantiated: which script a node carries and whether it
@@ -19,90 +16,6 @@
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
-
-const PLAIN := """extends Node3D
-
-@export var block_height_scale := 1.0
-@export var other := 2.0
-"""
-
-const WITH_SETTER := """extends Node3D
-
-@export var cover_scale := 0.5: set = _set_cover_scale
-"""
-
-const TYPED := """extends Node3D
-
-@export var cover_scale: float = 0.5
-"""
-
-const VECTOR := """extends Node3D
-
-@export var flame_size := Vector2(0.5, 0.7): set = _set_flame_size
-"""
-
-
-# --- The rewriter ------------------------------------------------------------------------
-
-func test_a_plain_export_default_is_rewritten() -> void:
-	var out := ObjectKnobs.rewrite_export_default(PLAIN, "block_height_scale", "0.62")
-	assert_str(out).contains("@export var block_height_scale := 0.62")
-	# The neighbouring declaration is untouched: a rewrite edits ONE line, not the block around it.
-	assert_str(out).contains("@export var other := 2.0")
-
-
-# Two of the three knobs own a setter, and the setter is what makes them live knobs at all -- a
-# rewrite that dropped the suffix would leave a slider that moves nothing on the board.
-func test_a_setter_suffix_survives_the_rewrite() -> void:
-	var out := ObjectKnobs.rewrite_export_default(WITH_SETTER, "cover_scale", "0.62")
-	assert_str(out).is_equal("""extends Node3D
-
-@export var cover_scale := 0.62: set = _set_cover_scale
-""")
-
-
-func test_a_typed_export_default_is_rewritten() -> void:
-	var out := ObjectKnobs.rewrite_export_default(TYPED, "cover_scale", "0.62")
-	assert_str(out).contains("@export var cover_scale: float = 0.62")
-
-
-# A multi-argument literal must not be mistaken for the start of the setter suffix.
-func test_a_vector_literal_is_rewritten_whole() -> void:
-	var out := ObjectKnobs.rewrite_export_default(VECTOR, "flame_size", "Vector2(0.4, 0.9)")
-	assert_str(out).is_equal("""extends Node3D
-
-@export var flame_size := Vector2(0.4, 0.9): set = _set_flame_size
-""")
-
-
-# THE case. Returning the source unchanged would be indistinguishable from a successful no-change
-# save, so "not found" has to be representable as something a caller cannot mistake for success.
-func test_an_unknown_property_returns_empty_rather_than_the_source() -> void:
-	var out := ObjectKnobs.rewrite_export_default(PLAIN, "renamed_since", "0.62")
-	assert_str(out).override_failure_message(
-		"a property the rewriter cannot find must return \"\", or a no-op write reads as a save").is_empty()
-
-
-# A component path (flame_size:x) has no declaration line of its own -- "x = 0.4" is not a thing a
-# script can say. Refused loudly rather than half-written.
-func test_a_component_path_is_refused() -> void:
-	assert_str(ObjectKnobs.rewrite_export_default(VECTOR, "flame_size:x", "0.4")).is_empty()
-
-
-# ...which is why the save path asks a different question first. A component knob's DECLARATION is
-# the vector's, so both axis knobs resolve to one line and one write.
-func test_a_component_knob_resolves_to_the_declaration_it_shares() -> void:
-	var width := {"node": "BoardMirror", "prop": "flame_size:x", "label": "Flame width"}
-	var height := {"node": "BoardMirror", "prop": "flame_size:y", "label": "Flame height"}
-	assert_str(ObjectKnobs.declaration_prop(width)).is_equal("flame_size")
-	assert_str(ObjectKnobs.declaration_prop(height)).is_equal(
-		ObjectKnobs.declaration_prop(width))
-
-
-func test_a_plain_knob_declares_itself() -> void:
-	assert_str(ObjectKnobs.declaration_prop(
-		{"node": "BoardMirror", "prop": "cover_scale"})).is_equal("cover_scale")
-
 
 # --- The laws ----------------------------------------------------------------------------
 
@@ -115,9 +28,9 @@ func test_every_object_knob_is_declared_in_the_script_its_node_carries() -> void
 		# The DECLARATION prop, which is what Save writes -- a component knob (flame_size:x) tunes
 		# one axis of a property declared whole, and asking about the component here would red on a
 		# table that is perfectly correct.
-		var prop := ObjectKnobs.declaration_prop(knob)
+		var prop := KnobSource.declaration_prop(knob)
 		var source := _read(path)
-		var rewritten := ObjectKnobs.rewrite_export_default(source, prop, "1.0")
+		var rewritten := KnobSource.rewrite_declaration_default(source, prop, "1.0")
 		assert_str(rewritten).override_failure_message(
 			"'%s' names %s:%s, but %s declares no @export default for %s -- Save would write nothing and report success"
 				% [knob["label"], knob["node"], knob["prop"], path, prop]).is_not_empty()
@@ -140,7 +53,7 @@ func test_the_scene_overrides_no_object_knob_property() -> void:
 		var section := _node_section(scene, knob["node"])
 		assert_bool(section.is_empty()).override_failure_message(
 			"Battle3D.tscn has no node '%s'" % knob["node"]).is_false()
-		var override := RegEx.create_from_string("(?m)^%s[ \\t]*=" % ObjectKnobs.declaration_prop(knob))
+		var override := RegEx.create_from_string("(?m)^%s[ \\t]*=" % KnobSource.declaration_prop(knob))
 		assert_object(override.search(section)).override_failure_message(
 			"Battle3D.tscn overrides %s:%s -- the script default ObjectKnobs writes is no longer what the game reads"
 				% [knob["node"], knob["prop"]]).is_null()

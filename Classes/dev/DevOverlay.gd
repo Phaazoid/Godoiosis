@@ -17,6 +17,7 @@ class_name DevOverlay
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var look_tool: LookTool = get_node("%Look")
 @onready var object_tool: ObjectTool = get_node("%Objects")
+@onready var game_tool: GameTool = get_node("%Game")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 
@@ -91,6 +92,7 @@ func attach_3d_host(host: Node3D) -> void:
 	host_3d = host
 	look_tool.attach_host(host)
 	object_tool.attach_host(host)
+	game_tool.attach_host(host)
 
 
 # What the dev was looking at, for a bug report (#328). The WINDOW answers it, because the tabs are
