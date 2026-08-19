@@ -373,7 +373,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	if is_inside_tree():
 		var camera := get_viewport().get_camera_3d()
 		if camera != null:
-			bar.face(camera.global_position)
+			bar.face(camera.global_transform.basis)
 
 
 # The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a

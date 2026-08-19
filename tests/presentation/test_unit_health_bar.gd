@@ -191,13 +191,16 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 			"nothing was displaced, so laying it out in the parent's space proves nothing"
 			).is_greater_equal(2)
 
-	# And the other half: something has to turn it now that its parts do not turn themselves.
+	# And the other half: something has to turn it now that its parts do not turn themselves --
+	# to the camera VIEW PLANE, which is what BILLBOARD_FIXED_Y does to every sprite around it
+	# (#325 follow-up). Pointing at the camera POSITION instead is the same angle only at screen
+	# centre, which is why the crown and the bar read as sitting on different axes.
 	var camera := bar.get_viewport().get_camera_3d()
 	assert_object(camera).is_not_null()
-	var to_camera: Vector3 = camera.global_position - bar.global_position
+	var facing: Vector3 = camera.global_transform.basis.z
 	assert_float(bar.global_rotation.y).override_failure_message(
-			"the readout does not face the camera").is_equal_approx(
-			atan2(to_camera.x, to_camera.z), 0.001)
+			"the readout is not aligned to the camera view plane").is_equal_approx(
+			atan2(facing.x, facing.z), 0.001)
 
 
 func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
