@@ -5,7 +5,7 @@
 [ext_resource type="Script" uid="uid://d4f3aheegfqek" path="res://Classes/presentation/UnitMirror.gd" id="3"]
 [ext_resource type="Script" uid="uid://btoy3ievwu1rh" path="res://Scenes/LookDev/look_dev_camera.gd" id="4"]
 [ext_resource type="Script" uid="uid://c44kj2r8wa1q5" path="res://Classes/presentation/BoardOverlays.gd" id="5"]
-[ext_resource type="MeshLibrary" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="6"]
+[ext_resource type="MeshLibrary" uid="uid://c67dboeyyqkpb" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="6"]
 [ext_resource type="PackedScene" uid="uid://cxiu0yvwwxlgo" path="res://Scenes/Main.tscn" id="7"]
 [ext_resource type="Script" uid="uid://bxgelre76vn41" path="res://Classes/presentation/OverlayMirror.gd" id="8"]
 

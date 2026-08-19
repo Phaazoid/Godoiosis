@@ -26,6 +26,9 @@ var _unit_mirror: UnitMirror
 
 
 func before_test() -> void:
+	# Hermetic, and NOT optional (#350): is_on() falls through to user://settings.cfg, so without
+	# this a suite asserting which units wear a bar reads the developer's own saved preference.
+	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
@@ -49,8 +52,8 @@ func _settle() -> void:
 	await await_idle_frame()
 
 
-func _spawn(faction: Team.Faction, cell: Vector2i, armed := true) -> Unit:
-	var unit: Unit = game.spawn_unit(H.make_unit_data({}, faction), cell)
+func _spawn(faction: Team.Faction, cell: Vector2i, armed := true, overrides := {}) -> Unit:
+	var unit: Unit = game.spawn_unit(H.make_unit_data(overrides, faction), cell)
 	assert_object(unit).is_not_null()   # fixture setup, not the claim under test
 	if armed:
 		unit.equipped_weapon = H.make_weapon()   # pattern-less: Reach falls back to adjacency
@@ -247,3 +250,114 @@ func test_the_queue_panel_and_the_bar_predict_the_same_hp() -> void:
 	assert_int(panel_says).is_equal(_predicted(victim))
 	assert_float(bar.notch_fraction()).is_equal_approx(
 			float(panel_says) / float(victim.get_max_hp()), 1.0 / bar.track_texels())
+
+
+# ------------------------------------------------------------------------------
+#  It stays up THROUGH the pass (#354)
+# ------------------------------------------------------------------------------
+
+# The real pass, started but deliberately NOT awaited, so the case can look at the board WHILE it
+# runs. `done` is a one-slot array because a coroutine has no other way to hand a fact back.
+func _start_pass(unit: Unit, done: Array) -> void:
+	await game.order_executor.execute_orders(unit)
+	done[0] = true
+
+
+# The regression the ticket was filed for. Every case above asserts on a plan that never RUNS, which
+# is exactly why the suite stayed green while bars winked out one at a time in play.
+#
+# Two attackers on purpose: a lone attack applies its damage and calls finish_execution() in the same
+# synchronous block, so there would be no mid-pass frame to look at. With two, the first hit lands
+# while the second is still lunging — the dev's report ("disappearing as soon as each individual unit
+# is done") is precisely that gap.
+func test_a_readout_survives_its_own_hit_landing_and_leaves_when_the_pass_does() -> void:
+	var first := _spawn(PLAYER, Vector2i(2, 2))
+	var second := _spawn(PLAYER, Vector2i(2, 3))
+	game.squad_manager.join_squad(second, first.squad)   # ONE squad, so ONE plan resolves both aims
+	var struck := _spawn(ENEMY, Vector2i(3, 2))
+	var waiting := _spawn(ENEMY, Vector2i(3, 3))
+	_aim_at(first, struck.movement.cell)
+	_aim_at(second, waiting.movement.cell)
+	await _settle()
+
+	var struck_hp := struck.get_current_hp()
+	var waiting_hp := waiting.get_current_hp()
+	assert_bool(_unit_mirror.bar_for(struck).visible).override_failure_message(
+			"no readout appeared before the pass, so its surviving one would prove nothing").is_true()
+
+	var done := [false]
+	_start_pass(first, done)
+	var landed := false
+	for _frame in 600:
+		await await_idle_frame()
+		if done[0] or not is_instance_valid(struck):
+			break
+		if struck.get_current_hp() != struck_hp:
+			landed = true
+			break
+	assert_bool(landed).override_failure_message(
+			"the first hit never landed mid-pass, so there is no moment of impact to check").is_true()
+	# One more frame: the mirror POLLS, so the bar the old rule would have hidden is only actually
+	# hidden a frame after the HP moved. Asserting on the frame the damage lands passes either way.
+	await await_idle_frame()
+
+	assert_bool(done[0]).override_failure_message(
+			"the pass finished before the assert, so this case cannot see mid-pass at all").is_false()
+	assert_int(waiting.get_current_hp()).override_failure_message(
+			"the second hit had already landed, so the pass is not staggered here").is_equal(waiting_hp)
+	assert_bool(_unit_mirror.bar_for(struck).visible).override_failure_message(
+			"the readout went away at the moment of impact — #354").is_true()
+
+	while not done[0]:
+		await await_idle_frame()
+	await _settle()
+	# And the other half of the ticket: they leave TOGETHER, when the pass ends, not one at a time.
+	assert_array(_shown_bars()).is_empty()
+
+
+# The boundary the display clamp hides. A unit at exactly 1 HP that the plan puts on the floor has a
+# predicted HP of 1 (LethalityRules.displayed_hp mirrors _go_downed's cling) and a current HP of 1 —
+# so a rule comparing those two numbers reads "this plan does nothing to them" for the single unit
+# the plan hurts most. The suite's other down case sits at 2 HP, one point clear of the collision.
+func test_a_unit_at_one_hp_the_plan_fells_still_wears_a_readout() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2))
+	victim.set_current_hp(1)
+	_aim_at(attacker, victim.movement.cell)
+	await _settle()
+
+	assert_int(PlanResolver.projected_lifecycle(victim, _plan().hypo)).override_failure_message(
+			"the fixture attack did not fell the victim, so the clamp collision is not in play"
+			).is_equal(Unit.LifecycleState.DOWNED)
+	# The precondition IS the bug: assert the two displayed numbers really do collide, or this case
+	# quietly stops testing the boundary the moment the clamp or the ladder moves.
+	assert_int(_predicted(victim)).is_equal(victim.get_current_hp())
+
+	var bar := _unit_mirror.bar_for(victim)
+	assert_bool(bar.visible).override_failure_message(
+			"a unit this plan fells wears no readout at all — #354").is_true()
+	assert_bool(bar.alarm_running()).override_failure_message(
+			"the felling alarm never raised, because the visibility gate ran ahead of it").is_true()
+
+
+# The same collision one rung along, and the reason membership cannot be an HP question alone: a
+# Crisis stands the unit back up at exactly CRISIS_REVIVE_HP, so a unit sitting on that number ends
+# the pass at the HP it started with. Nothing about its HP moved; everything about its situation did.
+func test_a_crisis_at_the_revive_hp_still_wears_a_readout() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var victim := _spawn(ENEMY, Vector2i(3, 2), true, {Stats.Stat.WIL: UnitInstance.MAX_WILL})
+	victim.unit_instance.jobs.append("berserker")   # arms Crisis the way content does (#158)
+	victim.set_current_hp(Abilities.CRISIS_REVIVE_HP)
+	_aim_at(attacker, victim.movement.cell)
+	await _settle()
+
+	var hypo: Dictionary = _plan().hypo
+	assert_bool(PlanResolver.plan_fells(victim, hypo)).override_failure_message(
+			"the fixture attack did not drive the victim into Crisis, so this case proves nothing"
+			).is_true()
+	assert_int(PlanResolver.projected_hp(victim, hypo)).override_failure_message(
+			"the projection moved the victim's HP, so the collision under test is absent"
+			).is_equal(victim.get_current_hp())
+
+	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
+			"a unit this plan drives into Crisis wears no readout at all — #354").is_true()
