@@ -265,6 +265,12 @@ func number_text() -> String:
 	return _label.text
 
 
+# Whether the digits are up, as opposed to what they SAY. A separate question since #350: a bar can
+# be up for three reasons now and only one of them earns the number.
+func number_shown() -> bool:
+	return _label.visible
+
+
 func _rebuild() -> void:
 	var signature: Array = [_width, _height, _outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,

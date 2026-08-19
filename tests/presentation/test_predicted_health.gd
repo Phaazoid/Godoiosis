@@ -26,6 +26,9 @@ var _unit_mirror: UnitMirror
 
 
 func before_test() -> void:
+	# Hermetic, and NOT optional (#350): is_on() falls through to user://settings.cfg, so without
+	# this a suite asserting which units wear a bar reads the developer's own saved preference.
+	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D

@@ -27,6 +27,12 @@ class_name UnitMirror
 # tracks the board, so a bar drains down to its notch as the hit lands instead of vanishing at the
 # moment of impact — and the readout leaves when the PASS does, because the plan does.
 #
+# #350 adds the THIRD and last reason: a player who has asked for every bar, always. That one is a
+# PREFERENCE rather than a derivation, so it comes off PlayerSettings rather than off anything on
+# the board — one more disjunct in the same expression, no new per-unit state, nothing to compute.
+# The expression is now THE gate for this volume: #357's state-icon row is specified to ride it
+# rather than grow its own, so a second visibility rule in this file would be the bug.
+#
 # It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
 # authority" that #229 already made, and for the same reason: the flat view draws no HP over units
 # at all, so there is no retained 2D state to mirror.
@@ -101,9 +107,14 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Only the peak is a knob: the resting colour is bar_doomed_color, so the alarm cannot drift away
 # from the thing it is alarming about.
 @export var alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
-# Whether a bar that is up only because of a PLAN also carries the number. Off by default: a
-# prediction can put a readout over half the board at once, and hovering still reveals the digits.
-@export var ghost_shows_number := false
+
+# --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
+# Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
+# and the reason generalises past the ticket that found it: a plan can put a readout over half the
+# board at once, and #350's toggle puts one over ALL of it. So the digits stay a hover reward
+# either way. ONE knob rather than one per reason -- the question is how crowded this volume may
+# get, and that question does not change with why a bar happens to be up.
+@export var unhovered_shows_number := false
 
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
@@ -164,6 +175,9 @@ func reconcile() -> void:
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
 	var plan := _plan()   # board-wide for the same reason, and a dictionary read per unit after
+	# The player's standing preference (#350), asked once for the same reason: it cannot change
+	# mid-frame, and a static read per unit would be N reads answering one question.
+	var always_on := PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH)
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
 		var unit := child as Unit
@@ -180,7 +194,7 @@ func reconcile() -> void:
 			add_child(bar)
 			_bars[id] = bar
 		_sync(unit, _mirrored[id])
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan)
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, always_on)
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
@@ -308,7 +322,7 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
-		plan: ResolvedPlan) -> void:
+		plan: ResolvedPlan, always_on: bool) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -317,8 +331,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# differs from current", which made membership a function of LIVE HP — so every bar switched
 	# itself off at the instant its own hit landed, mid-pass, one at a time.
 	var foretold := plan != null and PlanResolver.plan_changes(unit, plan.hypo)
-	bar.set_shown(hovered or foretold)
-	if not (hovered or foretold):
+	# THE gate: three reasons, ONE expression (#350). #357's state-icon row is specified to ride
+	# this rather than grow its own, so a second visibility rule anywhere in this file is the bug.
+	var shown := hovered or foretold or always_on
+	bar.set_shown(shown)
+	if not shown:
 		return
 	bar.set_style(bar_width_texels, bar_height_texels, bar_outline_texels, bar_fill_color,
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
@@ -326,7 +343,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, notch_color, notch_texels,
 			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
-	bar.set_number_shown(hovered or ghost_shows_number)
+	bar.set_number_shown(hovered or unhovered_shows_number)
 	if foretold:
 		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:

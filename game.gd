@@ -286,6 +286,12 @@ func _open_pause_menu() -> void:
 			# `prior` would leave the board locked for good on Resume.
 			game_state = prior
 			_open_pause_menu()
+		PauseMenu.Choice.SETTINGS:
+			await SettingsScreen.show_screen(self)
+			# GLOSSARY's shape exactly, restore included -- a settings page is another read-only
+			# detour that must hand the player back to the menu they opened it from.
+			game_state = prior
+			_open_pause_menu()
 		PauseMenu.Choice.REPORT:
 			# The state named is the one from BEFORE the pause, not MENU: a report should say what
 			# the player was doing when they reached for it.

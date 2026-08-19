@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #362 (2026-08-18).**
+**Canon checked through #362 (2026-08-19).**
 
 ## Principles
 
@@ -169,6 +169,9 @@ The rulings, all dev calls, all made before building:
   is hovered, so the crowding question the umbrella worried about does not arise yet — it returns
   the moment anything here becomes always-on. **#313 below is that moment**, and it answered the
   crowding question by folding the prediction into the SAME bar rather than adding a second one.
+  **#350 is the LITERAL case** — every unit, always, because the player asked — and it answered the
+  same way, widening #313's crowding knob instead of growing a second one. What that density does to
+  bars that OVERLAP is named as still-open in its section below.
 - **A bar AND a number**, world-scaled like the icons beside it rather than screen-constant: it
   belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
 - **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
@@ -249,11 +252,12 @@ puts a doomed bar over the player unit it is about to hit. Whether that is a lea
 lands during `Pacing.AI_PLAN_READ`, the beat that exists so a drawn AI plan can be read) is an open
 dev call, filed rather than decided.
 
-Successor filed the same day: [#350](https://github.com/Phaazoid/Godoiosis/issues/350) — a player
-toggle pinning **every** bar on, which is one more disjunct in the same visibility expression and
-then almost entirely a legibility problem. Note also that the predicted-down alarm is a **pulse**,
-so it joins [#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry the
-moment that registry exists.
+Successor filed the same day and **BUILT 2026-08-19**: [#350](https://github.com/Phaazoid/Godoiosis/issues/350)
+— a player toggle pinning **every** bar on, which was one more disjunct in this same visibility
+expression and then almost entirely a question of where a player setting lives. See *Every bar, if
+the player says so* below. Note also that the predicted-down alarm is a **pulse**, so it joins
+[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry — and since
+#350 that registry has a home to be declared in (`PlayerSettings`) and a page to appear on.
 
 ## The readout belongs to the PLAN, not to the board ([#354](https://github.com/Phaazoid/Godoiosis/issues/354), FIXED 2026-08-18)
 
@@ -295,6 +299,66 @@ Two things that generalise past this ticket:
    live Law #2 break in EXECUTION** — it overwrites `AttackAction.resolved` on attacks that have not
    run yet, and `execute` is pure playback of that field — filed separately; this change only makes
    the readout immune to it.
+
+## Every bar, if the player says so ([#350](https://github.com/Phaazoid/Godoiosis/issues/350), BUILT 2026-08-19)
+
+The third and final reason a readout is up, and the only one that is a **preference** rather than a
+derivation: the player asked for all of them. #229 was hover, #313 was the plan; this is *show me
+the board at a glance*, and the dev asked for it at #313's merge.
+
+The model half is one more disjunct in the same expression — `hovered or foretold or always_on` —
+with no new per-unit state and nothing computed. **What made it a ticket is that the toggle had
+nowhere to live**, which is the part worth keeping.
+
+The rulings, all dev calls, all made before building:
+
+- **It gets a SETTINGS SCREEN, not a keybind and not a checkbox bolted to the pause card.**
+  `presentation-effects.md` had already ruled that a settings surface, once it exists, *drives*
+  #217's photosensitivity switch rather than a second one growing beside it — so the choice was
+  build the surface or build the second switch. `SettingsScreen` is `GlossaryScreen`'s shape exactly
+  (a `ModalCard`, reachable from the pause menu **and** the title screen, because a preference set
+  before the first mission is one nobody has to pause to find).
+- **The page is a PROJECTION of `PlayerSettings.DEFS`**, so it never learns a setting's name. That
+  is the whole point of paying for a table with one row in it: #217 is a store edit, not UI work.
+  A test pins "every declared setting gets a row" so the property cannot quietly lapse.
+- **Persisted, not session-scoped.** `user://settings.cfg` via `ConfigFile`, keyed by the enum
+  member's NAME — `Experiments`'s shape, minus its cull-the-flags doctrine, because a setting is a
+  promise to the player rather than an experiment. A static class, not an autoload; this project
+  has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics.
+- **Two states, and the toggle governs the HOVER reason only.** A bar that is up because a queued
+  plan is about to change that unit stays up either way. Law #2 says the queue never lies, and #354
+  had just finished ruling that a prediction survives to the end of its pass; a preference that can
+  hide what the queue is promising would undo both. "Off" is #229's behaviour, not "no readouts".
+- **Bars only; the digits stay a hover reward.** Reused rather than re-decided — `ghost_shows_number`
+  had already answered this one level down for prediction bars, so the knob simply **widened**
+  (renamed `unhovered_shows_number`, since the question is *how crowded may this volume get* and
+  that does not change with why a bar happens to be up). One knob, not one per reason.
+
+Two things that generalise past this ticket:
+
+1. **A global static read is a hermeticity hazard in the SUITE, not just in the game.**
+   `PlayerSettings.is_on` falls through to `user://settings.cfg`, so any suite asserting *which*
+   units wear a bar would silently read the developer's own saved preference and red on a machine
+   where the toggle is on. Both bar suites now call `reset_for_test()` in `before_test`. Any future
+   store with a disk fallback owes the same seam on the same day it is written.
+2. **The gate is ONE named expression, deliberately.** [#357](https://github.com/Phaazoid/Godoiosis/issues/357)'s
+   state-icon row is specified to ride it rather than grow its own, so a second visibility rule in
+   `UnitMirror` is the bug — the ticket said so before it was built and the code says so now.
+
+**Still open, and named rather than fixed: `render_priority` is a GLOBAL sort key in the alpha
+queue, not a per-bar one.** Each `UnitHealthBar` claims `UNIT_HUD_RENDER_PRIORITY + 0..+6` for its
+five coplanar quads and its label, so two bars that overlap on screen interleave **by layer rather
+than by distance** — a far bar's notch and digits draw over a near bar's outline. #245 already
+proved priority beats depth here (a flame at priority 0 sat under a `Layer.TERRAIN` overlay at 2 and
+read as erased). It could not show while at most one bar was up; at always-on it can, and a bar is
+`bar_width_texels` 26 ÷ 16 px-per-cell = **1.63 cells wide**, so two units on *adjacent* cells
+overlap before any camera pitch is considered. The fix, when the dev's eye says it is needed, is to
+collapse the quads into one mesh at one priority (vertex colours) so bars sort by depth against each
+other. Deliberately not built: this ticket is the toggle, and whether the crowding actually reads
+badly is a question only play answers.
+
+**3D only, inherited** — the flat view still has no health readout of any kind to toggle, which is
+#229's gap under [#292](https://github.com/Phaazoid/Godoiosis/issues/292) and not a new one.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 

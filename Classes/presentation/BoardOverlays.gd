@@ -52,7 +52,9 @@ const FLAME_RENDER_PRIORITY := 16
 # The band above the units: HUD hung in the volume over a unit's head (#229's health readout), which
 # must never be sorted behind the sprite it describes. It lives HERE with the other two because the
 # relationship between the bands is the thing worth pinning, and a table is the only place a
-# relationship can be read at a glance. The readout claims this value and the two above it.
+# relationship can be read at a glance. The readout claims this value and the SIX above it: five
+# coplanar quads (outline, missing, fill, the predicted span, the notch) then the number's outline
+# and its glyphs.
 const UNIT_HUD_RENDER_PRIORITY := 48
 
 const LAYERS: Dictionary[Layer, Dictionary] = {

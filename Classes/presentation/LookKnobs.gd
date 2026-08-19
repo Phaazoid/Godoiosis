@@ -215,8 +215,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Thickness of the prediction marker in texels, at the same pixel density as the bar. One texel is a hairline that can disappear at distance; wide enough and it stops reading as a mark on the bar and starts reading as a third segment of it."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
 		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "ghost_shows_number", "label": "Prediction shows number",
-		"tip": "Whether a readout that is up only because of a QUEUED PLAN also carries the HP digits. Off by default: a plan can put a bar over half the board at once, and pointing at any of them reveals its number anyway."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "unhovered_shows_number", "label": "Unhovered bars show number",
+		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
 ]
 
 # A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
@@ -277,7 +277,7 @@ const PRESET_EXCLUDED: Array[String] = [
 	"UnitMirror|notch_color",
 	"UnitMirror|notch_texels",
 	"UnitMirror|alarm_peak_color",
-	"UnitMirror|ghost_shows_number",
+	"UnitMirror|unhovered_shows_number",
 ]
 
 # --- Identity ---------------------------------------------------------------------------

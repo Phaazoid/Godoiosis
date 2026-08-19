@@ -1,6 +1,9 @@
 # The hover health readout (#229): does pointing at a unit actually put a bar over it, does that
 # bar say what the UNIT says, and does it follow the thing that is on screen?
 #
+# Since #350 it also covers the third reason a bar is up — the player asked for all of them — and
+# the crowding rule that rides with it. Those cases live at the bottom, driven through the store.
+#
 # This is a WIRE, which is why every case drives the real chain rather than calling the bar:
 # battle3d's picked cell -> HoverPresenter.pointer_source -> last_hovered_cell -> unit_at_pointer
 # -> UnitMirror -> UnitHealthBar. Both ends of that chain were already correct and unconnected
@@ -22,6 +25,9 @@ var _unit_mirror: UnitMirror
 
 
 func before_test() -> void:
+	# Hermetic, and NOT optional (#350): is_on() falls through to user://settings.cfg, so without
+	# this a suite asserting which units wear a bar reads the developer's own saved preference.
+	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
@@ -203,3 +209,58 @@ func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		var spec: Dictionary = BoardOverlays.LAYERS[layer]
 		assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(spec["sort"])
+
+
+# --- The always-show setting (#350) -----------------------------------------------------------
+# The third reason a readout is up, and the only one that is a PREFERENCE rather than a derivation.
+# Driven through PlayerSettings, never by poking UnitMirror, because the store is what the settings
+# page writes and the gate is what reads it — the wire is the whole point.
+
+func _set_always_on(on: bool) -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH, on)
+
+
+func test_the_setting_puts_a_readout_over_every_unit_at_once() -> void:
+	var first := _spawn(PLAYER, Vector2i(2, 2))
+	var second := _spawn(PLAYER, Vector2i(6, 2))
+	var third := _spawn(PLAYER, Vector2i(9, 5))
+	_point_at(Vector2i(20, 20))   # empty ground: nothing is hovered, nothing is planned
+	_set_always_on(true)
+	await _settle()
+
+	# The inverse of the hover case's exclusivity claim: every unit, not one.
+	var shown := _shown_bars()
+	assert_array(shown).contains([first, second, third])
+	assert_int(shown.size()).is_equal(3)
+
+
+func test_an_always_on_readout_keeps_its_digits_for_hover_alone() -> void:
+	# The crowding answer #313 already reached one level down, reused rather than re-decided: a bar
+	# that is up for a non-hover reason is bar-only, and pointing at it reveals the number.
+	var pointed := _spawn(PLAYER, Vector2i(2, 2))
+	var other := _spawn(PLAYER, Vector2i(6, 2))
+	_set_always_on(true)
+	_point_at(pointed.movement.cell)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(pointed).visible).is_true()
+	assert_bool(_unit_mirror.bar_for(other).visible).is_true()
+	assert_bool(_unit_mirror.bar_for(pointed).number_shown()).override_failure_message(
+			"the hovered unit lost its digits").is_true()
+	assert_bool(_unit_mirror.bar_for(other).number_shown()).override_failure_message(
+			"every always-on bar carries digits, which is the crowding #313 already ruled on").is_false()
+
+
+func test_turning_the_setting_off_returns_the_board_to_hover_only() -> void:
+	# The off state is #229's behaviour, not "bars we forgot to clear" — a stale bar left standing
+	# would look identical to the feature working right up until you moved the mouse.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_set_always_on(true)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(unit).visible).is_true()   # precondition, via the real path
+
+	_set_always_on(false)
+	await _settle()
+
+	assert_array(_shown_bars()).is_empty()
