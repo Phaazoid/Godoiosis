@@ -104,13 +104,24 @@ const ICON_TEXTURES = {
 static var SQUAD_MARKER_RINGS := true
 static var SQUAD_RING_ALPHA := 0.9
 const SQUAD_RING_TEXTURE := preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
-# Per-squad hues, dealt by SquadManager at squad creation: cool for friendly squads, warm for
-# enemy ones, so "which squad" and "whose side" read from one glance.
+# Per-squad hues, dealt lazily by SquadManager when a squad first gains a squadmate: cool for
+# friendly squads, warm for enemy ones, so "which squad" and "whose side" read from one glance.
+# Plain consts, one per line -- edit freely; WHITE is reserved as the not-yet-dealt sentinel.
 const SQUAD_HUES_FRIENDLY: Array[Color] = [
-	Color(0.3, 0.6, 1.0), Color(0.2, 0.9, 0.8), Color(0.65, 0.5, 1.0), Color(0.35, 0.9, 0.5),
+	Color(0.3, 0.6, 1.0),    # blue
+	Color(0.2, 0.9, 0.8),    # teal
+	Color(0.65, 0.5, 1.0),   # violet
+	Color(0.35, 0.9, 0.5),   # green
+	Color(0.6, 0.85, 1.0),   # sky
+	Color(0.3, 0.4, 0.95),   # indigo
 ]
 const SQUAD_HUES_ENEMY: Array[Color] = [
-	Color(1.0, 0.35, 0.3), Color(1.0, 0.65, 0.2), Color(1.0, 0.4, 0.75), Color(1.0, 0.85, 0.3),
+	Color(1.0, 0.35, 0.3),   # red
+	Color(1.0, 0.65, 0.2),   # orange
+	Color(1.0, 0.4, 0.75),   # magenta
+	Color(1.0, 0.85, 0.3),   # amber
+	Color(0.8, 0.2, 0.45),   # wine
+	Color(1.0, 0.95, 0.5),   # yellow
 ]
 const RING_Z_INDEX := 2       # underfoot: above terrain state (1), below arrows (3) and units (4)
 const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the toggle round-trips

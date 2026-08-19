@@ -89,7 +89,6 @@ func create_squad(leader: Unit) -> Squad:
 	add_child(squad)
 
 	squad.set_leader(leader)
-	squad.ring_hue = _deal_ring_hue(leader.get_faction())
 
 	squads.append(squad)
 	_register_squad_signals(squad)
@@ -114,6 +113,11 @@ func join_squad(unit: Unit, target_squad: Squad):
 
 	_detach_from_current_squad(unit)
 	target_squad._add_member(unit)
+	# #325: the marker hue is dealt at the first moment a squad actually HAS squadmates -- this
+	# is the one growth funnel (_add_member's only other caller is set_leader's solo birth), so
+	# solo churn never touches the palette.
+	if target_squad.ring_hue == Color.WHITE and target_squad.members.size() > 1:
+		target_squad.ring_hue = _deal_ring_hue(target_squad.leader.get_faction())
 	if target_squad.members.size() > target_squad.max_size():
 		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
 
@@ -231,14 +235,24 @@ func clear_all_squads():
 		squad_deleted.emit(squad)
 		squad.queue_free()
 
-# #325: each squad is dealt a marker hue at creation -- cool palette for friendly factions, warm
-# for the enemy, cycling per faction so concurrently-alive squads stay distinct. Battle-scoped;
-# a reload re-deals in load order.
+# #325: a squad's marker hue -- cool palette for friendly factions, warm for the enemy. Prefers
+# a hue no living squad of the faction is wearing, so concurrent squads stay distinct until a
+# faction fields more squads than its palette; only then does the counter cycle into repeats.
+# WHITE = not yet dealt (the palettes never contain it); a squad's death frees its hue by
+# leaving `squads`. Battle-scoped; a reload re-deals in join order.
 var _ring_hue_counters: Dictionary[Team.Faction, int] = {}
 
 func _deal_ring_hue(faction: Team.Faction) -> Color:
 	var palette: Array[Color] = OverlayManager.SQUAD_HUES_ENEMY if faction == Team.Faction.ENEMY \
 			else OverlayManager.SQUAD_HUES_FRIENDLY
+	var worn: Array[Color] = []
+	for squad in squads:
+		if squad.ring_hue != Color.WHITE and squad.leader != null \
+				and squad.leader.get_faction() == faction:
+			worn.append(squad.ring_hue)
+	for hue in palette:
+		if not worn.has(hue):
+			return hue
 	var index: int = _ring_hue_counters.get(faction, 0)
 	_ring_hue_counters[faction] = index + 1
 	return palette[index % palette.size()]
