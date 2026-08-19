@@ -290,3 +290,20 @@ func test_prolog_authored_content_resolves() -> void:
 		assert_object(beat.timeline).is_not_null()
 	for step: TutorialStep in scenario.tutorial_steps:
 		assert_str(step.text).is_not_empty()
+
+
+func test_disarm_also_empties_the_pending_queue() -> void:
+	# The resurrection bug: a beat queued behind a running timeline survived disarm, and
+	# timeline_ended popped it back to life on a director that had nothing left to say.
+	_director.set_beats([
+		_beat(DialogBeat.Trigger.MISSION_START, "First voice."),
+		_beat(DialogBeat.Trigger.MISSION_START, "Queued voice."),
+	])
+	_director.mission_started()   # first starts, second queues
+	await _await_starts(1)
+	_director.disarm()
+	Dialogic.end_timeline(true)   # ended pops the queue -- which must now be empty
+	await Dialogic.timeline_ended
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(1)

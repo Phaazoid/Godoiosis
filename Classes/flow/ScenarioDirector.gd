@@ -78,6 +78,9 @@ func disarm() -> void:
 	_armed = false
 	_beats = []
 	_steps = []
+	# Pending is CONTENT, not display: a queued beat surviving disarm resurrects the moment the
+	# current timeline ends (timeline_ended pops the queue) -- disarmed means nothing left to say.
+	_pending.clear()
 	game.refresh_mission_status()
 
 
