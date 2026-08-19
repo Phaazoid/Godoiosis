@@ -23,8 +23,15 @@ var _unit_mirror: UnitMirror
 var _mirror: OverlayMirror
 
 
+var _rings_were: bool
+var _ring_alpha_was: float
+
+
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
+	# Statics outlive a test; cache rather than restore-to-a-literal, per the tuning razor.
+	_rings_were = OverlayManager.SQUAD_MARKER_RINGS
+	_ring_alpha_was = OverlayManager.SQUAD_RING_ALPHA
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -40,6 +47,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	OverlayManager.SQUAD_MARKER_RINGS = _rings_were
+	OverlayManager.SQUAD_RING_ALPHA = _ring_alpha_was
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -383,18 +392,78 @@ func test_squad_fills_and_icons_mirror() -> void:
 	await _settle()
 	assert_bool(_om().squadrange_overlay.get_used_cells().size() > 0).is_true()
 	assert_that(_sorted_3d(BoardOverlays.Layer.SQUAD_RANGE)).is_equal(_lifted(_om().squadrange_overlay))
-	# One billboard per 2D icon (crown + squadmember), textures copied.
-	var icon_count := 0
+	# Ring style is the default (#325): one GROUND decal per 2D MEMBER icon, texture AND tint
+	# copied off the 2D sprite -- the squad hue is authored 2D-side, and the mirror must never
+	# re-derive it. CROWN entries stay off the ground (the bar badge is the leader's mark).
+	var member_count := 0
 	var textures: Array = []
+	var tints: Array = []
+	for unit in _om().icons_by_unit:
+		for type in _om().icons_by_unit[unit]:
+			if type != OverlayIcon.IconType.SQUADMEMBER:
+				continue
+			member_count += 1
+			var sprite: Sprite2D = (_om().icons_by_unit[unit][type] as OverlayIcon).sprite
+			textures.append(sprite.texture)
+			tints.append(sprite.modulate)
+	assert_bool(member_count >= 2).is_true()
+	var markers := _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS)
+	assert_int(markers.size()).is_equal(member_count)
+	for marker in markers:
+		assert_bool(textures.has(marker["texture"])).is_true()
+		assert_bool(tints.has(marker["modulate"])).override_failure_message(
+				"a ground decal's tint is not the 2D sprite's -- the hue stopped arriving by copy").is_true()
+	# Two styles never draw at once: ring mode leaves the head channel empty.
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(0)
+
+
+func test_ring_mode_keeps_the_crown_off_the_ground() -> void:
+	var pair := _squad_pair()
+	_om().redraw_squad_unit_icons(pair[0].squad)
+	await _settle()
+	# The leader's CROWN icon still exists in 2D (the flat view's legacy head mark) but never
+	# lands in the ground channel -- in ring mode the leader reads off the health bar's badge
+	# instead (test_unit_health_bar pins that half).
+	assert_bool(_om().icons_by_unit[pair[0]].has(OverlayIcon.IconType.CROWN)).is_true()
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
+		assert_bool(marker["texture"] == crown).override_failure_message(
+				"the crown landed on the ground channel -- ring mode should badge the bar instead").is_false()
+
+
+func test_square_mode_restores_the_head_billboards_on_markers_already_up() -> void:
+	var pair := _squad_pair()
+	_om().redraw_squad_unit_icons(pair[0].squad)
+	await _settle()
+	# The Look-tab toggle's path: flip the static, restyle in place -- no lifecycle event fires.
+	OverlayManager.SQUAD_MARKER_RINGS = false
+	_om().restyle_squad_markers()
+	await _settle()
+	var icon_count := 0
 	for unit in _om().icons_by_unit:
 		for type in _om().icons_by_unit[unit]:
 			icon_count += 1
-			textures.append((_om().icons_by_unit[unit][type] as OverlayIcon).sprite.texture)
-	assert_bool(icon_count >= 2).is_true()
-	var markers := _overlays.markers_of(BoardOverlays.Layer.ICONS)
-	assert_int(markers.size()).is_equal(icon_count)
-	for marker in markers:
-		assert_bool(textures.has(marker["texture"])).is_true()
+			var sprite: Sprite2D = (_om().icons_by_unit[unit][type] as OverlayIcon).sprite
+			assert_that(sprite.texture).is_same(OverlayManager.ICON_TEXTURES[type])
+	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
+	assert_int(heads.size()).is_equal(icon_count)
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS).size()).is_equal(0)
+
+
+func test_a_ring_on_a_ramp_lies_tilted_with_the_slope() -> void:
+	# The #281 wire, extended to the ground-icon channel: a decal on a ramped cell must arrive
+	# with a tilted basis, or it hangs level through the slope.
+	var pair := _squad_pair()
+	game.board_heights.set_cell(pair[0].movement.cell, 0, Terrain.RampRise.EAST)
+	_om().redraw_squad_unit_icons(pair[0].squad)
+	await _settle()
+	var tilted := 0
+	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
+		var lie: Basis = marker["basis"]
+		if not lie.y.normalized().is_equal_approx(Vector3.UP):
+			tilted += 1
+	assert_int(tilted).override_failure_message(
+			"every ground decal came through level -- the mirror is not keeping the surface basis").is_greater(0)
 
 
 func test_zone_fills_mirror_and_captured_zones_drop() -> void:

@@ -22,6 +22,7 @@ const PLAYER := Team.Faction.PLAYER
 var _scene: Node3D
 var game: Node2D
 var _unit_mirror: UnitMirror
+var _rings_were: bool
 
 
 func before_test() -> void:
@@ -29,6 +30,8 @@ func before_test() -> void:
 	# this a suite asserting which units wear a bar reads the developer's own saved preference.
 	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
+	# A static outlives a test; cache rather than restore-to-a-literal, per the tuning razor.
+	_rings_were = OverlayManager.SQUAD_MARKER_RINGS
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -42,6 +45,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	OverlayManager.SQUAD_MARKER_RINGS = _rings_were
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -209,6 +213,50 @@ func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		var spec: Dictionary = BoardOverlays.LAYERS[layer]
 		assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(spec["sort"])
+
+
+# --- The leader badge (#325): the crown rides the bar in ring mode -------------------------
+
+func _squad_pair() -> Array[Unit]:
+	var leader := _spawn(PLAYER, Vector2i(2, 2))
+	var member := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+	return [leader, member]
+
+
+func test_a_hovered_leaders_bar_wears_the_crown_badge_at_bar_height() -> void:
+	var pair := _squad_pair()
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[0])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_true()
+	# "Same height as the health bar" (dev call), square -- derived from the knobs, never pinned.
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var expected: float = roundf(_unit_mirror.bar_height_texels) * _unit_mirror.crown_badge_scale * texel
+	assert_float(bar.badge_size().y).is_equal_approx(expected, 0.001)
+	assert_float(bar.badge_size().x).is_equal_approx(bar.badge_size().y, 0.001)
+
+
+func test_a_hovered_members_bar_carries_no_badge() -> void:
+	var pair := _squad_pair()
+	_point_at(Vector2i(3, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[1])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_false()
+
+
+func test_square_mode_keeps_the_badge_off_the_bar() -> void:
+	# The toggle compares two complete systems: in squares mode the crown billboard is the
+	# leader's mark, so the bar must not double-crown it.
+	OverlayManager.SQUAD_MARKER_RINGS = false
+	var pair := _squad_pair()
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[0])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_false()
 
 
 # --- The always-show setting (#350) -----------------------------------------------------------
