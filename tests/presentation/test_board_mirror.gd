@@ -36,6 +36,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 

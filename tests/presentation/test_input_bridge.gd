@@ -38,9 +38,18 @@ func before_test() -> void:
 	_container = _scene.get_node("Main/GameContainer") as SubViewportContainer
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
+	# The Prolog carries the #182 lesson now, and load_mission routes through begin_mission -- the
+	# fresh-start door that ARMS it. This suite tests the CLICK WIRE, not the tutorial: disarm so
+	# no step or beat can spawn a Dialogic layer mid-click (its CanvasLayer consumes the synthesized
+	# press this suite exists to route), and end the intro the mission start already fired.
+	_game.scenario_director.disarm()
+	await DialogFixtures.end_all_dialog(self)
 
 
 func after_test() -> void:
+	# Cases that re-enter the fresh-start door mid-test (demo boot, board swaps) re-arm the Prolog
+	# lesson and re-fire its intro -- end it before the scene dies.
+	await DialogFixtures.end_all_dialog(self)
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
