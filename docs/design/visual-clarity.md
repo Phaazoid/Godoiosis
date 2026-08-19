@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #365 (2026-08-19).**
+**Canon checked through #368 (2026-08-19).**
 
 ## Principles
 
@@ -342,8 +342,9 @@ Two things that generalise past this ticket:
    where the toggle is on. Both bar suites now call `reset_for_test()` in `before_test`. Any future
    store with a disk fallback owes the same seam on the same day it is written.
 2. **The gate is ONE named expression, deliberately.** [#357](https://github.com/Phaazoid/Godoiosis/issues/357)'s
-   state-icon row is specified to ride it rather than grow its own, so a second visibility rule in
-   `UnitMirror` is the bug — the ticket said so before it was built and the code says so now.
+   state-icon row rides it rather than growing its own, so a second visibility rule in `UnitMirror`
+   is the bug — the ticket said so before it was built, and what shipped is stronger than the
+   ticket asked: the icons hang off the bar, so there is no second rule to keep in step.
 
 **Still open, and named rather than fixed: `render_priority` is a GLOBAL sort key in the alpha
 queue, not a per-bar one.** Each `UnitHealthBar` claims `UNIT_HUD_RENDER_PRIORITY + 0..+6` for its
@@ -396,15 +397,33 @@ member wider.
 Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
 general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
 their candidates marked *nowhere in either view* until #316, and Squad Up only looked right because
-someone had patched that one screen. And **the freed channel's first occupant is now filed, in two
-halves (dev direction, 2026-08-18):** [#357](https://github.com/Phaazoid/Godoiosis/issues/357)
-puts a `StateIcons` row just above each unit's health bar (riding #350's visibility gate, never
-growing its own), and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) makes the sprite
-itself wear its status — wet drip, frost sheen, Crisis — the channel that keeps states readable
-when [#350](https://github.com/Phaazoid/Godoiosis/issues/350)'s toggle hides the bars.
-`StateIcons.ICONS` still carries art for WET alone; a CHILLED icon is the open art ask. Always-on
-state icons remain the trigger #229 named for the crowding question it deferred — two states
-cannot crowd, a longer vocabulary can.
+someone had patched that one screen. And **the freed channel's first occupant was filed in two
+halves (dev direction, 2026-08-18), of which the first is now BUILT:**
+[#357](https://github.com/Phaazoid/Godoiosis/issues/357) puts a `StateIcons` row just above each
+unit's health bar, and [#358](https://github.com/Phaazoid/Godoiosis/issues/358) — still open —
+makes the sprite itself wear its status (wet drip, frost sheen, Crisis), the channel that keeps
+states readable when [#350](https://github.com/Phaazoid/Godoiosis/issues/350)'s toggle hides the
+bars. Always-on state icons remain the trigger #229 named for the crowding question it deferred —
+two states cannot crowd, a longer vocabulary can.
+
+**#357's structural point is that the row has NO visibility rule of its own.** The icons are
+CHILDREN of `UnitHealthBar`, so a hidden bar hides them by construction — there is no second
+expression to keep in step with the gate, which is what the ticket asked for one level more weakly
+(*"specified to ride it"*). Everything else follows the crown badge #325 put on the same bar: quads
+in the group's local space, so `face()` turns the whole display and nothing gets a billboard basis
+of its own; sizes in texels; a POOL that parks extras rather than freeing them, since the count
+changes every time a state lands or expires. Three Look knobs (icon size, row clearance, spacing),
+preset-excluded like the rest of the Unit HUD group — a mission may not hide what a unit IS.
+
+**CHILLED's art is the FROZEN terrain tile, as a declared placeholder (dev call, 2026-08-19).**
+`StateIcons.ICONS` carried WET alone, and the alternative — falling back to a text label in world
+space — reads as mush at icon size. The stand-in lands in the shared table rather than at one
+surface, so the hover card, the inspect bar and the row all show it, and a real 16px CHILLED icon
+is a one-line swap. Two consequences were paid at the same time, both of them Law #4 arriving on
+schedule: `ActionQueueRow` had kept its **own** one-entry copy of the art table, which would have
+started disagreeing the moment CHILLED existed (it now reads `StateIcons.ICONS`); and the two
+source images disagree in size (32px wet, 16px ice), so `populate` now renders every icon at
+`ICON_SIZE` — the recipe `HoverInfoPanelControl` already uses to draw these same terrain icons.
 
 The doctrine governing everything that enters these channels (dev, 2026-08-18): *"Having access to
 fancy effects doesn't necessitate using them. Using them in the correct places rather than

@@ -9,10 +9,6 @@ class_name ActionQueueRow
 
 const CROWN_ICON := preload("res://Art/Icons/BoardIcons/CrownIcon.png")
 
-const STATE_ICONS := {
-	Elemental.State.WET: preload("res://Art/Icons/StateIcons/WetIcon.png"),
-}
-
 var action: BaseAction
 var draggable := false
 var is_volley_header := false
@@ -84,9 +80,11 @@ func _draw() -> void:
 func _show_elemental_overlays(atk: AttackAction) -> void:
 	if atk.resolved == null:
 		return
+	# StateIcons.ICONS, not a local copy: this file kept its own one-entry twin until #357 added
+	# CHILLED, at which point the two would have disagreed about what a chill attack shows.
 	for state in atk.resolved.states_added:
-		if STATE_ICONS.has(state):
-			_overlay_behind(action_icon, STATE_ICONS[state], Vector2(0, -8))
+		if StateIcons.ICONS.has(state):
+			_overlay_behind(action_icon, StateIcons.ICONS[state], Vector2(0, -8))
 	for icon in atk.resolved.reaction_icons:
 		if icon != null:
 			_overlay_behind(target_texture, icon)
