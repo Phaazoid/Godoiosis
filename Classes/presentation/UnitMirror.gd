@@ -63,10 +63,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # for two rounds and read as floating both times, because a map sprite's visible head is wherever
 # its transparent padding ends and no single number is right for every piece of art.
 #
-# The selection icons (crown, squad member, target) hang at BoardOverlays.billboard_lift, measured
-# from the CELL, and the dev's stacking is icons on top with the readout tucked under them. Nothing
-# enforces that: a test would be pinning one tuning value against another, which the tuning razor
-# forbids, so if the icons move this moves by hand.
+# The CROWN hangs at BoardOverlays.billboard_lift, measured from the CELL, and the dev's stacking is
+# it on top with the readout tucked under. Nothing enforces that: a test would be pinning one tuning
+# value against another, which the tuning razor forbids, so if the crown moves this moves by hand.
+# (It is the head channel's only tenant since #325's verdict -- TARGET went to the ground with #346,
+# squad membership followed it as a ring.)
 @export var hud_lift := 0.06
 @export var bar_width_texels := 26.0
 @export var bar_height_texels := 5.0
@@ -115,8 +116,6 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # either way. ONE knob rather than one per reason -- the question is how crowded this volume may
 # get, and that question does not change with why a bar happens to be up.
 @export var unhovered_shows_number := false
-# #325: the leader's crown badge beside the bar, as a multiple of the bar's own height.
-@export var crown_badge_scale := 1.0
 
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
@@ -346,11 +345,6 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
-	# #325: in ring mode leadership reads beside health; the squares arm keeps its billboard.
-	var leads: bool = OverlayManager.SQUAD_MARKER_RINGS and unit.squad != null \
-			and unit.squad.get_leader() == unit and unit.has_squad()
-	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN] if leads else null
-	bar.set_leader_badge(crown, crown_badge_scale)
 	if foretold:
 		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:

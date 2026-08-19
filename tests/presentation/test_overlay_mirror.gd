@@ -23,14 +23,12 @@ var _unit_mirror: UnitMirror
 var _mirror: OverlayMirror
 
 
-var _rings_were: bool
 var _ring_alpha_was: float
 
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
 	# Statics outlive a test; cache rather than restore-to-a-literal, per the tuning razor.
-	_rings_were = OverlayManager.SQUAD_MARKER_RINGS
 	_ring_alpha_was = OverlayManager.SQUAD_RING_ALPHA
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
@@ -47,7 +45,6 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	OverlayManager.SQUAD_MARKER_RINGS = _rings_were
 	OverlayManager.SQUAD_RING_ALPHA = _ring_alpha_was
 	get_tree().root.remove_child(_scene)
 	_scene.free()
@@ -413,41 +410,32 @@ func test_squad_fills_and_icons_mirror() -> void:
 		assert_bool(textures.has(marker["texture"])).is_true()
 		assert_bool(tints.has(marker["modulate"])).override_failure_message(
 				"a ground decal's tint is not the 2D sprite's -- the hue stopped arriving by copy").is_true()
-	# Two styles never draw at once: ring mode leaves the head channel empty.
-	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(0)
+	# The two channels split by TYPE, not by mode (#325 verdict): rings on the ground, the leader's
+	# crown over the head. One squad, one leader, so exactly one head marker.
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(1)
 
 
-func test_ring_mode_keeps_the_crown_off_the_ground() -> void:
+func test_the_leader_wears_the_crown_over_the_head_and_a_ring_underfoot() -> void:
 	var pair := _squad_pair()
 	_om().redraw_squad_unit_icons(pair[0].squad)
 	await _settle()
-	# The leader's CROWN icon still exists in 2D (the flat view's legacy head mark) but never
-	# lands in the ground channel -- in ring mode the leader reads off the health bar's badge
-	# instead (test_unit_health_bar pins that half).
+	# #325's verdict, and the half that was DEAD between 2026-08-18 and the verdict: the crown is
+	# produced in 2D (it always was) and the 3D mirror has to carry it to the head channel. Ring
+	# mode used to drop it on the floor of _icons and badge the health bar instead.
 	assert_bool(_om().icons_by_unit[pair[0]].has(OverlayIcon.IconType.CROWN)).is_true()
 	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
+	assert_int(heads.size()).override_failure_message(
+			"the crown never reached the head channel -- the 3D mirror dropped it").is_equal(1)
+	assert_bool(heads[0]["texture"] == crown).is_true()
+
+	# ...and it is NOT also on the ground. The leader still gets a ring there, because they are a
+	# member too, so the ground channel holds rings only -- never the crown.
 	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
 		assert_bool(marker["texture"] == crown).override_failure_message(
-				"the crown landed on the ground channel -- ring mode should badge the bar instead").is_false()
-
-
-func test_square_mode_restores_the_head_billboards_on_markers_already_up() -> void:
-	var pair := _squad_pair()
-	_om().redraw_squad_unit_icons(pair[0].squad)
-	await _settle()
-	# The Look-tab toggle's path: flip the static, restyle in place -- no lifecycle event fires.
-	OverlayManager.SQUAD_MARKER_RINGS = false
-	_om().restyle_squad_markers()
-	await _settle()
-	var icon_count := 0
-	for unit in _om().icons_by_unit:
-		for type in _om().icons_by_unit[unit]:
-			icon_count += 1
-			var sprite: Sprite2D = (_om().icons_by_unit[unit][type] as OverlayIcon).sprite
-			assert_that(sprite.texture).is_same(OverlayManager.ICON_TEXTURES[type])
-	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
-	assert_int(heads.size()).is_equal(icon_count)
-	assert_int(_overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS).size()).is_equal(0)
+				"the crown landed on the ground channel as well as the head").is_false()
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS).size()).override_failure_message(
+			"the leader lost its own membership ring").is_equal(2)
 
 
 func test_a_ring_on_a_ramp_lies_tilted_with_the_slope() -> void:
@@ -620,3 +608,47 @@ func test_a_reload_of_an_unchanged_board_leaves_the_zone_fills_drawn() -> void:
 			"the 2D lost the zones on reload, which is a different bug").is_equal(drawn)
 	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)).override_failure_message(
 			"the board reloaded and its zones never came back in 3D").is_equal(drawn)
+
+
+# Move the pointer the way the picker does, so everything past this line is the real hover wire:
+# battle3d hands the cell to HoverPresenter, which resolves the unit and creates the icons.
+func _point_at(cell: Vector2i) -> void:
+	var heights: BoardHeights = game.board_heights
+	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
+
+
+func test_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -> void:
+	# The TIMING half of #325's verdict, in the dev's own words: the crown "stays over the squad
+	# leader whenever you are hovering over any squad member, like it did before". Nothing asserted
+	# that end to end before -- get_squad_icons was never the thing that broke, the 3D mirror was,
+	# and a case that draws the icons by hand cannot tell the two apart.
+	var pair := _squad_pair()
+	_point_at(pair[1].movement.cell)   # the MEMBER, not the leader
+	await _settle()
+
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
+	assert_int(heads.size()).override_failure_message(
+			"hovering a squadmate did not put a crown over the leader").is_equal(1)
+	assert_bool(heads[0]["texture"] == crown).is_true()
+
+	# It is over the LEADER, not the unit under the cursor.
+	var leader_anchor := BoardSpace.surface_point(pair[0].movement.cell, game.board_heights)
+	assert_float(heads[0]["pos"].x).is_equal_approx(leader_anchor.x, 0.01)
+	assert_float(heads[0]["pos"].z).override_failure_message(
+			"the crown is over the hovered member, not the leader").is_equal_approx(leader_anchor.z, 0.01)
+
+	# Somewhere on the board with nobody on it. DERIVED, never a literal: hover draws nothing OFF
+	# the painted board (update_hover_visuals returns early on a tileless cell), so "look away" has
+	# to land on a real tile -- and which tiles exist is authored content this suite must not pin.
+	var empty := GridUtils.NO_CELL
+	for cell: Vector2i in game.grid.get_used_cells():
+		if game.unit_at_pointer(cell) == null:
+			empty = cell
+			break
+	assert_bool(empty != GridUtils.NO_CELL).override_failure_message(
+			"the fixture board has no empty tile to look away at").is_true()
+	_point_at(empty)
+	await _settle()
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).override_failure_message(
+			"the crown outlived the hover that raised it").is_equal(0)

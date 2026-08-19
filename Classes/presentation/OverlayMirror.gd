@@ -229,12 +229,16 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 			ghosts.append(entry)
 
 
-# Selection icons (crown / squadmember): anchored to the icon's own authored target_cell, and
-# forked on the 2D's own style flag (#325 experiment). Squares ride ICONS as head billboards
-# with a per-type y-stagger against z-fighting (the 2D stacks them by tree order); rings ride
-# GROUND_ICONS as surface decals, texture and tint arriving BY COPY from the 2D sprite -- the
-# squad hue is authored there, never re-derived here. CROWN is skipped in ring mode: the leader
-# reads off the health bar's badge (UnitMirror), and the flat view keeps its own head crown.
+# Selection icons, routed by TYPE rather than by a style mode (#325 verdict, dev call after playing
+# both, 2026-08-19). CROWN rides ICONS as a head billboard -- leadership is what a unit IS, and
+# nothing has read better over a head than the original crown. Everything else (today, SQUADMEMBER)
+# rides GROUND_ICONS as a surface decal in the squad's own hue, texture and tint arriving BY COPY
+# from the 2D sprite, so the hue is authored in one place and never re-derived here.
+#
+# The leader wears BOTH: a ring because they are a member, the crown because they lead.
+#
+# No per-type y-stagger any more. It existed to keep several head-icon types off each other's
+# plane; CROWN is the channel's only tenant now, so there is nothing to stagger against.
 func _icons(om: OverlayManager) -> void:
 	var heads: Array[Dictionary] = []
 	var ground: Array[Dictionary] = []
@@ -245,13 +249,10 @@ func _icons(om: OverlayManager) -> void:
 			if icon == null or not is_instance_valid(icon):
 				continue
 			var surface := _anchor(icon.target_cell)
-			if OverlayManager.SQUAD_MARKER_RINGS:
-				if type == OverlayIcon.IconType.CROWN:
-					continue
-				ground.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
-			else:
-				surface.origin.y += float(type) * 0.02
+			if type == OverlayIcon.IconType.CROWN:
 				heads.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
+			else:
+				ground.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
 	_markers(BoardOverlays.Layer.ICONS, heads)
 	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
 

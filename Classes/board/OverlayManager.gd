@@ -91,19 +91,21 @@ enum OverlayType {
 	INVALIDMOVE
 }
 
+# The ONE answer to what each marker type looks like, applied once by create_unit_icon's setup --
+# so _style_icon below never touches a texture, and there is no second place a marker's art can come
+# from. Membership is a per-squad ring underfoot, leadership the crown over the head (#325, settled
+# 2026-08-19); the legacy green square lost, and SquadHighlightIcon.png is now unreferenced.
 const ICON_TEXTURES = {
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
-	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadHighlightIcon.png")
+	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
 }
 
-# --- Squad marker style (#325 experiment) --------------------------------------------------
-# Rings underfoot vs the legacy over-the-head squares. static, the ATTACK_MODULATE pattern, so
-# the Look tab's toggle reaches it without a node ref; read by _style_icon here and by
-# OverlayMirror._icons, so flipping it moves BOTH stacks. Style only -- icon LIFECYCLE (when a
-# marker exists) is untouched either way. The losing style gets deleted when the experiment ends.
-static var SQUAD_MARKER_RINGS := true
+# --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
+# The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
+# leadership is the ORIGINAL crown over the head. The legacy green squares lost and are deleted --
+# no toggle, no second style. SQUAD_RING_ALPHA stays a live Look-tab value; it tunes a shipped
+# feature rather than picking between two.
 static var SQUAD_RING_ALPHA := 0.9
-const SQUAD_RING_TEXTURE := preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
 # Per-squad hues, dealt lazily by SquadManager when a squad first gains a squadmate: cool for
 # friendly squads, warm for enemy ones, so "which squad" and "whose side" read from one glance.
 # Plain consts, one per line -- edit freely; WHITE is reserved as the not-yet-dealt sentinel.
@@ -451,26 +453,21 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 	icons_by_unit[unit][type] = icon
 	return icon
 
-# Presentation only (#325): which texture/tint/z an icon wears under the current marker style.
-# Rings lie under the unit in the squad's dealt hue; the crown decal keeps its authored gold so
-# it never fights the palette. Square mode is byte-for-byte the legacy look.
+# Presentation only: the TINT and Z a marker wears. Never the texture -- ICON_TEXTURES above is that
+# one answer and setup applies it, so this cannot become a second place a marker's art comes from.
+# What genuinely varies per UNIT is the squad hue, and only membership rings carry one; the crown
+# keeps its authored gold over the head so it never fights the palette.
 func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
-	if SQUAD_MARKER_RINGS and icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
+	if icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
 		icon.sprite.z_index = RING_Z_INDEX
-		icon.sprite.texture = SQUAD_RING_TEXTURE
 		var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
 		icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
 	else:
-		# CROWN keeps the legacy over-sprite form in BOTH styles: in ring mode the 3D never
-		# mirrors it (the leader reads off the health bar's badge -- UnitMirror), but the flat
-		# view has no bar to badge, so its head crown stays. The readout family's #292
-		# asymmetry, one member wider.
-		icon.sprite.texture = ICON_TEXTURES[icon.icon_type]
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
 		icon.sprite.modulate = Color.WHITE
 
-# The Look-tab toggle restyles markers already on screen; walking the store here keeps the
-# panel ignorant of icon lifecycle.
+# The Look tab's ring-opacity slider restyles markers already on screen; walking the store here
+# keeps the panel ignorant of icon lifecycle.
 func restyle_squad_markers() -> void:
 	for unit in icons_by_unit.keys().duplicate():
 		if not is_instance_valid(unit):
