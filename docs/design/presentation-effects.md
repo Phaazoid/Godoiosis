@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #386 (2026-08-19).**
+**Canon checked through #389 (2026-08-19).**
 
 ---
 
@@ -41,6 +41,13 @@ load-gated: there is one default and it is always the target, so what the ask gu
 rather than "the wrong file"); `DevWidgets.confirm_overwrite` is the shared wording. Save
 As is the one save that never confirms, because `refuse_existing_file` makes it structurally unable to
 overwrite anything.
+
+**And every save says whether there is anything to do** (#389): a panel holding unsaved changes
+wears `Save *`, via `DevWidgets.mark_unsaved`. It never disables — Save As is legitimate on a clean
+panel, and a greyed Save would bury the precise "nothing has moved" its handler already reports.
+The three knob panels answer `has_unsaved_changes()` differently (Moods and Game diff a baseline,
+Objects has none since its edits land in the live TileSet), which is why they shipped as one
+ticket rather than three improvisations.
 
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.

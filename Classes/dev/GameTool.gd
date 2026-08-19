@@ -31,13 +31,18 @@ var _class_baseline: Array = []   # the same, per CLASS_KNOBS index
 var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
 var _status: Label
+var _save_button: Button
+# Touched since the last save/reset (#389). A FLAG for the marker; the exact answer is re-derived
+# where it is cheap -- once per save, from changed_indices()/changed_class_indices().
+var _dirty := false
 
 
 func _ready() -> void:
 	var buttons := HBoxContainer.new()
-	buttons.add_child(_button("Save to source",
+	_save_button = _button("Save to source",
 		"Write every value you have moved into the declaration that authors it, in the script that\ndeclares it. These are game-wide constants rather than mission mood, so this is the whole way\nto keep one -- the change shows up as an ordinary line in the diff. Editor runs only; res:// is\nread-only in a build.",
-		_on_save_pressed))
+		_on_save_pressed)
+	buttons.add_child(_save_button)
 	buttons.add_child(_button("Reset",
 		"Put every knob back to what is currently saved on disk.", _on_reset_pressed))
 	add_child(buttons)
@@ -92,6 +97,31 @@ static func tab_titles() -> Array[String]:
 func _capture_baselines() -> void:
 	_baseline = KnobSource.capture_baseline(_host, GameKnobs.KNOBS)
 	_class_baseline = GameKnobs.capture_class_baseline(_host)
+	_refresh_dirty()
+
+
+# --- The unsaved marker (#389) --------------------------------------------------------------
+
+func has_unsaved_changes() -> bool:
+	return _dirty
+
+
+func _touch() -> void:
+	_dirty = true
+	_refresh_save_mark()
+
+
+# Re-DERIVED rather than cleared: a partial save (some writes failed) leaves real edits behind, and
+# quietly adopting them would hide the failure behind a clean-looking panel. Affordable here --
+# once per save, never per drag tick.
+func _refresh_dirty() -> void:
+	_dirty = _host != null and not (changed_indices().is_empty() and changed_class_indices().is_empty())
+	_refresh_save_mark()
+
+
+func _refresh_save_mark() -> void:
+	if is_instance_valid(_save_button):
+		DevWidgets.mark_unsaved(_save_button, "Save to source", _dirty)
 
 
 func baseline_of(index: int) -> Variant:
@@ -143,7 +173,9 @@ func _rebuild() -> void:
 			group = knob_group
 			_add_heading(rows, knob_group)
 		DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
-			func(value: Variant) -> void: LookKnobs.write(_host, knob, value),
+			func(value: Variant) -> void:
+				LookKnobs.write(_host, knob, value)
+				_touch(),
 			tip_for(knob))
 	group = ""
 	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
@@ -165,7 +197,9 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 		push_error("GameTool: class knob does not resolve: %s" % knob["label"])
 		return
 	DevWidgets.add_knob_row(rows, knob, value,
-		func(picked: Variant) -> void: GameKnobs.write_class(_host, knob, picked),
+		func(picked: Variant) -> void:
+			GameKnobs.write_class(_host, knob, picked)
+			_touch(),
 		tip_for(knob))
 
 
@@ -231,6 +265,7 @@ func _save_confirmed(moved: PackedInt32Array, moved_class: PackedInt32Array) -> 
 		parts.append("Saved: %s" % ", ".join(written))
 	if not failed.is_empty():
 		parts.append("FAILED: %s" % ", ".join(failed))
+	_refresh_dirty()   # the truth after a partial save, not a blind clear
 	_status.text = " | ".join(parts)
 
 
@@ -246,4 +281,5 @@ func _on_reset_pressed() -> void:
 		if typeof(saved_class) != TYPE_NIL:
 			GameKnobs.write_class(_host, GameKnobs.CLASS_KNOBS[i], saved_class)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
+	_refresh_dirty()
 	_status.text = "Back to what is saved on disk."
