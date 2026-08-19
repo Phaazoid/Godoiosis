@@ -16,38 +16,10 @@ class_name LookTool
 # look every board falls back to. Copy Values still diffs the AUTHORED scene rather than either,
 # because its output is paste-ready lines FOR Battle3D.tscn -- diffed against a loaded preset they
 # would not reproduce what you are looking at.
-
-# Board-markup colours (#212 slice 2). A DECLARED second table rather than a widening of KNOBS,
-# and it stays HERE rather than moving with the rest: these address a LAYER through an accessor
-# pair rather than a property path, presets never touch them, and only this panel tunes them.
 #
-# Which layers appear here is measured, not chosen. `set_layer_modulate` REPLACES a layer's albedo,
-# so any layer something already drives per frame would take a knob that silently reverts -- the
-# lying-slider class. Excluded for that reason: ATTACK's 3D side and AIM (OverlayMirror rewrites
-# both from the 2D every poll) and HOVER (battle3d._sync_bracket_tint). ZONE_PATROL/ZONE_HIGHLIGHT
-# are excluded as authoring-only -- invisible during real play, and they READ OverlayManager's
-# constants, so a knob would fork a value that is deliberately one (dev call).
-#
-# `reach` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
-# the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
-const LAYER_KNOBS: Array[Dictionary] = [
-	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
-		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
-	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
-		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
-	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
-		"tip": "The candidate bubble while FORMING a squad (Squad Up / Join Squad) -- the cells a recruit may be picked from. Membership itself is the ring/square markers, not this fill."},
-	{"group": "Board markup colours", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
-		"tip": "The leader's cohesion range -- how far squadmates may stray before the plan is refused. Shares its colour with Squad fill by default, since they are two halves of the same idea."},
-	{"group": "Board markup colours", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
-		"tip": "A painted objective zone that can be captured. Stays visible for the whole battle -- this is live objective information, not authoring scaffolding."},
-	{"group": "Board markup colours", "label": "Extraction zone", "layer": BoardOverlays.Layer.ZONE_EXTRACTION,
-		"tip": "A painted zone your units must reach to extract. Also visible all battle."},
-	{"group": "Board markup colours", "label": "Attack reach (2D+3D)", "reach": "ATTACK_MODULATE",
-		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
-	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "reach": "HEAL_ATTACK_MODULATE",
-		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
-]
+# Board-markup colours were a second table here (LAYER_KNOBS) until #373 moved them, with the rest
+# of the markup, to the Game tab: none of it was scene mood, and none of it had a Save. What is
+# left on this panel is mood entire, which is what let LookKnobs' exclusion list go away.
 
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Scenario tab's heading gold
 
@@ -62,24 +34,17 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Post": "Post",
 	"Fog": "Fog & DoF",
 	"Depth of field": "Fog & DoF",
-	"Camera": "Camera",
-	"Board markup": "Markup",
-	"Board markup colours": "Markup",
-	# The Effects sub-tab is gone (#272): its whole population moved to the Objects tab, and the one
-	# knob left is dev chrome, which shares Markup for the reason the Unit HUD does — neither is
-	# scene mood, and a tab holding a single row is a tab that has stopped meaning anything.
-	"Dev chrome": "Markup",
-	# #229's health readout. Shares the Markup tab rather than taking its own: it is HUD hung on a
-	# unit, i.e. the same "gameplay legibility, not scene mood" family as the board overlays, and
-	# both are excluded from presets for that one reason.
-	"Unit HUD": "Markup",
+	# The Effects and Markup sub-tabs are both gone, and for one reason twice: their populations
+	# were not scene mood. Effects left for the Objects tab (#272, world construction and the fire
+	# block), Markup for the Game tab (#373, board markup and its colours, the unit readout, camera
+	# handling, the brush ghost). What remains is the look, and every group of it joins a preset.
+	"Camera framing": "Camera",
 }
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
 var _authored: Array = []        # the SCENE's own value per KNOBS index, read once on attach.
 								 # Only Copy Values reads it now -- its lines paste into the scene.
 var _baseline: Array = []        # what Reset returns to: the scene, or whatever was last applied
-var _layer_baseline: Array = []  # the same, per LAYER_KNOBS index (presets never touch these)
 var _loaded_preset := ""         # dropdown-relative name; "" = nothing loaded (default or scene)
 var _tabs: TabContainer
 var _tab_rows: Dictionary[String, VBoxContainer] = {}   # tab title -> its row container
@@ -134,68 +99,7 @@ func attach_host(host: Node3D) -> void:
 	for knob: Dictionary in LookKnobs.KNOBS:
 		_authored.append(read(knob))   # authored by definition: nothing has moved one yet
 	_baseline = _authored.duplicate()  # no preset loaded yet, so Reset means "back to the scene"
-	_layer_baseline.clear()
-	for knob: Dictionary in LAYER_KNOBS:
-		_layer_baseline.append(read_layer(knob))
 	_rebuild()
-
-
-# --- Board-markup colours ---------------------------------------------------------------
-
-func _overlays() -> BoardOverlays:
-	if _host == null:
-		return null
-	return _host.get_node_or_null(^"BoardOverlays") as BoardOverlays
-
-
-# A reach colour is a STATIC var, and Object.get/set are instance methods -- there is no reflecting
-# on the class, so the two names are matched explicitly. An unknown one is a loud failure rather
-# than a silently dead knob.
-func read_layer(knob: Dictionary) -> Variant:
-	if knob.has("reach"):
-		match knob["reach"]:
-			"ATTACK_MODULATE": return OverlayManager.ATTACK_MODULATE
-			"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
-		push_error("LookTool: unknown reach colour %s" % knob["reach"])
-		return null
-	var overlays := _overlays()
-	if overlays == null:
-		return null
-	return overlays.layer_modulate(knob["layer"])
-
-
-func write_layer(knob: Dictionary, color: Color) -> void:
-	if knob.has("reach"):
-		# The static var IS the authority; the live 2D fill is re-derived from it so the tuned
-		# colour shows now rather than at the next aim (the 3D mirrors that fill, not the var).
-		match knob["reach"]:
-			"ATTACK_MODULATE": OverlayManager.ATTACK_MODULATE = color
-			"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = color
-			_:
-				push_error("LookTool: unknown reach colour %s" % knob["reach"])
-				return
-		var om: OverlayManager = _overlay_manager()
-		if om != null:
-			om.refresh_attack_reach_color()
-		return
-	var overlays := _overlays()
-	if overlays != null:
-		overlays.set_layer_modulate(knob["layer"], color)
-
-
-func _overlay_manager() -> OverlayManager:
-	if _host == null:
-		return null
-	var game: Node2D = _host.game
-	if game == null:
-		return null
-	return game.overlay_manager as OverlayManager
-
-
-func layer_baseline_of(index: int) -> Variant:
-	if index < 0 or index >= _layer_baseline.size():
-		return null
-	return _layer_baseline[index]
 
 
 func has_host() -> bool:
@@ -273,64 +177,14 @@ func _rebuild() -> void:
 			group = knob_group
 			_add_heading(rows, group)
 		_build_row(rows, knob)
-	var layer_group: String = LAYER_KNOBS[0]["group"]
-	var layer_rows := _rows_for_group(layer_group)
-	_add_heading(layer_rows, layer_group)
-	for knob: Dictionary in LAYER_KNOBS:
-		var value: Variant = read_layer(knob)
-		if typeof(value) != TYPE_COLOR:
-			DevWidgets.add_label(layer_rows, "%s - UNRESOLVED" % knob["label"])
-			push_error("LookTool layer knob does not resolve: %s" % knob["label"])
-			continue
-		var first := layer_rows.get_child_count()
-		DevWidgets.add_color(layer_rows, knob["label"], value,
-			func(picked: Color) -> void: write_layer(knob, picked))
-		_apply_tip(layer_rows, first, tip_for(knob))
-	_build_squad_marker_rows(layer_rows)
 	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
 
 
-# --- #325 experiment: squares vs rings ---------------------------------------------------
-
-# A bespoke row rather than a table entry: ring alpha is a float STATIC on OverlayManager (both
-# stacks read it), which neither KNOBS (property paths on scene nodes) nor LAYER_KNOBS (Color-only)
-# can address. The Rings-underfoot checkbox beside it died with #325's verdict -- rings won for
-# membership, the head crown won for leadership, and there is no second style left to pick.
-func _build_squad_marker_rows(rows: VBoxContainer) -> void:
-	_add_heading(rows, "Squad markers")
-	var first := rows.get_child_count()
-	DevWidgets.add_slider(rows, "Ring opacity", OverlayManager.SQUAD_RING_ALPHA, 0.1, 1.0, 0.01,
-		_on_ring_alpha)
-	_apply_tip(rows, first, DevWidgets.wrap_tooltip(
-		"Alpha of the per-squad membership rings under each member (the leader's crown, over the head, stays opaque). MOVES BOTH STACKS -- and takes effect on markers already up."))
-
-
-func _on_ring_alpha(moved: float) -> void:
-	OverlayManager.SQUAD_RING_ALPHA = moved
-	_restyle_squad_markers()
-
-
-func _restyle_squad_markers() -> void:
-	var om: OverlayManager = _overlay_manager()
-	if om != null:
-		om.restyle_squad_markers()
-
-
-# The which-stack note is appended per KIND rather than typed into each tip, so it cannot drift
-# out of step with the table it describes.
+# The where-does-this-live note is appended per TABLE rather than typed into each tip, so it cannot
+# drift out of step with what Save actually writes -- the Game and Objects tabs say their own.
 func tip_for(knob: Dictionary) -> String:
-	var tip: String = knob.get("tip", "")
-	if knob.has("layer"):
-		tip += "\n\n3D ONLY -- the flat 2D board keeps its own colour. A declared divergence, and provisional: tune it, look at it, then decide whether 2D should follow."
-	elif knob.has("reach"):
-		tip += "\n\nMOVES BOTH STACKS -- the 3D mirrors the 2D's fill rather than holding a colour of its own, so this tunes OverlayManager and the flat 2D game changes with it."
-	return DevWidgets.wrap_tooltip(tip)
-
-
-# Every control the row added, so hovering the slider handle answers as well as the label.
-func _apply_tip(rows: VBoxContainer, first_index: int, tip: String) -> void:
-	for i in range(first_index, rows.get_child_count()):
-		DevWidgets.apply_tooltip(rows.get_child(i), tip)
+	return DevWidgets.wrap_tooltip(String(knob.get("tip", ""))
+		+ "\n\nMISSION MOOD -- a preset captures this, and a board wearing that preset wears this value. Save As / Update is how it is kept; a value that must be the same on every board is a Game tab knob instead.")
 
 
 # The row itself is DevWidgets.add_knob_row since #272 -- the Object tab draws the same kind of row
@@ -560,12 +414,13 @@ func _delete_confirmed(target: String) -> void:
 	refresh_preset_dropdown()
 
 
-# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved preset establishes.
+# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved preset
+# establishes. It used to skip the excluded rows, which is now every row of a table that is mood
+# entire (#373); the authored copy it starts from survives only as the shape of the array.
 func _live_values() -> Array:
 	var values: Array = _authored.duplicate()
 	for i in LookKnobs.KNOBS.size():
-		if not LookKnobs.PRESET_EXCLUDED.has(LookKnobs.preset_key(LookKnobs.KNOBS[i])):
-			values[i] = read(LookKnobs.KNOBS[i])
+		values[i] = read(LookKnobs.KNOBS[i])
 	return values
 
 
@@ -593,10 +448,6 @@ func _on_reset_pressed() -> void:
 		var authored: Variant = baseline_of(i)
 		if typeof(authored) != TYPE_NIL:
 			write(LookKnobs.KNOBS[i], authored)
-	for i in LAYER_KNOBS.size():
-		var authored_color: Variant = layer_baseline_of(i)
-		if typeof(authored_color) == TYPE_COLOR:
-			write_layer(LAYER_KNOBS[i], authored_color)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
 	if _loaded_preset == "":
 		_status.text = "Every knob is back at its authored value."
@@ -625,13 +476,6 @@ func changed_values() -> Dictionary:
 		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or LookKnobs.same_value(live, authored):
 			continue
 		_record(groups, _paste_split(knob))
-	for i in LAYER_KNOBS.size():
-		var knob: Dictionary = LAYER_KNOBS[i]
-		var live: Variant = read_layer(knob)
-		var authored: Variant = layer_baseline_of(i)
-		if typeof(live) != TYPE_COLOR or typeof(authored) != TYPE_COLOR or LookKnobs.same_value(live, authored):
-			continue
-		_record(groups, _layer_paste_split(knob, live))
 	return groups
 
 
@@ -644,22 +488,6 @@ func _record(groups: Dictionary, split: Array) -> void:
 	var entries: Dictionary = groups[header]
 	entries[split[1]] = split[2]
 
-
-# A layer colour is not authored at a property path, so it gets its own paste shape: the whole
-# LAYERS row (sort and kind read off the live table, so the line is paste-ready as-is), or the
-# static var declaration for a reach colour.
-func _layer_paste_split(knob: Dictionary, live: Color) -> Array:
-	if knob.has("reach"):
-		var name: String = knob["reach"]
-		return ["OverlayManager.gd", name,
-			"static var %s := %s" % [name, DevWidgets.literal_for(live)]]
-	var layer: BoardOverlays.Layer = knob["layer"]
-	var spec: Dictionary = BoardOverlays.LAYERS[layer]
-	var layer_name: String = BoardOverlays.Layer.keys()[layer]
-	var kind_name: String = BoardOverlays.Kind.keys()[spec["kind"]]
-	return ["BoardOverlays.gd -> LAYERS", layer_name,
-		'Layer.%s: {"color": %s, "sort": %d, "kind": Kind.%s},'
-			% [layer_name, DevWidgets.literal_for(live), spec["sort"], kind_name]]
 
 
 func _paste_split(knob: Dictionary) -> Array:

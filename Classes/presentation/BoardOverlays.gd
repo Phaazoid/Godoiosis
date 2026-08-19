@@ -80,7 +80,7 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# crown decal lying on the cell surface. Above terrain state, below the aim pulse, pick
 	# markers and arrows (a ring must never eat an arrowhead) -- AIM/TARGET_PICK/arrows each
 	# moved up one to open this slot. Colour stays WHITE: the tint is per-entry (the squad hue,
-	# copied off the 2D sprite), which is also why this layer can never take a LAYER_KNOBS row.
+	# copied off the 2D sprite), which is also why this layer can never take a GameKnobs colour row.
 	Layer.GROUND_ICONS: {"color": Color.WHITE, "sort": 3, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this

@@ -11,6 +11,7 @@
 [ext_resource type="ButtonGroup" uid="uid://6a8b7yuy02ce" path="res://Classes/dev/AttackTypeToggle.tres" id="6_p14e7"]
 [ext_resource type="Script" path="res://Classes/dev/LookTool.gd" id="7_look1"]
 [ext_resource type="Script" path="res://Classes/dev/ObjectTool.gd" id="8_objs1"]
+[ext_resource type="Script" path="res://Classes/dev/GameTool.gd" id="9_game1"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -504,6 +505,13 @@ visible = false
 layout_mode = 2
 script = ExtResource("8_objs1")
 metadata/_tab_index = 7
+
+[node name="Game" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=990000052]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("9_game1")
+metadata/_tab_index = 8
 
 [connection signal="toggled" from="Panel/MarginContainer/VBoxContainer/DevModeBanner/DevModeToggle" to="." method="_on_dev_mode_toggled"]
 [connection signal="text_changed" from="Panel/MarginContainer/VBoxContainer/DevTabs/Unit Authoring/AuthoringTabs/Spawn/UnitNameInput" to="Panel/MarginContainer/VBoxContainer/DevTabs/Unit Authoring/AuthoringTabs/Spawn" method="_on_unit_name_input_text_changed"]

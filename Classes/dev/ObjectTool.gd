@@ -65,11 +65,10 @@ func has_host() -> bool:
 
 
 # What is on disk, by definition: nothing has moved a knob yet at attach time, and after a save the
-# written ones are re-read so the two agree again.
+# written ones are re-read so the two agree again. Both this tab and the Game tab ask it, so the
+# walk itself is KnobSource's.
 func _capture_baseline() -> void:
-	_baseline.clear()
-	for knob: Dictionary in ObjectKnobs.KNOBS:
-		_baseline.append(LookKnobs.read(_host, knob))
+	_baseline = KnobSource.capture_baseline(_host, ObjectKnobs.KNOBS)
 
 
 func baseline_of(index: int) -> Variant:
@@ -78,18 +77,8 @@ func baseline_of(index: int) -> Variant:
 	return _baseline[index]
 
 
-# Which rows have been moved off what is saved. The APPROXIMATE compare, for LookKnobs' reason:
-# engine properties store single-precision, so a value written and read straight back is not
-# bit-identical and an exact compare reports every knob as changed the moment it is touched.
 func changed_indices() -> PackedInt32Array:
-	var moved: PackedInt32Array = PackedInt32Array()
-	for i in ObjectKnobs.KNOBS.size():
-		var live: Variant = LookKnobs.read(_host, ObjectKnobs.KNOBS[i])
-		if typeof(live) == TYPE_NIL:
-			continue
-		if not LookKnobs.same_value(live, baseline_of(i)):
-			moved.append(i)
-	return moved
+	return KnobSource.changed_indices(_host, ObjectKnobs.KNOBS, _baseline)
 
 
 func _rebuild() -> void:
@@ -289,7 +278,8 @@ func _on_save_pressed() -> void:
 	var report := ObjectKnobs.save_to_source(_host, moved)
 	# The baseline follows what LANDED, never what was asked for: a knob whose write failed is still
 	# unsaved, and quietly adopting it would hide the failure behind an unchanged-looking panel.
-	for i: int in report["saved"]:
+	for landed: Dictionary in report["saved"]:
+		var i: int = landed["index"]
 		_baseline[i] = LookKnobs.read(_host, ObjectKnobs.KNOBS[i])
 	var parts: PackedStringArray = PackedStringArray()
 	var written: PackedStringArray = report["written"]

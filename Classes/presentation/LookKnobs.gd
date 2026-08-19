@@ -18,9 +18,13 @@ class_name LookKnobs
 # one failure that makes a tuning panel untrustworthy. tests/dev/test_look_tool.gd pins that by
 # writing, waiting two frames, and reading back.
 #
-# Board-markup COLOURS are deliberately not here: they address a layer through an accessor pair
-# rather than a property path, they are excluded from presets anyway, and only the panel tunes
-# them -- so LookTool.LAYER_KNOBS stays where the surface that uses it lives.
+# WHAT IS NOT HERE, and where it went. This table is scene MOOD, entire -- so a preset captures
+# every row of it and there is no exclusion list (#373 deleted `PRESET_EXCLUDED` by emptying it).
+# Board markup, the unit readout, camera HANDLING and the brush ghost were all excluded from
+# presets and all left for GameKnobs, which gave them the Save a preset could never be; world
+# construction and terrain effects left earlier, for ObjectKnobs (#272). A knob added here now
+# joins presets automatically, which is right for a look knob and is why the question to ask of a
+# new one is "may one board differ from another about this?" -- if not, it belongs in another table.
 
 const PRESET_DIR := "res://Resources/LookPresets/"
 
@@ -109,29 +113,19 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Fog", "node": "WorldEnvironment", "prop": "environment:volumetric_fog_anisotropy", "label": "Fog anisotropy", "min": -0.9, "max": 0.9, "step": 0.01,
 		"tip": "Which way the fog throws light. Positive scatters it forward, so a bright haze gathers around whatever is lighting it; negative scatters back toward the source; 0 scatters evenly in all directions."},
 
-	# --- Camera ---
-	{"group": "Camera", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
+	# --- Camera framing ---
+	# FRAMING only: how the board is composed, which is mood and travels with a preset. How the
+	# camera DRAGS -- zoom limits, pan speed, smoothing, orbit sensitivity -- left for GameKnobs
+	# with the rest of the game settings (#373), which is what makes "a mission may not re-teach
+	# the controls" structural rather than a name on an exclusion list.
+	{"group": "Camera framing", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
 		"tip": "How far the camera looks DOWN at the board. Shallow shows more of the sprites' faces and more sky; steep reads like a map. Press Re-fit camera after moving it -- the framing maths only re-runs on a board load."},
-	{"group": "Camera", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
+	{"group": "Camera framing", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
 		"tip": "Field of view. Low values flatten perspective toward an orthographic, model-railway look (the HD-2D diorama trick); high values exaggerate depth and bend the board's edges. Press Re-fit camera after moving it."},
-	{"group": "Camera", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,
+	{"group": "Camera framing", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,
 		"tip": "How many cells wide the view is when a mission OPENS, centred on your own units. It does not limit zoom -- the whole board still does -- it only decides where the game starts you.\n\nInert on a board that authors its own camera start (Scenario tab, #234): an authored pose says where, which way and how far, so there is no width left to derive."},
-	{"group": "Camera", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
-		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
-		"tip": "How far one notch of the mouse wheel moves the camera."},
-	{"group": "Camera", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
-		"tip": "How fast the camera catches up to where it has been told to go. Higher is snappier and more responsive; lower glides, which reads as cinematic until you are trying to play."},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5,
-		"tip": "How fast WASD slides the camera across the board, in world units per second."},
-	{"group": "Camera", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01,
-		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit."},
-	{"group": "Camera", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
-		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
-	{"group": "Camera", "node": "CameraRig", "prop": "fit_margin_cells", "label": "Fit margin (cells)", "min": 0.0, "max": 8.0, "step": 0.25,
+	{"group": "Camera framing", "node": "CameraRig", "prop": "fit_margin_cells", "label": "Fit margin (cells)", "min": 0.0, "max": 8.0, "step": 0.25,
 		"tip": "Breathing room left around the board whenever the camera frames it, so the edge tiles are not flush against the screen."},
-	{"group": "Camera", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
-		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
 
 	# --- Depth of field ---
 	# The BANDS are the knobs; the distances they produce are re-derived per frame off the live
@@ -150,144 +144,6 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Whether anything BEYOND the sharp band blurs at all. This is the half that sells the diorama, by making the far edge of the board read as distant."},
 	{"group": "Depth of field", "node": "CameraRig/Pitch/Camera", "prop": "attributes:dof_blur_far_transition", "label": "Far transition", "min": 0.1, "max": 20.0, "step": 0.1,
 		"tip": "How gradually the far blur ramps in. Too abrupt and you can see the band's edge crossing the board as a line."},
-
-	# --- Board markup ---
-	# fill_lift and lift_step raise every ground marker together, arrows included. A lift the
-	# ARROWS own alone (#227) needs its own export on BoardOverlays -- not in this slice.
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "fill_lift", "label": "Marker lift", "min": 0.0, "max": 0.5, "step": 0.001,
-		"tip": "How far every ground marker floats above the tile's top face. Enough to beat z-fighting (the flickering where two surfaces share a plane) and no more -- too much and the markup visibly hovers."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "lift_step", "label": "Per-layer lift step", "min": 0.0, "max": 0.05, "step": 0.0005,
-		"tip": "Extra lift per sort layer, so stacked markers never land on exactly the same plane and fight. Also what keeps path arrows drawing over the move fill rather than through it."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_arm", "label": "Bracket arm", "min": 0.05, "max": 0.5, "step": 0.005,
-		"tip": "Length of each arm of the corner bracket that marks the hovered cell. Short arms read as corner ticks; long ones close into a full box."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_thickness", "label": "Bracket thickness", "min": 0.005, "max": 0.2, "step": 0.001,
-		"tip": "How chunky the hover bracket's arms are. Thin reads precise, thick reads legible at a distance."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
-		"tip": "Size of the whole hover bracket relative to one cell. Just above 1 makes it sit proud of the tile edge so it is not swallowed by the tile art."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
-		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,
-		"tip": "How high a selection icon floats above the cell it marks. High enough to clear the unit standing there, low enough not to read as belonging to the cell behind."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
-		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
-
-	# --- Dev chrome ---
-	# There used to be an EFFECTS group here, and everything in it has MOVED to ObjectKnobs (#272),
-	# in two passes and for one reason: none of it was scene mood. Prop geometry went first as world
-	# construction; the whole FIRE block followed on the dev's ruling that a terrain effect's look is
-	# a game value like the rest. Leaving is what makes those rulings structural rather than entries
-	# on PRESET_EXCLUDED, and it is what gives them a Save that writes their authored default.
-	# The one survivor is dev chrome, so it is filed as that and rides the Markup sub-tab -- a group
-	# of one deserves a truthful heading, not a tab of its own.
-	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
-	# --- Unit HUD (#229) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,
-		"tip": "Gap between the top of the unit's visible ART and the bottom of the readout, in cells. Measured from the sprite's topmost opaque pixel rather than from its feet, so units drawn with different amounts of empty space above their heads all wear it at the same apparent height. The selection icons sit higher still; keep this well under their lift or the readout climbs past them."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_width_texels", "label": "Bar width", "min": 4.0, "max": 128.0, "step": 1.0,
-		"tip": "Width of the health bar in texels, at the same pixel density as every sprite -- 16 is one cell wide. The bar is pixel-snapped, so this also decides how finely it can show a fraction: at 20 wide, one texel is 5% of a unit's health."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_height_texels", "label": "Bar height", "min": 1.0, "max": 16.0, "step": 1.0,
-		"tip": "Thickness of the health bar in texels. Thin reads as a delicate HUD line and can vanish at distance; thick reads as a solid gauge and starts competing with the unit sprite for attention."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_outline_texels", "label": "Bar outline", "min": 0.0, "max": 8.0, "step": 1.0,
-		"tip": "Thickness of the black border around the bar, in texels. This is what separates the bar from whatever it happens to be floating over; 0 removes it, and on a busy board that usually costs more than it saves."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_fill_color", "label": "Bar fill",
-		"tip": "The health a unit still HAS. Flat -- it does not change hue as the bar shortens, since the length already says how hurt the unit is. Fully opaque by design: this is a gameplay descriptor, not scenery."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_missing_color", "label": "Bar missing",
-		"tip": "The health a unit has LOST, showing behind the fill. Read together, fill against missing is the whole gauge, so these two want to be as far apart as the palette allows."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_height_cells", "label": "Number size", "min": 0.02, "max": 0.6, "step": 0.005,
-		"tip": "How tall the HP digits stand, in cells -- a size in the SCENE, not on screen, so it shrinks with the unit as you zoom out. The glyphs are rendered at a fixed high resolution and scaled down to this, so small stays crisp instead of turning to mush."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_outline_size", "label": "Number outline", "min": 0.0, "max": 24.0, "step": 1.0,
-		"tip": "Thickness of the black outline behind the number, in GLYPH units -- so it holds its proportion when Number size changes, but what lands on screen is this scaled down with the text. Around 8 is one pixel of the game's own art and 16 is two; anything under about 5 is thinner than a single art pixel and will not separate white digits from a bright bar at all. Push it far enough and neighbouring digits bleed together, and at that point a black backing plate is the better answer than more outline."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_color", "label": "Number colour",
-		"tip": "Colour of the HP digits. The outline is always black, so this is the fill; a tint here is the cheapest way to make the number read as part of the bar rather than as separate text."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_gap", "label": "Number inset", "min": 0.0, "max": 0.5, "step": 0.005,
-		"tip": "How far in from the bar's left edge the digits start, in cells. The number sits ON the bar, so this is padding inside it rather than a gap beside it -- zero puts the first digit flush against the outline."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "number_shows_max", "label": "Number shows max",
-		"tip": "On, the number reads '12/20'; off, just '12'. The bar already carries the fraction either way, so this is purely how much text you want floating over a head."},
-	# --- The predicted readout (#313) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_doomed_color", "label": "Predicted loss",
-		"tip": "The health the queued plan is about to TAKE, drawn over the fill between where the bar is now and where the plan leaves it. It has to read as a warning against the fill beside it without reading as damage that has already landed -- the notch is what says 'not yet'."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_heal_color", "label": "Predicted gain",
-		"tip": "The same span in the other direction: health a queued heal is about to give back, drawn over the missing backing. Wants to be unmistakably not-the-loss-colour, since the shape of the span is identical either way and only the colour says which."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "notch_color", "label": "Prediction notch",
-		"tip": "The marker sitting AT the health the plan predicts. This is the one mark that says the bar is showing a future as well as a present, so it wants to stand off both the fill and the loss colour."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "notch_texels", "label": "Notch width", "min": 1.0, "max": 8.0, "step": 1.0,
-		"tip": "Thickness of the prediction marker in texels, at the same pixel density as the bar. One texel is a hairline that can disappear at distance; wide enough and it stops reading as a mark on the bar and starts reading as a third segment of it."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
-		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "unhovered_shows_number", "label": "Unhovered bars show number",
-		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
-	# --- The element-state row (#357) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
-		"tip": "Size of each element-state icon above the health bar, in texels -- 16 is one cell. The source art is 32px (wet) and 16px (the frozen-tile stand-in for chilled), so powers of two land on exact reductions and anything else will shimmer as the camera moves. This is the first dial to reach for if the icons stop reading at play distance."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_gap_texels", "label": "State row clearance", "min": 0.0, "max": 16.0, "step": 1.0,
-		"tip": "Gap between the top of the health bar's outline and the bottom of the state icons, in texels. Zero stacks them flush against the bar so the two read as one display; push it up to separate what a unit IS from how hurt it is, at the cost of climbing toward the selection icons above."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_spacing_texels", "label": "State icon spacing", "min": 0.0, "max": 16.0, "step": 1.0,
-		"tip": "Gap between neighbouring state icons, in texels. Only visible on a unit holding more than one state, which today means wet AND chilled at once -- with two states the row cannot crowd, and this is the dial that matters when the vocabulary grows."},
-]
-
-# A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
-# unless it is named here; LAYER_KNOBS is out wholesale, so a preset never touches board-markup
-# colour. Excluded for three separate reasons, all the same rule -- a MISSION must not be able to
-# change these, because they are things the player learns once and keeps:
-#   * camera HANDLING -- how the camera drags, not how the board is framed. Pitch/FOV/opening
-#     shot/fit margin ARE framing and stay in.
-#   * board MARKUP -- gameplay legibility. Its geometry as much as its colour.
-#   * the brush ghost -- dev chrome; players never see it.
-# PROP GEOMETRY used to be a fourth reason and is now OUT OF THIS TABLE ENTIRELY (#272): block
-# height, tuft scale and cover-bump scale live in ObjectKnobs, so "a mission cannot restyle world
-# construction" is structural rather than three names on this list. #264's block_height_scale is
-# what proved the default-IN rule has teeth -- it self-joined presets and had to be ruled on -- and
-# that ruling is why those three left rather than why they are listed.
-# The default is IN: a knob added later joins presets unless someone lists it here, which is right
-# for a look knob and wrong for a future handling one. A law test pins every key to a real knob, so
-# a renamed property fails loudly instead of silently un-excluding itself.
-const PRESET_EXCLUDED: Array[String] = [
-	"CameraRig|min_distance",
-	"CameraRig|zoom_step",
-	"CameraRig|smoothing",
-	"CameraRig|pan_speed",
-	"CameraRig|orbit_sensitivity",
-	"CameraRig|pan_margin_cells",
-	"CameraRig|zoom_out_slack",
-	"BoardOverlays|fill_lift",
-	"BoardOverlays|lift_step",
-	"BoardOverlays|bracket_arm",
-	"BoardOverlays|bracket_thickness",
-	"BoardOverlays|bracket_scale",
-	"BoardOverlays|invalid_bracket_color",
-	"BoardOverlays|billboard_lift",
-	"BoardOverlays|billboard_pixel_size",
-	"BoardMirror|brush_ghost_alpha",
-	# The two flame carve-outs that used to sit here -- the #217 accessibility switch and the #298
-	# plane-separation clearance -- left with the rest of the fire block for ObjectKnobs (#272).
-	# Both reasons still hold and are simply no longer expressible here: a preset cannot reach a
-	# knob that is not in this table at all.
-	# #229's readout is game MARKUP, not scene mood — the same side of that line as the board
-	# overlays above, and for the same reason: a mission should not be able to hide a unit's health
-	# by wearing a look. Excluded wholesale, which also keeps the shipped presets valid under
-	# test_look_presets' "names every in-scope knob" law. #313's prediction rides the same bar and
-	# answers the same way: a plan's consequences are the least hideable thing on the board.
-	"UnitMirror|hud_lift",
-	"UnitMirror|bar_width_texels",
-	"UnitMirror|bar_height_texels",
-	"UnitMirror|bar_outline_texels",
-	"UnitMirror|bar_fill_color",
-	"UnitMirror|bar_missing_color",
-	"UnitMirror|number_height_cells",
-	"UnitMirror|number_outline_size",
-	"UnitMirror|number_color",
-	"UnitMirror|number_gap",
-	"UnitMirror|number_shows_max",
-	"UnitMirror|bar_doomed_color",
-	"UnitMirror|bar_heal_color",
-	"UnitMirror|notch_color",
-	"UnitMirror|notch_texels",
-	"UnitMirror|alarm_peak_color",
-	"UnitMirror|unhovered_shows_number",
-	"UnitMirror|state_icon_texels",
-	"UnitMirror|state_icon_gap_texels",
-	"UnitMirror|state_icon_spacing_texels",
 ]
 
 # --- Identity ---------------------------------------------------------------------------
@@ -301,12 +157,11 @@ static func preset_key(knob: Dictionary) -> String:
 	return "%s|%s" % [knob["node"], knob["prop"]]
 
 
+# EVERY knob, since #373 -- this table is scene mood entire, so there is nothing left to filter.
+# It survives as a named answer to "what does a preset capture" rather than being inlined at its
+# two call sites, because that question is one a future knob will ask again.
 static func preset_knobs() -> Array[Dictionary]:
-	var wanted: Array[Dictionary] = []
-	for knob: Dictionary in KNOBS:
-		if not PRESET_EXCLUDED.has(preset_key(knob)):
-			wanted.append(knob)
-	return wanted
+	return KNOBS
 
 
 static func preset_path(preset_name: String) -> String:
@@ -401,10 +256,8 @@ static func apply(host: Node3D, preset: LookPreset) -> Dictionary:
 	if default_look != null and default_look != preset:
 		fallback = default_look.values
 	var applied := {}
-	for knob: Dictionary in KNOBS:
+	for knob: Dictionary in preset_knobs():
 		var key := preset_key(knob)
-		if PRESET_EXCLUDED.has(key):
-			continue
 		if preset.values.has(key):
 			applied[key] = true
 			write(host, knob, preset.values[key])
