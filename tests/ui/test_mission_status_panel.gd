@@ -199,3 +199,61 @@ func test_the_panel_stays_inside_the_viewport() -> void:
 	assert_bool(viewport_rect.encloses(version_rect)) \
 		.override_failure_message("Version stamp runs off the viewport: %s vs %s" % [version_rect, viewport_rect]) \
 		.is_true()
+
+
+# ==============================================================================
+#  The instruction row (#182): the tutorial's "do this now", riding the same panel
+# ==============================================================================
+
+func _steps(list: Array[TutorialStep]) -> void:
+	game.scenario_director.set_steps(list)
+	game.scenario_director.mission_started()   # content is inert until armed (the solo-squad spawn guard)
+
+
+func _step(done_when: DialogBeat.Trigger, text: String, unit_name := "", squad_size := 0) -> TutorialStep:
+	var step := TutorialStep.new()
+	step.done_when = done_when
+	step.text = text
+	step.unit_name = unit_name
+	step.squad_size = squad_size
+	return step
+
+
+func test_an_instruction_shows_without_objectives_and_without_their_header() -> void:
+	_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
+	assert_bool(panel._panel.visible).is_true()
+	assert_array(_row_texts()).contains_exactly(["> Form a squad."])
+
+
+func test_clearing_the_board_hides_an_instruction_only_panel() -> void:
+	# The reset-order trap: mc.reset() re-renders the panel mid-teardown, so the director must
+	# already be reset or the dying board keeps its instruction row.
+	_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
+	game.scenario_manager.clear_board()
+	assert_bool(panel._panel.visible).is_false()
+
+
+func test_clicking_the_named_unit_advances_the_row_through_the_real_click_path() -> void:
+	var torv_data := H.make_unit_data({}, Team.Faction.PLAYER)
+	torv_data.display_name = "Torv"
+	var torv: Unit = game.spawn_unit(torv_data, Vector2i(3, 3))
+	assert_object(torv).is_not_null()
+	_steps([
+		_step(DialogBeat.Trigger.UNIT_SELECTED, "Select Torv.", "Torv"),
+		_step(DialogBeat.Trigger.SQUAD_FORMED, "Squad up."),
+	])
+	assert_array(_row_texts()).contains_exactly(["> Select Torv."])
+	game._click_idle(Vector2i(3, 3))   # the one select write point -- the emitter itself is under test
+	assert_array(_row_texts()).contains_exactly(["> Squad up."])
+
+
+func test_joining_through_the_real_door_advances_at_the_authored_size() -> void:
+	var torv: Unit = _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var second: Unit = _spawn(Team.Faction.PLAYER, Vector2i(5, 5))
+	var third: Unit = _spawn(Team.Faction.PLAYER, Vector2i(4, 4))
+	var squad: Squad = torv.squad   # spawn_unit already wrapped torv in a solo squad (invariant I7)
+	_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Bring everyone.", "", 3)])
+	game.squad_manager.join_squad(second, squad)   # 2 of 3: not yet
+	assert_array(_row_texts()).contains_exactly(["> Bring everyone."])
+	game.squad_manager.join_squad(third, squad)    # 3 of 3: the emitter fires and the lesson ends
+	assert_bool(panel._panel.visible).is_false()

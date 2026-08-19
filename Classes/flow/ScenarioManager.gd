@@ -190,7 +190,8 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)
-	game.dialog_director.set_beats(scenario.dialog_beats)   # same REPLACED-not-merged seam (#182)
+	game.scenario_director.set_beats(scenario.dialog_beats)   # same REPLACED-not-merged seam (#182)
+	game.scenario_director.set_steps(scenario.tutorial_steps)
 	# Set BEFORE board_loaded fires (it is this function's last line), because battle3d reads this
 	# from that signal. The 3D view is the only reader; a flat Main.tscn launch has no host and
 	# correctly applies nothing.
@@ -280,8 +281,11 @@ func _collect_scenarios(dir: String, paths: Array[String]) -> void:
 		paths.append(dir.path_join(file))
 
 func clear_board():
+	# Director BEFORE controller: mc.reset() is a refresh_mission_status write point, and that
+	# refresh reads active_instruction() -- reset the director first or the instruction row
+	# re-renders stale on the dying board (#182).
+	game.scenario_director.reset()
 	game.mission_controller.reset()   # mission START resets battle-scoped state (#96/#87 seam)
-	game.dialog_director.reset()      # same seam: no dialog outlives its board (#182)
 	# A cleared board has NO loaded scenario. Update's load-gate reads this; a stale path would let
 	# a sandbox board overwrite the last-loaded mission (the Prolog accident, 2026-08-11). Safe for
 	# load paths: load_scenario re-sets it AFTER apply_scenario's internal clear_board.

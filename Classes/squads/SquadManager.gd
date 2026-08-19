@@ -51,6 +51,7 @@ signal squad_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.A
 signal squad_became_active(squad: Squad, action: BaseAction)
 signal squad_became_empty(squad: Squad)
 signal squad_action_queued(squad: Squad, action: BaseAction)
+signal squad_member_joined(squad: Squad, unit: Unit)   # emitted by join_squad, the one join door (#182; #367 will consume it too)
 
 
 func any_squad_active() -> bool:
@@ -113,6 +114,7 @@ func join_squad(unit: Unit, target_squad: Squad):
 
 	_detach_from_current_squad(unit)
 	target_squad._add_member(unit)
+	squad_member_joined.emit(target_squad, unit)
 	if target_squad.members.size() > target_squad.max_size():
 		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
 

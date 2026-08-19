@@ -52,6 +52,7 @@ var game_state: GameState = GameState.IDLE
 # dev_overlay.sync_dev_mode_button, and a second consumer (the 3D badge) would have made that push
 # one of two ways the same fact travels. Both listeners connect; nothing polls.
 signal dev_mode_changed(active: bool)
+signal unit_selected(unit: Unit)   # fired at the one select write point (_click_idle); #182 lesson triggers
 # Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
 # RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
@@ -75,7 +76,7 @@ var _target_pick_callback: Callable           # func(picked: Unit) -> void
 # back-ref set before anything touches it).
 var dev_controller: DevController
 var ai_controller: AIController
-var dialog_director: DialogDirector   # fires authored DialogBeats (#182)
+var scenario_director: ScenarioDirector   # fires authored DialogBeats (#182)
 var terrain_states: TerrainStateManager
 var board_heights: BoardHeights   # per-cell elevation + ramps (#257); RefCounted, so not a child
 var height_debug_overlay: HeightDebugOverlay   # F5 readout, dev builds only; deleted when art lands
@@ -127,9 +128,9 @@ func _build_collaborators() -> void:
 	ai_controller.game = self
 	add_child(ai_controller)
 
-	dialog_director = DialogDirector.new()
-	dialog_director.game = self
-	add_child(dialog_director)   # after @onready: _ready here connects turn_manager / squad_manager
+	scenario_director = ScenarioDirector.new()
+	scenario_director.game = self
+	add_child(scenario_director)   # after @onready: _ready here connects turn_manager / squad_manager
 
 	terrain_states = TerrainStateManager.new()
 	terrain_states.name = "TerrainStateManager"
@@ -363,6 +364,7 @@ func _click_idle(cell: Vector2i) -> void:
 		return
 	last_clicked_cell = cell
 	selected_unit = target
+	unit_selected.emit(target)   # the one select write point; ScenarioDirector's lesson listens (#182)
 	game_state = GameState.TILE_SELECTED
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
 
@@ -742,10 +744,11 @@ func refresh_action_queue(squad: Squad):
 # set_objectives, restore_progress, reset) plus the dev Scenario tab's live objective toggle — the
 # refresh_action_queue pattern, not a signal. No objectives (sandbox, cleared board) hides the panel.
 func refresh_mission_status() -> void:
-	if mission_controller.objectives.is_empty():
+	var instruction := scenario_director.active_instruction()   # tutorial row (#182) rides the same panel
+	if mission_controller.objectives.is_empty() and instruction == "":
 		mission_status_panel.clear()
 		return
-	mission_status_panel.show_status(mission_controller, _board())
+	mission_status_panel.show_status(mission_controller, _board(), instruction)
 
 # The bottom-right End Turn affordance (#189): flashes with the SAME Pulse cue as Execute Orders
 # once every squad on the active faction has acted or waited -- there's nothing left to click but
