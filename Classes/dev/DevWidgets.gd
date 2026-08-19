@@ -1,7 +1,7 @@
 extends Object
 class_name DevWidgets
 
-# One knob row, whichever panel is drawing it (#212's Look tab, #272's Object tab). The widget is
+# One knob row, whichever panel is drawing it (#212's Moods tab, #272's Object tab). The widget is
 # picked from the LIVE VALUE's type rather than from a column on the table, which is why one builder
 # serves both -- and why a knob whose property does not resolve draws a labelled failure instead of
 # a row that edits nothing. The value and the writer are PASSED, so this stays ignorant of which
@@ -35,9 +35,9 @@ static func add_knob_row(rows: VBoxContainer, knob: Dictionary, value: Variant,
 		apply_tooltip(rows.get_child(i), tip)
 
 
-# The GDScript spelling of a tuned value. Two readers with different destinations -- LookTool's
-# Copy Values puts it on the clipboard, ObjectKnobs writes it into a script's @export default -- so
-# it belongs to neither panel.
+# The GDScript spelling of a tuned value. Every reader writes it into a source declaration --
+# GameKnobs and ObjectKnobs into an @export default, KnobSource into a static var -- so it belongs
+# to none of their panels.
 static func literal_for(value: Variant) -> String:
 	match typeof(value):
 		TYPE_BOOL:
@@ -78,7 +78,7 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 
 # Feel work is DRAG work: a value you sweep while watching the board, with the number beside it
 # so a landed setting can be read off. add_spinbox is the typing form; this is the hunting form.
-# Returns the slider so a caller can write a value back into the widget (LookTool's Reset).
+# Returns the slider so a caller can write a value back into the widget (the Moods panel's Reset).
 static func add_slider(container: Node, label_text: String, initial_value: float,
 		min_value: float, max_value: float, step: float, on_change: Callable) -> HSlider:
 	var row := HBoxContainer.new()
@@ -398,7 +398,7 @@ static func confirm_delete(host: Control, victim: String, on_confirm: Callable) 
 # Every dev save that OVERWRITES rides this or confirm() directly (#380's convention, dev:
 # "anything that can overwrite settings should" ask) -- every tool's Update, plus the Game tab's
 # source save and the Objects tab's tileset save, whose messages are their own shape. Save As is
-# the one save that never confirms, because refuse_taken_name makes it structurally unable to
+# the one save that never confirms, because refuse_existing_file makes it structurally unable to
 # overwrite. First worn by the Scenario tool's Update (dev call 2026-08-12, after a mis-aimed
 # Update destroyed a level the load-gate could not protect -- it WAS the loaded file).
 static func confirm_overwrite(host: Control, victim: String, replacement: String,

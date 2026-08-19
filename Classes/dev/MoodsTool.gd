@@ -1,21 +1,26 @@
 extends VBoxContainer
-class_name LookTool
+class_name MoodsTool
 
-# The dev-tools Look tab (#212): the live SURFACE onto the HD-2D stack's aesthetic values.
+# The dev-tools Moods tab (#212): the live SURFACE onto the HD-2D stack's aesthetic values.
 #
 # What the look IS -- the knob table, reading and writing it, capturing and applying a preset --
 # moved to Classes/presentation/LookKnobs.gd in #253 part 2, because a MISSION carries a look now
 # and the shipping path cannot route through a dev tab. This file owns the PANEL: the rows, the
-# sub-tabs, the preset buttons, the baseline that Reset returns to, and Copy Values.
+# sub-tabs, the mood buttons, and the baseline that Reset returns to.
 #
 # The host is PUSHED in by battle3d._ready (attach_host), never looked up: no part of the game
 # subtree gains an upward path to the 3D scene, and launching Main.tscn flat -- a real shipping
 # target -- simply never attaches one, which this reports instead of crashing.
 #
-# Loading a preset makes it the BASELINE, so Reset returns there; Default returns to the fallback
-# look every board falls back to. Copy Values still diffs the AUTHORED scene rather than either,
-# because its output is paste-ready lines FOR Battle3D.tscn -- diffed against a loaded preset they
-# would not reproduce what you are looking at.
+# Loading a mood makes it the BASELINE, so Reset returns there; Default returns to the fallback
+# look every board wears when its mission names none -- and Update default WRITES that file, so
+# the panel is the door to it (#386). It replaced Copy Values, which spelled a tuned look as
+# paste-ready GDScript to hand-type into Battle3D.tscn: a second way to say "make this the
+# baseline", and the worse one.
+#
+# The panel says MOOD; the files it writes are LookPresets under Resources/LookPresets/. Renaming
+# the resource would drop the look from every saved mission (ScenarioData.look_preset is an
+# @export), so the vocabulary split is deliberate.
 #
 # Board-markup colours were a second table here (LAYER_KNOBS) until #373 moved them, with the rest
 # of the markup, to the Game tab: none of it was scene mood, and none of it had a Save. What is
@@ -42,8 +47,6 @@ const GROUP_TABS: Dictionary[String, String] = {
 }
 
 var _host: Node3D                # the Battle3D scene; pushed in, never looked up
-var _authored: Array = []        # the SCENE's own value per KNOBS index, read once on attach.
-								 # Only Copy Values reads it now -- its lines paste into the scene.
 var _baseline: Array = []        # what Reset returns to: the scene, or whatever was last applied
 var _loaded_preset := ""         # dropdown-relative name; "" = nothing loaded (default or scene)
 var _tabs: TabContainer
@@ -58,14 +61,14 @@ var _delete_button: Button
 func _ready() -> void:
 	_build_preset_row()
 	var buttons := HBoxContainer.new()
-	buttons.add_child(_button("Copy changed values",
-		"Copy every value moved off the SCENE's authored setting to the clipboard, as paste-ready\nGDScript. Always measured against Battle3D.tscn, never against a loaded preset -- these lines\nare what you paste INTO the scene, so a preset-relative diff would not reproduce what you see.",
-		_on_copy_pressed))
 	buttons.add_child(_button("Reset",
-		"Put every knob back to whatever was last applied -- the loaded preset, the default, or the\nscene's own values if neither", _on_reset_pressed))
+		"Put every knob back to whatever was last applied -- the loaded mood, the default, or the\nscene's own values if neither", _on_reset_pressed))
 	buttons.add_child(_button("Default",
-		"Load the default look -- what every board falls back to, and what a mission gets when it\nnames no preset. This is the way back; Reset returns to whatever you last loaded.",
+		"Load the default mood -- what every board wears when its mission names none. This is the\nway back; Reset returns to whatever you last loaded.",
 		_on_default_pressed))
+	buttons.add_child(_button("Update default",
+		"Overwrite the default mood with what is on screen, so every board naming no mood wears\nthis. Asks first. Named moods are untouched -- this writes the one file Default loads.",
+		_on_update_default_pressed))
 	buttons.add_child(_button("Re-fit camera",
 		"Pitch and FOV feed the framing maths, which only runs on a board load -- press this after moving either",
 		_on_refit_pressed))
@@ -95,10 +98,7 @@ func _ready() -> void:
 # the tab always builds its no-host state and then rebuilds here.
 func attach_host(host: Node3D) -> void:
 	_host = host
-	_authored.clear()
-	for knob: Dictionary in LookKnobs.KNOBS:
-		_authored.append(read(knob))   # authored by definition: nothing has moved one yet
-	_baseline = _authored.duplicate()  # no preset loaded yet, so Reset means "back to the scene"
+	_baseline = _live_values()   # no mood loaded yet, so Reset means "back to the scene"
 	_rebuild()
 
 
@@ -111,10 +111,6 @@ func has_host() -> bool:
 # Thin binds over LookKnobs' statics, closing over this tab's own _host. NOT a second answer --
 # the table and the property access both live there; these only save every call site passing it.
 
-func target_of(knob: Dictionary) -> Node:
-	return LookKnobs.target_of(_host, knob)
-
-
 func read(knob: Dictionary) -> Variant:
 	return LookKnobs.read(_host, knob)
 
@@ -123,19 +119,11 @@ func write(knob: Dictionary, value: Variant) -> void:
 	LookKnobs.write(_host, knob, value)
 
 
-# What Reset returns to -- the loaded preset if there is one, else the authored scene.
+# What Reset returns to -- the loaded mood if there is one, else the authored scene.
 func baseline_of(index: int) -> Variant:
 	if index < 0 or index >= _baseline.size():
 		return null
 	return _baseline[index]
-
-
-# What the SCENE was authored with, whatever is loaded. Copy Values' reference point, because its
-# output is lines you paste into Battle3D.tscn.
-func authored_of(index: int) -> Variant:
-	if index < 0 or index >= _authored.size():
-		return null
-	return _authored[index]
 
 
 # --- Building the rows ------------------------------------------------------------------
@@ -154,7 +142,7 @@ func _tab_titles() -> Array[String]:
 # so it lands on the first tab and says so; the law test is what stops that shipping.
 func _rows_for_group(group: String) -> VBoxContainer:
 	if not GROUP_TABS.has(group):
-		push_error("LookTool: group '%s' has no tab in GROUP_TABS" % group)
+		push_error("MoodsTool: group '%s' has no tab in GROUP_TABS" % group)
 		return _tab_rows[_tab_titles()[0]]
 	return _tab_rows[GROUP_TABS[group]]
 
@@ -258,7 +246,7 @@ func _build_preset_row() -> void:
 	_preset_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(_preset_name_input)
 	bottom.add_child(_button("Save As",
-		"Save every scene-mood knob under a new name. Camera handling, board markup and the brush\nghost are deliberately not captured -- those are game settings, not a mission's look.",
+		"Save every scene-mood knob under a new name. Camera handling, board markup and the brush\nghost are deliberately not captured -- those are game settings, not a mission's mood.",
 		_on_save_as_pressed))
 	add_child(bottom)
 
@@ -285,8 +273,8 @@ func refresh_preset_dropdown(select_name := "") -> void:
 
 func _refresh_preset_buttons() -> void:
 	var target := DevWidgets.selected_name(_preset_dropdown)
-	DevWidgets.refresh_update_button(_update_button, target, "preset", update_block_reason())
-	DevWidgets.refresh_delete_button(_delete_button, target, "preset")
+	DevWidgets.refresh_update_button(_update_button, target, "mood", update_block_reason())
+	DevWidgets.refresh_delete_button(_delete_button, target, "mood")
 
 
 # "" = allowed. Update only ever writes the LOADED preset back over its own file -- the 2026-08-11
@@ -309,7 +297,7 @@ func _on_load_pressed() -> void:
 		return
 	var preset := LookKnobs.resolve(target)
 	if preset == null:
-		_status.text = "Could not load preset '%s', and the default is missing too" % target
+		_status.text = "Could not load mood '%s', and the default is missing too" % target
 		return
 	var report := apply_preset(preset)
 	_loaded_preset = target
@@ -326,20 +314,44 @@ func _on_default_pressed() -> void:
 		return
 	var preset := LookKnobs.default_preset()
 	if preset == null:
-		_status.text = "The default look is missing from %s." % LookKnobs.DEFAULT_PATH
+		_status.text = "The default mood is missing from %s." % LookKnobs.DEFAULT_PATH
 		return
 	apply_preset(preset)
 	_loaded_preset = ""
 	_preset_dropdown.select(-1)
 	_refresh_preset_buttons()
-	_status.text = "Loaded the default look. Reset now returns here."
+	_status.text = "Loaded the default mood. Reset now returns here."
+
+
+# Default's twin (#386): the file it loads is what every board with no named mood wears, and until
+# now the panel could only READ it -- the same doorless-value shape as #272 and #373. Confirmed
+# rather than load-gated: there is one default and it is always the target, so the mis-click this
+# guards is not "the wrong file" but "not yet".
+func _on_update_default_pressed() -> void:
+	if _host == null:
+		return
+	DevWidgets.confirm_overwrite(self, "the default mood", "what is on screen",
+		_update_default_confirmed)
+
+
+func _update_default_confirmed() -> void:
+	if not DevWidgets.save_over(capture_preset(LookKnobs.DEFAULT_NAME), LookKnobs.DEFAULT_PATH, _status):
+		return
+	# The file now holds what is on screen, so leave the panel exactly where pressing Default would:
+	# the live look IS the default, and no named mood is loaded any more.
+	_baseline = _live_values()
+	_loaded_preset = ""
+	_preset_dropdown.select(-1)
+	_refresh_preset_buttons()
+	_status.text = "The default mood is now what you see (%d knobs). Reset returns here." \
+		% LookKnobs.preset_knobs().size()
 
 
 func _load_report(target: String, report: Dictionary) -> String:
-	var text := "Loaded preset '%s'. Reset now returns here." % target
+	var text := "Loaded mood '%s'. Reset now returns here." % target
 	var missing: Array = report["missing"]
 	if not missing.is_empty():
-		text += ("\n%d knob(s) added since this preset was saved, left at the scene's value: %s."
+		text += ("\n%d knob(s) added since this mood was saved, left at the scene's value: %s."
 			+ " Set them and press Update to back-add.") % [missing.size(), ", ".join(missing)]
 	var unknown: Array = report["unknown"]
 	if not unknown.is_empty():
@@ -350,27 +362,27 @@ func _load_report(target: String, report: Dictionary) -> String:
 
 func _on_save_as_pressed() -> void:
 	if _host == null:
-		_status.text = "No 3D host attached - there is no look to save."
+		_status.text = "No 3D host attached - there is no mood to save."
 		return
 	var entered := _preset_name_input.text.strip_edges()
 	if entered == "":
-		var msg := "Preset needs a name"
+		var msg := "Mood needs a name"
 		push_warning(msg)
 		_status.text = msg
 		return
 	# Flat folder, so no allow_slash: a '/' would land the file where the scan never looks (#168).
-	if DevWidgets.refuse_illegal_name(entered, "preset", _status):
+	if DevWidgets.refuse_illegal_name(entered, "mood", _status):
 		return
-	if DevWidgets.refuse_existing_file(LookKnobs.preset_path(entered), "preset", _status):
+	if DevWidgets.refuse_existing_file(LookKnobs.preset_path(entered), "mood", _status):
 		return
 	if not DevWidgets.save_over(capture_preset(entered), LookKnobs.preset_path(entered), _status):
 		return
-	# Saving is also loading: the look on screen IS this preset now, so Reset should return to it.
+	# Saving is also loading: the look on screen IS this mood now, so Reset should return to it.
 	_baseline = _live_values()
 	_loaded_preset = entered
 	_preset_name_input.text = ""
 	refresh_preset_dropdown(entered)
-	_status.text = "Saved preset '%s' (%d knobs). Reset now returns here." % [entered, LookKnobs.preset_knobs().size()]
+	_status.text = "Saved mood '%s' (%d knobs). Reset now returns here." % [entered, LookKnobs.preset_knobs().size()]
 
 
 func _on_update_pressed() -> void:
@@ -384,7 +396,7 @@ func _on_update_pressed() -> void:
 		return
 	# Confirmed as well as load-gated (the 2026-08-12 scenario call): the gate cannot catch a
 	# mis-click at the file you DID load, which is exactly how a tuned look would be lost.
-	DevWidgets.confirm_overwrite(self, "preset '%s'" % target, "the current look",
+	DevWidgets.confirm_overwrite(self, "mood '%s'" % target, "the current look",
 		func() -> void: _update_confirmed(target))
 
 
@@ -392,53 +404,37 @@ func _update_confirmed(target: String) -> void:
 	if not DevWidgets.save_over(capture_preset(target), LookKnobs.preset_path(target), _status):
 		return
 	_baseline = _live_values()   # the file now says what is on screen, so Reset must too
-	_status.text = "Updated preset '%s' (%d knobs)." % [target, LookKnobs.preset_knobs().size()]
+	_status.text = "Updated mood '%s' (%d knobs)." % [target, LookKnobs.preset_knobs().size()]
 
 
 func _on_delete_pressed() -> void:
 	var target := DevWidgets.selected_name(_preset_dropdown)
 	if target == "":
 		return
-	DevWidgets.confirm_delete(self, "preset '%s'" % target, func() -> void: _delete_confirmed(target))
+	DevWidgets.confirm_delete(self, "mood '%s'" % target, func() -> void: _delete_confirmed(target))
 
 
 func _delete_confirmed(target: String) -> void:
-	if not DevWidgets.delete_saved_file(LookKnobs.preset_path(target), "preset", _status):
+	if not DevWidgets.delete_saved_file(LookKnobs.preset_path(target), "mood", _status):
 		return
 	if _loaded_preset == target:
 		# The look on screen is untouched -- only its file is gone. Reset holds it rather than
 		# snapping anywhere, so deleting a file never also changes what you are looking at.
 		_baseline = _live_values()
 		_loaded_preset = ""
-		_status.text = "Deleted preset '%s'. The look on screen is unchanged; press Default to leave it." % target
+		_status.text = "Deleted mood '%s'. The look on screen is unchanged; press Default to leave it." % target
 	refresh_preset_dropdown()
 
 
-# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved preset
+# The live value of every knob, per LookKnobs.KNOBS index -- the baseline a just-saved mood
 # establishes. It used to skip the excluded rows, which is now every row of a table that is mood
-# entire (#373); the authored copy it starts from survives only as the shape of the array.
+# entire (#373).
 func _live_values() -> Array:
-	var values: Array = _authored.duplicate()
+	var values: Array = []
+	values.resize(LookKnobs.KNOBS.size())
 	for i in LookKnobs.KNOBS.size():
 		values[i] = read(LookKnobs.KNOBS[i])
 	return values
-
-
-# --- The handoff ------------------------------------------------------------------------
-
-func _on_copy_pressed() -> void:
-	var moved := changed_values()
-	if moved.is_empty():
-		_status.text = "Nothing has moved off the scene's authored values yet."
-		return
-	DisplayServer.clipboard_set(_format(moved))
-	var count := _value_count(moved)
-	if _loaded_preset == "":
-		_status.text = "Copied %d changed value(s) to the clipboard." % count
-	else:
-		# Say which, or the count reads as "what I tuned" when it is "preset + what I tuned".
-		_status.text = ("Copied %d value(s) differing from Battle3D.tscn -- that is preset '%s' PLUS "
-			+ "anything you moved since. Save As / Update is the handoff for a preset.") % [count, _loaded_preset]
 
 
 func _on_reset_pressed() -> void:
@@ -452,7 +448,7 @@ func _on_reset_pressed() -> void:
 	if _loaded_preset == "":
 		_status.text = "Every knob is back at its authored value."
 	else:
-		_status.text = "Every knob is back at preset '%s'." % _loaded_preset
+		_status.text = "Every knob is back at mood '%s'." % _loaded_preset
 
 
 func _on_refit_pressed() -> void:
@@ -461,75 +457,3 @@ func _on_refit_pressed() -> void:
 	_host.fit_camera()
 	_status.text = "Camera re-framed on the current board."
 
-
-# Only what MOVED, keyed by where it gets pasted: header -> {property: literal}. A property path
-# that passes through a sub-resource is authored INSIDE that resource, so the header names the
-# resource and the line is what goes in it. A vector component (flame_size:x) has no resource
-# between it and the node, so the whole vector is emitted -- "x = 0.6" would mean nothing in a
-# .tscn, and it also collapses the x and y knobs into the single line they share.
-func changed_values() -> Dictionary:
-	var groups := {}
-	for i in LookKnobs.KNOBS.size():
-		var knob: Dictionary = LookKnobs.KNOBS[i]
-		var live: Variant = read(knob)
-		var authored: Variant = authored_of(i)
-		if typeof(live) == TYPE_NIL or typeof(authored) == TYPE_NIL or LookKnobs.same_value(live, authored):
-			continue
-		_record(groups, _paste_split(knob))
-	return groups
-
-
-# split = [paste header, dedup key, the finished line]. The key exists only so two knobs that
-# emit the SAME line (flame_size:x and :y) collapse to one entry.
-func _record(groups: Dictionary, split: Array) -> void:
-	var header: String = split[0]
-	if not groups.has(header):
-		groups[header] = {}
-	var entries: Dictionary = groups[header]
-	entries[split[1]] = split[2]
-
-
-
-func _paste_split(knob: Dictionary) -> Array:
-	var segments: PackedStringArray = String(knob["prop"]).split(":")
-	var current: Object = target_of(knob)
-	var owner_bits: PackedStringArray = PackedStringArray()
-	var i := 0
-	# Walk to the DEEPEST object in the chain: that is the thing the value is authored on.
-	while i < segments.size() - 1:
-		var next: Variant = current.get(segments[i])
-		if not (next is Object):
-			break
-		owner_bits.append(segments[i])
-		current = next as Object
-		i += 1
-	var node_path: String = knob["node"]
-	var header := "Battle3D.tscn -> %s" % ("Battle3D" if node_path == "." else node_path)
-	if owner_bits.size() > 0:
-		header += ".%s" % ".".join(owner_bits)
-	var prop: String = segments[i]
-	return [header, prop, "%s = %s" % [prop, DevWidgets.literal_for(current.get(prop))]]
-
-
-func _format(groups: Dictionary) -> String:
-	var out: PackedStringArray = PackedStringArray()
-	for header: String in groups:
-		out.append("# %s" % header)
-		var entries: Dictionary = groups[header]
-		for key: String in entries:
-			out.append(entries[key])   # the split already built the finished line
-		out.append("")
-	return "\n".join(out).strip_edges()
-
-
-func _value_count(groups: Dictionary) -> int:
-	var total := 0
-	for header: String in groups:
-		var entries: Dictionary = groups[header]
-		total += entries.size()
-	return total
-
-
-# literal_for moved to DevWidgets in #272 -- the Object tab writes the same literals into a script
-# rather than onto the clipboard, so "what is the GDScript spelling of this value" gained a second
-# reader and stopped being this panel's private business.

@@ -4,7 +4,7 @@ class_name ScenarioHeader
 # The scenario's file operations, as a persistent header over the whole dev-tools window (#382):
 # SCENARIO -- <name> (modified), Load / Update / Save As / Delete, and the authored-save checkbox.
 # Carved out of the Scenario tab when the window went from tabs to a scope tree, for the same
-# reason the Look tab pinned its buttons above its sub-tabs (dev ask, 2026-08-14): saving must be
+# reason the Moods tab pinned its buttons above its sub-tabs (dev ask, 2026-08-14): saving must be
 # reachable from wherever you are, never a navigation away.
 #
 # The file ops are ScenarioTool's old ones, verbatim in behaviour: Update is load-gated AND

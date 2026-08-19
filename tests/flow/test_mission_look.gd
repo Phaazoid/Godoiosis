@@ -119,6 +119,25 @@ func test_the_default_look_exists_and_names_every_in_scope_knob() -> void:
 		"the default look predates %d knob(s): %s" % [missing.size(), ", ".join(missing)]).is_empty()
 
 
+# The other direction, and the one nothing was watching: test_look_presets.gd's out-of-scope law
+# scans PRESET_DIR, which the default deliberately sits outside, so it carried eleven dead
+# BoardMirror|flame_* keys from before #380 moved fire to the Game tab -- reported as "unknown" by
+# every single apply and silently discarded. A dead key is also a SECOND authority for a value the
+# declaration it was copied from still owns.
+func test_the_default_look_carries_no_dead_key() -> void:
+	var default_look := LookKnobs.default_preset()
+	assert_object(default_look).is_not_null()
+	var live: Array[String] = []
+	for knob: Dictionary in LookKnobs.preset_knobs():
+		live.append(LookKnobs.preset_key(knob))
+	var dead: Array[String] = []
+	for key: String in default_look.values:
+		if not live.has(key):
+			dead.append(key)
+	assert_array(dead).override_failure_message(
+		"the default look carries %d key(s) no knob claims: %s" % [dead.size(), ", ".join(dead)]).is_empty()
+
+
 # It lives OUTSIDE Resources/LookPresets/ on purpose (dev, 2026-08-15): outside, it cannot appear
 # in the load dropdown, Delete can never target it and Save As cannot shadow it -- all structural
 # rather than a filename check anyone could get wrong later.

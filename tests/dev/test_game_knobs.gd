@@ -1,7 +1,7 @@
-# The Game tab (#373): the board markup, unit readout and camera handling that left the Look tab
+# The Game tab (#373): the board markup, unit readout and camera handling that left the Moods tab
 # when they got a Save. Three kinds of law, and they fail in three different ways.
 #
-# THE LIVE LAWS come with the knobs from test_look_tool.gd, unchanged in substance. "Every knob
+# THE LIVE LAWS come with the knobs from test_moods_tool.gd, unchanged in substance. "Every knob
 # resolves" catches a row left pointing at a renamed property. "A written knob survives two frames"
 # is the one that matters: a knob may only name a property that is authored and READ, never one the
 # game writes back per frame, or the slider moves and silently reverts -- and TWO frames, because

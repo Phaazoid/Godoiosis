@@ -57,12 +57,12 @@ func refresh_look_row() -> void:
 func _on_look_picked(picked: String) -> void:
 	scenario_manager.current_look_preset = "" if picked == NO_LOOK_LABEL else picked
 	_mark()
-	# Apply live so the pick is visible at once, and route it through the Look tab so ITS baseline
+	# Apply live so the pick is visible at once, and route it through the Moods tab so ITS baseline
 	# stays in step.
 	var overlay: DevOverlay = game.dev_overlay
-	if overlay == null or not overlay.look_tool.has_host():
+	if overlay == null or not overlay.moods_tool.has_host():
 		return
-	overlay.look_tool.apply_preset(LookKnobs.resolve(scenario_manager.current_look_preset))
+	overlay.moods_tool.apply_preset(LookKnobs.resolve(scenario_manager.current_look_preset))
 
 
 # Where this board opens the camera (#234). Same code-built-and-moved-to-the-top shape as the look
@@ -95,7 +95,7 @@ func refresh_camera_row() -> void:
 		"Where the camera sits when this mission OPENS. Capture stores the view you are looking at "
 		+ "right now -- aim, angle and zoom -- and every load of this board returns to it, including "
 		+ "a resumed save.\n\n"
-		+ "Clear goes back to DERIVED: the camera opens on your own units, as wide as the Look tab's "
+		+ "Clear goes back to DERIVED: the camera opens on your own units, as wide as the Moods tab's "
 		+ "'Opening shot (cells)'. That knob does nothing on a board that authors a start.\n\n"
 		+ "Nothing is validated. Edit the board afterwards and an aim that now sits off it is simply "
 		+ "clamped back on, silently -- re-capture if the shot looks wrong.\n\n"
