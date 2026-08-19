@@ -663,6 +663,14 @@ func test_demo_mode_boots_watch_only() -> void:
 	await await_idle_frame()
 	var container: SubViewportContainer = demo.get_node("Main/GameContainer")
 	assert_bool(container.visible).is_false()
+	# #375: a lesson needs a student -- the watch-only boot must not arm the tutorial, and no
+	# intro may open with nobody to advance it. The REAL wire: demo_mode makes load_mission
+	# pass armed=false through the #220 door.
+	demo.load_mission(PROLOG)
+	await await_idle_frame()
+	var demo_game: Node2D = demo.game
+	assert_str(demo_game.scenario_director.active_instruction()).is_equal("")
+	assert_object(Dialogic.current_timeline).is_null()
 	get_tree().root.remove_child(demo)
 	demo.free()
 

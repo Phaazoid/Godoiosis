@@ -101,10 +101,16 @@ func _close_mission_select() -> void:
 
 # The one path-taking mission entry, public since #220 — the Mission Select signal
 # and the Battle3D driver both start missions through this door.
-func begin_mission(path: String) -> void:
+func begin_mission(path: String, armed := true) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
-	game.scenario_director.mission_started()   # fresh start (the #220 door); ARMS before turn 1 fires
+	# armed=false is the watch-only boot (#375: a lesson needs a student -- demo mode has no player
+	# to advance dialog or follow instructions). Must be decided HERE, not disarmed after: the intro
+	# starts DEFERRED (the layout-ready trap), so a late disarm cannot un-start it.
+	if armed:
+		game.scenario_director.mission_started()   # fresh start (the #220 door); ARMS before turn 1 fires
+	else:
+		game.scenario_director.disarm()
 	_begin_turn()
 
 func _on_sandbox_chosen() -> void:
