@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #362 (2026-08-19).**
+**Canon checked through #365 (2026-08-19).**
 
 ## Principles
 
@@ -375,11 +375,23 @@ over its head. Seeing both at once, the dev's call was that **the ground one rea
 
 **Retired by this rule:** `IconType.TARGET`, whose only producer was `draw_create_squad` — the
 target-pick ground marker is now the single answer to *which unit may I pick*. `CURSOR` and
-`INVALID` went with it as never-produced leftovers. **`CROWN` and `SQUADMEMBER` got their ruling
-2026-08-18:** [#325](https://github.com/Phaazoid/Godoiosis/issues/325) is experimenting with a
-restyle of the `Layer.SQUAD` presence each member already has — a squad-colored ring underfoot,
-a leader variant instead of the crown — behind a Look-tab toggle against the current squares.
-The loser gets deleted, not kept as a second opinion.
+`INVALID` went with it as never-produced leftovers. **`CROWN` and `SQUADMEMBER` were answered by
+[#325](https://github.com/Phaazoid/Godoiosis/issues/325), shipped 2026-08-19:** membership is a
+per-squad coloured RING under each member, and the leader's crown is a badge ON THE HEALTH BAR,
+bar-height and to its left — so leadership rides #229's readout rather than floating on its own.
+The legacy squares survive behind a Look-tab toggle until the dev rules; **the loser then gets
+deleted, not kept as a second opinion.**
+
+**The premise this ticket was filed on was wrong, and the correction generalises.** #325's body
+said `Layer.SQUAD` "already draws the squad's footprint" — measured false while planning: that
+layer is the Squad Up / Join Squad *candidate bubble*, `SQUAD_RANGE` is the cohesion leash, and
+the head-icon channel (`OverlayManager.icons_by_unit`) was the **only** membership marker in the
+game. So the build RELOCATED that one channel rather than restyling a fill, and the icon
+lifecycle never moved. Third instance of [#228](https://github.com/Phaazoid/Godoiosis/issues/228)'s
+law — *an issue's own premises are stale-able; re-derive from the code before building.*
+The 2D keeps a head crown, since the flat view has no bar to badge — a declared
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry, the readout family's, one
+member wider.
 
 Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
 general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
