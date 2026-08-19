@@ -219,6 +219,13 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "crown_badge_scale", "label": "Crown badge scale", "min": 0.5, "max": 4.0, "step": 0.1,
 		"tip": "Size of the leader's crown beside the health bar, as a multiple of the bar's height (#325 -- ring mode only; the squares style keeps its floating crown). At 1.0 the crown matches the bar line; push it up if the glyph turns to mush at distance."},
+	# --- The element-state row (#357) ---
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
+		"tip": "Size of each element-state icon above the health bar, in texels -- 16 is one cell. The source art is 32px (wet) and 16px (the frozen-tile stand-in for chilled), so powers of two land on exact reductions and anything else will shimmer as the camera moves. This is the first dial to reach for if the icons stop reading at play distance."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_gap_texels", "label": "State row clearance", "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "Gap between the top of the health bar's outline and the bottom of the state icons, in texels. Zero stacks them flush against the bar so the two read as one display; push it up to separate what a unit IS from how hurt it is, at the cost of climbing toward the selection icons above."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_spacing_texels", "label": "State icon spacing", "min": 0.0, "max": 16.0, "step": 1.0,
+		"tip": "Gap between neighbouring state icons, in texels. Only visible on a unit holding more than one state, which today means wet AND chilled at once -- with two states the row cannot crowd, and this is the dial that matters when the vocabulary grows."},
 ]
 
 # A preset is SCENE MOOD, not game settings (dev, 2026-08-15). Everything in KNOBS is captured
@@ -281,6 +288,9 @@ const PRESET_EXCLUDED: Array[String] = [
 	"UnitMirror|alarm_peak_color",
 	"UnitMirror|unhovered_shows_number",
 	"UnitMirror|crown_badge_scale",
+	"UnitMirror|state_icon_texels",
+	"UnitMirror|state_icon_gap_texels",
+	"UnitMirror|state_icon_spacing_texels",
 ]
 
 # --- Identity ---------------------------------------------------------------------------
