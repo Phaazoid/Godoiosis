@@ -453,3 +453,65 @@ func test_reset_puts_every_knob_and_colour_back() -> void:
 	assert_array(_game.changed_indices()).is_empty()
 	assert_array(_game.changed_class_indices()).is_empty()
 	await await_idle_frame()   # the rebuild's detached rows, or they read as orphans
+
+
+# --- Saves ask first (#380's convention) -----------------------------------------------------
+#
+# The Game tab's save writes SOURCE FILES and the Objects tab's writes the shared tileset, so both
+# ask before a byte moves -- the same convention every Update and Delete already carries, asserted
+# per button in test_dev_tool_overwrite_guards.gd. These two live here because their fixtures need
+# the Battle3D host that suite deliberately does not load. No case emits `confirmed`.
+
+func _find_dialog(host: Node) -> ConfirmationDialog:
+	for child in host.get_children():
+		if child is ConfirmationDialog:
+			return child as ConfirmationDialog
+	return null
+
+
+func test_save_to_source_asks_before_writing() -> void:
+	var knob := _knob("BoardOverlays", "billboard_lift")
+	var path := KnobSource.script_path_for(_scene, knob)
+	var before := FileAccess.open(path, FileAccess.READ).get_as_text()
+	LookKnobs.write(_scene, knob, 1.42)
+
+	_game._on_save_pressed()
+
+	assert_object(_find_dialog(_game)).is_not_null()
+	# Nothing written while the question is open -- byte-identical, not just same mtime.
+	assert_str(FileAccess.open(path, FileAccess.READ).get_as_text()).is_equal(before)
+	assert_array(_game.changed_indices()).is_not_empty()   # still reported moved, not adopted
+
+
+func test_save_cancel_writes_nothing_and_the_dialog_frees() -> void:
+	var knob := _knob("BoardOverlays", "billboard_lift")
+	var path := KnobSource.script_path_for(_scene, knob)
+	var before := FileAccess.open(path, FileAccess.READ).get_as_text()
+	LookKnobs.write(_scene, knob, 1.42)
+	_game._on_save_pressed()
+	var dialog := _find_dialog(_game)
+	assert_object(dialog).is_not_null()
+
+	dialog.canceled.emit()
+	dialog.hide()
+	await await_idle_frame()
+
+	assert_str(FileAccess.open(path, FileAccess.READ).get_as_text()).is_equal(before)
+	assert_object(_find_dialog(_game)).is_null()
+
+
+func test_a_save_with_nothing_moved_never_reaches_a_dialog() -> void:
+	_game._on_save_pressed()
+
+	assert_object(_find_dialog(_game)).is_null()
+	assert_str(_game._status.text).is_not_empty()
+
+
+func test_save_object_fields_asks_before_writing() -> void:
+	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
+	var objects: ObjectTool = dev_overlay.object_tool
+	assert_bool(objects.has_host()).is_true()
+
+	objects._on_save_fields_pressed()
+
+	assert_object(_find_dialog(objects)).is_not_null()

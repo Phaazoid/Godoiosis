@@ -9,7 +9,7 @@
 # Three shapes, because a game constant is authored three ways: an @export default, a static var,
 # and one entry of a const table (BoardOverlays.LAYERS) that has no var to name at all. Whether a
 # TABLE'S rows really are findable in the real files is a different question, asked per table by
-# test_object_knobs.gd and test_game_knobs.gd against the source on disk.
+# test_game_knobs.gd against the source on disk.
 extends GdUnitTestSuite
 
 const PLAIN := """extends Node3D

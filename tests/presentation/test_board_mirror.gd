@@ -2153,3 +2153,56 @@ func test_two_burning_cells_do_not_burn_in_lockstep() -> void:
 	assert_int(phases.size()).override_failure_message(
 			"every fire on the board starts on the same beat -- they flicker as one"
 	).is_greater(1)
+
+
+# --- #380: the lamp defaults are LIVE knobs -----------------------------------------------------
+
+# The #264 law, for lights: a knob on a thing that is built once and reconciled moves nothing until
+# a repaint unless a setter re-applies it. The four prop_light_* globals gained rows on the Game tab
+# in #380, so this pins that tuning one re-lights a STANDING lamp -- no repaint, no reconcile.
+func test_a_standing_lamps_light_follows_the_global_knob_without_a_repaint() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var lit := _object_tile(true)
+	assert_bool(not lit.is_empty()).override_failure_message(
+			"the tileset has no lit object; the case is vacuous").is_true()
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, lit.source_id, lit.coords)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var light := _light_under(mirror.prop_at(cell))
+	assert_object(light).override_failure_message("the lit object stood up no light").is_not_null()
+
+	var want: float = light.light_energy + 1.5
+	mirror.prop_light_energy = want
+
+	assert_float(light.light_energy).override_failure_message(
+			"a standing lamp ignored the global light knob -- the #264 born-dead slider, for lights"
+	).is_equal_approx(want, 0.001)
+	# The other three ride the same sweep; height is the one applied as position rather than a
+	# light property, so it is the second most likely to silently not arrive.
+	var lifted: float = light.position.y + 0.4
+	mirror.prop_light_height = lifted
+	assert_float(light.position.y).is_equal_approx(lifted, 0.001)
+
+
+# The sweep's isolation: fire's own OmniLight is flame_light_*'s business and lives in a different
+# store, so tuning a LAMP default must not move a FIRE. This is what makes walking _props (and not
+# every OmniLight under the mirror) load-bearing rather than an implementation detail.
+func test_a_fires_light_does_not_move_when_a_lamp_default_is_tuned() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var fire_light := _light_under(mirror.fire_marker_at(burning[0]))
+	assert_object(fire_light).override_failure_message("the fire stood up no light").is_not_null()
+	var before: float = fire_light.light_energy
+
+	mirror.prop_light_energy = mirror.prop_light_energy + 2.0
+
+	assert_float(fire_light.light_energy).override_failure_message(
+			"tuning a LAMP default moved a FIRE's light -- the sweep is walking the wrong store"
+	).is_equal_approx(before, 0.001)

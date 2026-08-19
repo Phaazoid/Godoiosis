@@ -195,6 +195,8 @@ func _button(text: String, tooltip: String, on_pressed: Callable) -> Button:
 
 # --- The handoff ---------------------------------------------------------------------------------
 
+# Asks first (#380's convention: anything that can overwrite settings does). The gates run BEFORE
+# the dialog, so a no-op save never reaches one.
 func _on_save_pressed() -> void:
 	if _host == null:
 		_status.text = "No 3D host attached - nothing to save."
@@ -204,6 +206,13 @@ func _on_save_pressed() -> void:
 	if moved.is_empty() and moved_class.is_empty():
 		_status.text = "Nothing has moved off what is saved."
 		return
+	DevWidgets.confirm(self,
+		"Write %d changed value(s) into the scripts that declare them? The old defaults are replaced."
+			% (moved.size() + moved_class.size()),
+		func() -> void: _save_confirmed(moved, moved_class))
+
+
+func _save_confirmed(moved: PackedInt32Array, moved_class: PackedInt32Array) -> void:
 	var report := GameKnobs.save_to_source(_host, moved, moved_class)
 	# The baseline follows what LANDED, never what was asked for: a knob whose write failed is still
 	# unsaved, and quietly adopting it would hide the failure behind an unchanged-looking panel.

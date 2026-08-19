@@ -205,3 +205,44 @@ func test_the_helper_confirm_wire_fires_the_callable() -> void:
 
 	assert_bool(hit[0]).is_true()
 	assert_object(_find_dialog(_scenario_tool())).is_null()
+
+# ==============================================================================
+#  Every editor's Update asks first (#380 -- the convention, dev 2026-08-19:
+#  "anything that can overwrite settings should". These three were load-gated
+#  only; the gate cannot catch a mis-click at the file you DID load. No case
+#  emits `confirmed`, so nothing is written. The Game and Objects tabs' saves
+#  carry the same convention, asserted in test_game_knobs.gd -- their fixtures
+#  need the Battle3D host this suite deliberately does not load.
+# ==============================================================================
+
+func test_character_update_asks_before_overwriting() -> void:
+	var tool: CharacterEditorTool = overlay.get_node("%Character")
+	assert_int(tool.load_dropdown.item_count).is_greater(0)   # empty cast would make this vacuous
+	tool.load_dropdown.select(0)
+	tool._on_load_pressed()
+
+	tool.update_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).is_not_null()
+
+
+func test_item_update_asks_before_overwriting() -> void:
+	var tool: ItemEditorTool = overlay.get_node("%Item Editor")
+	assert_int(tool.load_dropdown.item_count).is_greater(0)
+	tool.load_dropdown.select(0)
+	tool._on_load_pressed()
+
+	tool.update_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).is_not_null()
+
+
+func test_attack_update_asks_before_overwriting() -> void:
+	var tool: AttackEditorTool = overlay.get_node("%Attack Editor")
+	assert_int(tool.load_dropdown.item_count).is_greater(0)
+	tool.load_dropdown.select(0)
+	tool._on_load_pressed()
+
+	tool.update_button.pressed.emit()
+
+	assert_object(_find_dialog(tool)).is_not_null()

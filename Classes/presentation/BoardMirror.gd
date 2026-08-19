@@ -154,10 +154,14 @@ const FLAME_FRAMES := 8
 # These four are now DEFAULTS rather than the answer: a tile may override any of them, and this is
 # what it falls back to (dev's ruling, 2026-08-16). Resolving that layering is the *_for helpers
 # below, and it happens ONLY here — nothing downstream knows a global exists.
-@export var prop_light_color := Color(1, 0.8, 0.5)
-@export var prop_light_energy := 1.5
-@export var prop_light_range := 3.5
-@export var prop_light_height := 0.7
+#
+# The setters re-light every standing lamp (#380) — the same reason block_height_scale has one:
+# a light's values are baked into its OmniLight3D at build, so without the sweep a knob on these
+# moves nothing until the tile under it is repainted (#264's born-dead slider, one shelf along).
+@export var prop_light_color := Color(1, 0.8, 0.5): set = _set_prop_light_color
+@export var prop_light_energy := 1.5: set = _set_prop_light_energy
+@export var prop_light_range := 3.5: set = _set_prop_light_range
+@export var prop_light_height := 0.7: set = _set_prop_light_height
 
 # How tall a solid prop stands relative to its own art. A knob rather than a constant because the
 # art is drawn in 3/4: a crate sprite includes some of its own lid, so the height measured off the
@@ -230,6 +234,10 @@ const TUFT_META := "tuft"
 # override rides the node the same way TUFT_META does, for the same reason: a sweep has to find a
 # fact about a node it did not just build.
 const OVERRIDE_META := "size_override"
+# A lit prop's four authored light overrides (sentinels included), stashed at build for the same
+# reason OVERRIDE_META is: the re-light sweep has no grid to re-read the tile from, so what it
+# needs to re-derive through _resolved() has to ride on the node (#380).
+const LIGHT_OVERRIDE_META := "light_overrides"
 
 # Where each tile's art actually sits, so a billboard is planted by its DRAWN pixels rather than by
 # its region. Both caches are pure derivations of the tileset — a decoded sheet per source, a
@@ -864,6 +872,12 @@ func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 
 	var data := grid.get_cell_tile_data(cell)
 	if GridUtils.prop_lit_of(data):
+		root.set_meta(LIGHT_OVERRIDE_META, {
+			"color": GridUtils.prop_color_override_of(data, "prop_light_color"),
+			"energy": GridUtils.prop_override_of(data, "prop_light_energy"),
+			"range": GridUtils.prop_override_of(data, "prop_light_range"),
+			"height": GridUtils.prop_override_of(data, "prop_light_height"),
+		})
 		_add_light(root, light_color_for(data), light_energy_for(data),
 			light_range_for(data), light_height_for(data))
 	return root
@@ -1086,6 +1100,47 @@ func _override_on(root: Node3D) -> float:
 	if not root.has_meta(OVERRIDE_META):
 		return GridUtils.INHERIT
 	return root.get_meta(OVERRIDE_META)
+
+
+# Re-light every standing lamp — the four light globals' shared sweep (#380), on the block sweep's
+# shape. Walks _props ONLY: a fire's own OmniLight lives in _fire_markers and is flame_light_*'s
+# business, so tuning a lamp default can never move a fire. Each value re-derives through the same
+# inherit logic the build used, off the overrides stashed at build, so an authored per-tile light
+# is never stomped by a global's slider (#272 slice 2's trap).
+func _restyle_prop_lights() -> void:
+	for root: Node3D in _props.values():
+		if not root.has_meta(LIGHT_OVERRIDE_META):
+			continue   # unlit prop — no light was built
+		var authored: Dictionary = root.get_meta(LIGHT_OVERRIDE_META)
+		for child in root.get_children():
+			var light := child as OmniLight3D
+			if light == null:
+				continue
+			var color: Color = authored["color"]
+			light.light_color = prop_light_color if GridUtils.is_inherited_color(color) else color
+			light.light_energy = _resolved(authored["energy"], prop_light_energy)
+			light.omni_range = _resolved(authored["range"], prop_light_range)
+			light.position.y = _resolved(authored["height"], prop_light_height)
+
+
+func _set_prop_light_color(value: Color) -> void:
+	prop_light_color = value
+	_restyle_prop_lights()
+
+
+func _set_prop_light_energy(value: float) -> void:
+	prop_light_energy = value
+	_restyle_prop_lights()
+
+
+func _set_prop_light_range(value: float) -> void:
+	prop_light_range = value
+	_restyle_prop_lights()
+
+
+func _set_prop_light_height(value: float) -> void:
+	prop_light_height = value
+	_restyle_prop_lights()
 
 
 # --- COVER (#326) -------------------------------------------------------------------------------

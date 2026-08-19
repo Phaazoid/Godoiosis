@@ -391,11 +391,20 @@ static func confirm(host: Control, message: String, on_confirm: Callable) -> Con
 	dialog.popup_centered()
 	return dialog
 
-# Every dev Delete rides this (dev call 2026-08-11); the Scenario tool's Update rides confirm()
-# directly with an overwrite message (dev call 2026-08-12, after a mis-aimed Update destroyed a
-# level the load-gate could not protect -- it WAS the loaded file).
+# Every dev Delete rides this (dev call 2026-08-11).
 static func confirm_delete(host: Control, victim: String, on_confirm: Callable) -> ConfirmationDialog:
 	return confirm(host, "Delete %s? This cannot be undone." % victim, on_confirm)
+
+# Every dev save that OVERWRITES rides this or confirm() directly (#380's convention, dev:
+# "anything that can overwrite settings should" ask) -- every tool's Update, plus the Game tab's
+# source save and the Objects tab's tileset save, whose messages are their own shape. Save As is
+# the one save that never confirms, because refuse_taken_name makes it structurally unable to
+# overwrite. First worn by the Scenario tool's Update (dev call 2026-08-12, after a mis-aimed
+# Update destroyed a level the load-gate could not protect -- it WAS the loaded file).
+static func confirm_overwrite(host: Control, victim: String, replacement: String,
+		on_confirm: Callable) -> ConfirmationDialog:
+	return confirm(host, "Overwrite %s with %s? The saved version is lost." % [victim, replacement],
+		on_confirm)
 
 # Filenames illegal on Windows -- refuse rather than sanitize (a silently renamed file is the same
 # surprise one step later, and every catalog keys on the exact name). '/' is a separate question

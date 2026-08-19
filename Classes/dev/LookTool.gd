@@ -384,7 +384,7 @@ func _on_update_pressed() -> void:
 		return
 	# Confirmed as well as load-gated (the 2026-08-12 scenario call): the gate cannot catch a
 	# mis-click at the file you DID load, which is exactly how a tuned look would be lost.
-	DevWidgets.confirm(self, "Overwrite preset '%s' with the current look? The saved version is lost." % target,
+	DevWidgets.confirm_overwrite(self, "preset '%s'" % target, "the current look",
 		func() -> void: _update_confirmed(target))
 
 

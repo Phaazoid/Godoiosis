@@ -292,6 +292,7 @@ layout_mode = 2
 size_flags_horizontal = 3
 
 [node name="Attack Editor" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/DevTabs" unique_id=1345851927]
+unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("5_qihyv")

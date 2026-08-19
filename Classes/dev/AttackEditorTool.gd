@@ -153,7 +153,10 @@ func _on_update_pressed():
 			push_warning(msg)
 			status_label.text = msg
 			return
-		DevWidgets.save_over(current, current.resource_path, status_label)
+		# Confirmed as well as load-gated (#380's convention), both branches: the gate cannot
+		# catch a mis-click at the attack you DID load.
+		DevWidgets.confirm_overwrite(self, "attack '%s'" % target, "the editor's values",
+			func() -> void: DevWidgets.save_over(current, current.resource_path, status_label))
 		return
 	var path: String = _items[target].resource_path
 	if path == "":
@@ -161,6 +164,11 @@ func _on_update_pressed():
 		push_warning(msg)
 		status_label.text = msg
 		return
+	DevWidgets.confirm_overwrite(self, "attack '%s'" % target, "the editor's values",
+		func() -> void: _update_confirmed(path))
+
+
+func _update_confirmed(path: String) -> void:
 	if DevWidgets.save_over(current, path, status_label):
 		_loaded_name = current.display_name   # a rename moves the loaded identity with it
 		_refresh_list(current.display_name)
