@@ -24,6 +24,12 @@ class_name UnitHealthBar
 # World-scaled, not screen-constant (dev, 2026-08-15): it shrinks with distance like the icons
 # beside it, because it belongs to the scene rather than to the glass.
 #
+# Since #357 it also carries the ELEMENT-STATE row: one icon per state the unit holds, sitting just
+# above the bar and flush with its left edge. That is the first deliberate occupant of the channel
+# #346 freed — above the head is what this unit IS — and it is a CHILD of this group rather than a
+# display of its own precisely so it cannot grow a second visibility rule: a hidden bar hides it by
+# construction, which is what #350's one-gate ruling asks for.
+#
 # A dumb idempotent sink: it is TOLD a style, an HP pair and a prediction, and draws them. It never
 # reads a Unit, the plan, the board or the pointer — UnitMirror owns all of that, and owns the knobs
 # too, since the Look panel can only address nodes that exist in the scene.
@@ -46,6 +52,10 @@ var _fill: MeshInstance3D
 var _doomed: MeshInstance3D    # #313: the span between current HP and what the plan predicts
 var _notch: MeshInstance3D     # #313: the marker AT the predicted level
 var _label: Label3D
+# #357: the element-state row above the bar. A POOL, grown on demand and hidden rather than freed —
+# the same contract UnitMirror.set_ghosts and BoardOverlays use, for the same reason: the count
+# changes every time a state lands or expires.
+var _state_icons: Array[MeshInstance3D] = []
 
 var _width := 32.0
 var _height := 6.0
@@ -68,6 +78,10 @@ var _alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
 var _predicted := 0
 var _has_prediction := false
 var _number_shown := true
+var _state_textures: Array[Texture2D] = []
+var _state_icon_texels := 8.0
+var _state_gap_texels := 2.0
+var _state_spacing_texels := 1.0
 
 var _alarm: Tween
 var _alarm_peak_live := Color(1.0, 1.0, 1.0, 1.0)   # the peak the RUNNING tween was started with
@@ -183,6 +197,21 @@ func set_number_shown(shown: bool) -> void:
 	_rebuild()
 
 
+# The element-state row (#357). Textures only: StateIcons stays the one answer to which art means
+# which state, and this node keeps reading no game state at all.
+#
+# The array is DUPLICATED on the way in because it joins the _drawn signature. That signature holds
+# a reference, so a caller reusing one buffer across frames would mutate the very thing the redraw
+# gate compares against and the row would freeze on whatever it drew first.
+func set_state_icons(textures: Array[Texture2D], size_texels: float, gap_texels: float,
+		spacing_texels: float) -> void:
+	_state_textures = textures.duplicate()
+	_state_icon_texels = size_texels
+	_state_gap_texels = gap_texels
+	_state_spacing_texels = spacing_texels
+	_rebuild()
+
+
 func set_shown(shown: bool) -> void:
 	visible = shown
 	if not shown:
@@ -257,6 +286,27 @@ func alarm_running() -> bool:
 	return _alarm != null
 
 
+# The state row's rendered facts (#357), read off the meshes like every accessor above. The count is
+# of SHOWN slots, not pooled ones: the pool only ever grows, so its size answers a different
+# question than "how many states is this unit wearing".
+func state_icon_count() -> int:
+	var count := 0
+	for quad: MeshInstance3D in _state_icons:
+		if quad.visible:
+			count += 1
+	return count
+
+
+func state_icon_size() -> Vector2:
+	if _state_icons.is_empty():
+		return Vector2.ZERO
+	return (_state_icons[0].mesh as QuadMesh).size
+
+
+func state_icon_offset(index: int) -> Vector3:
+	return (_state_icons[index].mesh as QuadMesh).center_offset
+
+
 func track_texels() -> float:
 	return roundf(_width)
 
@@ -275,7 +325,8 @@ func _rebuild() -> void:
 	var signature: Array = [_width, _height, _outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color, _notch_color, _notch_texels,
-			_current, _maximum, _predicted, _has_prediction]
+			_current, _maximum, _predicted, _has_prediction,
+			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels]
 	if signature == _drawn:
 		return
 	_drawn = signature
@@ -326,6 +377,44 @@ func _draw() -> void:
 	var half_text: float = _label.get_aabb().size.x * 0.5
 	_label.position = Vector3(-track_w * 0.5 * texel + _gap + half_text, 0.0, texel)
 
+	_draw_state_row(texel, track_w, bar_h, edge)
+
+
+# The element-state row (#357): square icons ABOVE the bar, the first one flush with the outline's
+# left edge and the rest growing rightward. Sized in texels rather than as a multiple of the bar's
+# height: nothing ties a status icon to how thick the gauge happens to be, and the two want to be
+# tunable apart.
+#
+# Local space again, and that is the whole reason this lives inside the group: face() turns the
+# parent, so an offset written here is a real offset at every camera angle. Priority is the group's
+# base — the row is coplanar with nothing, so it has no sibling to sort against.
+func _draw_state_row(texel: float, track_w: float, bar_h: float, edge: float) -> void:
+	while _state_icons.size() < _state_textures.size():
+		var quad := _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
+		var fresh := quad.material_override as StandardMaterial3D
+		fresh.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST   # pixel art, like every sprite in this stack
+		add_child(quad)
+		_state_icons.append(quad)
+	var icon: float = maxf(roundf(_state_icon_texels), 1.0)
+	var gap: float = maxf(roundf(_state_gap_texels), 0.0)
+	var spacing: float = maxf(roundf(_state_spacing_texels), 0.0)
+	# Clear of the outline's TOP edge, and flush with its LEFT one, so the row and the gauge share a
+	# left margin rather than each finding its own.
+	var row_y: float = (bar_h * 0.5 + edge + gap + icon * 0.5) * texel
+	var left: float = -(track_w * 0.5 + edge)
+	for i in _state_icons.size():
+		var quad: MeshInstance3D = _state_icons[i]
+		# Occupancy, NOT visibility: extras are parked rather than freed, and the bar's own
+		# visible flag is what decides whether any of this is seen.
+		quad.visible = i < _state_textures.size()
+		if not quad.visible:
+			continue
+		_size_quad(quad, icon * texel, icon * texel,
+				(left + icon * 0.5 + float(i) * (icon + spacing)) * texel, row_y)
+		var material := quad.material_override as StandardMaterial3D
+		material.albedo_texture = _state_textures[i]
+		material.albedo_color = Color.WHITE
+
 
 # The prediction (#313). The SPAN runs between where the bar is now and where the plan leaves it,
 # so the same two quads say "this much is coming off" and "this much is coming back" — the colour is
@@ -360,10 +449,13 @@ func _segment_color() -> Color:
 	return _heal_color if _has_prediction and _predicted > _current else _doomed_color
 
 
-func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: float) -> void:
+# offset_y defaults to 0 because everything in the bar proper is vertically centred on it; the
+# state row is the one thing that sits OFF the line, so it is the only caller that passes it.
+func _size_quad(quad: MeshInstance3D, width: float, height: float, offset_x: float,
+		offset_y := 0.0) -> void:
 	var mesh := quad.mesh as QuadMesh
 	mesh.size = Vector2(width, height)
-	mesh.center_offset = Vector3(offset_x, 0.0, 0.0)
+	mesh.center_offset = Vector3(offset_x, offset_y, 0.0)
 
 
 func _quad_width(quad: MeshInstance3D) -> float:

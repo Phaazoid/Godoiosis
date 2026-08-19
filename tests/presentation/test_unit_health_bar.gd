@@ -264,3 +264,118 @@ func test_turning_the_setting_off_returns_the_board_to_hover_only() -> void:
 	await _settle()
 
 	assert_array(_shown_bars()).is_empty()
+
+
+# --- The element-state row (#357) --------------------------------------------------------------
+# The first deliberate occupant of the head channel #346 freed: what this unit IS, above the bar
+# that says how hurt it is. Driven through the same wire as everything above — states go on the
+# UNIT, the pointer moves, and the row is read off the meshes. Nothing here calls the bar directly.
+
+func _wet(cell: Vector2i) -> Unit:
+	var unit := _spawn(PLAYER, cell)
+	unit.add_element_state(Elemental.State.WET)
+	return unit
+
+
+func test_a_hovered_units_row_shows_one_icon_per_held_state() -> void:
+	var unit := _wet(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_true()
+	assert_int(bar.state_icon_count()).is_equal(1)
+
+	# CHILLED reaches the row through StateIcons like any other state — it holds a placeholder
+	# texture rather than its own art, and the row cannot tell the difference.
+	unit.add_element_state(Elemental.State.CHILLED)
+	await _settle()
+	assert_int(bar.state_icon_count()).is_equal(2)
+
+
+func test_a_hovered_unit_with_no_states_wears_no_row() -> void:
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_true()   # the BAR is up; the row is what must be empty
+	assert_int(bar.state_icon_count()).is_equal(0)
+
+
+func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> void:
+	var unit := _wet(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+
+	# Derived from the knobs, never pinned: the claim is the RELATIONSHIP (clear of the outline's
+	# top, flush with its left), which survives every retune of the values underneath it.
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var icon: float = roundf(_unit_mirror.state_icon_texels)
+	var edge: float = roundf(_unit_mirror.bar_outline_texels)
+	var bar_h: float = roundf(_unit_mirror.bar_height_texels)
+	var track: float = roundf(_unit_mirror.bar_width_texels)
+	var gap: float = roundf(_unit_mirror.state_icon_gap_texels)
+
+	assert_float(bar.state_icon_size().x).is_equal_approx(icon * texel, 0.001)
+	assert_float(bar.state_icon_size().y).is_equal_approx(icon * texel, 0.001)
+
+	var offset := bar.state_icon_offset(0)
+	# Its BOTTOM edge clears the outline's top edge by the gap.
+	assert_float(offset.y - bar.state_icon_size().y * 0.5).is_equal_approx(
+			(bar_h * 0.5 + edge + gap) * texel, 0.001)
+	# Its LEFT edge sits on the outline's left edge — "centered left", the dev's words.
+	assert_float(offset.x - bar.state_icon_size().x * 0.5).is_equal_approx(
+			-(track * 0.5 + edge) * texel, 0.001)
+
+
+func test_the_row_grows_rightward_without_moving_the_first_icon() -> void:
+	var unit := _wet(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+	var alone := bar.state_icon_offset(0).x
+
+	unit.add_element_state(Elemental.State.CHILLED)
+	await _settle()
+
+	# LEFT-aligned, not centred: a second state must push rightward off a fixed left edge. A row
+	# that re-centred would pass a count test and still slide under the bar every time a state
+	# landed, which is the thing you would notice and a counter would not.
+	assert_float(bar.state_icon_offset(0).x).override_failure_message(
+			"the first icon moved when a second arrived — the row is centring, not left-aligning") \
+			.is_equal_approx(alone, 0.001)
+	assert_float(bar.state_icon_offset(1).x).is_greater(bar.state_icon_offset(0).x)
+
+
+func test_a_state_leaving_takes_its_icon_away() -> void:
+	var unit := _wet(Vector2i(2, 2))
+	unit.add_element_state(Elemental.State.CHILLED)
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+	assert_int(bar.state_icon_count()).is_equal(2)   # precondition, via the real path
+
+	unit.remove_element_state(Elemental.State.WET)
+	await _settle()
+
+	# The pool only ever GROWS, so the retired slot is still there — parked, not drawn. A row that
+	# forgot to park it would keep claiming a state the unit shed.
+	assert_int(bar.state_icon_count()).is_equal(1)
+
+
+func test_the_row_rides_the_bars_own_visibility_and_not_a_rule_of_its_own() -> void:
+	# The one-gate claim (#350), asserted where it is visible: a wet unit nobody is pointing at
+	# wears nothing, and the SETTING alone is enough to put its states on the board.
+	var unit := _wet(Vector2i(2, 2))
+	_point_at(Vector2i(20, 20))   # empty ground: not hovered, no plan
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_false()
+
+	_set_always_on(true)
+	await _settle()
+
+	assert_bool(bar.visible).is_true()
+	assert_int(bar.state_icon_count()).override_failure_message(
+			"the row did not follow the bar up — it has grown a visibility rule of its own") \
+			.is_equal(1)

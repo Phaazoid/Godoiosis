@@ -30,8 +30,9 @@ class_name UnitMirror
 # #350 adds the THIRD and last reason: a player who has asked for every bar, always. That one is a
 # PREFERENCE rather than a derivation, so it comes off PlayerSettings rather than off anything on
 # the board — one more disjunct in the same expression, no new per-unit state, nothing to compute.
-# The expression is now THE gate for this volume: #357's state-icon row is specified to ride it
-# rather than grow its own, so a second visibility rule in this file would be the bug.
+# The expression is now THE gate for this volume, and #357's state-icon row rides it: the icons are
+# CHILDREN of the bar, so a hidden bar hides them with nothing to keep in step. A second visibility
+# rule in this file would be the bug.
 #
 # It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
 # authority" that #229 already made, and for the same reason: the flat view draws no HP over units
@@ -116,6 +117,17 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # either way. ONE knob rather than one per reason -- the question is how crowded this volume may
 # get, and that question does not change with why a bar happens to be up.
 @export var unhovered_shows_number := false
+
+# --- The element-state row (#357) ------------------------------------------------------
+# One icon per state the unit holds, just above the bar. In TEXELS, at the same pixel density as
+# the bar and every sprite. Not a multiple of the bar's height: nothing ties a status icon to how
+# thick the gauge happens to be.
+#
+# 8 is half a cell, and deliberate rather than arbitrary: both source icons are powers of two (the
+# wet drop 32px, the frozen-tile placeholder 16px), so both land on exact 4:1 and 2:1 reductions.
+@export var state_icon_texels := 8.0
+@export var state_icon_gap_texels := 2.0        # clearance above the bar's outline
+@export var state_icon_spacing_texels := 1.0    # between neighbouring icons
 
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
@@ -332,8 +344,8 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# differs from current", which made membership a function of LIVE HP — so every bar switched
 	# itself off at the instant its own hit landed, mid-pass, one at a time.
 	var foretold := plan != null and PlanResolver.plan_changes(unit, plan.hypo)
-	# THE gate: three reasons, ONE expression (#350). #357's state-icon row is specified to ride
-	# this rather than grow its own, so a second visibility rule anywhere in this file is the bug.
+	# THE gate: three reasons, ONE expression (#350). #357's state-icon row rides it structurally —
+	# the icons hang off the bar — so a second visibility rule anywhere in this file is the bug.
 	var shown := hovered or foretold or always_on
 	bar.set_shown(shown)
 	if not shown:
@@ -345,6 +357,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
+	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
+	# rides THE gate rather than growing one — and the art comes from StateIcons, which stays the
+	# one answer to which icon means which state for all three surfaces that draw them.
+	bar.set_state_icons(StateIcons.textures_for(unit.element_states), state_icon_texels,
+			state_icon_gap_texels, state_icon_spacing_texels)
 	if foretold:
 		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:
