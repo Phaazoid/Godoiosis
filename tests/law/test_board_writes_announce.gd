@@ -11,11 +11,11 @@
 # frame budget (docs/performance.md -> "board size and the 3D authoring poll"). The speed was worth
 # the trade only if the guarantee came back as a law, so here it is.
 #
-# DECLARED EXCEPTION: ScenarioManager assigns `tile_map_data` wholesale on every board load. A
-# property assignment cannot be doored at all, and it is safe because a load emits board_loaded ->
-# battle3d.rebuild(), which full-syncs. It is matched by neither pattern below, so it needs no
-# allow-listing — but a SECOND bulk writer would need the same rebuild guarantee, and this comment
-# is where that gets checked.
+# THE EXCEPTION IS GONE as of #391. ScenarioManager used to assign `tile_map_data` wholesale on
+# every board load, allowed because a load emits board_loaded -> battle3d.rebuild(). That argument
+# covered exactly one writer, and the authoring undo needed the same wholesale write — so the bulk
+# write got a door of its own (BoardGrid.restore, which mark_all's) and the assignment joined the
+# forbidden list below. Nothing is allow-listed now.
 extends GdUnitTestSuite
 
 # Production only. tests/ deliberately writes raw grids in fixtures that no mirror ever reads, and
@@ -36,9 +36,14 @@ const DOOR := "res://Classes/board/BoardGrid.gd"
 # grid under a name not ending in "grid" slips past. Every production holder is `grid` or
 # `game.grid` today. This is a backstop for review, not a proof. `clear(` is left out entirely --
 # far too common a method name to match on at all.
+#
+# The third is the BULK write (#391), and it is an ASSIGNMENT rather than a call: `= ` with a
+# following character that is not `=`, so a read (`if grid.tile_map_data == other`) is left alone
+# and `restore()` is the only way to write it.
 const FORBIDDEN_PATTERNS: Array[String] = [
 	"(?i)\\bgrid\\s*\\.\\s*set_cell\\s*\\(",
 	"(?i)\\bgrid\\s*\\.\\s*erase_cell\\s*\\(",
+	"(?i)\\bgrid\\s*\\.\\s*tile_map_data\\s*=[^=]",
 ]
 
 
@@ -86,6 +91,10 @@ func test_the_door_itself_still_makes_the_raw_calls() -> void:
 		+ "scans for stopped matching anything, which makes the law above vacuous."
 	).is_true()
 	assert_bool(door.contains("erase_cell(")).is_true()
+	assert_bool(door.contains("tile_map_data = ")).override_failure_message(
+		"BoardGrid no longer assigns tile_map_data -- the bulk pattern above matches nothing, so "
+		+ "the law is vacuous about the one write that cannot be doored as a property."
+	).is_true()
 
 
 func _scripts() -> Array[String]:

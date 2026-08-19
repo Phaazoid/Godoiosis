@@ -11,11 +11,12 @@ class_name BoardGrid
 #   2. Even if it did, an override only intercepts GDScript callers — engine-internal writes would
 #      slip past it, which is a worse hole than the honest one below, because it would look covered.
 #
-# THE HOLE THAT REMAINS, declared rather than hidden: `tile_map_data` is assigned wholesale by
-# ScenarioManager on every board load, and a property assignment cannot be doored at all. That is
-# safe because a load emits board_loaded -> battle3d.rebuild(), which full-syncs; it is NOT safe to
-# add a second bulk writer without the same guarantee. tests/law/test_board_writes_announce.gd
-# keeps every OTHER writer on the door.
+# THE BULK WRITE used to be the declared hole here: `tile_map_data` assigned wholesale on every
+# board load, safe only because a load emits board_loaded -> battle3d.rebuild(), which full-syncs.
+# restore() below closed it (#391) -- an authoring undo needs the same wholesale write and would
+# have been the SECOND writer relying on that argument, which is one more than an argument like
+# that survives. tests/law/test_board_writes_announce.gd now scans for the assignment too, and has
+# no exceptions left.
 #
 # The dirty set is deliberately not consulted by anything in this class — the grid announces, and
 # what to do about it is the mirror's business.
@@ -40,4 +41,22 @@ func erase(cell: Vector2i) -> void:
 # rather than enumerating, since a wipe has no cell list and the consumer will full-sync regardless.
 func reset() -> void:
 	clear()
+	dirty.mark_all()
+
+
+# The BULK door (#391): every cell replaced at once, from a scenario load or an undo. mark_all for
+# the reason reset() uses it -- a wholesale write has no cell list to enumerate, and DirtyCells
+# already spells ALL as "no cell list exists" rather than "every cell marked".
+#
+# This is the only reason the raw assignment is reachable at all now: it cannot be doored as a
+# property, so it is doored as a method, and the law scans for the property being written anywhere
+# else.
+func restore(data: PackedByteArray) -> void:
+	# The clear() is NOT belt-and-braces, it is the whole reason this is a method. MEASURED on
+	# 4.7.1: assigning an EMPTY buffer to tile_map_data does nothing at all -- the setter returns
+	# early rather than wiping -- so restoring a board back to bare ground left every painted cell
+	# standing. Every previous caller happened to clear first (apply_scenario runs clear_board), so
+	# the quirk was invisible until an undo asked for the empty board directly.
+	clear()
+	tile_map_data = data
 	dirty.mark_all()
