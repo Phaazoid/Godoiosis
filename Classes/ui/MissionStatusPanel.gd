@@ -16,6 +16,7 @@ const BUTTON_CLEARANCE := 44   # the End Turn button's reserved corner slot belo
 const MET_COLOR := Color(0.55, 0.95, 0.55)
 const PENDING_COLOR := Color(0.92, 0.92, 0.92)
 const UNWINNABLE_COLOR := Color(1, 0.45, 0.35)   # the Scenario tab's warning colour
+const INSTRUCTION_COLOR := Color(1, 0.87, 0.5)   # guidance, not a win condition -- its own colour lane
 
 @onready var _panel: PanelContainer = $ObjectivePanel
 @onready var _rows: VBoxContainer = $ObjectivePanel/Rows
@@ -31,19 +32,28 @@ func _ready() -> void:
 func clear() -> void:
 	_panel.visible = false
 
-func show_status(controller: MissionController, board: BoardContext) -> void:
+func show_status(controller: MissionController, board: BoardContext, instruction := "") -> void:
 	# Immediate free, not queue_free: the panel re-lays out from minimum size below, and a dying
 	# child still counts toward it until end of frame.
 	for child in _rows.get_children():
 		_rows.remove_child(child)
 		child.free()
-	var header := Label.new()
-	header.text = "OBJECTIVES"
-	header.add_theme_font_size_override("font_size", 11)
-	header.modulate = Color(1, 1, 1, 0.65)
-	_rows.add_child(header)
+	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
+		var header := Label.new()
+		header.text = "OBJECTIVES"
+		header.add_theme_font_size_override("font_size", 11)
+		header.modulate = Color(1, 1, 1, 0.65)
+		_rows.add_child(header)
 	for objective in controller.objectives:
 		_rows.add_child(_build_row(objective, controller, board))
+	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,
+	# and only handed to us -- ScenarioDirector owns the text, game.refresh_mission_status() the read.
+	if instruction != "":
+		var row := Label.new()
+		row.add_theme_font_size_override("font_size", 13)
+		row.text = "> " + instruction
+		row.modulate = INSTRUCTION_COLOR
+		_rows.add_child(row)
 	_panel.visible = true
 	# Re-anchor from the new minimum size each refresh -- offsets track content both ways, so a
 	# shrinking list never leaves the panel ratcheted at its widest (the off-screen-card lesson).

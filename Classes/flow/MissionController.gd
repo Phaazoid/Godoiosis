@@ -104,8 +104,8 @@ func _close_mission_select() -> void:
 func begin_mission(path: String) -> void:
 	_close_mission_select()
 	game.scenario_manager.load_scenario(path)   # routes through clear_board() -> reset()
+	game.scenario_director.mission_started()   # fresh start (the #220 door); ARMS before turn 1 fires
 	_begin_turn()
-	game.dialog_director.mission_started()   # fresh start (the #220 door) -- a resume never lands here
 
 func _on_sandbox_chosen() -> void:
 	_close_mission_select()
@@ -136,8 +136,8 @@ func can_restart() -> bool:
 
 func restart_mission() -> void:
 	game.scenario_manager.reload_current()
+	game.scenario_director.mission_started()   # a restart is a fresh start (#182); arms before turn 1
 	_begin_turn()
-	game.dialog_director.mission_started()   # a restart is a fresh start (#182)
 
 # Player-facing resume (#144): the same two-step arrival begin_mission makes, except the
 # board comes from a save slot and last_loaded_path is aimed at the ORIGIN mission -- so Restart
@@ -151,7 +151,7 @@ func resume_from_slot(slot: int) -> void:
 	game.scenario_manager.apply_scenario(save.scenario)
 	game.scenario_manager.last_loaded_path = save.mission_path
 	_begin_turn()
-	game.dialog_director.disarm()   # a resume is not a fresh start; dialog beats are fresh-start content (#182)
+	game.scenario_director.disarm()   # a resume is not a fresh start; dialog beats are fresh-start content (#182)
 
 # Leaving a mission the player has not finished. Deliberately the SAME handoff _end_mission makes
 # for its Mission Select choice, minus the outcome -- tidy the HUD, then hand to the menu. The
