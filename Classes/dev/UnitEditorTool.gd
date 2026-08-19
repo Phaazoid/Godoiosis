@@ -54,8 +54,10 @@ func edit_unit(unit):
 		_dirty = false
 	populate_unit_editor(unit)
 
+# Through the window's one door (#382), so the click-a-unit jump also moves the TREE selection --
+# writing current_tab raw would leave the tree pointing at the leaf you left.
 func _show_self():
-	%DevTabs.current_tab = %DevTabs.get_tab_idx_from_control(self)
+	game.dev_overlay.show_leaf(self)
 
 # Catalog data can change while this tab isn't current; a full repaint picks it up fresh.
 func refresh_catalogs() -> void:

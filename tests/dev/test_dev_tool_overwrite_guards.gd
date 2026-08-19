@@ -32,8 +32,9 @@ func after_test() -> void:
 	get_tree().root.remove_child(_main)
 	_main.free()
 
-func _scenario_tool() -> ScenarioTool:
-	return overlay.scenario_tool
+# The scenario FILE ops live on the persistent header since #382; these cases follow them there.
+func _scenario_header() -> ScenarioHeader:
+	return overlay.scenario_header
 
 func _find_dialog(host: Node) -> ConfirmationDialog:
 	for child in host.get_children():
@@ -47,7 +48,7 @@ func _find_dialog(host: Node) -> ConfirmationDialog:
 
 func test_update_refuses_a_scenario_that_is_not_loaded() -> void:
 	# The accident replayed: the live board is NOT Prolog, the dropdown says Prolog, Update pressed.
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)
 
 	tool.update_button.pressed.emit()
@@ -57,7 +58,7 @@ func test_update_refuses_a_scenario_that_is_not_loaded() -> void:
 
 func test_update_allows_the_loaded_scenario() -> void:
 	# Reason level only -- an actual allowed press would re-save the tracked file.
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	game.scenario_manager.load_scenario(ScenarioManager.scenario_path(PROLOG))
 	tool.refresh_dropdown(PROLOG)
 
@@ -65,7 +66,7 @@ func test_update_allows_the_loaded_scenario() -> void:
 	assert_bool(tool.update_button.disabled).is_false()
 
 func test_the_button_and_the_refusal_agree() -> void:
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)   # not loaded -> blocked
 	assert_bool(tool.update_button.disabled).is_true()
 
@@ -80,7 +81,7 @@ func test_a_cleared_board_has_no_loaded_scenario() -> void:
 	game.scenario_manager.clear_board()
 
 	assert_str(game.scenario_manager.last_loaded_path).is_empty()
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)
 	tool.update_button.pressed.emit()
 	assert_str(tool.status_label.text).is_not_empty()
@@ -103,11 +104,11 @@ func test_item_editor_allows_the_loaded_entry() -> void:
 	assert_str(tool._update_block_reason()).is_empty()
 	assert_bool(tool.update_button.disabled).is_false()
 
-func test_showing_the_tab_aims_the_dropdown_at_the_loaded_scenario() -> void:
+func test_showing_the_window_aims_the_dropdown_at_the_loaded_scenario() -> void:
 	# Dev ask 2026-08-11: an external load (Mission Select, F2) should pre-select its scenario, so
 	# Update is aimed without hunting the list. Drives the real tab-entry hook.
 	game.scenario_manager.load_scenario(ScenarioManager.scenario_path(PROLOG))
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown("Elemental")   # the dev wandered; the tab visit should re-aim
 
 	tool.refresh_on_show()
@@ -115,8 +116,8 @@ func test_showing_the_tab_aims_the_dropdown_at_the_loaded_scenario() -> void:
 	assert_str(DevWidgets.selected_name(tool.scenario_dropdown)).is_equal(PROLOG)
 	assert_bool(tool.update_button.disabled).is_false()   # aimed AND the gate agrees
 
-func test_showing_the_tab_with_nothing_loaded_leaves_the_selection_alone() -> void:
-	var tool := _scenario_tool()
+func test_showing_the_window_with_nothing_loaded_leaves_the_selection_alone() -> void:
+	var tool := _scenario_header()
 	tool.refresh_dropdown("Elemental")
 
 	tool.refresh_on_show()
@@ -129,7 +130,7 @@ func test_showing_the_tab_with_nothing_loaded_leaves_the_selection_alone() -> vo
 # ==============================================================================
 
 func test_update_asks_before_overwriting() -> void:
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	var path := ScenarioManager.scenario_path(PROLOG)
 	game.scenario_manager.load_scenario(path)
 	tool.refresh_dropdown(PROLOG)
@@ -141,7 +142,7 @@ func test_update_asks_before_overwriting() -> void:
 	assert_int(FileAccess.get_modified_time(path)).is_equal(mtime)   # nothing saved yet
 
 func test_update_cancel_saves_nothing_and_the_dialog_frees() -> void:
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	var path := ScenarioManager.scenario_path(PROLOG)
 	game.scenario_manager.load_scenario(path)
 	tool.refresh_dropdown(PROLOG)
@@ -159,7 +160,7 @@ func test_update_cancel_saves_nothing_and_the_dialog_frees() -> void:
 
 func test_a_blocked_update_never_reaches_the_dialog() -> void:
 	# The load-gate stays FIRST: an unloaded target is refused with the reason, not asked about.
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)   # not loaded
 
 	tool.update_button.pressed.emit()
@@ -172,7 +173,7 @@ func test_a_blocked_update_never_reaches_the_dialog() -> void:
 # ==============================================================================
 
 func test_delete_asks_before_deleting() -> void:
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)
 
 	tool.delete_button.pressed.emit()
@@ -181,7 +182,7 @@ func test_delete_asks_before_deleting() -> void:
 	assert_bool(FileAccess.file_exists(ScenarioManager.scenario_path(PROLOG))).is_true()
 
 func test_delete_cancel_deletes_nothing_and_the_dialog_frees() -> void:
-	var tool := _scenario_tool()
+	var tool := _scenario_header()
 	tool.refresh_dropdown(PROLOG)
 	tool.delete_button.pressed.emit()
 	var dialog := _find_dialog(tool)
@@ -197,14 +198,14 @@ func test_delete_cancel_deletes_nothing_and_the_dialog_frees() -> void:
 func test_the_helper_confirm_wire_fires_the_callable() -> void:
 	# The helper's own wire, against a flag -- never a real deletion.
 	var hit := [false]
-	var dialog := DevWidgets.confirm_delete(_scenario_tool(), "nothing real", func(): hit[0] = true)
+	var dialog := DevWidgets.confirm_delete(_scenario_header(), "nothing real", func(): hit[0] = true)
 
 	dialog.confirmed.emit()
 	dialog.hide()
 	await await_idle_frame()
 
 	assert_bool(hit[0]).is_true()
-	assert_object(_find_dialog(_scenario_tool())).is_null()
+	assert_object(_find_dialog(_scenario_header())).is_null()
 
 # ==============================================================================
 #  Every editor's Update asks first (#380 -- the convention, dev 2026-08-19:
