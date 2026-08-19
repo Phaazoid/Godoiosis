@@ -105,7 +105,7 @@ const ART_PIXELS_PER_CELL := 16.0
 @export var bracket_scale := 1.02
 @export var fill_lift := 0.02          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
-@export var billboard_lift := 1.1      # icon height above the cell's top face
+@export var billboard_lift := 0.85
 @export var billboard_pixel_size := 1.0 / 32.0
 # What the hover bracket turns when the pointer is over something the 2D calls INVALID (#245).
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
