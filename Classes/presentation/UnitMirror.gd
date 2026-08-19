@@ -99,6 +99,8 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Whether a bar that is up only because of a PLAN also carries the number. Off by default: a
 # prediction can put a readout over half the board at once, and hovering still reveals the digits.
 @export var ghost_shows_number := false
+# #325: the leader's crown badge beside the bar, as a multiple of the bar's own height.
+@export var crown_badge_scale := 1.0
 
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
@@ -332,6 +334,11 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or ghost_shows_number)
+	# #325: in ring mode leadership reads beside health; the squares arm keeps its billboard.
+	var leads: bool = OverlayManager.SQUAD_MARKER_RINGS and unit.squad != null \
+			and unit.squad.get_leader() == unit and unit.has_squad()
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN] if leads else null
+	bar.set_leader_badge(crown, crown_badge_scale)
 	if foretold:
 		bar.set_prediction(predicted, _plan_fells(unit, plan))
 	else:

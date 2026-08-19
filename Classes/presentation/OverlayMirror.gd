@@ -232,9 +232,9 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 # Selection icons (crown / squadmember): anchored to the icon's own authored target_cell, and
 # forked on the 2D's own style flag (#325 experiment). Squares ride ICONS as head billboards
 # with a per-type y-stagger against z-fighting (the 2D stacks them by tree order); rings ride
-# GROUND_ICONS as surface decals, staggered along the surface normal so the leader's crown
-# decal (ordinal 0) sits clear of its ring. Texture and tint arrive BY COPY from the 2D
-# sprite -- the squad hue is authored there, never re-derived here.
+# GROUND_ICONS as surface decals, texture and tint arriving BY COPY from the 2D sprite -- the
+# squad hue is authored there, never re-derived here. CROWN is skipped in ring mode: the leader
+# reads off the health bar's badge (UnitMirror), and the flat view keeps its own head crown.
 func _icons(om: OverlayManager) -> void:
 	var heads: Array[Dictionary] = []
 	var ground: Array[Dictionary] = []
@@ -246,7 +246,8 @@ func _icons(om: OverlayManager) -> void:
 				continue
 			var surface := _anchor(icon.target_cell)
 			if OverlayManager.SQUAD_MARKER_RINGS:
-				surface.origin += surface.basis.y * ((1.0 - float(type)) * overlays.lift_step)
+				if type == OverlayIcon.IconType.CROWN:
+					continue
 				ground.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
 			else:
 				surface.origin.y += float(type) * 0.02

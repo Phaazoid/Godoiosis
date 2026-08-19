@@ -392,20 +392,23 @@ func test_squad_fills_and_icons_mirror() -> void:
 	await _settle()
 	assert_bool(_om().squadrange_overlay.get_used_cells().size() > 0).is_true()
 	assert_that(_sorted_3d(BoardOverlays.Layer.SQUAD_RANGE)).is_equal(_lifted(_om().squadrange_overlay))
-	# Ring style is the default (#325): one GROUND decal per 2D icon, texture AND tint copied off
-	# the 2D sprite -- the squad hue is authored 2D-side, and the mirror must never re-derive it.
-	var icon_count := 0
+	# Ring style is the default (#325): one GROUND decal per 2D MEMBER icon, texture AND tint
+	# copied off the 2D sprite -- the squad hue is authored 2D-side, and the mirror must never
+	# re-derive it. CROWN entries stay off the ground (the bar badge is the leader's mark).
+	var member_count := 0
 	var textures: Array = []
 	var tints: Array = []
 	for unit in _om().icons_by_unit:
 		for type in _om().icons_by_unit[unit]:
-			icon_count += 1
+			if type != OverlayIcon.IconType.SQUADMEMBER:
+				continue
+			member_count += 1
 			var sprite: Sprite2D = (_om().icons_by_unit[unit][type] as OverlayIcon).sprite
 			textures.append(sprite.texture)
 			tints.append(sprite.modulate)
-	assert_bool(icon_count >= 2).is_true()
+	assert_bool(member_count >= 2).is_true()
 	var markers := _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS)
-	assert_int(markers.size()).is_equal(icon_count)
+	assert_int(markers.size()).is_equal(member_count)
 	for marker in markers:
 		assert_bool(textures.has(marker["texture"])).is_true()
 		assert_bool(tints.has(marker["modulate"])).override_failure_message(
@@ -414,24 +417,18 @@ func test_squad_fills_and_icons_mirror() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).is_equal(0)
 
 
-func test_a_leaders_ring_and_crown_stack_on_its_cell_without_coinciding() -> void:
+func test_ring_mode_keeps_the_crown_off_the_ground() -> void:
 	var pair := _squad_pair()
 	_om().redraw_squad_unit_icons(pair[0].squad)
 	await _settle()
-	# The leader carries SQUADMEMBER + CROWN. Both decals anchor on its cell, separated along the
-	# surface normal -- coincident quads on one layer would z-fight, the fault the head channel's
-	# per-type stagger already answers for squares.
-	var anchor: Vector3 = BoardSpace.surface_transform(pair[0].movement.cell, game.board_heights).origin
-	var on_leader: Array = []
+	# The leader's CROWN icon still exists in 2D (the flat view's legacy head mark) but never
+	# lands in the ground channel -- in ring mode the leader reads off the health bar's badge
+	# instead (test_unit_health_bar pins that half).
+	assert_bool(_om().icons_by_unit[pair[0]].has(OverlayIcon.IconType.CROWN)).is_true()
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
 	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
-		var pos: Vector3 = marker["pos"]
-		if Vector2(pos.x, pos.z).distance_to(Vector2(anchor.x, anchor.z)) < 0.01:
-			on_leader.append(marker)
-	assert_int(on_leader.size()).is_equal(2)
-	var y0: float = (on_leader[0]["pos"] as Vector3).y
-	var y1: float = (on_leader[1]["pos"] as Vector3).y
-	assert_bool(absf(y0 - y1) > 0.0).override_failure_message(
-			"ring and crown decals coincide -- they will z-fight on the leader's cell").is_true()
+		assert_bool(marker["texture"] == crown).override_failure_message(
+				"the crown landed on the ground channel -- ring mode should badge the bar instead").is_false()
 
 
 func test_square_mode_restores_the_head_billboards_on_markers_already_up() -> void:

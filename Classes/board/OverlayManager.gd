@@ -444,16 +444,16 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 # Rings lie under the unit in the squad's dealt hue; the crown decal keeps its authored gold so
 # it never fights the palette. Square mode is byte-for-byte the legacy look.
 func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
-	if SQUAD_MARKER_RINGS:
+	if SQUAD_MARKER_RINGS and icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
 		icon.sprite.z_index = RING_Z_INDEX
-		if icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
-			icon.sprite.texture = SQUAD_RING_TEXTURE
-			var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
-			icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
-		else:
-			icon.sprite.texture = ICON_TEXTURES[icon.icon_type]
-			icon.sprite.modulate = Color.WHITE
+		icon.sprite.texture = SQUAD_RING_TEXTURE
+		var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
+		icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
 	else:
+		# CROWN keeps the legacy over-sprite form in BOTH styles: in ring mode the 3D never
+		# mirrors it (the leader reads off the health bar's badge -- UnitMirror), but the flat
+		# view has no bar to badge, so its head crown stays. The readout family's #292
+		# asymmetry, one member wider.
 		icon.sprite.texture = ICON_TEXTURES[icon.icon_type]
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
 		icon.sprite.modulate = Color.WHITE
