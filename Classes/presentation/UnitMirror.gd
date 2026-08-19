@@ -64,10 +64,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # for two rounds and read as floating both times, because a map sprite's visible head is wherever
 # its transparent padding ends and no single number is right for every piece of art.
 #
-# The selection icons (crown, squad member, target) hang at BoardOverlays.billboard_lift, measured
-# from the CELL, and the dev's stacking is icons on top with the readout tucked under them. Nothing
-# enforces that: a test would be pinning one tuning value against another, which the tuning razor
-# forbids, so if the icons move this moves by hand.
+# The CROWN hangs at BoardOverlays.billboard_lift, measured from the CELL, and the dev's stacking is
+# it on top with the readout tucked under. Nothing enforces that: a test would be pinning one tuning
+# value against another, which the tuning razor forbids, so if the crown moves this moves by hand.
+# (It is the head channel's only tenant since #325's verdict -- TARGET went to the ground with #346,
+# squad membership followed it as a ring.)
 @export var hud_lift := 0.06
 @export var bar_width_texels := 26.0
 @export var bar_height_texels := 5.0
@@ -116,13 +117,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # either way. ONE knob rather than one per reason -- the question is how crowded this volume may
 # get, and that question does not change with why a bar happens to be up.
 @export var unhovered_shows_number := false
-# #325: the leader's crown badge beside the bar, as a multiple of the bar's own height.
-@export var crown_badge_scale := 1.0
 
 # --- The element-state row (#357) ------------------------------------------------------
 # One icon per state the unit holds, just above the bar. In TEXELS, at the same pixel density as
-# the bar and every sprite — the crown is measured against the bar's height because the dev asked
-# for it at bar height, and nothing ties these to how thick the gauge is.
+# the bar and every sprite. Not a multiple of the bar's height: nothing ties a status icon to how
+# thick the gauge happens to be.
 #
 # 8 is half a cell, and deliberate rather than arbitrary: both source icons are powers of two (the
 # wet drop 32px, the frozen-tile placeholder 16px), so both land on exact 4:1 and 2:1 reductions.
@@ -358,11 +357,6 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			alarm_peak_color)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
-	# #325: in ring mode leadership reads beside health; the squares arm keeps its billboard.
-	var leads: bool = OverlayManager.SQUAD_MARKER_RINGS and unit.squad != null \
-			and unit.squad.get_leader() == unit and unit.has_squad()
-	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN] if leads else null
-	bar.set_leader_badge(crown, crown_badge_scale)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
 	# rides THE gate rather than growing one — and the art comes from StateIcons, which stays the
 	# one answer to which icon means which state for all three surfaces that draw them.

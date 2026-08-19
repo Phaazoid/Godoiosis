@@ -45,16 +45,12 @@ const OUTLINE_COLOR := Color.BLACK
 # text by font_size would have meant a 4px font to hit the size the dev asked for, which renders to
 # mush; sizing by pixel_size keeps the atlas crisp and shrinks the quad.
 const FONT_RESOLUTION := 32
-# Gap between the leader badge and the bar's outline, in texels. Not a knob: spacing inside one
-# display, not a feel value anyone tunes per board.
-const BADGE_GAP_TEXELS := 2.0
 
 var _outline: MeshInstance3D
 var _missing: MeshInstance3D
 var _fill: MeshInstance3D
 var _doomed: MeshInstance3D    # #313: the span between current HP and what the plan predicts
 var _notch: MeshInstance3D     # #313: the marker AT the predicted level
-var _badge: MeshInstance3D     # #325: the leader's crown at bar height, left of the bar
 var _label: Label3D
 # #357: the element-state row above the bar. A POOL, grown on demand and hidden rather than freed —
 # the same contract UnitMirror.set_ghosts and BoardOverlays use, for the same reason: the count
@@ -82,8 +78,6 @@ var _alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
 var _predicted := 0
 var _has_prediction := false
 var _number_shown := true
-var _badge_texture: Texture2D = null
-var _badge_scale := 1.0
 var _state_textures: Array[Texture2D] = []
 var _state_icon_texels := 8.0
 var _state_gap_texels := 2.0
@@ -120,10 +114,6 @@ func _init() -> void:
 	_fill = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 2)
 	_doomed = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 3)
 	_notch = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4)
-	_badge = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
-	# The one textured quad in the group: pixel art, so nearest like every sprite in the stack.
-	var badge_material := _badge.material_override as StandardMaterial3D
-	badge_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	_label = Label3D.new()
 	# NOT billboarded, like everything else here — face() turns the whole group instead. Label3D
 	# draws its glyphs and its outline as two surfaces, and displacing it with Label3D.offset (the
@@ -143,7 +133,6 @@ func _init() -> void:
 	add_child(_fill)
 	add_child(_doomed)
 	add_child(_notch)
-	add_child(_badge)
 	add_child(_label)
 	visible = false
 	_rebuild()
@@ -205,15 +194,6 @@ func clear_prediction() -> void:
 # number. Two reasons to be up (#313), so the number follows the reason rather than the bar.
 func set_number_shown(shown: bool) -> void:
 	_number_shown = shown
-	_rebuild()
-
-
-# The leader's crown riding the bar (#325 -- dev call: leadership reads beside health, on the
-# bar's own visibility). null = no badge. The texture is passed in, like every other input --
-# this node never reads game state.
-func set_leader_badge(texture: Texture2D, scale: float) -> void:
-	_badge_texture = texture
-	_badge_scale = scale
 	_rebuild()
 
 
@@ -306,15 +286,6 @@ func alarm_running() -> bool:
 	return _alarm != null
 
 
-# Rendered facts for tests, same reason as fill_fraction: read off the mesh, never recomputed.
-func badge_shown() -> bool:
-	return _badge.visible
-
-
-func badge_size() -> Vector2:
-	return (_badge.mesh as QuadMesh).size
-
-
 # The state row's rendered facts (#357), read off the meshes like every accessor above. The count is
 # of SHOWN slots, not pooled ones: the pool only ever grows, so its size answers a different
 # question than "how many states is this unit wearing".
@@ -354,7 +325,7 @@ func _rebuild() -> void:
 	var signature: Array = [_width, _height, _outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color, _notch_color, _notch_texels,
-			_current, _maximum, _predicted, _has_prediction, _badge_texture, _badge_scale,
+			_current, _maximum, _predicted, _has_prediction,
 			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels]
 	if signature == _drawn:
 		return
@@ -406,24 +377,13 @@ func _draw() -> void:
 	var half_text: float = _label.get_aabb().size.x * 0.5
 	_label.position = Vector3(-track_w * 0.5 * texel + _gap + half_text, 0.0, texel)
 
-	# The leader badge (#325): bar-height, square, off the outline's left edge. Vertically
-	# centred with the bar, so "same height, sitting to the left" is true by construction.
-	_badge.visible = _badge_texture != null
-	if _badge.visible:
-		var badge_h: float = bar_h * maxf(_badge_scale, 0.01)
-		var badge_x: float = -(track_w * 0.5 + edge + BADGE_GAP_TEXELS + badge_h * 0.5)
-		_size_quad(_badge, badge_h * texel, badge_h * texel, badge_x * texel)
-		var badge_material := _badge.material_override as StandardMaterial3D
-		badge_material.albedo_texture = _badge_texture
-		badge_material.albedo_color = Color.WHITE
-
 	_draw_state_row(texel, track_w, bar_h, edge)
 
 
 # The element-state row (#357): square icons ABOVE the bar, the first one flush with the outline's
 # left edge and the rest growing rightward. Sized in texels rather than as a multiple of the bar's
-# height — the crown is bar-height because the dev asked for it AT bar height, while nothing ties
-# this row to how thick the gauge happens to be.
+# height: nothing ties a status icon to how thick the gauge happens to be, and the two want to be
+# tunable apart.
 #
 # Local space again, and that is the whole reason this lives inside the group: face() turns the
 # parent, so an offset written here is a real offset at every camera angle. Priority is the group's
@@ -432,14 +392,14 @@ func _draw_state_row(texel: float, track_w: float, bar_h: float, edge: float) ->
 	while _state_icons.size() < _state_textures.size():
 		var quad := _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
 		var fresh := quad.material_override as StandardMaterial3D
-		fresh.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST   # pixel art, like the badge
+		fresh.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST   # pixel art, like every sprite in this stack
 		add_child(quad)
 		_state_icons.append(quad)
 	var icon: float = maxf(roundf(_state_icon_texels), 1.0)
 	var gap: float = maxf(roundf(_state_gap_texels), 0.0)
 	var spacing: float = maxf(roundf(_state_spacing_texels), 0.0)
-	# Clear of the outline's TOP edge, and flush with its LEFT one — the same reference the crown
-	# measures from, so the two marks share a silhouette rather than each finding their own.
+	# Clear of the outline's TOP edge, and flush with its LEFT one, so the row and the gauge share a
+	# left margin rather than each finding its own.
 	var row_y: float = (bar_h * 0.5 + edge + gap + icon * 0.5) * texel
 	var left: float = -(track_w * 0.5 + edge)
 	for i in _state_icons.size():

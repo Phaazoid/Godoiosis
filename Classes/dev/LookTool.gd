@@ -292,26 +292,17 @@ func _rebuild() -> void:
 
 # --- #325 experiment: squares vs rings ---------------------------------------------------
 
-# Bespoke rows rather than table entries: the style flag is a bool STATIC on OverlayManager
-# (both stacks read it), which neither KNOBS (property paths on scene nodes) nor LAYER_KNOBS
-# (Color-only) can address. They die with the experiment, whichever style wins.
+# A bespoke row rather than a table entry: ring alpha is a float STATIC on OverlayManager (both
+# stacks read it), which neither KNOBS (property paths on scene nodes) nor LAYER_KNOBS (Color-only)
+# can address. The Rings-underfoot checkbox beside it died with #325's verdict -- rings won for
+# membership, the head crown won for leadership, and there is no second style left to pick.
 func _build_squad_marker_rows(rows: VBoxContainer) -> void:
-	_add_heading(rows, "Squad markers (#325 experiment)")
+	_add_heading(rows, "Squad markers")
 	var first := rows.get_child_count()
-	DevWidgets.add_checkbox(rows, "Rings underfoot", OverlayManager.SQUAD_MARKER_RINGS,
-		_on_ring_toggle)
-	_apply_tip(rows, first, DevWidgets.wrap_tooltip(
-		"ON: squad membership reads as a per-squad coloured ring under each member, with the crown decal inside the leader's. OFF: the legacy green squares over heads. MOVES BOTH STACKS -- and takes effect on markers already up. The losing style gets deleted when the experiment resolves."))
-	first = rows.get_child_count()
 	DevWidgets.add_slider(rows, "Ring opacity", OverlayManager.SQUAD_RING_ALPHA, 0.1, 1.0, 0.01,
 		_on_ring_alpha)
 	_apply_tip(rows, first, DevWidgets.wrap_tooltip(
-		"Alpha of the membership rings (the crown decal stays opaque). MOVES BOTH STACKS."))
-
-
-func _on_ring_toggle(on: bool) -> void:
-	OverlayManager.SQUAD_MARKER_RINGS = on
-	_restyle_squad_markers()
+		"Alpha of the per-squad membership rings under each member (the leader's crown, over the head, stays opaque). MOVES BOTH STACKS -- and takes effect on markers already up."))
 
 
 func _on_ring_alpha(moved: float) -> void:

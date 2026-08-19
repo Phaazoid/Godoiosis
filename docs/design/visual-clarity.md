@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #368 (2026-08-19).**
+**Canon checked through #372 (2026-08-19).**
 
 ## Principles
 
@@ -377,11 +377,32 @@ over its head. Seeing both at once, the dev's call was that **the ground one rea
 **Retired by this rule:** `IconType.TARGET`, whose only producer was `draw_create_squad` — the
 target-pick ground marker is now the single answer to *which unit may I pick*. `CURSOR` and
 `INVALID` went with it as never-produced leftovers. **`CROWN` and `SQUADMEMBER` were answered by
-[#325](https://github.com/Phaazoid/Godoiosis/issues/325), shipped 2026-08-19:** membership is a
-per-squad coloured RING under each member, and the leader's crown is a badge ON THE HEALTH BAR,
-bar-height and to its left — so leadership rides #229's readout rather than floating on its own.
-The legacy squares survive behind a Look-tab toggle until the dev rules; **the loser then gets
-deleted, not kept as a second opinion.**
+[#325](https://github.com/Phaazoid/Godoiosis/issues/325), and the dev's verdict after playing both
+styles (2026-08-19) was a MIX rather than a winner:** membership is a per-squad coloured RING under
+each member; leadership is the **original crown over the head**, unchanged from before the ticket,
+including its timing — hover *any* squad member and that squad's leader wears it. The legacy green
+squares lost outright and are **deleted**: no toggle, no second style, `SQUAD_MARKER_RINGS` gone.
+
+The leader wears **both** — a ring because they are a member, the crown because they lead — and
+that is the two-channel rule of this section working rather than an exception to it: the ring says
+what this INTERACTION is about, the crown says what this UNIT is.
+
+**The interim design — the crown as a badge on the health bar — is deleted, and why it lost is
+worth keeping.** It read fine in isolation; what killed it is that it made leadership conditional
+on a *different* marker's visibility. [#350](https://github.com/Phaazoid/Godoiosis/issues/350)
+landed a day later and made the health bar a player preference that is **off by default**, so a
+squad leader silently had no persistent 3D marker at all. Neither ticket was wrong on its own and
+neither could see it; it appeared only in composition. **The rule that falls out: a marker answering
+"what is this unit" must not ride another marker's visibility gate** — which is also the standing
+caution for [#357](https://github.com/Phaazoid/Godoiosis/issues/357), whose state-icon row is
+specified to ride exactly that gate. Riding it is a choice about defaults, not a free consolidation.
+
+**Two things are now single-sourced by the deletion**, both Law #4 in miniature: `ICON_TEXTURES` is
+the one answer to what a marker type LOOKS like (applied once at `setup`, so `_style_icon` only ever
+decides tint and z — it used to assign textures too, a second place a marker's art came from), and
+`OverlayMirror._icons` routes by TYPE rather than by mode (CROWN to the head channel, everything
+else to the ground). The per-type y-stagger went with the squares: CROWN is the head channel's only
+tenant, so there is nothing left to stagger against.
 
 **The premise this ticket was filed on was wrong, and the correction generalises.** #325's body
 said `Layer.SQUAD` "already draws the squad's footprint" — measured false while planning: that
@@ -390,9 +411,9 @@ the head-icon channel (`OverlayManager.icons_by_unit`) was the **only** membersh
 game. So the build RELOCATED that one channel rather than restyling a fill, and the icon
 lifecycle never moved. Third instance of [#228](https://github.com/Phaazoid/Godoiosis/issues/228)'s
 law — *an issue's own premises are stale-able; re-derive from the code before building.*
-The 2D keeps a head crown, since the flat view has no bar to badge — a declared
-[#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry, the readout family's, one
-member wider.
+**The 2D/3D asymmetry the badge introduced is gone with it** — both views now draw the same head
+crown, so there is nothing here for [#292](https://github.com/Phaazoid/Godoiosis/issues/292) to
+carry.
 
 Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
 general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
@@ -409,7 +430,8 @@ two states cannot crowd, a longer vocabulary can.
 **#357's structural point is that the row has NO visibility rule of its own.** The icons are
 CHILDREN of `UnitHealthBar`, so a hidden bar hides them by construction — there is no second
 expression to keep in step with the gate, which is what the ticket asked for one level more weakly
-(*"specified to ride it"*). Everything else follows the crown badge #325 put on the same bar: quads
+(*"specified to ride it"*). Everything else follows the shape the bar's own parts already use — and
+that shape outlived the crown badge #325 briefly put beside them (deleted 2026-08-19, above): quads
 in the group's local space, so `face()` turns the whole display and nothing gets a billboard basis
 of its own; sizes in texels; a POOL that parks extras rather than freeing them, since the count
 changes every time a state lands or expires. Three Look knobs (icon size, row clearance, spacing),
