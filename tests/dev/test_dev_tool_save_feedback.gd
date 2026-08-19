@@ -135,9 +135,7 @@ func test_item_editor_save_as_shows_the_refusal() -> void:
 
 
 func test_attack_editor_save_as_shows_the_refusal() -> void:
-	# Not %-reachable -- unlike the "Item Editor" tab node, "Attack Editor" was never marked
-	# unique_name_in_owner, so this goes structural instead of expanding the scene diff for it.
-	var tool: AttackEditorTool = overlay.get_node("Panel/MarginContainer/VBoxContainer/DevTabs/Attack Editor")
+	var tool: AttackEditorTool = overlay.get_node("%Attack Editor")
 	tool.name_input.text = "bad\\name"
 	tool.save_as_button.pressed.emit()
 
@@ -145,10 +143,11 @@ func test_attack_editor_save_as_shows_the_refusal() -> void:
 		.override_failure_message("Attack Editor's Save As left no visible feedback for an illegal name").is_not_empty()
 
 
-func test_scenario_tool_save_as_shows_the_refusal() -> void:
-	var tool := overlay.scenario_tool
-	tool.scenario_name_input.text = "bad\\name"
-	tool.get_node("NewRow/SaveAsScenarioButton").pressed.emit()
+func test_scenario_header_save_as_shows_the_refusal() -> void:
+	# The scenario file ops live on the persistent header since #382.
+	var header := overlay.scenario_header
+	header.scenario_name_input.text = "bad\\name"
+	header.get_node("HeaderVbox/NewRow/SaveAsScenarioButton").pressed.emit()
 
-	assert_str(tool.status_label.text) \
-		.override_failure_message("Scenario tool's Save As left no visible feedback for an illegal name").is_not_empty()
+	assert_str(header.status_label.text) \
+		.override_failure_message("the header's Save As left no visible feedback for an illegal name").is_not_empty()
