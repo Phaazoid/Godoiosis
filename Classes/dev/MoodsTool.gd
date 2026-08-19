@@ -56,6 +56,11 @@ var _preset_name_input: LineEdit
 var _preset_dropdown: OptionButton
 var _update_button: Button
 var _delete_button: Button
+var _save_as_button: Button
+# Touched since the last save/load/reset (#389). A FLAG, not a live compare: read() resolves its
+# node per knob, so a derived answer would be 43 get_node calls per drag tick. The precise answer
+# is never lost -- pressing a save still runs the real comparison and still reports what moved.
+var _dirty := false
 
 
 func _ready() -> void:
@@ -99,11 +104,39 @@ func _ready() -> void:
 func attach_host(host: Node3D) -> void:
 	_host = host
 	_baseline = _live_values()   # no mood loaded yet, so Reset means "back to the scene"
+	_clear_dirty()
 	_rebuild()
 
 
 func has_host() -> bool:
 	return _host != null
+
+
+# --- The unsaved marker (#389) ------------------------------------------------------------
+
+# Update and Save As both wear it -- both are "keep what I am looking at", and on a fresh boot
+# nothing is loaded, Update is disabled by its load gate, and Save As is the only way to keep
+# anything. Update default is deliberately NOT marked: its target is a file the live look may
+# never have matched, so its * would mean something different from the other two.
+func has_unsaved_changes() -> bool:
+	return _dirty
+
+
+func _touch() -> void:
+	_dirty = true
+	_refresh_save_marks()
+
+
+func _clear_dirty() -> void:
+	_dirty = false
+	_refresh_save_marks()
+
+
+func _refresh_save_marks() -> void:
+	if is_instance_valid(_update_button):
+		DevWidgets.mark_unsaved(_update_button, "Update", _dirty)
+	if is_instance_valid(_save_as_button):
+		DevWidgets.mark_unsaved(_save_as_button, "Save As", _dirty)
 
 
 # --- Reading and writing a knob ---------------------------------------------------------
@@ -178,9 +211,14 @@ func tip_for(knob: Dictionary) -> String:
 # The row itself is DevWidgets.add_knob_row since #272 -- the Object tab draws the same kind of row
 # and "how is a knob a control" is one question. What stays here is what is this panel's: which host
 # the write lands on, and the which-stack note the tip carries.
+# The one write funnel (#389): Reset and apply_preset write through write()/LookKnobs.apply
+# directly, so they cannot mark the panel dirty on their way past.
 func _build_row(rows: VBoxContainer, knob: Dictionary) -> void:
 	DevWidgets.add_knob_row(rows, knob, read(knob),
-		func(value: Variant) -> void: write(knob, value), tip_for(knob))
+		func(value: Variant) -> void:
+			write(knob, value)
+			_touch(),
+		tip_for(knob))
 
 
 func _add_heading(rows: VBoxContainer, text: String) -> void:
@@ -220,6 +258,7 @@ func apply_preset(preset: LookPreset) -> Dictionary:
 	var report := LookKnobs.apply(_host, preset)
 	if _host != null and preset != null:
 		_baseline = _live_values()   # what the properties ACCEPTED, never what was asked for
+		_clear_dirty()   # covers Load, Default and the Scenario tab's look-row pick -- all route here
 		_rebuild()
 	return report
 
@@ -245,9 +284,10 @@ func _build_preset_row() -> void:
 	_preset_name_input.placeholder_text = "New preset name"
 	_preset_name_input.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bottom.add_child(_preset_name_input)
-	bottom.add_child(_button("Save As",
+	_save_as_button = _button("Save As",
 		"Save every scene-mood knob under a new name. Camera handling, board markup and the brush\nghost are deliberately not captured -- those are game settings, not a mission's mood.",
-		_on_save_as_pressed))
+		_on_save_as_pressed)
+	bottom.add_child(_save_as_button)
 	add_child(bottom)
 
 
@@ -340,6 +380,7 @@ func _update_default_confirmed() -> void:
 	# The file now holds what is on screen, so leave the panel exactly where pressing Default would:
 	# the live look IS the default, and no named mood is loaded any more.
 	_baseline = _live_values()
+	_clear_dirty()
 	_loaded_preset = ""
 	_preset_dropdown.select(-1)
 	_refresh_preset_buttons()
@@ -379,6 +420,7 @@ func _on_save_as_pressed() -> void:
 		return
 	# Saving is also loading: the look on screen IS this mood now, so Reset should return to it.
 	_baseline = _live_values()
+	_clear_dirty()
 	_loaded_preset = entered
 	_preset_name_input.text = ""
 	refresh_preset_dropdown(entered)
@@ -404,6 +446,7 @@ func _update_confirmed(target: String) -> void:
 	if not DevWidgets.save_over(capture_preset(target), LookKnobs.preset_path(target), _status):
 		return
 	_baseline = _live_values()   # the file now says what is on screen, so Reset must too
+	_clear_dirty()
 	_status.text = "Updated mood '%s' (%d knobs)." % [target, LookKnobs.preset_knobs().size()]
 
 
@@ -445,6 +488,7 @@ func _on_reset_pressed() -> void:
 		if typeof(authored) != TYPE_NIL:
 			write(LookKnobs.KNOBS[i], authored)
 	_rebuild()   # redraw every widget off the restored values -- one path, every widget kind
+	_clear_dirty()
 	if _loaded_preset == "":
 		_status.text = "Every knob is back at its authored value."
 	else:

@@ -366,6 +366,15 @@ static func refresh_update_button(button: Button, target: String, noun: String, 
 	else:
 		button.tooltip_text = "Overwrite %s" % target
 
+# The unsaved marker (#389), twin of the confirm convention above: a save button says whether there
+# is anything to do, as well as asking before it does it. Deliberately NEVER disables -- Save As
+# stays legitimate on a clean panel (forking a new mood off an unchanged one), and a disabled Save
+# would bury the precise "nothing has moved" answer its handler already gives. It lives here so the
+# marker's SPELLING is one thing: three panels each appending their own suffix is how one of them
+# ends up saying "(unsaved)".
+static func mark_unsaved(button: Button, base_text: String, dirty: bool) -> void:
+	button.text = base_text + (" *" if dirty else "")
+
 # Delete asks first -- every dev Delete rides confirm_delete (dev call 2026-08-11); the tooltip
 # still names the victim.
 static func refresh_delete_button(button: Button, target: String, noun: String) -> void:

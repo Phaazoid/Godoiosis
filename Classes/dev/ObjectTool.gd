@@ -22,13 +22,20 @@ var _status: Label
 var _object_picker: OptionButton
 var _objects: Array[Dictionary] = []   # ObjectKnobs.object_tiles, in picker order
 var _picked := 0                       # survives the rebuild every field write triggers
+var _save_button: Button
+# Edited since the last save (#389). A pure FLAG, and it has to be: there is no baseline here --
+# a field write goes straight into the live TileSet, so the honest question is "has the in-memory
+# tileset diverged from disk", which any edit answers yes to. Switching the picked object does not
+# clear it: edits to object A are still unsaved while you look at object B.
+var _dirty := false
 
 
 func _ready() -> void:
 	var buttons := HBoxContainer.new()
-	buttons.add_child(_button("Save object fields",
+	_save_button = _button("Save object fields",
 		"Write every per-object field into the board's TILESET, where the tile itself carries it.\nThe board already shows them; this is what makes them permanent.",
-		_on_save_fields_pressed))
+		_on_save_fields_pressed)
+	buttons.add_child(_save_button)
 	add_child(buttons)
 	_status = Label.new()
 	_status.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -177,6 +184,7 @@ func _shown(value: Variant) -> String:
 # the same split every dev tab makes between editing and committing.
 func _write_field(data: TileData, layer: String, value: Variant) -> void:
 	data.set_custom_data(layer, value)
+	_touch()   # the one write funnel: every field row routes through here
 	var host := _host
 	if host != null:
 		host.rebuild_props()
@@ -220,7 +228,29 @@ func _on_save_fields_pressed() -> void:
 
 func _save_fields_confirmed(tiles: TileSet) -> void:
 	if ObjectKnobs.save_fields(tiles, _status):
+		_clear_dirty()   # on LANDED, never on intent -- the press only opens the confirmation
 		_status.text = "Object fields saved to %s" % tiles.resource_path
+
+
+# --- The unsaved marker (#389) --------------------------------------------------------------
+
+func has_unsaved_changes() -> bool:
+	return _dirty
+
+
+func _touch() -> void:
+	_dirty = true
+	_refresh_save_mark()
+
+
+func _clear_dirty() -> void:
+	_dirty = false
+	_refresh_save_mark()
+
+
+func _refresh_save_mark() -> void:
+	if is_instance_valid(_save_button):
+		DevWidgets.mark_unsaved(_save_button, "Save object fields", _dirty)
 
 
 func _add_heading(text: String) -> void:
