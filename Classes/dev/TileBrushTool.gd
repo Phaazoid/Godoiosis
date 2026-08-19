@@ -94,6 +94,8 @@ var _height_spin: SpinBox
 # to the on/off checkbox, the one mode control that didn't live below the Paint picker).
 var tile_dropdown: OptionButton
 var _tile_row: HBoxContainer
+var _undo_button: Button
+var _redo_button: Button
 
 func _ready():
 	_build_extra_controls()
@@ -107,10 +109,35 @@ func init(game_ref) -> void:
 	# F2 reset -- so the picker can never list a board that no longer exists.
 	game.zone_manager.zones_changed.connect(_on_zones_changed)
 	refresh_zone_list()
+	# Pushed, not polled (#391): every writer of the history is DevController, so it can say when.
+	game.dev_controller.history_changed.connect(_refresh_undo_row)
+	_refresh_undo_row()
 
 func _on_zones_changed() -> void:
 	refresh_zone_list()
 	update_zone_highlight()
+
+func _on_undo_pressed() -> void:
+	if game != null:
+		game.dev_controller.undo_board()
+
+func _on_redo_pressed() -> void:
+	if game != null:
+		game.dev_controller.redo_board()
+
+# Greyed rather than hidden: a row that vanishes at the bottom of the history moves every control
+# under it. Built before init() runs, so this has to answer with no game ref too.
+func _refresh_undo_row() -> void:
+	if _undo_button == null:
+		return
+	var can_undo := false
+	var can_redo := false
+	if game != null:
+		var history: BoardHistory = game.dev_controller.history   # typed: game is untyped
+		can_undo = history.can_undo()
+		can_redo = history.can_redo()
+	_undo_button.disabled = not can_undo
+	_redo_button.disabled = not can_redo
 
 func _populate_tile_dropdown() -> void:
 	tile_dropdown.clear()
@@ -211,6 +238,22 @@ func _build_extra_controls() -> void:
 	var note := Label.new()
 	note.text = "Left-drag paints  ·  right-drag erases"
 	add_child(note)
+
+	# The undo row (#391), directly under the gesture it undoes. A visible door beside Ctrl+Z, and
+	# the only one that works with the pointer over this window rather than the board.
+	var undo_row := HBoxContainer.new()
+	_undo_button = Button.new()
+	_undo_button.text = "Undo"
+	_undo_button.tooltip_text = "Undo the last board edit — a whole drag, not one cell (Ctrl+Z)"
+	_undo_button.pressed.connect(_on_undo_pressed)
+	undo_row.add_child(_undo_button)
+	_redo_button = Button.new()
+	_redo_button.text = "Redo"
+	_redo_button.tooltip_text = "Redo the edit you just undid (Ctrl+Shift+Z or Ctrl+Y)"
+	_redo_button.pressed.connect(_on_redo_pressed)
+	undo_row.add_child(_redo_button)
+	add_child(undo_row)
+	_refresh_undo_row()
 
 	# Part 1: map-resize row.
 	var row := HBoxContainer.new()
@@ -500,5 +543,4 @@ func _on_clear_states_pressed() -> void:
 func _clear_states_confirmed() -> void:
 	if game == null:
 		return
-	game.terrain_states.clear()
-	game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	game.dev_controller.clear_tile_states()   # through the controller so the wipe is one undo step (#391)
