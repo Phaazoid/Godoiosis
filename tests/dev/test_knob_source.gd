@@ -58,6 +58,49 @@ func test_a_typed_export_default_is_rewritten() -> void:
 	assert_str(out).contains("@export var cover_scale: float = 0.62")
 
 
+# The comment is documentation the save was never asked to touch (#378: the first real Save
+# deleted billboard_lift's). Whitespace before the # rides with it, so the comment column holds.
+func test_a_trailing_comment_survives_the_rewrite() -> void:
+	var commented := """extends Node3D
+
+@export var fill_lift := 0.02          # quad height above the top face -- the z-fight gap
+"""
+	var out := KnobSource.rewrite_declaration_default(commented, "fill_lift", "0.04")
+	assert_str(out).is_equal("""extends Node3D
+
+@export var fill_lift := 0.04          # quad height above the top face -- the z-fight gap
+""")
+
+
+# Both suffixes at once, in their original order -- the setter is code and the comment is prose,
+# and a rewrite that reordered them would not parse.
+func test_a_setter_and_a_comment_survive_together() -> void:
+	var both := """extends Node3D
+
+@export var tuft_scale := 1.0: set = _set_tuft_scale   # stands the plants up (#280)
+"""
+	var out := KnobSource.rewrite_declaration_default(both, "tuft_scale", "1.3")
+	assert_str(out).is_equal("""extends Node3D
+
+@export var tuft_scale := 1.3: set = _set_tuft_scale   # stands the plants up (#280)
+""")
+
+
+# A comment may SAY ": set = _x" without BEING a setter. The value group refusing to cross a #
+# is what makes this unambiguous -- without it, backtracking can hand half the comment to the
+# setter group and the rewrite reassembles a line that never existed.
+func test_a_comment_naming_a_setter_is_not_eaten_as_one() -> void:
+	var tricky := """extends Node3D
+
+@export var flame_lift := 0.5   # tuned live; the writer is: set = _set_flame_lift on the mirror
+"""
+	var out := KnobSource.rewrite_declaration_default(tricky, "flame_lift", "0.7")
+	assert_str(out).is_equal("""extends Node3D
+
+@export var flame_lift := 0.7   # tuned live; the writer is: set = _set_flame_lift on the mirror
+""")
+
+
 # A multi-argument literal must not be mistaken for the start of the setter suffix.
 func test_a_vector_literal_is_rewritten_whole() -> void:
 	var out := KnobSource.rewrite_declaration_default(VECTOR, "flame_size", "Vector2(0.4, 0.9)")

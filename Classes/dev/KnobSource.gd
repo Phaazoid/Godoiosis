@@ -26,11 +26,16 @@ enum Kind {
 
 # Both spellings of an authored default are accepted (`:= value` and `: Type = value`) and any
 # `: set = _x` suffix is CARRIED, not dropped -- several knobs own a setter, and losing it would
-# silently un-live the knob rather than fail. `@export` and `static` are one pattern rather than
-# two: which prefix a declaration wears is a fact about the SOURCE, not about the caller's intent,
-# and a name is unique in its script either way. The `^` anchor is what keeps an indented local
-# `var` of the same name out.
-const DECLARATION_LINE := "(?m)^((?:@export|static)[ \\t]+var[ \\t]+%s[ \\t]*(?::[ \\t]*\\w+[ \\t]*=|:=)[ \\t]*)(.+?)([ \\t]*:[ \\t]*set[ \\t]*=[ \\t]*\\w+)?$"
+# silently un-live the knob rather than fail. A trailing # comment is carried the same way (#378:
+# the first real Save deleted billboard_lift's), and the value group excluding # is what makes
+# that sound -- the value can never cross into a comment, so a comment whose TEXT contains
+# ": set = foo" cannot be half-eaten as a setter. No knob value contains # (DevWidgets.literal_for
+# emits numeric Color forms, never hex strings), and the save laws run this against every real
+# declaration, so one arriving later fails there. `@export` and `static` are one pattern rather
+# than two: which prefix a declaration wears is a fact about the SOURCE, not about the caller's
+# intent, and a name is unique in its script either way. The `^` anchor is what keeps an indented
+# local `var` of the same name out.
+const DECLARATION_LINE := "(?m)^((?:@export|static)[ \\t]+var[ \\t]+%s[ \\t]*(?::[ \\t]*\\w+[ \\t]*=|:=)[ \\t]*)([^#\\n]+?)([ \\t]*:[ \\t]*set[ \\t]*=[ \\t]*\\w+)?([ \\t]*#[^\\n]*)?$"
 
 # One entry of a const Layer -> spec dictionary, keyed by the layer's NAME as written. The value is
 # a Color(...) call or a constant reference, and it cannot be matched as "up to the next comma" --
@@ -61,8 +66,9 @@ static func rewrite_layer_color(source: String, layer_name: String, literal: Str
 
 
 # Rebuilt from the match rather than through sub(), so a literal containing $ could never be read
-# as a backreference. `keep_suffix` carries group 3 (a declaration's `: set = _x`); the layer form
-# has no third group and keeps whatever follows the value untouched by ending the match there.
+# as a backreference. `keep_suffix` carries groups 3 and 4 (a declaration's `: set = _x` and its
+# trailing comment, in that order -- #378); the layer form has neither group and keeps whatever
+# follows the value untouched by ending the match there.
 static func _rewrite(source: String, pattern: String, literal: String, keep_suffix: bool) -> String:
 	var re := RegEx.create_from_string(pattern)
 	if re == null:
@@ -72,7 +78,7 @@ static func _rewrite(source: String, pattern: String, literal: String, keep_suff
 		return ""
 	var line := found.get_string(1) + literal
 	if keep_suffix:
-		line += found.get_string(3)
+		line += found.get_string(3) + found.get_string(4)
 	return source.substr(0, found.get_start(0)) + line + source.substr(found.get_end(0))
 
 
