@@ -117,6 +117,36 @@ func load_slot(slot: int) -> SaveGame:
 		return null
 	return save
 
+# --- the BOARD half, on its own (#391) ---
+#
+# Terrain, height, tile states and zones: what the Tile Brush writes, and what an authoring undo
+# puts back. The whole-battle pair below is built on top of these, so there is ONE answer to "put a
+# board back" rather than one for loading and a second for undoing.
+func capture_board() -> BoardSnapshot:
+	var snapshot := BoardSnapshot.new()
+	snapshot.tile_data = grid.tile_map_data
+	snapshot.terrain_states = game.terrain_states.to_state_dict()
+	snapshot.elevations = game.board_heights.to_elevation_dict()
+	snapshot.ramp_rises = game.board_heights.to_ramp_dict()
+	snapshot.zones = game.zone_manager.to_dict()
+	return snapshot
+
+# Two things a load does are deliberately NOT here, so that routing apply_scenario through this
+# could not move the load path:
+#   - CameraController.refresh_bounds, which a scenario load has never done. The dev brush does, at
+#     its own three sites, and undo joins them there.
+#   - the CAPTURED-zone redraw. MissionController.restore_progress runs one immediately after a
+#     load and is the last writer either way; the plain redraw here is what an undo needs, since
+#     nothing else follows it.
+func restore_board(snapshot: BoardSnapshot) -> void:
+	grid.restore(snapshot.tile_data)
+	game.terrain_states.load_state_dict(snapshot.terrain_states)
+	game.board_heights.load_dicts(snapshot.elevations, snapshot.ramp_rises)
+	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
+	overlay_manager.redraw_terrain_live(game.terrain_states)
+	game.zone_manager.load_dict(snapshot.zones)
+	overlay_manager.redraw_zones(game.zone_manager)
+
 # The snapshot itself, split from writing it (#87) -- apply_scenario is its inverse.
 # authored (#177): cast units — those spawned from a standalone character file — save as a
 # REFERENCE to that file with no state captured, so every load re-reads the character as it is
@@ -125,12 +155,8 @@ func load_slot(slot: int) -> SaveGame:
 func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	var scenario := ScenarioData.new()
 	scenario.scenario_name = scenario_name
-	scenario.tile_data = grid.tile_map_data
+	capture_board().write_into(scenario)
 	scenario.active_faction = turn_manager.active_faction()
-	scenario.terrain_states = game.terrain_states.to_state_dict()
-	scenario.elevations = game.board_heights.to_elevation_dict()
-	scenario.ramp_rises = game.board_heights.to_ramp_dict()
-	scenario.zones = game.zone_manager.to_dict()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
@@ -179,12 +205,7 @@ func load_scenario(path: String):
 func apply_scenario(scenario: ScenarioData) -> void:
 	clear_board()
 
-	grid.tile_map_data = scenario.tile_data
-	game.terrain_states.load_state_dict(scenario.terrain_states)
-	game.board_heights.load_dicts(scenario.elevations, scenario.ramp_rises)
-	# Authored state must be VISIBLE at turn one -- nothing else redraws until the first round tick (#174).
-	overlay_manager.redraw_terrain_live(game.terrain_states)
-	game.zone_manager.load_dict(scenario.zones)
+	restore_board(BoardSnapshot.from_scenario(scenario))
 	game.mission_controller.set_objectives(scenario.objectives)
 	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested)
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and

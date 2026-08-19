@@ -22,6 +22,16 @@ var _brush_painting := false
 var _brush_erasing := false
 var _brush_ghost: TileMapLayer = null
 
+# The undo history (#391), owned HERE rather than by the Tile Brush panel: the brush's strokes and
+# the panel's board-wide buttons are both authoring edits, and the keys reach this node from either
+# OS window. The panel is a reader.
+var history := BoardHistory.new()
+var _stroke_open := false
+
+# Fires whenever the history moved -- a step recorded, an undo, a redo, a board load. The panel's
+# Undo/Redo row greys off this rather than polling, since every writer is right here.
+signal history_changed
+
 # --- dev keys ---
 
 # The dev layer sits ABOVE the game rules: ALWAYS keeps these keys alive while ModalLock has the
@@ -29,6 +39,15 @@ var _brush_ghost: TileMapLayer = null
 # below still answer.
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	# The history belongs to ONE board (#391). game is assigned before add_child, so the manager
+	# resolves here; without the wire, undoing after a load pastes the previous board's terrain
+	# onto this one -- a stack outliving its subject.
+	if game != null and game.scenario_manager != null:
+		game.scenario_manager.board_loaded.connect(_on_board_loaded)
+
+func _on_board_loaded() -> void:
+	history.reset(game.scenario_manager.capture_board())
+	history_changed.emit()
 
 func _input(event: InputEvent) -> void:
 	handle_dev_key(event)
@@ -58,6 +77,7 @@ func handle_dev_key(event: InputEvent) -> void:
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
 	_handle_rise_keys(event)
+	_handle_undo_keys(event)
 
 # Z / C turn the elevation brush's ramp rise (#260 follow-up), the Q/E detent idiom applied to
 # authoring. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
@@ -68,6 +88,8 @@ func _handle_rise_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return   # echo: holding the key must not spin the rise
+	if key.ctrl_pressed:
+		return   # Ctrl+Z is the board undo (#391) -- it must not ALSO turn the rise
 	var brush := _elevation_brush()
 	if brush == null:
 		return
@@ -76,6 +98,32 @@ func _handle_rise_keys(event: InputEvent) -> void:
 			brush.cycle_rise(-1)
 		KEY_C:
 			brush.cycle_rise(1)
+
+# Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (#391). Hardcoded physical keycodes for the reason the rise keys
+# above are: project.godot is the one file concurrent PRs reliably collide on. Both redo spellings,
+# because both are muscle memory and the branch costs a line.
+#
+# Gated on DEV_MODE but deliberately NOT on brush_armed(): you untick the brush, then think better
+# of the last stroke, and a history reachable only while the checkbox is ticked would be shut
+# exactly then. Outside dev mode the keys do nothing at all -- there is no authoring to undo, and
+# rewinding the board mid-battle would take the fire a played round deposited with it.
+#
+# The dev-tools window forwards here (DevOverlay._input) after excluding a focused LineEdit/TextEdit,
+# so Ctrl+Z while typing a scenario name stays that field's own text undo, which is right.
+func _handle_undo_keys(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or not key.ctrl_pressed:
+		return
+	if game == null or game.game_state != game.GameState.DEV_MODE:
+		return
+	match key.physical_keycode:
+		KEY_Z:
+			if key.shift_pressed:
+				redo_board()
+			else:
+				undo_board()
+		KEY_Y:
+			redo_board()
 
 func _toggle_dev_overlay() -> void:
 	var overlay: DevOverlay = game.dev_overlay
@@ -163,16 +211,69 @@ func handle_tile_brush(event) -> void:
 		if event.button_index == MOUSE_BUTTON_LEFT:
 			_brush_painting = event.pressed
 			if event.pressed:
+				_begin_stroke()
 				_paint()
+			else:
+				_end_stroke()
 		elif event.button_index == MOUSE_BUTTON_RIGHT:
 			_brush_erasing = event.pressed
 			if event.pressed:
+				_begin_stroke()
 				_erase()
+			else:
+				_end_stroke()
 	elif event is InputEventMouseMotion:
 		if _brush_painting:
 			_paint()
 		elif _brush_erasing:
 			_erase()
+
+# --- undo (#391) ---
+
+# A STROKE is the step: mouse-down to mouse-up, however many cells it crossed and whatever mode it
+# was in. The wheel is read and returned before the drag flags above, so changing the paint level
+# mid-stroke still cannot end one.
+func _begin_stroke() -> void:
+	if _stroke_open:
+		return   # the other button was already down: one gesture, already open
+	_stroke_open = true
+	history.begin(game.scenario_manager.capture_board())
+
+func _end_stroke() -> void:
+	if _brush_painting or _brush_erasing:
+		return   # the other button is still down -- the gesture has not ended yet
+	if not _stroke_open:
+		return   # a release whose press landed in the other OS window
+	_stroke_open = false
+	_commit_step()
+
+# A board-wide act is one step exactly as a stroke is; resize_map and clear_tile_states bracket
+# themselves with these two.
+func _commit_step() -> void:
+	if history.commit(game.scenario_manager.capture_board()):
+		history_changed.emit()
+
+func undo_board() -> bool:
+	return _restore_step(history.undo())
+
+func redo_board() -> bool:
+	return _restore_step(history.redo())
+
+# Everything a paint or an erase refreshes at its own site, because an undo can put back anything
+# either of them wrote: the board's SHAPE can have moved (an undone resize), the height readout is
+# pushed rather than signalled (BoardHeights is a store, not a subject), and the zone picker
+# rebuilds itself off zones_changed while its highlight does not. The brush ghost polls, so it
+# needs nothing at all.
+func _restore_step(snapshot: BoardSnapshot) -> bool:
+	if snapshot == null:
+		return false
+	game.scenario_manager.restore_board(snapshot)
+	game.camera_controller.refresh_bounds(game.grid)
+	_refresh_height_readout()
+	if game.dev_overlay != null:
+		game.dev_overlay.tile_brush.update_zone_highlight()
+	history_changed.emit()
+	return true
 
 func _mouse_cell() -> Vector2i:
 	if cell_source.is_valid():
@@ -397,9 +498,12 @@ func _erase_state(cell: Vector2i) -> void:
 	game.terrain_states.apply(effect)
 	game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	
+# Brackets itself as ONE undo step (#391), and it is the most destructive thing in the panel: a
+# shrink clears the board and repaints a rectangle, stranding every state and height outside it.
 func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) -> void:
 	width = maxi(1, width)
 	height = maxi(1, height)
+	_begin_stroke()
 	game.grid.reset()
 	for x in range(width):
 		for y in range(height):
@@ -410,6 +514,16 @@ func resize_map(width: int, height: int, fill_source: int, fill_tile: Vector2i) 
 		game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	_prune_groundless_heights()
 	game.camera_controller.refresh_bounds(game.grid)
+	_end_stroke()
+
+# The board-wide state wipe, HERE rather than in the panel (#391) so it can be one undo step -- the
+# same split _on_resize_pressed already makes, where the panel owns the confirm and the controller
+# owns the board act. The confirm stays: undo is a second net, not a replacement for the first.
+func clear_tile_states() -> void:
+	_begin_stroke()
+	game.terrain_states.clear()
+	game.overlay_manager.redraw_terrain_live(game.terrain_states)
+	_end_stroke()
 
 # Elevation goes with the ground too (#260), at both sites the states do. The redraw is inside the
 # refresh, which no-ops when the readout is hidden.

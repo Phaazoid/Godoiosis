@@ -363,8 +363,11 @@ Two things are worth knowing before touching this again:
   because that mutant passed.
 
 The guarantee the old poll got for free — *it caught every writer, because it re-read everything* —
-is now `tests/law/test_board_writes_announce.gd`. `tile_map_data` is the declared exception: a bulk
-property assignment cannot be doored, and `board_loaded` → `rebuild()` covers it.
+is now `tests/law/test_board_writes_announce.gd`, and since #391 it has **no exceptions**. The bulk
+`tile_map_data` assignment used to be one — a property assignment cannot be doored, and
+`board_loaded` → `rebuild()` covered it — but that argument covered exactly one writer, and the
+authoring undo needed the same wholesale write. It has a door of its own now, `BoardGrid.restore`,
+which `mark_all`s; both bulk writers go through it and the law scans for the assignment too.
 
 ### The announcement grew a second, non-consuming reader (#308, 2026-08-16)
 

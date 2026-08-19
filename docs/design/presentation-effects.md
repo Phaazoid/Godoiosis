@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama.
 
-**Canon checked through #389 (2026-08-19).**
+**Canon checked through #391 (2026-08-19).**
 
 ---
 
@@ -136,7 +136,7 @@ Stage 4a shipped two declared cadences: the board mirrored on `board_loaded`, an
 
 **Terrain syncs per cell too, but only while `DEV_MODE` is active** — the sim never paints terrain, so the diff stays entirely out of the shipping game. (An engine signal was the first choice and does not exist: `TileMapLayer.changed` does **not** fire on `set_cell`/`erase_cell` in 4.7. Measured, with a property write as the control.)
 
-**That diff used to be a whole-board walk, and the property it bought is now a law instead ([#319](https://github.com/Phaazoid/Godoiosis/issues/319), 2026-08-16).** Re-reading everything every frame caught every writer with *no trigger site to remember*, which was the point — and it cost O(board) per frame, i.e. a whole 60fps budget on Prolog before anyone painted anything. The trade: writes now announce which cells moved (`BoardGrid.paint`/`erase`/`reset`, `BoardHeights.set_cell`), the poll reconciles only those, and the cost goes flat in board size. **The "no trigger site" guarantee did not survive that and was not meant to** — `tests/law/test_board_writes_announce.gd` carries it now, and `tile_map_data` is the declared exception a door cannot cover (a bulk property write, made safe by `board_loaded` → `rebuild()`). Numbers and the two traps — a lowered floor still full-syncs; the board rect grows in place but shrinks by re-deriving — are in [`docs/performance.md`](../performance.md).
+**That diff used to be a whole-board walk, and the property it bought is now a law instead ([#319](https://github.com/Phaazoid/Godoiosis/issues/319), 2026-08-16).** Re-reading everything every frame caught every writer with *no trigger site to remember*, which was the point — and it cost O(board) per frame, i.e. a whole 60fps budget on Prolog before anyone painted anything. The trade: writes now announce which cells moved (`BoardGrid.paint`/`erase`/`reset`, `BoardHeights.set_cell`), the poll reconciles only those, and the cost goes flat in board size. **The "no trigger site" guarantee did not survive that and was not meant to** — `tests/law/test_board_writes_announce.gd` carries it now, and since [#391](https://github.com/Phaazoid/Godoiosis/issues/391) it has no exceptions: the bulk `tile_map_data` write was one — a property assignment a door cannot cover, made safe by `board_loaded` → `rebuild()` — until the authoring undo needed the same wholesale write and it got `BoardGrid.restore`, which `mark_all`s. Numbers and the two traps — a lowered floor still full-syncs; the board rect grows in place but shrinks by re-deriving — are in [`docs/performance.md`](../performance.md).
 
 Two rules this settled, both general:
 
