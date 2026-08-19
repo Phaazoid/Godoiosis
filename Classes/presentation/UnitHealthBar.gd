@@ -39,12 +39,16 @@ const OUTLINE_COLOR := Color.BLACK
 # text by font_size would have meant a 4px font to hit the size the dev asked for, which renders to
 # mush; sizing by pixel_size keeps the atlas crisp and shrinks the quad.
 const FONT_RESOLUTION := 32
+# Gap between the leader badge and the bar's outline, in texels. Not a knob: spacing inside one
+# display, not a feel value anyone tunes per board.
+const BADGE_GAP_TEXELS := 2.0
 
 var _outline: MeshInstance3D
 var _missing: MeshInstance3D
 var _fill: MeshInstance3D
 var _doomed: MeshInstance3D    # #313: the span between current HP and what the plan predicts
 var _notch: MeshInstance3D     # #313: the marker AT the predicted level
+var _badge: MeshInstance3D     # #325: the leader's crown at bar height, left of the bar
 var _label: Label3D
 
 var _width := 32.0
@@ -68,6 +72,8 @@ var _alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
 var _predicted := 0
 var _has_prediction := false
 var _number_shown := true
+var _badge_texture: Texture2D = null
+var _badge_scale := 1.0
 
 var _alarm: Tween
 var _alarm_peak_live := Color(1.0, 1.0, 1.0, 1.0)   # the peak the RUNNING tween was started with
@@ -100,6 +106,10 @@ func _init() -> void:
 	_fill = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 2)
 	_doomed = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 3)
 	_notch = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4)
+	_badge = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
+	# The one textured quad in the group: pixel art, so nearest like every sprite in the stack.
+	var badge_material := _badge.material_override as StandardMaterial3D
+	badge_material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	_label = Label3D.new()
 	# NOT billboarded, like everything else here — face() turns the whole group instead. Label3D
 	# draws its glyphs and its outline as two surfaces, and displacing it with Label3D.offset (the
@@ -119,6 +129,7 @@ func _init() -> void:
 	add_child(_fill)
 	add_child(_doomed)
 	add_child(_notch)
+	add_child(_badge)
 	add_child(_label)
 	visible = false
 	_rebuild()
@@ -180,6 +191,15 @@ func clear_prediction() -> void:
 # number. Two reasons to be up (#313), so the number follows the reason rather than the bar.
 func set_number_shown(shown: bool) -> void:
 	_number_shown = shown
+	_rebuild()
+
+
+# The leader's crown riding the bar (#325 -- dev call: leadership reads beside health, on the
+# bar's own visibility). null = no badge. The texture is passed in, like every other input --
+# this node never reads game state.
+func set_leader_badge(texture: Texture2D, scale: float) -> void:
+	_badge_texture = texture
+	_badge_scale = scale
 	_rebuild()
 
 
@@ -257,6 +277,15 @@ func alarm_running() -> bool:
 	return _alarm != null
 
 
+# Rendered facts for tests, same reason as fill_fraction: read off the mesh, never recomputed.
+func badge_shown() -> bool:
+	return _badge.visible
+
+
+func badge_size() -> Vector2:
+	return (_badge.mesh as QuadMesh).size
+
+
 func track_texels() -> float:
 	return roundf(_width)
 
@@ -265,11 +294,17 @@ func number_text() -> String:
 	return _label.text
 
 
+# Whether the digits are up, as opposed to what they SAY. A separate question since #350: a bar can
+# be up for three reasons now and only one of them earns the number.
+func number_shown() -> bool:
+	return _label.visible
+
+
 func _rebuild() -> void:
 	var signature: Array = [_width, _height, _outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color, _notch_color, _notch_texels,
-			_current, _maximum, _predicted, _has_prediction]
+			_current, _maximum, _predicted, _has_prediction, _badge_texture, _badge_scale]
 	if signature == _drawn:
 		return
 	_drawn = signature
@@ -319,6 +354,17 @@ func _draw() -> void:
 	# direction precisely because the group has one orientation.
 	var half_text: float = _label.get_aabb().size.x * 0.5
 	_label.position = Vector3(-track_w * 0.5 * texel + _gap + half_text, 0.0, texel)
+
+	# The leader badge (#325): bar-height, square, off the outline's left edge. Vertically
+	# centred with the bar, so "same height, sitting to the left" is true by construction.
+	_badge.visible = _badge_texture != null
+	if _badge.visible:
+		var badge_h: float = bar_h * maxf(_badge_scale, 0.01)
+		var badge_x: float = -(track_w * 0.5 + edge + BADGE_GAP_TEXELS + badge_h * 0.5)
+		_size_quad(_badge, badge_h * texel, badge_h * texel, badge_x * texel)
+		var badge_material := _badge.material_override as StandardMaterial3D
+		badge_material.albedo_texture = _badge_texture
+		badge_material.albedo_color = Color.WHITE
 
 
 # The prediction (#313). The SPAN runs between where the bar is now and where the plan leaves it,

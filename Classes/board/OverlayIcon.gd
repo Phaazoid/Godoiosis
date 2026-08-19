@@ -2,8 +2,9 @@ extends Node2D
 class_name OverlayIcon
 
 # One marker hung on a UNIT rather than a cell: a Sprite2D plus the cell it was anchored to.
-# Built and pooled by OverlayManager (icons_by_unit), and mirrored into the 3D as a billboard
-# above the unit's head by OverlayMirror._icons -> BoardOverlays.Layer.ICONS.
+# Built and pooled by OverlayManager (icons_by_unit), styled by its _style_icon (#325: a ring
+# underfoot or the legacy head square), and mirrored by OverlayMirror._icons into
+# BoardOverlays.Layer.GROUND_ICONS (rings, surface decals) or Layer.ICONS (squares, billboards).
 
 @onready var sprite = $Sprite2D
 var icon_type

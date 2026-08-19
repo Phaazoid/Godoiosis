@@ -17,6 +17,7 @@ var squad_name := ""
 var archetype: AIArchetype.Type = AIArchetype.Type.FACTION_DEFAULT
 var zone_name := ""   # painted zone this squad is bound to (Sentry); "" = none
 var home_cell := NO_HOME   # sentry post: set at scenario load; first sentry turn fixes it otherwise
+var ring_hue := Color.WHITE   # #325: dealt by SquadManager at first squadmate; WHITE = undealt; never saved
 
 signal actions_became_active(squad: Squad, action: BaseAction)
 signal actions_became_empty(squad: Squad)

@@ -805,7 +805,16 @@ func _hovered_unit() -> Unit:
 # squad identity, so this is null whenever nothing is being commanded — no active squad, and an AI
 # squad's own resolve (which never matches the player's active squad) — and the ghosts are simply
 # absent rather than showing somebody else's intentions.
+#
+# While a pass is RUNNING that question has a better answer than the last resolve (#354): the plan
+# being executed. A kill mid-pass re-resolves the queue (game._on_unit_died), and a queue whose
+# earlier attacks have already landed re-simulates them — so the last resolve stops describing the
+# exchange the player is watching. One function still answers "which plan"; it just knows a live
+# pass outranks a stale resolve.
 func _previewed_plan() -> ResolvedPlan:
+	var executing: ResolvedPlan = game.order_executor.executing_plan
+	if executing != null:
+		return executing
 	var squads: SquadManager = game.squad_manager
 	return squads.resolved_plan_for(squads.active_squad)
 

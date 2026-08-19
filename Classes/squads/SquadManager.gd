@@ -88,9 +88,9 @@ func faction_all_squads_acted(faction: Team.Faction) -> bool:
 func create_squad(leader: Unit) -> Squad:
 	var squad := Squad.new()
 	add_child(squad)
-	
+
 	squad.set_leader(leader)
-	
+
 	squads.append(squad)
 	_register_squad_signals(squad)
 	
@@ -114,6 +114,12 @@ func join_squad(unit: Unit, target_squad: Squad):
 
 	_detach_from_current_squad(unit)
 	target_squad._add_member(unit)
+	# #325: the marker hue is dealt at the first moment a squad actually HAS squadmates -- this
+	# is the one growth funnel (_add_member's only other caller is set_leader's solo birth), so
+	# solo churn never touches the palette.
+	if target_squad.ring_hue == Color.WHITE and target_squad.members.size() > 1:
+		target_squad.ring_hue = _deal_ring_hue(target_squad.leader.get_faction())
+	# Hue BEFORE the join emit: a listener reading the squad off this signal sees settled state (#182/#367).
 	squad_member_joined.emit(target_squad, unit)
 	if target_squad.members.size() > target_squad.max_size():
 		push_warning("Squad '%s' over capacity (%d/%d) — grandfathered (direct/loaded join)." % [target_squad.squad_name, target_squad.members.size(), target_squad.max_size()])
@@ -226,10 +232,33 @@ func destroy_empty_squad(squad: Squad):
 	
 func clear_all_squads():
 	active_squad = null
+	_ring_hue_counters.clear()
 	for squad in squads.duplicate():
 		squads.erase(squad)
 		squad_deleted.emit(squad)
 		squad.queue_free()
+
+# #325: a squad's marker hue -- cool palette for friendly factions, warm for the enemy. Prefers
+# a hue no living squad of the faction is wearing, so concurrent squads stay distinct until a
+# faction fields more squads than its palette; only then does the counter cycle into repeats.
+# WHITE = not yet dealt (the palettes never contain it); a squad's death frees its hue by
+# leaving `squads`. Battle-scoped; a reload re-deals in join order.
+var _ring_hue_counters: Dictionary[Team.Faction, int] = {}
+
+func _deal_ring_hue(faction: Team.Faction) -> Color:
+	var palette: Array[Color] = OverlayManager.SQUAD_HUES_ENEMY if faction == Team.Faction.ENEMY \
+			else OverlayManager.SQUAD_HUES_FRIENDLY
+	var worn: Array[Color] = []
+	for squad in squads:
+		if squad.ring_hue != Color.WHITE and squad.leader != null \
+				and squad.leader.get_faction() == faction:
+			worn.append(squad.ring_hue)
+	for hue in palette:
+		if not worn.has(hue):
+			return hue
+	var index: int = _ring_hue_counters.get(faction, 0)
+	_ring_hue_counters[faction] = index + 1
+	return palette[index % palette.size()]
 
 func queue_action(squad: Squad, action: BaseAction) -> bool:
 	# Downed/dead units can't be ordered. This is the single order chokepoint (Law #3 —

@@ -229,11 +229,15 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 			ghosts.append(entry)
 
 
-# Selection icons (crown / squadmember / target / …): anchored to the icon's own
-# authored target_cell; a small per-type height stagger keeps co-celled billboards
-# from z-fighting (2D overlaps them by pixel offsets instead).
+# Selection icons (crown / squadmember): anchored to the icon's own authored target_cell, and
+# forked on the 2D's own style flag (#325 experiment). Squares ride ICONS as head billboards
+# with a per-type y-stagger against z-fighting (the 2D stacks them by tree order); rings ride
+# GROUND_ICONS as surface decals, texture and tint arriving BY COPY from the 2D sprite -- the
+# squad hue is authored there, never re-derived here. CROWN is skipped in ring mode: the leader
+# reads off the health bar's badge (UnitMirror), and the flat view keeps its own head crown.
 func _icons(om: OverlayManager) -> void:
-	var entries: Array[Dictionary] = []
+	var heads: Array[Dictionary] = []
+	var ground: Array[Dictionary] = []
 	for unit in om.icons_by_unit:
 		var by_type: Dictionary = om.icons_by_unit[unit]
 		for type in by_type:
@@ -241,9 +245,15 @@ func _icons(om: OverlayManager) -> void:
 			if icon == null or not is_instance_valid(icon):
 				continue
 			var surface := _anchor(icon.target_cell)
-			surface.origin.y += float(type) * 0.02
-			entries.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
-	_markers(BoardOverlays.Layer.ICONS, entries)
+			if OverlayManager.SQUAD_MARKER_RINGS:
+				if type == OverlayIcon.IconType.CROWN:
+					continue
+				ground.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
+			else:
+				surface.origin.y += float(type) * 0.02
+				heads.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
+	_markers(BoardOverlays.Layer.ICONS, heads)
+	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
 
 
 # Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is

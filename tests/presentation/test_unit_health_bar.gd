@@ -1,6 +1,9 @@
 # The hover health readout (#229): does pointing at a unit actually put a bar over it, does that
 # bar say what the UNIT says, and does it follow the thing that is on screen?
 #
+# Since #350 it also covers the third reason a bar is up — the player asked for all of them — and
+# the crowding rule that rides with it. Those cases live at the bottom, driven through the store.
+#
 # This is a WIRE, which is why every case drives the real chain rather than calling the bar:
 # battle3d's picked cell -> HoverPresenter.pointer_source -> last_hovered_cell -> unit_at_pointer
 # -> UnitMirror -> UnitHealthBar. Both ends of that chain were already correct and unconnected
@@ -19,10 +22,16 @@ const PLAYER := Team.Faction.PLAYER
 var _scene: Node3D
 var game: Node2D
 var _unit_mirror: UnitMirror
+var _rings_were: bool
 
 
 func before_test() -> void:
+	# Hermetic, and NOT optional (#350): is_on() falls through to user://settings.cfg, so without
+	# this a suite asserting which units wear a bar reads the developer's own saved preference.
+	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
+	# A static outlives a test; cache rather than restore-to-a-literal, per the tuning razor.
+	_rings_were = OverlayManager.SQUAD_MARKER_RINGS
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -36,6 +45,7 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	OverlayManager.SQUAD_MARKER_RINGS = _rings_were
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -203,3 +213,102 @@ func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 	for layer: BoardOverlays.Layer in BoardOverlays.LAYERS:
 		var spec: Dictionary = BoardOverlays.LAYERS[layer]
 		assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(spec["sort"])
+
+
+# --- The leader badge (#325): the crown rides the bar in ring mode -------------------------
+
+func _squad_pair() -> Array[Unit]:
+	var leader := _spawn(PLAYER, Vector2i(2, 2))
+	var member := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(member, leader.squad)
+	return [leader, member]
+
+
+func test_a_hovered_leaders_bar_wears_the_crown_badge_at_bar_height() -> void:
+	var pair := _squad_pair()
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[0])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_true()
+	# "Same height as the health bar" (dev call), square -- derived from the knobs, never pinned.
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var expected: float = roundf(_unit_mirror.bar_height_texels) * _unit_mirror.crown_badge_scale * texel
+	assert_float(bar.badge_size().y).is_equal_approx(expected, 0.001)
+	assert_float(bar.badge_size().x).is_equal_approx(bar.badge_size().y, 0.001)
+
+
+func test_a_hovered_members_bar_carries_no_badge() -> void:
+	var pair := _squad_pair()
+	_point_at(Vector2i(3, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[1])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_false()
+
+
+func test_square_mode_keeps_the_badge_off_the_bar() -> void:
+	# The toggle compares two complete systems: in squares mode the crown billboard is the
+	# leader's mark, so the bar must not double-crown it.
+	OverlayManager.SQUAD_MARKER_RINGS = false
+	var pair := _squad_pair()
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(pair[0])
+	assert_bool(bar.visible).is_true()
+	assert_bool(bar.badge_shown()).is_false()
+
+
+# --- The always-show setting (#350) -----------------------------------------------------------
+# The third reason a readout is up, and the only one that is a PREFERENCE rather than a derivation.
+# Driven through PlayerSettings, never by poking UnitMirror, because the store is what the settings
+# page writes and the gate is what reads it — the wire is the whole point.
+
+func _set_always_on(on: bool) -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH, on)
+
+
+func test_the_setting_puts_a_readout_over_every_unit_at_once() -> void:
+	var first := _spawn(PLAYER, Vector2i(2, 2))
+	var second := _spawn(PLAYER, Vector2i(6, 2))
+	var third := _spawn(PLAYER, Vector2i(9, 5))
+	_point_at(Vector2i(20, 20))   # empty ground: nothing is hovered, nothing is planned
+	_set_always_on(true)
+	await _settle()
+
+	# The inverse of the hover case's exclusivity claim: every unit, not one.
+	var shown := _shown_bars()
+	assert_array(shown).contains([first, second, third])
+	assert_int(shown.size()).is_equal(3)
+
+
+func test_an_always_on_readout_keeps_its_digits_for_hover_alone() -> void:
+	# The crowding answer #313 already reached one level down, reused rather than re-decided: a bar
+	# that is up for a non-hover reason is bar-only, and pointing at it reveals the number.
+	var pointed := _spawn(PLAYER, Vector2i(2, 2))
+	var other := _spawn(PLAYER, Vector2i(6, 2))
+	_set_always_on(true)
+	_point_at(pointed.movement.cell)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(pointed).visible).is_true()
+	assert_bool(_unit_mirror.bar_for(other).visible).is_true()
+	assert_bool(_unit_mirror.bar_for(pointed).number_shown()).override_failure_message(
+			"the hovered unit lost its digits").is_true()
+	assert_bool(_unit_mirror.bar_for(other).number_shown()).override_failure_message(
+			"every always-on bar carries digits, which is the crowding #313 already ruled on").is_false()
+
+
+func test_turning_the_setting_off_returns_the_board_to_hover_only() -> void:
+	# The off state is #229's behaviour, not "bars we forgot to clear" — a stale bar left standing
+	# would look identical to the feature working right up until you moved the mouse.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_set_always_on(true)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+	assert_bool(_unit_mirror.bar_for(unit).visible).is_true()   # precondition, via the real path
+
+	_set_always_on(false)
+	await _settle()
+
+	assert_array(_shown_bars()).is_empty()

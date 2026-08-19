@@ -36,7 +36,7 @@ const LAYER_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
 		"tip": "Tiles inside a unit's movement range that it still may not stop on -- out of its leader's cohesion range, or already occupied. Clicking one does nothing, so this colour is the only warning."},
 	{"group": "Board markup colours", "label": "Squad fill", "layer": BoardOverlays.Layer.SQUAD,
-		"tip": "Marks the members of the currently selected squad."},
+		"tip": "The candidate bubble while FORMING a squad (Squad Up / Join Squad) -- the cells a recruit may be picked from. Membership itself is the ring/square markers, not this fill."},
 	{"group": "Board markup colours", "label": "Squad-range fill", "layer": BoardOverlays.Layer.SQUAD_RANGE,
 		"tip": "The leader's cohesion range -- how far squadmates may stray before the plan is refused. Shares its colour with Squad fill by default, since they are two halves of the same idea."},
 	{"group": "Board markup colours", "label": "Capture zone", "layer": BoardOverlays.Layer.ZONE_CAPTURE,
@@ -286,7 +286,43 @@ func _rebuild() -> void:
 		DevWidgets.add_color(layer_rows, knob["label"], value,
 			func(picked: Color) -> void: write_layer(knob, picked))
 		_apply_tip(layer_rows, first, tip_for(knob))
+	_build_squad_marker_rows(layer_rows)
 	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
+
+
+# --- #325 experiment: squares vs rings ---------------------------------------------------
+
+# Bespoke rows rather than table entries: the style flag is a bool STATIC on OverlayManager
+# (both stacks read it), which neither KNOBS (property paths on scene nodes) nor LAYER_KNOBS
+# (Color-only) can address. They die with the experiment, whichever style wins.
+func _build_squad_marker_rows(rows: VBoxContainer) -> void:
+	_add_heading(rows, "Squad markers (#325 experiment)")
+	var first := rows.get_child_count()
+	DevWidgets.add_checkbox(rows, "Rings underfoot", OverlayManager.SQUAD_MARKER_RINGS,
+		_on_ring_toggle)
+	_apply_tip(rows, first, DevWidgets.wrap_tooltip(
+		"ON: squad membership reads as a per-squad coloured ring under each member, with the crown decal inside the leader's. OFF: the legacy green squares over heads. MOVES BOTH STACKS -- and takes effect on markers already up. The losing style gets deleted when the experiment resolves."))
+	first = rows.get_child_count()
+	DevWidgets.add_slider(rows, "Ring opacity", OverlayManager.SQUAD_RING_ALPHA, 0.1, 1.0, 0.01,
+		_on_ring_alpha)
+	_apply_tip(rows, first, DevWidgets.wrap_tooltip(
+		"Alpha of the membership rings (the crown decal stays opaque). MOVES BOTH STACKS."))
+
+
+func _on_ring_toggle(on: bool) -> void:
+	OverlayManager.SQUAD_MARKER_RINGS = on
+	_restyle_squad_markers()
+
+
+func _on_ring_alpha(moved: float) -> void:
+	OverlayManager.SQUAD_RING_ALPHA = moved
+	_restyle_squad_markers()
+
+
+func _restyle_squad_markers() -> void:
+	var om: OverlayManager = _overlay_manager()
+	if om != null:
+		om.restyle_squad_markers()
 
 
 # The which-stack note is appended per KIND rather than typed into each tip, so it cannot drift
