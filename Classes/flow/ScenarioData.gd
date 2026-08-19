@@ -55,5 +55,6 @@ class_name ScenarioData
 @export var ai_factions: Array[Team.Faction] = []
 
 # --- Mission-scoped battle state (#87), the board-wide half of a mid-battle snapshot. ---
+@export var dialog_beats: Array[DialogBeat] = []   # authored dialog moments (#182); DialogDirector fires them
 @export var captured_zones: Array[String] = []   # CAPTURE zones already claimed
 @export var contested := false   # "both sides were ever up at once" latch
