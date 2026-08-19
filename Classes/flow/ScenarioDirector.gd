@@ -145,6 +145,7 @@ func _on_squad_member_joined(squad: Squad, _unit: Unit) -> void:
 		return
 	var step := _active_step()
 	if step != null and step.done_when == DialogBeat.Trigger.SQUAD_MEMBER_ADDED \
+			and _name_matches(step.unit_name, leader) \
 			and squad.get_members().size() >= step.squad_size:
 		_advance_step()
 	for beat: DialogBeat in _beats:
@@ -163,6 +164,11 @@ func _active_step() -> TutorialStep:
 func _advance_step() -> void:
 	_step_idx += 1
 	game.refresh_mission_status()   # the write-point pattern (#134), not a signal
+	# THEN the payoff voice (the pinned order: HUD first). _step_idx is also how many steps
+	# are complete, which is exactly the 1-based index STEP_COMPLETED beats author against.
+	for beat: DialogBeat in _beats:
+		if beat.trigger == DialogBeat.Trigger.STEP_COMPLETED and beat.step == _step_idx:
+			_fire(beat)
 
 
 func _name_matches(wanted: String, unit: Unit) -> bool:

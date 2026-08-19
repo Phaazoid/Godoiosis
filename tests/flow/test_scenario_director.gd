@@ -246,3 +246,47 @@ func test_disarm_clears_the_instruction() -> void:
 	assert_str(_director.active_instruction()).is_equal("Never seen on resume.")
 	_director.disarm()
 	assert_str(_director.active_instruction()).is_equal("")
+
+
+func test_payoff_beat_fires_when_its_step_completes() -> void:
+	_director.set_steps([
+		_step(DialogBeat.Trigger.UNIT_SELECTED, "Select Torv.", "Torv"),
+		_step(DialogBeat.Trigger.SQUAD_FORMED, "Squad up."),
+	])
+	var payoff := _beat(DialogBeat.Trigger.STEP_COMPLETED, "Both steps done.")
+	payoff.step = 2
+	_director.set_beats([payoff])
+	_director.mission_started()
+	_stub.unit_selected.emit(_named_unit("Torv", PLAYER))   # completes step 1 -- not the payoff's step
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(0)
+	_stub.squad_manager.squad_created.emit(_player_squad())   # completes step 2 -- the payoff's
+	await _await_starts(1)
+
+
+func test_member_step_ignores_the_wrong_leaders_squad() -> void:
+	_director.set_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Grow Torv's squad.", "Torv", 2)])
+	_director.mission_started()
+	var isaac_squad := auto_free(Squad.new()) as Squad
+	isaac_squad.set_leader(_named_unit("Isaac", PLAYER))
+	isaac_squad._add_member(_named_unit("Collette", PLAYER))
+	_stub.squad_manager.squad_member_joined.emit(isaac_squad, isaac_squad.get_members()[1])
+	assert_str(_director.active_instruction()).is_equal("Grow Torv's squad.")
+	var torv_squad := auto_free(Squad.new()) as Squad
+	torv_squad.set_leader(_named_unit("Torv", PLAYER))
+	torv_squad._add_member(_named_unit("Ross", PLAYER))
+	_stub.squad_manager.squad_member_joined.emit(torv_squad, torv_squad.get_members()[1])
+	assert_str(_director.active_instruction()).is_equal("")
+
+
+# --- authored content integrity (the Prolog lesson, #182 slice 3) ---
+
+# Not a content pin: empty arrays pass. What it guards is the WIRE from authored data to
+# playable dialog -- a renamed or moved .dtl leaves a beat with a null timeline and no error
+# until a player reaches that moment of the lesson.
+func test_prolog_authored_content_resolves() -> void:
+	var scenario: ScenarioData = load("res://Scenarios/missions/Prolog.tres")
+	for beat: DialogBeat in scenario.dialog_beats:
+		assert_object(beat.timeline).is_not_null()
+	for step: TutorialStep in scenario.tutorial_steps:
+		assert_str(step.text).is_not_empty()

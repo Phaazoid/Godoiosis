@@ -14,8 +14,12 @@ enum Trigger {
 	SQUAD_FORMED,         # the player forms any squad
 	UNIT_SELECTED,        # the player selects a unit (game.unit_selected)
 	SQUAD_MEMBER_ADDED,   # a unit joins a player squad (SquadManager.squad_member_joined)
+	STEP_COMPLETED,       # the lesson advanced past step N (`step` below) -- beats only, the
+	                      # payoff voice for tutorial progress (a board event fires at its FIRST
+	                      # occurrence; "the squad is COMPLETE" is a lesson fact, not a board one)
 }
 
 @export var trigger := Trigger.MISSION_START
 @export var turn := 1   # TURN_START only: which player turn fires this (1-based)
+@export var step := 1   # STEP_COMPLETED only: which lesson step (1-based)
 @export var timeline: DialogicTimeline
