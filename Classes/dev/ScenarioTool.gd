@@ -7,9 +7,12 @@ class_name ScenarioTool
 # occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission requires versus who is
 # standing on it, split at the seam.
 #
-# Every edit here is scenario content, so each one marks the header modified.
+# Every edit here is scenario content, so each one marks the header modified. The one exception is
+# Check board (#390), which is a READ: it asks BoardLint whether what this page and its neighbours
+# have declared adds up to a playable mission, and touches nothing.
 
 @onready var objective_list: VBoxContainer = %ObjectiveList
+@onready var scroll_vbox: VBoxContainer = %ScenarioScrollVbox
 
 var scenario_manager: ScenarioManager
 var game
@@ -18,8 +21,17 @@ var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
 var _objective_warning: Label
 var _look_row: HBoxContainer
 var _camera_row: HBoxContainer
+var _report_box: VBoxContainer
 
 const NO_LOOK_LABEL := "(none - default)"
+
+# The report's three voices. Red is the same literal _refresh_objective_warning uses below -- the
+# live objective warning and a BLOCKS finding say the same kind of thing and must look the same.
+# Hardcoded rather than knobs on purpose: dev-panel text is in no knob table (CLAUDE.md's three-tab
+# fork is about the game's LOOK), and the neighbour hardcodes too.
+const BLOCKS_COLOR := Color(1, 0.45, 0.35)
+const DEGRADES_COLOR := Color(1, 0.78, 0.35)
+const CLEAN_COLOR := Color(0.6, 0.85, 0.6)
 
 
 func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -> void:
@@ -27,8 +39,13 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	game = p_game
 	_header = header
 	_build_objectives()
+	_build_check_section()
 	refresh_look_row()
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
+	# A LOAD is the one thing that makes a report describe a board that is no longer on screen, and
+	# board_loaded is the only signal that means exactly that -- the header's file_changed also
+	# fires on Update and Save As, which would wipe the report at the very moment you'd just run it.
+	scenario_manager.board_loaded.connect(_clear_report)
 
 
 func _mark() -> void:
@@ -195,3 +212,67 @@ func _refresh_objective_warning() -> void:
 	for objective in missing:
 		names.append(MissionRules.Objective.keys()[objective])
 	_objective_warning.text = "⚠ No zone painted for: %s — this mission cannot be won." % ", ".join(names)
+
+
+# --- Check board (#390) --------------------------------------------------------------------------
+
+# The deliberate sweep, under the objective boxes and INSIDE the scroll body -- a report is a list
+# of unknown length, and hung off the page itself (where the look and camera rows live) it would
+# grow past the bottom edge instead of scrolling. Built once; only the box below the button is ever
+# rebuilt.
+func _build_check_section() -> void:
+	scroll_vbox.add_child(HSeparator.new())
+
+	var button := Button.new()
+	button.text = "Check board"
+	button.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	button.pressed.connect(_on_check_pressed)
+	DevWidgets.apply_tooltip(button, DevWidgets.wrap_tooltip(
+		"Asks whether this board is actually PLAYABLE, and lists what it finds.\n\n"
+		+ "Blocks play: an objective with no zone painted for it, ENEMY units the computer is not "
+		+ "playing, a unit standing where spawn would refuse it (painted over after placement, and "
+		+ "dropped on the next load).\n\n"
+		+ "Wrong but plays: a squadmate out of its leader's cohesion range (ejected the first time "
+		+ "that squad acts), a look preset that no longer exists.\n\n"
+		+ "It reads the board IN FRONT OF YOU, never a saved file, and it changes nothing. It says "
+		+ "nothing about dialog beats or tutorial steps, nothing about whether the map is any good, "
+		+ "and nothing about whether your objective can be reached from where the units start."))
+	scroll_vbox.add_child(button)
+
+	_report_box = VBoxContainer.new()
+	scroll_vbox.add_child(_report_box)
+
+
+func _on_check_pressed() -> void:
+	_render_report(BoardLint.check(game))
+
+
+# Read-only BY CONSTRUCTION: nothing on this path calls _mark(). Pressing Check must never make the
+# board look edited, or the header's (modified) marker stops meaning "you changed something".
+func _render_report(findings: Array[Dictionary]) -> void:
+	_clear_report()
+	if findings.is_empty():
+		_add_report_line("✔ No problems found.", CLEAN_COLOR)
+	for finding: Dictionary in findings:
+		var blocks: bool = finding["severity"] == BoardLint.Severity.BLOCKS
+		_add_report_line(("⛔ " if blocks else "⚠ ") + String(finding["text"]),
+			BLOCKS_COLOR if blocks else DEGRADES_COLOR)
+	# A standing note rather than a wipe-on-edit: the report is worth keeping while you go and fix
+	# what it found, and what it found is usually on ANOTHER page (Tile Brush, Squads & AI). The
+	# honest cost of keeping it is saying out loud that it describes a moment. A board LOAD does
+	# clear it outright -- see the board_loaded connect in init.
+	_add_report_line("Snapshot -- re-check after editing.", Color(0.7, 0.7, 0.7))
+
+
+func _add_report_line(text: String, color: Color) -> void:
+	var label := Label.new()
+	label.text = text
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.modulate = color
+	_report_box.add_child(label)
+
+
+func _clear_report() -> void:
+	for child in _report_box.get_children():
+		_report_box.remove_child(child)
+		child.queue_free()

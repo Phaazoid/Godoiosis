@@ -163,25 +163,12 @@ func test_saved_indices_are_in_bounds() -> void:
 	assert_array(problems).is_empty()
 
 
-func test_every_mission_with_enemies_declares_them_ai_controlled() -> void:
-	# #150. Commanding is gated on `unit.get_faction() == active_faction()` (game.gd), i.e. hotseat —
-	# so a mission whose ENEMY faction isn't listed here doesn't stall on the enemy turn, it hands
-	# the enemy to the PLAYER. Missions only: dev scratch saves in the root and fixtures/ are
-	# deliberately manual. Scoped to ENEMY because NEUTRAL/ALLY AI stances are undecided.
-	var problems: Array[String] = []
-	var scenarios := _loaded_scenarios()
-	for path in scenarios:
-		if not path.begins_with(ScenarioManager.MISSION_DIR):
-			continue
-		var scenario: ScenarioData = scenarios[path]
-		var has_enemies := false
-		for entry: ScenarioUnitEntry in scenario.unit_entries:
-			if entry != null and entry.unit_data != null and entry.unit_data.faction == Team.Faction.ENEMY:
-				has_enemies = true
-				break
-		if has_enemies and not scenario.ai_factions.has(Team.Faction.ENEMY):
-			problems.append("%s: has ENEMY units but does not list ENEMY in ai_factions" % path.get_file())
-	assert_array(problems).is_empty()
+# The #150 ai_factions case MOVED to BoardLint (#390) on 2026-08-19, and is asserted over the same
+# missions by tests/dev/test_board_lint.gd. It left because it gained a second reader: the dev-tools
+# Check board button asks it of the board in your hands, and a rule stated both here and there would
+# be two rules. Its SCOPE stayed behind at the caller rather than travelling with it -- that test
+# still asks it of missions/ only, because root and fixtures/ saves are deliberately manual, while
+# the button has no path to scope by and asks unconditionally.
 
 
 func test_job_ids_resolve() -> void:

@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #386 (2026-08-19).**
+**Canon checked through #390 (2026-08-19).**
 
 ## What a mission is
 
@@ -55,9 +55,10 @@ Two authoring rules replaced the original one-zone-per-cell store: **zones overl
 
 ### The guard: declared without painted
 
-An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Two things catch it:
+An objective ticked with no matching zone painted can never be met — the mission is unwinnable. Three things catch it, all reading the one rule (`MissionController.objectives_missing_geometry`):
 
 - **Authoring time.** The dev Scenario tab's objective checkboxes render a live warning naming every declared-but-unpainted objective. This is the one that matters; it is cheaper than finding out mid-playtest.
+- **On demand.** Scenario ▸ Properties ▸ **Check board** ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)) reports it alongside the board's other authoring faults, and CI runs the same pass over every shipped mission.
 - **Load time.** `MissionController.set_objectives` `push_error`s once per missing objective.
 
 At runtime the unpainted objective reads **PENDING, not NONE** — deliberately. The map really is unwinnable, and silently dropping the objective would quietly convert a broken map into a *different, playable* one, which is a far worse failure than a loud one.

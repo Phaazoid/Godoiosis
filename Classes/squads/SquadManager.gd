@@ -135,7 +135,18 @@ func leave_squad(unit: Unit):
 # board state settles, mirroring OrderExecutor._process_downed_pending -- end of a resolution pass
 # and turn start after the terrain/downed ticks. Deliberately not previewed, same as downed ejection.
 func enforce_contact() -> void:
+	for member in contact_breaks():
+		leave_squad(member)
+
+# The predicate half of enforce_contact, split out for #390 rather than copied into it: the board
+# lint warns about exactly the members this sweep is about to eject, so it has to ask the sweep's
+# OWN question -- a second copy would relax on one side and go quiet on the other, which is how the
+# 2026-08-04 cohesion hole shipped in the first place. Non-mutating; the caller decides whether to
+# act on the answer. Snapshotting `squads` and `members` is inherited from the sweep and stays
+# load-bearing there, where leave_squad appends solo squads while this iterates.
+func contact_breaks() -> Array[Unit]:
 	var board: BoardContext = board_source.call()
+	var broken: Array[Unit] = []
 	for squad in squads.duplicate():
 		if not is_instance_valid(squad) or squad.members.size() <= 1:
 			continue
@@ -144,7 +155,8 @@ func enforce_contact() -> void:
 			if member == squad.leader:
 				continue
 			if not SquadCohesion.in_range(squad, leader_cell, member, member.movement.cell, board):
-				leave_squad(member)
+				broken.append(member)
+	return broken
 
 func check_reassign_leader(squad: Squad, unit: Unit):
 	if squad.members.is_empty():
