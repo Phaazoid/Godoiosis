@@ -431,11 +431,22 @@ layout_mode = 2
 script = ExtResource("2_1dnd3")
 metadata/_tab_index = 4
 
-[node name="LoadedScenarioLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox" unique_id=990000021]
+[node name="TitleRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox" unique_id=990000078]
+layout_mode = 2
+
+[node name="LoadedScenarioLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox/TitleRow" unique_id=990000021]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.83, 0.4, 1)
 text = "Loaded: (unsaved board)"
+
+[node name="ScenarioStatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox/TitleRow" unique_id=990000027]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_colors/font_color = Color(1, 0.45, 0.35, 1)
+horizontal_alignment = 2
+autowrap_mode = 3
 
 [node name="ExistingRow" type="HBoxContainer" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox" unique_id=1524370160]
 layout_mode = 2
@@ -464,20 +475,13 @@ layout_mode = 2
 
 [node name="ScenarioNameInput" type="LineEdit" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox/NewRow" unique_id=1875216039]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(100, 25)
+custom_minimum_size = Vector2(480, 25)
 layout_mode = 2
-size_flags_horizontal = 3
 placeholder_text = "New scenario name"
 
 [node name="SaveAsScenarioButton" type="Button" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox/NewRow" unique_id=990000013]
 layout_mode = 2
 text = "Save As"
-
-[node name="ScenarioStatusLabel" type="Label" parent="Panel/MarginContainer/VBoxContainer/ScenarioHeader/HeaderVbox" unique_id=990000027]
-unique_name_in_owner = true
-layout_mode = 2
-theme_override_colors/font_color = Color(1, 0.45, 0.35, 1)
-autowrap_mode = 3
 
 [node name="LowerScroll" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/Scenario" unique_id=990000015]
 layout_mode = 2

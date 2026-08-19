@@ -46,8 +46,8 @@ func init(p_scenario_manager: ScenarioManager, p_game) -> void:
 	scenario_manager = p_scenario_manager
 	game = p_game
 	refresh_dropdown()
-	var row := get_node("HeaderVbox") as VBoxContainer
-	DevWidgets.add_checkbox(row, "Authored save — cast units re-read their character files",
+	var row := get_node("HeaderVbox/NewRow") as HBoxContainer
+	DevWidgets.add_checkbox(row, "Authored",
 		authored_save, func(pressed: bool): authored_save = pressed,
 		"ON (authoring mode): units spawned from a character file (Resources/Units/) save as\n"
 		+ "REFERENCES to that file — every load re-reads the character as authored, so editing\n"
