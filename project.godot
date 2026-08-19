@@ -45,8 +45,8 @@ enabled=PackedStringArray("res://addons/AsepriteWizard/plugin.cfg", "res://addon
 
 [gui]
 
-theme/custom="res://Resources/UiTheme.tres"
 timers/tooltip_delay_sec=1.0
+theme/custom="res://Resources/UiTheme.tres"
 
 [input]
 
