@@ -89,6 +89,7 @@ func open_mission_select() -> void:
 	_select_screen.load_game_chosen.connect(_on_load_game_chosen)
 	_select_screen.sandbox_chosen.connect(_on_sandbox_chosen)
 	_select_screen.glossary_chosen.connect(func(): GlossaryScreen.show_screen(game))
+	_select_screen.settings_chosen.connect(func(): SettingsScreen.show_screen(game))
 	# Defaults to FEEDBACK, not BUG: nobody reaches this screen mid-defect (#131 item 6).
 	_select_screen.feedback_chosen.connect(func(): game.open_report_card(BugReporter.Kind.FEEDBACK))
 	_select_screen.quit_chosen.connect(func(): game.get_tree().quit())
