@@ -206,7 +206,7 @@ func test_the_panel_stays_inside_the_viewport() -> void:
 # ==============================================================================
 
 func _steps(list: Array[TutorialStep]) -> void:
-	game.scenario_director.set_steps(list)
+	game.scenario_manager.current_tutorial_steps = list   # #397: the manager owns content
 	game.scenario_director.mission_started()   # content is inert until armed (the solo-squad spawn guard)
 
 

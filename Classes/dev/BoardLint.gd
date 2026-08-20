@@ -39,6 +39,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_placement(game, board, found)
 	_check_cohesion(game, found)
 	_check_look_preset(game, found)
+	_check_dialog(game, board, found)
 
 	# Ordered by severity here, not at the panel: a second reader would otherwise have to re-derive
 	# the running order, and the order IS part of what the report says. Grouping by a pass over the
@@ -145,3 +146,31 @@ static func _check_look_preset(game, found: Array[Dictionary]) -> void:
 	_add(found, Severity.DEGRADES,
 		"This board names look preset '%s', which no longer exists -- it opens with the default look."
 			% preset)
+
+
+# #397, the two checks deferred from #390. Both read the SAME stores the director reads
+# (ScenarioManager's current_dialog_beats/current_tutorial_steps), so every fault here is
+# reachable from the surface that misbehaves -- a check against a saved file would miss the
+# unsaved edits the dev-tools page makes.
+static func _check_dialog(game, board: BoardContext, found: Array[Dictionary]) -> void:
+	for beat: DialogBeat in game.scenario_manager.current_dialog_beats:
+		if beat.timeline == null:
+			_add(found, Severity.DEGRADES,
+				"A dialog beat (%s) has no timeline -- it fires into nothing."
+					% DialogBeat.Trigger.keys()[beat.trigger])
+
+	# The name check is authored-time advice: mid-battle, a named unit may legitimately be gone
+	# (dead, extracted), so past the opening turn of an ARMED battle it stays quiet (dev call,
+	# #397). An un-armed board is an authoring session and always gets checked -- the dev-tools
+	# Load path never arms.
+	if game.scenario_director.past_opening_turn():
+		return
+	var names: Dictionary = {}
+	for unit: Unit in board.units:
+		if is_instance_valid(unit) and unit.unit_data != null:
+			names[unit.unit_data.display_name] = true
+	for step: TutorialStep in game.scenario_manager.current_tutorial_steps:
+		if step.unit_name != "" and not names.has(step.unit_name):
+			_add(found, Severity.BLOCKS,
+				("A tutorial step names '%s', but no unit on this board carries that name -- "
+					+ "the step can never complete and the lesson stalls there.") % step.unit_name)

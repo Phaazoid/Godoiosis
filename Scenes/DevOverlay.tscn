@@ -14,6 +14,7 @@
 [ext_resource type="Script" path="res://Classes/dev/GameTool.gd" id="9_game1"]
 [ext_resource type="Script" path="res://Classes/dev/ScenarioHeader.gd" id="10_schdr"]
 [ext_resource type="Script" path="res://Classes/dev/SquadsAiTool.gd" id="11_sqai"]
+[ext_resource type="Script" path="res://Classes/dev/DialogTool.gd" id="11_dlgt"]
 [ext_resource type="Script" path="res://Classes/dev/ExperimentsTool.gd" id="12_exps"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
@@ -86,6 +87,12 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("11_sqai")
+
+[node name="Dialog" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000300]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("11_dlgt")
 
 [node name="SquadsScroll" type="ScrollContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs/SquadsAI" unique_id=990000075]
 layout_mode = 2

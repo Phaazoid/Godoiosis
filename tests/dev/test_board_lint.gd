@@ -297,3 +297,47 @@ func test_no_shipped_mission_loses_a_unit_on_load() -> void:
 			problems.append("%s: %d of %d entries reached the board — the rest were dropped as blocked or off-map"
 				% [path.get_file(), actual, expected])
 	assert_array(problems).is_empty()
+
+
+# --- the dialog checks (#397, deferred from #390) --------------------------------------------------
+
+func test_a_beat_with_no_timeline_degrades() -> void:
+	var beat := DialogBeat.new()   # timeline left null
+	game.scenario_manager.current_dialog_beats.append(beat)
+	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no timeline")).is_true()
+	# Non-vacuous twin: give it a timeline and the finding goes.
+	beat.timeline = DialogicTimeline.new()
+	assert_bool(_mentions(BoardLint.Severity.DEGRADES, "no timeline")).is_false()
+
+
+func test_a_step_naming_an_absent_unit_blocks() -> void:
+	var step := TutorialStep.new()
+	step.unit_name = "Torv"
+	step.text = "Select Torv."
+	game.scenario_manager.current_tutorial_steps.append(step)
+	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_true()
+	# Non-vacuous twin: put a Torv on the board and the finding goes.
+	var torv_data := H.make_unit_data({}, Team.Faction.PLAYER)
+	torv_data.display_name = "Torv"
+	assert_object(game.spawn_unit(torv_data, Vector2i(0, 0))).is_not_null()
+	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_false()
+
+
+func test_an_empty_unit_name_is_never_a_finding() -> void:
+	var step := TutorialStep.new()
+	step.unit_name = ""   # "any unit" is always satisfiable
+	game.scenario_manager.current_tutorial_steps.append(step)
+	assert_bool(_texts_at(BoardLint.Severity.BLOCKS).is_empty()).is_true()
+
+
+func test_the_name_check_stays_quiet_past_the_opening_turn() -> void:
+	# Dev call (#397): mid-battle, a named unit may legitimately be gone (dead, extracted), so an
+	# ARMED battle past turn 1 stops asking. The un-armed authoring board above always asks.
+	var step := TutorialStep.new()
+	step.unit_name = "Torv"
+	game.scenario_manager.current_tutorial_steps.append(step)
+	game.scenario_director.mission_started()   # arms
+	game.turn_manager.turn_started.emit(Team.Faction.PLAYER)   # turn 1: still authored-time
+	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_true()
+	game.turn_manager.turn_started.emit(Team.Faction.PLAYER)   # turn 2: battle underway
+	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_false()
