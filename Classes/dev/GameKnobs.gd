@@ -168,7 +168,7 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_camera_offset", "label": "Flame camera push", "min": 0.0, "max": 0.5, "step": 0.005,
 		"tip": "How far each flame is pushed toward the camera, in cells. A flame and a unit sprite on one cell are the same camera-facing plane, so without this they speckle against each other wherever someone stands in fire; push too far and the fire visibly leaves its own tile. A clearance rather than a taste call -- it defends against a geometric coincidence."},
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_animated", "label": "Flame animated",
-		"tip": "Off holds the fire on one frame at steady light -- a still flame, not a missing one. This is the photosensitivity switch in its first home; when the game grows a settings menu the PLAYER drives this rather than a second switch being grown beside it."},
+		"tip": "Off holds the fire on one frame at steady light -- a still flame, not a missing one. This is the authored game constant; the PLAYER's photosensitivity toggle (#217) ANDs on top of it in BoardMirror._flame_animating, the one composed reader."},
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_ground_gap", "label": "Flame ground gap", "min": 0.0, "max": 0.5, "step": 0.005,
 		"tip": "Gap between the base of the flame and the tile surface. A small gap stops the flame z-fighting the ground it stands on; too large and the fire floats."},
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_writes_depth", "label": "Flame writes depth",

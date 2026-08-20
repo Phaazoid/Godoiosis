@@ -27,6 +27,7 @@ var _game: Node2D
 
 
 func before_test() -> void:
+	PlayerSettings.reset_for_test()   # hermetic: never read the developer's own settings.cfg
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -2165,6 +2166,43 @@ func test_the_fire_animates_while_animated_and_holds_still_when_not() -> void:
 		assert_float(_frame_of(flame)).override_failure_message(
 			"the fire kept moving with flame_animated off -- #217's toggle would only hide it"
 		).is_equal(still)
+
+
+func test_the_photosensitivity_setting_holds_the_fire_still() -> void:
+	# #217's player-facing half. The setting drives the SAME seam the authored flag does, so a
+	# player who asks for steady effects gets them on a board whose fire is authored animated. The
+	# precondition guard keeps the "still" half honest: a fire that never moves passes it vacuously.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var flame := _flames_of(mirror, burning[0])[0]
+
+	# Precondition: the fire really does animate with the setting off.
+	var seen: Dictionary[float, bool] = {}
+	for i in 40:
+		mirror._flame_time += 1.0
+		mirror.advance_flames()
+		seen[_frame_of(flame)] = true
+	assert_int(seen.size()).override_failure_message(
+			"the fire never moved with the setting off; the toggle case proves nothing").is_greater(1)
+
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	mirror.advance_flames()   # settle onto the steady frame BEFORE capturing it, as the sibling test does
+	var still := _frame_of(flame)
+	for i in 40:
+		mirror._flame_time += 1.0
+		mirror.advance_flames()
+		assert_float(_frame_of(flame)).override_failure_message(
+				"the fire kept moving with the photosensitivity setting on -- the player's toggle would only hide it"
+		).is_equal(still)
+	# Steady state means steady ENERGY too: a still frame under a flickering lamp is still a strobe.
+	var light := _light_under(mirror.fire_marker_at(burning[0]))
+	assert_float(light.light_energy).override_failure_message(
+			"the flame's light still flickers with the setting on -- steady state means steady energy"
+	).is_equal(mirror.flame_light_energy)
 
 
 func test_two_burning_cells_do_not_burn_in_lockstep() -> void:

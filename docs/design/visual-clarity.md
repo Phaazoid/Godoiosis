@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #372 (2026-08-19).**
+**Canon checked through #427 (2026-08-20).**
 
 ## Principles
 
@@ -256,8 +256,8 @@ Successor filed the same day and **BUILT 2026-08-19**: [#350](https://github.com
 — a player toggle pinning **every** bar on, which was one more disjunct in this same visibility
 expression and then almost entirely a question of where a player setting lives. See *Every bar, if
 the player says so* below. Note also that the predicted-down alarm is a **pulse**, so it joins
-[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry — and since
-#350 that registry has a home to be declared in (`PlayerSettings`) and a page to appear on.
+[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity registry — a registry
+whose first member (fire) shipped, and which since #350 has a home (`PlayerSettings`) and a page.
 
 ## The readout belongs to the PLAN, not to the board ([#354](https://github.com/Phaazoid/Godoiosis/issues/354), FIXED 2026-08-18)
 

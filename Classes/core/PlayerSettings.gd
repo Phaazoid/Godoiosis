@@ -7,9 +7,8 @@ class_name PlayerSettings
 ## Declare a setting in `Setting`, describe it in `DEFS`, read it anywhere with
 ## `PlayerSettings.is_on(...)`. SettingsScreen builds its rows straight off DEFS, so a new setting
 ## is one enum member plus one table entry and no UI work — which is the point: #217's
-## photosensitivity switch is the declared second tenant, and `docs/design/presentation-effects.md`
-## already ruled that a settings surface DRIVES that switch rather than a second one growing beside
-## it.
+## photosensitivity switch is the second tenant, shipped, and `docs/design/presentation-effects.md`
+## ruled that a settings surface DRIVES that switch rather than a second one growing beside it.
 ##
 ## A static class, not an autoload: this project has none, and Stats / Elemental / Experiments are
 ## all class-level statics for the same reason. Callers poll it; there is no changed signal, because
@@ -22,6 +21,7 @@ class_name PlayerSettings
 enum Setting {
 	ALWAYS_SHOW_HEALTH,
 	SHOW_DIALOG,
+	PHOTOSENSITIVITY,
 }
 
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
@@ -38,6 +38,11 @@ const DEFS := {
 		"title": "Show mission dialog",
 		"desc": "Characters speak during missions. Turn off to skip all dialog -- replays, restarts, or preference. Tutorial instructions stay on either way.",
 		"default": true,
+	},
+	Setting.PHOTOSENSITIVITY: {
+		"title": "Photosensitivity toggle",
+		"desc": "Hold flickering and strobing effects (like fire) at a steady brightness instead of animating them. For players sensitive to flashing lights.",
+		"default": false,
 	},
 }
 
