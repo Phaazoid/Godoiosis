@@ -196,6 +196,27 @@ func test_unit_movement_does_not_mark_the_scenario_modified() -> void:
 	).is_false()
 
 
+# The marker gap the verticality fixture surfaced (#259 rework): the Unit Editor's own Save wrote
+# the live unit and told nobody, so "(modified)" never lit and the dev had no cue an Update was
+# owed. The save also flags the unit dev_edited -- the authored-save divergence the flow suite
+# (test_cast_references.gd) pins from the capture side.
+func test_a_unit_editor_save_marks_the_scenario_modified() -> void:
+	await _load_prolog()
+	var unit: Unit = null
+	for child in game.units_root.get_children():
+		if child is Unit:
+			unit = child
+			break
+	assert_object(unit).override_failure_message("Prolog spawned no units; the case is vacuous").is_not_null()
+	overlay.unit_editor.edit_unit(unit)
+	await await_idle_frame()
+	overlay.unit_editor._save_button.pressed.emit()   # the real button wire, not the handler
+	assert_bool(overlay.scenario_header.is_modified()).override_failure_message(
+		"the Unit Editor's Save did not mark the scenario modified").is_true()
+	assert_bool(unit.dev_edited).override_failure_message(
+		"the saved unit is not flagged dev_edited -- an authored Update would discard the edit").is_true()
+
+
 func test_update_clears_the_modified_marker() -> void:
 	await _load_prolog()
 	var cells: Array[Vector2i] = game.grid.get_used_cells()

@@ -36,8 +36,11 @@ var _revert_button: Button = null
 var _active_subtab := 0   # survives the full-panel repaint every staged toggle triggers
 var _page_scroll := 0     # ditto for the active page's scroll -- a rebuild resets it to the top
 
-func init(p_game):
+var _header: ScenarioHeader
+
+func init(p_game, header: ScenarioHeader = null):
 	game = p_game
+	_header = header
 
 func edit_unit(unit):
 	if unit != null and unit == editing_unit:
@@ -153,6 +156,11 @@ func _on_save_pressed() -> void:
 	if not is_instance_valid(editing_unit):
 		return
 	_apply(editing_unit)
+	# The unit is board-local now (#259 rework): an authored save snapshots it instead of
+	# re-referencing its character file, and the scenario header owes the dev a (modified).
+	editing_unit.dev_edited = true
+	if _header != null:
+		_header.mark_modified()
 	_capture(editing_unit)   # re-read: HP may have clamped against a max the edit just moved
 	populate_unit_editor(editing_unit)
 

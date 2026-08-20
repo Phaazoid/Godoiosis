@@ -176,9 +176,11 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 			continue
 
 		var entry := ScenarioUnitEntry.new()
-		if authored and unit.unit_data_source != null:
+		if authored and unit.unit_data_source != null and not unit.dev_edited:
 			# Reference, not copy: serializes as an ExtResource to the character file, and
 			# state_saved=false tells the loader the spawn's own initialize+kit is the whole answer.
+			# A DEV-EDITED unit falls through to the snapshot branch (dev-ratified, #259 rework):
+			# the edit made it board-local, and a re-reference would silently discard it.
 			entry.unit_data = unit.unit_data_source
 			entry.state_saved = false
 		else:

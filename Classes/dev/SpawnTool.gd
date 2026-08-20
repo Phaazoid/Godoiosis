@@ -27,7 +27,10 @@ var _characters := {}
 var selected_character: UnitData = null
 var _character_dropdown: OptionButton = null
 
-func init(p_game):
+var _header: ScenarioHeader
+
+func init(p_game, header: ScenarioHeader = null):
+	_header = header
 	game = p_game
 
 	var stat_grid := %StatInput
@@ -167,6 +170,10 @@ func try_spawn_at(cell: Vector2i) -> void:
 		var unit = game.spawn_unit(selected_character, cell)
 		if unit != null and unit.get_faction() != faction:
 			unit.change_faction(faction)
+			# Cast off the file's own side = a dev edit (#259 rework): an authored save must
+			# snapshot this unit, or the reference loads back on the character's faction.
+			unit.dev_edited = true
+		_mark_authoring_edit(unit != null)
 		return
 	_validate()
 	if valid:
@@ -174,9 +181,16 @@ func try_spawn_at(cell: Vector2i) -> void:
 		var unit = game.spawn_unit(data, cell)
 		if unit != null and selected_weapon != null:
 			unit.add_item(WeaponCatalog.instantiate_entry(selected_weapon))
+		_mark_authoring_edit(unit != null)
 	else:
 		print(error_message)
 		error_message = ""
+
+# A spawn changes what the scenario CONTAINS — the header's (modified) rule (#259 rework closing
+# the marker gap: only field edits and terrain marked before; the unit-shaped edits never did).
+func _mark_authoring_edit(spawned: bool) -> void:
+	if spawned and _header != null:
+		_header.mark_modified()
 
 func _on_weapon_dropdown_item_selected(index: int):
 	if index < 0 or index >= _spawnable.size():

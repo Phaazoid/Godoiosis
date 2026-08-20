@@ -343,8 +343,14 @@ func test_every_class_knob_is_findable_in_the_file_it_names() -> void:
 		var rewritten := ""
 		var what := ""
 		if knob.has("static"):
-			what = "static var %s in OverlayManager.gd" % knob["static"]
-			rewritten = KnobSource.rewrite_declaration_default(manager, knob["static"], "1.0")
+			# A static row names its own script home since the #259 rework (default: the
+			# OverlayManager file) -- the law reads the same key the Save routes by.
+			var home: String = knob.get("script", GameKnobs.OVERLAY_MANAGER_SCRIPT)
+			var source := manager if home == GameKnobs.OVERLAY_MANAGER_SCRIPT else _read_file(home)
+			assert_str(source).override_failure_message(
+				"could not read %s -- this law would pass vacuously" % home).is_not_empty()
+			what = "static var %s in %s" % [knob["static"], home.get_file()]
+			rewritten = KnobSource.rewrite_declaration_default(source, knob["static"], "1.0")
 		else:
 			var layer_name: String = BoardOverlays.Layer.keys()[knob["layer"]]
 			what = "Layer.%s's entry in BoardOverlays.LAYERS" % layer_name
