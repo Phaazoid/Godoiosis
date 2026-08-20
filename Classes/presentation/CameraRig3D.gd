@@ -1,5 +1,14 @@
+extends Node3D
+class_name CameraRig3D
+
 # The diorama camera rig (#203, camera pass #176 stage 4d): the camera contract made
-# drivable, and shared verbatim by the look-dev scene and Battle3D.
+# drivable, and shared verbatim by Battle3D and the look-dev scene.
+#
+# It was `Scenes/LookDev/look_dev_camera.gd` until #393 -- shipping code wearing the scratch
+# scene's name, in the scratch scene's folder, with no class_name, while Battle3D.tscn loaded
+# this exact script. Same move LookKnobs made out of dev/, for the same reason: where a thing
+# was first prototyped is not where it belongs once the game runs it. It sits beside CameraPose,
+# which exists only to feed pose() below.
 #
 # Yaw ORBITS FREELY (drag orbit_button) and rests wherever you leave it; Q/E step to
 # the next 90-degree detent, i.e. one press realigns from any angle. That repeals the
@@ -38,7 +47,6 @@
 # re-derived as offsets around the camera's live distance to the rig, so the focus
 # band stays glued to the diorama. The band widths are the exports below; blur
 # AMOUNT stays a hand-tuned knob on the camera's CameraAttributes.
-extends Node3D
 
 # Feel knobs, every one (the tuning rule -- these were consts until 4d).
 @export var yaw_step := 90.0

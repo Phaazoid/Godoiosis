@@ -112,17 +112,53 @@ func test_tile_materials_are_nearest_filtered_and_textured() -> void:
 			assert_int(material.texture_filter).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
 
 
-func test_presets_are_distinct_and_apply() -> void:
-	# Presets are feel-tuned content; what is structural is that they exist, apply
-	# cleanly, and actually differ from one another (the relighting demo is real).
-	var sun := _scene.get_node("Sun") as DirectionalLight3D
-	var preset_count: int = _scene.PRESETS.size()
-	assert_int(preset_count).is_equal(4)
-	var signatures := {}
-	for index in preset_count:
-		_scene.apply_preset(index)
-		signatures["%s|%s|%s" % [sun.light_color, sun.light_energy, sun.rotation_degrees]] = true
-	assert_int(signatures.size()).is_equal(preset_count)
+func test_every_bound_mood_resolves_to_the_preset_it_names() -> void:
+	# The keys are RESOLUTION KEYS since #393, not indices into a local table, so the scene's
+	# moods can go missing in a way the old copy could not: renaming or deleting a file under
+	# Resources/LookPresets/ makes LookKnobs fall back to the default -- deliberately soft on a
+	# board, where a broken map must still render, but the diorama's four are a fixed set and
+	# nothing else would say they had gone.
+	var names: Array[String] = _scene.PRESET_NAMES
+	assert_int(names.size()).is_equal(4)
+	for preset_name in names:
+		var preset := LookKnobs.resolve(preset_name)
+		assert_str(preset.preset_name).override_failure_message(
+			"LookDev binds a key to '%s' but LookKnobs resolved '%s' -- that preset was renamed "
+			% [preset_name, preset.preset_name]
+			+ "or deleted, and the scene now silently wears the default instead."
+		).is_equal(preset_name)
+
+
+func test_a_mood_key_applies_the_WHOLE_mood_to_this_scene() -> void:
+	# #393's actual claim: the SHARED applier reaches this host, entire -- not the nine properties
+	# the retired local table wrote. Every expectation is read back off the preset FILE, so no
+	# feel-tuned number is pinned and the dev may retune any mood freely; what is asserted is only
+	# that the saved value ARRIVED. A signature over a few sampled properties cannot do this job --
+	# rename `WorldEnvironment` in LookDev.tscn and LookKnobs.write silently no-ops that whole
+	# group, while the sun alone still makes four distinct signatures.
+	#
+	# ONE knob is expected not to land, and counting them is what pins that: `opening_view_cells`
+	# names a property the look-dev root does not have (the rig free-roams here, it never frames),
+	# so write() no-ops on it exactly as on a missing node. Identified by its derived preset key,
+	# never by its label -- LookKnobs says the labels are the part that gets reworded.
+	var preset := LookKnobs.resolve(_scene.PRESET_NAMES[0])
+	_scene.apply_preset(0)
+	var skipped: Array[String] = []
+	for knob: Dictionary in LookKnobs.preset_knobs():
+		var key := LookKnobs.preset_key(knob)
+		var live: Variant = LookKnobs.read(_scene, knob)
+		if typeof(live) == TYPE_NIL:
+			skipped.append(key)
+			continue
+		var saved: Variant = preset.values[key]
+		assert_bool(LookKnobs.same_value(live, saved)).override_failure_message(
+			"after applying '%s', %s reads %s but the preset saved %s -- the mood did not land"
+			% [preset.preset_name, key, live, saved]
+		).is_true()
+	assert_array(skipped).override_failure_message(
+		"expected exactly one knob with no home in this scene, got %s -- a node renamed in "
+		% [skipped] + "LookDev.tscn drops its whole group silently, which is what this counts."
+	).is_equal([".|opening_view_cells"])
 
 
 func test_dof_focus_tracks_the_camera_distance() -> void:

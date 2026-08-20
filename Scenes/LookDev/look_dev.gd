@@ -1,61 +1,34 @@
-# The HD-2D look-dev scene controller (#203 / #176 Stage 0): lighting presets and
-# per-ingredient toggles, so each layer of the post stack can be judged alone and
-# the relighting trick (same board, four moods) can be demoed live. This scene is
-# the permanent lighting/grading playground; nothing in the game references it.
+# The HD-2D look-dev scene controller (#203 / #176 Stage 0): named moods and per-ingredient
+# toggles, so each layer of the post stack can be judged alone and the relighting trick
+# (same board, four moods) can be demoed live. The permanent lighting/grading playground.
 #
-# Keys: 1-4 presets (Day/Sunset/Night/Overcast) - Q/E orbit - wheel zoom - WASD pan
+# NOT a scratch scene, whatever "LookDev" suggests (#393). Five presentation suites fixture
+# on LookDev.tscn -- test_board_overlays, test_board_picker, test_camera_rig, test_look_dev,
+# test_walk_demo -- Battle3D.tscn loads its MeshLibrary, BoardMirror and BoardOverlays read
+# textures out of Art/LookDev/, and its camera rig IS the shipping one (CameraRig3D, which
+# lived here until #393). Editing it freely reds the presentation area; deleting it does worse.
+#
+# THE MOODS ARE NOT HERE. They were `const PRESETS`, a hardcoded copy of four of the twelve
+# LookPresets #253 shipped -- a second answer to "what is Day?", free to drift from the files
+# the game itself renders. PRESET_NAMES now holds only the key BINDINGS; LookKnobs.resolve +
+# LookKnobs.apply do the rest, the same applier battle3d._apply_board_look calls, so a mood
+# cannot mean one thing in the diorama and another on a board.
+#
+# Two consequences of applying a WHOLE mood, both #253's own ruling arriving here:
+#   - a mood key RESTORES an ingredient you toggled off (F then 1 brings fog back), because a
+#     mood you cannot fully re-enter is not a mood;
+#   - `opening_view_cells` has no home in this scene (the rig never frames here, it free-roams),
+#     so that one knob is silently skipped -- the tolerance LookKnobs.write already gives a
+#     knob whose NODE is missing, one level down.
+#
+# Keys: 1-4 moods (Day/Sunset/Night/Overcast) - Q/E orbit - wheel zoom - WASD pan
 #       R reset cam - F fog - G glow - C depth of field - V vignette - T torch - H help
 extends Node3D
 
+# Key bindings, not content: each name is resolved through LookKnobs against Resources/LookPresets/.
 const PRESET_NAMES: Array[String] = ["Day", "Sunset", "Night", "Overcast"]
-const PRESETS: Array[Dictionary] = [
-	{
-		"sun_rotation": Vector3(-50.0, -35.0, 0.0),
-		"sun_color": Color(1.0, 0.985, 0.94),
-		"sun_energy": 1.3,
-		"fog_density": 0.015,
-		"fog_albedo": Color(0.85, 0.88, 0.92),
-		"saturation": 1.05,
-		"sky_top": Color(0.32, 0.5, 0.78),
-		"sky_horizon": Color(0.68, 0.74, 0.82),
-	},
-	{
-		# Fog tamed 2026-08-12 ("looks like a forest fire") — stopgap until the
-		# tuning panel; the dev owns these numbers.
-		"sun_rotation": Vector3(-14.0, -62.0, 0.0),
-		"sun_color": Color(1.0, 0.62, 0.32),
-		"sun_energy": 1.1,
-		"fog_density": 0.018,
-		"fog_albedo": Color(0.9, 0.78, 0.62),
-		"saturation": 1.12,
-		"sky_top": Color(0.36, 0.28, 0.5),
-		"sky_horizon": Color(0.98, 0.6, 0.35),
-	},
-	{
-		"sun_rotation": Vector3(-48.0, 24.0, 0.0),
-		"sun_color": Color(0.55, 0.65, 0.95),
-		"sun_energy": 0.22,
-		"fog_density": 0.045,
-		"fog_albedo": Color(0.5, 0.56, 0.72),
-		"saturation": 0.9,
-		"sky_top": Color(0.04, 0.06, 0.13),
-		"sky_horizon": Color(0.1, 0.13, 0.22),
-	},
-	{
-		"sun_rotation": Vector3(-65.0, -25.0, 0.0),
-		"sun_color": Color(0.86, 0.89, 0.93),
-		"sun_energy": 0.55,
-		"fog_density": 0.055,
-		"fog_albedo": Color(0.75, 0.77, 0.8),
-		"saturation": 0.72,
-		"sky_top": Color(0.45, 0.48, 0.52),
-		"sky_horizon": Color(0.62, 0.64, 0.66),
-	},
-]
-
 const TORCH_FLICKER := 0.12
 
-@onready var _sun: DirectionalLight3D = $Sun
 @onready var _env: Environment = $WorldEnvironment.environment
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
 @onready var _torch_light: OmniLight3D = $Props/Torch/TorchLight
@@ -106,18 +79,11 @@ func _process(delta: float) -> void:
 		_torch_light.light_energy = _torch_base_energy * flicker
 
 
+# The whole mood, resolved by NAME. A name that no longer resolves falls back to the default
+# loudly rather than leaving whatever was on screen -- LookKnobs owns that, here as on a board.
 func apply_preset(index: int) -> void:
-	var preset := PRESETS[clampi(index, 0, PRESETS.size() - 1)]
-	_sun.rotation_degrees = preset["sun_rotation"]
-	_sun.light_color = preset["sun_color"]
-	_sun.light_energy = preset["sun_energy"]
-	_env.volumetric_fog_density = preset["fog_density"]
-	_env.volumetric_fog_albedo = preset["fog_albedo"]
-	_env.adjustment_saturation = preset["saturation"]
-	var sky_material := _env.sky.sky_material as ProceduralSkyMaterial
-	sky_material.sky_top_color = preset["sky_top"]
-	sky_material.sky_horizon_color = preset["sky_horizon"]
-	sky_material.ground_horizon_color = preset["sky_horizon"]
+	var preset_name: String = PRESET_NAMES[clampi(index, 0, PRESET_NAMES.size() - 1)]
+	LookKnobs.apply(self, LookKnobs.resolve(preset_name))
 
 
 func toggle_fog() -> void:

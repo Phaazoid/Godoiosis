@@ -81,7 +81,7 @@ func handle_dev_key(event: InputEvent) -> void:
 
 # Z / C turn the elevation brush's ramp rise (#260 follow-up), the Q/E detent idiom applied to
 # authoring. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
-# in look_dev_camera -- and project.godot is the one file concurrent PRs reliably collide on.
+# in CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
 # Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
 # dev-layer exactly like F1/F2/F3.
 func _handle_rise_keys(event: InputEvent) -> void:
