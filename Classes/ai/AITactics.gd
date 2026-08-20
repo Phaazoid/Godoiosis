@@ -166,6 +166,11 @@ static func _best_attack_candidate(unit: Unit, board: BoardContext, origin: Vect
 				continue
 			if not reach.has(other.movement.cell):
 				continue
+			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
+			# is refused at the click, so the AI must not author one. Directional attacks pass, as
+			# they do at the click. (Live cell, not projected -- the declared v1 approximation.)
+			if not Reach.vertical_aim_ok(attack, origin, other.movement.cell, board):
+				continue
 			var affected := Reach.get_affected_cells_from(unit, origin, other.movement.cell, attack)
 			var victims := RulesService.gather_attack_victims(unit, affected, board, attack)
 			if victims.is_empty():
@@ -328,12 +333,16 @@ static func _nearest_standable_attack_cell(unit: Unit, goal: Vector2i, aiming: A
 
 # Every cell `unit` could both STAND on and hit `goal` from -- the firing positions around a target.
 # Reach is unioned over all 4 facings, so "X can hit goal" iff "goal can hit X" for every pattern
-# this game authors; can_traverse then drops walls and is_standable_for drops occupied cells, which
-# are the same two rules compute_move_range's own BFS enforces. Shared by the approach picker and by
-# target selection so the two cannot disagree about where a fight can be had from (#127).
+# this game authors -- for the HORIZONTAL half only, since #258's up/down tolerance is asymmetric by
+# design. The vertical clause is therefore judged in the TRUE direction (stand at `cell`, hit
+# `goal`), never inverted. can_traverse then drops walls and is_standable_for drops occupied cells,
+# which are the same two rules compute_move_range's own BFS enforces. Shared by the approach picker
+# and by target selection so the two cannot disagree about where a fight can be had from (#127).
 static func _standable_attack_cells(unit: Unit, goal: Vector2i, aiming: AttackData, board: BoardContext) -> Dictionary:
 	var cells := {}
 	for cell in Reach.get_all_attack_cells_from(unit, goal, aiming):
+		if not Reach.vertical_aim_ok(aiming, cell, goal, board):
+			continue   # a ledge above the weapon's tolerance is not a firing position (#258)
 		if not RulesService.can_traverse(cell, unit, board):
 			continue   # a wall/off-map neighbour of goal is not a firing position either
 		if RulesService.is_standable_for(unit, board.unit_at_cell(cell)):
@@ -378,7 +387,8 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	var route := RulesService.path_hops(hop_target, board, unit, -1, wanted, true)
 
 	var best := here
-	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal)
+	var best_can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, here, aiming).has(goal) \
+		and Reach.vertical_aim_ok(aiming, here, goal, board)
 	var best_hops: int = route.get(here, RulesService.UNREACHABLE)
 	var best_dist: int = GridUtils.manhattan_distance(here, goal)
 	var best_cost := 0
@@ -386,7 +396,8 @@ static func _best_approach(unit: Unit, goal: Vector2i, board: BoardContext, allo
 	for cell in range.reachable.keys():
 		if allowed != null and not allowed.has(cell):
 			continue
-		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal)
+		var can_attack: bool = prefer_attack and Reach.get_all_attack_cells_from(unit, cell, aiming).has(goal) \
+			and Reach.vertical_aim_ok(aiming, cell, goal, board)
 		var hops: int = route.get(cell, RulesService.UNREACHABLE)
 		var dist: int = GridUtils.manhattan_distance(cell, goal)
 		var cost: int = range.reachable[cell]

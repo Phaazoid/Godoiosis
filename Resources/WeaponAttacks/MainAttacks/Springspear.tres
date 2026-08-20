@@ -13,4 +13,6 @@ display_name = "Stab"
 power = 3
 attack_pattern = SubResource("Resource_main")
 requires_readiness = true
+up_tolerance = 1
+down_tolerance = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

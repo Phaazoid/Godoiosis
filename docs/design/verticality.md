@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #340 (2026-08-16).**
+**Canon checked through #420 (2026-08-20).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -121,11 +121,39 @@ a lookalike; zero new code.
 
 ---
 
-## Targeting — height buys reach [DECIDED]
+## Targeting — height buys reach [BUILT as #258, 2026-08-20]
 
 **Per-attack, asymmetric vertical tolerance**, checked *alongside* Manhattan distance, never folded
 into it. Each attack authors an up-tolerance and a down-tolerance; a sword might be 1 up / 2 down, a
-carbine tighter, a lobbed shell looser.
+lobbed shell looser going down than up.
+
+**BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258):** `AttackData.up_tolerance` /
+`down_tolerance` (`-1` = unlimited, the default — so a flat board and every heights-less fixture
+behave exactly as before, the slice-1 contract). The one rule is `Reach.vertical_aim_ok`, and
+`Reach.can_hit_cell_from` conjoins it with membership — it takes the `BoardContext` as a REQUIRED
+parameter (the `movement_cost` precedent: an optional would give one question two answers). Starter
+numbers are placeholder content: melee-shaped mains at 1 up / 2 down, Fireball at 2 up, guns and the
+other carvings unlimited.
+
+### Lobs vs guns need no second mechanism [DECIDED 2026-08-20]
+
+The dev's observation — *a gunshot just needs line of sight, so it can be shot up an angled ramp;
+a lobbed shot can only clear so many tiles in vertical height, so shooting one up a ramp can be
+stopped short by the terrain* — is expressed entirely by the two numbers the design already has:
+
+- **Up-tolerance IS the lob's climb ceiling.** A lob fired up a ramp is "stopped short" because the
+  terrain carries targets above the ceiling it can reach.
+- **A gun authors `-1`** — its only real constraint is the *deferred* LoS raycast (`arc_clearance`
+  ≈ 0: can't shoot through walls, any angle fine). This inverts the old illustration ("a carbine
+  tighter"): the Carbine ships unlimited.
+
+### Directional spreads are EXEMPT in v1 [DECIDED 2026-08-20]
+
+A ForwardWide/ForwardLine aim is a *direction*, so "is this cell too high" is a question about which
+cells the spread covers — the footprint / 3D-blast-extent question, which this doc already defers.
+`vertical_aim_ok` returns true for any directional attack (aims, counters, the overlay's blocked set
+alike), declared rather than silent. When blast extent lands, that is where a spread's per-cell
+height rule belongs.
 
 ### Why it is a separate check and not added to distance
 
@@ -161,8 +189,10 @@ board-blind, so that matters.
 ### What this buys, all from one rule
 
 - **Height advantage** — the high ground covers more than the low ground can answer.
-- **Counter denial, with no new rule.** `SquadManager:384` is the counter-reach check; a unit two
-  levels up with an up-tolerance-1 weapon below it simply generates no counter.
+- **Counter denial, with no new rule.** `SquadManager.can_counter` is the counter-reach check (it
+  now takes the board, threaded down from `resolve_plan`); a unit two levels up with an
+  up-tolerance-1 weapon below it simply generates no counter. Pinned by the ledge cases in
+  `tests/squad/test_counters.gd`, falsified against the board being dropped.
 - **The AI sees it with zero AI-side wiring** — `AITactics` probes candidates through `Reach` and
   scores through the real `PlanResolver`. That satisfies #117's standing lesson and the integration
   contract in `CLAUDE.md`.
@@ -170,7 +200,7 @@ board-blind, so that matters.
   terrace is crossable by most melee, a 2-level one is a genuine barrier. Same power-gating argument
   as the shove kill — the level designer sets the frequency.
 
-### `ResolvedOutcome.elevation_delta` — the wire for later [DECIDED, v1]
+### `ResolvedOutcome.elevation_delta` — the wire for later [BUILT, #258]
 
 > *"it is important that we can track *if* attacks are happening up and down slopes so the wiring is
 > there for later."*
@@ -181,7 +211,10 @@ immediately.
 
 **It must be FROZEN, not re-derived** — the same reason `fired_attack` is stamped at declare time.
 Units get shoved mid-pass, so re-deriving the delta later from live positions would give a different
-number than the one previewed, which is a Law #2 break.
+number than the one previewed, which is a Law #2 break. Built exactly so: the stamp reads the frozen
+`origin_cell` against the THREADED hypo position (the same pair `_resolve_knockback` uses), and the
+queue row already prints an `uphill`/`downhill` token off it. Pinned by
+`tests/law/test_elevation_delta.gd`, whose shove-then-hit case is falsified against the live read.
 
 This is not pre-building a deferred seam ([`CLAUDE.md`](../../CLAUDE.md)'s counterweight rule): it was
 explicitly requested, it is one field, and it is computed where the resolver already holds the board
@@ -342,6 +375,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    became its own ticket.
 2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
    `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
+   **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258) (2026-08-20)** — see
+   *Targeting* above for the shape and the two rulings it added (lob-vs-gun, directional exemption).
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
 
@@ -360,6 +395,14 @@ must not paint cells that cannot be hit. **Both survive if membership never chan
 draw in a distinct state.** Precedent exists: that layer already forks colour red/green off
 `AttackData.heals` without touching membership. "In range but vertically out of reach" is the same
 move.
+
+**Built (#258) as a per-cell TILE, not a colour** — the `TARGET_ATLAS_COORDS` precedent for
+per-cell states on this layer: blocked cells wear a hatched fill (`BLOCKED_ATLAS_COORDS`, a third
+tile on `Basic_Tile_Overlay.png`) under the SAME layer modulate, so the heal-green fork follows for
+free. In 3D there is no per-cell art, so `OverlayMirror` routes those coords to their own
+`Layer.ATTACK_BLOCKED` fill whose colour is DERIVED — the live reach modulate dimmed by
+`OverlayManager.BLOCKED_REACH_DIM` (a GameKnobs row) — a declared #292 asymmetry: same information,
+per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one draw door.
 
 ---
 

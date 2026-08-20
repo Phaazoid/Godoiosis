@@ -409,8 +409,9 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 	if attacker != null:
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # exactly what declare() will stamp (#102)
-		# Directional weapons aim by direction; point weapons need the cell in range.
-		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
+		# Directional weapons aim by direction; point weapons need the cell in range AND within
+		# the attack's vertical tolerance (#258) -- the board carries the elevations.
+		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming, _board()):
 			# #47: cells are the target. A legal aim is queueable whether or not a unit is
 			# there — victims (and terrain effects, #50) are derived at resolve time (#15).
 			# Store the AIM only (actor + aimed cell); null target = derived later.
@@ -559,9 +560,13 @@ func enter_attack_mode(unit: Unit):
 	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
 	# range underneath it, which is exactly what wiped whole ForwardWide lanes. Its COLOR does
 	# change (#123 follow-up) -- green for a heal, red otherwise -- which is a paint choice, not a
-	# cell-membership one, so it doesn't touch that invariant.
+	# cell-membership one, so it doesn't touch that invariant. Neither does the vertically-BLOCKED
+	# state (#258): membership stays the full union, blocked cells just wear a distinct tile.
 	overlay_manager.set_attack_reach_color(aiming)
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, Reach.get_all_attack_cells_from(unit, unit.get_projected_destination(), aiming), OverlayManager.ATLAS_COORDS)
+	var reach_origin := unit.get_projected_destination()
+	overlay_manager.show_attack_reach(
+		Reach.get_all_attack_cells_from(unit, reach_origin, aiming),
+		Reach.blocked_cells_from(unit, reach_origin, aiming, _board()))
 
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays

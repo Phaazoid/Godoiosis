@@ -246,6 +246,30 @@ func test_attack_reach_mirrors_cells_and_heal_color() -> void:
 	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.ATTACK)).is_equal(OverlayManager.HEAL_ATTACK_MODULATE)
 
 
+# A third atlas coord on the 2D layer -- #258's vertically-blocked reach -- must be routed
+# EXPLICITLY: the old else branch mirrored any unknown coord as plain red reach, which is exactly
+# how the blocked state would have silently vanished in 3D. Its colour is DERIVED (the live reach
+# modulate dimmed by one factor), never a second authored colour.
+func test_blocked_reach_cells_route_to_their_own_layer() -> void:
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon = H.make_weapon(3)
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	var ledge := Vector2i(3, 2)
+	game.board_heights.set_cell(ledge, 2)
+	game.enter_attack_mode(attacker)
+	await _settle()
+
+	var expected: Array[Vector3i] = [Vector3i(3, 2, 2)]   # the ledge cell, at its own level
+	assert_that(_sorted_3d(BoardOverlays.Layer.ATTACK_BLOCKED)).is_equal(expected)
+	assert_bool(_sorted_3d(BoardOverlays.Layer.ATTACK).has(Vector3i(3, 2, 2))).is_false()
+	assert_int(_sorted_3d(BoardOverlays.Layer.ATTACK).size()) \
+		.is_equal(_om().attack_overlay.get_used_cells().size() - 1)
+	var m: Color = _om().attack_overlay.modulate
+	var dim: float = OverlayManager.BLOCKED_REACH_DIM
+	assert_that(_overlays.layer_modulate(BoardOverlays.Layer.ATTACK_BLOCKED)) \
+		.is_equal(Color(m.r * dim, m.g * dim, m.b * dim, m.a))
+
+
 func test_target_pick_markers_split_from_the_reach_fill() -> void:
 	var rescuer := _spawn(PLAYER, Vector2i(2, 2))
 	var body := _spawn(PLAYER, Vector2i(3, 2))

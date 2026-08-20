@@ -30,7 +30,7 @@ enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
-	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS,
+	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
@@ -60,6 +60,11 @@ const UNIT_HUD_RENDER_PRIORITY := 48
 const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.MOVE: {"color": Color(1, 1, 0, 0.5), "sort": 0, "kind": Kind.FILL},
 	Layer.ATTACK: {"color": Color(1, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
+	# Reach cells past the aim's vertical tolerance (#258). Shares ATTACK's sort safely: the 2D
+	# splits the one layer by atlas coords, so the two cell sets are disjoint by construction and
+	# can never z-fight. Colour here is only the no-mirror fallback -- OverlayMirror drives it per
+	# frame as the live reach modulate x OverlayManager.BLOCKED_REACH_DIM (so no colour knob here).
+	Layer.ATTACK_BLOCKED: {"color": Color(0.45, 0, 0, 0.5), "sort": 1, "kind": Kind.FILL},
 	# The zone BAND sits at -3, with the picked-zone highlight alone at -2 above it. In 2D
 	# the highlight wins by TREE ORDER (appended last); 3D has no such thing, so the sort
 	# number IS the relationship and a test pins it rather than the values (#231). -1 was

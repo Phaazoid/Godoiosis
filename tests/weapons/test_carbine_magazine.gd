@@ -191,11 +191,11 @@ func test_carbine_counter_reach_excludes_the_adjacent_attacker() -> void:
 	var defender := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0), {}, false)
 	defender.equipped_weapon = _carbine(true)
 	var adjacent := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
-	assert_bool(sm.can_counter(defender, adjacent)).is_false()   # inside the min range
+	assert_bool(sm.can_counter(defender, adjacent, null)).is_false()   # inside the min range
 
 func test_carbine_counters_at_exactly_range_two() -> void:
 	var sm := H.make_manager(self)
 	var defender := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0), {}, false)
 	defender.equipped_weapon = _carbine(true)
 	var standoff := H.spawn_solo(self, sm, PLAYER, Vector2i(2, 0))
-	assert_bool(sm.can_counter(defender, standoff)).is_true()
+	assert_bool(sm.can_counter(defender, standoff, null)).is_true()

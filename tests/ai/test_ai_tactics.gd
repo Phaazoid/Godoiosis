@@ -375,3 +375,57 @@ func test_nearest_enemy_falls_back_to_distance_when_nothing_is_reachable() -> vo
 	var _far: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(11, 5))
 
 	assert_object(AITactics.nearest_enemy(leader, _context(board))).is_same(near)
+
+
+# --- vertical tolerance (#258): the AI mirrors the player's aim gate ---
+
+# _context, but carrying the board's heights store -- the shape game._board() has in production.
+func _heights_context(board: Dictionary) -> BoardContext:
+	var units: Array[Unit] = []
+	for child in board.units_root.get_children():
+		units.append(child as Unit)
+	return BoardContext.new(board.grid, units, board.squad_manager, null, null, board.board_heights)
+
+
+# A point aim past the attack's up-tolerance is refused at the player's click, so the AI must not
+# author one either (Law #3's spirit: no aim the player surface would refuse).
+func test_the_ai_does_not_aim_past_its_vertical_tolerance() -> void:
+	var board: Dictionary = _build_board()
+	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
+	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(1, 0))
+	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	var heights: BoardHeights = board.board_heights
+	heights.set_cell(Vector2i(1, 0), 2)
+
+	assert_bool(AITactics.queue_main_action(player, _heights_context(board), board.squad_manager, ATTACK_ONLY)).is_false()
+
+
+# The non-vacuity twin: one level lower and the same setup attacks.
+func test_the_same_ledge_within_tolerance_is_attacked() -> void:
+	var board: Dictionary = _build_board()
+	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
+	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(1, 0))
+	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	var heights: BoardHeights = board.board_heights
+	heights.set_cell(Vector2i(1, 0), 1)
+
+	assert_bool(AITactics.queue_main_action(player, _heights_context(board), board.squad_manager, ATTACK_ONLY)).is_true()
+
+
+# _standable_attack_cells judges the vertical clause in the TRUE direction (stand at cell, hit
+# goal) -- the union symmetry it leans on is horizontal-only once tolerance is asymmetric. A goal
+# on a ledge above a tight weapon's reach has NO firing positions, so the approach picker never
+# parks the unit somewhere it cannot fire from.
+func test_a_ledge_goal_has_no_firing_positions_for_a_tight_weapon() -> void:
+	var board: Dictionary = _build_board()
+	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
+	var aiming: AttackData = (player.get_equipped_weapon() as WeaponInstance).template.main_attack
+	aiming.up_tolerance = 1
+	var goal := Vector2i(3, 0)
+	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, goal)   # a goal is an occupied enemy cell
+	var heights: BoardHeights = board.board_heights
+	heights.set_cell(goal, 2)
+
+	assert_bool(AITactics._standable_attack_cells(player, goal, aiming, _heights_context(board)).is_empty()).is_true()
+	heights.set_cell(goal, 1)
+	assert_bool(AITactics._standable_attack_cells(player, goal, aiming, _heights_context(board)).is_empty()).is_false()

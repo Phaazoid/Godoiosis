@@ -210,6 +210,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
 		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
+	{"group": "Board markup colours", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
+		"min": 0.1, "max": 1.0, "step": 0.01,
+		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
@@ -276,6 +279,7 @@ static func read_static(name: String) -> Variant:
 	match name:
 		"ATTACK_MODULATE": return OverlayManager.ATTACK_MODULATE
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
+		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
@@ -288,6 +292,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"ATTACK_MODULATE": OverlayManager.ATTACK_MODULATE = value
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
+		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)

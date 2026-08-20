@@ -54,6 +54,14 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		action.resolved = outcome
 		return
 
+	# Elevation stamp (#258): frozen origin (Law #2, same as fired_attack) against the THREADED
+	# position — a shove earlier in the pass moves the target's level, and the delta must describe
+	# the hit as previewed. Hoisted above the heal branch so heals carry it too; _hypo_for is
+	# idempotent, so the heal branch re-fetching the same object costs nothing.
+	var target_hypo: _Hypo = _hypo_for(target, hypo)
+	if board != null:
+		outcome.elevation_delta = board.elevation_at(target_hypo.position) - board.elevation_at(action.origin_cell)
+
 	# --- base damage stage (E1: the calc that used to live in AttackAction.create) ---
 	var base := _source_base_damage(action)
 	outcome.base_damage = base
@@ -70,7 +78,6 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		return
 
 	# --- elemental stage: collect EVERY reaction matching the PRE-HIT snapshot (E8) ---
-	var target_hypo: _Hypo = _hypo_for(target, hypo)
 	outcome.hp_before = target_hypo.hp   # threaded pre-hit HP (R4), not the live board value
 	var incoming := _source_elements(action)
 	var elements := _surviving_elements(incoming, target)

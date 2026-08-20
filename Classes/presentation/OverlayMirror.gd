@@ -166,21 +166,33 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	overlays.set_cells(layer, cells, _heights())
 
 
-# ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (1,0) on the
-# same layer — split by atlas coords; the heal-green arrives as the layer modulate.
+# ATTACK is TRIPLE-use in 2D: reach fill at (0,0), target-pick markers at (1,0), and the
+# vertically-blocked reach cells at (2,0) (#258) — split by atlas coords; the heal-green arrives
+# as the layer modulate. The split is EXPLICIT per coord: an `else` catch-all here silently drew
+# any new coord as plain red reach, which is how the blocked state would have vanished in 3D.
 #
 # The reach half hands its cells to _fill rather than lifting and diffing them here: a hand-copied
 # diff is a second copy of whatever _fill's key gets wrong, which is exactly how #308 had two homes.
 func _attack(om: OverlayManager) -> void:
 	var reach: Array[Vector2i] = []
+	var blocked: Array[Vector2i] = []
 	var picks: Array[Dictionary] = []
 	for cell: Vector2i in om.attack_overlay.get_used_cells():
-		if om.attack_overlay.get_cell_atlas_coords(cell) == OverlayManager.TARGET_ATLAS_COORDS:
+		var coords: Vector2i = om.attack_overlay.get_cell_atlas_coords(cell)
+		if coords == OverlayManager.TARGET_ATLAS_COORDS:
 			picks.append(_marker(_anchor(cell), _target_pick_texture(om), Color.WHITE))
+		elif coords == OverlayManager.BLOCKED_ATLAS_COORDS:
+			blocked.append(cell)
 		else:
 			reach.append(cell)
 	_fill(BoardOverlays.Layer.ATTACK, reach)
+	_fill(BoardOverlays.Layer.ATTACK_BLOCKED, blocked)
 	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK, om.attack_overlay.modulate)
+	# Derived, never a second colour: the 2D hatch tile wears the same modulate, so the 3D twin
+	# is the same modulate dimmed by one tunable factor (a GameKnobs row).
+	var dim: float = OverlayManager.BLOCKED_REACH_DIM
+	var m: Color = om.attack_overlay.modulate
+	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK_BLOCKED, Color(m.r * dim, m.g * dim, m.b * dim, m.a))
 	_markers(BoardOverlays.Layer.TARGET_PICK, picks)
 
 

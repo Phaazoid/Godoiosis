@@ -225,3 +225,64 @@ func test_leaving_the_mode_stops_every_pulse() -> void:
 	assert_bool(_unit_pulsing(_foe())).is_false()
 	assert_bool(_tiles_pulsing()).is_false()
 	assert_that(_foe().visuals.sprite.modulate).is_equal(_foe().visuals.base_modulate)
+
+
+# ==============================================================================
+#  Vertical tolerance (#258): blocked cells say so, and the click agrees
+# ==============================================================================
+
+# Raise AWAY_CELL past the weapon's up-tolerance and arm the attacker. Every case below shares
+# this shape; the flat cases above are untouched because clear_board wipes the heights store.
+func _armed_attacker_below_a_ledge() -> Unit:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	game.board_heights.set_cell(AWAY_CELL, 2)
+	return attacker
+
+
+# Membership never changes; the blocked cell wears the hatched fill instead of vanishing.
+func test_a_blocked_cell_wears_the_hatched_fill_and_membership_holds() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	game.enter_attack_mode(attacker)
+
+	for cell in _reach_cells():
+		var expected: Vector2i = OverlayManager.BLOCKED_ATLAS_COORDS if cell == AWAY_CELL else OverlayManager.ATLAS_COORDS
+		assert_that(game.overlay_manager.attack_overlay.get_cell_atlas_coords(cell)) \
+			.override_failure_message("reach cell %s wears the wrong fill" % cell) \
+			.is_equal(expected)
+
+
+# The wire test: the real click handler on a blocked cell queues NOTHING, and the identical click
+# on a hittable cell still queues -- so the hatch and the refusal can never disagree. Counted as
+# ATTACK orders: activating a squad in the real scene also inserts the hold-move filler.
+func _queued_attacks(unit: Unit) -> int:
+	var count := 0
+	for action in unit.squad.action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK:
+			count += 1
+	return count
+
+
+func test_clicking_a_blocked_cell_queues_nothing() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(AWAY_CELL)
+	assert_int(_queued_attacks(attacker)).is_equal(0)
+
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(FOE_CELL)
+	assert_int(_queued_attacks(attacker)).is_equal(1)
+
+
+func test_hovering_a_blocked_cell_previews_nothing() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	_aim_at(attacker, AWAY_CELL)
+
+	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()
+	assert_bool(_tiles_pulsing()).is_false()
+	assert_bool(_unit_pulsing(_foe())).is_false()

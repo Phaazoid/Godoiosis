@@ -30,8 +30,8 @@ func test_counter_derivation_is_deterministic() -> void:
 	a1.squad._queue_action(attack)
 
 	var attacks: Array[AttackAction] = [attack]
-	var first := sm.calculate_reactions_for_squad(a1.squad, attacks)
-	var second := sm.calculate_reactions_for_squad(a1.squad, attacks)
+	var first := sm.calculate_reactions_for_squad(a1.squad, attacks, null)
+	var second := sm.calculate_reactions_for_squad(a1.squad, attacks, null)
 
 	assert_int(second.size()).is_equal(first.size())
 	assert_int(first.size()).is_greater(0)   # guard against vacuously-equal empties

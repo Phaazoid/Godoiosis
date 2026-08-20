@@ -20,6 +20,12 @@ extends Resource
 # from the attacker, stopping at the first wall/unit/edge. 0 = no displacement (every attack
 # today). Generic on purpose — a future air-blast rune could carry it too. Resolved by
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
+# Vertical tolerance (#258): how many levels above/below itself this attack can reach a target.
+# -1 = unlimited. A lob's climb ceiling is its up_tolerance; a gun stays -1 (its real limit is the
+# deferred LoS raycast / arc_clearance). Judged at aim time by Reach.vertical_aim_ok — directional
+# spreads are exempt in v1 (their per-cell height question is the deferred footprint question).
+@export var up_tolerance: int = -1
+@export var down_tolerance: int = -1
 @export var heals := false   # EITHER damage OR heal, never both; reinterprets base damage as HP restored
 # A pure-utility attack (#126): SCALING is suppressed, so neither aura nor a weapon's stat blend can
 # sneak damage into a damageless effect. Only the attack's own contribution — an elemental reaction's

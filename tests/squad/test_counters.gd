@@ -23,7 +23,7 @@ func _counters_for(attacker: Unit, target: Unit) -> Array[CounterAttackAction]:
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	attacker.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return _sm.calculate_reactions_for_squad(attacker.squad, attacks)
+	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null)
 
 # C1 — every unit in the defending party gets the opportunity to counter (once per
 # plan). Two adjacent defenders => two counters off a single attack.
@@ -83,7 +83,7 @@ func test_c4_defending_party_responds_once_per_plan() -> void:
 	a1.squad._queue_action(atk2)
 
 	var attacks: Array[AttackAction] = [atk1, atk2]
-	var counters := _sm.calculate_reactions_for_squad(a1.squad, attacks)
+	var counters := _sm.calculate_reactions_for_squad(a1.squad, attacks, null)
 
 	assert_int(counters.size()).is_equal(2)          # one per defender member, not four
 	for c in counters:
@@ -135,3 +135,31 @@ func test_c7_bystander_parties_never_counter() -> void:
 	assert_object(counters[0].actor).is_same(d)
 	for c in counters:
 		assert_object(c.actor).is_not_same(bystander)
+
+# --- Vertical counter denial (#258) ---------------------------------------------------------
+# The #218 payoff: height buys reach, so a unit on a ledge above the defender's up-tolerance
+# simply generates no counter. Judged by the same Reach.can_hit_cell_from the aim gate uses,
+# through can_counter's new board parameter -- the null board every case above passes reads
+# flat, which is why none of them moved.
+
+# One attack from a ledge two levels up; the defender's counter weapon reaches 1 up. The board
+# with the heights is passed exactly the way resolve_plan passes it.
+func _ledge_counters(defender_up_tolerance: int) -> int:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 2)   # the attacker's ledge
+	var sm := H.make_manager(self, heights)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))   # on the ledge
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0))    # on the ground
+	(d.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = defender_up_tolerance
+
+	var attack := AttackAction.create(a, a.movement.cell, d, d.movement.cell)
+	a.squad._queue_action(attack)
+	var attacks: Array[AttackAction] = [attack]
+	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call()).size()
+
+func test_a_ledge_above_the_counter_tolerance_draws_no_counter() -> void:
+	assert_int(_ledge_counters(1)).is_equal(0)
+
+# The non-vacuity twin: identical geometry, tolerance loose enough -- the counter comes back.
+func test_the_same_ledge_within_tolerance_still_counters() -> void:
+	assert_int(_ledge_counters(2)).is_equal(1)

@@ -4,4 +4,6 @@
 
 [resource]
 script = ExtResource("1_wad")
+up_tolerance = 1
+down_tolerance = 2
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

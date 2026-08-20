@@ -23,6 +23,12 @@ class_name Reach
 # A null attack, or one with no pattern (bare fists, a rune with nothing channelable), falls back to
 # adjacency: selectable = Manhattan range 1, affected = the aimed cell alone. That fallback is
 # load-bearing in the tests -- a pattern-less weapon is how they get trivial geometry.
+#
+# Verticality (#258): the aim question also checks the attack's up/down tolerance against the two
+# cells' elevations -- can_hit_cell_from takes the board for exactly that (required, not optional:
+# an optional would give one question two answers, the movement_cost precedent). The FOOTPRINT
+# question (get_affected_cells_from) stays board-blind on purpose -- whether a blast covers a
+# volume is the deferred 3D-blast-extent question, not the aim question (#218).
 
 static func get_attack_cells_from(unit: Unit, origin_cell: Vector2i, target_hint_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:
 	var pattern := _pattern_of(attack)
@@ -30,8 +36,32 @@ static func get_attack_cells_from(unit: Unit, origin_cell: Vector2i, target_hint
 		return GridUtils.cells_within_manhattan_range(origin_cell, 1)
 	return pattern.get_selectable_cells(unit, origin_cell, target_hint_cell)
 
-static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData) -> bool:
+static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Vector2i, attack: AttackData, board: BoardContext) -> bool:
+	if not vertical_aim_ok(attack, origin_cell, target_cell, board):
+		return false
 	return get_attack_cells_from(unit, origin_cell, target_cell, attack).has(target_cell)
+
+# May this attack cross the height difference between two cells (#258)? -1 = unlimited; a null
+# attack (bare fists) is unlimited; a null board reads flat, matching BoardContext's null-heights
+# contract. Directional attacks are EXEMPT in v1 -- their spread is the footprint question -- so
+# the gate reaches point aims, counters, and the AI's mirrors of both.
+static func vertical_aim_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
+	if attack == null or board == null or is_directional_attack(attack):
+		return true
+	var delta := board.elevation_at(target_cell) - board.elevation_at(origin_cell)
+	if delta > 0:
+		return attack.up_tolerance < 0 or delta <= attack.up_tolerance
+	return attack.down_tolerance < 0 or -delta <= attack.down_tolerance
+
+# The reach-union cells a point aim could never legally target -- what the overlay draws in the
+# blocked state. Empty for a directional attack (exempt) and on a flat board. Presentation only;
+# the gate itself is can_hit_cell_from.
+static func blocked_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData, board: BoardContext) -> Array[Vector2i]:
+	var blocked: Array[Vector2i] = []
+	for cell in get_all_attack_cells_from(unit, origin_cell, attack):
+		if not vertical_aim_ok(attack, origin_cell, cell, board):
+			blocked.append(cell)
+	return blocked
 
 # Union over all four facings — what the red targeting overlay draws.
 static func get_all_attack_cells_from(unit: Unit, origin_cell: Vector2i, attack: AttackData) -> Array[Vector2i]:

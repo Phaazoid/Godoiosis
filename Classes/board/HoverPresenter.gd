@@ -161,17 +161,17 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var victims: Array[Unit] = []
 	var pulse_tiles := false
 	if attacker != null:
+		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
 		# Directional: any non-zero facing is a legal aim (the whole spread is the target).
-		# Point: the hovered cell itself must be in range.
-		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
+		# Point: the hovered cell itself must be in range AND within vertical tolerance (#258).
+		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming, board):
 			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming)
 			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
 			# to ask and answers as UNIT.
 			pulse_tiles = aiming != null and aiming.hits_map()
 			if aiming == null or aiming.hits_units():
-				var board: BoardContext = game._board()
 				victims = RulesService.gather_attack_victims(attacker, preview_cells, board, aiming)
 
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)

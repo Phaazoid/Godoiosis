@@ -131,7 +131,10 @@ static func spawn_solo(
 # Open ground keeps path distance == Manhattan distance, so the suites' geometry semantics held.
 const PAINTED_EXTENT := 16
 
-static func make_manager(suite: GdUnitTestSuite) -> SquadManager:
+# `heights` (#258): a suite that wants a non-flat board passes a BoardHeights; the default null
+# keeps every existing Tier-2 suite reading perfectly flat, the same contract BoardContext itself
+# declares for a missing store.
+static func make_manager(suite: GdUnitTestSuite, heights: BoardHeights = null) -> SquadManager:
 	var root := Node.new()
 	root.name = "GameRoot"
 
@@ -156,7 +159,7 @@ static func make_manager(suite: GdUnitTestSuite) -> SquadManager:
 	root.add_child(manager)
 	# Cohesion reads live terrain (#151): fresh context per call, same shape as game._board.
 	manager.board_source = func() -> BoardContext:
-		return BoardContext.new(grid, manager._all_units(), manager)
+		return BoardContext.new(grid, manager._all_units(), manager, null, null, heights)
 
 	suite.auto_free(root)
 	suite.add_child(root)   # enters tree -> every @onready resolves cleanly
