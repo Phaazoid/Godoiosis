@@ -318,3 +318,15 @@ func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
 	assert_object(trace).is_not_null()
 	assert_bool(trace.blocked).is_true()
 	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()   # the aim is refused
+
+
+# Melee draws no sight line (dev, 2026-08-20: "visually obvious anytime") -- the aim itself still
+# previews; only the trace stays away. Ranged aims keep theirs (the cases above).
+func test_a_melee_aim_draws_no_sight_line() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.STEP
+
+	_aim_at(attacker, FOE_CELL)
+
+	assert_object(game.overlay_manager.sight_trace).is_null()
+	assert_bool(game.overlay_manager.hover_overlay.get_used_cells().is_empty()).is_false()

@@ -32,7 +32,7 @@ enum Layer {
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 }
-enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
+enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
 const WORLD_RENDER_LAYER := 1  # bit for layer index 0 — the board and props
 const UNIT_RENDER_LAYER := 2   # bit for layer index 1 — UnitSprite3D sets this
@@ -81,10 +81,10 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
 	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
-	# The aim's bead path (#258) -- free 3D positions at the trajectory's own heights, not cell
-	# markup, so its markers arrive with identity basis and pre-computed pos. Colour is per-marker
-	# (the 2D SightTrace2D verdict colours, copied by the mirror -- parallel-stacks rule).
-	Layer.SIGHT_TRACE: {"color": Color.WHITE, "sort": 7, "kind": Kind.SPRITE},
+	# The aim's sight line (#258) -- a laser polyline at the trajectory's own heights, not cell
+	# markup. Colour arrives per set_line call (the 2D SightTrace2D verdict colours, copied by the
+	# mirror -- parallel-stacks rule); the entry colour is only the fallback.
+	Layer.SIGHT_TRACE: {"color": Color.WHITE, "sort": 7, "kind": Kind.LINE},
 	# The ground form of the selection icons (#325 experiment): membership rings + the leader's
 	# crown decal lying on the cell surface. Above terrain state, below the aim pulse, pick
 	# markers and arrows (a ring must never eat an arrowhead) -- AIM/TARGET_PICK/arrows each
@@ -126,6 +126,7 @@ var fill_texture: Texture2D
 var _markers: Dictionary[Layer, Array] = {}       # layer -> node pool (all kinds)
 var _cells: Dictionary[Layer, Array] = {}         # set_cells layers: the current cell list
 var _marker_data: Dictionary[Layer, Array] = {}   # set_markers layers: the current entries
+var _lines: Dictionary[Layer, PackedVector3Array] = {}   # set_line layers: the current polyline
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
@@ -201,10 +202,42 @@ func set_layer_modulate(layer: Layer, color: Color) -> void:
 		material.albedo_color = color
 
 
+# Replaces a LINE layer's polyline wholesale -- one pooled MeshInstance3D whose ImmediateMesh is
+# rebuilt per call (a hovered aim changes every mouse move; a line strip rebuild of ~15 points is
+# nothing). Points arrive in WORLD space at the trajectory's own heights; fewer than 2 hides it.
+func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
+	var spec: Dictionary = LAYERS[layer]
+	if spec["kind"] != Kind.LINE:
+		push_error("set_line on a %s layer" % Kind.keys()[spec["kind"]])
+		return
+	_lines[layer] = points.duplicate()
+	var pool: Array = _pool_for(layer)
+	if pool.is_empty():
+		pool.append(_make_marker(layer))
+	var node := pool[0] as MeshInstance3D
+	var mesh := node.mesh as ImmediateMesh
+	mesh.clear_surfaces()
+	if points.size() < 2:
+		node.visible = false
+		return
+	node.visible = true
+	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
+	for p in points:
+		mesh.surface_add_vertex(p)
+	mesh.surface_end()
+	(node.material_override as StandardMaterial3D).albedo_color = color
+
+
+func line_of(layer: Layer) -> PackedVector3Array:
+	return _lines.get(layer, PackedVector3Array()).duplicate()
+
+
 func clear(layer: Layer) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] == Kind.SPRITE or spec["kind"] == Kind.BILLBOARD:
 		set_markers(layer, [])
+	elif spec["kind"] == Kind.LINE:
+		set_line(layer, PackedVector3Array(), LAYERS[layer]["color"])
 	else:
 		set_cells(layer, [])
 
@@ -323,6 +356,8 @@ func _make_marker(layer: Layer) -> Node3D:
 			return _make_bracket(_layer_colors.get(layer, spec["color"]))
 		Kind.BILLBOARD:
 			return _make_billboard(spec)
+		Kind.LINE:
+			return _make_line(spec)
 		Kind.SPRITE:
 			return _make_quad(spec, null, Color.WHITE)
 		_:
@@ -344,6 +379,24 @@ func _make_quad(spec: Dictionary, texture: Texture2D, color: Color) -> MeshInsta
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	material.albedo_texture = texture
 	material.albedo_color = color
+	material.render_priority = spec["sort"]
+	instance.material_override = material
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	instance.layers = WORLD_RENDER_LAYER
+	add_child(instance)
+	return instance
+
+
+# The laser polyline: an unshaded ImmediateMesh line strip, rebuilt by set_line. 1-px engine
+# lines -- if that reads too thin in play, the upgrade is a camera-facing ribbon built here,
+# with nothing upstream changing.
+func _make_line(spec: Dictionary) -> MeshInstance3D:
+	var instance := MeshInstance3D.new()
+	instance.mesh = ImmediateMesh.new()
+	var material := StandardMaterial3D.new()
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.vertex_color_use_as_albedo = false
 	material.render_priority = spec["sort"]
 	instance.material_override = material
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF

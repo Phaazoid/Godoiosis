@@ -59,14 +59,29 @@ func test_a_flat_shot_up_a_ramp_staircase_is_clear() -> void:
 	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_false()
 
 
-# The eye offset (#218): shooting down from your own plateau's edge row clears the lip, because
-# the sightline starts a level above your feet. Falsified against EYE_HEIGHT = 0.
-func test_shooting_down_from_a_plateau_edge_clears_the_lip() -> void:
+# The eye offset (#218, now the sprite's CENTER -- dev, 2026-08-20): standing ON your cliff edge,
+# the shot down clears, because the sightline starts half a level above your feet. One cell back,
+# your own lip occludes the steep shot -- real lip occlusion; step forward to take it.
+func test_shooting_down_from_the_lip_clears_and_one_back_is_occluded() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(0, 0), 2)
-	heights.set_cell(Vector2i(1, 0), 2)   # the lip -- level with the shooter's feet
+	heights.set_cell(Vector2i(0, 0), 2)   # the shooter stands ON the edge
 	var board := _board_with(heights)
 	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_false()
+
+	heights.set_cell(Vector2i(1, 0), 2)   # now the edge is one cell ahead -- the lip occludes
+	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_true()
+
+
+# The sightline originates at the sprite's CENTER (dev): the trace's first point sits exactly half
+# a level above the shooter's surface, at the cell's center. Pins EYE_HEIGHT through the READOUT --
+# the drawn path is the rule, so this is the one number a player could measure off the screen.
+func test_the_line_starts_at_the_sprites_center() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 2)
+	var trace := Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _board_with(heights))
+	var first: Vector3 = trace.points[0]
+	assert_float(first.y).is_equal_approx(2.5, 0.0001)
+	assert_float(first.x).is_equal_approx(0.5, 0.0001)
 
 
 # The rule IS the readout: wherever horizontal membership holds, can_hit_cell_from and the trace

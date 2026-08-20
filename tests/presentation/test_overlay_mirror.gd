@@ -270,10 +270,10 @@ func test_blocked_reach_cells_route_to_their_own_layer() -> void:
 		.is_equal(Color(m.r * dim, m.g * dim, m.b * dim, m.a))
 
 
-# The bead path (#258) reaches the diorama at the trajectory's own heights, gated on the store's
-# version (#308's rule), and clears when the trace clears. The world mapping is hand-derived here
-# (the independent spelling): rule-height h sits at world surface_y(0) + h * CELL_SIZE.
-func test_sight_trace_beads_reach_the_diorama_and_clear() -> void:
+# The sight line (#258) reaches the diorama as a polyline at the trajectory's own heights, gated
+# on the store's version (#308's rule), and clears when the trace clears. The world mapping is
+# hand-derived here (the independent spelling): rule-height h sits at world surface_y(0) + h * CELL_SIZE.
+func test_sight_trace_line_reaches_the_diorama_and_clears() -> void:
 	var attacker := _spawn(PLAYER, Vector2i(2, 2))
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
 	attacker.equipped_weapon = H.make_weapon(3)
@@ -284,17 +284,17 @@ func test_sight_trace_beads_reach_the_diorama_and_clear() -> void:
 
 	var trace: Reach.SightTrace = _om().sight_trace
 	assert_object(trace).is_not_null()
-	var beads := _overlays.markers_of(BoardOverlays.Layer.SIGHT_TRACE)
-	assert_int(beads.size()).is_equal(trace.points.size())
+	var line := _overlays.line_of(BoardOverlays.Layer.SIGHT_TRACE)
+	assert_int(line.size()).is_equal(trace.points.size())
 	var first: Vector3 = trace.points[0]
-	assert_that(beads[0]["pos"]).is_equal(Vector3(
+	assert_that(line[0]).is_equal(Vector3(
 		first.x * BoardSpace.CELL_SIZE,
 		BoardSpace.surface_y(0) + first.y * BoardSpace.CELL_SIZE,
 		first.z * BoardSpace.CELL_SIZE))
 
 	game.exit_current_mode()
 	await _settle()
-	assert_int(_overlays.markers_of(BoardOverlays.Layer.SIGHT_TRACE).size()).is_equal(0)
+	assert_int(_overlays.line_of(BoardOverlays.Layer.SIGHT_TRACE).size()).is_equal(0)
 
 
 func test_target_pick_markers_split_from_the_reach_fill() -> void:

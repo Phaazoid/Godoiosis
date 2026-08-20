@@ -45,12 +45,13 @@ static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Ve
 		return false
 	return get_attack_cells_from(unit, origin_cell, target_cell, attack).has(target_cell)
 
-# The sightline's height above a shooter's feet. A RULE constant, not a knob -- it defines what a
-# wall is (the #218 eye offset: without it, standing on a cliff edge blocks your own shot down).
-const EYE_HEIGHT := 1.0
-# Bead samples per cell of shot length -- readout resolution only, never legality (blocking is
-# judged per crossed CELL, not per sample).
-const TRACE_SAMPLES_PER_CELL := 2
+# The sightline's height above a shooter's feet -- the SPRITE'S CENTER (dev, 2026-08-20: the line
+# "should originate from the center of the sprite"). A RULE constant, not a knob: it defines what a
+# wall is, and the #218 purpose survives (standing ON a cliff edge still shoots down past it).
+const EYE_HEIGHT := 0.5
+# Trace samples per cell of shot length -- readout resolution only, never legality (blocking is
+# judged per crossed CELL, not per sample). Dense enough that a lob's line draws as a CURVE.
+const TRACE_SAMPLES_PER_CELL := 6
 
 # One aim's sight trace (#258): the verdict and the bead path, from the same trajectory.
 class SightTrace:
@@ -89,7 +90,17 @@ static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_
 	return attack.down_tolerance < 0 or -delta <= attack.down_tolerance
 
 
-# The bead path (#258): endpoints at eye height over each cell's surface, lifted mid-flight by the
+# Whether the aim READOUT draws this attack's sight line (dev, 2026-08-20): ranged point attacks
+# only. Melee (STEP, bare fists included) is "visually obvious anytime" -- the hatch and the
+# refusal carry its verdict -- and a directional spread has no single line. The GATE is unaffected:
+# vertical_aim_ok judges every point aim's trace whether or not it is drawn.
+static func draws_sight_trace(attack: AttackData) -> bool:
+	if attack == null or is_directional_attack(attack):
+		return false
+	return attack.vertical_rule == AttackData.VerticalRule.TOLERANCE
+
+
+# The sight line (#258): endpoints at eye height over each cell's surface, lifted mid-flight by the
 # attack's arc_clearance -- a gun (clearance 0) is a straight sightline, a lob visibly arcs. The
 # shot is blocked at the first crossed cell whose column reaches the bead (touch = blocked: a bead
 # that grazes a wall-top stops, and a 1-high wall stops a flat shot -- the dev's standing

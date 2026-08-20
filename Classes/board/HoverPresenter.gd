@@ -165,10 +165,10 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
-		# The bead path (#258): for a point aim at any cell in horizontal reach, show the sight
-		# trace -- valid or blocked, the player sees the line the gate judged. Directional aims
-		# have no single line (exempt from the vertical gate too).
-		if not Reach.is_directional_attack(aiming) \
+		# The sight line (#258): for a RANGED point aim at any cell in horizontal reach, show the
+		# trace -- valid or blocked, the player sees the line the gate judged. Melee draws none
+		# (visually obvious anytime -- dev); a directional aim has no single line.
+		if Reach.draws_sight_trace(aiming) \
 				and Reach.get_attack_cells_from(attacker, origin, cell, aiming).has(cell):
 			game.overlay_manager.show_sight_trace(Reach.sight_trace(aiming, origin, cell, board))
 			trace_shown = true

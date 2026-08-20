@@ -132,11 +132,12 @@ give for a sword did not survive play.
 day:** each attack authors its **vertical rule** — `AttackData.VerticalRule.STEP` for melee (below),
 `TOLERANCE` with `up_tolerance` / `down_tolerance` for everything else (`-1` = unlimited, the
 default — so a flat board and every heights-less fixture behave exactly as before, the slice-1
-contract) — and every point aim must also have a **clear sight trace** (the bead path, below). The
+contract) — and every point aim must also have a **clear sight trace** (the sight line, below). The
 one gate is `Reach.vertical_aim_ok`, and `Reach.can_hit_cell_from` conjoins it with membership — it
 takes the `BoardContext` as a REQUIRED parameter (the `movement_cost` precedent: an optional would
-give one question two answers). Starter content: melee mains are STEP, Fireball is 2 up with
-`arc_clearance = 2`, guns and the other carvings TOLERANCE-unlimited with clearance 0.
+give one question two answers). Starter content: melee mains are STEP; Fireball is 3 up with
+`arc_clearance = 3` (clears 1/2/3-walls to the far side, dies on a 4 — the dev's asked-for shape);
+guns and the other carvings TOLERANCE-unlimited with clearance 0.
 
 ### Lobs vs guns need no second mechanism [DECIDED 2026-08-20]
 
@@ -268,33 +269,45 @@ dev's ruling on how to build it reshaped the model from "raycast plus threshold"
 > the player and their target. If the bead can find the target, the shot is valid. If not, not
 > valid."*
 
-So there is ONE trajectory, and both the gate and the in-game beads evaluate it
-(`Reach.sight_trace`; the constant `Reach.EYE_HEIGHT` and the arc term live nowhere else):
+"Bead" as in *having a bead on someone* — an aim, not dots (dev clarification, same day): the
+readout is a **laser sight line**. So there is ONE trajectory, and both the gate and the drawn line
+evaluate it (`Reach.sight_trace`; the constant `Reach.EYE_HEIGHT` and the arc term live nowhere
+else):
 
 ```
 h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
 ```
 
-- **Endpoints at eye height** (EYE = 1) — the #218 offset, kept: without it, standing on a cliff
-  edge blocks your own shot down. Standing one cell BACK from a tall edge, your own lip can occlude
+- **Endpoints at the SPRITE'S CENTER** (EYE = 0.5 — dev: the line "should originate from the center
+  of the sprite rather than the top") — the #218 offset's purpose survives: standing ON a cliff
+  edge, your own shot down clears. Standing one cell BACK from a tall edge, your own lip can occlude
   a steep shot — real lip occlusion, step forward to shoot. A target standing on a far lip is
   silhouetted and shootable; a step back and it is covered.
-- **A gun (clearance 0) is a straight sightline; a lob visibly arcs**, peaking `+clearance`
-  mid-flight — so what a fireball can clear is literally drawn, not inferred.
-- **Blocked at the first crossed cell whose column reaches the bead — touch = blocked.** A bead that
-  grazes a wall-top visibly stops, and a 1-high wall stops a flat shot (the dev's standing
+- **A gun (clearance 0) is a straight laser; a lob's line visibly arcs**, peaking `+clearance`
+  mid-flight — so what a fireball can clear is literally drawn, not inferred (the straight look is
+  reserved for guns by construction).
+- **Blocked at the first crossed cell whose column reaches the line — touch = blocked.** A line that
+  grazes a wall-top visibly dies there, and a 1-high wall stops a flat shot (the dev's standing
   "anything 1 block tall blocks line of sight"). The crossed cells come from
   `GridUtils.cells_crossed` — supercover, endpoints excluded, corner-ties take BOTH cells, so a
   shot can never thread a diagonal seam between two walls.
 - **Terrain only; units never block** — they move every turn, so a unit-blocked preview could not
   stay truthful (Law #2).
-- **The readout**: `HoverPresenter` computes the trace once per hovered point aim and stores it on
+- **The readout**: `HoverPresenter` computes the trace once per hovered aim and stores it on
   `OverlayManager` (`show_sight_trace`, with `sight_trace_version` as the mirror's #308-style
-  change signal); `SightTrace2D` draws it flat, `OverlayMirror` lifts the same points into the
-  diorama at their true heights on `BoardOverlays.Layer.SIGHT_TRACE`. Directional spreads draw no
-  trace (exempt, above). Pinned by `tests/weapons/test_sight_trace.gd` — including the law that the
-  gate and the trace can never disagree — falsified against EYE = 0 and against the version bump
-  being dropped.
+  change signal); `SightTrace2D` draws the polyline flat, `OverlayMirror` lifts the same points
+  into the diorama at their true heights (`BoardOverlays.Layer.SIGHT_TRACE`, the sink's LINE kind).
+  **Only ranged point aims draw it** (`Reach.draws_sight_trace`): melee is "visually obvious
+  anytime" (dev) — STEP attacks and bare fists show no line, though the gate still judges their
+  trace — and a directional spread has no single line. Pinned by
+  `tests/weapons/test_sight_trace.gd` — including the law that the gate and the trace can never
+  disagree — falsified against a wrong eye height and against the version bump being dropped.
+
+**Stale-content trap, paid once the day this shipped:** a scenario snapshot EMBEDS carving copies,
+and `.tres` omits defaulted fields — so a board saved before `arc_clearance` existed loads its
+embedded Fireball with clearance 0 and lobs it flat (plus `up_tolerance` unlimited). That was the
+"lob can't clear a 1-wall" bug report in its entirety; the fix was content (patch the embedded
+copy), not rules. Boards saved before an `AttackData` field existed need a re-save to pick it up.
 
 ---
 
@@ -594,6 +607,9 @@ itself.
   Explicitly **not** part of this arc — recorded as a supported direction. On a heightmap it needs no
   volume math: it is one more authored number, "the blast covers cells whose surface is within V of
   the impact point," so a fireball on a terrace does not catch the men on the plateau above.
+- **A projectile graphic riding the sight line** — dev, 2026-08-20: *"we can add a little graphic
+  of a fire following it when it goes off, for when the advanced battle zoom is disabled"*. The
+  trajectory function is already the one home the flight path would read.
 - **Terrain interlocks** — water flowing downhill, fire climbing, fog settling in low ground. A rich
   vein and a separate project; see [terrain.md](terrain.md).
 - **30° two-tile slopes** — a presentation experiment noted on #176. If adopted, traversal and the
