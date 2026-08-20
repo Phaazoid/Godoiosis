@@ -279,18 +279,29 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
 			floori(unit.position.y / PIXELS_PER_CELL))
 	var stand_y := BoardSpace.surface_point(over, heights).y
-	# The airborne shove (#259 rework): while FLYING the sprite holds its launch height -- the
-	# surface underneath is a hole or a drop it is sailing over -- and while sliding (or still
-	# settling after one) the height EASES at shove_fall_speed instead of snapping, so the drop at
-	# the landing reads as a fall. The residual flag rides the sprite: the slide can finish while
-	# the sprite is still above its landing surface. Walks keep the per-cell snap untouched.
-	if unit.movement.sliding and unit.movement.airborne:
-		stand_y = BoardSpace.surface_point(unit.movement.slide_origin, heights).y
-	if unit.movement.sliding or sprite.get_meta("kb_settling", false):
-		var eased := move_toward(previous.y, stand_y, shove_fall_speed * get_process_delta_time())
-		if unit.movement.sliding or not is_equal_approx(eased, stand_y):
-			sprite.set_meta("kb_settling", true)
+	# The airborne shove (#259 rework, ramp contact in round 2). While sliding, height is SLAVED
+	# to the horizontal motion, never rate-limited -- the slide runs many cells a second, so an
+	# eased height cannot track a ramp and reads as floating (measured, dev report). Airborne
+	# holds the launch height; ground contact follows the surface plane directly under the sprite
+	# (surface_height_at -- ramp-aware and continuous, so a tumble STICKS to the slope). A ramp
+	# LANDING begins contact the moment the sprite crosses onto the cell -- its high edge meets
+	# the flight level at that edge -- while a flat landing keeps fly-then-fall: airborne through
+	# arrival, then the kb_settling ease below drops it at shove_fall_speed. The residual flag
+	# rides the sprite because the slide can finish while it is still above its landing surface.
+	# Walks keep the per-cell snap untouched.
+	if unit.movement.sliding:
+		var m := unit.movement
+		var ramp_contact: bool = over == m.slide_landing_cell and heights != null \
+				and heights.ramp_rise_at(over) != Terrain.RampRise.NONE
+		if m.airborne and not ramp_contact:
+			stand_y = BoardSpace.surface_point(m.slide_origin, heights).y
 		else:
+			stand_y = BoardSpace.surface_height_at(over, unit.position.x / PIXELS_PER_CELL,
+					unit.position.y / PIXELS_PER_CELL, heights)
+		sprite.set_meta("kb_settling", true)
+	elif sprite.get_meta("kb_settling", false):
+		var eased := move_toward(previous.y, stand_y, shove_fall_speed * get_process_delta_time())
+		if is_equal_approx(eased, stand_y):
 			sprite.remove_meta("kb_settling")
 		stand_y = eased
 	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,

@@ -351,14 +351,19 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
   damage where it comes down. Both canon examples below still reproduce verbatim (pinned in
   `tests/law/test_falls.gd`).
 
-**The shove is ANIMATED and the trail is HONEST (review rework, 2026-08-20):** the target slides
-the resolver's own `knockback_path` (`MovementComponent.slide_along_path`, facing held — being
-moved is not moving), and in 3D its height rides `knockback_landing_index`, the resolver's
-flight/tumble split: launch height while airborne, an eased fall at the landing, terrain-following
-through the tumble. The preview trail obeys the same split — flown cells draw in the air at launch
-height, and a drop paints a vertical pointer down to the destination ("in the air until he would
-drop, then point straight down" — dev). A VOID cell renders as **no column at all** in 3D: the pit
-is the absence of the block.
+**The shove is ANIMATED and the trail is HONEST (review rework, 2026-08-20, two rounds):** the
+target slides the resolver's own `knockback_path` (`MovementComponent.slide_along_path`, facing
+held — being moved is not moving), and in 3D its height rides `knockback_landing_index`, the
+resolver's flight/tumble split: launch height while airborne, then **slaved to the surface under
+the sprite** (`BoardSpace.surface_height_at`, the ramp-aware plane — a tumble STICKS to the
+slope; an eased height cannot track a many-cells-per-second slide and floats, measured). A flat
+landing keeps fly-then-fall via the post-slide ease. The preview trail obeys the same split —
+flown cells draw in the air at launch height, and a drop onto a FULL tile hangs the trail's own
+rail sprite vertically at the entry edge of the landing, flight height down to the destination
+("in the air until he would drop, then point straight down" — dev); a fall onto a RAMP draws no
+pointer — the flat arrow lying on the slope is the whole story, and the sprite rides the slope
+from its edge. A VOID cell renders as **no column at all** in 3D: the pit is the absence of the
+block.
 
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the

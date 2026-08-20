@@ -19,6 +19,10 @@ class_name ScenarioHeader
 # draw board state. The header never reaches into a panel itself.
 
 signal file_changed
+# About to capture the board for a save (#259 rework round 2) -- the window routes it to panels
+# holding STAGED edits (the Unit Editor's flush_staged), so a save can never disagree with what
+# is on screen. Emitted synchronously before save_scenario in both Update and Save As.
+signal capturing
 
 @onready var loaded_label: Label = %LoadedScenarioLabel
 @onready var scenario_dropdown: OptionButton = %ScenarioDropdown
@@ -193,6 +197,7 @@ func _on_update_pressed() -> void:
 
 
 func _update_confirmed(target: String) -> void:
+	capturing.emit()   # flush staged unit edits first -- the save must match what panels show
 	# Subfolder names round-trip untouched: save_over make_dir_recursive's the base dir.
 	scenario_manager.save_scenario(target, status_label, authored_save)
 	_stamp_clean()
@@ -226,6 +231,7 @@ func _on_save_as_pressed() -> void:
 		return
 	if DevWidgets.refuse_existing_file(ScenarioManager.scenario_path(entered), "scenario", status_label):
 		return
+	capturing.emit()   # same flush as Update: a Save As mid-edit keeps what the panel shows
 	scenario_manager.save_scenario(entered, status_label, authored_save)
 	_stamp_clean()
 	scenario_name_input.text = ""

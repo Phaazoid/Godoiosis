@@ -167,6 +167,11 @@ func resolve_pending(cell: Vector2i) -> void:
 			unit.movement.set_cell(cell)             # set_cell snaps world position too
 		PendingAction.DUPLICATE:
 			duplicate_unit(unit, cell)
+	# A dev-armed placement is AUTHORING, unlike gameplay movement, which deliberately never marks
+	# (#259 rework round 2 -- the edit sweep). Reached through the overlay ref the F1 toggle
+	# already holds; null in a demo build, where there is no scenario header to tell.
+	if game.dev_overlay != null:
+		game.dev_overlay.scenario_header.mark_modified()
 
 # Independent deep copy of `source` at `cell`. UnitData is duplicated so the copy owns its
 # identity; runtime state (stats, HP) lives on the instance, copied post-spawn; inventory items

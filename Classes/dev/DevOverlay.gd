@@ -115,6 +115,9 @@ func _ready() -> void:
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
+	# The reverse route (#259 rework round 2): before the header captures, panels holding staged
+	# edits apply them, so Update/Save As always write exactly what is on screen.
+	scenario_header.capturing.connect(unit_editor.flush_staged)
 	close_requested.connect(_on_close_requested)
 	%DevTabs.tab_changed.connect(_on_tab_changed)
 	%AuthoringTabs.tab_changed.connect(_on_authoring_tab_changed)

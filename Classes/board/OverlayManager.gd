@@ -417,6 +417,14 @@ func show_knockback_preview(shoves: Array) -> void:
 				trail[i].set_meta("kb_drop_from", path[0])
 				if shove.get("removed", false):
 					trail[i].set_meta("kb_removed", true)
+				# The 3D drop pointer's clothes and hanger (#259 rework round 2): the trail's own
+				# straight rail texture -- vertical, a rail has no cardinal identity, so the EW cut
+				# serves every direction -- and the travel step INTO the landing, which places the
+				# pointer at the cell edge the flight crosses when it falls.
+				if i > 0:
+					trail[i].set_meta("kb_rail_texture",
+							_get_path_segment_atlas(Vector2i.LEFT, Vector2i.RIGHT))
+					trail[i].set_meta("kb_dir", path[i] - path[i - 1])
 			knockback_preview_sprites.append(trail[i])
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
