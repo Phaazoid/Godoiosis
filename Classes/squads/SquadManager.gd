@@ -434,7 +434,7 @@ func squad_has_invalid_actions(squad: Squad) -> bool:
 			return true
 	return false
 	
-func can_counter(countering_unit: Unit, target_unit: Unit) -> bool: 
+func can_counter(countering_unit: Unit, target_unit: Unit, board: BoardContext) -> bool:
 	if countering_unit == null or target_unit == null:
 		return false
 	if not is_instance_valid(countering_unit) or not is_instance_valid(target_unit):
@@ -452,20 +452,22 @@ func can_counter(countering_unit: Unit, target_unit: Unit) -> bool:
 
 	# Reach must be judged by the attack the counter will ACTUALLY fire -- main, for a weapon --
 	# not by whatever this unit last aimed with. Reading the live pick here let a melee unit
-	# counter from a reach attack's range and then swing a range-1 main (#102).
-	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell, countering_unit.get_counter_attack())
+	# counter from a reach attack's range and then swing a range-1 main (#102). The board carries
+	# the elevations: a target above this unit's up_tolerance draws no counter (#258's counter
+	# denial). Required, may be null = flat -- an optional would silently read flat forever.
+	return Reach.can_hit_cell_from(countering_unit, counter_cell, target_cell, countering_unit.get_counter_attack(), board)
 
-func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) -> Unit:
+func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit], board: BoardContext) -> Unit:
 	# Taunt (Reaction, docs/design/jobs.md "The ability chassis"): a standing policy, never a
 	# prompt — counters against the taunter's party must target the taunter WHERE LEGAL.
 	# First legal taunter in member order wins (deterministic, Law #1); an unreachable taunter
 	# falls through to the default policy below rather than suppressing the counter.
 	for member in attacking_party:
-		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member):
+		if member.has_live_ability(Abilities.Id.TAUNT) and can_counter(countering_unit, member, board):
 			return member
 	# Default policy (C3 placeholder): first legal member.
 	for member in attacking_party:
-		if can_counter(countering_unit, member):
+		if can_counter(countering_unit, member, board):
 			return member
 	return null
 
@@ -473,10 +475,10 @@ func choose_counter_target(countering_unit: Unit, attacking_party: Array[Unit]) 
 # A damaging source picks from the attacking party (above, unchanged); a healing one turns inward
 # and can never pick an enemy. Forked off the same flag the resolver, the executor and the reach
 # overlay already read, rather than a second way to ask "is this a heal" (#148).
-func _choose_reaction_target(reacting_unit: Unit, attacking_party: Array[Unit], hypo: Dictionary) -> Unit:
+func _choose_reaction_target(reacting_unit: Unit, attacking_party: Array[Unit], hypo: Dictionary, board: BoardContext) -> Unit:
 	if _reaction_heals(reacting_unit):
-		return choose_reaction_heal_target(reacting_unit, hypo)
-	return choose_counter_target(reacting_unit, attacking_party)
+		return choose_reaction_heal_target(reacting_unit, board, hypo)
+	return choose_counter_target(reacting_unit, attacking_party, board)
 
 func _reaction_heals(reacting_unit: Unit) -> bool:
 	var source := reacting_unit.get_counter_attack()
@@ -486,11 +488,11 @@ func _reaction_heals(reacting_unit: Unit) -> bool:
 # FILTER, "lowest HP" is the sort. Collapsed into one, a full 19/19 unit outranks a hurt 20/23 one,
 # which is the exact thing the dev ruled out. Ties fall to _all_units order, the same first-in-
 # order tie-break choose_counter_target uses (Law #1).
-func choose_reaction_heal_target(healer: Unit, hypo: Dictionary = {}) -> Unit:
+func choose_reaction_heal_target(healer: Unit, board: BoardContext, hypo: Dictionary = {}) -> Unit:
 	var best: Unit = null
 	var best_hp := 0
 	for candidate in _all_units():
-		if not can_reaction_heal(healer, candidate, hypo):
+		if not can_reaction_heal(healer, candidate, board, hypo):
 			continue
 		var hp := PlanResolver.projected_hp(candidate, hypo)
 		if best == null or hp < best_hp:
@@ -503,7 +505,7 @@ func choose_reaction_heal_target(healer: Unit, hypo: Dictionary = {}) -> Unit:
 # live, the healer would pick whoever was hurt BEFORE the swing and skip the squadmate who just
 # took it. A DOWNED ally is excluded outright (dev call, #148): a heal moves HP but never lifts
 # lifecycle_state, so healing a body would silently eat the squad's whole reaction.
-func can_reaction_heal(healer: Unit, candidate: Unit, hypo: Dictionary = {}) -> bool:
+func can_reaction_heal(healer: Unit, candidate: Unit, board: BoardContext, hypo: Dictionary = {}) -> bool:
 	if healer == null or candidate == null:
 		return false
 	if not is_instance_valid(healer) or not is_instance_valid(candidate):
@@ -521,8 +523,9 @@ func can_reaction_heal(healer: Unit, candidate: Unit, hypo: Dictionary = {}) -> 
 		return false
 	if PlanResolver.projected_hp(candidate, hypo) >= candidate.get_max_hp():
 		return false
-	# Same reach test can_counter applies, judged by the attack that will actually fire (#102).
-	return Reach.can_hit_cell_from(healer, healer.get_projected_destination(), candidate.get_projected_destination(), source)
+	# Same reach test can_counter applies, judged by the attack that will actually fire (#102),
+	# vertical tolerance included (#258).
+	return Reach.can_hit_cell_from(healer, healer.get_projected_destination(), candidate.get_projected_destination(), source, board)
 
 # Every reaction the defending parties get, in RESOLUTION ORDER: damaging ones first, healing ones
 # after (C10). That ordering is the whole reason #148 needed no separate post-counter stage --
@@ -532,7 +535,7 @@ func can_reaction_heal(healer: Unit, candidate: Unit, hypo: Dictionary = {}) -> 
 # ONE walk, ONE ledger. C1 (a unit reacts once per plan) and C4 (a party responds once per
 # attacking squad's plan) are bookkeeping, and a second sweep for heals would have to keep its own
 # copy of it -- two answers to "has this party reacted yet", free to drift (Law #4).
-func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], hypo: Dictionary = {}) -> Array[CounterAttackAction]:
+func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[AttackAction], board: BoardContext, hypo: Dictionary = {}) -> Array[CounterAttackAction]:
 	var strikes: Array[CounterAttackAction] = []
 	var heals: Array[CounterAttackAction] = []
 	var defender_groups_that_countered := {} # {Squad : bool}
@@ -549,7 +552,7 @@ func calculate_reactions_for_squad(attacking_squad: Squad, attacks: Array[Attack
 			continue
 
 		for reacting_unit in defender.squad.get_members():
-			var reaction_target := _choose_reaction_target(reacting_unit, attacking_units, hypo)
+			var reaction_target := _choose_reaction_target(reacting_unit, attacking_units, hypo, board)
 			if reaction_target == null:
 				continue
 
@@ -621,7 +624,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
 	# gather the attack loop above uses — so an AoE counter splashes everyone in the blast, not
 	# just its chosen target. (Parallels the #15 "derive victims, don't store" rule for attacks.)
-	for aim in calculate_reactions_for_squad(squad, plan.attacks, hypo):
+	for aim in calculate_reactions_for_squad(squad, plan.attacks, board, hypo):
 		var c_origin := aim.actor.get_projected_destination()
 		var c_aim_cell := aim.target.get_projected_destination()
 		# The counter's own attack drives its footprint AND its friendly-fire rule, matching what

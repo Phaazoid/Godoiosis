@@ -160,20 +160,30 @@ func _hover_attack_targeting(cell: Vector2i) -> void:
 	var preview_cells: Array[Vector2i] = []
 	var victims: Array[Unit] = []
 	var pulse_tiles := false
+	var trace_shown := false
 	if attacker != null:
+		var board: BoardContext = game._board()
 		var origin := attacker.get_projected_destination()
 		var aiming := attacker.get_fired_attack()   # aiming: the live pick IS the question (#102)
+		# The sight line (#258): for a RANGED point aim at any cell in horizontal reach, show the
+		# trace -- valid or blocked, the player sees the line the gate judged. Melee draws none
+		# (visually obvious anytime -- dev); a directional aim has no single line.
+		if Reach.draws_sight_trace(aiming) \
+				and Reach.get_attack_cells_from(attacker, origin, cell, aiming).has(cell):
+			game.overlay_manager.show_sight_trace(Reach.sight_trace(aiming, origin, cell, board))
+			trace_shown = true
 		# Directional: any non-zero facing is a legal aim (the whole spread is the target).
-		# Point: the hovered cell itself must be in range.
-		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming):
+		# Point: the hovered cell itself must be in range AND within vertical tolerance (#258).
+		if Reach.is_directional_attack(aiming) or Reach.can_hit_cell_from(attacker, origin, cell, aiming, board):
 			preview_cells = Reach.get_affected_cells_from(attacker, origin, cell, aiming)
 			# A null pick is bare fists -- unit-only by definition, so it has no hits_map/hits_units
 			# to ask and answers as UNIT.
 			pulse_tiles = aiming != null and aiming.hits_map()
 			if aiming == null or aiming.hits_units():
-				var board: BoardContext = game._board()
 				victims = RulesService.gather_attack_victims(attacker, preview_cells, board, aiming)
 
+	if not trace_shown:
+		game.overlay_manager.clear_sight_trace()
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.HOVER, preview_cells, OverlayManager.ATLAS_COORDS)
 	game.overlay_manager.set_target_pulse(victims, pulse_tiles)
 	_set_cursor_for_preview(cell, not preview_cells.is_empty())

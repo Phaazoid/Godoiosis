@@ -4,4 +4,5 @@
 
 [resource]
 script = ExtResource("1_wad")
+vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

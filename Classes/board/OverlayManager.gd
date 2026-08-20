@@ -58,6 +58,10 @@ const ATLAS_COORDS = Vector2i(0,0)          # plain fill — what every overlay 
 # (1,0) is the marker tile on the AttackOverlay's sheet — #316: this read (3,0) since before the
 # reorg, a coord the one-tile sheet never had, so the highlight drew in NEITHER view.
 const TARGET_ATLAS_COORDS = Vector2i(1, 0)  # the "pick this unit" marker (PICKING_TARGET)
+# (2,0): the hatched fill for a reach cell a point aim can never legally target — in range but past
+# the attack's vertical tolerance (#258). Same layer, same modulate (so the heal-green fork follows
+# for free); distinctness is the tile art, the TARGET_ATLAS_COORDS precedent for per-cell states.
+const BLOCKED_ATLAS_COORDS = Vector2i(2, 0)
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
@@ -74,6 +78,11 @@ const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
 # answer of its own, so there is no 3D-only value here to tune (dev call: acceptable).
 static var ATTACK_MODULATE := Color(1, 0, 0, .5)
 static var HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
+# How much darker a vertically-BLOCKED reach cell (#258) draws than the reach fill. The 2D says
+# "blocked" with the hatched tile under the same modulate; the 3D has no per-cell art, so its
+# ATTACK_BLOCKED layer derives its colour as the live reach modulate scaled by this. One factor,
+# never a second colour -- deriving keeps the heal-green fork and any tuned reach colour for free.
+static var BLOCKED_REACH_DIM := 0.45
 # The two authoring-zone tints. Named because the 3D mirrors them (#231) and the parallel
 # stacks' rule is that a mirrored color is COPIED from here, never restated — a literal on
 # each side is two answers to "what colour is a patrol zone".
@@ -155,6 +164,14 @@ var _tile_pulse: Tween = null
 # What the reach fill was last painted for, so refresh_attack_reach_color can re-derive it.
 var _reach_attack: AttackData = null
 
+# The hovered aim's sight trace (#258): computed ONCE by HoverPresenter via Reach.sight_trace and
+# stored here as DATA -- SightTrace2D draws it flat, OverlayMirror lifts the same points into the
+# diorama. `sight_trace_version` is the monotonic, non-consuming change signal the mirror gates on
+# (the #308 rule: never a copied key).
+var sight_trace: Reach.SightTrace = null
+var sight_trace_version := 0
+var _sight_trace_2d: SightTrace2D
+
 
 
 # Called when the node enters the scene tree for the first time.
@@ -198,6 +215,28 @@ func _ready() -> void:
 		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 		zone_highlight_overlay.visible = false
 		add_child(zone_highlight_overlay)
+	# The bead-path renderer (#258). Code-built (no .tscn edit), above the tile overlays and below
+	# unit sprites, the standing rule for board markup.
+	_sight_trace_2d = SightTrace2D.new()
+	_sight_trace_2d.name = "SightTrace2D"
+	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
+	add_child(_sight_trace_2d)
+
+
+func show_sight_trace(trace: Reach.SightTrace) -> void:
+	sight_trace = trace
+	sight_trace_version += 1
+	_sight_trace_2d.trace = trace
+	_sight_trace_2d.queue_redraw()
+
+
+func clear_sight_trace() -> void:
+	if sight_trace == null:
+		return   # idempotent -- exit paths spam this; the version only moves on real change
+	sight_trace = null
+	sight_trace_version += 1
+	_sight_trace_2d.trace = null
+	_sight_trace_2d.queue_redraw()
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color.
@@ -214,6 +253,13 @@ func set_attack_reach_color(attack: AttackData) -> void:
 # so without this a tuned colour would not show until the player next entered targeting.
 func refresh_attack_reach_color() -> void:
 	set_attack_reach_color(_reach_attack)
+
+# The one door for the attack-reach draw (#258). Membership = the full union, drawn once on
+# entering the mode (the inviolable rule); `blocked` cells re-tile to the hatched fill in the same
+# pass, so a cell the aim gate would refuse says so up front. Never called during aiming.
+func show_attack_reach(cells: Array[Vector2i], blocked: Array[Vector2i]) -> void:
+	show_overlay(OverlayType.ATTACK, cells, ATLAS_COORDS)
+	draw_cells(attack_overlay, blocked, BLOCKED_ATLAS_COORDS)
 
 func show_overlay(type: int, cells: Array, atlas_coord: Vector2i):
 	var layer = overlay_map[type]

@@ -31,7 +31,7 @@ func _counters_for(attacker: Unit, target: Unit) -> Array[CounterAttackAction]:
 	var attack := AttackAction.create(attacker, attacker.movement.cell, target, target.movement.cell)
 	attacker.squad._queue_action(attack)
 	var attacks: Array[AttackAction] = [attack]
-	return _sm.calculate_reactions_for_squad(attacker.squad, attacks)
+	return _sm.calculate_reactions_for_squad(attacker.squad, attacks, null)
 
 func test_taunt_holder_attracts_the_counter_over_the_default_policy() -> void:
 	# Same geometry as test_c3 (both attackers reachable) — without Taunt this would pick a1

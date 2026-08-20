@@ -33,3 +33,9 @@ var lethality: Lethality = Lethality.NONE
 var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview
 
 var hp_before: int = 0   # target's HP going into this hit; recorded by the resolver, not derived
+
+# Target height minus attacker height at resolve time (#258) — the wire a future height-damage rule
+# attaches to; no behaviour reads it in v1 beyond the queue row's uphill/downhill token. FROZEN like
+# fired_attack: stamped from origin_cell + the threaded hypo position, never re-derived later, since
+# a shove earlier in the pass can change the target's level (Law #2). 0 with no board.
+var elevation_delta: int = 0

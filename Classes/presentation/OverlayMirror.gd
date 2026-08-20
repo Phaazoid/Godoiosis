@@ -46,6 +46,8 @@ var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
 var _last_heights_version := -1
 var _heights_moved := false
 
+var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
+
 
 func _process(_delta: float) -> void:
 	if game == null or overlays == null:
@@ -69,6 +71,7 @@ func _process(_delta: float) -> void:
 	overlays.set_layer_modulate(BoardOverlays.Layer.AIM, om.hover_overlay.modulate)
 
 	_attack(om)
+	_sight_trace(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -166,22 +169,55 @@ func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	overlays.set_cells(layer, cells, _heights())
 
 
-# ATTACK is dual-use in 2D: reach fill at (0,0), target-pick markers at (1,0) on the
-# same layer — split by atlas coords; the heal-green arrives as the layer modulate.
+# ATTACK is TRIPLE-use in 2D: reach fill at (0,0), target-pick markers at (1,0), and the
+# vertically-blocked reach cells at (2,0) (#258) — split by atlas coords; the heal-green arrives
+# as the layer modulate. The split is EXPLICIT per coord: an `else` catch-all here silently drew
+# any new coord as plain red reach, which is how the blocked state would have vanished in 3D.
 #
 # The reach half hands its cells to _fill rather than lifting and diffing them here: a hand-copied
 # diff is a second copy of whatever _fill's key gets wrong, which is exactly how #308 had two homes.
 func _attack(om: OverlayManager) -> void:
 	var reach: Array[Vector2i] = []
+	var blocked: Array[Vector2i] = []
 	var picks: Array[Dictionary] = []
 	for cell: Vector2i in om.attack_overlay.get_used_cells():
-		if om.attack_overlay.get_cell_atlas_coords(cell) == OverlayManager.TARGET_ATLAS_COORDS:
+		var coords: Vector2i = om.attack_overlay.get_cell_atlas_coords(cell)
+		if coords == OverlayManager.TARGET_ATLAS_COORDS:
 			picks.append(_marker(_anchor(cell), _target_pick_texture(om), Color.WHITE))
+		elif coords == OverlayManager.BLOCKED_ATLAS_COORDS:
+			blocked.append(cell)
 		else:
 			reach.append(cell)
 	_fill(BoardOverlays.Layer.ATTACK, reach)
+	_fill(BoardOverlays.Layer.ATTACK_BLOCKED, blocked)
 	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK, om.attack_overlay.modulate)
+	# Derived, never a second colour: the 2D hatch tile wears the same modulate, so the 3D twin
+	# is the same modulate dimmed by one tunable factor (a GameKnobs row).
+	var dim: float = OverlayManager.BLOCKED_REACH_DIM
+	var m: Color = om.attack_overlay.modulate
+	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK_BLOCKED, Color(m.r * dim, m.g * dim, m.b * dim, m.a))
 	_markers(BoardOverlays.Layer.TARGET_PICK, picks)
+
+
+# The aim's sight line (#258), lifted into the diorama at the trajectory's own heights -- the arc
+# a lob clears a wall by is literally visible, a gun's line is straight by construction. Gated on
+# the store's own version, never a copied key (#308); the points and the verdict were computed ONCE
+# by Reach.sight_trace, so this is a second projection of one answer, not a second computation.
+func _sight_trace(om: OverlayManager) -> void:
+	if om.sight_trace_version == _last_trace_version:
+		return
+	_last_trace_version = om.sight_trace_version
+	var points := PackedVector3Array()
+	var tint := SightTrace2D.CLEAR_COLOR   # colours COPIED from the 2D renderer, never restated
+	var trace: Reach.SightTrace = om.sight_trace
+	if trace != null:
+		if trace.blocked:
+			tint = SightTrace2D.BLOCKED_COLOR
+		for p in trace.points:
+			# Rule-height h sits at world surface_y(0) + h * CELL_SIZE: a level-E surface is world
+			# surface_y(E), and h counts levels above the level-0 floor plane.
+			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(0) + p.y * BoardSpace.CELL_SIZE, p.z * BoardSpace.CELL_SIZE))
+	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:

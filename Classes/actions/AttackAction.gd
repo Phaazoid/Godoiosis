@@ -187,8 +187,10 @@ func get_outcome_summary() -> String:
 	if fired_attack != null and fired_attack.heals:
 		parts.append("+%d" % resolved.heal_amount)
 		parts.append("(%d->%d)" % [resolved.hp_before, resolved.target_hp_after])
+		if resolved.elevation_delta != 0:
+			parts.append(_slope_token())
 		return "   ".join(parts)
-	
+
 	parts.append("-%d" % resolved.damage)
 	# HP context: "before -> after". A CRISIS row breaks the subtraction arithmetic (the
 	# target stands back up at revive HP), so it gets its own honest form.
@@ -210,4 +212,11 @@ func get_outcome_summary() -> String:
 		parts.append("+%s" % Elemental.State.keys()[s])
 	for s in resolved.states_removed:
 		parts.append("-%s" % Elemental.State.keys()[s])
+	if resolved.elevation_delta != 0:
+		parts.append(_slope_token())
 	return "   ".join(parts)
+
+# The queue row's readout of ResolvedOutcome.elevation_delta (#258): the target sat above or below
+# the attacker when this hit was previewed. Wording only -- no rule reads the delta yet.
+func _slope_token() -> String:
+	return "uphill" if resolved.elevation_delta > 0 else "downhill"

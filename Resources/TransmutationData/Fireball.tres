@@ -21,4 +21,6 @@ power = 5
 attack_pattern = SubResource("Resource_mq7ng")
 hits_allies = true
 targets = 2
+up_tolerance = 3
+arc_clearance = 3
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"

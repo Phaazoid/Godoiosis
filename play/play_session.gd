@@ -155,7 +155,9 @@ func queue_attack(handle: String, aim: Vector2i) -> Dictionary:
 	# Play never sets active_attack, so today this is always the weapon's main -- the headless
 	# side has no way to select a secondary at all (#110).
 	var aiming := unit.get_fired_attack()
-	if not Reach.can_hit_cell_from(unit, origin, aim, aiming):
+	# The board carries the elevations for the vertical-tolerance half of the gate (#258),
+	# mirroring the player's click exactly.
+	if not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
 		return {"ok": false, "error": "%s cannot hit %s from %s" % [handle, str(aim), str(origin)]}
 	var affected := Reach.get_affected_cells_from(unit, origin, aim, aiming)
 	var victims := RulesService.gather_attack_victims(unit, affected, _board(), aiming)

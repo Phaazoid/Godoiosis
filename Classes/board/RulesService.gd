@@ -51,19 +51,30 @@ static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardConte
 	# No sideways entry (dev ruling): a ramp connects exactly its high and low sides, so any step
 	# touching one must run along its slope. Checked for BOTH cells -- leaving a ramp sideways and
 	# entering one sideways are separate clauses, and a test covering only one is blind to the other.
+	# A MOVEMENT rule only: melee's STEP gate below shares the height core but not these guards --
+	# swinging past a ramp's side is not walking onto it.
 	if from_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(from_rise, step):
 		return false
 	if to_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(to_rise, step):
 		return false
 
+	return height_step_ok(from, to, board)
+
+# The height core of the edge question, extracted (#258) so melee's STEP rule ("same step, or a
+# facing half step" -- dev, 2026-08-20) and movement answer it identically: equal levels connect,
+# a +/-1 edge connects only through a ramp whose rise runs along the step, anything taller never.
+static func height_step_ok(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
+	var step := to - from
 	var delta := board.elevation_at(to) - board.elevation_at(from)
 	if delta == 0:
 		return true
 	if abs(delta) != 1:
 		return false
 	if delta > 0:
-		return Terrain.rise_direction(from_rise) == step      # climbing off the ramp we stand on
-	return Terrain.rise_direction(to_rise) == -step           # descending onto a ramp, against its rise
+		# climbing off the ramp we stand on
+		return Terrain.rise_direction(board.ramp_rise_at(from)) == step
+	# descending onto a ramp, against its rise
+	return Terrain.rise_direction(board.ramp_rise_at(to)) == -step
 
 static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)

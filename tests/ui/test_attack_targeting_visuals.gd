@@ -225,3 +225,108 @@ func test_leaving_the_mode_stops_every_pulse() -> void:
 	assert_bool(_unit_pulsing(_foe())).is_false()
 	assert_bool(_tiles_pulsing()).is_false()
 	assert_that(_foe().visuals.sprite.modulate).is_equal(_foe().visuals.base_modulate)
+
+
+# ==============================================================================
+#  Vertical tolerance (#258): blocked cells say so, and the click agrees
+# ==============================================================================
+
+# Raise AWAY_CELL past the weapon's up-tolerance and arm the attacker. Every case below shares
+# this shape; the flat cases above are untouched because clear_board wipes the heights store.
+func _armed_attacker_below_a_ledge() -> Unit:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	game.board_heights.set_cell(AWAY_CELL, 2)
+	return attacker
+
+
+# Membership never changes; the blocked cell wears the hatched fill instead of vanishing.
+func test_a_blocked_cell_wears_the_hatched_fill_and_membership_holds() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	game.enter_attack_mode(attacker)
+
+	for cell in _reach_cells():
+		var expected: Vector2i = OverlayManager.BLOCKED_ATLAS_COORDS if cell == AWAY_CELL else OverlayManager.ATLAS_COORDS
+		assert_that(game.overlay_manager.attack_overlay.get_cell_atlas_coords(cell)) \
+			.override_failure_message("reach cell %s wears the wrong fill" % cell) \
+			.is_equal(expected)
+
+
+# The wire test: the real click handler on a blocked cell queues NOTHING, and the identical click
+# on a hittable cell still queues -- so the hatch and the refusal can never disagree. Counted as
+# ATTACK orders: activating a squad in the real scene also inserts the hold-move filler.
+func _queued_attacks(unit: Unit) -> int:
+	var count := 0
+	for action in unit.squad.action_queue:
+		if action.action_type == BaseAction.ActionType.ATTACK:
+			count += 1
+	return count
+
+
+func test_clicking_a_blocked_cell_queues_nothing() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(AWAY_CELL)
+	assert_int(_queued_attacks(attacker)).is_equal(0)
+
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._click_attack_targeting(FOE_CELL)
+	assert_int(_queued_attacks(attacker)).is_equal(1)
+
+
+func test_hovering_a_blocked_cell_previews_nothing() -> void:
+	var attacker := _armed_attacker_below_a_ledge()
+
+	_aim_at(attacker, AWAY_CELL)
+
+	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()
+	assert_bool(_tiles_pulsing()).is_false()
+	assert_bool(_unit_pulsing(_foe())).is_false()
+
+
+# ==============================================================================
+#  The sight trace (#258): the bead path the aim gate judged, stored for both stacks
+# ==============================================================================
+
+func test_hovering_an_aim_stores_its_sight_trace_and_exit_clears_it() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+
+	_aim_at(attacker, FOE_CELL)
+	var trace: Reach.SightTrace = game.overlay_manager.sight_trace
+	assert_object(trace).is_not_null()
+	assert_bool(trace.blocked).is_false()
+
+	game.exit_current_mode()
+	assert_object(game.overlay_manager.sight_trace).is_null()
+
+
+func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	var pattern := ManhattanRangePattern.new()
+	pattern.min_range = 1
+	pattern.max_range = 2
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = pattern
+	game.board_heights.set_cell(Vector2i(1, 2), 3)   # a wall between (1,1) and the target at (1,3)
+
+	_aim_at(attacker, Vector2i(1, 3))
+
+	var trace: Reach.SightTrace = game.overlay_manager.sight_trace
+	assert_object(trace).is_not_null()
+	assert_bool(trace.blocked).is_true()
+	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()   # the aim is refused
+
+
+# Melee draws no sight line (dev, 2026-08-20: "visually obvious anytime") -- the aim itself still
+# previews; only the trace stays away. Ranged aims keep theirs (the cases above).
+func test_a_melee_aim_draws_no_sight_line() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.STEP
+
+	_aim_at(attacker, FOE_CELL)
+
+	assert_object(game.overlay_manager.sight_trace).is_null()
+	assert_bool(game.overlay_manager.hover_overlay.get_used_cells().is_empty()).is_false()
