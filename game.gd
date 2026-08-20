@@ -788,10 +788,17 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 			seen[key] = true
 			deposits.append({"cell": effect.cell, "state": state})
 	overlay_manager.show_terrain_preview(deposits)
+	# Attacks AND counters (#259 closed the gap: counter shoves were never previewed). The path
+	# is the trail's one source -- a landing tumble can bend it, so endpoints cannot describe it.
+	var all_hits: Array = []
+	all_hits.append_array(plan.attacks)
+	all_hits.append_array(plan.counters)
 	var shoves: Array = []
-	for atk in plan.attacks:
+	for atk: AttackAction in all_hits:
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-			shoves.append({"target": atk.target, "from": atk.resolved.knockback_from, "to": atk.resolved.knockback_to})
+			shoves.append({"target": atk.target, "path": atk.resolved.knockback_path,
+				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed,
+				"landing_index": atk.resolved.knockback_landing_index})
 	overlay_manager.show_knockback_preview(shoves)
 
 func _squad_all_committed(squad: Squad) -> bool:

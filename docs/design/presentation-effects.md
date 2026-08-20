@@ -336,7 +336,7 @@ The tier nobody else can copy, because it renders systems Iosis alone has.
 - **Squad cohesion** drawn as a soft light tether/field (the `SquadCohesion.field` is already computed; render it instead of tile fills).
 - **Zones**: capture/extraction as diegetic alchemical light columns, intensity tracking progress.
 - **Turn count drives the sun** — dawn on turn 1, dusk by turn 12; time pressure made visible. (Pure presentation; the rules never read the clock.)
-- **When #116 lands**: the shove-off-cliff kill earns a slow focus-racked camera tilt — the tilt-shift rig doing dramatic work.
+- **The shove-off-cliff kill is REAL as of #259 (2026-08-20)** — it still owes this earned presentation: a slow focus-racked camera tilt, the tilt-shift rig doing dramatic work.
 
 ## Tier 4 — the far wall (flagged as such)
 

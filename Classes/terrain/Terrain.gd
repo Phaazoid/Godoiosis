@@ -45,8 +45,12 @@ enum Kind {
 	ROCK,
 	TREE,
 	WATER,
-	DIRT   # bare ground: no reactions key on it, so it cannot catch fire -- the non-flammable
+	DIRT,  # bare ground: no reactions key on it, so it cannot catch fire -- the non-flammable
 		   # default ground beside GRASS (which ignites)
+	VOID   # #259: a bottomless hole -- chasm, airship edge, train side. Unwalkable like water, but
+		   # a shove FLIES OVER it and a shove that ENDS on it removes the unit outright (the #116
+		   # kill doctrine). The two authored `hole` tiles carry it; the headless no-tile sentinel
+		   # renamed to "offmap" so this member owns the word.
 }
 
 # Which way a ramp cell RISES (#218/#257). Stored per-cell in BoardHeights and serialized into

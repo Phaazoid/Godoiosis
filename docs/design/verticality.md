@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #420 (2026-08-20).**
+**Canon checked through #427 (2026-08-20).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -311,7 +311,7 @@ copy), not rules. Boards saved before an `AttackData` field existed need a re-sa
 
 ---
 
-## Falls, shoves and tumbles [DECIDED]
+## Falls, shoves and tumbles [BUILT as #259, 2026-08-20]
 
 ### Two kinds of edge
 
@@ -324,7 +324,54 @@ These reconcile rather than compete: a void is a drop with no floor. The cliff c
 terraces that hurt, an outer edge that removes you — and #116's power-gating argument survives
 untouched, because the level designer decides which edges exist.
 
-### Shoves
+### The shove is AIRBORNE [REVISED at build, 2026-08-20 — supersedes the step-wise text below]
+
+> *"The drop occurs where the shove would move the unit to. This means you could potentially blow
+> allies over holes to safety. Also, when a unit lands, if they land on a slope, they tumble down
+> that too."* — dev
+
+So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
+
+- **The flight** travels the knockback distance at the unit's STARTING elevation. A cell higher
+  than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
+  cell is flown over**; walls, water, bodies and off-board stop it exactly as before — water's
+  shoreline stop is deliberately untouched, since what a shove INTO water does is #116's still-open
+  fork.
+- **The landing** resolves wherever the horizontal travel ends — distance spent *or* blocked early.
+  Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending lower =
+  **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
+  (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap
+  so the cap stays absolute) and carries the #120 weight term (inert until gear has mass). Ending
+  on the doc's original tumble entry (a connected descending ramp — its high edge meets the flight
+  level) = a free tumble, no fall. **Ending on any other ramp tumbles too**, down the slope's OWN
+  downhill — after paying the drop, and possibly bending the shove's path once, which is why
+  `ResolvedOutcome.knockback_path` now carries the full trail the preview draws.
+- One visible consequence of airborne, worth knowing when authoring: a knockback-1 shove onto a
+  descending ramp tumbles free, while a longer shove **flies over** the same ramp and pays fall
+  damage where it comes down. Both canon examples below still reproduce verbatim (pinned in
+  `tests/law/test_falls.gd`).
+
+**The shove is ANIMATED and the trail is HONEST (review rework, 2026-08-20):** the target slides
+the resolver's own `knockback_path` (`MovementComponent.slide_along_path`, facing held — being
+moved is not moving), and in 3D its height rides `knockback_landing_index`, the resolver's
+flight/tumble split: launch height while airborne, an eased fall at the landing, terrain-following
+through the tumble. The preview trail obeys the same split — flown cells draw in the air at launch
+height, and a drop paints a vertical pointer down to the destination ("in the air until he would
+drop, then point straight down" — dev). A VOID cell renders as **no column at all** in 3D: the pit
+is the absence of the block.
+
+**A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
+up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the
+flag exists because execution needs its own door (a 0-damage `take_damage` cannot kill an ACTIVE
+unit), so **both** executors — `AttackAction.execute` and `play_session._apply_attack`, the
+hand-mirrored twins — call `Unit.die()` on it. A removed target publishes no projected knockback
+and draws no landing ghost: its sprite stands where it is, the trail alone says where it goes, and
+nothing on a chasm cell is pickable. `Terrain.Kind.VOID` (append-only) is the authored vocabulary;
+the two `hole` tiles carry it, and the headless no-tile sentinel renamed to `"offmap"` to free the
+word. Counter shoves are previewed too since this slice (`_preview_plan_effects` walks
+`plan.counters` — a gap, closed).
+
+### Shoves — the original rulings (all intact under the airborne model)
 
 - **You cannot be pushed uphill.** A shove that would climb stops dead. High ground braces you.
 - **Only vertical drops give fall damage.** Slopes never do.
@@ -358,13 +405,18 @@ Two consequences, both ruled the conservative way:
    *directly* over a vertical edge, so the two mechanics never compound into a two-stage prediction
    on day one. Tumble-then-plummet is a fine later addition once the base case has been felt.
 
-Structurally this is cheap: `PlanResolver._resolve_knockback` already publishes `knockback_from` /
-`knockback_to` and threads the new position into the hypo, so a tumble is a longer `knockback_to`. No
-new channel, and the queue preview shows the landing cell for free.
+Structurally it landed close to the prediction: the knockback stage still publishes
+`knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
+the lethality rung is named (fall damage can change it), so `_resolve_knockback` split into a pure
+`_knockback_landing` called off a *provisional* rung (a hit that alone kills still shoves nothing)
+with the *final* `predict` feeding the Will-spend stage; and the trail gained
+`knockback_path`, since a landing tumble can bend a shove once.
 
 The existing declared placeholder at that call site — a shove asks the CELL-level `is_walkable`, never
 the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — **stays declared and stays
-correct**. Being thrown is not walking.
+correct**. Being thrown is not walking. #259 resolved the cliff (fall damage) and the void
+(removal) at that stop; **water remains the open fork**, pinned by
+`test_water_still_stops_the_shove_at_the_shoreline`.
 
 ---
 
@@ -428,6 +480,11 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    exemption) and *Line of sight* (the sight trace, pulled forward from the deferred list).
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
+   **BUILT as [#259](https://github.com/Phaazoid/Godoiosis/issues/259) (2026-08-20)** with the
+   AIRBORNE revision — see *Falls, shoves and tumbles* above. The interlock closed as far as it
+   can before content: the fall-damage **weight term is wired** (`FallRules`) and inert at weight
+   0; #120's distance bands + the weight-authoring pass stay on #120, and #116 stays open for its
+   water fork alone.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
 only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then

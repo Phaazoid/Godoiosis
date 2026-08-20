@@ -618,7 +618,11 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		PlanResolver.resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
 		for atk in group:
 			if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
-				atk.target.set_projected_knockback(atk.resolved.knockback_to)
+				# A REMOVED target (#259) publishes nothing: a doomed unit must not become
+				# pickable or aimable on the chasm cell -- its sprite never moves, the trail
+				# alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
+				if not atk.resolved.removed:
+					atk.target.set_projected_knockback(atk.resolved.knockback_to)
 
 	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire

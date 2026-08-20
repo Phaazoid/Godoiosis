@@ -421,7 +421,8 @@ func test_hover_path_preview_mirrors_while_sweeping() -> void:
 
 func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
-	var shoves: Array = [{"target": foe, "from": Vector2i(3, 2), "to": Vector2i(5, 2)}]
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(5, 2)}]
 	_om().show_knockback_preview(shoves)   # the one draw seam every shove preview crosses
 	await _settle()
 	var trails := _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)
@@ -429,6 +430,42 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	# The landing ghost joins the unit-mirror pool; the real sprite hides behind it.
 	assert_int(_unit_mirror.ghost_count()).is_equal(1)
 	assert_bool(_unit_mirror.sprite_for(foe).visible).is_false()
+
+
+# The honest trail (#259 rework, dev: the arrow should paint "in the air until he would drop,
+# then point straight down to his destination"). A shove off a terrace: the flown cell's arrow
+# hangs at the LAUNCH cell's level rather than lying on the ground below it, and the landing
+# contributes a vertical segment from flight height to the destination surface.
+func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void:
+	var origin := Vector2i(3, 2)
+	game.board_heights.set_cell(origin, 2)   # the cliff edge; (4,2)/(5,2) stay ground level
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(5, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(5, 2),
+			"removed": false, "landing_index": 2}]
+	_om().show_knockback_preview(shoves)
+	await _settle()
+
+	var flight_y := BoardSpace.surface_transform(origin, game.board_heights).origin.y
+	var ground_y := BoardSpace.surface_transform(Vector2i(4, 2), game.board_heights).origin.y
+	assert_bool(flight_y > ground_y).override_failure_message(
+			"the terrace never rose; the case is vacuous").is_true()
+	# The FLOWN cell (4,2): its marker must carry the launch height, not the ground under it.
+	var flown_x := (4.0 * 16.0 + 8.0) / 16.0
+	var found := false
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		var pos: Vector3 = marker["pos"]
+		if absf(pos.x - flown_x) < 0.01:
+			found = true
+			assert_float(pos.y).override_failure_message(
+					"the flown cell's arrow lies on the ground under the flight (y %f, flight %f)"
+					% [pos.y, flight_y]).is_equal_approx(flight_y, 0.001)
+	assert_bool(found).override_failure_message("no trail marker over the flown cell").is_true()
+	# The drop pointer: one vertical segment at the landing, flight level down to the surface.
+	var drop := _overlays.line_of(BoardOverlays.Layer.KNOCKBACK_DROP)
+	assert_int(drop.size()).is_equal(2)
+	assert_float(drop[0].y).is_equal_approx(flight_y, 0.001)
+	assert_float(drop[1].y).is_equal_approx(ground_y, 0.001)
 
 
 # --- Squad + board channels --------------------------------------------------------

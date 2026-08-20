@@ -43,9 +43,11 @@ func after_test() -> void:
 
 
 func test_every_kind_is_mapped_or_declared_skip() -> void:
+	# Two declared skips with opposite meanings: NONE renders ground via FALLBACK_ITEM,
+	# VOID (#259) renders NO column at all — the hole is the absence of the block.
 	for kind: Terrain.Kind in Terrain.Kind.values():
-		if kind == Terrain.Kind.NONE:
-			assert_bool(BoardMirror.KIND_TO_ITEM.has(kind)).is_false()  # the declared skip
+		if kind == Terrain.Kind.NONE or kind == Terrain.Kind.VOID:
+			assert_bool(BoardMirror.KIND_TO_ITEM.has(kind)).is_false()
 		else:
 			assert_bool(BoardMirror.KIND_TO_ITEM.has(kind)).is_true()
 
@@ -296,6 +298,26 @@ func test_a_live_terrain_paint_reaches_the_3d_board_per_cell() -> void:
 			BoardMirror.tile_item_name(other.source, other.coords))
 
 
+# VOID's declared-skip half made real (#259): painting a hole tile CLEARS the standing column,
+# so the pit is the absence of the block rather than dirt ground wearing hole art.
+func test_a_void_tile_clears_its_column() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	var at := _surface_of(cell)
+	assert_int(board.get_cell_item(at)).is_not_equal(GridMap.INVALID_CELL_ITEM)
+	var hole := _a_tile_of_kind(Terrain.Kind.VOID)
+	assert_bool(hole.source >= 0).override_failure_message(
+			"the tileset authors no VOID tile; the case is vacuous").is_true()
+	_game.grid.paint(cell, hole.source, hole.coords)
+	await _settle()
+	assert_int(board.get_cell_item(at)).override_failure_message(
+			"a VOID tile still stands a column — the hole renders as ground").is_equal(
+			GridMap.INVALID_CELL_ITEM)
+
+
 func test_an_erased_cell_leaves_a_hole_in_the_3d_board() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
@@ -485,7 +507,25 @@ func _a_tile_of_a_different_kind(cell: Vector2i) -> Dictionary:
 			if data == null or not data.has_custom_data("terrain_type"):
 				continue
 			var kind: int = data.get_custom_data("terrain_type")
-			if kind != current and kind != Terrain.Kind.NONE:
+			# VOID is excluded the same way NONE is: a tile that deliberately draws NO
+			# column (#259) cannot serve a case asserting the paint produced a block.
+			if kind != current and kind != Terrain.Kind.NONE and kind != Terrain.Kind.VOID:
+				return {"source": source_id, "coords": coords}
+	return {"source": -1, "coords": Vector2i.ZERO}
+
+
+# The first tile of exactly this kind the tileset declares; source -1 = none authored.
+func _a_tile_of_kind(wanted: Terrain.Kind) -> Dictionary:
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			var data := source.get_tile_data(coords, 0)
+			if data != null and GridUtils.terrain_kind_of(data) == wanted:
 				return {"source": source_id, "coords": coords}
 	return {"source": -1, "coords": Vector2i.ZERO}
 

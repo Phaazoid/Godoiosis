@@ -4,7 +4,7 @@ extends RefCounted
 # token-light, no layer ever occluded. Reads PlaySession directly (the structured
 # dicts stay internal; this is the channel a player reads).
 
-const TERRAIN_GLYPH := {"grass": ".", "mud": "~", "rock": "#", "void": " "}
+const TERRAIN_GLYPH := {"grass": ".", "mud": "~", "rock": "#", "offmap": " ", "void": " "}   # offmap = NO tile (the #259 rename); "void" = the authored VOID kind -- both render as empty space
 
 # ---- public renders ----
 

@@ -177,6 +177,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
+
+	# --- Playback (#259 rework: the animated shove) ---
+	{"group": "Playback", "node": "UnitMirror", "prop": "shove_fall_speed", "label": "Shove fall speed", "min": 0.5, "max": 20.0, "step": 0.1,
+		"tip": "How fast a shoved sprite's height settles in the 3D view, in world units/second -- the drop off a cliff and the roll down a ramp both ease at this rate. The slide across the ground is the Shove slide speed knob beside it."},
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A
@@ -193,6 +197,14 @@ const KNOBS: Array[Dictionary] = [
 #
 # `static` entries are the exception that proves it: ATTACK has no 3D-only colour to tune, because
 # the 3D mirrors the 2D's modulate rather than holding an answer. Tuning it moves BOTH stacks.
+
+# Where the class-level stores are declared -- above the table because a row may name its own
+# script home. Named once, here, because the Save has to write these files and a second spelling
+# of "which file holds LAYERS" would go stale the first time one moved. Checked by a law.
+const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
+const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
+const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
+
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
 		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
@@ -220,6 +232,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad markers", "label": "Ring opacity", "static": "SQUAD_RING_ALPHA",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "Alpha of the per-squad membership rings under each member (the leader's crown, over the head, stays opaque). Takes effect on markers already up."},
+
+	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
+	# node property to address -- hence a class row with its own script home.
+	{"group": "Playback", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
+		"script": MOVEMENT_SCRIPT, "min": 60.0, "max": 960.0, "step": 10.0,
+		"tip": "How fast a shoved unit slides along its knockback trail, in pixels/second (a walk is 120). Read at each shove, so a change applies from the next one."},
 ]
 
 
@@ -236,13 +254,8 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Camera handling": "Camera",
 	"World": "World",
 	"Fire": "Fire",
+	"Playback": "Playback",
 }
-
-# Where the two class-level stores are declared. Named once, here, because the Save has to write
-# these files and a second spelling of "which file holds LAYERS" would go stale the first time one
-# moved. Both are checked by a law rather than trusted.
-const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
-const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
 
 # Which table an edit came from, carried through the save report. The two tables share an index
 # space, so a saved row's number alone cannot say whose baseline to move.
@@ -281,6 +294,7 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
+		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -294,6 +308,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
+		"SHOVE_SLIDE_SPEED":
+			MovementComponent.SHOVE_SLIDE_SPEED = value
+			return   # read at each shove -- nothing standing to re-apply
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return
@@ -352,7 +369,8 @@ static func class_edits(host: Node3D, indices: PackedInt32Array) -> Array[Dictio
 		var knob: Dictionary = CLASS_KNOBS[i]
 		var literal := DevWidgets.literal_for(read_class(host, knob))
 		if knob.has("static"):
-			edits.append(KnobSource.edit(OVERLAY_MANAGER_SCRIPT, KnobSource.Kind.DECLARATION,
+			edits.append(KnobSource.edit(knob.get("script", OVERLAY_MANAGER_SCRIPT),
+				KnobSource.Kind.DECLARATION,
 				knob["static"], literal, knob["label"], i, CLASS_SOURCE))
 			continue
 		var layer_name: String = BoardOverlays.Layer.keys()[knob["layer"]]

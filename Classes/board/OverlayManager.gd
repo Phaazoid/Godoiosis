@@ -385,36 +385,45 @@ func clear_terrain_preview() -> void:
 			sprite.queue_free()
 	terrain_preview_sprites.clear()
 
-# One entry per SHOVE ({"target", "from", "to"}), in resolve order. A unit can be shoved more than
-# once in a plan (#105 — two maces, or a mace plus a counter), so this draws an arrow PER HIT but
-# exactly ONE ghost per target, at the cell the chain ends on. Drawing a ghost per hit would leave a
-# copy of the unit standing on every waypoint.
+# One entry per SHOVE ({"target", "path", "to", "removed"}), in resolve order. A unit can be shoved
+# more than once in a plan (#105 — two maces, or a mace plus a counter), so this draws an arrow PER
+# HIT but at most ONE ghost per target, at the cell the chain ends on. The trail draws the
+# resolver's own `knockback_path` (#259) — a landing tumble can bend a shove once, so the old
+# endpoints-plus-direction reconstruction can no longer describe it (and its `while cursor != to`
+# was an infinite loop for any bent pair). A REMOVED target (shoved into a void) gets a trail and
+# neither ghost nor hide: its sprite stays where it stands, matching the unpublished projection.
 func show_knockback_preview(shoves: Array) -> void:
 	clear_knockback_preview()
 
 	var final_cell := {}   # Unit -> Vector2i; entries arrive in resolve order, so the last one wins
+	var removed := {}      # Unit -> bool, same last-one-wins
 	for shove in shoves:
 		final_cell[shove["target"]] = shove["to"]
+		removed[shove["target"]] = shove.get("removed", false)
 
 	for shove in shoves:
-		var from: Vector2i = shove["from"]
-		var to: Vector2i = shove["to"]
-		# The FACING, not the displacement: a shove of 2+ tiles (and, before #105, a mis-sourced
-		# start cell) makes to - from a vector the arrow atlas has no texture for, so it fell
-		# through to PATH_ERROR. Same helper the resolver picks the shove direction with.
-		var dir := GridUtils.cardinal_direction_i_between(from, to)
 		# The WHOLE trail, cell by cell, through the same texture pick a planned move uses (#126).
-		# This used to draw two sprites -- start and arrowhead -- which is complete only when they are
-		# adjacent, so Blowback (1 tile) looked right and every longer shove left its middle blank.
-		# Stepping `dir` is not a second source for the cells: a shove is a straight cardinal line by
-		# construction (_resolve_knockback walks one direction and stops at the first blocked cell),
-		# so from + to + dir cannot describe a different path than the resolver walked.
-		for sprite in _draw_arrow_trail(_shove_path(from, to, dir), Color.WHITE):
-			knockback_preview_sprites.append(sprite)
+		var path: Array[Vector2i] = shove["path"]
+		var landing: int = shove.get("landing_index", path.size() - 1)
+		var trail := _draw_arrow_trail(path, Color.WHITE)
+		for i in trail.size():
+			# The AIRBORNE geometry, riding each sprite for the 3D mirror (#259 rework) — the
+			# flat canvas can't draw height, but the trail must not pretend the flight hugs the
+			# ground: cells before the landing are flown at the launch cell's level, and the
+			# landing cell is where any vertical drop (or void removal) happens.
+			if i < landing:
+				trail[i].set_meta("kb_air_from", path[0])
+			elif i == landing:
+				trail[i].set_meta("kb_drop_from", path[0])
+				if shove.get("removed", false):
+					trail[i].set_meta("kb_removed", true)
+			knockback_preview_sprites.append(trail[i])
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
 	# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).
 	for target in final_cell:
+		if removed.get(target, false):
+			continue   # nothing stands in a hole — the trail and the KILL row say where it went
 		var unit: Unit = target
 		unit.visuals.set_projected(true)
 		knockback_hidden_units.append(unit)
@@ -426,18 +435,6 @@ func show_knockback_preview(shoves: Array) -> void:
 		ghost.offset = Vector2i(0, -8)
 		projected_unit_overlay.add_child(ghost)
 		knockback_preview_sprites.append(ghost)
-
-# Every cell a shove crosses, `from` and `to` inclusive. A zero/undecidable direction yields just the
-# start, which _draw_arrow_trail renders as PATH_ERROR -- a malformed shove is visible, never a hang.
-func _shove_path(from: Vector2i, to: Vector2i, dir: Vector2i) -> Array[Vector2i]:
-	var cells: Array[Vector2i] = [from]
-	if dir == Vector2i.ZERO:
-		return cells
-	var cursor := from
-	while cursor != to:
-		cursor += dir
-		cells.append(cursor)
-	return cells
 
 func clear_knockback_preview() -> void:
 	for unit in knockback_hidden_units:

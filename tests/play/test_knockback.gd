@@ -131,3 +131,26 @@ func test_shoved_enemy_out_of_range_does_not_counter() -> void:
 	s.sess.execute()
 	assert_int(foe.movement.cell.x).is_equal(2)                        # shoved to x=2, out of reach
 	assert_int(attacker.get_current_hp()).is_equal(attacker_hp)        # no counter landed
+
+
+# --- #259: the void, end to end through the headless executor ---------------------------------
+
+# A shove that ENDS on a VOID tile removes the unit outright -- KILLED in the preview, and the
+# play executor's die() door (the hand-mirrored twin of AttackAction.execute's) actually takes
+# the unit off the board. Falsified against that door being dropped.
+func test_a_shove_into_the_void_removes_the_unit() -> void:
+	var s := _mace_board(Vector2i(0, 0), Vector2i(1, 0))
+	var sess = s.sess
+	var foe: Unit = s.foe
+	(sess.grid as TileMapLayer).set_cell(Vector2i(2, 0), 0, Vector2i(18, 2))   # the hole tile
+
+	var res: Dictionary = sess.queue_attack(sess.handle_for(s.hero), Vector2i(1, 0))
+	assert_bool(res.ok).is_true()
+	var result: Dictionary = sess.execute()
+
+	assert_bool(sess.live_units().has(foe)).is_false()
+	var told := false
+	for line in result.get("events", []):
+		if String(line).contains("void"):
+			told = true
+	assert_bool(told).is_true()

@@ -36,6 +36,7 @@ var board_mirror: BoardMirror   # for the fire poll; set by battle3d._ready
 var _last_cells: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_markers: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_ghosts: Array[Dictionary] = []
+var _last_drops := PackedVector3Array()   # the shove drop pointers (#259 rework), skip-if-equal
 var _last_fire: Array[Vector2i] = []
 var _last_cover: Array[Vector2i] = []
 var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
@@ -76,8 +77,12 @@ func _process(_delta: float) -> void:
 
 	var kb_trails: Array[Dictionary] = []
 	var kb_ghosts: Array[Dictionary] = []
-	_split_knockback(om, kb_trails, kb_ghosts)
+	var kb_drops := PackedVector3Array()
+	_split_knockback(om, kb_trails, kb_ghosts, kb_drops)
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
+	if kb_drops != _last_drops:
+		_last_drops = kb_drops
+		overlays.set_segments(BoardOverlays.Layer.KNOCKBACK_DROP, kb_drops, Color.WHITE)
 
 	_icons(om)
 	_terrain(om)
@@ -251,18 +256,55 @@ func _arrows(om: OverlayManager) -> void:
 
 # knockback_preview_sprites holds BOTH halves of the preview; the parent says which:
 # arrow trail under ArrowIconOverlay, landing ghost under ProjectedUnitOverlay.
-func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary]) -> void:
+#
+# The trail is HONEST about height since the #259 rework: a sprite stamped kb_air_from is a
+# FLOWN cell and hangs flat at the launch cell's level rather than lying on whatever is below
+# (the hole it sails over, the ground under the cliff); the kb_drop_from sprite is the landing,
+# anchored on its own surface, and when the two levels differ it also contributes a vertical
+# segment -- "in the air until he would drop, then straight down to his destination" (dev).
+func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary],
+		drops: PackedVector3Array) -> void:
 	for node in om.knockback_preview_sprites:
 		if not is_instance_valid(node):
 			continue
 		var sprite := node as Sprite2D
 		if sprite == null or sprite.texture == null:
 			continue
-		var entry := _marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate)
+		var entry: Dictionary
+		if sprite.has_meta("kb_air_from"):
+			entry = _marker(_air_anchor(sprite.global_position, sprite.get_meta("kb_air_from")),
+					sprite.texture, sprite.modulate)
+		else:
+			entry = _marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate)
 		if sprite.get_parent() == om.arrow_icon_overlay:
+			if sprite.has_meta("kb_drop_from"):
+				_append_drop(drops, sprite)
 			trails.append(entry)
 		elif sprite.get_parent() == om.projected_unit_overlay:
 			ghosts.append(entry)
+
+
+# The drop pointer's two ends: the flight level over the landing cell, and the destination. A
+# removal has no destination surface to land on -- the pit is the absence of the column -- so its
+# lower end goes one level below the hole's mouth, which reads as "into it". Levels that turn out
+# EQUAL draw nothing: a flight ending flush with its landing has no vertical story to tell.
+func _append_drop(drops: PackedVector3Array, sprite: Sprite2D) -> void:
+	var from_cell: Vector2i = sprite.get_meta("kb_drop_from")
+	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
+	var surface_y := _anchor_px(sprite.global_position).origin.y
+	var bottom_y := surface_y - 1.0 if sprite.get_meta("kb_removed", false) else surface_y
+	if is_equal_approx(flight_y, bottom_y):
+		return
+	var px := sprite.global_position
+	drops.append(BoardSpace.of_pixels(px, flight_y))
+	drops.append(BoardSpace.of_pixels(px, bottom_y))
+
+
+# A FLYING trail arrow: flat at the shove's launch height, no tilt -- it hangs in the air rather
+# than lying on a surface, so neither the level nor the slope of the cell below may touch it.
+func _air_anchor(px: Vector2, from_cell: Vector2i) -> Transform3D:
+	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
+	return Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y))
 
 
 # Selection icons, routed by TYPE rather than by a style mode (#325 verdict, dev call after playing
