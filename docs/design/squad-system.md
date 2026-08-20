@@ -66,7 +66,7 @@ Reactions are **derived**: recomputed from the current plan whenever it changes,
 - **C4.** A defending party responds at most once per attacking squad's plan, triggered by the first attack against it in queue order.
 - **C5.** Faction gate: `can_attack` (via `Team.is_enemy`) filters counters — friendly-fire victims never counter their own side.
 - **C6.** Weaponless units cannot counter. A unit's counter reach is its weapon pattern from its *projected* position, with free rotation (no facing persistence on the board — revisit if facing becomes a mechanic).
-- **C7.** Bystander parties never counter: only the attacked party responds, and only against the attacking party. Reaction mechanics beyond that (overwatch, intercepts) would be separate named systems.
+- **C7.** Bystander parties never counter: only the attacked party responds, and only against the attacking party. Reaction mechanics beyond that (overwatch, intercepts) would be separate named systems. **That system exists as of 2026-08-20: [standing-reactions.md](standing-reactions.md) (Guard + Overwatch), ratified with C1–C10 untouched — its listening grammar (*counters listen to authored attacks; watches listen to entries; Guards listen to hits on their ward*) is also why a derived overwatch shot draws no counter.**
 
 ### Reactive healing — BUILT 2026-08-07 ([#148](https://github.com/Phaazoid/Godoiosis/issues/148))
 
