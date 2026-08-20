@@ -16,7 +16,7 @@ class_name MovementComponent
 
 # The shove slide's speed (#259 rework) -- a game constant, tuned on the dev Game tab. Read at
 # each segment start, so a change applies from the next shove.
-static var SHOVE_SLIDE_SPEED := 240.0  # pixels per second
+static var SHOVE_SLIDE_SPEED := 120.0  # pixels per second
 
 signal movement_finished
 
@@ -32,6 +32,7 @@ var moving := false
 var sliding := false
 var airborne := false
 var slide_origin: Vector2i
+var slide_landing_cell: Vector2i   # where flight ends -- the mirror forks ramp/flat contact on it
 var _flight_entries_left := 0
 
 # `owner` rather than get_parent(): matches UnitVisuals, and survives the
@@ -89,6 +90,7 @@ func slide_along_path(new_path: Array[Vector2i], landing_index: int) -> void:
 
 	path = new_path.duplicate()
 	slide_origin = path.pop_front()
+	slide_landing_cell = new_path[clampi(landing_index, 0, new_path.size() - 1)]
 	_flight_entries_left = landing_index
 	sliding = true
 

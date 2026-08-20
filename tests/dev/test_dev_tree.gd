@@ -217,6 +217,46 @@ func test_a_unit_editor_save_marks_the_scenario_modified() -> void:
 		"the saved unit is not flagged dev_edited -- an authored Update would discard the edit").is_true()
 
 
+# Round 2 of the sweep: the header lights the moment an edit is STAGED (the dev reads Update's
+# marker as "anything to save?"), and the header's capture FLUSHES staged edits through the
+# capturing signal, so an Update taken mid-edit saves exactly what the panel shows.
+func test_a_staged_unit_edit_lights_the_header_and_the_capture_flushes_it() -> void:
+	await _load_prolog()
+	var unit: Unit = null
+	for child in game.units_root.get_children():
+		if child is Unit:
+			unit = child
+			break
+	assert_object(unit).override_failure_message("Prolog spawned no units; the case is vacuous").is_not_null()
+	overlay.unit_editor.edit_unit(unit)
+	await await_idle_frame()
+	overlay.unit_editor._stage_unit_name("Renamed by the sweep")
+	assert_bool(overlay.scenario_header.is_modified()).override_failure_message(
+		"staging an edit did not light the header -- Update gives no cue a save is owed").is_true()
+	overlay.scenario_header.capturing.emit()   # exactly what Update fires before capturing
+	assert_str(unit.get_unit_name()).override_failure_message(
+		"the capture did not flush the staged edit -- Update saves a board the panel disagrees with"
+	).is_equal("Renamed by the sweep")
+	assert_bool(overlay.unit_editor._dirty).is_false()
+
+
+# A LIVE write (no Save step by design) must mark too, and diverge the unit -- element states are
+# unit state a snapshot carries, so an authored Update re-referencing it away would drop the edit.
+func test_an_element_state_toggle_marks_the_scenario_and_diverges_the_unit() -> void:
+	await _load_prolog()
+	var unit: Unit = null
+	for child in game.units_root.get_children():
+		if child is Unit:
+			unit = child
+			break
+	assert_object(unit).override_failure_message("Prolog spawned no units; the case is vacuous").is_not_null()
+	overlay.unit_editor.edit_unit(unit)
+	await await_idle_frame()
+	overlay.unit_editor._on_element_state_toggled(unit, Elemental.State.WET, true)
+	assert_bool(overlay.scenario_header.is_modified()).is_true()
+	assert_bool(unit.dev_edited).is_true()
+
+
 func test_update_clears_the_modified_marker() -> void:
 	await _load_prolog()
 	var cells: Array[Vector2i] = game.grid.get_used_cells()

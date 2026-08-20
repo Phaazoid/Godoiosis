@@ -89,6 +89,28 @@ func test_a_board_with_no_heights_wired_reads_as_flat() -> void:
 	assert_that(BoardSpace.surface_transform(Vector2i(4, 4), null).basis).is_equal(Basis.IDENTITY)
 
 
+# surface_height_at (#259 rework round 2): the plane a sliding sprite sticks to. Asserted as
+# CONTINUITY -- a ramp's plane meets its own edges at the levels the ramp joins, so a tumble
+# crossing cell borders never steps -- plus the flat constant and the null-heights fallback.
+func test_surface_height_under_a_position_is_continuous_across_a_ramp() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(2, 2), 1, Terrain.RampRise.NONE)   # the top shelf, surface y 2.0
+	heights.set_cell(Vector2i(3, 2), 1, Terrain.RampRise.EAST)   # rises toward east: high edge east
+	# The ramp's centre is its surface_point; its EAST edge (x=4.0) meets level 2's surface, its
+	# WEST edge (x=3.0) meets level 1's -- the two levels the ramp joins (#281's own geometry).
+	var mid := BoardSpace.surface_point(Vector2i(3, 2), heights)
+	assert_float(BoardSpace.surface_height_at(Vector2i(3, 2), mid.x, mid.z, heights)).is_equal_approx(mid.y, 0.0001)
+	assert_float(BoardSpace.surface_height_at(Vector2i(3, 2), 4.0, 2.5, heights)) \
+			.is_equal_approx(BoardSpace.surface_y(2), 0.0001)
+	assert_float(BoardSpace.surface_height_at(Vector2i(3, 2), 3.0, 2.5, heights)) \
+			.is_equal_approx(BoardSpace.surface_y(1), 0.0001)
+	# A flat cell is constant everywhere on it; no heights resolves like every other anchor.
+	assert_float(BoardSpace.surface_height_at(Vector2i(2, 2), 2.1, 2.9, heights)) \
+			.is_equal_approx(BoardSpace.surface_y(1), 0.0001)
+	assert_float(BoardSpace.surface_height_at(Vector2i(4, 4), 4.2, 4.8, null)) \
+			.is_equal_approx(BoardSpace.surface_y(0), 0.0001)
+
+
 # --- How markup LIES on a surface (#281) --------------------------------------------
 
 # Markup on a ramp has to reach the two levels the ramp CONNECTS -- its low edge at the level below,

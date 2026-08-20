@@ -48,6 +48,20 @@ static func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
 	return surface_transform(cell, heights).origin
 
 
+# The surface's height directly UNDER a world position (#259 rework round 2): surface_transform's
+# own plane evaluated at (x, z), so a sliding sprite can stick to a ramp continuously instead of
+# stepping per cell or floating over it. Flat cells are constant; a ramp's plane meets the next
+# ramp's (and the level catch's surface) exactly at the shared edge, which is what makes a tumble
+# read as one slide. Same tan as RAMP_SLOPE_ANGLE: one level of rise per cell of run.
+static func surface_height_at(cell: Vector2i, x: float, z: float, heights: BoardHeights) -> float:
+	var t := surface_transform(cell, heights)
+	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(cell)
+	if rise == Terrain.RampRise.NONE:
+		return t.origin.y
+	var dir := Terrain.rise_direction(rise)
+	return t.origin.y + tan(RAMP_SLOPE_ANGLE) * ((x - t.origin.x) * dir.x + (z - t.origin.z) * dir.y)
+
+
 # One level of rise per cell of run — the authored wedge's own profile (its slope face runs corner
 # to corner, normal (0,1,1)), and the same ratio surface_point's half-level lift already encodes.
 const RAMP_SLOPE_ANGLE := atan2(CELL_SIZE, CELL_SIZE)

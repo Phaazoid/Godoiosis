@@ -435,7 +435,8 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 # The honest trail (#259 rework, dev: the arrow should paint "in the air until he would drop,
 # then point straight down to his destination"). A shove off a terrace: the flown cell's arrow
 # hangs at the LAUNCH cell's level rather than lying on the ground below it, and the landing
-# contributes a vertical segment from flight height to the destination surface.
+# hangs the drop RAIL -- vertical quads wearing the trail's own rail sprite (round 2), at the
+# ENTRY EDGE of the landing cell, spanning flight height down to the destination surface.
 func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void:
 	var origin := Vector2i(3, 2)
 	game.board_heights.set_cell(origin, 2)   # the cliff edge; (4,2)/(5,2) stay ground level
@@ -455,17 +456,54 @@ func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void
 	var found := false
 	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
 		var pos: Vector3 = marker["pos"]
-		if absf(pos.x - flown_x) < 0.01:
+		if absf(pos.x - flown_x) < 0.01 and _is_flat(marker):
 			found = true
 			assert_float(pos.y).override_failure_message(
 					"the flown cell's arrow lies on the ground under the flight (y %f, flight %f)"
 					% [pos.y, flight_y]).is_equal_approx(flight_y, 0.001)
 	assert_bool(found).override_failure_message("no trail marker over the flown cell").is_true()
-	# The drop pointer: one vertical segment at the landing, flight level down to the surface.
-	var drop := _overlays.line_of(BoardOverlays.Layer.KNOCKBACK_DROP)
-	assert_int(drop.size()).is_equal(2)
-	assert_float(drop[0].y).is_equal_approx(flight_y, 0.001)
-	assert_float(drop[1].y).is_equal_approx(ground_y, 0.001)
+	# The drop rail: vertical markers at the landing's ENTRY edge (x = 5.0 cells), centred over
+	# the span, stretched from flight height to the ground -- dressed, not a bare line.
+	var rails := _rail_markers()
+	assert_int(rails.size()).is_equal(2)   # the crossed pair
+	for rail: Dictionary in rails:
+		var pos: Vector3 = rail["pos"]
+		assert_float(pos.x).is_equal_approx(5.0, 0.001)
+		assert_float(pos.y).is_equal_approx((flight_y + ground_y) * 0.5, 0.001)
+		var down: Vector3 = (rail["basis"] as Basis).x
+		assert_float(down.y).is_equal_approx(-(flight_y - ground_y), 0.001)
+		assert_object(rail["texture"]).is_not_null()
+
+
+# A fall ONTO A RAMP draws no rail (dev, round 2): the flat arrow lying on the slope is the whole
+# story, and the sprite slides the ramp rather than dropping. Vertical markers must be absent.
+func test_a_fall_onto_a_ramp_draws_no_drop_rail() -> void:
+	var origin := Vector2i(3, 2)
+	game.board_heights.set_cell(origin, 2)
+	game.board_heights.set_cell(Vector2i(4, 2), 0, Terrain.RampRise.WEST)
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, Vector2i(4, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(4, 2),
+			"removed": false, "landing_index": 1}]
+	_om().show_knockback_preview(shoves)
+	await _settle()
+	assert_int(_rail_markers().size()).override_failure_message(
+			"a ramp landing hung a drop rail -- the slope's flat arrow is the whole story").is_equal(0)
+
+
+# A drop rail's rail axis (basis.x) is PURELY vertical; a ground marker's -- flat or lying on a
+# ramp -- always keeps a horizontal component (a ramp tilt is a rotation, never a right angle).
+func _is_flat(marker: Dictionary) -> bool:
+	var x: Vector3 = ((marker.get("basis", Basis.IDENTITY)) as Basis).x
+	return Vector2(x.x, x.z).length() > 0.001 or absf(x.y) < 0.001
+
+
+func _rail_markers() -> Array[Dictionary]:
+	var rails: Array[Dictionary] = []
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		if not _is_flat(marker):
+			rails.append(marker)
+	return rails
 
 
 # --- Squad + board channels --------------------------------------------------------

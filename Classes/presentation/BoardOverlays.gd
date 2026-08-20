@@ -31,7 +31,6 @@ enum Layer {
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
-	KNOCKBACK_DROP,   # the shove's vertical drop pointer (#259 rework) -- set_segments, not set_line
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -86,7 +85,6 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# markup. Colour arrives per set_line call (the 2D SightTrace2D verdict colours, copied by the
 	# mirror -- parallel-stacks rule); the entry colour is only the fallback.
 	Layer.SIGHT_TRACE: {"color": Color.WHITE, "sort": 7, "kind": Kind.LINE},
-	Layer.KNOCKBACK_DROP: {"color": Color.WHITE, "sort": 6, "kind": Kind.LINE},
 	# The ground form of the selection icons (#325 experiment): membership rings + the leader's
 	# crown decal lying on the cell surface. Above terrain state, below the aim pulse, pick
 	# markers and arrows (a ring must never eat an arrowhead) -- AIM/TARGET_PICK/arrows each
@@ -226,32 +224,6 @@ func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
 	for p in points:
 		mesh.surface_add_vertex(p)
-	mesh.surface_end()
-	(node.material_override as StandardMaterial3D).albedo_color = color
-
-
-# set_line's segment sibling (#259 rework): PAIRS of points drawn as independent segments
-# (PRIMITIVE_LINES), for a layer holding several disjoint lines at once -- one vertical drop
-# pointer per shove in a plan. Same pooled node; an odd trailing point is dropped by the pairing.
-func set_segments(layer: Layer, points: PackedVector3Array, color: Color) -> void:
-	var spec: Dictionary = LAYERS[layer]
-	if spec["kind"] != Kind.LINE:
-		push_error("set_segments on a %s layer" % Kind.keys()[spec["kind"]])
-		return
-	_lines[layer] = points.duplicate()
-	var pool: Array = _pool_for(layer)
-	if pool.is_empty():
-		pool.append(_make_marker(layer))
-	var node := pool[0] as MeshInstance3D
-	var mesh := node.mesh as ImmediateMesh
-	mesh.clear_surfaces()
-	if points.size() < 2:
-		node.visible = false
-		return
-	node.visible = true
-	mesh.surface_begin(Mesh.PRIMITIVE_LINES)
-	for i in range(0, points.size() - points.size() % 2):
-		mesh.surface_add_vertex(points[i])
 	mesh.surface_end()
 	(node.material_override as StandardMaterial3D).albedo_color = color
 

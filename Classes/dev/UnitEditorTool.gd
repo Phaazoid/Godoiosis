@@ -173,6 +173,21 @@ func _on_revert_pressed() -> void:
 func _touch() -> void:
 	_dirty = true
 	_refresh_save_row()
+	# The header lights the moment ANYTHING is staged (#259 rework round 2): the dev reads Update's
+	# marker as "is there something to save", and staged edits ARE -- the header's capture flushes
+	# them (flush_staged) so Update always writes exactly what this panel shows. Known corner:
+	# stage-then-Revert leaves a stale (modified) until the next save clears it -- a nuisance,
+	# never a lost edit.
+	if _header != null:
+		_header.mark_modified()
+
+
+# Apply whatever is staged, as the header's save is about to capture the board -- the capturing
+# signal's one listener (routed by DevOverlay, the file_changed pattern in reverse). Without this,
+# an Update taken mid-edit would save a board that disagrees with the panel on screen.
+func flush_staged() -> void:
+	if _dirty and is_instance_valid(editing_unit):
+		_on_save_pressed()
 
 func _refresh_save_row() -> void:
 	if not is_instance_valid(_save_button):
@@ -654,6 +669,15 @@ func _add_element_state_section(into: VBoxContainer, unit: Unit) -> void:
 			func(pressed: bool): _on_element_state_toggled(unit, state, pressed),
 			"Applies to the live unit immediately -- no Save needed; a reaction can still consume it")
 
+# A LIVE write skips the staged Save entirely, so it marks here (#259 rework round 2 -- the edit
+# sweep): the header lights, and the unit diverges (dev_edited) when the write is unit state a
+# snapshot carries -- an authored Update must not re-reference it away.
+func _mark_live_edit(unit: Unit, diverges: bool) -> void:
+	if diverges and is_instance_valid(unit):
+		unit.dev_edited = true
+	if _header != null:
+		_header.mark_modified()
+
 func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool) -> void:
 	if not is_instance_valid(unit):
 		return
@@ -661,12 +685,14 @@ func _on_element_state_toggled(unit: Unit, state: Elemental.State, pressed: bool
 		unit.add_element_state(state)
 	else:
 		unit.remove_element_state(state)
+	_mark_live_edit(unit, true)
 
 func _delete_unit(unit: Unit):
 	if is_instance_valid(unit):
 		unit.die()
 	editing_unit = null
 	_dirty = false
+	_mark_live_edit(null, false)   # the roster changed; nothing left to diverge
 	populate_unit_editor(null)
 
 # Ejection is DEFERRED to the end of a resolution pass (#103), and a button press has no pass to
@@ -677,6 +703,7 @@ func _down_unit(unit: Unit) -> void:
 		return
 	unit.force_down()
 	game.order_executor._process_downed_pending()
+	_mark_live_edit(unit, true)
 	_resync(unit)
 
 func _revive_unit(unit: Unit) -> void:
@@ -684,6 +711,7 @@ func _revive_unit(unit: Unit) -> void:
 		return
 	unit.revive()   # the same call RescueAction makes; the body keeps its solo squad
 	game.refresh_action_queue(game.squad_manager.active_squad)   # a rescue aimed here just went invalid
+	_mark_live_edit(unit, true)
 	_resync(unit)
 
 # The unit moved underneath the staged buffer, so re-read it -- the trade Revert already makes.

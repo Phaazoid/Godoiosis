@@ -36,7 +36,6 @@ var board_mirror: BoardMirror   # for the fire poll; set by battle3d._ready
 var _last_cells: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_markers: Dictionary[BoardOverlays.Layer, Array] = {}
 var _last_ghosts: Array[Dictionary] = []
-var _last_drops := PackedVector3Array()   # the shove drop pointers (#259 rework), skip-if-equal
 var _last_fire: Array[Vector2i] = []
 var _last_cover: Array[Vector2i] = []
 var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
@@ -77,12 +76,8 @@ func _process(_delta: float) -> void:
 
 	var kb_trails: Array[Dictionary] = []
 	var kb_ghosts: Array[Dictionary] = []
-	var kb_drops := PackedVector3Array()
-	_split_knockback(om, kb_trails, kb_ghosts, kb_drops)
+	_split_knockback(om, kb_trails, kb_ghosts)
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
-	if kb_drops != _last_drops:
-		_last_drops = kb_drops
-		overlays.set_segments(BoardOverlays.Layer.KNOCKBACK_DROP, kb_drops, Color.WHITE)
 
 	_icons(om)
 	_terrain(om)
@@ -260,10 +255,9 @@ func _arrows(om: OverlayManager) -> void:
 # The trail is HONEST about height since the #259 rework: a sprite stamped kb_air_from is a
 # FLOWN cell and hangs flat at the launch cell's level rather than lying on whatever is below
 # (the hole it sails over, the ground under the cliff); the kb_drop_from sprite is the landing,
-# anchored on its own surface, and when the two levels differ it also contributes a vertical
-# segment -- "in the air until he would drop, then straight down to his destination" (dev).
-func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary],
-		drops: PackedVector3Array) -> void:
+# anchored on its own surface, and when the two levels differ it also hangs the drop RAIL --
+# "in the air until he would drop, then straight down to his destination" (dev).
+func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary]) -> void:
 	for node in om.knockback_preview_sprites:
 		if not is_instance_valid(node):
 			continue
@@ -278,26 +272,46 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 			entry = _marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate)
 		if sprite.get_parent() == om.arrow_icon_overlay:
 			if sprite.has_meta("kb_drop_from"):
-				_append_drop(drops, sprite)
+				_append_drop_rails(trails, sprite)
 			trails.append(entry)
 		elif sprite.get_parent() == om.projected_unit_overlay:
 			ghosts.append(entry)
 
 
-# The drop pointer's two ends: the flight level over the landing cell, and the destination. A
-# removal has no destination surface to land on -- the pit is the absence of the column -- so its
-# lower end goes one level below the hole's mouth, which reads as "into it". Levels that turn out
-# EQUAL draw nothing: a flight ending flush with its landing has no vertical story to tell.
-func _append_drop(drops: PackedVector3Array, sprite: Sprite2D) -> void:
-	var from_cell: Vector2i = sprite.get_meta("kb_drop_from")
-	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
-	var surface_y := _anchor_px(sprite.global_position).origin.y
-	var bottom_y := surface_y - 1.0 if sprite.get_meta("kb_removed", false) else surface_y
-	if is_equal_approx(flight_y, bottom_y):
-		return
+# The drop pointer (#259 rework round 2, dev: the trail's own rail sprite, hanging at the edge it
+# falls from): two crossed vertical quads on the ordinary KNOCKBACK layer, wearing the straight
+# rail texture stamped at build time, stretched over the drop (#281's stretch lesson) at the
+# ENTRY EDGE of the landing cell -- connected to the flying arrow above and the flat arrowhead
+# below. A RAMP landing draws no pointer: the flat arrow lying on the slope is the whole story
+# (dev). A removal spans one level into the pit, which has no real bottom. Levels that turn out
+# equal draw nothing -- a flight ending flush with its landing has no vertical story to tell.
+func _append_drop_rails(trails: Array[Dictionary], sprite: Sprite2D) -> void:
+	var heights := _heights()
 	var px := sprite.global_position
-	drops.append(BoardSpace.of_pixels(px, flight_y))
-	drops.append(BoardSpace.of_pixels(px, bottom_y))
+	var landing := Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)),
+			floori(px.y / float(GridUtils.TILE_SIZE)))
+	if heights != null and heights.ramp_rise_at(landing) != Terrain.RampRise.NONE:
+		return
+	var rail: Texture2D = sprite.get_meta("kb_rail_texture", null)
+	if rail == null or not sprite.has_meta("kb_dir"):
+		return
+	var top_y := BoardSpace.surface_transform(sprite.get_meta("kb_drop_from"), heights).origin.y
+	var surface_y := BoardSpace.surface_transform(landing, heights).origin.y
+	var bottom_y := surface_y - BoardSpace.CELL_SIZE if sprite.get_meta("kb_removed", false) \
+			else surface_y
+	if top_y <= bottom_y or is_equal_approx(top_y, bottom_y):
+		return
+	var dir_2d: Vector2i = sprite.get_meta("kb_dir")
+	var d := Vector3(dir_2d.x, 0.0, dir_2d.y)
+	var centre := BoardSpace.of_pixels(px, (top_y + bottom_y) * 0.5) - d * (BoardSpace.CELL_SIZE * 0.5)
+	# The quads' local X (the texture's rail axis) points DOWN, scaled over the drop; their
+	# normals cross so the rail cannot vanish edge-on under free orbit.
+	var down := Vector3(0.0, -(top_y - bottom_y) / BoardSpace.CELL_SIZE, 0.0)
+	var flat := Vector3(d.z, 0.0, -d.x)
+	trails.append({"pos": centre, "texture": rail, "modulate": Color.WHITE,
+			"basis": Basis(down, flat, d)})
+	trails.append({"pos": centre, "texture": rail, "modulate": Color.WHITE,
+			"basis": Basis(down, d, -flat)})
 
 
 # A FLYING trail arrow: flat at the shove's launch height, no tilt -- it hangs in the air rather
