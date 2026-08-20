@@ -2150,6 +2150,7 @@ func test_the_photosensitivity_setting_holds_the_fire_still() -> void:
 			"the fire never moved with the setting off; the toggle case proves nothing").is_greater(1)
 
 	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	mirror.advance_flames()   # settle onto the steady frame BEFORE capturing it, as the sibling test does
 	var still := _frame_of(flame)
 	for i in 40:
 		mirror._flame_time += 1.0
