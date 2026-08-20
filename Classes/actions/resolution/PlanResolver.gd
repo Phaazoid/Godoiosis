@@ -142,6 +142,20 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		action.resolved = outcome
 		return
 
+	# Falls (#259): the landing must be known BEFORE the rung is named, because fall damage can
+	# change it -- so the landing computes here, off a PROVISIONAL rung (a hit that alone kills
+	# leaves nothing to shove, the pre-#259 rule preserved), and only the FINAL predict below
+	# feeds the Will-spend stage. predict is pure; the second call is the one that counts.
+	var landing: _Landing = null
+	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
+		landing = _knockback_landing(action, target_hypo, board)
+	if landing != null and landing.fall_levels > 0:
+		# Falls bypass DEF (dev, 2026-08-20: armor does not stop gravity) -- added after
+		# mitigation, before the Iron Will clamp so the cap stays absolute.
+		outcome.fall_damage = FallRules.damage_for(landing.fall_levels, target)
+		outcome.damage += outcome.fall_damage
+		outcome.popups.append("Fell %d!" % landing.fall_levels)
+
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
 	# a non-issue since cap >= 0 makes max(0,min(cap,x)) == min(cap,max(0,x)) always.
@@ -155,10 +169,16 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		if not target_hypo.states.has(s):
 			target_hypo.states.append(s)
 
-	# Will/death stage (R7): pick the rung from the now-final damage so the queue previews
-	# it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same call
-	# Unit.take_damage makes at execution time — one ladder, two callers.
+	# Will/death stage (R7): pick the rung from the now-final damage (fall included) so the queue
+	# previews it (Law #2). Reads pre-hit HP + Will, so it runs BEFORE the subtraction below. Same
+	# call Unit.take_damage makes at execution time — one ladder, two callers.
 	outcome.lethality = LethalityRules.predict(target_hypo, outcome.damage)
+	if landing != null and landing.removed:
+		# A void removal (#259) outranks the ladder: gone regardless of HP or Will. KILLED so
+		# every reader threads DEAD; the flag is execution's own die() door.
+		outcome.lethality = ResolvedOutcome.Lethality.KILLED
+		outcome.removed = true
+		outcome.popups.append("Into the void!")
 	# The lifecycle a rung leaves behind is ONE map (#313) — a preview holding only an outcome reads
 	# the same one. What a rung SPENDS stays here: it differs per rung and it is spent from the hypo.
 	target_hypo.lifecycle = LethalityRules.lifecycle_for(outcome.lethality, target_hypo.lifecycle)
@@ -175,10 +195,15 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		target_hypo.hp = Abilities.CRISIS_REVIVE_HP           # stood back up mid-pass (enter_crisis)
 	outcome.target_hp_after = target_hypo.hp
 
-	# Displacement stage (#84): a knockback attack shoves the target directly away from the
-	# attacker, stopping at the first wall/unit/edge, threaded into the hypo so a later hit this
-	# pass sees the moved cell (R4). Needs a board to test cells; unit-only callers skip it.
-	_resolve_knockback(action, outcome, target_hypo, board)
+	# Displacement stage (#84/#259): apply the landing computed above -- position threaded into
+	# the hypo so a later hit this pass sees the moved cell (R4). The path is the trail's one
+	# source (a landing tumble can bend it); from/to stay the endpoints execute reads.
+	if landing != null and landing.path.size() > 1:
+		outcome.knockback_applied = true
+		outcome.knockback_from = landing.path[0]
+		outcome.knockback_to = landing.cell
+		outcome.knockback_path = landing.path
+		target_hypo.position = landing.cell
 
 	action.resolved = outcome
 
@@ -245,31 +270,98 @@ static func _source_knockback(action: AttackAction) -> int:
 		return action.fired_attack.knockback   # on the shared AttackData base — no cast needed
 	return 0   # counters fire main (no stamped attack) — no shove
 
-static func _resolve_knockback(action: AttackAction, outcome: ResolvedOutcome, target_hypo: _Hypo, board: BoardContext) -> void:
+# One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
+class _Landing:
+	var cell: Vector2i
+	var path: Array[Vector2i] = []   # start + every cell entered, flight then tumble
+	var fall_levels := 0
+	var removed := false
+
+
+# The AIRBORNE shove (#259, dev: "the drop occurs where the shove would move the unit to" -- so
+# you can blow an ally over a hole to safety). The unit flies its knockback distance at its
+# STARTING elevation; the landing resolves wherever the horizontal travel ends, whether the
+# distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
+# _resolve_one applies the result after the rung is named.
+static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: BoardContext) -> _Landing:
 	var distance := _source_knockback(action)
-	if distance <= 0 or board == null or outcome.lethality == ResolvedOutcome.Lethality.KILLED:
-		return   # no shove: no knockback, no board to test cells, or the target is dead (leaving)
+	if distance <= 0 or board == null:
+		return null
 	var dir := GridUtils.cardinal_direction_i_between(action.origin_cell, target_hypo.position)
 	if dir == Vector2i.ZERO:
-		return
-	var landing := target_hypo.position
+		return null
+
+	var start := target_hypo.position
+	var flight_height := board.elevation_at(start)
+	var pos := start
+	var path: Array[Vector2i] = [start]
 	for _i in range(distance):
-		var next: Vector2i = landing + dir
+		var next: Vector2i = pos + dir
+		if board.elevation_at(next) > flight_height:
+			break   # you cannot be pushed uphill -- high ground braces you (#259)
+		if board.terrain_kind_at(next) == Terrain.Kind.VOID:
+			pos = next
+			path.append(pos)
+			continue   # airborne: a hole cannot catch you mid-flight
 		# DECLARED, not an oversight (#115): a shove asks the CELL-level question
 		# (BoardContext.is_walkable), never the per-unit one (RulesService.can_traverse) that
 		# movement and GroupMoveSolver ask. So a Waterwalker is NOT shoved onto water — the
 		# ability lets you walk there under your own power, and being thrown is not walking.
-		# This is parked rather than settled: what a shove into a hazard should DO is #116
-		# (off a cliff = a kill; into water = deliberately still an open question). Resolve it
-		# there, not by quietly swapping the predicate here.
+		# Water therefore still stops a shove at the shoreline: what a shove INTO water should
+		# DO is #116's deliberately open fork (#259 resolved the cliff and the void, not this).
 		if not board.is_walkable(next) or board.unit_at_cell(next) != null:
-			break   # stop at the first wall / off-board / occupied cell
-		landing = next
-	if landing != target_hypo.position:
-		outcome.knockback_applied = true
-		outcome.knockback_from = target_hypo.position   # where THIS shove started (may be a prior shove's landing)
-		outcome.knockback_to = landing
-		target_hypo.position = landing   # thread it forward (R4)
+			break   # wall / water / off-board / occupied: today's rule, unchanged
+		pos = next
+		path.append(pos)
+	if pos == start:
+		return null
+
+	var landing := _Landing.new()
+	landing.path = path
+	landing.cell = pos
+	if board.terrain_kind_at(pos) == Terrain.Kind.VOID:
+		landing.removed = true   # halted over (or blown exactly onto) the hole -- gone
+		return landing
+
+	var drop := flight_height - board.elevation_at(pos)
+	# The doc's original tumble entry: a connected descending ramp -- its high edge meets the
+	# flight level, so sliding on is not a fall ("slopes never deal fall damage").
+	var rise := board.ramp_rise_at(pos)
+	if drop == 1 and rise != Terrain.RampRise.NONE and Terrain.rise_direction(rise) == -dir:
+		drop = 0
+	landing.fall_levels = drop
+	# "When a unit lands, if they land on a slope, they tumble down that too" (dev, 2026-08-20).
+	if rise != Terrain.RampRise.NONE:
+		_tumble(landing, board)
+	return landing
+
+
+# The tumble (#259): from a ramp, slide the slope's OWN downhill -- continuing down ramps of the
+# same rise -- until the first walkable, unoccupied cell level with the current ramp catches it.
+# A wall, a rise, an occupied cell, water, a hole or a lip stops it where it stands: no launch,
+# no fall damage (dev-ruled conservative; tumble-then-plummet is a deliberate later addition).
+# Terminates by construction -- every ramp continuation strictly descends.
+static func _tumble(landing: _Landing, board: BoardContext) -> void:
+	var cell := landing.cell
+	while true:
+		var rise := board.ramp_rise_at(cell)
+		var down := -Terrain.rise_direction(rise)
+		var next: Vector2i = cell + down
+		if board.unit_at_cell(next) != null or board.terrain_kind_at(next) == Terrain.Kind.VOID \
+				or not board.is_walkable(next):
+			break
+		var here_elev := board.elevation_at(cell)
+		var next_elev := board.elevation_at(next)
+		if board.ramp_rise_at(next) == rise and next_elev == here_elev - 1:
+			cell = next
+			landing.path.append(cell)
+			continue   # another ramp continuing down the same slope
+		if next_elev == here_elev:
+			cell = next
+			landing.path.append(cell)
+			break   # the first flat or level cell it can legally enter -- the landing catches it
+		break   # a drop lip or a rise: stop where it stands
+	landing.cell = cell
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded

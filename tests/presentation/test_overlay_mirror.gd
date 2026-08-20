@@ -421,7 +421,8 @@ func test_hover_path_preview_mirrors_while_sweeping() -> void:
 
 func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 	var foe := _spawn(ENEMY, Vector2i(3, 2))
-	var shoves: Array = [{"target": foe, "from": Vector2i(3, 2), "to": Vector2i(5, 2)}]
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(5, 2)}]
 	_om().show_knockback_preview(shoves)   # the one draw seam every shove preview crosses
 	await _settle()
 	var trails := _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)

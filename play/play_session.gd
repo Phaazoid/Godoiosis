@@ -102,7 +102,7 @@ func _squad_id(squad: Squad) -> int:
 func terrain_at(cell: Vector2i) -> Dictionary:
 	var data := grid.get_cell_tile_data(cell)
 	if data == null:
-		return {"exists": false, "walkable": false, "cost": 0, "type": "void"}
+		return {"exists": false, "walkable": false, "cost": 0, "type": "offmap"}
 	var cost := 0
 	if data.has_custom_data("move_cost"):
 		cost = int(data.get_custom_data("move_cost"))
@@ -489,6 +489,11 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	if r.knockback_applied and is_instance_valid(target):
 		target.movement.set_cell(r.knockback_to)
 		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
+	# The void door (#259) — MIRRORS AttackAction.execute exactly (the hand-copied twin): a
+	# 0-damage take_damage cannot kill an ACTIVE unit, so removal is applied here or nowhere.
+	if r.removed and is_instance_valid(target):
+		events.append("%s falls into the void" % handle_for(target))
+		target.die()
 	# Post-fire economy (#73/#84): mirror AttackAction.execute()'s readiness/charge hook — the
 	# headless executor bypasses that method, so without this the play path diverges from the game
 	# (a fired Spring stays sprung; a Blowback keeps its charge). Lead volley member only. Counters

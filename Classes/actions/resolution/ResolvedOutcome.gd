@@ -18,6 +18,17 @@ var target_hp_after: int = 0                     # threaded hypothetical HP afte
 var knockback_applied: bool = false               # #84: this hit shoved the target (Kinetic Mace Blowback)
 var knockback_from: Vector2i = Vector2i.ZERO       # the cell it was standing on BEFORE this shove
 var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — previewed and applied verbatim (Law #2)
+# Every cell of the shove, start included — the flight plus any landing tumble (#259). The TRAIL's
+# one source: a tumble down a sideways ramp bends the path once, so the endpoints above cannot
+# describe it (from/to stay authoritative for the projection and execute's set_cell).
+var knockback_path: Array[Vector2i] = []
+var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
+# Shoved into a VOID (#259) — gone outright, the #116 kill doctrine. lethality reads KILLED so
+# every reader (AI removal tiers, the KILL icon, lifecycle_for → DEAD) lights up; this flag exists
+# because execution needs its own door — a 0-damage take_damage cannot kill an ACTIVE unit, so
+# both executors call Unit.die() on it. Preview-side it also suppresses the landing ghost and the
+# projected-knockback publish (nothing stands in a hole, and nothing there may be pickable).
+var removed: bool = false
 # Both ends are recorded because a unit can be shoved MORE THAN ONCE in a plan (#105): the second
 # hit starts where the first one left it, not at its live board cell. The preview used to
 # reconstruct the start from `target.movement.cell`, which is a second answer to a question this

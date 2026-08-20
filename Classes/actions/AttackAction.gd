@@ -82,6 +82,11 @@ func execute():
 		# tweened slide is polish, TODO); the resolver already stopped it at any wall/unit/edge.
 		if resolved.knockback_applied and is_instance_valid(target):
 			target.movement.set_cell(resolved.knockback_to)
+		# A void shove (#259): the hit's own damage may be 0, so take_damage above cannot carry
+		# the death -- removal is its own door. die() frees the node and tears the squad down.
+		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap).
+		if resolved.removed and is_instance_valid(target):
+			target.die()
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
 	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
 	# Counters run through here too: they stamp main (#72), so a family whose MAIN spends — a

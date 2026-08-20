@@ -63,12 +63,15 @@ func test_a_heal_carries_the_delta() -> void:
 	assert_int(heal.resolved.elevation_delta).is_equal(2)
 
 
-# The Law #2 case: a shove earlier in the pass moves the victim onto a ledge, and the later hit's
+# The Law #2 case: a shove earlier in the pass moves the victim's LEVEL, and the later hit's
 # delta must describe where the victim STANDS when it lands -- the threaded hypo position, never
-# the live board cell (which still says elevation 0 for the whole preview pass).
+# the live board cell. Since #259 a shove cannot climb (the brace), so the level change is a DROP:
+# the victim starts on a terrace and is knocked off it; the live cell still reads elevation 2 for
+# the whole preview pass, which is exactly what the mutant (a live read) reports.
 func test_a_later_hit_reads_the_shoved_position() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(3, 0), 2)   # the cell the shove lands on
+	heights.set_cell(Vector2i(1, 0), 2)
+	heights.set_cell(Vector2i(2, 0), 2)   # the victim's terrace; (3,0) is ground level
 	var sm := H.make_manager(self, heights)
 	var shover := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
 	var victim := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0))
@@ -84,4 +87,5 @@ func test_a_later_hit_reads_the_shoved_position() -> void:
 
 	assert_bool(shove.resolved.knockback_applied).is_true()
 	assert_bool(shove.resolved.knockback_to == Vector2i(3, 0)).is_true()
-	assert_int(follow_up.resolved.elevation_delta).is_equal(2)
+	# second stands at ground level; the victim LANDS at ground level -> 0. The live read says 2.
+	assert_int(follow_up.resolved.elevation_delta).is_equal(0)
