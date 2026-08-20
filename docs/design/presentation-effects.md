@@ -52,6 +52,24 @@ ticket rather than three improvisations.
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
 
+**Open — the table a value lives in and the PAGE it is shown on are different questions (captured
+2026-08-20, scratchpad).** The dev's ask: *"the glow settings belong on the Fire tab"* — move the
+glow rows to sit beside the flames they are actually being tuned against. The rows are
+`LookKnobs`'s (`WorldEnvironment.environment:glow_*`), i.e. **mission mood**; the fire block is
+`GameKnobs`'s, i.e. a **game constant**, and since #380 they are on different tabs by the rule
+above. So this is not a row move: the two have different stores, different save buttons and
+different answers to *who may disagree*, and moving the row would silently promote a per-mission
+value into a game-wide one — the exact mistake the three-row table exists to prevent. Glow is also
+**scene-wide**, not per-fire, so whatever is shown beside a flame still governs the whole board.
+What is actually being asked for is a **view**: one page composing rows that belong to two tables,
+each still saving to its own home and still labelled with which. Nothing in the panels forbids
+that — both tables reach their properties through the same `LookKnobs.read`/`write` — but no tool
+does it today, and a shared page needs a stance on what its `Save *` marker and its save buttons
+mean when the rows on it answer to two owners (#389's marker is per-panel). Worth settling before
+the next "these two knobs belong together" request, which is likely: the underlying complaint is
+that the tabs are organised by **where a value is stored** and the dev tunes by **what he is
+looking at**.
+
 **INHERIT is zero, and that is forced rather than chosen.** `TileData.has_custom_data` answers
 whether the *layer* exists, never whether *this tile* wrote to it, so an unauthored field arrives as
 its type's own default and the sentinel has to BE that default. A `Color` layer's default is opaque
@@ -323,6 +341,7 @@ The tier nobody else can copy, because it renders systems Iosis alone has.
 ## Tier 4 — the far wall (flagged as such)
 
 - Battle intros zooming from a tabletop map into the living diorama; UI as parchment-and-brass instruments framing it (the "toy soldiers" conceit).
+- **Defeat as the diorama reveal — the twin of the intro above (scratchpad, 2026-08-19).** Losing a battle pulls the camera *out*, and out, and out, until the battlefield is seen to **be** a diorama: a strategist stands over the table, mulling a plan that did not work. The player is then offered **watch the replay** (to study the failure) or **try again**. Two things make this cheaper than it sounds and one makes it expensive. Cheap: the HD-2D stack already *literally renders the battle as a diorama*, so the reveal is a camera move rather than a new asset class — `CameraRig3D` is the rig, and `MissionEndBanner` is the surface that already owns the defeat moment; the "watch the failure" half is a straight consumer of [#209](https://github.com/Phaazoid/Godoiosis/issues/209)'s replay substrate and buys nothing until that exists. Expensive: **the strategist is a character in a scene**, i.e. real art and a real staging question, which is what keeps this on the far wall rather than in Tier 3 with the other camera work. **The story value is the part to preserve if it is ever cut down**: every defeat reframed as *a plan failing on a table* rather than as your people dying — which is a tonal claim about what a loss means, and it costs nothing to honor in wording long before the camera move exists.
 - Fog-of-war as physical volumetric fog carved by torch/unit light — needs vision rules that don't exist yet.
 - FROZEN reflections showing *planned* ghost positions instead of the present — deliciously on-theme (the ice previews the plan), possibly too weird. Kept on the wall per instructions.
 - Photo mode — the look-dev scene's free camera and per-ingredient toggles are accidentally 80% of one already.

@@ -452,6 +452,88 @@ fancy effects doesn't necessitate using them. Using them in the correct places r
 everywhere makes them have more effect."* Unit status (#358) is a sanctioned place; a fancy effect
 everywhere is a fancy effect nowhere.
 
+## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
+
+Six inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in
+every case something does.
+
+**A third health-bar state: *damaged only*.** Show every unit's bar except full-health ones (the
+hovered unit keeps its bar and its digits either way). Structurally this is a **third value for a
+choice that already exists** — `PlayerSettings.ALWAYS_SHOW_HEALTH` (#350 above) is today hovered-only
+vs always-on, and the gate is deliberately **one named expression** (`hovered or foretold or
+always_on`), so this is a third disjunct there and **not** a second visibility rule. The real cost is
+UI, not model: `SettingsScreen` is a pure projection of `PlayerSettings.DEFS` and `DEFS` describes
+**booleans** — a three-way setting is the first non-checkbox row the table has ever had, so it either
+grows a widget kind or the question is re-cut as two independent bools. Worth noting *why* it was
+asked for: #350's own open note flags that always-on bars can **crowd** (`render_priority` sorts
+globally, and a bar is 1.63 cells wide, so adjacent units overlap) — "damaged only" is a *crowding*
+answer as much as a preference, which is an argument for it and also a hint that the crowding fix
+may be the better ticket. **The `foretold` disjunct must survive any cut** — Law #2 says a bar the
+queue is promising to change cannot be hidden by a preference.
+
+**Unit sprites should LOOK hurt.** Art reflecting health, so a nearly-dead unit reads as nearly dead
+without a bar at all. This is **the same thread as the Crisis-sprite item below** — sprite-as-status,
+art-gated, and the third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s
+effect stack. Treat them as one design: whatever answers "how does a sprite show a state" answers
+both, and answering them separately is how two effect stacks get built. Two constraints already on
+the books: the #346 channel rule says what a unit **is** belongs *on/above the unit* (this qualifies),
+and the restraint doctrine — *fancy effects in the correct places rather than everywhere* — bites
+hard here, since "every damaged unit" is close to "everywhere". Must reach both views or be declared
+on [#292](https://github.com/Phaazoid/Godoiosis/issues/292).
+
+**Squad join / leave feedback on the ring channel.** Animate the per-squad ring under a unit's feet
+**forming** on join and **dissolving** on leave; a forceful removal **shatters** it. The ring is
+#325's, which survived that ticket's verdict (the mix: rings for membership, crown for leadership —
+the green squares were deleted), so this decorates a marker that is now **settled** rather than one
+awaiting a verdict. The genuinely useful half is *which events to hook*, and it is wider than the
+menu: **cohesion ejection** (`SquadManager.enforce_contact`) and **downed ejection** both drop
+membership at settle points and are noted in the codebase as **un-previewed** — a squad silently
+losing a member is exactly the moment feedback earns most, and it is not a click the player made.
+Sprite-FX-shaped, so it queues behind #358.
+
+**Warn when a move ends on — or crosses — an element-afflicted tile.** *(Merged capture: the
+action-menu warning recorded 2026-08-18 and the queue-row warning recorded 2026-08-19 are the same
+fact asked at two surfaces.)* Before committing a move onto a tile carrying fire (or any later
+hazard), say so. Three surfaces want it and they are one question: **prefer** in pathing (the AI and
+Group Move half — [terrain.md](terrain.md) owns the rule, and the AI's share files to
+[#117](https://github.com/Phaazoid/Godoiosis/issues/117)), **warn** on the action-menu entry, and
+**warn** on the queued row. Open: what the notice IS (menu text, an icon, a confirm), and whether it
+covers only the **destination** or **any afflicted tile the path crosses** — the second is strictly
+more honest and strictly more visual noise. Precedent for the row half: `ActionQueueRow` already
+renders element icons off the shared `StateIcons.ICONS` table, so the queue surface has the art.
+
+**A queued move should still offer "Move" — re-entering move planning.** Today the row is *hidden*
+once a move is queued (`MainActionMenu.populate` refuses on `has_action_type_queued(MOVE)`), so
+re-planning means cancelling the unit's actions and starting over. Re-entry is plausibly "drop the
+old move, enter move mode", and the hard part is already solved: by the 2026-08-02 fork a re-planned
+move is **never refused for breaking a queued aim** — the aim falls to invalid-in-red instead — so
+the invalidation machinery a re-plan needs exists and is exercised. The open half is the gate's
+*other* clause: a unit with a **main action** queued also loses Move, and move-before-main is a real
+ordering rule (`MoveAction.actor_can_perform`), so re-entry must either preserve it or state why not.
+**A menu that greys rather than hides would explain itself** — since #166 a row can only be greyed if
+it can say why, which is the shape this wants.
+
+**Streamline move → main action.** After a move commits, open the unit's main-action menu
+automatically; or a double-click shortcut. Pure flow-feel, no model question. Open: which gesture,
+and whether auto-open irritates on the turns a player only wanted to move. **One caution from this
+codebase specifically** — `game.clear_selection()` runs on every menu *pick*, not just cancel
+(`ActionMenuController` emits `cancelled` before `action_selected`), and that ordering has already
+produced two bugs; anything that chains one menu into the next lands directly on it.
+
+**Player-chosen aim / attack reticule colours.** The dev's half-joking aside at #212 (*"a color
+slider to set whatever color they want"*), kept because it is closer than it sounds: the reach fill
+is a tunable `OverlayManager.ATTACK_MODULATE` **static** rather than a `const`, the 3D mirrors that
+modulate rather than holding its own colour, and since #350 the game **has** a settings surface that
+did not exist when this was said. So the pieces are: a store row, a projection row, and a widget
+kind that `DEFS` does not have yet (a colour, like the three-way above — the same gap, twice).
+Real colour-blindness support would want the whole `BoardOverlays.LAYERS` / `OverlayManager`
+modulate set rather than the reticule alone, which makes this a sibling of
+[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity toggle — the other
+accessibility knob whose home is that same page. **Note the tuning-surface collision before
+building:** those same layer colours are `GameKnobs.CLASS_KNOBS` rows (#373), i.e. dev-tunable
+game constants written back into their declarations — a player override is a *second* writer of the
+same value and needs a declared relationship with the authored default, not a second seam.
+
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
