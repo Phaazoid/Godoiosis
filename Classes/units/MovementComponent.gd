@@ -16,7 +16,7 @@ class_name MovementComponent
 
 # The shove slide's speed (#259 rework) -- a game constant, tuned on the dev Game tab. Read at
 # each segment start, so a change applies from the next shove.
-static var SHOVE_SLIDE_SPEED := 240.0  # pixels per second
+static var SHOVE_SLIDE_SPEED := 120.0  # pixels per second
 
 signal movement_finished
 
