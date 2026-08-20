@@ -109,8 +109,8 @@ func _ready() -> void:
 	scenario_tool.init(scenario_manager, game, scenario_header)
 	squads_ai.init(game, scenario_header)
 	dialog_tool.init(game, scenario_header)
-	spawn.init(game)
-	unit_editor.init(game)
+	spawn.init(game, scenario_header)
+	unit_editor.init(game, scenario_header)
 	tile_brush.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.

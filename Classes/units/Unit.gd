@@ -32,6 +32,11 @@ var unit_instance: UnitInstance
 # Set by UnitFactory (null for form-built or scenario-embedded UnitData). Authored saves read it
 # so a cast member serializes as a reference to its file, never as an inline copy.
 var unit_data_source: UnitData = null
+# A dev tool wrote this unit (#259 rework, dev-ratified): an authored save SNAPSHOTS a dev-edited
+# unit instead of re-referencing its character file, so fixture edits (inventory, team, stats)
+# persist through Update. Sticky across loads by construction -- the snapshot entry respawns with
+# no unit_data_source. Battle-scoped on purpose: it describes this board's session, not the cast.
+var dev_edited := false
 var inventory : Array[Item] = []
 var squad: Squad
 var pending_grid : TileMapLayer

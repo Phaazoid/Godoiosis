@@ -103,6 +103,29 @@ func test_reference_survives_a_load_and_resave() -> void:
 	assert_bool(entry.state_saved).is_false()
 
 
+# The #259-rework ruling (dev): a DEV EDIT breaks the reference. An authored capture snapshots a
+# dev-edited cast unit instead of re-referencing its file -- the edit made it board-local, and a
+# reference would silently discard it (the verticality-fixture bug: inventory and team edits could
+# never be saved). Sticky by construction: the snapshot entry respawns with no unit_data_source,
+# so a later authored Update keeps the snapshot without re-asking.
+func test_a_dev_edited_cast_unit_saves_as_a_snapshot_and_the_edit_survives() -> void:
+	var unit := _spawn_cast(Vector2i(1, 1))
+	unit.change_faction(Team.Faction.ENEMY)   # the team edit the Unit Editor stages
+	unit.dev_edited = true
+
+	var snap: ScenarioData = sm.capture_scenario("__cast_edited", true)
+	var entry: ScenarioUnitEntry = snap.unit_entries[0]
+	assert_bool(entry.state_saved).override_failure_message(
+			"the authored capture re-referenced a dev-edited unit -- the edit is discarded").is_true()
+
+	sm.apply_scenario(snap)
+	await await_idle_frame()
+	var back := _sole_unit()
+	assert_bool(back.get_faction() == Team.Faction.ENEMY).override_failure_message(
+			"the team edit did not survive the round trip").is_true()
+	assert_object(back.unit_data_source).is_null()   # sticky: the next authored Update keeps it
+
+
 func test_default_capture_still_embeds_a_snapshot() -> void:
 	var source: UnitData = load(FIXTURE_PATH)
 	_spawn_cast(Vector2i(1, 1))
