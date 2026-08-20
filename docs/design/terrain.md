@@ -92,6 +92,21 @@ Terrain is a **target**, not just a backdrop — this is where terrain & element
 
 A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model. **Not committed — captured.**
 
+## Hazardous tiles and pathing — nothing avoids them today (captured 2026-08-20, NOT decided)
+
+*From the scratchpad; **captured, not locked**.* The dev's ask: Group Move and the AI should **prefer not to walk into fire** (and whatever hazards land later), and a queued move that ends on one should **say so** — the display half is [visual-clarity.md](visual-clarity.md), this section owns the rule.
+
+**Premise confirmed against the code: traversal is entirely hazard-blind.** The per-unit gate `RulesService.can_traverse` and `movement_cost` decide on **walkability plus Waterwalk**, and `SquadCohesion.path_hops` walks the same rule — none of them reads dynamic tile **state**. So a burning tile costs exactly what an empty one costs, to the player's solver and to the AI's approach picker alike. Note the sharp asymmetry this creates today: `BoardContext.is_walkable` **does** know state (a FROZEN water tile is passable *because* of its state — that was #109's whole point), so the codebase already has a state-aware walkability answer; what it does not have is a state-aware **preference**.
+
+The fork, deliberately unpicked:
+
+- **Hard refusal** — a hazard is untraversable, or unstandable. Cheap to express, and wrong the moment a mission wants you to run through fire; it also converts a tactical cost into a wall the player cannot choose to pay.
+- **Soft cost** — a hazard raises `movement_cost`, so paths route around it when there is room and through it when there is not. This is the shape MOV already speaks, and it makes the AI's approach picker inherit the behavior for free. Its cost is that a soft number is a **balance** knob nobody has tuned, and a cost high enough to deter is close to a wall anyway.
+
+Two riders either cut must answer. **Destination-only or path-crossing?** — standing in fire and running through fire are different exposures, and the rule should probably not pretend otherwise. And **whose rule is it?** — a preference belongs to the mover (a fire-immune unit should not detour), which points at `can_traverse`'s per-unit layer rather than at the cell.
+
+**Do not fold this into occupancy's shape by reflex.** `path_hops` already takes `block_on_occupancy` as an opt-in *because two callers genuinely wanted opposite answers*; a hazard preference may or may not have that property, and copying the parameter without establishing that it does would be adding a knob nobody asked for. The AI's share of this is [#117](https://github.com/Phaazoid/Godoiosis/issues/117) (evergreen AI catch-up), by that issue's own rule that new AI gaps file there.
+
 ## Open questions
 
 - How much terrain state is **authored per level** vs **emergent** from play? (Weather sets baselines — elemental-interactions.)
