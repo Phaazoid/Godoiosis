@@ -497,7 +497,7 @@ modes merged, and the art now comes off the tile-pick layer, because the paint w
 And **the wheel suppression is DECLARATIVE, not
 a consume**: the camera rig is a *child* of `battle3d`, so it sees `_unhandled_input` first and
 `set_input_as_handled()` in the parent lands after the zoom has already happened (measured — the
-obvious fix is not the one that shipped). `battle3d` stands `look_dev_camera.wheel_zoom_enabled`
+obvious fix is not the one that shipped). `battle3d` stands `CameraRig3D.wheel_zoom_enabled`
 down every frame, the same way it borrows the orbit button, and drives the `Ctrl+wheel` notch
 itself.
 

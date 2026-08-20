@@ -24,8 +24,8 @@ func after_test() -> void:
 	_scene.free()
 
 
-func _rig() -> Node3D:
-	return _scene.get_node("CameraRig") as Node3D
+func _rig() -> CameraRig3D:
+	return _scene.get_node("CameraRig") as CameraRig3D
 
 
 func _camera() -> Camera3D:

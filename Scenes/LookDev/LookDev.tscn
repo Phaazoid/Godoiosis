@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://c54m0eo0yy8jn" path="res://Scenes/LookDev/look_dev.gd" id="1"]
 [ext_resource type="Script" uid="uid://cgjivql78oaqy" path="res://Scenes/LookDev/board_painter.gd" id="2"]
-[ext_resource type="Script" uid="uid://btoy3ievwu1rh" path="res://Scenes/LookDev/look_dev_camera.gd" id="3"]
+[ext_resource type="Script" uid="uid://btoy3ievwu1rh" path="res://Classes/presentation/CameraRig3D.gd" id="3"]
 [ext_resource type="MeshLibrary" path="res://Scenes/LookDev/lookdev_meshlib.tres" id="4"]
 [ext_resource type="Texture2D" uid="uid://cfamyhlji3e0i" path="res://Art/LookDev/torch_flame.png" id="9"]
 [ext_resource type="Shader" uid="uid://5norpg1h4q1r" path="res://Scenes/LookDev/vignette.gdshader" id="10"]

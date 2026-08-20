@@ -194,6 +194,24 @@ One case in `test_ai_turn_terminates.gd`, `test_ai_turn_from_a_jam_terminates_ev
 - **A crashed mutation run leaves the source mutated.** The next run then read *that* as its "original" baseline and silently restored a broken file, making every later result meaningless — and it wrote the mutation into the repo. Always `git checkout -- <file>` to get the baseline *and* to restore, never a string captured from the working file.
 - **`$ErrorActionPreference = 'Stop'` plus `2>&1` on `godot.exe` aborts the run** on Godot's harmless `ObjectDB instances leaked at exit` warning, because PowerShell 5.1 wraps native stderr in ErrorRecords. Don't redirect a native exe's stderr here.
 
+## Testing the presentation stack (`LookDev.tscn` is a FIXTURE, not a scratch scene)
+
+`res://Scenes/LookDev/LookDev.tscn` is the fixture five suites stand on — `test_board_overlays`,
+`test_board_picker`, `test_camera_rig`, `test_look_dev`, `test_walk_demo`. Its folder name says
+scratch and its header used to agree; both were wrong, and [#393](https://github.com/Phaazoid/Godoiosis/issues/393)
+(2026-08-19) said so in canon rather than moving the scene. **Renaming a node in it, deleting a prop,
+or re-parenting the camera rig reds those five suites**, and the game as well: `Battle3D.tscn` loads
+its `lookdev_meshlib.tres`, `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, and
+the rig itself is now `Classes/presentation/CameraRig3D.gd` — shipping code that merely used to live
+in that folder.
+
+Two consequences for writing cases against it. Its **moods** are `LookPreset` files resolved by name
+through `LookKnobs`, not a table in `look_dev.gd`, so a case about them must not assume a local
+constant — and `_ready` applies `Day`, so the scene's live post-stack values come from
+`Resources/LookPresets/Day.tres` rather than from what `LookDev.tscn` authors. Its **help label** is a
+full-rect `CanvasLayer` over the viewport, which is why `test_camera_rig` drives the rig's own
+`_unhandled_input` rather than parsing events into the tree.
+
 ## Install (already done; recorded for reproducibility)
 
 gdUnit4 was vendored from `github.com/MikeSchulze/gdUnit4` into `addons/gdUnit4/` (its own `test/` folder dropped to keep it lean) and enabled in `project.godot` `[editor_plugins]` next to AsepriteWizard. In a headless run gdUnit4 detects the CI environment and skips its editor plugin automatically. `reports/` (generated) is gitignored.

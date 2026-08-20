@@ -56,7 +56,7 @@ enum View {
 @onready var _unit_mirror: UnitMirror = $UnitMirror
 @onready var _overlay_mirror: OverlayMirror = $OverlayMirror
 @onready var _overlays: BoardOverlays = $BoardOverlays
-@onready var _rig: Node3D = $CameraRig
+@onready var _rig: CameraRig3D = $CameraRig
 # The AUTHORED orbit binding, captured before anything rewrites it. The brush borrows MIDDLE
 # while it is armed and gives this back when it disarms, so orbit_button stays a real
 # inspector knob instead of a constant this file re-asserts every frame.
