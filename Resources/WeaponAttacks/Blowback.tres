@@ -15,6 +15,5 @@ attack_pattern = SubResource("Resource_pat")
 knockback = 1
 requires_readiness = true
 consumes_readiness = true
-up_tolerance = 1
-down_tolerance = 2
+vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

@@ -286,3 +286,35 @@ func test_hovering_a_blocked_cell_previews_nothing() -> void:
 	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()
 	assert_bool(_tiles_pulsing()).is_false()
 	assert_bool(_unit_pulsing(_foe())).is_false()
+
+
+# ==============================================================================
+#  The sight trace (#258): the bead path the aim gate judged, stored for both stacks
+# ==============================================================================
+
+func test_hovering_an_aim_stores_its_sight_trace_and_exit_clears_it() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+
+	_aim_at(attacker, FOE_CELL)
+	var trace: Reach.SightTrace = game.overlay_manager.sight_trace
+	assert_object(trace).is_not_null()
+	assert_bool(trace.blocked).is_false()
+
+	game.exit_current_mode()
+	assert_object(game.overlay_manager.sight_trace).is_null()
+
+
+func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
+	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
+	var pattern := ManhattanRangePattern.new()
+	pattern.min_range = 1
+	pattern.max_range = 2
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = pattern
+	game.board_heights.set_cell(Vector2i(1, 2), 3)   # a wall between (1,1) and the target at (1,3)
+
+	_aim_at(attacker, Vector2i(1, 3))
+
+	var trace: Reach.SightTrace = game.overlay_manager.sight_trace
+	assert_object(trace).is_not_null()
+	assert_bool(trace.blocked).is_true()
+	assert_array(game.overlay_manager.hover_overlay.get_used_cells()).is_empty()   # the aim is refused

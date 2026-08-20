@@ -11,6 +11,5 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 script = ExtResource("2_wad")
 power = 5
 attack_pattern = SubResource("Resource_main")
-up_tolerance = 1
-down_tolerance = 2
+vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

@@ -46,6 +46,9 @@ var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
 var _last_heights_version := -1
 var _heights_moved := false
 
+var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
+var _bead_texture_cache: GradientTexture2D
+
 
 func _process(_delta: float) -> void:
 	if game == null or overlays == null:
@@ -69,6 +72,7 @@ func _process(_delta: float) -> void:
 	overlays.set_layer_modulate(BoardOverlays.Layer.AIM, om.hover_overlay.modulate)
 
 	_attack(om)
+	_sight_trace(om)
 	_arrows(om)
 
 	var kb_trails: Array[Dictionary] = []
@@ -194,6 +198,44 @@ func _attack(om: OverlayManager) -> void:
 	var m: Color = om.attack_overlay.modulate
 	overlays.set_layer_modulate(BoardOverlays.Layer.ATTACK_BLOCKED, Color(m.r * dim, m.g * dim, m.b * dim, m.a))
 	_markers(BoardOverlays.Layer.TARGET_PICK, picks)
+
+
+# The aim's bead path (#258), lifted into the diorama at the trajectory's own heights -- the arc a
+# lob clears a wall by is literally visible. Gated on the store's own version, never a copied key
+# (#308); the points and the verdict were computed ONCE by Reach.sight_trace, so this is a second
+# projection of one answer, not a second computation.
+func _sight_trace(om: OverlayManager) -> void:
+	if om.sight_trace_version == _last_trace_version:
+		return
+	_last_trace_version = om.sight_trace_version
+	var beads: Array[Dictionary] = []
+	var trace: Reach.SightTrace = om.sight_trace
+	if trace != null:
+		# Colours COPIED from the 2D renderer (parallel-stacks rule), never restated.
+		var tint := SightTrace2D.BLOCKED_COLOR if trace.blocked else SightTrace2D.CLEAR_COLOR
+		for p in trace.points:
+			# Rule-height h sits at world (h + 1) * CELL_SIZE: a level-E surface is world
+			# surface_y(E), and h counts levels above the level-0 floor plane.
+			var pos := Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(0) + p.y * BoardSpace.CELL_SIZE, p.z * BoardSpace.CELL_SIZE)
+			beads.append({"pos": pos, "texture": _bead_texture(), "modulate": tint})
+	_markers(BoardOverlays.Layer.SIGHT_TRACE, beads)
+
+
+# A tiny radial dot, code-built -- no art file to author for a readout whose whole identity is
+# "a bead" (GradientTexture2D renders on first use; pooled markers reuse the one instance).
+func _bead_texture() -> Texture2D:
+	if _bead_texture_cache == null:
+		var gradient := Gradient.new()
+		gradient.offsets = PackedFloat32Array([0.0, 0.7, 1.0])
+		gradient.colors = PackedColorArray([Color.WHITE, Color.WHITE, Color(1, 1, 1, 0)])
+		_bead_texture_cache = GradientTexture2D.new()
+		_bead_texture_cache.gradient = gradient
+		_bead_texture_cache.fill = GradientTexture2D.FILL_RADIAL
+		_bead_texture_cache.fill_from = Vector2(0.5, 0.5)
+		_bead_texture_cache.fill_to = Vector2(0.5, 0.0)
+		_bead_texture_cache.width = 8
+		_bead_texture_cache.height = 8
+	return _bead_texture_cache
 
 
 func _target_pick_texture(om: OverlayManager) -> Texture2D:

@@ -41,6 +41,43 @@ static func cells_within_manhattan_range(origin: Vector2i, range: int) -> Array[
 				cells.append(cell)
 	return cells
 
+# Every cell the center-to-center segment from `a` to `b` passes through, in order, ENDPOINTS
+# EXCLUDED (#258's sight trace walks these). Supercover: an exact corner crossing includes BOTH
+# side cells — conservative for line of sight, so a shot can never thread a diagonal seam between
+# two walls. Integer arithmetic throughout (the crossing compare is cross-multiplied), so the walk
+# is exact and deterministic (Law #1).
+static func cells_crossed(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	var nx := absi(b.x - a.x)
+	var ny := absi(b.y - a.y)
+	var sx := 1 if b.x > a.x else -1
+	var sy := 1 if b.y > a.y else -1
+	var p := a
+	var ix := 0
+	var iy := 0
+	while ix < nx or iy < ny:
+		# Next crossing times: (ix + 0.5) / nx vs (iy + 0.5) / ny, kept exact by cross-multiplying.
+		var decision := (1 + 2 * ix) * ny - (1 + 2 * iy) * nx
+		if decision == 0:
+			cells.append(Vector2i(p.x + sx, p.y))
+			cells.append(Vector2i(p.x, p.y + sy))
+			p = Vector2i(p.x + sx, p.y + sy)
+			ix += 1
+			iy += 1
+			if p != b:
+				cells.append(p)
+		elif decision < 0:
+			p = Vector2i(p.x + sx, p.y)
+			ix += 1
+			if p != b:
+				cells.append(p)
+		else:
+			p = Vector2i(p.x, p.y + sy)
+			iy += 1
+			if p != b:
+				cells.append(p)
+	return cells
+
 static func cardinal_direction_between(from_cell: Vector2i, to_cell: Vector2i) -> Vector2:
 	var diff := to_cell - from_cell
 

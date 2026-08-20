@@ -123,17 +123,20 @@ a lookalike; zero new code.
 
 ## Targeting — height buys reach [BUILT as #258, 2026-08-20]
 
-**Per-attack, asymmetric vertical tolerance**, checked *alongside* Manhattan distance, never folded
-into it. Each attack authors an up-tolerance and a down-tolerance; a sword might be 1 up / 2 down, a
-lobbed shell looser going down than up.
+**A per-attack vertical rule**, checked *alongside* Manhattan distance, never folded into it. A
+ranged attack authors an up-tolerance and a down-tolerance (a lobbed shell looser going down than
+up); melee authors the STEP rule instead (below) — the tolerance illustration this section used to
+give for a sword did not survive play.
 
-**BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258):** `AttackData.up_tolerance` /
-`down_tolerance` (`-1` = unlimited, the default — so a flat board and every heights-less fixture
-behave exactly as before, the slice-1 contract). The one rule is `Reach.vertical_aim_ok`, and
-`Reach.can_hit_cell_from` conjoins it with membership — it takes the `BoardContext` as a REQUIRED
-parameter (the `movement_cost` precedent: an optional would give one question two answers). Starter
-numbers are placeholder content: melee-shaped mains at 1 up / 2 down, Fireball at 2 up, guns and the
-other carvings unlimited.
+**BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258), REWORKED in review the same
+day:** each attack authors its **vertical rule** — `AttackData.VerticalRule.STEP` for melee (below),
+`TOLERANCE` with `up_tolerance` / `down_tolerance` for everything else (`-1` = unlimited, the
+default — so a flat board and every heights-less fixture behave exactly as before, the slice-1
+contract) — and every point aim must also have a **clear sight trace** (the bead path, below). The
+one gate is `Reach.vertical_aim_ok`, and `Reach.can_hit_cell_from` conjoins it with membership — it
+takes the `BoardContext` as a REQUIRED parameter (the `movement_cost` precedent: an optional would
+give one question two answers). Starter content: melee mains are STEP, Fireball is 2 up with
+`arc_clearance = 2`, guns and the other carvings TOLERANCE-unlimited with clearance 0.
 
 ### Lobs vs guns need no second mechanism [DECIDED 2026-08-20]
 
@@ -143,9 +146,10 @@ stopped short by the terrain* — is expressed entirely by the two numbers the d
 
 - **Up-tolerance IS the lob's climb ceiling.** A lob fired up a ramp is "stopped short" because the
   terrain carries targets above the ceiling it can reach.
-- **A gun authors `-1`** — its only real constraint is the *deferred* LoS raycast (`arc_clearance`
-  ≈ 0: can't shoot through walls, any angle fine). This inverts the old illustration ("a carbine
-  tighter"): the Carbine ships unlimited.
+- **A gun authors `-1`** — its only real constraint is the sight trace (`arc_clearance` 0: can't
+  shoot through or over walls, any angle fine). This inverts the old illustration ("a carbine
+  tighter"): the Carbine ships unlimited. *(Written when the trace was still deferred; it shipped
+  the same day — see the line-of-sight section.)*
 
 ### Directional spreads are EXEMPT in v1 [DECIDED 2026-08-20]
 
@@ -169,14 +173,23 @@ The additive model also made *any* height difference a total melee barrier in bo
 almost everything is range 1. The dev rejected that outright: *"I don't like the idea of not being
 able to melee up a slope."*
 
-### Melee is IN the system [DECIDED]
+### Melee is IN the system — and its rule is the STEP [REVISED 2026-08-20]
 
 > *"melee can be in the check too. We might want to edit some crazy melee attacks down the line.
 > Let's keep the tool flexible."*
 
-Melee is not exempted — it is authored with tolerances loose enough not to bite. **One mechanism,
-content decides.** This is the same shape as `arc_clearance` below: a number on the attack, never a
-category the code branches on.
+Melee is not exempted — it lives in the same gate. But the first build's "authored with tolerances
+loose enough not to bite" did not survive play: **tolerance numbers cannot say what melee is.** The
+dev, reviewing the build: *"Melee units should have to be on the same step, or on a facing half
+step to hit each other. If a unit is next to another unit but on different elevations, melee
+attacks shouldn't be queuable."* A sheer 1-level edge is melee-illegal in BOTH directions — which
+`1 up / 2 down` wrongly allowed — while the ramp's half step stays legal, which `0 / 0` would
+wrongly forbid. So melee authors `VerticalRule.STEP`: same elevation at any range, or an adjacent
+edge that is ramp-connected — judged by `RulesService.height_step_ok`, the height core extracted
+from `can_step` so melee and movement can never disagree about which edges connect. (The sideways
+guards stay movement-only: swinging past a ramp's side is not walking onto it.) Bare fists are
+STEP too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
+slope") is exactly what the half step preserves.
 
 ### The aim, not the footprint
 
@@ -222,7 +235,7 @@ and both cells.
 
 ---
 
-## Line of sight — three consumers, three rules [DEFERRED past v1]
+## Line of sight — three consumers, three rules [BUILT for aiming, 2026-08-20]
 
 Dev ruling: *"I think these are going to be fundamentally different things, and a bit case by case."*
 That is right, and **the mistake to avoid is building one shared LoS service they all call.** The
@@ -231,35 +244,57 @@ question only looks singular:
 | Consumer | The question it actually asks | Answered by |
 |---|---|---|
 | **Squad range / cohesion** | can I *walk* there? | `path_hops` — already done, see above |
-| **Flat-trajectory aiming** | is the profile between us clear? | a raycast (deferred) |
-| **Lobbed aiming** | how high can I clear? | the same raycast, different threshold |
+| **Flat-trajectory aiming** | is the profile between us clear? | `Reach.sight_trace` (clearance 0) |
+| **Lobbed aiming** | how high can I clear? | the same trace, arced by `arc_clearance` |
 
 ### `arc_clearance: int`, replacing the planned `arcs_over_obstacles: bool`
 
-The dev's unification, and it deletes a flag before it was ever built:
+The dev's unification, and it deleted a flag before it was ever built:
 
 > *"shots are just lobs who answer 'how high is too high?' with 1... But we can't lob fireballs over,
 > say, 20 tile high walls."*
 
 So clearance is **a number, not a category**. A gun clears nothing; a fireball clears some; nothing
-clears infinity. No shot/lob classification, no second code path. The boolean is doc-only today
-(named as "planned" in `CLAUDE.md` and [weapons.md](weapons.md)) — **both should now say
-`arc_clearance: int`**, and no code is owed until evaluation lands.
+clears infinity (which is why the field has no unlimited sentinel). No shot/lob classification, no
+second code path.
 
-**When it does land, measure clearance against the shot's LINE** (interpolated shooter→target), not
-against the shooter's own height, with an **eye-height offset of 1**. Without the offset, standing on
-a cliff edge blocks you from shooting down past your own ledge — technically defensible, infuriating
-in play.
+### The drawn path IS the rule [DECIDED + BUILT 2026-08-20]
 
-### The cost of deferring it, stated honestly
+The deferral did not survive its first real board — the day the tolerance half shipped, the bug
+reports showed a Carbine shooting through a 3-high wall and a Fireball lobbed over a 4-high one. The
+dev's ruling on how to build it reshaped the model from "raycast plus threshold" into a readout:
 
-**V1 lets a gun shoot through a cliff at a same-level target.** There is no cheap approximation that
-fixes this — a target one level up at three tiles is a *legal* shot, and only a wall between should
-stop it, so it genuinely is a profile raycast. The mitigation is not code:
+> *"I think we need to literally have a line drawn (we can represent it as a bead in game) between
+> the player and their target. If the bead can find the target, the shot is valid. If not, not
+> valid."*
 
-> **Author v1 maps as terraces and slopes, not as sheer walls with things behind them.**
+So there is ONE trajectory, and both the gate and the in-game beads evaluate it
+(`Reach.sight_trace`; the constant `Reach.EYE_HEIGHT` and the arc term live nowhere else):
 
-That belongs in the slice-2 ticket, not in a feel-check surprise.
+```
+h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
+```
+
+- **Endpoints at eye height** (EYE = 1) — the #218 offset, kept: without it, standing on a cliff
+  edge blocks your own shot down. Standing one cell BACK from a tall edge, your own lip can occlude
+  a steep shot — real lip occlusion, step forward to shoot. A target standing on a far lip is
+  silhouetted and shootable; a step back and it is covered.
+- **A gun (clearance 0) is a straight sightline; a lob visibly arcs**, peaking `+clearance`
+  mid-flight — so what a fireball can clear is literally drawn, not inferred.
+- **Blocked at the first crossed cell whose column reaches the bead — touch = blocked.** A bead that
+  grazes a wall-top visibly stops, and a 1-high wall stops a flat shot (the dev's standing
+  "anything 1 block tall blocks line of sight"). The crossed cells come from
+  `GridUtils.cells_crossed` — supercover, endpoints excluded, corner-ties take BOTH cells, so a
+  shot can never thread a diagonal seam between two walls.
+- **Terrain only; units never block** — they move every turn, so a unit-blocked preview could not
+  stay truthful (Law #2).
+- **The readout**: `HoverPresenter` computes the trace once per hovered point aim and stores it on
+  `OverlayManager` (`show_sight_trace`, with `sight_trace_version` as the mirror's #308-style
+  change signal); `SightTrace2D` draws it flat, `OverlayMirror` lifts the same points into the
+  diorama at their true heights on `BoardOverlays.Layer.SIGHT_TRACE`. Directional spreads draw no
+  trace (exempt, above). Pinned by `tests/weapons/test_sight_trace.gd` — including the law that the
+  gate and the trace can never disagree — falsified against EYE = 0 and against the version bump
+  being dropped.
 
 ---
 
@@ -375,8 +410,9 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    became its own ticket.
 2. **Height → reach.** Per-attack asymmetric tolerances in `Reach` (aim methods only), plus
    `ResolvedOutcome.elevation_delta`, plus the "in range but blocked" preview treatment.
-   **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258) (2026-08-20)** — see
-   *Targeting* above for the shape and the two rulings it added (lob-vs-gun, directional exemption).
+   **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258) (2026-08-20), reworked in
+   review the same day** — see *Targeting* above (the STEP melee rule, lob-vs-gun, the directional
+   exemption) and *Line of sight* (the sight trace, pulled forward from the deferred list).
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
 
@@ -548,8 +584,8 @@ itself.
 
 ## Deferred, and why each is deferred rather than dropped
 
-- **LoS evaluation** (`arc_clearance`, the profile raycast, the eye-height offset) — the model is
-  decided, only evaluation is deferred. Mitigated by the map-authoring constraint above.
+- ~~**LoS evaluation**~~ — **no longer deferred**: built 2026-08-20 as the sight trace (see *The
+  drawn path IS the rule* above), after the first real board broke the map-authoring mitigation.
 - **Height → damage.** The dev wants it eventually — *"there might be cases where it can affect damage
   as well, but we can shelve that for a later grill session."* `elevation_delta` is the wire it will
   attach to. Likeliest first case: a heavy melee weapon swung downhill, since falling damage already

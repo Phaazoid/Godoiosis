@@ -30,7 +30,7 @@ enum Layer {
 	MOVE, ATTACK, ZONE_CAPTURE, ZONE_EXTRACTION, HOVER,
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
-	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED,
+	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD }
 
@@ -81,6 +81,10 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.TARGET_PICK: {"color": Color.WHITE, "sort": 5, "kind": Kind.SPRITE},
 	Layer.PATH_ARROWS: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
 	Layer.KNOCKBACK: {"color": Color.WHITE, "sort": 6, "kind": Kind.SPRITE},
+	# The aim's bead path (#258) -- free 3D positions at the trajectory's own heights, not cell
+	# markup, so its markers arrive with identity basis and pre-computed pos. Colour is per-marker
+	# (the 2D SightTrace2D verdict colours, copied by the mirror -- parallel-stacks rule).
+	Layer.SIGHT_TRACE: {"color": Color.WHITE, "sort": 7, "kind": Kind.SPRITE},
 	# The ground form of the selection icons (#325 experiment): membership rings + the leader's
 	# crown decal lying on the cell surface. Above terrain state, below the aim pulse, pick
 	# markers and arrows (a ring must never eat an arrowhead) -- AIM/TARGET_PICK/arrows each

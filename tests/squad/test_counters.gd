@@ -163,3 +163,26 @@ func test_a_ledge_above_the_counter_tolerance_draws_no_counter() -> void:
 # The non-vacuity twin: identical geometry, tolerance loose enough -- the counter comes back.
 func test_the_same_ledge_within_tolerance_still_counters() -> void:
 	assert_int(_ledge_counters(2)).is_equal(1)
+
+# The melee STEP rule (dev, 2026-08-20) at the counter gate: a sheer 1-level edge draws no melee
+# counter in either direction; the same edge ramp-connected still does ("a facing half step").
+func _sheer_step_counters(with_ramp: bool) -> int:
+	var heights := BoardHeights.new()
+	if with_ramp:
+		heights.set_cell(Vector2i(0, 0), 0, Terrain.RampRise.EAST)
+	heights.set_cell(Vector2i(1, 0), 1)
+	var sm := H.make_manager(self, heights)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))    # on the step
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0))     # below it
+	(d.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.STEP
+
+	var attack := AttackAction.create(a, a.movement.cell, d, d.movement.cell)
+	a.squad._queue_action(attack)
+	var attacks: Array[AttackAction] = [attack]
+	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call()).size()
+
+func test_a_sheer_step_denies_a_melee_counter() -> void:
+	assert_int(_sheer_step_counters(false)).is_equal(0)
+
+func test_the_same_edge_ramp_connected_still_counters() -> void:
+	assert_int(_sheer_step_counters(true)).is_equal(1)

@@ -164,6 +164,14 @@ var _tile_pulse: Tween = null
 # What the reach fill was last painted for, so refresh_attack_reach_color can re-derive it.
 var _reach_attack: AttackData = null
 
+# The hovered aim's sight trace (#258): computed ONCE by HoverPresenter via Reach.sight_trace and
+# stored here as DATA -- SightTrace2D draws it flat, OverlayMirror lifts the same points into the
+# diorama. `sight_trace_version` is the monotonic, non-consuming change signal the mirror gates on
+# (the #308 rule: never a copied key).
+var sight_trace: Reach.SightTrace = null
+var sight_trace_version := 0
+var _sight_trace_2d: SightTrace2D
+
 
 
 # Called when the node enters the scene tree for the first time.
@@ -207,6 +215,28 @@ func _ready() -> void:
 		zone_highlight_overlay.modulate = ZONE_HIGHLIGHT_MODULATE
 		zone_highlight_overlay.visible = false
 		add_child(zone_highlight_overlay)
+	# The bead-path renderer (#258). Code-built (no .tscn edit), above the tile overlays and below
+	# unit sprites, the standing rule for board markup.
+	_sight_trace_2d = SightTrace2D.new()
+	_sight_trace_2d.name = "SightTrace2D"
+	_sight_trace_2d.z_index = TERRAIN_Z_INDEX
+	add_child(_sight_trace_2d)
+
+
+func show_sight_trace(trace: Reach.SightTrace) -> void:
+	sight_trace = trace
+	sight_trace_version += 1
+	_sight_trace_2d.trace = trace
+	_sight_trace_2d.queue_redraw()
+
+
+func clear_sight_trace() -> void:
+	if sight_trace == null:
+		return   # idempotent -- exit paths spam this; the version only moves on real change
+	sight_trace = null
+	sight_trace_version += 1
+	_sight_trace_2d.trace = null
+	_sight_trace_2d.queue_redraw()
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color.

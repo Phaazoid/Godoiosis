@@ -587,6 +587,7 @@ func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 	overlay_manager.clear_target_pulse()
+	overlay_manager.clear_sight_trace()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
 	selected_unit = null
