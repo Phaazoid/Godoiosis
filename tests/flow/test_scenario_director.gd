@@ -11,10 +11,17 @@ const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
 
+class ManagerStub extends RefCounted:
+	# Just the two #397 content stores the director reads live; the real ScenarioManager needs a board.
+	var current_dialog_beats: Array[DialogBeat] = []
+	var current_tutorial_steps: Array[TutorialStep] = []
+
+
 class GameStub extends Node:
 	signal unit_selected(unit: Unit)   # mirrors game.gd's signal; tests emit it directly
 	var turn_manager: TurnManager
 	var squad_manager: SquadManager
+	var scenario_manager: ManagerStub
 	var refreshes := 0   # counts refresh_mission_status calls -- the #134 write-point wire
 
 	func refresh_mission_status() -> void:
@@ -30,6 +37,7 @@ func before_test() -> void:
 	_stub = auto_free(GameStub.new())
 	_stub.turn_manager = auto_free(TurnManager.new())
 	_stub.squad_manager = auto_free(SquadManager.new())
+	_stub.scenario_manager = ManagerStub.new()   # #397: the content stores the director reads live
 	add_child(_stub)
 	_director = ScenarioDirector.new()
 	_director.game = _stub
@@ -86,13 +94,13 @@ func _await_starts(expected: int) -> void:
 # --- MISSION_START ---
 
 func test_mission_start_beat_plays_on_mission_started() -> void:
-	_director.set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Welcome to the academy.")])
+	_set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Welcome to the academy.")])
 	_director.mission_started()
 	await _await_starts(1)
 
 
 func test_mission_start_beat_fires_once_per_battle() -> void:
-	_director.set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Once only.")])
+	_set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Once only.")])
 	_director.mission_started()
 	_director.mission_started()
 	await _await_starts(1)
@@ -103,7 +111,7 @@ func test_mission_start_beat_fires_once_per_battle() -> void:
 # --- TURN_START ---
 
 func test_turn_start_beat_waits_for_its_player_turn() -> void:
-	_director.set_beats([_beat(DialogBeat.Trigger.TURN_START, "Turn two tip.", 2)])
+	_set_beats([_beat(DialogBeat.Trigger.TURN_START, "Turn two tip.", 2)])
 	_director.mission_started()   # content is inert until armed
 	_stub.turn_manager.turn_started.emit(ENEMY)    # enemy turns never advance the player count
 	_stub.turn_manager.turn_started.emit(PLAYER)   # player turn 1: not yet
@@ -116,7 +124,7 @@ func test_turn_start_beat_waits_for_its_player_turn() -> void:
 # --- SQUAD_FORMED ---
 
 func test_squad_formed_beat_fires_for_player_squad_only() -> void:
-	_director.set_beats([_beat(DialogBeat.Trigger.SQUAD_FORMED, "Squads share a plan.")])
+	_set_beats([_beat(DialogBeat.Trigger.SQUAD_FORMED, "Squads share a plan.")])
 	_director.mission_started()
 	_stub.squad_manager.squad_created.emit(_squad(ENEMY))
 	await get_tree().process_frame
@@ -128,7 +136,7 @@ func test_squad_formed_beat_fires_for_player_squad_only() -> void:
 # --- one timeline at a time ---
 
 func test_beat_landing_mid_dialog_queues_until_the_timeline_ends() -> void:
-	_director.set_beats([
+	_set_beats([
 		_beat(DialogBeat.Trigger.MISSION_START, "Intro talking."),
 		_beat(DialogBeat.Trigger.SQUAD_FORMED, "Payoff line."),
 	])
@@ -142,13 +150,14 @@ func test_beat_landing_mid_dialog_queues_until_the_timeline_ends() -> void:
 # --- resume / teardown ---
 
 func test_disarm_silences_every_trigger() -> void:
-	_director.set_beats([
+	_set_beats([
 		_beat(DialogBeat.Trigger.MISSION_START, "Never."),
 		_beat(DialogBeat.Trigger.TURN_START, "Never.", 1),
 		_beat(DialogBeat.Trigger.SQUAD_FORMED, "Never."),
 	])
 	_director.disarm()
-	_director.mission_started()
+	# No re-arm: mission_started IS the fresh-start door, so calling it here would legitimately
+	# fire (#397 -- disarm silences execution, it no longer destroys content).
 	_stub.turn_manager.turn_started.emit(PLAYER)
 	_stub.squad_manager.squad_created.emit(_player_squad())
 	await get_tree().process_frame
@@ -157,7 +166,7 @@ func test_disarm_silences_every_trigger() -> void:
 
 
 func test_reset_ends_a_running_timeline() -> void:
-	_director.set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Doomed dialog.")])
+	_set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Doomed dialog.")])
 	_director.mission_started()
 	await _await_starts(1)
 	_director.reset()
@@ -183,7 +192,7 @@ func _named_unit(unit_name: String, fac: Team.Faction) -> Unit:
 
 
 func test_selection_step_requires_the_named_unit() -> void:
-	_director.set_steps([
+	_set_steps([
 		_step(DialogBeat.Trigger.UNIT_SELECTED, "Select Torv.", "Torv"),
 		_step(DialogBeat.Trigger.SQUAD_FORMED, "Squad up."),
 	])
@@ -195,7 +204,7 @@ func test_selection_step_requires_the_named_unit() -> void:
 
 
 func test_member_step_waits_for_the_squad_size() -> void:
-	_director.set_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Bring everyone.", "", 3)])
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Bring everyone.", "", 3)])
 	_director.mission_started()
 	var squad := _player_squad()
 	squad._add_member(_named_unit("Second", PLAYER))   # 2 members: leader + one
@@ -207,8 +216,8 @@ func test_member_step_waits_for_the_squad_size() -> void:
 
 
 func test_step_and_payoff_beat_share_one_event_step_first() -> void:
-	_director.set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
-	_director.set_beats([_beat(DialogBeat.Trigger.SQUAD_FORMED, "Good -- now you move as one.")])
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
+	_set_beats([_beat(DialogBeat.Trigger.SQUAD_FORMED, "Good -- now you move as one.")])
 	_director.mission_started()
 	_stub.squad_manager.squad_created.emit(_player_squad())
 	assert_str(_director.active_instruction()).is_equal("")   # the step advanced...
@@ -216,7 +225,7 @@ func test_step_and_payoff_beat_share_one_event_step_first() -> void:
 
 
 func test_the_lesson_walks_in_authored_order() -> void:
-	_director.set_steps([
+	_set_steps([
 		_step(DialogBeat.Trigger.UNIT_SELECTED, "Select Torv.", "Torv"),
 		_step(DialogBeat.Trigger.SQUAD_FORMED, "Squad up with someone.", "Torv"),
 		_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Bring the other two.", "", 4),
@@ -241,7 +250,7 @@ func test_the_lesson_walks_in_authored_order() -> void:
 
 
 func test_disarm_clears_the_instruction() -> void:
-	_director.set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Never seen on resume.")])
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Never seen on resume.")])
 	_director.mission_started()
 	assert_str(_director.active_instruction()).is_equal("Never seen on resume.")
 	_director.disarm()
@@ -249,13 +258,13 @@ func test_disarm_clears_the_instruction() -> void:
 
 
 func test_payoff_beat_fires_when_its_step_completes() -> void:
-	_director.set_steps([
+	_set_steps([
 		_step(DialogBeat.Trigger.UNIT_SELECTED, "Select Torv.", "Torv"),
 		_step(DialogBeat.Trigger.SQUAD_FORMED, "Squad up."),
 	])
 	var payoff := _beat(DialogBeat.Trigger.STEP_COMPLETED, "Both steps done.")
 	payoff.step = 2
-	_director.set_beats([payoff])
+	_set_beats([payoff])
 	_director.mission_started()
 	_stub.unit_selected.emit(_named_unit("Torv", PLAYER))   # completes step 1 -- not the payoff's step
 	await get_tree().process_frame
@@ -265,7 +274,7 @@ func test_payoff_beat_fires_when_its_step_completes() -> void:
 
 
 func test_member_step_ignores_the_wrong_leaders_squad() -> void:
-	_director.set_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Grow Torv's squad.", "Torv", 2)])
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_MEMBER_ADDED, "Grow Torv's squad.", "Torv", 2)])
 	_director.mission_started()
 	var isaac_squad := auto_free(Squad.new()) as Squad
 	isaac_squad.set_leader(_named_unit("Isaac", PLAYER))
@@ -295,7 +304,7 @@ func test_prolog_authored_content_resolves() -> void:
 func test_disarm_also_empties_the_pending_queue() -> void:
 	# The resurrection bug: a beat queued behind a running timeline survived disarm, and
 	# timeline_ended popped it back to life on a director that had nothing left to say.
-	_director.set_beats([
+	_set_beats([
 		_beat(DialogBeat.Trigger.MISSION_START, "First voice."),
 		_beat(DialogBeat.Trigger.MISSION_START, "Queued voice."),
 	])
@@ -307,3 +316,12 @@ func test_disarm_also_empties_the_pending_queue() -> void:
 	await get_tree().process_frame
 	await get_tree().process_frame
 	assert_int(_starts).is_equal(1)
+
+
+# #397: content lives on the manager; the director reads it live. These write the stub store.
+func _set_beats(beats: Array[DialogBeat]) -> void:
+	_stub.scenario_manager.current_dialog_beats = beats
+
+
+func _set_steps(steps: Array[TutorialStep]) -> void:
+	_stub.scenario_manager.current_tutorial_steps = steps

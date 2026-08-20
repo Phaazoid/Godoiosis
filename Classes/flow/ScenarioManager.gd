@@ -66,6 +66,11 @@ var current_look_preset := ""
 # store/writer shape as the look right above -- apply_scenario sets it, clear_board zeroes it, the
 # dev Scenario tab captures into it, capture_scenario reads it back out.
 var current_camera_start: CameraPose = null
+# The #182 lesson content, same seam: authored scenario content that is not board state. THE store
+# — ScenarioDirector reads these LIVE (never copies), capture_scenario writes them back out, and
+# clear_board empties them so a sandbox spawn cannot inherit the last mission's lesson.
+var current_dialog_beats: Array[DialogBeat] = []
+var current_tutorial_steps: Array[TutorialStep] = []
 
 # Entries whose unit_data failed to resolve (resource deleted/moved since saving) come back
 # null. Drop them with a push_error instead of letting load_scenario null-deref (#13). Pure +
@@ -161,6 +166,8 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
+	scenario.dialog_beats = current_dialog_beats.duplicate()       # #182/#397: Update must not wipe
+	scenario.tutorial_steps = current_tutorial_steps.duplicate()   # the lesson it cannot see on the board
 	scenario.captured_zones = game.mission_controller.captured_zone_names()
 	scenario.contested = game.mission_controller.is_contested()
 
@@ -211,8 +218,10 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)
-	game.scenario_director.set_beats(scenario.dialog_beats)   # same REPLACED-not-merged seam (#182)
-	game.scenario_director.set_steps(scenario.tutorial_steps)
+	# #182 lesson content: REPLACED, not merged (#150's shape). The director reads these stores
+	# live; clear_board (first line of this function) already reset its execution state.
+	current_dialog_beats = scenario.dialog_beats
+	current_tutorial_steps = scenario.tutorial_steps
 	# Set BEFORE board_loaded fires (it is this function's last line), because battle3d reads this
 	# from that signal. The 3D view is the only reader; a flat Main.tscn launch has no host and
 	# correctly applies nothing.
@@ -316,6 +325,9 @@ func clear_board():
 	current_look_preset = ""
 	# And the camera start (#234): a sandbox spawn must not open on the last mission's authored shot.
 	current_camera_start = null
+	# And the lesson (#182/#397): content follows its board out.
+	current_dialog_beats = []
+	current_tutorial_steps = []
 	# Same seam for AI control (#150): spawn_sandbox() lands here with no ScenarioData, so without
 	# this it would inherit the last mission's flags. A typed local, not a bare [] -- `game` is
 	# untyped, and a literal passed through it is not coerced to the typed parameter.

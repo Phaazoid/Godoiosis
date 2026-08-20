@@ -25,6 +25,7 @@ class_name DevOverlay
 @onready var scenario_tool: ScenarioTool = get_node("%Scenario")
 @onready var scenario_header: ScenarioHeader = get_node("%ScenarioHeader")
 @onready var squads_ai: SquadsAiTool = get_node("%SquadsAI")
+@onready var dialog_tool: DialogTool = get_node("%Dialog")
 @onready var moods_tool: MoodsTool = get_node("%Moods")
 @onready var object_tool: ObjectTool = get_node("%Objects")
 @onready var game_tool: GameTool = get_node("%Game")
@@ -49,6 +50,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "Click a unit in dev mode to edit it here — the unit standing on THIS board, not its character file."},
 	{"scope": "Scenario", "label": "Squads & AI", "page": "%SquadsAI",
 		"tip": "Who is standing on this board and how it behaves — per-faction AI control, and each squad's archetype and zone."},
+	{"scope": "Scenario", "label": "Dialog & Tutorial", "page": "%Dialog",
+		"tip": "The mission's script — dialog beats (who says what, and when) and the sequential tutorial steps the HUD instructs through. Check board lints both."},
 	{"scope": "Project", "label": "Characters", "page": "%Character",
 		"tip": "Author cast characters — the Resources/Units/ files authored saves reference. Update rewrites the character everywhere; Save As or Capture creates."},
 	{"scope": "Project", "label": "Items", "page": "%Item Editor",
@@ -105,6 +108,7 @@ func _ready() -> void:
 	scenario_header.init(scenario_manager, game)
 	scenario_tool.init(scenario_manager, game, scenario_header)
 	squads_ai.init(game, scenario_header)
+	dialog_tool.init(game, scenario_header)
 	spawn.init(game)
 	unit_editor.init(game)
 	tile_brush.init(game)
@@ -234,6 +238,8 @@ func _on_tab_changed(_tab: int):
 		scenario_tool.refresh_on_show()
 	if current == squads_ai:
 		squads_ai.refresh_on_show()
+	if current == dialog_tool:
+		dialog_tool.refresh_on_show()
 	if current != tile_brush:
 		tile_brush.deactivate()
 	_update_zone_visibility()
@@ -244,6 +250,7 @@ func _on_tab_changed(_tab: int):
 func _on_scenario_file_changed() -> void:
 	scenario_tool.refresh_on_show()
 	squads_ai.refresh_on_show()
+	dialog_tool.refresh_on_show()
 
 # The Spawn form's dropdowns go stale whenever authoring happens elsewhere, so they refresh at
 # BOTH doors into it: outer tab entry above, and the sub-tab switch here -- "save a character,
