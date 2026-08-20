@@ -176,6 +176,8 @@ func test_a_longer_flight_overflies_the_ramp_and_falls() -> void:
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
 	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(1, s.d))
+	# No tumble here, so flight runs the whole path: the drop happens on its last cell.
+	assert_int(outcome.knockback_landing_index).is_equal(outcome.knockback_path.size() - 1)
 
 
 # "When a unit lands, if they land on a slope, they tumble down that too" (dev) -- a sideways
@@ -188,6 +190,9 @@ func test_a_perpendicular_ramp_landing_bends_the_tumble() -> void:
 	assert_bool(outcome.knockback_to == Vector2i(3, 1)).is_true()  # slid south, downhill
 	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0), Vector2i(3, 1)]
 	assert_that(_path_of(outcome)).is_equal(expected)
+	# The flight/tumble split (#259 rework): flight ends on the ramp at index 1, the bend after it
+	# is tumble -- what the shove animation and the 3D trail's air/ground fork read.
+	assert_int(outcome.knockback_landing_index).is_equal(1)
 
 
 func test_the_tumble_stops_at_a_lip() -> void:

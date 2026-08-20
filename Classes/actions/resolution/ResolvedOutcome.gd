@@ -22,6 +22,10 @@ var knockback_to: Vector2i = Vector2i.ZERO         # the cell it lands in — pr
 # one source: a tumble down a sideways ramp bends the path once, so the endpoints above cannot
 # describe it (from/to stay authoritative for the projection and execute's set_cell).
 var knockback_path: Array[Vector2i] = []
+# Where horizontal FLIGHT ends, as an index into knockback_path: the cell any vertical drop (or
+# void removal) happens on; cells after it are the landing tumble. The resolver's own split — the
+# shove animation and the 3D trail read it here rather than re-deriving (Law #2).
+var knockback_landing_index: int = 0
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
 # Shoved into a VOID (#259) — gone outright, the #116 kill doctrine. lethality reads KILLED so
 # every reader (AI removal tiers, the KILL icon, lifecycle_for → DEAD) lights up; this flag exists

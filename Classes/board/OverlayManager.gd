@@ -404,8 +404,20 @@ func show_knockback_preview(shoves: Array) -> void:
 	for shove in shoves:
 		# The WHOLE trail, cell by cell, through the same texture pick a planned move uses (#126).
 		var path: Array[Vector2i] = shove["path"]
-		for sprite in _draw_arrow_trail(path, Color.WHITE):
-			knockback_preview_sprites.append(sprite)
+		var landing: int = shove.get("landing_index", path.size() - 1)
+		var trail := _draw_arrow_trail(path, Color.WHITE)
+		for i in trail.size():
+			# The AIRBORNE geometry, riding each sprite for the 3D mirror (#259 rework) — the
+			# flat canvas can't draw height, but the trail must not pretend the flight hugs the
+			# ground: cells before the landing are flown at the launch cell's level, and the
+			# landing cell is where any vertical drop (or void removal) happens.
+			if i < landing:
+				trail[i].set_meta("kb_air_from", path[0])
+			elif i == landing:
+				trail[i].set_meta("kb_drop_from", path[0])
+				if shove.get("removed", false):
+					trail[i].set_meta("kb_removed", true)
+			knockback_preview_sprites.append(trail[i])
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing
 	# redraw_projected_units uses for moves (set_projected hides, show_projected_unit draws).

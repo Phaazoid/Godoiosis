@@ -203,6 +203,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		outcome.knockback_from = landing.path[0]
 		outcome.knockback_to = landing.cell
 		outcome.knockback_path = landing.path
+		outcome.knockback_landing_index = landing.landing_index
 		target_hypo.position = landing.cell
 
 	action.resolved = outcome
@@ -274,6 +275,7 @@ static func _source_knockback(action: AttackAction) -> int:
 class _Landing:
 	var cell: Vector2i
 	var path: Array[Vector2i] = []   # start + every cell entered, flight then tumble
+	var landing_index := 0           # path index where flight ends -- the drop cell; tumble follows
 	var fall_levels := 0
 	var removed := false
 
@@ -319,6 +321,7 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 	var landing := _Landing.new()
 	landing.path = path
 	landing.cell = pos
+	landing.landing_index = path.size() - 1   # flight ends here; _tumble appends beyond it
 	if board.terrain_kind_at(pos) == Terrain.Kind.VOID:
 		landing.removed = true   # halted over (or blown exactly onto) the hole -- gone
 		return landing

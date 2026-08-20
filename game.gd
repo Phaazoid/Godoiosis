@@ -797,7 +797,8 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 	for atk: AttackAction in all_hits:
 		if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
 			shoves.append({"target": atk.target, "path": atk.resolved.knockback_path,
-				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed})
+				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed,
+				"landing_index": atk.resolved.knockback_landing_index})
 	overlay_manager.show_knockback_preview(shoves)
 
 func _squad_all_committed(squad: Squad) -> bool:

@@ -78,10 +78,13 @@ func execute():
 			target.remove_element_state(s)
 		for s in resolved.states_added:
 			target.add_element_state(s, resolved.state_turns.get(s, 0))
-		# Knockback (#84): shove the target to the resolved landing cell. set_cell is instant (a
-		# tweened slide is polish, TODO); the resolver already stopped it at any wall/unit/edge.
+		# Knockback (#84, animated by the #259 rework): the target SLIDES the resolver's own trail
+		# to its landing, holding its facing (the mirror gates on movement.sliding). Awaited, so a
+		# sequential later attack finds the body where the plan already said it lands.
 		if resolved.knockback_applied and is_instance_valid(target):
-			target.movement.set_cell(resolved.knockback_to)
+			target.movement.slide_along_path(resolved.knockback_path, resolved.knockback_landing_index)
+			if target.movement.sliding:
+				await target.movement.movement_finished
 		# A void shove (#259): the hit's own damage may be 0, so take_damage above cannot carry
 		# the death -- removal is its own door. die() frees the node and tears the squad down.
 		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap).

@@ -129,6 +129,12 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var state_icon_gap_texels := 2.0        # clearance above the bar's outline
 @export var state_icon_spacing_texels := 1.0    # between neighbouring icons
 
+# How fast a SHOVED sprite's height settles, in world units/second (#259 rework). While a unit
+# slides its height EASES toward its target -- held at the launch cell's level while airborne,
+# the surface underneath after -- instead of snapping per-cell like a walk, so a cliff shove
+# reads as fly-then-fall rather than a teleport down the wall. Game-tab knob.
+@export var shove_fall_speed := 4.0
+
 # Which unit the pointer resolves to, injected by battle3d — the same idiom as pointer_source and
 # board_source. A Callable rather than a game back-ref keeps this node testable and keeps the
 # question single-sourced: it returns whatever HoverPresenter's own derivation returns.
@@ -272,8 +278,23 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# the sprite crosses the edge.
 	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
 			floori(unit.position.y / PIXELS_PER_CELL))
+	var stand_y := BoardSpace.surface_point(over, heights).y
+	# The airborne shove (#259 rework): while FLYING the sprite holds its launch height -- the
+	# surface underneath is a hole or a drop it is sailing over -- and while sliding (or still
+	# settling after one) the height EASES at shove_fall_speed instead of snapping, so the drop at
+	# the landing reads as a fall. The residual flag rides the sprite: the slide can finish while
+	# the sprite is still above its landing surface. Walks keep the per-cell snap untouched.
+	if unit.movement.sliding and unit.movement.airborne:
+		stand_y = BoardSpace.surface_point(unit.movement.slide_origin, heights).y
+	if unit.movement.sliding or sprite.get_meta("kb_settling", false):
+		var eased := move_toward(previous.y, stand_y, shove_fall_speed * get_process_delta_time())
+		if unit.movement.sliding or not is_equal_approx(eased, stand_y):
+			sprite.set_meta("kb_settling", true)
+		else:
+			sprite.remove_meta("kb_settling")
+		stand_y = eased
 	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
-			BoardSpace.surface_point(over, heights).y, unit.position.y / PIXELS_PER_CELL)
+			stand_y, unit.position.y / PIXELS_PER_CELL)
 	sprite.cell = BoardSpace.cell_of(stand + Vector3(0, -0.5, 0))
 	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which
 	# unit.position never sees — the one fact UnitVisuals expresses that the reads above cannot
@@ -302,7 +323,9 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	sprite.modulate = unit.modulate * unit.visuals.sprite.modulate
 
 	var step := stand - previous
-	if Vector2(step.x, step.z).length_squared() > 0.000001:
+	# A SHOVED unit keeps the facing it had when it was hit (dev, #259 rework) -- being moved is
+	# not moving, so the slide neither flips the sprite nor pollutes its facing memory.
+	if not unit.movement.sliding and Vector2(step.x, step.z).length_squared() > 0.000001:
 		sprite.last_step = step
 		sprite.flip_h = sprite.facing_flip_for(step)
 

@@ -67,8 +67,9 @@ class_name BoardMirror
 # sync() is the terrain twin: a per-cell diff against the live 2D grid, driven
 # while the dev brush can paint, so painting shows up without an F2.
 
-# NONE is the one declared skip: an authored tile with no kind still renders
-# ground via FALLBACK_ITEM rather than a hole.
+# Two declared skips, with opposite meanings: NONE (an authored tile with no kind)
+# still renders ground via FALLBACK_ITEM rather than a hole; VOID (#259) renders NO
+# column at all — the absence of the block is the hole (see reconcile_cell).
 const KIND_TO_ITEM: Dictionary[Terrain.Kind, int] = {
 	Terrain.Kind.GRASS: 0,
 	Terrain.Kind.ROCK: 1,
@@ -371,6 +372,13 @@ func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeight
 func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 		floor_level: int) -> void:
 	if not GridUtils.has_ground(grid, cell):
+		_clear_column(cell, floor_level)
+		_free_prop_at(cell)
+		return
+	# A VOID tile (#259) is the second declared skip beside NONE-means-fallback: the hole IS the
+	# absence of the column, so the painted cell clears exactly like unpainted ground and the
+	# neighbours' side faces become the pit walls.
+	if GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.VOID:
 		_clear_column(cell, floor_level)
 		_free_prop_at(cell)
 		return
