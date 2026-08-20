@@ -190,6 +190,11 @@ func _fire(beat: DialogBeat) -> void:
 	if _fired.has(beat) or beat.timeline == null:
 		return
 	_fired[beat] = true
+	# The #400 player switch: dialog off CONSUMES the beat without playing it -- a moment that
+	# passed silently must not replay if the setting comes back mid-battle. Tutorial INSTRUCTIONS
+	# are not dialog and never gate here; the #134 row carries the lesson alone then.
+	if not PlayerSettings.is_on(PlayerSettings.Setting.SHOW_DIALOG):
+		return
 	if _dialog_active or Dialogic.current_timeline != null:
 		_pending.append(beat.timeline)
 	else:

@@ -21,6 +21,7 @@ class_name PlayerSettings
 
 enum Setting {
 	ALWAYS_SHOW_HEALTH,
+	SHOW_DIALOG,
 }
 
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
@@ -32,6 +33,11 @@ const DEFS := {
 		"title": "Always show health bars",
 		"desc": "Keep every unit's health bar up, not just the one under your cursor. The numbers still appear on hover.",
 		"default": false,
+	},
+	Setting.SHOW_DIALOG: {
+		"title": "Show mission dialog",
+		"desc": "Characters speak during missions. Turn off to skip all dialog -- replays, restarts, or preference. Tutorial instructions stay on either way.",
+		"default": true,
 	},
 }
 

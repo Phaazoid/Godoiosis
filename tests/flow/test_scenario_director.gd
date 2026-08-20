@@ -43,6 +43,7 @@ func before_test() -> void:
 	_director.game = _stub
 	_stub.add_child(_director)   # _ready connects the two manager signals + Dialogic
 	_starts = 0
+	PlayerSettings.reset_for_test()   # is_on falls through to DISK otherwise (the #350 gotcha)
 	Dialogic.timeline_started.connect(_count_start)
 
 
@@ -325,3 +326,26 @@ func _set_beats(beats: Array[DialogBeat]) -> void:
 
 func _set_steps(steps: Array[TutorialStep]) -> void:
 	_stub.scenario_manager.current_tutorial_steps = steps
+
+
+# --- the #400 player switch ---
+
+func test_dialog_off_consumes_beats_silently_and_never_replays_them() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.SHOW_DIALOG, false)
+	_set_beats([_beat(DialogBeat.Trigger.MISSION_START, "Skipped entirely.")])
+	_director.mission_started()
+	await get_tree().process_frame
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(0)
+	# The moment passed: re-enabling mid-battle must not replay it...
+	PlayerSettings.set_on(PlayerSettings.Setting.SHOW_DIALOG, true)
+	_director.mission_started()   # same battle, fired-set intact
+	await get_tree().process_frame
+	assert_int(_starts).is_equal(0)
+
+
+func test_dialog_off_leaves_the_instruction_row_alone() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.SHOW_DIALOG, false)
+	_set_steps([_step(DialogBeat.Trigger.SQUAD_FORMED, "Form a squad.")])
+	_director.mission_started()
+	assert_str(_director.active_instruction()).is_equal("Form a squad.")
