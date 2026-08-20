@@ -119,8 +119,10 @@ const FLAME_FRAMES := 8
 # per frame from the live camera rather than baked, which is what makes it hold under free orbit.
 @export var flame_camera_offset := 0.10
 
-# The photosensitivity switch (#217's tenant here, and its ONE reader). False leaves the fire on a
-# steady frame at steady light — a still flame, never a missing one, which is what that issue
+# The game-side half of the animation decision: the authored game constant (a GameKnobs row), ON by
+# default. The player's photosensitivity choice (#217) ANDs on top of it in _flame_animating(), the
+# single composed reader — one reader, two declared answers. Off, or the setting on, leaves the fire
+# on a steady frame at steady light — a still flame, never a missing one, which is what #217
 # requires of every toggle-off state. Deliberately NOT a preset value: an accessibility choice is
 # the player's, and a mission's look must not re-decide it.
 @export var flame_animated := true
@@ -207,7 +209,7 @@ const FLAME_PHASE_META := "flame_phase"
 
 # The fire clock. ONE for the whole board, with each flame offset from it by its own phase — a
 # per-flame clock would drift apart under a paused frame and cost a float per quad for nothing.
-# It only advances while flame_animated, which is what makes the toggle-off state a STILL fire
+# It only advances while _flame_animating(), which is what makes the toggle-off state a STILL fire
 # rather than a fire that jumps when it comes back.
 var _flame_time := 0.0
 
@@ -254,13 +256,21 @@ var _item_by_name: Dictionary[String, int] = {}
 var _item_index_built := false
 
 
+# The ONE answer to "is the fire moving right now": the authored game constant ANDed with the
+# player's photosensitivity choice. Two declared answers to two different questions ("does the game
+# even author animated fire" vs "does THIS player want it steady"), composed here so no reader has
+# to know both exist. Read at the clock, the frame and the flicker — never flame_animated alone.
+func _flame_animating() -> bool:
+	return flame_animated and not PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+
+
 # Fire is the one thing this mirror draws that MOVES on its own (#324). Everything else here is
 # reconciled from the game and then left standing, so the loop early-outs to nothing on a board
 # that is not alight — the cost is proportional to burning cells, which is normally none.
 func _process(delta: float) -> void:
 	if _fire_markers.is_empty():
 		return
-	if flame_animated:
+	if _flame_animating():
 		_flame_time += delta
 	advance_flames()
 
@@ -299,7 +309,7 @@ func _animate_flame(flame: MeshInstance3D, toward_camera: Vector3) -> void:
 	var quad := flame.mesh as QuadMesh
 	var material := quad.material as StandardMaterial3D
 	var frame := 0
-	if flame_animated:
+	if _flame_animating():
 		frame = int(floorf(_flame_time * flame_fps + phase * float(FLAME_FRAMES))) % FLAME_FRAMES
 	material.uv1_offset = Vector3(float(frame) / float(FLAME_FRAMES), 0.0, 0.0)
 
@@ -308,7 +318,7 @@ func _animate_flame(flame: MeshInstance3D, toward_camera: Vector3) -> void:
 # settles into a countable pulse — the torch recipe from the LookDev scene, which is the flicker the
 # dev already signed off on. Steady when the switch is off, at the authored energy exactly.
 func _flicker_of(marker: Node3D) -> float:
-	if not flame_animated or flame_flicker == 0.0:
+	if not _flame_animating() or flame_flicker == 0.0:
 		return 1.0
 	var t := _flame_time + marker.position.x + marker.position.z
 	return 1.0 + flame_flicker * sin(t * 13.0) * sin(t * 7.3)
