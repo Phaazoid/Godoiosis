@@ -41,8 +41,11 @@ table stale, and two rows describing one TODO that had only ever existed once.
 | Where | Depends on |
 |---|---|
 | `game.spawn_unit` — flyers spawning on non-walkable tiles | unit movement-classes |
-| `game.gd` (squad icons) — muted squad-icon colours when another squad is active | multi-squad visual layer — now tracked under **#44** (visual clarity) |
 | `Classes/squads/Squad.gd:94` — preserve status actions when clearing the queue | a status-effect system (explicitly "if that becomes a thing") |
+
+**One row left this bin by being DROPPED rather than done (2026-08-21):** the muted squad-icon
+colours TODO in `HoverPresenter._hover_idle`. The dev ruled the item out on #44, so the comment was
+deleted with it — a TODO pointing at work nobody intends to do is a reminder that can only mislead.
 
 ## 4 · Overdue — worth doing now
 
