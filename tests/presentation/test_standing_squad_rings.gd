@@ -166,3 +166,25 @@ func test_rings_come_back_after_a_pass_settles() -> void:
 	assert_int(_ringed_units().size()).override_failure_message(
 			"the standing rings never came back after the pass -- the restore runs before the clear"
 			).is_equal(2)
+
+
+# The per-squad redraw clears the WHOLE icon channel and then draws ONE squad, and HoverPresenter
+# calls it on every hover-move preview. Standing rings are the first thing that ever needed to
+# survive that, so without a standing set inside the redraw, hovering one squad silently strips
+# every OTHER squad's rings -- the state the board would sit in for most of a feel-test.
+func test_hovering_one_squad_keeps_another_squads_standing_rings() -> void:
+	_rings_on()
+	var first := _pair()
+	var second_leader := _spawn(Vector2i(8, 2))
+	var second_member := _spawn(Vector2i(9, 2))
+	game.squad_manager.join_squad(second_member, second_leader.squad)
+	await _settle()
+	assert_int(_ringed_units().size()).is_equal(4)   # precondition, not the claim
+	# The seam HoverPresenter drives when the cursor crosses a reachable cell.
+	game.overlay_manager.redraw_squad_unit_icons(first[0].squad)
+	await _settle()
+	var ringed := _ringed_units()
+	assert_bool(ringed.has(second_leader) and ringed.has(second_member)).override_failure_message(
+			"the other squad lost its standing rings when this one was redrawn -- a per-squad redraw clears the whole channel"
+			).is_true()
+	assert_int(ringed.size()).is_equal(4)

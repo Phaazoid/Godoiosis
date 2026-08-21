@@ -139,6 +139,12 @@ const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the
 
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
+
+# WHICH squads wear a STANDING ring right now, injected by game (the squad_manager.board_source
+# idiom). redraw_squad_unit_icons clears the WHOLE channel and then draws one squad, so without
+# this it strips every OTHER squad's standing rings the moment the player hovers one. Returns
+# empty while ALWAYS_SHOW_SQUAD_RINGS is off, which is what keeps the selection paths untouched.
+var standing_squads_source: Callable = func() -> Array[Squad]: return []
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
@@ -563,8 +569,13 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 		for type in types:
 			clear_unit_icon(unit, type)
 
+# The channel is cleared whole, so everything that should be on it after this call has to be drawn
+# by it: the STANDING set first, then the squad the caller is actually about (which may already be
+# in that set -- create_unit_icon is idempotent, so the overlap costs nothing).
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	for standing: Squad in standing_squads_source.call():
+		draw_squad_unit_icons(standing)
 	draw_squad_unit_icons(squad)
 
 # What ONE squad's markers ARE: a ring on every member, the crown on its leader. Split out of the

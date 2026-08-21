@@ -441,6 +441,18 @@ rings. It is gated on having squadmates (`Unit.has_squad`'s question) and delibe
 `ring_hue`, which is dealt once at the first squadmate and never reset — that gate would leave a
 lone leftover wearing a colour forever.
 
+**A CHANNEL THAT IS CLEARED WHOLE HAS TO BE REDRAWN WHOLE, and the per-squad redraw is where that
+bit.** `OverlayManager.redraw_squad_unit_icons` clears every `CROWN`/`SQUADMEMBER` marker and then
+draws the ONE squad it was handed — fine for a decade of selection-scoped markers, since the only
+markers that should exist belong to the thing being selected. Standing rings are the first tenant of
+that channel that has to survive somebody *else's* redraw, and `HoverPresenter` calls it on every
+hover-move preview: so hovering one squad stripped every other squad's rings, which is the state the
+board would have sat in for most of a feel-test. `standing_squads_source` (a Callable injected by
+game, the `SquadManager.board_source` idiom) is what lets the redraw put the standing set back
+without `OverlayManager` learning what a player setting is. The general form: **adding a persistent
+tenant to a channel means auditing every writer that clears the channel, not just the ones that
+draw the new thing.**
+
 **Two findings worth keeping.** First, **persistence is what made a stale copy visible**:
 `OverlayIcon` stored the cell it was built on and `OverlayMirror` anchored on that copy, which was
 invisible only because markers were rebuilt constantly — the instant one outlived a move it sat on

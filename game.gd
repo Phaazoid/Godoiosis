@@ -191,6 +191,8 @@ func _wire_signals() -> void:
 	squad_manager.squad_created.connect(func(_s: Squad): refresh_squad_rings())
 	squad_manager.squad_deleted.connect(func(_s: Squad): refresh_squad_rings())
 	squad_manager.squad_member_joined.connect(func(_s: Squad, _u: Unit): refresh_squad_rings())
+	# The per-squad redraw clears the whole channel, so it has to know the standing set too.
+	overlay_manager.standing_squads_source = standing_ring_squads
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
@@ -1018,25 +1020,35 @@ func clear_selection_icons() -> void:
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
 
 # --- Standing squad rings (ALWAYS_SHOW_SQUAD_RINGS) ----------------------------------------
-# THE answer to which units wear a membership marker when nothing is selected. Off by default, and
-# while it is off this does NOTHING: the selection paths own the channel exactly as they did, so
-# the setting cannot regress the old behaviour by existing.
-#
-# When it is on the channel is rebuilt from membership rather than added to, which is what makes a
-# marker DISAPPEAR again -- create_unit_icon only ever adds, so a squad dropping back to one member
-# would otherwise leave its rings on the board. A selected squad is already in the standing set,
-# and target-pick markers are redrawn by their own mode, so the clear costs nothing visible.
+# WHICH squads wear a standing ring: THE one answer, read by the sweep below and -- through
+# OverlayManager.standing_squads_source -- by the per-squad redraw the hover and plan paths call.
+# Empty while the setting is off, so those paths behave exactly as they did.
 #
 # Gated on the squad having squadmates -- Unit.has_squad's question, the one _repaint_squad_plan
 # also asks -- and NOT on ring_hue: a hue is dealt once at the first squadmate and never reset, so
 # a squad that shrank back to one would keep wearing its colour.
+func standing_ring_squads() -> Array[Squad]:
+	var standing: Array[Squad] = []
+	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
+		return standing
+	for squad: Squad in squad_manager.squads:
+		if is_instance_valid(squad) and squad.get_members().size() > 1:
+			standing.append(squad)
+	return standing
+
+# Rebuild the marker channel from membership. The setting guard is NOT redundant with the empty
+# list above: while the setting is off this must not touch the channel at all, where clearing it
+# and drawing nothing would wipe whatever the selection had up.
+#
+# It REBUILDS rather than adds, which is what makes a marker DISAPPEAR again -- create_unit_icon
+# only ever adds, so a squad dropping back to one member would otherwise leave its rings behind.
+# A selected squad is already in the standing set and target-pick markers are redrawn by their own
+# mode, so the clear costs nothing visible.
 func refresh_squad_rings() -> void:
 	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
 		return
 	clear_selection_icons()
-	for squad: Squad in squad_manager.squads:
-		if not is_instance_valid(squad) or squad.get_members().size() <= 1:
-			continue
+	for squad: Squad in standing_ring_squads():
 		overlay_manager.draw_squad_unit_icons(squad)
 
 # ==============================================================================
