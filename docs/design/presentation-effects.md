@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #451 (2026-08-21).**
+**Canon checked through #455 (2026-08-21).**
 
 ---
 
@@ -83,12 +83,27 @@ ends carry a tooltip pointing at the other; it is not an argument for moving a r
 stored*, the dev tunes by *what he is looking at*. #420 answered it the cheap way — group the rows
 better (see the Elemental tab below) rather than invent cross-table views. Expect it again.
 
-**Lamp emission is NOT done and is deliberately deferred.** A lit prop is a `Sprite3D`
-(`_make_prop_billboard`), and `SpriteBase3D` has no emission property at all — very likely why
-#324 built the flame as a `MeshInstance3D` + `QuadMesh` + `StandardMaterial3D` in the first place.
-Whether a `material_override` on the sprite preserves its atlas UVs and alpha-cut discipline is a
-**measurement nobody has taken**; if it does not, the billboard prop path becomes the flame's node
-kind, which touches every tree, banner and fence, not just lamps. Measure before scoping.
+**A PROP THAT EMITS LIGHT NEEDS A FORM THAT CAN EMIT**, and that is a fact about the engine rather
+than a design call. **A `Sprite3D` cannot emit** — measured 2026-08-21, `SpriteBase3D`'s entire
+surface is `modulate`, `shaded`, `alpha_cut`, `alpha_scissor_threshold`, `alpha_antialiasing_*`,
+`billboard`, `cast_shadow`, `gi_*`. Very likely why #324 built the flame as a `MeshInstance3D` +
+`QuadMesh` + `StandardMaterial3D` in the first place. So authoring `prop_lit` on a `BILLBOARD` tile
+gets the `OmniLight3D` and silently **no glow from the art** — a half-working state with no warning,
+worth a `BoardLint` check once more than one tile can get it wrong.
+
+**Which is why lamp emission is [#454](https://github.com/Phaazoid/Godoiosis/issues/454) rather than
+part of #420**: closing that gap on the billboard path means changing the node kind, and the dev's
+own plan retires that form (*"I don't like lanterns as a billboard… the current setup is wholly
+temporary"*). The census is what makes the consequence exact — **two** `BILLBOARD` tiles exist
+(Lantern, Tree) and **exactly one tile is `prop_lit`: the Lantern**, so moving it to a solid form
+leaves **zero lit billboards** and nothing waiting on that path. On the block path emission is a
+`set_surface_override_material` over a duplicate of the generator-baked material, per surface —
+no node-kind change, no test rewrites, no UV question, roughly a third of the cost, and it survives.
+
+*(The estimate this replaces said converting the billboard path "touches every tree, banner and
+fence". Wrong — fences are `PLANE` and already go through the meshlib block path. #263's precedent:
+an assumption reversing under measurement, in the direction that made the work smaller, which is
+the direction nobody checks.)*
 
 ### The Elemental tab (#420)
 
@@ -101,6 +116,18 @@ It stays a SUB-TAB rather than its own tree leaf, and that is the storage rule a
 are game constants, so they want `GameTool`'s existing Save-to-source. A separate leaf would need
 its own panel and its own save — a duplicate seam for nothing. A new element is one `GROUP_TABS`
 line.
+
+**A tab named for a category with two members is a promise, not a category** — what keeps it is
+[#455](https://github.com/Phaazoid/Godoiosis/issues/455), the board channel of *elemental state made
+visible*. Its strongest single item is that **BLAZE and BURNING are still visually identical**
+(#174's one-texture ruling; #324 recorded not fixing it as deliberate), i.e. two mechanically
+different states the board refuses to distinguish. **Its sibling is
+[#358](https://github.com/Phaazoid/Godoiosis/issues/358), the UNIT channel** — wet drip, frost
+sheen, Crisis — and the two are named together because they can disagree: a CHILLED unit wearing a
+frost sheen while standing on a FROZEN tile drawn as a flat blue quad is two answers to one idea.
+Whatever #358 settles for layering and intensity is the doctrine here too. Restraint governs both
+(dev, #346): *effects in the correct places rather than everywhere* — "the tab looks empty" is not a
+reason for a state to earn one.
 
 **A knob written once at build needs a SWEEP or it is not a knob**, and this ticket paid it twice.
 `_rebuild_fires()` was already the answer for the five geometry knobs (#324); emission and the
