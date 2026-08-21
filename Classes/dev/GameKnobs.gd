@@ -226,6 +226,13 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
+	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
+	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
+	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
+	# refused order and green a member falling behind.
+	{"group": "Board markup colours", "label": "Shove trail (2D+3D)", "static": "KNOCKBACK_MODULATE",
+		"tip": "The knockback trail a predicted shove draws, and the drop pointer that hangs off it in 3D. Distinct from a planned move's white arrow, which is an order the player authored -- a shove is a consequence. Takes effect on a preview already up."},
+
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
 	# like the two reach colours above, and both stacks read it.
@@ -303,6 +310,7 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
+		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
@@ -319,6 +327,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
+		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply
@@ -339,6 +348,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		return
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
+		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
 		_: manager.refresh_attack_reach_color()
 
 
