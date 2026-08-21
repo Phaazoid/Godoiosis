@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #455 (2026-08-21).**
+**Canon checked through #462 (2026-08-21).**
 
 ---
 
@@ -97,13 +97,35 @@ ends carry a tooltip pointing at the other; it is not an argument for moving a r
 stored*, the dev tunes by *what he is looking at*. #420 answered it the cheap way — group the rows
 better (see the Elemental tab below) rather than invent cross-table views. Expect it again.
 
-**A PROP THAT EMITS LIGHT NEEDS A FORM THAT CAN EMIT**, and that is a fact about the engine rather
-than a design call. **A `Sprite3D` cannot emit** — measured 2026-08-21, `SpriteBase3D`'s entire
-surface is `modulate`, `shaded`, `alpha_cut`, `alpha_scissor_threshold`, `alpha_antialiasing_*`,
-`billboard`, `cast_shadow`, `gi_*`. Very likely why #324 built the flame as a `MeshInstance3D` +
-`QuadMesh` + `StandardMaterial3D` in the first place. So authoring `prop_lit` on a `BILLBOARD` tile
-gets the `OmniLight3D` and silently **no glow from the art** — a half-working state with no warning,
-worth a `BoardLint` check once more than one tile can get it wrong.
+**CASTING LIGHT AND GLOWING ARE DIFFERENT QUESTIONS, and only the second constrains the form.**
+A light is its own node — parent an `OmniLight3D` beside anything and it lights the scene, whatever
+the thing beside it is drawn as. Making the ART itself glow is emission, and emission is a
+**material** property, so it is only available to something that has a material.
+
+**A `Sprite3D` does not.** Measured 2026-08-21: `SpriteBase3D`'s entire surface is `modulate`,
+`shaded`, `alpha_cut`, `alpha_scissor_threshold`, `alpha_antialiasing_*`, `billboard`, `cast_shadow`,
+`gi_*`. Very likely why #324 built the flame as a `MeshInstance3D` + `QuadMesh` +
+`StandardMaterial3D` in the first place. So **a thing that should GLOW needs a form that can emit**,
+and authoring `prop_lit` on a `BILLBOARD` tile gets the `OmniLight3D` and silently **no glow from the
+art** — a half-working state with no warning, worth a `BoardLint` check once more than one tile can
+get it wrong.
+
+**Three tickets sit on this split, and it is what separates their costs:**
+
+| | casts light | its art glows |
+|---|---|---|
+| **fire** (#324, #420) | yes, always did | **yes** — it is a `MeshInstance3D` already, which is why #420's emission knobs were cheap |
+| **the lamp** ([#454](https://github.com/Phaazoid/Godoiosis/issues/454)) | yes, since #255 | **no** — a `BILLBOARD` prop is a `Sprite3D`; this is the whole reason that ticket pairs the glow with the model |
+| **carried gear** ([#320](https://github.com/Phaazoid/Godoiosis/issues/320)) | **buildable today** — the light is a sibling node, so `UnitSprite3D` being a `Sprite3D` does not block it | **no, and doubly so** — the sprite has no material, *and* a unit is ONE sprite, so there is no staff-head to emit separately even if it did |
+
+That last row is the useful one: **#320's cast-light half is unblocked and its glow half is a
+different feature**, needing the carried item to be its own drawn thing rather than pixels inside the
+unit's sprite. Do not let the second silently ride in on the first.
+
+Their shared question is **where a light source's values live**, and there are already three homes
+(a `BoardMirror` global default, a per-type TileSet column, and the `LookPreset` a mission wears).
+Carried gear must land in one of those shapes rather than inventing a fourth — Law #4, flagged on
+#320 at filing and now concrete, since #454 pins the prop side.
 
 **Which is why lamp emission is [#454](https://github.com/Phaazoid/Godoiosis/issues/454) rather than
 part of #420**: closing that gap on the billboard path means changing the node kind, and the dev's
