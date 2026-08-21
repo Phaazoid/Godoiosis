@@ -356,6 +356,19 @@ func remove_actions_for_unit(unit: Unit) -> void:
 	# for an empty queue, so this subsumes the old separate "no actions left" branch.
 	revert_if_only_hold(squad)
 	
+# Clear every member's move and settle. TWO askers, and they ask different questions of the same
+# act: queue_group_move's rollback GIVES UP THE ADVANCE (#103), and game.begin_group_move_planning
+# SPENDS the formation it is about to replace (#461). Unconditional by design -- the rollback runs
+# it to clean up hold fillers too, so the "is there anything to cancel" guard belongs at the caller.
+func cancel_squad_moves(squad: Squad) -> void:
+	for member in squad.get_members():
+		cancel_move_for_unit(member)
+	# A hold-only queue is not an activation -- otherwise the squad stays `active` behind an
+	# open panel with no X and no Execute.
+	revert_if_only_hold(squad)
+	overlay_manager.redraw_planned_paths()
+	overlay_manager.redraw_projected_units()
+
 func cancel_move_for_unit(unit: Unit):
 	var squad = unit.squad
 	
@@ -836,13 +849,7 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 	# test: plan() already drops members it cannot place, so the question is not "one per member" but
 	# "did every order I authored actually land".
 	if queued.size() != moves.size() or _plan_has_invalid_move(squad):
-		for member in squad.get_members():
-			cancel_move_for_unit(member)
-		# A hold-only queue is not an activation -- otherwise the squad stays `active` behind an
-		# open panel with no X and no Execute.
-		revert_if_only_hold(squad)
-		overlay_manager.redraw_planned_paths()
-		overlay_manager.redraw_projected_units()
+		cancel_squad_moves(squad)
 		return false
 
 	for move in queued:
