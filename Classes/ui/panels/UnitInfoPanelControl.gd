@@ -19,7 +19,7 @@ var current_board: BoardContext   # kept so a live refresh can recompute terrain
 
 func _ready() -> void:
 	$UnitInfoPanel/Margin/VBox/HeaderRow/CloseButton.pressed.connect(clear)
-	inventory_panel.loadout_changed.connect(_on_loadout_changed)
+	inventory_panel.loadout_changed.connect(_refresh_derived_rows)
 
 func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if current_unit == unit:
@@ -27,6 +27,7 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	if unit == null:
 		clear()
 		return
+	_release_current_unit()
 	current_unit = unit
 	current_board = board
 	visible = true
@@ -37,16 +38,26 @@ func set_unit(unit: Unit, can_act := false, board: BoardContext = null):
 	inventory_panel.set_unit(unit, can_act)
 	squad_panel.set_unit(unit)
 	states_bar.set_unit(unit)
+	unit.movement.movement_finished.connect(_refresh_derived_rows)
 
 # Re-read only the derived numbers. set_unit early-returns on the same unit (it's called on every
-# inspect), so a loadout change made while the panel is OPEN would otherwise leave DEF and MOV
-# showing their values from inspect time.
-func _on_loadout_changed():
+# inspect), so a change made while the panel is OPEN would otherwise leave DEF and MOV showing
+# their values from inspect time -- and re-inspecting cannot clear it. Two triggers, because two
+# things move these numbers: a loadout edit, and ARRIVAL -- DEF's cover term is read at the unit's
+# current cell, so walking on or off Cover changes it.
+func _refresh_derived_rows():
 	if current_unit == null:
 		return
 	stats_section.set_unit(current_unit, current_board)
 
+# The panel outlives the units it shows. Guarded the way info_panel.set_unit guards its own
+# teardown: a freed ref compares == null as TRUE (#149), so this skips instead of faulting.
+func _release_current_unit() -> void:
+	if current_unit != null and is_instance_valid(current_unit):
+		current_unit.movement.movement_finished.disconnect(_refresh_derived_rows)
+
 func clear():
+	_release_current_unit()
 	current_unit = null
 	visible = false
 	portrait_panel.set_unit(null)
