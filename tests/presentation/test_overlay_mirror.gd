@@ -434,9 +434,9 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 
 # The honest trail (#259 rework, dev: the arrow should paint "in the air until he would drop,
 # then point straight down to his destination"). A shove off a terrace: the flown cell's arrow
-# hangs at the LAUNCH cell's level rather than lying on the ground below it, and the landing
-# hangs the drop RAIL -- vertical quads wearing the trail's own rail sprite (round 2), at the
-# ENTRY EDGE of the landing cell, spanning flight height down to the destination surface.
+# hangs at the LAUNCH cell's level rather than lying on the ground below it, and the drop folds
+# the ribbon down -- a half-cell BRIDGE at flight height carrying it from the landing cell's entry
+# edge to that cell's CENTRE, then the RAIL falling from there onto the destination surface.
 func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void:
 	var origin := Vector2i(3, 2)
 	game.board_heights.set_cell(origin, 2)   # the cliff edge; (4,2)/(5,2) stay ground level
@@ -462,22 +462,123 @@ func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void
 					"the flown cell's arrow lies on the ground under the flight (y %f, flight %f)"
 					% [pos.y, flight_y]).is_equal_approx(flight_y, 0.001)
 	assert_bool(found).override_failure_message("no trail marker over the flown cell").is_true()
-	# The drop rail: vertical markers at the landing's ENTRY edge (x = 5.0 cells), centred over
-	# the span, stretched from flight height to the ground -- dressed, not a bare line.
+	# The drop: ONE vertical rail, starting down at the landing cell's ENTRY EDGE (x = 5.0,
+	# z = the cell centre). It falls immediately rather than after crossing half the tile,
+	# because the flat arrow it lands on begins at that same edge -- a fold further in leaves
+	# that much flat shaft sticking out behind the foot (dev, #431 round 5). Its BAND runs across
+	# the trail, the same direction the flat arrows' thickness runs, so the drop reads as the
+	# trail continuing. One quad, never a cross: the rig's pitch is fixed, so a vertical quad
+	# across the trail never goes edge-on.
 	var rails := _rail_markers()
-	assert_int(rails.size()).is_equal(2)   # the crossed pair
-	for rail: Dictionary in rails:
-		var pos: Vector3 = rail["pos"]
-		assert_float(pos.x).is_equal_approx(5.0, 0.001)
-		assert_float(pos.y).is_equal_approx((flight_y + ground_y) * 0.5, 0.001)
-		var down: Vector3 = (rail["basis"] as Basis).x
-		assert_float(down.y).is_equal_approx(-(flight_y - ground_y), 0.001)
-		assert_object(rail["texture"]).is_not_null()
+	assert_int(rails.size()).is_equal(1)
+	var rail: Dictionary = rails[0]
+	var pos: Vector3 = rail["pos"]
+	assert_float(pos.x).is_equal_approx(5.0 + OverlayMirror.WALL_CLEARANCE, 0.001)
+	assert_float(pos.z).is_equal_approx(2.5, 0.001)
+	var basis: Basis = rail["basis"]
+	# It spans the whole drop, plus the deliberate overshoot at each end -- a butt joint between
+	# two quads meeting at a right angle can leave a sub-pixel sliver where neither covers the
+	# corner, and a hair of overlap into art of the same colour cannot.
+	assert_float(absf(basis.x.y)).is_equal_approx(
+			flight_y - ground_y + OverlayMirror.JOIN_OVERLAP * 2.0, 0.001)
+	assert_float(basis.x.x).is_equal_approx(0.0, 0.001)   # rail axis is PURELY vertical
+	assert_float(basis.x.z).is_equal_approx(0.0, 0.001)
+	assert_float(basis.y.x).is_equal_approx(1.0, 0.001)   # face normal along travel (RIGHT)
+	assert_float(basis.y.y).is_equal_approx(0.0, 0.001)
+	assert_float(basis.y.z).is_equal_approx(0.0, 0.001)
+	assert_float(basis.z.x).is_equal_approx(0.0, 0.001)   # band runs ACROSS the trail
+	assert_float(basis.z.y).is_equal_approx(0.0, 0.001)
+	assert_float(basis.z.z).is_equal_approx(1.0, 0.001)
+	assert_object(rail["texture"]).is_not_null()
+	# ONE marker per break, and no companion piece: the fold is at the edge, so there is no half
+	# cell left for a bridge to close. Every OTHER knockback marker is a flat trail arrow lying on
+	# a cell centre.
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		if marker == rail:
+			continue
+		var other: Vector3 = marker["pos"]
+		assert_float(absf(other.x - floorf(other.x) - 0.5)).override_failure_message(
+				"a knockback marker sits off a cell centre at x %f -- a stray drop piece?"
+				% other.x).is_less(0.001)
+	# The layer's clearance is applied along the marker's own plane NORMAL by the sink, never to
+	# the marker data -- so this reads the LIVE quad, and for a vertical rail that normal is the
+	# travel direction, i.e. straight out of the cliff face it hangs on.
+	var rail_quads: Array[MeshInstance3D] = []
+	for child in _overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh \
+				and not quad.basis.y.normalized().is_equal_approx(Vector3.UP):
+			rail_quads.append(quad)
+	assert_int(rail_quads.size()).is_equal(1)
+	assert_float(rail_quads[0].position.z).is_equal_approx(2.5, 0.001)
+	# THE JOIN, at BOTH ends. The pointer has to reach the plane each flat arrow was drawn in --
+	# never stop short of it, which is a visible break, and never overshoot by more than the
+	# deliberate overlap. Only readable on the LIVE quads, because that plane is the layer's own
+	# clearance and the sink is what applies it, which is why nothing here caught the lift
+	# regression the first two times it shipped (#431).
+	var rail_quad := rail_quads[0]
+	var rail_top := rail_quad.position.y + absf(rail_quad.basis.x.y) * 0.5
+	var rail_foot := rail_quad.position.y - absf(rail_quad.basis.x.y) * 0.5
+	var air_quad := _flat_quad_at(flown_x)
+	var land_quad := _flat_quad_at(5.5)
+	assert_object(air_quad).override_failure_message(
+			"no flat arrow over the flown cell to join").is_not_null()
+	assert_object(land_quad).override_failure_message(
+			"no flat arrowhead on the landing cell to join").is_not_null()
+	assert_float(rail_top - air_quad.position.y).override_failure_message(
+			"the pointer's top misses the arrow it falls from -- the ribbon breaks at the corner") \
+			.is_between(0.0, OverlayMirror.JOIN_OVERLAP + 0.001)
+	assert_float(land_quad.position.y - rail_foot).override_failure_message(
+			"the pointer's foot misses the arrow it lands on -- the ribbon breaks at the bottom") \
+			.is_between(0.0, OverlayMirror.JOIN_OVERLAP + 0.001)
+	# ...and it still starts falling AT that corner. The wall clearance keeps it off the coplanar
+	# cliff face, but it must stay invisibly small: at the layer lift's own size it would step the
+	# top visibly past the edge, which is the same break seen from the side.
+	assert_float(rail_quad.position.x - 5.0).override_failure_message(
+			"the pointer is not standing at the edge with a hair of wall clearance") \
+			.is_between(0.0, 0.01)
+	# On the LIVE material (the sink applies these, never the dict): double-sided, because the
+	# pointer stands in the world and orbit reaches both its faces -- but it DEPTH-TESTS like
+	# every other marker. Skipping the test made it an x-ray, drawn through the platform the
+	# camera had panned behind (#431); standing clear of the cliff face is what fixed the
+	# z-fight it was papering over.
+	var mat := rail_quads[0].material_override as StandardMaterial3D
+	assert_bool(mat.no_depth_test).override_failure_message(
+			"the drop pointer skips the depth test -- it will draw through platforms").is_false()
+	assert_int(mat.cull_mode).is_equal(BaseMaterial3D.CULL_DISABLED)
 
 
-# A fall ONTO A RAMP draws no rail (dev, round 2): the flat arrow lying on the slope is the whole
-# story, and the sprite slides the ramp rather than dropping. Vertical markers must be absent.
-func test_a_fall_onto_a_ramp_draws_no_drop_rail() -> void:
+# The rail's band direction must NOT flip with the travel sign (#431): the flat arrows draw their
+# thickness with a fixed orientation, so a band that mirrored for a LEFT shove shifted the rail's
+# off-centre sprite a full pixel -- "matches in one direction, off by one in the other" (dev).
+# LEFT keeps the same +Z band as RIGHT; only the face normal flips to the travel.
+func test_a_left_shove_keeps_the_rail_band_consistent() -> void:
+	var origin := Vector2i(5, 2)
+	game.board_heights.set_cell(origin, 2)
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(3, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(3, 2),
+			"removed": false, "landing_index": 2}]
+	_om().show_knockback_preview(shoves)
+	await _settle()
+
+	var rails := _rail_markers()
+	assert_int(rails.size()).is_equal(1)
+	var basis: Basis = rails[0]["basis"]
+	assert_float(basis.y.x).is_equal_approx(-1.0, 0.001)   # face normal along travel (LEFT)
+	assert_float(basis.y.z).is_equal_approx(0.0, 0.001)
+	assert_float(basis.z.z).is_equal_approx(1.0, 0.001)   # band stays +Z, NOT mirrored
+	assert_float(basis.z.x).is_equal_approx(0.0, 0.001)
+	# LEFT enters the landing cell from the right, so the edge it starts falling at is x = 4.0 --
+	# and its wall clearance leans the other way with it, always INTO the cell being fallen to.
+	var pos: Vector3 = rails[0]["pos"]
+	assert_float(pos.x).is_equal_approx(4.0 - OverlayMirror.WALL_CLEARANCE, 0.001)
+
+
+# A shove off a cliff that LANDS on a ramp draws the rail (dev, #431): the unit FELL onto the
+# slope, so the vertical story is real -- only a slide with no break skips it. Entered from the
+# ramp's HIGH shoulder, a whole level below the flight.
+func test_a_drop_onto_a_ramp_draws_a_drop_rail() -> void:
 	var origin := Vector2i(3, 2)
 	game.board_heights.set_cell(origin, 2)
 	game.board_heights.set_cell(Vector2i(4, 2), 0, Terrain.RampRise.WEST)
@@ -487,15 +588,154 @@ func test_a_fall_onto_a_ramp_draws_no_drop_rail() -> void:
 			"removed": false, "landing_index": 1}]
 	_om().show_knockback_preview(shoves)
 	await _settle()
+	var rails := _rail_markers()
+	assert_int(rails.size()).override_failure_message(
+			"a drop onto a ramp drew no rail -- the fall is the vertical story").is_equal(1)
+	# And its FOOT lands in the plane the slope's own arrow is DRAWN in, at the edge the fall
+	# arrives on. Three candidate answers, and only one is right: not the ramp's CENTRE (half a
+	# level lower -- the tail of #431 round 5), and not the raw SURFACE at the edge either, because
+	# the sink lifts a ramp's markers along the ramp's own NORMAL, which leans, so the arrow sits
+	# downhill and above the ground it lies on. Every term derived from the board and the sink.
+	var ramp := Vector2i(4, 2)
+	var basis: Basis = rails[0]["basis"]
+	var foot: float = (rails[0]["pos"] as Vector3).y - absf(basis.x.y) * 0.5
+	var surface := BoardSpace.surface_transform(ramp, game.board_heights)
+	var lift := _overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK)
+	var edge_y := BoardSpace.surface_height_at(ramp, 4.0, 2.5, game.board_heights)
+	var drawn_at_edge := edge_y + surface.basis.y.y * lift
+	assert_bool(edge_y > surface.origin.y).override_failure_message(
+			"the ramp's edge and centre are level; the case cannot tell them apart").is_true()
+	assert_bool(absf(surface.basis.y.y - 1.0) > 0.01).override_failure_message(
+			"the ramp's normal is upright; the case cannot see the lean the seam came from").is_true()
+	assert_float(foot).override_failure_message(
+			"the pointer's foot misses the plane the slope's arrow is drawn in") \
+			.is_between(drawn_at_edge - OverlayMirror.JOIN_OVERLAP - 0.001, drawn_at_edge + 0.001)
+
+
+# A pure SLIDE onto a ramp draws no rail -- the flat arrow on the slope is the whole story. The
+# unit steps onto the ramp's HIGH shoulder level with its own footing and only then descends, so
+# the two surfaces MEET at the shared edge and nothing has broken. No flag says so: the geometry
+# does, which is why both sides must be measured AT THE EDGE. Measured at the cell's centre this
+# board reads as half a level of fall, because a ramp's centre is half a level under its shoulder
+# -- and that is the mutant this case exists to catch.
+func test_a_slide_onto_a_ramp_draws_no_drop_rail() -> void:
+	var origin := Vector2i(3, 2)
+	var ramp := Vector2i(4, 2)
+	game.board_heights.set_cell(origin, 1)
+	game.board_heights.set_cell(ramp, 0, Terrain.RampRise.WEST)   # high shoulder faces the shove
+	var foe := _spawn(ENEMY, origin)
+	var flight_y := BoardSpace.surface_transform(origin, game.board_heights).origin.y
+	var ramp_centre_y := BoardSpace.surface_transform(ramp, game.board_heights).origin.y
+	assert_bool(ramp_centre_y < flight_y).override_failure_message(
+			"the ramp's centre is not under the flight; the case cannot catch the mutant").is_true()
+	var path: Array[Vector2i] = [origin, ramp]
+	var shoves: Array = [{"target": foe, "path": path, "to": ramp,
+			"removed": false, "landing_index": 1}]
+	_om().show_knockback_preview(shoves)
+	await _settle()
 	assert_int(_rail_markers().size()).override_failure_message(
-			"a ramp landing hung a drop rail -- the slope's flat arrow is the whole story").is_equal(0)
+			"a slide onto a ramp hung a drop rail -- the slope's flat arrow is the whole story").is_equal(0)
 
 
-# A drop rail's rail axis (basis.x) is PURELY vertical; a ground marker's -- flat or lying on a
-# ramp -- always keeps a horizontal component (a ramp tilt is a rotation, never a right angle).
+# Cliff -> slide -> drop (the dev's report, #431): a shove that falls onto a ramp, tumbles down it
+# and then plummets off its lip breaks TWICE, and both breaks draw. The old gate stamped one flag
+# on the ONE cell the flight ended on, so the second drop could not be expressed at all.
+func test_a_tumble_that_plummets_draws_a_pointer_at_both_breaks() -> void:
+	var origin := Vector2i(2, 2)
+	var ramp := Vector2i(3, 2)
+	var floor_cell := Vector2i(4, 2)
+	game.board_heights.set_cell(origin, 4)
+	game.board_heights.set_cell(ramp, 2, Terrain.RampRise.WEST)   # entered at its high shoulder
+	game.board_heights.set_cell(floor_cell, 0)                    # the lip: a sheer 2-drop
+	var foe := _spawn(ENEMY, origin)
+	# Both breaks stated from the board, not from constants: the flight clears the ramp's shoulder,
+	# and the ramp's lip hangs over the floor. Either being false makes the case vacuous.
+	var flight_y := BoardSpace.surface_transform(origin, game.board_heights).origin.y
+	var shoulder_y := BoardSpace.surface_height_at(ramp, 3.0, 2.5, game.board_heights)
+	var lip_y := BoardSpace.surface_height_at(ramp, 4.0, 2.5, game.board_heights)
+	var floor_y := BoardSpace.surface_transform(floor_cell, game.board_heights).origin.y
+	assert_bool(flight_y > shoulder_y).override_failure_message("the flight does not clear the ramp").is_true()
+	assert_bool(lip_y > floor_y).override_failure_message("the ramp does not overhang the floor").is_true()
+
+	var path: Array[Vector2i] = [origin, ramp, floor_cell]
+	var shoves: Array = [{"target": foe, "path": path, "to": floor_cell,
+			"removed": false, "landing_index": 1}]   # the FLIGHT ends on the ramp; the rest tumbles
+	_om().show_knockback_preview(shoves)
+	await _settle()
+
+	var rails := _rail_markers()
+	assert_int(rails.size()).override_failure_message(
+			"the tumble's own plummet drew no pointer -- only the flight's landing did").is_equal(2)
+	var xs: Array[float] = []
+	for marker: Dictionary in rails:
+		xs.append((marker["pos"] as Vector3).x)
+	xs.sort()
+	# Each pointer stands at the edge it falls over, within the layer's own clearance. A BAND
+	# rather than a point because an end that lands on a slope leans by the ramp normal's
+	# horizontal part -- and still an order of magnitude narrower than the half cell a wrong edge
+	# would be off by, which is what these two are guarding.
+	var slack := _overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK) + OverlayMirror.WALL_CLEARANCE
+	assert_float(xs[0]).is_between(3.0, 3.0 + slack)   # the fall onto the ramp, at its top edge
+	assert_float(xs[1]).is_between(4.0, 4.0 + slack)   # the plummet, at the lip it goes over
+
+
+# A void removal draws the rail (the arrow curves down into the hole) but no FLAT arrowhead on the
+# hole cell itself -- the landing sprite's texture is nulled, and the rail alone says where it went.
+# NB the drop's own bridge is flat too, but it sits at the QUARTER point (the entry edge to the
+# fold), so the cell-centre test below still means "no arrowhead" and not "no markers at all".
+func test_a_void_removal_draws_no_arrowhead_but_a_rail() -> void:
+	var origin := Vector2i(3, 2)
+	game.board_heights.set_cell(origin, 2)
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, Vector2i(4, 2)]
+	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(4, 2),
+			"removed": true, "landing_index": 1}]
+	_om().show_knockback_preview(shoves)
+	await _settle()
+
+	var rails := _rail_markers()
+	assert_int(rails.size()).override_failure_message(
+			"a void removal drew no drop rail").is_equal(1)
+	# It falls the WHOLE plummet, not one tile into the hole (dev: "for spectacle, it should go
+	# down a bunch, offscreen") -- the same distance the sprite itself falls in execution, so the
+	# preview cannot promise a shorter drop than playback shows. Asserted against the knob rather
+	# than a number: tuning a feel value must never redden the suite.
+	var flight_y := BoardSpace.surface_transform(origin, game.board_heights).origin.y
+	var lip_y := BoardSpace.surface_height_at(Vector2i(4, 2), 4.0, 2.5, game.board_heights)
+	var span := -(rails[0]["basis"] as Basis).x.y
+	assert_float(span).override_failure_message(
+			"the void pointer stops short of the plummet the unit actually falls") \
+			.is_equal_approx(flight_y - lip_y + MovementComponent.VOID_PLUMMET_CELLS
+					+ OverlayMirror.JOIN_OVERLAP * 2.0, 0.001)
+	var landing_x := (4.0 * 16.0 + 8.0) / 16.0
+	var flat_at_hole := 0
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		if _is_flat(marker) and absf((marker["pos"] as Vector3).x - landing_x) < 0.01:
+			flat_at_hole += 1
+	assert_int(flat_at_hole).override_failure_message(
+			"the hole cell drew a flat arrowhead").is_equal(0)
+
+
+# A drop pointer's own axis (basis.x) runs overwhelmingly DOWN; a ground marker's -- flat, or lying
+# on a ramp, where the 45-degree tilt makes its horizontal and vertical parts exactly equal -- never
+# does. A RATIO rather than "purely vertical", because a pointer whose foot lands on a slope leans
+# a fraction off vertical to reach the arrow drawn there, and the two classes are still an order of
+# magnitude apart.
 func _is_flat(marker: Dictionary) -> bool:
 	var x: Vector3 = ((marker.get("basis", Basis.IDENTITY)) as Basis).x
-	return Vector2(x.x, x.z).length() > 0.001 or absf(x.y) < 0.001
+	return absf(x.y) <= Vector2(x.x, x.z).length() * 2.0
+
+
+# The LIVE flat-lying quad whose centre sits at this x, or null. Flat markers are the ones whose
+# plane normal is up; the drop pointer's is not, which is what tells the two apart in the pool.
+func _flat_quad_at(x: float) -> MeshInstance3D:
+	for child in _overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible and quad.mesh is PlaneMesh \
+				and quad.basis.y.normalized().is_equal_approx(Vector3.UP) \
+				and absf(quad.position.x - x) < 0.01:
+			return quad
+	return null
 
 
 func _rail_markers() -> Array[Dictionary]:

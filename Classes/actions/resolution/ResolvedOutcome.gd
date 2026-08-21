@@ -27,6 +27,12 @@ var knockback_path: Array[Vector2i] = []
 # shove animation and the 3D trail read it here rather than re-deriving (Law #2).
 var knockback_landing_index: int = 0
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
+var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): the flight drop plus
+							# any tumble-then-plummet. The distance fall_damage is derived from and
+							# the "Fell N!" popup names -- a rules fact, not a render one. The 3D
+							# drop pointer deliberately does NOT read it (#431): it measures the
+							# trail's own surfaces, which is the only form that can see the SECOND
+							# drop a plummet adds.
 # Shoved into a VOID (#259) — gone outright, the #116 kill doctrine. lethality reads KILLED so
 # every reader (AI removal tiers, the KILL icon, lifecycle_for → DEAD) lights up; this flag exists
 # because execution needs its own door — a 0-damage take_damage cannot kill an ACTIVE unit, so

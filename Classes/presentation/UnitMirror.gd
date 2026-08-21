@@ -289,7 +289,12 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# arrival, then the kb_settling ease below drops it at shove_fall_speed. The residual flag
 	# rides the sprite because the slide can finish while it is still above its landing surface.
 	# Walks keep the per-cell snap untouched.
-	if unit.movement.sliding:
+	# The void plummet (#431) is checked FIRST: the slide is over by the time it starts, so the
+	# kb_settling ease below would otherwise be pulling the sprite back up to the lip it is
+	# supposed to be falling past.
+	if unit.movement.plummeting:
+		stand_y -= unit.movement.plummet_depth * BoardSpace.CELL_SIZE
+	elif unit.movement.sliding:
 		var m := unit.movement
 		var ramp_contact: bool = over == m.slide_landing_cell and heights != null \
 				and heights.ramp_rise_at(over) != Terrain.RampRise.NONE

@@ -410,21 +410,26 @@ func show_knockback_preview(shoves: Array) -> void:
 			# The AIRBORNE geometry, riding each sprite for the 3D mirror (#259 rework) — the
 			# flat canvas can't draw height, but the trail must not pretend the flight hugs the
 			# ground: cells before the landing are flown at the launch cell's level, and the
-			# landing cell is where any vertical drop (or void removal) happens.
+			# landing cell is where the flight meets the world again.
 			if i < landing:
 				trail[i].set_meta("kb_air_from", path[0])
 			elif i == landing:
 				trail[i].set_meta("kb_drop_from", path[0])
 				if shove.get("removed", false):
 					trail[i].set_meta("kb_removed", true)
-				# The 3D drop pointer's clothes and hanger (#259 rework round 2): the trail's own
-				# straight rail texture -- vertical, a rail has no cardinal identity, so the EW cut
-				# serves every direction -- and the travel step INTO the landing, which places the
-				# pointer at the cell edge the flight crosses when it falls.
-				if i > 0:
-					trail[i].set_meta("kb_rail_texture",
-							_get_path_segment_atlas(Vector2i.LEFT, Vector2i.RIGHT))
-					trail[i].set_meta("kb_dir", path[i] - path[i - 1])
+					# No flat arrowhead on a hole: the pointer alone says where it went. The
+					# sprite keeps its meta so the 3D mirror still hangs the pointer off it.
+					trail[i].texture = null
+			# The 3D drop pointer's clothes and hanger (#431): every step past the first carries
+			# the trail's own straight rail texture -- turned vertical, a rail has no cardinal
+			# identity, so the EW cut serves every direction -- and the step INTO this cell, which
+			# names the EDGE the mirror measures the two surfaces across. Every cell, not just the
+			# landing: a tumble that bottoms out at a lip drops a second time, and only the edge
+			# each cell was entered by can say so.
+			if i > 0:
+				trail[i].set_meta("kb_rail_texture",
+						_get_path_segment_atlas(Vector2i.LEFT, Vector2i.RIGHT))
+				trail[i].set_meta("kb_dir", path[i] - path[i - 1])
 			knockback_preview_sprites.append(trail[i])
 
 	# Hide each real sprite while its ghost stands in at the FINAL landing cell — the same pairing

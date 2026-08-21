@@ -238,6 +238,15 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
 		"script": MOVEMENT_SCRIPT, "min": 60.0, "max": 960.0, "step": 10.0,
 		"tip": "How fast a shoved unit slides along its knockback trail, in pixels/second (a walk is 120). Read at each shove, so a change applies from the next one."},
+
+	# The void plummet (#431), the same shape one row along. The DEPTH is read twice -- by the fall
+	# and by the preview pointer's length -- so this one slider moves both, which is the point.
+	{"group": "Playback", "label": "Void fall depth", "static": "VOID_PLUMMET_CELLS",
+		"script": MOVEMENT_SCRIPT, "min": 1.0, "max": 40.0, "step": 0.5,
+		"tip": "How far a unit shoved into a hole keeps falling before it is removed, in cells below the lip. The plan-time drop arrow reaches exactly this far too, so raising it lengthens both. Read at each shove."},
+	{"group": "Playback", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
+		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
 ]
 
 
@@ -295,6 +304,8 @@ static func read_static(name: String) -> Variant:
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
+		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
+		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -311,6 +322,15 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply
+		"VOID_PLUMMET_SECONDS":
+			MovementComponent.VOID_PLUMMET_SECONDS = value
+			return   # read at each shove -- nothing standing to re-apply
+		"VOID_PLUMMET_CELLS":
+			MovementComponent.VOID_PLUMMET_CELLS = value
+			# Its SECOND reader is the preview pointer, which needs no re-apply either: OverlayMirror
+			# rebuilds every knockback marker from the 2D sprites each frame and value-diffs, so a
+			# standing preview re-lengthens on the next one. Not #324's redraw case.
+			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return

@@ -98,6 +98,30 @@ func _settle() -> void:
 	await await_idle_frame()
 
 
+# The void plummet (#431): a unit shoved into a hole keeps falling past the lip instead of blinking
+# out in mid-air. The fall is 3D-ONLY -- the flat board has no height to fall through -- so the
+# mirror is where it is expressed, and it has to beat the kb_settling ease that every slide leaves
+# behind, which would otherwise haul the sprite straight back up to the surface it is leaving.
+# Driven by setting the component's own state rather than by running plummet(), because the tween
+# is the part that does NOT run headless; what is worth pinning is the branch and its order.
+func test_a_plummeting_unit_falls_below_its_cell() -> void:
+	var unit := _live_units()[0]
+	var seat := _sprite_seat(unit.movement.cell)
+	var sprite := _mirror.sprite_for(unit)
+	# Seeded MID-SETTLE, above its cell, which is exactly the state the slide into a hole hands
+	# over: the ease reads the sprite's own last position, so parking it high gives the settle real
+	# work to do. Without this the settle finishes in one frame and the case passes against a
+	# mirror that runs it FIRST -- measured, the mutant went green before this line existed.
+	sprite.position = Vector3(seat.x, seat.y + 2.0, seat.z)
+	sprite.set_meta("kb_settling", true)
+	unit.movement.plummeting = true
+	unit.movement.plummet_depth = 3.0
+	await _settle()
+	assert_float(_mirror.sprite_for(unit).position.y).override_failure_message(
+			"the plummeting sprite is not falling -- the settle ease is winning") \
+			.is_equal_approx(seat.y - 3.0, 0.001)
+
+
 func test_a_downed_unit_stays_on_screen() -> void:
 	# #232, a 4c regression. The mirror copied $MapSprite.visible to get projected-hide
 	# parity, and Unit._show_downed_sprite hides that SAME flag to swap in the separate

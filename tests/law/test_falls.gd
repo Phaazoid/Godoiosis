@@ -195,15 +195,34 @@ func test_a_perpendicular_ramp_landing_bends_the_tumble() -> void:
 	assert_int(outcome.knockback_landing_index).is_equal(1)
 
 
-func test_the_tumble_stops_at_a_lip() -> void:
+# Tumble-then-plummet (the deferred later addition): the tumble no longer stops at a lip -- it
+# falls the drop, pays fall damage for it, and keeps whatever descent waits below.
+func test_the_tumble_plummets_past_a_lip() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 3)
 	heights.set_cell(Vector2i(2, 0), 3)
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2, then a sheer 2-drop
+	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2, then a sheer 2-drop to (4,0)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
-	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()  # stops where it stands
-	assert_int(outcome.fall_damage).is_equal(0)                    # no launch, no compound fall
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()  # falls the drop, not stopped
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, s.d))
+	assert_int(outcome.fall_levels).is_equal(2)
+
+
+# A plummet that lands on another ramp keeps tumbling down that one too (dev: "continue whatever
+# descent awaits them").
+func test_a_plummet_landing_on_a_ramp_tumbles_again() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 3)
+	heights.set_cell(Vector2i(2, 0), 3)
+	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2, then a 2-drop
+	heights.set_cell(Vector2i(4, 0), 0, Terrain.RampRise.WEST)     # lands on R0, tumbles again
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))    # (5,0) is F0, the catch
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(5, 0)).is_true()
+	assert_int(outcome.fall_levels).is_equal(2)
+	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0)]
+	assert_that(_path_of(outcome)).is_equal(expected)
 
 
 func test_the_tumble_stops_at_an_occupied_cell() -> void:

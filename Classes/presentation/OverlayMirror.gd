@@ -48,6 +48,20 @@ var _heights_moved := false
 
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 
+# How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
+# epsilon, not a feel value: big enough that a coplanar wall cannot stipple through it, small
+# enough to be invisible -- roughly a sixteenth of a texture pixel, against a depth precision floor
+# some three orders of magnitude finer at board distances. Anything the eye can resolve here reads
+# as the ribbon breaking where the fall starts, which is what this pointer keeps being reported
+# for. The two failure modes pull opposite ways: raise it if a wall ever stipples through, lower it
+# if the corner ever gaps.
+const WALL_CLEARANCE := 0.001
+
+# How far the pointer runs PAST each of its join points, in cells. A butt joint between two quads
+# meeting at a right angle can leave a sub-pixel sliver where neither covers the corner; a hair of
+# overlap cannot, and costs nothing visually because both ends tuck into art of the same colour.
+const JOIN_OVERLAP := 0.005
+
 
 func _process(_delta: float) -> void:
 	if game == null or overlays == null:
@@ -255,14 +269,21 @@ func _arrows(om: OverlayManager) -> void:
 # The trail is HONEST about height since the #259 rework: a sprite stamped kb_air_from is a
 # FLOWN cell and hangs flat at the launch cell's level rather than lying on whatever is below
 # (the hole it sails over, the ground under the cliff); the kb_drop_from sprite is the landing,
-# anchored on its own surface, and when the two levels differ it also hangs the drop RAIL --
-# "in the air until he would drop, then straight down to his destination" (dev).
+# anchored on its own surface; everything past it is a tumble step lying on its own slope. Where
+# consecutive cells' surfaces do not MEET, _append_drop folds the ribbon down the gap -- "in the
+# air until he would drop, then straight down to his destination" (dev).
 func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Array[Dictionary]) -> void:
 	for node in om.knockback_preview_sprites:
 		if not is_instance_valid(node):
 			continue
 		var sprite := node as Sprite2D
-		if sprite == null or sprite.texture == null:
+		if sprite == null:
+			continue
+		# The drop pointer is hung off a trail sprite BEFORE the flat-arrow skip: a void removal
+		# nulls the landing's texture (no flat arrowhead on a hole) but the pointer still draws.
+		if sprite.get_parent() == om.arrow_icon_overlay:
+			_append_drop(trails, sprite)
+		if sprite.texture == null:
 			continue
 		var entry: Dictionary
 		if sprite.has_meta("kb_air_from"):
@@ -271,47 +292,124 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 		else:
 			entry = _marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate)
 		if sprite.get_parent() == om.arrow_icon_overlay:
-			if sprite.has_meta("kb_drop_from"):
-				_append_drop_rails(trails, sprite)
 			trails.append(entry)
 		elif sprite.get_parent() == om.projected_unit_overlay:
 			ghosts.append(entry)
 
 
-# The drop pointer (#259 rework round 2, dev: the trail's own rail sprite, hanging at the edge it
-# falls from): two crossed vertical quads on the ordinary KNOCKBACK layer, wearing the straight
-# rail texture stamped at build time, stretched over the drop (#281's stretch lesson) at the
-# ENTRY EDGE of the landing cell -- connected to the flying arrow above and the flat arrowhead
-# below. A RAMP landing draws no pointer: the flat arrow lying on the slope is the whole story
-# (dev). A removal spans one level into the pit, which has no real bottom. Levels that turn out
-# equal draw nothing -- a flight ending flush with its landing has no vertical story to tell.
-func _append_drop_rails(trails: Array[Dictionary], sprite: Sprite2D) -> void:
-	var heights := _heights()
-	var px := sprite.global_position
-	var landing := Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)),
-			floori(px.y / float(GridUtils.TILE_SIZE)))
-	if heights != null and heights.ramp_rise_at(landing) != Terrain.RampRise.NONE:
-		return
+# The drop pointer (#431, replacing the #259 rework's stamped landing). THE RULE: a trail cell
+# DROPS when the two surfaces meeting at the EDGE it was entered by are not at the same height.
+# Nothing else is asked. That is why a shove that falls off a cliff, tumbles a ramp and then
+# plummets off its lip now draws a pointer at BOTH breaks -- the old gate read a flag ("did this
+# shove fall?") stamped on the ONE cell the flight ended on, so a second drop was unrepresentable
+# however the flag was set. The heights the trail is already drawn at answer the question; the
+# flag was a second seam for a fact the geometry holds (Law #4), and it went stale the moment the
+# tumble learned to plummet.
+#
+# BoardSpace.surface_height_at is the one answer to "how high is the surface HERE", and it carries
+# exactly what this needs: a ramp's plane meets its neighbour's precisely at the shared edge. So a
+# slide reads continuous and draws nothing, with no ramp special case anywhere.
+#
+# A break hangs ONE quad, and it starts falling AT THE EDGE (dev, round 5) -- the ribbon it has to
+# meet begins at the back of the tile, so a fold placed anywhere further in leaves that much flat
+# arrow sticking out behind the foot. On a ramp the same half cell is worse than untidy: a ramp's
+# centre is half a level under its top edge, so a foot placed there lands mid-slope while the
+# slope's own arrow starts at the top, and the mismatch reads as a tail. Both ends therefore land
+# on the SAME point the flat markers do: the top on the ribbon crossing the edge above, the foot on
+# the surface AT the edge -- never at the cell's centre, which is a different height on any slope.
+#
+# The layer's own clearance does the rest: at the edge this quad is coplanar with the cliff face it
+# hangs on, and _apply_marker lifts every marker along its own plane normal -- which for a vertical
+# quad IS the travel direction, i.e. straight out of that wall. That is what a coplanar marker has
+# always needed, and it is why the pointer can depth-test honestly rather than x-raying the board.
+func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
 	var rail: Texture2D = sprite.get_meta("kb_rail_texture", null)
 	if rail == null or not sprite.has_meta("kb_dir"):
-		return
-	var top_y := BoardSpace.surface_transform(sprite.get_meta("kb_drop_from"), heights).origin.y
-	var surface_y := BoardSpace.surface_transform(landing, heights).origin.y
-	var bottom_y := surface_y - BoardSpace.CELL_SIZE if sprite.get_meta("kb_removed", false) \
-			else surface_y
-	if top_y <= bottom_y or is_equal_approx(top_y, bottom_y):
-		return
+		return   # the first cell of a trail: no edge was crossed to reach it
+	var heights := _heights()
+	var px := sprite.global_position
+	var cell := _cell_of_px(px)
 	var dir_2d: Vector2i = sprite.get_meta("kb_dir")
 	var d := Vector3(dir_2d.x, 0.0, dir_2d.y)
-	var centre := BoardSpace.of_pixels(px, (top_y + bottom_y) * 0.5) - d * (BoardSpace.CELL_SIZE * 0.5)
-	# The quads' local X (the texture's rail axis) points DOWN, scaled over the drop; their
-	# normals cross so the rail cannot vanish edge-on under free orbit.
-	var down := Vector3(0.0, -(top_y - bottom_y) / BoardSpace.CELL_SIZE, 0.0)
-	var flat := Vector3(d.z, 0.0, -d.x)
-	trails.append({"pos": centre, "texture": rail, "modulate": Color.WHITE,
-			"basis": Basis(down, flat, d)})
-	trails.append({"pos": centre, "texture": rail, "modulate": Color.WHITE,
-			"basis": Basis(down, d, -flat)})
+	var centre := BoardSpace.of_pixels(px, 0.0)
+	var edge := centre - d * (BoardSpace.CELL_SIZE * 0.5)
+	# The upper side of the edge. A FLOWN cell and the LANDING both have the flight above them --
+	# the launch cell's level, which is what the airborne arrows hang at -- and every cell past
+	# the landing is a tumble step, whose upper side is the neighbouring surface read at the edge.
+	var airborne := sprite.has_meta("kb_air_from")
+	var flown := airborne or sprite.has_meta("kb_drop_from")
+	var top := 0.0
+	if flown:
+		var launch: Vector2i = sprite.get_meta("kb_air_from") if airborne \
+				else sprite.get_meta("kb_drop_from")
+		top = BoardSpace.surface_transform(launch, heights).origin.y
+	else:
+		top = BoardSpace.surface_height_at(cell - dir_2d, edge.x, edge.z, heights)
+	# The lower side of the SAME edge. Both sides must be read at the edge or the test is not a
+	# test of whether the surfaces meet: a slide onto a ramp's high shoulder enters level with the
+	# flight and only then descends, so measuring this cell at its CENTRE would call every such
+	# slide half a level of fall. An airborne cell hangs at the flight height on both sides, so it
+	# can never break and needs no case of its own.
+	var here := top if airborne else BoardSpace.surface_height_at(cell, edge.x, edge.z, heights)
+	# A REMOVAL skips the break test outright: a hole is a terrain KIND, invisible to the height
+	# store, so the two surfaces meet and the fall is real anyway. It drops the full plummet -- the
+	# same distance the sprite itself falls in execution, off MovementComponent's one knob, because
+	# a preview that promised less than the fall shows would be a Law #2 divergence.
+	var bottom := here
+	if bool(sprite.get_meta("kb_removed", false)):
+		bottom -= MovementComponent.VOID_PLUMMET_CELLS * BoardSpace.CELL_SIZE
+	elif top <= here or is_equal_approx(top, here):
+		return
+	# The ENDS are the points the arrows above and below are actually DRAWN at, never the raw
+	# surface heights the break was measured from. The sink lifts every marker along its own
+	# surface normal, and a ramp's normal leans -- so the slope's arrow is displaced downhill as
+	# well as up, and its uphill edge sits a visible step inside the cell boundary. Joining the
+	# surface instead of the drawn plane is what put a seam on every ramp landing. Above the edge
+	# the ribbon is the FLIGHT (flat, lifted straight up) unless this is a tumble step, where it is
+	# the neighbouring slope; below it is always this cell's own markup.
+	# The flight hangs FLAT at the launch level whatever it is passing over, so its ribbon is
+	# lifted straight up -- it is not lying on the cell below and never took that cell's tilt.
+	var head := Vector3(edge.x, top, edge.z) + Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK) \
+			if flown else _ribbon_point(cell - dir_2d, edge)
+	var foot := _ribbon_point(cell, edge) - Vector3.UP * (here - bottom)
+	# The band is a CONSISTENT horizontal perpendicular -- absf() picks +Z for an X trail and +X
+	# for a Z trail, and never flips with the travel sign. A band that flipped mirrored the rail's
+	# sprite, and since that sprite's band sits half a pixel off the texture centre, the mirror
+	# shifted it a full pixel -- "matches in one direction, off by one in the other" (dev). Forcing
+	# it makes the basis LEFT-handed on one of the two signs, which is why the quad is also
+	# double-sided (never culled) -- as it wants to be anyway, standing in the world under orbit.
+	var band := Vector3(absf(d.z), 0.0, absf(d.x))
+	# Local X (the texture's band axis) runs head-to-foot, stretched over the drop (#281's stretch
+	# lesson) and overshooting both joins; the band axis stays a unit vector so the art scale the
+	# flat markers use gives it the same one-cell width they wear. Local Y is the quad's normal,
+	# derived so the plane stays square when a ramp foot leans the fall a fraction off vertical,
+	# and turned to face the way the unit was travelling.
+	var fall := foot - head
+	var normal := band.cross(fall).normalized()
+	if normal.dot(d) < 0.0:
+		normal = -normal
+	var down := (fall + fall.normalized() * (JOIN_OVERLAP * 2.0)) / BoardSpace.CELL_SIZE
+	# The pointer's ends are already the drawn planes' own points, lift included, so the sink must
+	# not add the layer lift a second time -- lift_dir ZERO says exactly that. What it does still
+	# need is WALL_CLEARANCE: at the edge this quad is coplanar with the cliff face, and a hair of
+	# depth keeps it from stippling through without being wide enough to read as a gap.
+	trails.append({"pos": (head + foot) * 0.5 + d * WALL_CLEARANCE,
+			"texture": rail, "modulate": Color.WHITE, "lift_dir": Vector3.ZERO,
+			"basis": Basis(down, normal, band), "double_sided": true})
+
+
+# Where the markup DRAWN on this cell actually sits at a given (x, z): the surface point there,
+# plus the clearance the sink lifts that cell's markers by, along the surface's OWN normal (#281's
+# rule). On flat ground that is straight up and the distinction never shows. On a ramp the normal
+# LEANS, so the arrow lying on the slope is displaced downhill as well as up and its uphill edge
+# retreats from the cell boundary -- which is why anything joining that arrow has to ask where it
+# was drawn rather than where the ground is.
+func _ribbon_point(cell: Vector2i, at: Vector3) -> Vector3:
+	var heights := _heights()
+	var surface := BoardSpace.surface_transform(cell, heights)
+	var y := BoardSpace.surface_height_at(cell, at.x, at.z, heights)
+	var lift := overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK)
+	return Vector3(at.x, y, at.z) + surface.basis.y * lift
 
 
 # A FLYING trail arrow: flat at the shove's launch height, no tilt -- it hangs in the air rather
@@ -419,6 +517,12 @@ func _anchor(cell: Vector2i) -> Transform3D:
 # The same, for a 2D world position (sprites sit at cell centers). The LEVEL and the SLOPE both come
 # from the cell those pixels fall in, so a ghost or arrow over a terrace lifts and tilts with it.
 func _anchor_px(px: Vector2) -> Transform3D:
-	var cell := Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))
-	var surface := BoardSpace.surface_transform(cell, _heights())
+	var surface := BoardSpace.surface_transform(_cell_of_px(px), _heights())
 	return Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
+
+
+# Which 2D CELL a sprite's pixels fall in. Split out of _anchor_px because the drop pointer needs
+# the cell itself (to reach the neighbour across the edge it was entered by) rather than the
+# transform -- and two spellings of pixels-to-cell is the drift Law #4 names.
+func _cell_of_px(px: Vector2) -> Vector2i:
+	return Vector2i(floori(px.x / float(GridUtils.TILE_SIZE)), floori(px.y / float(GridUtils.TILE_SIZE)))

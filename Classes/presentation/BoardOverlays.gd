@@ -301,6 +301,15 @@ func _lift_of(spec: Dictionary) -> float:
 	return fill_lift + spec["sort"] * lift_step
 
 
+# How far off its surface this layer's markup sits. Public because a marker that has to MEET other
+# markers rather than lie beside them -- the knockback drop pointer, which joins the flat arrows at
+# a right angle -- has to land in the plane they were lifted INTO, not on the raw surface. That
+# distinction is invisible on flat ground and 0.7x this value sideways on a ramp, whose normal
+# leans, which is exactly where joining to the surface leaves a seam (#431).
+func marker_lift(layer: Layer) -> float:
+	return _lift_of(LAYERS[layer])
+
+
 func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	var pos: Vector3 = marker["pos"]
 	var texture: Texture2D = marker["texture"]
@@ -321,10 +330,28 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	if texture != null:
 		var size: Vector2 = texture.get_size() / ART_PIXELS_PER_CELL
 		art = Vector3(size.x, 1.0, size.y)
-	quad.transform = Transform3D(tilt * Basis.from_scale(art), pos + tilt.y * _lift_of(spec))
+	# The layer lift rides the marker's own basis.y by default -- the surface normal, so a marker
+	# lying on a ramp floats off the ramp rather than off the world. What the lift actually buys is
+	# a shared PLANE: every marker on a layer ends up the same distance off the ground, which is
+	# what lets one ribbon run through several of them. A marker that does not LIE on the surface
+	# says so (lift_dir): the knockback drop pointer is vertical, so its own basis.y is horizontal,
+	# and lifting along it drops the pointer's top out of the plane of the flat arrows it has to
+	# meet -- and slides it off the edge besides. Twice now (#431), which is why the default is
+	# documented rather than merely defaulted.
+	var lift_dir: Vector3 = marker.get("lift_dir", tilt.y)
+	quad.transform = Transform3D(tilt * Basis.from_scale(art), pos + lift_dir * _lift_of(spec))
 	var material := quad.material_override as StandardMaterial3D
 	material.albedo_texture = texture
 	material.albedo_color = tint
+	# The drop pointer's one render exception, off by default so every flat marker is unchanged:
+	# it is double-sided, because it stands in the world rather than lying on a face and free
+	# orbit reaches both of its sides (and its consistent band makes the basis left-handed on one
+	# travel sign). Reset each time because the markers are pooled. It does NOT skip the depth
+	# test: a marker that wins against every surface is an x-ray, visible through the platform
+	# the camera panned behind (#431) -- what the pointer needed was to stop being coplanar with
+	# a wall, which it now is by position rather than by opting out of depth.
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED if marker.get("double_sided", false) \
+			else BaseMaterial3D.CULL_BACK
 	_apply_atlas_uv(material, texture)
 
 
