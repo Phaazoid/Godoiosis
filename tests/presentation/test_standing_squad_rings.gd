@@ -251,7 +251,14 @@ func test_the_crown_stands_with_the_rings_and_outlives_a_hover_out() -> void:
 	assert_int(heads.size()).override_failure_message(
 			"the leader's crown came down with the hover -- a standing squad wears BOTH"
 			).is_equal(1)
-	assert_bool(heads[0]["texture"] == crown).is_true()
+	# Searched rather than indexed: an empty channel is the very thing this case catches, and
+	# heads[0] would ERROR out of the case instead of failing it with the message above.
+	var still_crowned := false
+	for marker in heads:
+		if marker["texture"] == crown:
+			still_crowned = true
+	assert_bool(still_crowned).override_failure_message(
+			"what survived on the head channel is not the crown").is_true()
 	assert_int(_ringed_units().size()).override_failure_message(
 			"the rings came down with the hover").is_equal(2)
 
