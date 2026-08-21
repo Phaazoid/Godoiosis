@@ -55,14 +55,7 @@ func _ready() -> void:
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(_tabs)
 	for tab_title: String in tab_titles():
-		var scroll := ScrollContainer.new()
-		scroll.name = tab_title
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		_tabs.add_child(scroll)
-		var rows := VBoxContainer.new()
-		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		scroll.add_child(rows)
-		_tab_rows[tab_title] = rows
+		_tab_rows[tab_title] = DevWidgets.add_knob_scroll(_tabs, tab_title)
 	# Before any host arrives, and not only on attach: a CLASS knob is readable with no host at all
 	# (a static needs nothing but the class), so a panel that had not captured its baseline yet
 	# reported all three statics as moved the moment it was built.

@@ -25,4 +25,3 @@ render_target_update_mode = 4
 texture_filter = 1
 
 [node name="DevOverlay" parent="." unique_id=1904372676 instance=ExtResource("2_idj7w")]
-size = Vector2i(900, 720)

@@ -274,16 +274,26 @@ func _update_zone_visibility() -> void:
 func show_beside():
 	var main_pos := DisplayServer.window_get_position(DisplayServer.MAIN_WINDOW_ID)
 	var main_size := DisplayServer.window_get_size(DisplayServer.MAIN_WINDOW_ID)
-	position = main_pos + Vector2i(main_size.x + 16, 0)
-	# Keep the whole window on the monitor: overlapping the game beats hanging off-screen.
 	var usable := DisplayServer.screen_get_usable_rect(
 		DisplayServer.window_get_current_screen(DisplayServer.MAIN_WINDOW_ID))
-	position = Vector2i(
-		clampi(position.x, usable.position.x, usable.position.x + usable.size.x - size.x),
-		clampi(position.y, usable.position.y, usable.position.y + usable.size.y - size.y))
+	position = clamp_to_screen(main_pos + Vector2i(main_size.x + 16, 0), size, usable)
 	scenario_header.refresh_on_show()   # aim the dropdown at the loaded scenario on every window show
 	show()
 	_update_zone_visibility()
+
+# Keep the whole window on the monitor: overlapping the game beats hanging off-screen. Static and
+# pure so a screen this machine does not have can still be asked about (#403).
+#
+# The maxi is load-bearing. A window WIDER than the usable rect makes the upper bound smaller than
+# the lower, and clampi answers with whichever bound it tests last -- the upper one, i.e. a
+# NEGATIVE x. That parks the window off the left edge of the screen taking the tool tree, which
+# lives in its leftmost 210px, with it. Preferring the lower bound puts the overflow on the right,
+# where nothing but the far end of a knob row is.
+static func clamp_to_screen(wanted: Vector2i, window_size: Vector2i, usable: Rect2i) -> Vector2i:
+	var far := usable.position + usable.size - window_size
+	return Vector2i(
+		clampi(wanted.x, usable.position.x, maxi(usable.position.x, far.x)),
+		clampi(wanted.y, usable.position.y, maxi(usable.position.y, far.y)))
 
 # The banner SAYS its state three ways -- switch position, word, and background colour -- because
 # the switch alone was what the dev could not read at a glance. The word is the load-bearing one.
