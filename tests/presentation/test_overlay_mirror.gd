@@ -32,6 +32,10 @@ func before_test() -> void:
 	# Statics outlive a test; cache rather than restore-to-a-literal, per the tuning razor.
 	_ring_alpha_was = OverlayManager.SQUAD_RING_ALPHA
 	_shove_colour_was = OverlayManager.KNOCKBACK_MODULATE
+	# DECLARES which board this suite asserts on: the one a player who has changed nothing sees.
+	# The icon channel forks on ALWAYS_SHOW_SQUAD_RINGS, and the ON branch is a real player-facing
+	# state, not a stray -- it is pinned next door in test_standing_squad_rings (#449).
+	PlayerSettings.reset_for_test()
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -989,11 +993,14 @@ func _point_at(cell: Vector2i) -> void:
 	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
 
 
-func test_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -> void:
+func test_with_rings_off_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -> void:
 	# The TIMING half of #325's verdict, in the dev's own words: the crown "stays over the squad
 	# leader whenever you are hovering over any squad member, like it did before". Nothing asserted
 	# that end to end before -- get_squad_icons was never the thing that broke, the 3D mirror was,
 	# and a case that draws the icons by hand cannot tell the two apart.
+	#
+	# The clearing half is TRUE ONLY WITH STANDING RINGS OFF, which before_test declares (#449):
+	# with them on the crown stands with them, and that branch is pinned in test_standing_squad_rings.
 	var pair := _squad_pair()
 	_point_at(pair[1].movement.cell)   # the MEMBER, not the leader
 	await _settle()

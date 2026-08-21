@@ -21,8 +21,9 @@ var _overlays: BoardOverlays
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
-	# The setting persists to disk for real players, so a suite that skipped this would read the
-	# DEV'S OWN settings.cfg and pass or fail by what he last clicked.
+	# This suite SWITCHES the setting on, and _state is a static that outlives a case -- so the
+	# wipe is what stops the ON branch leaking into whatever runs next. (Reading the dev's own
+	# cfg stopped being possible in #449: a headless process honours nobody's preferences.)
 	PlayerSettings.reset_for_test()
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
@@ -224,6 +225,35 @@ func test_hovering_a_solo_unit_does_not_wipe_another_squads_standing_rings() -> 
 	assert_bool(ringed.has(pair[0]) and ringed.has(pair[1])).override_failure_message(
 			"hovering an unsquadded unit wiped the other squad's standing rings"
 			).is_true()
+
+
+# THE OTHER BRANCH OF #449, and the dev's ruling on it (2026-08-21): a standing squad wears its
+# rings AND its leader's crown, so the crown does not come down on the way out of a hover.
+# test_overlay_mirror pins the setting-OFF twin -- there the hover-raised crown DOES clear -- and
+# that case went red on the dev's own machine precisely because nothing said this branch existed.
+func test_the_crown_stands_with_the_rings_and_outlives_a_hover_out() -> void:
+	_rings_on()
+	var pair := _pair()
+	await _settle()
+	var crown: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.CROWN]
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).override_failure_message(
+			"the standing sweep put rings down without the leader's crown").is_equal(1)
+
+	# Hover the MEMBER and then look away: the clear that raises a selection crown and drops it.
+	game.hover_presenter.update_hover_visuals(pair[1].movement.cell)
+	await _settle()
+	var empty := Vector2i(1, 6)
+	assert_object(game.get_unit_at_cell(empty)).is_null()   # fixture setup, not the claim
+	game.hover_presenter.update_hover_visuals(empty)
+	await _settle()
+
+	var heads := _overlays.markers_of(BoardOverlays.Layer.ICONS)
+	assert_int(heads.size()).override_failure_message(
+			"the leader's crown came down with the hover -- a standing squad wears BOTH"
+			).is_equal(1)
+	assert_bool(heads[0]["texture"] == crown).is_true()
+	assert_int(_ringed_units().size()).override_failure_message(
+			"the rings came down with the hover").is_equal(2)
 
 
 # --- Solo units wear no ring (#441) ------------------------------------------------

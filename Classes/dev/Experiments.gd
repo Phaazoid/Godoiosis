@@ -33,13 +33,19 @@ const CONFIG_SECTION := "experiments"
 
 # Where toggles persist. A static var (not const) so tests can redirect it to a temp file.
 static var config_path := "user://experiments.cfg"
-# Tests flip this false to stay fully in-memory (no disk I/O).
+# Tests flip this false to stay fully in-memory (no disk I/O); _static_init clears it headlessly.
 static var persistence_enabled := true
 
 # Runtime on/off state, keyed by Flag. `static var` => one instance for the whole run,
 # no autoload needed (mirrors how Stats / Elemental are class-level statics).
 static var _state: Dictionary[Flag, bool] = {}
 static var _loaded := false
+
+# Nobody is at the keyboard in a headless run, so there is no dev whose flags these are -- the
+# suite reads the DEFAULTS rather than this machine's cfg. PlayerSettings' rule, same shape (#449).
+static func _static_init() -> void:
+	if DisplayServer.get_name() == "headless":
+		persistence_enabled = false
 
 # --- read / write API ---
 
