@@ -481,7 +481,7 @@ func get_faction() -> Team.Faction:
 
 # NB: "has squadMATES" — a solo unit still belongs to a managed squad of one.
 func has_squad() -> bool:
-	return squad.get_members().size() > 1
+	return squad != null and squad.has_squadmates()
 
 func is_leader() -> bool:
 	return squad.get_leader() == self

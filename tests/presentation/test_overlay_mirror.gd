@@ -24,12 +24,14 @@ var _mirror: OverlayMirror
 
 
 var _ring_alpha_was: float
+var _shove_colour_was: Color
 
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
 	# Statics outlive a test; cache rather than restore-to-a-literal, per the tuning razor.
 	_ring_alpha_was = OverlayManager.SQUAD_RING_ALPHA
+	_shove_colour_was = OverlayManager.KNOCKBACK_MODULATE
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
@@ -46,6 +48,7 @@ func before_test() -> void:
 
 func after_test() -> void:
 	OverlayManager.SQUAD_RING_ALPHA = _ring_alpha_was
+	OverlayManager.KNOCKBACK_MODULATE = _shove_colour_was
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -1058,3 +1061,102 @@ func test_every_board_icon_is_authored_at_one_cell() -> void:
 				% [OverlayIcon.IconType.keys()[type], str(art.get_size()), str(cells),
 					int(BoardOverlays.ART_PIXELS_PER_CELL)]
 			).is_equal(Vector2.ONE)
+
+
+# --- The shove trail's own colour (2026-08-21) ----------------------------------------------
+
+# A predicted shove and an authored move used to draw IDENTICALLY -- show_knockback_preview passed
+# Color.WHITE and _arrow_modulate returns Color.WHITE for a valid planned move -- so the board said
+# the same thing about a unit's own order and about what was about to be done to it.
+#
+# The assertion is a RELATIONSHIP, never the hue: KNOCKBACK_MODULATE is a tuning value on the Game
+# tab and pinning its components here would red the moment the dev drags the slider.
+func test_a_shove_trail_does_not_wear_a_planned_moves_colour() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	_om().show_knockback_preview([{"target": foe, "path": path, "to": Vector2i(5, 2)}])
+	await _settle()
+
+	var move := MoveAction.new()
+	move.is_valid = true
+	move.is_trailing = false
+	var authored: Color = _om()._arrow_modulate(move)   # the planned-move tint, derived not typed
+	assert_that(OverlayManager.KNOCKBACK_MODULATE).override_failure_message(
+			"a shove draws in the same colour as an order the player authored"
+			).is_not_equal(authored)
+
+	var trails := _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK)
+	assert_bool(trails.size() > 0).override_failure_message(
+			"no knockback markers reached 3D; the case is vacuous").is_true()
+	for marker: Dictionary in trails:
+		assert_that(marker["modulate"]).override_failure_message(
+				"a knockback marker reached 3D wearing the planned-move colour").is_not_equal(authored)
+
+
+# The drop pointer (#431) hardcoded its own Color.WHITE, so tuning the trail would have left the
+# pointer behind -- one shove drawn in two colours, which reads as a bug rather than as a knob. It
+# copies the sprite it hangs from now, the way every other flat marker already does.
+func test_the_drop_pointer_wears_the_trail_it_hangs_from() -> void:
+	var origin := Vector2i(3, 2)
+	game.board_heights.set_cell(origin, 2)   # a cliff, so there is a break to point at
+	var foe := _spawn(ENEMY, origin)
+	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(5, 2)]
+	_om().show_knockback_preview([{"target": foe, "path": path, "to": Vector2i(5, 2),
+			"removed": false, "landing_index": 2}])
+	await _settle()
+
+	var pointers := 0
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		if _is_flat(marker):
+			continue   # the pointer is the one whose plane is NOT lying on the ground
+		pointers += 1
+		assert_that(marker["modulate"]).override_failure_message(
+				"the drop pointer kept a colour of its own while the trail moved"
+				).is_equal(OverlayManager.KNOCKBACK_MODULATE)
+	assert_bool(pointers > 0).override_failure_message(
+			"the cliff drew no drop pointer; the case is vacuous").is_true()
+
+
+# The knob has to move a preview that is ALREADY up, or it is a slider that appears to do nothing
+# until the next shove (#324's lesson, and the reason restyle_squad_markers exists next door).
+func test_tuning_the_shove_colour_moves_a_preview_already_on_the_board() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	_om().show_knockback_preview([{"target": foe, "path": path, "to": Vector2i(5, 2)}])
+	await _settle()
+
+	var before: Color = OverlayManager.KNOCKBACK_MODULATE
+	OverlayManager.KNOCKBACK_MODULATE = Color(before.r, before.g, before.b, before.a * 0.5)
+	_om().restyle_knockback_trail()
+	await _settle()
+
+	for marker: Dictionary in _overlays.markers_of(BoardOverlays.Layer.KNOCKBACK):
+		assert_that(marker["modulate"]).override_failure_message(
+				"a standing shove preview kept the old colour after the knob moved"
+				).is_equal(OverlayManager.KNOCKBACK_MODULATE)
+
+
+# The ghost that stands in for a SHOVED unit was invisible to the queue-row highlight: the real
+# sprite is hidden (set_projected), but has_projected_unit only knew about the MOVE ghost store, so
+# HoverPresenter._highlight_unit fell through to UnitVisuals.set_highlighted and wrote its modulate
+# to a node nothing draws -- in the flat view and the diorama alike.
+func test_a_shoved_units_ghost_can_be_highlighted() -> void:
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	var path: Array[Vector2i] = [Vector2i(3, 2), Vector2i(4, 2), Vector2i(5, 2)]
+	_om().show_knockback_preview([{"target": foe, "path": path, "to": Vector2i(5, 2)}])
+	await _settle()
+
+	assert_bool(foe.visuals.projected).override_failure_message(
+			"the shove never hid the real sprite; the case is vacuous").is_true()
+	assert_bool(_om().has_projected_unit(foe)).override_failure_message(
+			"the board is standing a ghost in for this unit but will not admit it"
+			).is_true()
+
+	_om().set_projected_unit_highlighted(foe, true)
+	var ghost: Sprite2D = _om().knockback_ghost_by_unit[foe]
+	assert_that(ghost.modulate).override_failure_message(
+			"highlighting a shoved unit moved nothing the player can see"
+			).is_equal(OverlayManager.PROJECTED_HIGHLIGHT)
+
+	_om().set_projected_unit_highlighted(foe, false)
+	assert_that(ghost.modulate).is_equal(OverlayManager.PROJECTED_MODULATE)

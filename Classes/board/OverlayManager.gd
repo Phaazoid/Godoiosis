@@ -131,6 +131,24 @@ static var GUARD_RING_SCALE := 1.0
 # no toggle, no second style. SQUAD_RING_ALPHA stays a live Look-tab value; it tunes a shipped
 # feature rather than picking between two.
 static var SQUAD_RING_ALPHA := 0.9
+
+# --- Arrow tints (2026-08-21) --------------------------------------------------------------
+# The trail ART is GREYSCALE, so every colour below is exactly what the board shows. It was cyan
+# until now, and modulate MULTIPLIES: dialling yellow zeroed the blue channel and drew green, and
+# a "white" planned move had always rendered cyan. Desaturating the 14 segments is what makes these
+# four values mean what they say. (ERROR.png keeps its red -- GridUtils.ERROR_ICON draws it
+# untinted as the unknown-terrain marker.)
+#
+# A shove and a planned move are opposite kinds of fact -- one is what a unit CHOSE, the other is
+# what is about to be done to it -- and they drew identically until now.
+static var KNOCKBACK_MODULATE := Color(1.0, 1.0, 0.0, 0.9)
+# Pre-tuned to the art's own brightest pixel (136,248,248), so a planned move looks exactly as it
+# did before the desaturation rather than turning white by accident (dev, 2026-08-21).
+static var MOVE_ARROW_MODULATE := Color(0.4118, 1.0, 1.0, 1.0)
+# These two keep the numbers they always had, so both now read BRIGHTER than before -- the cyan art
+# used to multiply them down. Knobs, not guesses: tune against the shove colour on the Game tab.
+static var INVALID_ARROW_MODULATE := Color(1, 0.25, 0.25, 0.85)
+static var TRAILING_ARROW_MODULATE := Color(0.4, 1, 0.45, 0.9)
 # Per-squad hues, dealt lazily by SquadManager when a squad first gains a squadmate: cool for
 # friendly squads, warm for enemy ones, so "which squad" and "whose side" read from one glance.
 # Plain consts, one per line -- edit freely; WHITE is reserved as the not-yet-dealt sentinel.
@@ -168,6 +186,11 @@ var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
 var knockback_preview_sprites: Array[Node2D] = []
+# The knockback ghosts, keyed so "which sprite stands for this unit?" has an answer for them too.
+# A DECLARED second store rather than an entry in projected_unit_sprites: the two have different
+# lifetimes (a move ghost dies with clear_projected_unit, a shove's with clear_knockback_preview),
+# so they stay apart and _ghost_for is the one place that answers across both.
+var knockback_ghost_by_unit := {} # { Unit : Sprite2D }
 # ZoneManager.Kind -> the TileMapLayer that draws it. A layer per kind rather than a method per
 # kind: colour is `modulate`, which is per-LAYER, so a kind that needs its own colour needs its
 # own layer. Adding a kind is one line here.
@@ -427,7 +450,7 @@ func show_knockback_preview(shoves: Array) -> void:
 		# The WHOLE trail, cell by cell, through the same texture pick a planned move uses (#126).
 		var path: Array[Vector2i] = shove["path"]
 		var landing: int = shove.get("landing_index", path.size() - 1)
-		var trail := _draw_arrow_trail(path, Color.WHITE)
+		var trail := _draw_arrow_trail(path, KNOCKBACK_MODULATE)
 		for i in trail.size():
 			# The AIRBORNE geometry, riding each sprite for the 3D mirror (#259 rework) — the
 			# flat canvas can't draw height, but the trail must not pretend the flight hugs the
@@ -470,6 +493,7 @@ func show_knockback_preview(shoves: Array) -> void:
 		ghost.offset = Vector2i(0, -8)
 		projected_unit_overlay.add_child(ghost)
 		knockback_preview_sprites.append(ghost)
+		knockback_ghost_by_unit[unit] = ghost
 
 func clear_knockback_preview() -> void:
 	for unit in knockback_hidden_units:
@@ -480,6 +504,19 @@ func clear_knockback_preview() -> void:
 		if is_instance_valid(sprite):
 			sprite.queue_free()
 	knockback_preview_sprites.clear()
+	knockback_ghost_by_unit.clear()
+
+# Re-tint a preview that is already up, so the Game-tab knob is not a slider that moves nothing
+# until the next shove (#324's lesson). TRAIL sprites only -- the same parent test OverlayMirror
+# forks on -- because the ghosts in that array wear PROJECTED_MODULATE and are not part of the
+# trail. A sprite whose texture was nulled (a void removal) is re-tinted too: the 3D drop pointer
+# copies its modulate, so it still carries the colour even with nothing to draw flat.
+func restyle_knockback_trail() -> void:
+	for node in knockback_preview_sprites:
+		if not is_instance_valid(node):
+			continue
+		if node.get_parent() == arrow_icon_overlay:
+			node.modulate = KNOCKBACK_MODULATE
 
 func show_planned_path(unit: Unit, move: MoveAction):
 	if planned_move_by_unit.has(unit):
@@ -622,7 +659,16 @@ func redraw_squad_unit_icons(squad: Squad):
 # redraw above so the standing-ring sweep (game.refresh_squad_rings) can draw many squads without
 # each one wiping the last -- the alternative was a second copy of this pair, which is how the two
 # would have drifted.
+#
+# The membership gate lives HERE rather than at the call sites (#441): a ring means "this unit is in
+# a squad with somebody", so a solo squad has nothing to say on this channel -- and two of the three
+# callers had no gate, which put a ring tinted with the UNDEALT ring_hue sentinel (Color.WHITE) under
+# solo units between AI turns. A sentinel that can reach the screen is being read as a colour.
+# The crown rides the same gate on purpose: a solo unit leads nobody, which is the rule
+# _on_squad_became_active already applied to its own crown.
 func draw_squad_unit_icons(squad: Squad) -> void:
+	if squad == null or not squad.has_squadmates():
+		return
 	for member in squad.get_members():
 		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
 		if member == squad.get_leader():
@@ -766,10 +812,10 @@ func _dirs_match(a: Vector2i, b: Vector2i, dir1: Vector2i, dir2: Vector2i) -> bo
 # shove, which has no MoveAction to ask.
 func _arrow_modulate(move: MoveAction) -> Color:
 	if not move.is_valid:
-		return Color(1, .25, .25, .85)
+		return INVALID_ARROW_MODULATE
 	if move.is_trailing:
-		return Color(.4, 1, .45, .9)
-	return Color.WHITE
+		return TRAILING_ARROW_MODULATE
+	return MOVE_ARROW_MODULATE
 
 func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, tint: Color) -> Sprite2D:
 	var sprite := Sprite2D.new()
@@ -809,14 +855,22 @@ func show_projected_unit(unit: Unit, cell: Vector2i):
 	projected_unit_overlay.add_child(sprite)
 	projected_unit_sprites[unit] = sprite
 
+# Whichever ghost is standing in for this unit, from EITHER store -- a queued move's or a predicted
+# shove's. Both hide the real sprite (UnitVisuals.set_projected), so a caller that only knew about
+# the move ghost wrote its highlight to a node nobody can see: hovering the queue row for an attack
+# that knocks its target back lit nothing at all, in the flat view and the diorama alike.
+func _ghost_for(unit: Unit) -> Sprite2D:
+	var sprite: Sprite2D = projected_unit_sprites.get(unit)
+	if sprite == null:
+		sprite = knockback_ghost_by_unit.get(unit)
+	return sprite if is_instance_valid(sprite) else null
+
 func has_projected_unit(unit: Unit) -> bool:
-	return projected_unit_sprites.has(unit)
+	return _ghost_for(unit) != null
 
 func set_projected_unit_highlighted(unit: Unit, value: bool) -> void:
-	if not projected_unit_sprites.has(unit):
-		return
-	var sprite: Sprite2D = projected_unit_sprites[unit]
-	if not is_instance_valid(sprite):
+	var sprite := _ghost_for(unit)
+	if sprite == null:
 		return
 	sprite.modulate = PROJECTED_HIGHLIGHT if value else PROJECTED_MODULATE
 

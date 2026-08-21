@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #432 (2026-08-21).**
+**Canon checked through #443 (2026-08-21).**
 
 ## Principles
 
@@ -468,6 +468,28 @@ another in `game`.
 **The sharpened form: find the clears by grepping for them, not by imagining which ones matter.**
 Both misses were writers that clear the channel for a reason unrelated to the new feature, and the
 second was reachable by a mouse movement on a board with nothing selected — the most ordinary state
+
+**A SENTINEL MUST NOT BE REACHABLE AS A DISPLAY VALUE ([#441](https://github.com/Phaazoid/Godoiosis/issues/441), 2026-08-21).**
+The dev found solo units flashing a **white** ring between AI turns in Prolog. `Color.WHITE` is
+`Squad.ring_hue`'s *undealt* sentinel — dealt only at a squad's first squadmate — so the instant it
+rendered it was being read as a colour. Cause: `redraw_squad_unit_icons` drew a ring for every member
+of whatever squad it was handed, and **two of its three callers had no membership gate**
+(`_on_squad_has_no_actions`, `_on_unit_action_cancelled`; only `_repaint_squad_plan` checked). The
+timing was the tell — `_end_squad_turn` drains the queue with `remove_action`, each firing
+`action_cancelled` into the ungated redraw, which is exactly *"after one ends their move and another
+starts theirs"*. **It predated the rings' standing lifecycle entirely** (verified byte-identical on
+`main`), so #435 neither caused nor could have caught it.
+
+The gate now lives in `draw_squad_unit_icons`, where the *meaning* is — a ring says "this unit is in
+a squad with somebody", so a solo squad has nothing to say on the channel and every caller inherits
+the answer. The crown rides the same gate: a solo unit leads nobody, which is the rule
+`_on_squad_became_active` already applied to its own crown, so the two now agree.
+
+**The question had three spellings and was one gate away from a fourth** — `Unit.has_squad()`,
+`_repaint_squad_plan`'s `has_squadmates`, and #435's standing sweep each re-derived
+`get_members().size() > 1`. It is now `Squad.has_squadmates()`, and all three route through it;
+Law #4 says extend the existing answer rather than add another, and the *fourth* spelling is exactly
+what a bug fix is tempted to write.
 the game has.
 
 **Two findings worth keeping.** First, **persistence is what made a stale copy visible**:
@@ -613,8 +635,15 @@ same value and needs a declared relationship with the authored default, not a se
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
 landed as #229 above; the PANEL half and Will are both still open); squad-target
-cursor color-coding; muted squad icons when another squad is active; simultaneous-movement
-legibility (needs design first — the umbrella's core problem).
+cursor color-coding; simultaneous-movement legibility (needs design first — the umbrella's core
+problem).
+
+**Dropped 2026-08-21 (dev), not deferred — deleted from the umbrella rather than left to rot:**
+*muted squad icons when another squad is active* (the mute motif above stands; this particular
+application does not), *fade queued move arrows and restore on hover* (the move to 3D made it
+unnecessary), and *downed units respond to no sprite effect* (since #222/#232/#321 the mirror
+copies `modulate` and `animation_offset` off the hidden 2D node ungated by lifecycle, so highlight,
+flash and pulse already reach a downed unit in the boot view).
 
 **A unit IN CRISIS must read as unmistakable at board glance (dev, 2026-08-09 — filed with
 [#158](https://github.com/Phaazoid/Godoiosis/issues/158)'s ability re-homing):** the skull in the
