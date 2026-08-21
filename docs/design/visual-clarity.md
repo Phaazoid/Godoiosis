@@ -453,6 +453,23 @@ without `OverlayManager` learning what a player setting is. The general form: **
 tenant to a channel means auditing every writer that clears the channel, not just the ones that
 draw the new thing.**
 
+**It bit a SECOND time, at a different clear, and that one reached the dev.** `clear_selection_icons`
+is called by `HoverPresenter._hover_idle` on **every hover change while nothing is selected** — bare
+ground included — so the rings drew at load and the first mouse movement wiped them: *"I toggle them
+on, go back into the level, and they are not on. I still have to hover to show them."* Every headless
+case passed because none of them ever **moved the cursor**, which is the one thing a player does
+constantly. The fix is the method's own name taken literally — it drops the SELECTION's markers, and
+standing rings are not the selection's, so they go straight back up. `game.draw_standing_rings` is
+now the single implementation of *what is on this channel with nothing selected*, called by that
+clear and, through `OverlayManager.standing_rings_drawer`, by the per-squad redraw; the injected
+Callable DRAWS rather than returning a squad list precisely so there is not one answer here and
+another in `game`.
+
+**The sharpened form: find the clears by grepping for them, not by imagining which ones matter.**
+Both misses were writers that clear the channel for a reason unrelated to the new feature, and the
+second was reachable by a mouse movement on a board with nothing selected — the most ordinary state
+the game has.
+
 **Two findings worth keeping.** First, **persistence is what made a stale copy visible**:
 `OverlayIcon` stored the cell it was built on and `OverlayMirror` anchored on that copy, which was
 invisible only because markers were rebuilt constantly — the instant one outlived a move it sat on

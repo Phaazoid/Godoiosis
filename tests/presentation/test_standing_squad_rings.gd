@@ -188,3 +188,39 @@ func test_hovering_one_squad_keeps_another_squads_standing_rings() -> void:
 			"the other squad lost its standing rings when this one was redrawn -- a per-squad redraw clears the whole channel"
 			).is_true()
 	assert_int(ringed.size()).is_equal(4)
+
+
+# THE BUG THE DEV FOUND BY PLAYING (2026-08-21): rings drew at load and then vanished, and only a
+# hover brought them back. _hover_idle clears the icon channel on EVERY hover change while nothing
+# is selected -- hovering bare ground included -- so the first mouse movement after the board came
+# up wiped the standing set. Every case above passed because none of them ever moved the mouse,
+# which is the one thing a player does constantly.
+func test_hovering_empty_ground_does_not_wipe_the_standing_rings() -> void:
+	_rings_on()
+	var pair := _pair()
+	await _settle()
+	assert_int(_ringed_units().size()).is_equal(2)   # precondition, not the claim
+	# The real seam: HoverPresenter's IDLE branch, over a cell with no unit on it.
+	var empty := Vector2i(1, 6)
+	assert_object(game.get_unit_at_cell(empty)).is_null()   # fixture setup
+	game.hover_presenter.update_hover_visuals(empty)
+	await _settle()
+	var ringed := _ringed_units()
+	assert_bool(ringed.has(pair[0]) and ringed.has(pair[1])).override_failure_message(
+			"moving the cursor over empty ground wiped the standing rings -- a SELECTION clear is removing markers the selection does not own"
+			).is_true()
+
+
+# The same clear, reached the other way: hovering a unit that is not in a standing squad.
+func test_hovering_a_solo_unit_does_not_wipe_another_squads_standing_rings() -> void:
+	_rings_on()
+	var pair := _pair()
+	var loner := _spawn(Vector2i(9, 6))
+	await _settle()
+	assert_int(_ringed_units().size()).is_equal(2)   # the loner has no squadmates, so no ring
+	game.hover_presenter.update_hover_visuals(loner.movement.cell)
+	await _settle()
+	var ringed := _ringed_units()
+	assert_bool(ringed.has(pair[0]) and ringed.has(pair[1])).override_failure_message(
+			"hovering an unsquadded unit wiped the other squad's standing rings"
+			).is_true()

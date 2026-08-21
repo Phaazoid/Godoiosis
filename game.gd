@@ -192,7 +192,7 @@ func _wire_signals() -> void:
 	squad_manager.squad_deleted.connect(func(_s: Squad): refresh_squad_rings())
 	squad_manager.squad_member_joined.connect(func(_s: Squad, _u: Unit): refresh_squad_rings())
 	# The per-squad redraw clears the whole channel, so it has to know the standing set too.
-	overlay_manager.standing_squads_source = standing_ring_squads
+	overlay_manager.standing_rings_drawer = draw_standing_rings
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
@@ -635,7 +635,7 @@ func clear_selection():
 	if squad_manager.active_squad == null:
 		overlay_manager.clear_squad_range()
 	if squad_manager.active_squad == null:
-		clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+		clear_selection_icons()
 
 # ==============================================================================
 #  Queueing orders
@@ -1016,13 +1016,19 @@ func clear_icons(icons: Array[OverlayIcon.IconType]):
 # HoverPresenter/OrderExecutor reach this through an UNTYPED `game` ref, and a bare array
 # literal sent that way never gets coerced to clear_icons' typed parameter (it fails at
 # runtime, not at parse time). Keeping the literal on this side of the boundary avoids it.
+#
+# It drops the SELECTION's markers and no others, which is why the standing rings go straight back
+# up: they are not the selection's. That is the whole of the 2026-08-21 bug the dev found by
+# playing -- _hover_idle calls this on EVERY hover change while nothing is selected, bare ground
+# included, so the first mouse movement after a board came up wiped the standing set and only a
+# hover brought it back.
 func clear_selection_icons() -> void:
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	draw_standing_rings()
 
 # --- Standing squad rings (ALWAYS_SHOW_SQUAD_RINGS) ----------------------------------------
-# WHICH squads wear a standing ring: THE one answer, read by the sweep below and -- through
-# OverlayManager.standing_squads_source -- by the per-squad redraw the hover and plan paths call.
-# Empty while the setting is off, so those paths behave exactly as they did.
+# WHICH squads wear a standing ring: THE one answer. Empty while the setting is off, which is what
+# keeps every path above behaving exactly as it did.
 #
 # Gated on the squad having squadmates -- Unit.has_squad's question, the one _repaint_squad_plan
 # also asks -- and NOT on ring_hue: a hue is dealt once at the first squadmate and never reset, so
@@ -1036,20 +1042,25 @@ func standing_ring_squads() -> Array[Squad]:
 			standing.append(squad)
 	return standing
 
-# Rebuild the marker channel from membership. The setting guard is NOT redundant with the empty
-# list above: while the setting is off this must not touch the channel at all, where clearing it
-# and drawing nothing would wipe whatever the selection had up.
+# Put the standing set onto a channel that has just been cleared -- THE one implementation, called
+# by clear_selection_icons above and, through OverlayManager.standing_rings_drawer, by the
+# per-squad redraw the hover and plan paths use. A marker channel that is cleared whole has to be
+# redrawn whole, and this is the one thing that knows what "whole" means when nothing is selected.
+func draw_standing_rings() -> void:
+	for squad: Squad in standing_ring_squads():
+		overlay_manager.draw_squad_unit_icons(squad)
+
+# Membership changed, so the standing set may have gained or lost a squad. Rebuilds rather than
+# adds, which is what makes a marker DISAPPEAR again -- create_unit_icon only ever adds, so a squad
+# dropping back to one member would otherwise leave its rings behind.
 #
-# It REBUILDS rather than adds, which is what makes a marker DISAPPEAR again -- create_unit_icon
-# only ever adds, so a squad dropping back to one member would otherwise leave its rings behind.
-# A selected squad is already in the standing set and target-pick markers are redrawn by their own
-# mode, so the clear costs nothing visible.
+# The setting guard is NOT redundant with standing_ring_squads' empty list: while the setting is
+# off this must not touch the channel at all, where clearing it would wipe the selection's markers
+# and put nothing back.
 func refresh_squad_rings() -> void:
 	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
 		return
 	clear_selection_icons()
-	for squad: Squad in standing_ring_squads():
-		overlay_manager.draw_squad_unit_icons(squad)
 
 # ==============================================================================
 
