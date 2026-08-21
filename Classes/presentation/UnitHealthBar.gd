@@ -66,7 +66,7 @@ var _label: Label3D
 var _state_icons: Array[MeshInstance3D] = []
 # #322: the rescue clock's digits, sitting after the last icon in that row. Its own Label3D rather
 # than more text on _label — that one reads the HP and sits ON the bar, this one belongs to the row
-# above it, and the two want different sizes.
+# above it, so they are placed by different rules even though they are drawn at one size.
 var _count: Label3D
 
 var _width := 32.0

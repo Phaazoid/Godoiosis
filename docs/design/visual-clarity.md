@@ -656,6 +656,18 @@ gained a `DOWNED` const — deliberately **not** an `ICONS` entry, since that di
 predicted lethality **rung** is a different question, and it needs kill and maim art no status row
 has any use for.
 
+**THE HP DIGITS ARE THE FLOOR FOR ANY NUMBER IN THIS VOLUME (dev, in play, 2026-08-21):** *"any
+number needs to be at least as big as the numbers in the healthbar to be readable. Smaller than
+that is just impossible."* The clock shipped smaller and had to be raised — and the ruling that
+came with it is the more useful half: **that is a legibility floor, not a taste value, so it is not
+a knob.** The count reads `number_height_cells` directly, joining the colour and outline it already
+inherited, and its own size dial was deleted rather than re-defaulted — a dial whose entire lower
+range is unreadable is worse than none, and every value removed is one fewer way for two texts on
+one display to disagree. Wanting a number *bigger* than the HP digits would be a knob to add
+deliberately. Pinned as a RELATIONSHIP (`downed_count_glyph_height >= number_glyph_height`), so
+retuning the HP number moves both sides and can never red the suite — the tuning razor's own shape,
+applied to a rule rather than a value.
+
 **No 2D half, and that is not a new gap.** The flat view has no over-unit health readout of any
 kind, so there is no `1/20` there to disambiguate — the ticket's own "the 2D has the same gap" line
 was measured false. The 2D already says downed twice (the swapped sprite, the hover card's icon and
