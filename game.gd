@@ -759,6 +759,15 @@ func refresh_action_queue(squad: Squad):
 		overlay_manager.clear_knockback_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
+	# A running pass owns its plan (#361). Every order is still in the queue until _end_squad_turn,
+	# so a re-derive mid-pass re-simulates attacks that have ALREADY landed — _hypo_for seeds from
+	# live HP, so their damage is counted twice. Refused here rather than at the death handler that
+	# happens to be the loudest caller: the rows, the shove/deposit overlays, validate's is_valid
+	# writes and GuardAction.resolved_spent all hang off this one call. The null-squad branch above
+	# is a different question ("there is no squad to show") and still clears — a mission ending
+	# mid-pass must empty the panel.
+	if order_executor.executing_plan != null:
+		return
 	# ONE resolve feeds both the queue rows and the board preview — they used to resolve
 	# independently, doubling every refresh (docs/performance.md).
 	var plan := squad_manager.resolve_plan(squad, _board())

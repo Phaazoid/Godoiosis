@@ -809,10 +809,10 @@ func _hovered_unit() -> Unit:
 # absent rather than showing somebody else's intentions.
 #
 # While a pass is RUNNING that question has a better answer than the last resolve (#354): the plan
-# being executed. A kill mid-pass re-resolves the queue (game._on_unit_died), and a queue whose
-# earlier attacks have already landed re-simulates them — so the last resolve stops describing the
-# exchange the player is watching. One function still answers "which plan"; it just knows a live
-# pass outranks a stale resolve.
+# being executed. #361 closed the divergence at its source — refresh_action_queue now refuses to
+# re-derive mid-pass, so the last resolve IS the executing plan — but the preference stays: it costs
+# nothing and it does not lean on that gate holding. One function still answers "which plan"; it
+# just knows a live pass outranks a stale resolve.
 func _previewed_plan() -> ResolvedPlan:
 	var executing: ResolvedPlan = game.order_executor.executing_plan
 	if executing != null:
