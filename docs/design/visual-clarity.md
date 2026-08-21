@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #460 (2026-08-21).**
+**Canon checked through #461 (2026-08-21).**
 
 ## Principles
 
@@ -709,12 +709,11 @@ Two things deliberately did NOT change. **Move-before-main stands**: a unit hold
 still loses the row, because `MoveAction.actor_can_perform` refuses the order at the chokepoint, so
 relaxing that would be a rules change and not a menu one. Greying it with a reason instead of hiding
 it stays a live idea, and stays governed by the top-level ruling above — a permanently full main menu
-is a UX change, not a readout fix. **And Group Move stays one-shot**: both rows read `_can_move`
-since #443, so the queued-move clause moved down to the Group Move row rather than being deleted.
-Re-planning a *formation* is [#461](https://github.com/Phaazoid/Godoiosis/issues/461), and it has real content — `queue_group_move`'s
-all-or-nothing rollback cancels **every** member's move, which is already destructive and invisible
-only because a clean board has nothing to destroy. Pinned by `tests/ui/test_move_replan.gd`, which
-drives select → press the real button → click a tile, and asserts on the queue.
+is a UX change, not a readout fix. **Group Move was one-shot for one day**: both rows read
+`_can_move` since #443, so the queued-move clause moved down to the Group Move row rather than being
+deleted, and [#461](https://github.com/Phaazoid/Godoiosis/issues/461) then removed it — see below.
+Pinned by `tests/ui/test_move_replan.gd`, which drives select → press the real button → click a
+tile, and asserts on the queue.
 
 **Round 2 (same day, dev call): right-click CYCLES through it.** A queued move is not deleted by the
 press — it re-opens its planning, exactly as if you had hit Move again — so the button now walks
@@ -731,6 +730,35 @@ presentation call sites use it purely to paint the overlay and would start delet
 **two existing cases had to be rewritten**: both ended on an order count of zero, which stays true
 under re-entry, so neither could have told undo from re-planning until they started asserting
 `game_state`.
+
+**[#461](https://github.com/Phaazoid/Godoiosis/issues/461) finished it one row along — and the half
+worth remembering is the bug re-derivation found, not the relaxation.** A queued FORMATION is now
+re-plannable on the same rule (`game.begin_group_move_planning` spends the formation it replaces, so
+backing out leaves the squad with no moves), and that part is two lines — `queue_group_move` batches
+through `queue_action`, so `Squad._queue_action` displaces each member's move for free.
+
+What made it worth doing in that diff: **Group Move was being offered when a SQUADMATE held a main
+action.** `_can_move` only ever sees the unit whose menu is open, `GroupMoveSolver.plan` authors a
+move for that member anyway, `queue_action` refuses it (move-before-main), and the all-or-nothing
+rollback cancels *every* member's moves. #443 closed precisely this for the leader and stopped there,
+because the gate had no way to ask about anyone else. As a dead click it cost nothing; the moment the
+row became re-enterable it would have eaten a committed formation, and a squadmate with an attack
+queued is common. `_can_group_move` now asks `_can_move` of every member — **at the Group Move
+caller, because Move is a per-unit question and must not start reading squadmates.**
+
+The rollback itself is untouched: the AI and the Play API reach `queue_group_move` without the menu,
+so it stays their backstop, and `tests/squad/test_group_move_batching.gd` pins the member case at
+that layer too. Its loop is now `SquadManager.cancel_squad_moves`, which the new gesture also calls —
+two questions (*give up the advance*, *spend the formation*), one act.
+
+**Still destructive, declared:** with the gate closed, the only rollback cause a player can still
+reach is the rare cell-contention case cohesion already records (`followable_destinations` cannot see
+two members competing for one bubble cell). Re-planning into that clears the squad's moves. Fixing it
+means snapshot/restore around the batch, which would have to be justified at the AI's
+give-up-the-advance caller too — not free, and not this ticket.
+
+**Right-click still pops a formation whole** (dev call) — `game._lone_queued_move` scopes the
+re-plan rung to a single move, and a formation is one decision (#228).
 
 **Streamline move → main action.** After a move commits, open the unit's main-action menu
 automatically; or a double-click shortcut. Pure flow-feel, no model question. Open: which gesture,
