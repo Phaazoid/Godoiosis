@@ -224,3 +224,49 @@ func test_hovering_a_solo_unit_does_not_wipe_another_squads_standing_rings() -> 
 	assert_bool(ringed.has(pair[0]) and ringed.has(pair[1])).override_failure_message(
 			"hovering an unsquadded unit wiped the other squad's standing rings"
 			).is_true()
+
+
+# --- Solo units wear no ring (#441) ------------------------------------------------
+
+# The dev found this in Prolog: a solo unit flashed a WHITE ring between AI turns. redraw_squad_unit_icons
+# drew a ring for every member of whatever squad it was handed, and two of its three callers had no
+# membership gate -- so a solo squad, whose ring_hue is still the UNDEALT Color.WHITE sentinel, wore one.
+# Predates the standing-rings setting entirely (verified identical on main), so this drives the DEFAULT
+# off state; the case below covers the setting-on half.
+#
+# Driven through the executor rather than the seam, because the timing is the tell: _end_squad_turn
+# drains the queue with remove_action, each firing action_cancelled -> game._on_unit_action_cancelled
+# -> the ungated redraw. That is exactly "after one ends their move and another starts theirs".
+func test_a_solo_unit_wears_no_ring_after_its_turn_resolves() -> void:
+	var loner := _spawn(Vector2i(3, 3))
+	assert_bool(loner.squad.has_squadmates()).is_false()   # fixture setup, not the claim
+	# The hold order a squad's own activation queues -- what puts an action in the queue for
+	# _end_squad_turn to cancel.
+	game.squad_manager.setup_hold_move_actions(loner.squad)
+	await game.order_executor.execute_orders(loner)
+	await _settle()
+	assert_array(_ringed_units()).override_failure_message(
+			"a solo unit wore a squad ring -- ring_hue's undealt WHITE sentinel reached the screen as a colour"
+			).is_empty()
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS).size()).override_failure_message(
+			"the solo ring reached the 3D ground channel").is_equal(0)
+
+
+# The same, with standing rings ON: a solo squad is still not membership, so the setting must not
+# become a second way for one to appear.
+func test_a_solo_unit_wears_no_ring_with_standing_rings_on() -> void:
+	_rings_on()
+	var pair := _pair()
+	var loner := _spawn(Vector2i(3, 3))
+	await _settle()
+	assert_int(_ringed_units().size()).override_failure_message(
+			"the standing sweep drew a ring for the solo squad").is_equal(2)
+	game.squad_manager.setup_hold_move_actions(loner.squad)
+	await game.order_executor.execute_orders(loner)
+	await _settle()
+	var ringed := _ringed_units()
+	assert_bool(ringed.has(loner)).override_failure_message(
+			"the solo unit picked up a ring when its own turn resolved").is_false()
+	assert_bool(ringed.has(pair[0]) and ringed.has(pair[1])).override_failure_message(
+			"the real squad lost its standing rings when a solo unit's turn resolved"
+			).is_true()

@@ -581,7 +581,16 @@ func redraw_squad_unit_icons(squad: Squad):
 # redraw above so the standing-ring sweep (game.refresh_squad_rings) can draw many squads without
 # each one wiping the last -- the alternative was a second copy of this pair, which is how the two
 # would have drifted.
+#
+# The membership gate lives HERE rather than at the call sites (#441): a ring means "this unit is in
+# a squad with somebody", so a solo squad has nothing to say on this channel -- and two of the three
+# callers had no gate, which put a ring tinted with the UNDEALT ring_hue sentinel (Color.WHITE) under
+# solo units between AI turns. A sentinel that can reach the screen is being read as a colour.
+# The crown rides the same gate on purpose: a solo unit leads nobody, which is the rule
+# _on_squad_became_active already applied to its own crown.
 func draw_squad_unit_icons(squad: Squad) -> void:
+	if squad == null or not squad.has_squadmates():
+		return
 	for member in squad.get_members():
 		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
 		if member == squad.get_leader():

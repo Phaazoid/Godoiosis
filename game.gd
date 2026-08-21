@@ -875,7 +875,7 @@ func _on_unit_action_queued(squad: Squad, action: BaseAction):
 # lets the batch collapse N of these into one (docs/performance.md).
 func _repaint_squad_plan(squad: Squad) -> void:
 	# Squad-wide, so equivalent to the old per-actor unit.has_squad().
-	var has_squadmates: bool = squad.get_members().size() > 1
+	var has_squadmates: bool = squad.has_squadmates()
 	if squad_manager.active_squad == squad and has_squadmates:
 		draw_squad_leader_range(squad, squad.leader.get_projected_destination())
 	squad_manager.validate_squad_plan(squad)
@@ -1038,7 +1038,7 @@ func standing_ring_squads() -> Array[Squad]:
 	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
 		return standing
 	for squad: Squad in squad_manager.squads:
-		if is_instance_valid(squad) and squad.get_members().size() > 1:
+		if is_instance_valid(squad) and squad.has_squadmates():
 			standing.append(squad)
 	return standing
 

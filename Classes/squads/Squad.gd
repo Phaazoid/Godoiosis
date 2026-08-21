@@ -36,6 +36,14 @@ func get_leader() -> Unit:
 func get_members() -> Array[Unit]:
 	return members
 
+# Does this squad actually have MEMBERSHIP -- THE one answer, since every unit is born into a solo
+# squad of its own and "in a squad" is therefore never the question anyone means. It was spelled
+# three different ways (Unit.has_squad, _repaint_squad_plan's has_squadmates, #435's standing-ring
+# sweep) before #441, which is a fourth spelling waiting to happen.
+func has_squadmates() -> bool:
+	return members.size() > 1
+
+
 
 func _add_member(unit: Unit):
 	if not members.has(unit):
