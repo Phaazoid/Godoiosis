@@ -49,6 +49,20 @@ The three knob panels answer `has_unsaved_changes()` differently (Moods and Game
 Objects has none since its edits land in the live TileSet), which is why they shipped as one
 ticket rather than three improvisations.
 
+**And a knob page must not dictate the window's WIDTH** ([#403](https://github.com/Phaazoid/Godoiosis/issues/403),
+2026-08-21). `DevWidgets.add_knob_scroll` is the one answer to how a knob page scrolls — the
+ScrollContainer plus the row VBox inside it, which Moods, Game and Objects each built identically.
+Its horizontal axis is `SCROLL_MODE_AUTO`, and that is the fix rather than the tidy-up: **a
+ScrollContainer with an axis DISABLED declares its content's full width as its own MINIMUM**, so a
+panel pushed its widest row all the way up to the window. An `add_color` row is 841px — label 190,
+swatch, and four 0-255 slider/SpinBox pairs whose SpinBoxes measure **87 each however small a
+minimum they are asked for** — against the 678 a 900-wide window left a page, so the six colour
+sub-tabs ran off the right edge while every other page fitted. Scrolling costs nothing at the
+default size (the rows still EXPAND to fill a window with room) and degrades to a scrollbar rather
+than to silent clipping when the window is dragged narrower. Measurement moved the fix: an
+`HSplitContainer` does **not** squeeze its first child, so the tool tree was never displaced and
+the split-offset clamp the report proposed would have fixed nothing.
+
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
 

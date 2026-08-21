@@ -23,7 +23,7 @@ bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
 [node name="DevOverlay" type="Window" unique_id=1904372676]
 gui_embed_subwindows = true
 title = "Dev Tools"
-size = Vector2i(1160, 520)
+size = Vector2i(1200, 720)
 visible = false
 script = ExtResource("1_sulrl")
 

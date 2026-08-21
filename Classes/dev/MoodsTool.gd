@@ -87,14 +87,7 @@ func _ready() -> void:
 	_tabs.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	add_child(_tabs)
 	for tab_title: String in _tab_titles():
-		var scroll := ScrollContainer.new()
-		scroll.name = tab_title
-		scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-		_tabs.add_child(scroll)
-		var rows := VBoxContainer.new()
-		rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		scroll.add_child(rows)
-		_tab_rows[tab_title] = rows
+		_tab_rows[tab_title] = DevWidgets.add_knob_scroll(_tabs, tab_title)
 	refresh_preset_dropdown()   # after _status exists: a refusal has somewhere to print
 	_rebuild()
 

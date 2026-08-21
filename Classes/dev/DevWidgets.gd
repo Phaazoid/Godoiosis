@@ -58,6 +58,34 @@ static func literal_for(value: Variant) -> String:
 	return str(value)
 
 
+# The scrolling half of a knob page -- the ScrollContainer plus the row VBox that goes in it,
+# which Moods, Game and Objects each built identically before #403. Returns the row container, so
+# a caller keeps the only thing it ever used.
+#
+# SCROLL_MODE_AUTO on the horizontal axis is the load-bearing bit, and it is the fix rather than
+# the tidy-up. A ScrollContainer with an axis DISABLED declares its content's full width as its own
+# MINIMUM, so a knob page pushed its widest row all the way up to the window: an add_color row is
+# 841px (label 190 + swatch + four 0-255 slider/SpinBox pairs, whose SpinBoxes measure 87 each
+# however small a minimum they are asked for), and the dev window could not be narrowed below it
+# without the panel running off the right edge with no scrollbar to say so. Scrolling instead
+# costs nothing at the default size -- the rows still EXPAND to fill a window with room -- and
+# degrades to a scrollbar rather than to clipping when there is not.
+#
+# The page NOT dictating the window's width is why tests/dev/test_dev_window_fit.gd measures the
+# rows rather than this container: the container's minimum is now near zero by design.
+static func add_knob_scroll(parent: Node, page_name := "") -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	if page_name != "":
+		scroll.name = page_name   # a TabContainer titles its tab from the child's name
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+	scroll.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	parent.add_child(scroll)
+	var rows := VBoxContainer.new()
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(rows)
+	return rows
+
+
 static func add_label(container: Node, text: String) -> void:
 	var label := Label.new()
 	label.text = text
