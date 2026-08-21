@@ -634,7 +634,7 @@ more honest and strictly more visual noise. Precedent for the row half: `ActionQ
 renders element icons off the shared `StateIcons.ICONS` table, so the queue surface has the art.
 
 **A queued move should still offer "Move" — re-entering move planning.** Today the row is *hidden*
-once a move is queued (`MainActionMenu.populate` refuses on `has_action_type_queued(MOVE)`), so
+once a move is queued (`MainActionMenu._can_move` refuses on `has_action_type_queued(MOVE)`, and since #443 that one gate serves Group Move too — so re-entry is one clause to relax, not two), so
 re-planning means cancelling the unit's actions and starting over. Re-entry is plausibly "drop the
 old move, enter move mode", and the hard part is already solved: by the 2026-08-02 fork a re-planned
 move is **never refused for breaking a queued aim** — the aim falls to invalid-in-red instead — so

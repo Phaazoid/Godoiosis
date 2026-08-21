@@ -193,6 +193,15 @@ func _on_menu_cancelled(_controller) -> void:
 func _can_take_main_action(unit: Unit) -> bool:
 	return not unit.has_main_action_queued() and not unit.squad.has_acted and not game.squad_manager.is_another_squad_active(unit.squad)
 
+# Shared gate for BOTH movement entries. Same three clauses, and the main-action one carries the
+# rule from the other side: move-before-main, so a unit that locked its main cannot move after it
+# (MoveAction.actor_can_perform is the chokepoint that enforces it). Group Move used to carry its
+# own hand-copy of this, which had drifted -- missing the main-action clause, so the menu offered a
+# formation queue_group_move would then refuse the leader half of (#443). One gate now, so the next
+# clause added here reaches both rows.
+func _can_move(unit: Unit) -> bool:
+	return not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and _can_take_main_action(unit)
+
 func populate(unit: Unit) -> Array:
 	var options = []
 
@@ -205,13 +214,10 @@ func populate(unit: Unit) -> Array:
 	if unit.squad.has_any_queued_actions() and unit.is_leader():
 		options.append(EXECUTE_ORDERS)
 
-	if not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and not unit.has_main_action_queued() and not unit.squad.has_acted and not game.squad_manager.is_another_squad_active(unit.squad):
+	if _can_move(unit):
 		options.append(MOVE)
 
-	if unit.is_leader() and unit.has_squad() \
-		and not unit.has_action_type_queued(BaseAction.ActionType.MOVE) \
-		and not unit.squad.has_acted \
-		and not game.squad_manager.is_another_squad_active(unit.squad):
+	if _can_move(unit) and unit.is_leader() and unit.has_squad():
 		options.append(GROUP_MOVE)
 
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():

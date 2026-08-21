@@ -760,8 +760,23 @@ func _all_units() -> Array[Unit]:
 # The formation solver itself lives in GroupMoveSolver (split out 2026-07-26). This is the
 # COMMITTING half: same plan, queued through the Law #3 chokepoint and drawn on the board.
 
+# Does the squad hold a MOVE the validator has marked invalid? Narrower than squad_has_invalid_actions,
+# which answers for the whole plan -- a main action can be invalid without the formation being at
+# fault, and the batch rollback below must not fire on that.
+func _plan_has_invalid_move(squad: Squad) -> bool:
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.MOVE and not action.is_valid:
+			return true
+	return false
+
 func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardContext, allowed_cells = null) -> bool:
 	var moves := GroupMoveSolver.plan(squad, leader_destination, board, allowed_cells)
+
+	# Nothing to author -- plan() refuses to path a leader to a goal it cannot reach. Bail BEFORE the
+	# batch opens rather than falling into the rollback below, which would cancel moves this call
+	# never touched. The return value means "the whole formation was queued", so say false (#443).
+	if moves.is_empty():
+		return false
 
 	# One player action, so one fan-out. Note `batching` also covers the hold-position moves that
 	# setup_hold_move_actions queues when the squad first activates — those fire the same signal.
@@ -777,19 +792,27 @@ func queue_group_move(squad: Squad, leader_destination: Vector2i, board: BoardCo
 
 	validate_squad_plan(squad)
 
-	# All or nothing (#103) -- a rare BACKSTOP since cohesion stopped refusing an outrun member, so
-	# what reaches here is a destination CONFLICT. Scope is every MOVE in the queue, not just this
-	# batch's; all-hold is legal by construction.
-	for action in squad.action_queue:
-		if action.action_type == BaseAction.ActionType.MOVE and not action.is_valid:
-			for member in squad.get_members():
-				cancel_move_for_unit(member)
-			# A hold-only queue is not an activation -- otherwise the squad stays `active` behind an
-			# open panel with no X and no Execute.
-			revert_if_only_hold(squad)
-			overlay_manager.redraw_planned_paths()
-			overlay_manager.redraw_projected_units()
-			return false
+	# All or nothing (#103), and a batch fails TWO ways -- one rollback for both.
+	#
+	# INVALID is a rare BACKSTOP since cohesion stopped refusing an outrun member, so what reaches it
+	# is a destination CONFLICT. Scope is every MOVE in the queue, not just this batch's; all-hold is
+	# legal by construction.
+	#
+	# REFUSED is #443, and the invalid scan is structurally blind to it: an order queue_action turns
+	# down never reaches the queue, so it is not an invalid move there -- it is an ABSENT one. A leader
+	# holding a main action has exactly that happen (move-before-main), while every follower's move is
+	# queued at an offset solved for a destination the leader never reaches. The count is the whole
+	# test: plan() already drops members it cannot place, so the question is not "one per member" but
+	# "did every order I authored actually land".
+	if queued.size() != moves.size() or _plan_has_invalid_move(squad):
+		for member in squad.get_members():
+			cancel_move_for_unit(member)
+		# A hold-only queue is not an activation -- otherwise the squad stays `active` behind an
+		# open panel with no X and no Execute.
+		revert_if_only_hold(squad)
+		overlay_manager.redraw_planned_paths()
+		overlay_manager.redraw_projected_units()
+		return false
 
 	for move in queued:
 		overlay_manager.show_planned_path(move.actor, move)

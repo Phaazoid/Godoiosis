@@ -116,3 +116,95 @@ func test_a_lone_order_still_notifies_immediately() -> void:
 
 	assert_int(repaints[0]).is_greater(0)
 	assert_bool(sm.batching).is_false()
+
+
+# ==============================================================================
+#  All or nothing (#103) — the REFUSED half (#443)
+# ==============================================================================
+# The rollback used to ask one question: is any queued move INVALID? An order the Law #3
+# chokepoint refuses never reaches the queue at all, so that scan cannot see it — it is not an
+# invalid move there, it is an ABSENT one. Move-before-main is the refusal that actually fires:
+# a leader holding a main action has its own move dropped while every follower's is queued, at
+# offsets solved for a destination the leader never reaches. The squad marched off without it.
+#
+# These drive the real queue_group_move rather than the menu, because the menu is only one of the
+# doors — the Play API and the AI's group-move path reach the same function directly.
+
+# Rally is the cheapest real main action to author: it only needs Will to restore.
+func _lock_a_main_action(sm: SquadManager, unit: Unit) -> void:
+	unit.unit_instance.set_current_will(1)
+	var rally := RallyAction.new()
+	rally.init(unit)
+	assert_bool(sm.queue_action(unit.squad, rally)).is_true()
+	assert_bool(unit.has_main_action_queued()).is_true()
+
+
+func test_group_move_is_refused_whole_when_the_leader_holds_a_main_action() -> void:
+	var board: Dictionary = _build_squad_board(1)
+	var sm: SquadManager = board.squad_manager
+	var leader: Unit = board.leader
+	_lock_a_main_action(sm, leader)
+
+	var queued: bool = sm.queue_group_move(leader.squad, Vector2i(3, 0), _context(board))
+
+	assert_bool(queued) \
+		.override_failure_message("queue_group_move reported success for a formation its leader was refused") \
+		.is_false()
+
+
+func test_a_refused_group_move_leaves_nobody_walking() -> void:
+	# The load-bearing assertion: a partial formation is what strands the leader, and it is
+	# invisible in the return value alone. Hold-position moves are not walking (Unit treats them
+	# as no move at all), so this reads the PROJECTION rather than the queue's shape.
+	var board: Dictionary = _build_squad_board(2)
+	var sm: SquadManager = board.squad_manager
+	var leader: Unit = board.leader
+	_lock_a_main_action(sm, leader)
+
+	var before := {}
+	for member in leader.squad.get_members():
+		before[member] = member.movement.cell
+
+	sm.queue_group_move(leader.squad, Vector2i(3, 0), _context(board))
+
+	for member in leader.squad.get_members():
+		assert_vector(member.get_projected_destination()) \
+			.override_failure_message("%s was left walking after the batch was refused" % member.get_unit_name()) \
+			.is_equal(before[member])
+		assert_bool(member.has_action_type_queued(BaseAction.ActionType.MOVE)) \
+			.override_failure_message("%s kept a real move from a refused batch" % member.get_unit_name()) \
+			.is_false()
+
+
+func test_the_rollback_does_not_eat_the_main_action_that_caused_it() -> void:
+	# The rollback cancels MOVES. The order the player actually queued has to survive it, or the
+	# refusal costs them their turn instead of costing them nothing.
+	var board: Dictionary = _build_squad_board(1)
+	var sm: SquadManager = board.squad_manager
+	var leader: Unit = board.leader
+	_lock_a_main_action(sm, leader)
+
+	sm.queue_group_move(leader.squad, Vector2i(3, 0), _context(board))
+
+	assert_bool(leader.has_main_action_queued()).is_true()
+
+
+func test_an_unreachable_leader_destination_reports_failure() -> void:
+	# Same rule one step earlier: the solver authors nothing when the leader cannot path to the
+	# goal, and a return of true would say a formation was queued that never existed.
+	var board: Dictionary = _build_squad_board(1)
+	var sm: SquadManager = board.squad_manager
+
+	# Off the painted 8x3 rect entirely — no path, so plan() returns an empty batch.
+	var queued: bool = sm.queue_group_move(board.leader.squad, Vector2i(30, 30), _context(board))
+
+	assert_bool(queued).is_false()
+
+
+func test_a_clean_group_move_still_reports_success() -> void:
+	# Positive control: the two new refusals must not swallow the ordinary case.
+	var board: Dictionary = _build_squad_board(2)
+	var queued: bool = board.squad_manager.queue_group_move(board.leader.squad, Vector2i(3, 0), _context(board))
+
+	assert_bool(queued).is_true()
+	assert_vector(board.leader.get_projected_destination()).is_equal(Vector2i(3, 0))
