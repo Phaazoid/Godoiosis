@@ -125,10 +125,10 @@ static var SQUAD_RING_ALPHA := 0.9
 #
 # A shove and a planned move are opposite kinds of fact -- one is what a unit CHOSE, the other is
 # what is about to be done to it -- and they drew identically until now.
-static var KNOCKBACK_MODULATE := Color(0.55, 0.8, 0.95, 0.9)
+static var KNOCKBACK_MODULATE := Color(1.0, 1.0, 0.0, 0.9)
 # Pre-tuned to the art's own brightest pixel (136,248,248), so a planned move looks exactly as it
 # did before the desaturation rather than turning white by accident (dev, 2026-08-21).
-static var MOVE_ARROW_MODULATE := Color(0.533, 0.973, 0.973, 1.0)
+static var MOVE_ARROW_MODULATE := Color(0.4118, 1.0, 1.0, 1.0)
 # These two keep the numbers they always had, so both now read BRIGHTER than before -- the cyan art
 # used to multiply them down. Knobs, not guesses: tune against the shove colour on the Game tab.
 static var INVALID_ARROW_MODULATE := Color(1, 0.25, 0.25, 0.85)
