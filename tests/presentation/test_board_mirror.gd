@@ -2284,3 +2284,67 @@ func test_a_fires_light_does_not_move_when_a_lamp_default_is_tuned() -> void:
 	assert_float(fire_light.light_energy).override_failure_message(
 			"tuning a LAMP default moved a FIRE's light -- the sweep is walking the wrong store"
 	).is_equal_approx(before, 0.001)
+
+
+# --- The per-source glow knobs (#420) ------------------------------------------------------
+#
+# Both cases assert on a fire that is ALREADY BURNING, which is the whole question. Emission is
+# written once into the flame's material and the light's range once into its OmniLight3D, so a
+# plain @export moves the next fire built and nothing on screen -- #264's born-dead slider, which
+# flame_light_range had actually shipped with (_animate_flames refreshes ENERGY alone).
+#
+# The marker is re-fetched after the write because the sweep re-stands it: a reference taken
+# before the tune points at a freed node, so a case holding one would fail for the wrong reason.
+
+func _flame_material(mirror: BoardMirror, cell: Vector2i) -> StandardMaterial3D:
+	var flames := _flames_of(mirror, cell)
+	if flames.is_empty():
+		return null
+	var quad := flames[0].mesh as QuadMesh
+	return null if quad == null else quad.material as StandardMaterial3D
+
+
+func test_tuning_the_flames_glow_reaches_a_fire_already_burning() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var before := _flame_material(mirror, burning[0])
+	assert_object(before).override_failure_message(
+			"the fire stood up no material to tune").is_not_null()
+	var moved: float = before.emission_energy_multiplier + 1.5
+
+	mirror.flame_glow_energy = moved
+	await _settle()
+
+	var after := _flame_material(mirror, burning[0])
+	assert_object(after).override_failure_message(
+			"tuning the glow left the cell with no flames at all").is_not_null()
+	assert_float(after.emission_energy_multiplier).override_failure_message(
+			"a burning cell kept its old emission -- the knob only reaches the NEXT fire built"
+	).is_equal_approx(moved, 0.001)
+
+
+func test_tuning_the_flames_light_range_reaches_a_fire_already_burning() -> void:
+	# The regression half: this knob had no setter at all, so it moved nothing until the tile
+	# under it was repainted. Range rather than energy on purpose -- energy is refreshed by
+	# _animate_flames every frame, so it would pass with or without the sweep.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var burning := _burning()
+	assert_bool(not burning.is_empty()).override_failure_message(
+			"Prolog authored no fire; the case is vacuous").is_true()
+	var moved: float = mirror.flame_light_range + 2.0
+
+	mirror.flame_light_range = moved
+	await _settle()
+
+	var light := _light_under(mirror.fire_marker_at(burning[0]))
+	assert_object(light).override_failure_message(
+			"tuning the range left the fire with no light").is_not_null()
+	assert_float(light.omni_range).override_failure_message(
+			"a burning cell kept its old light range -- the sweep never re-stood it"
+	).is_equal_approx(moved, 0.001)

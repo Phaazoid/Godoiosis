@@ -130,8 +130,6 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How tall a solid prop -- crate, chest, rock, pot -- stands relative to its own sprite. 1.0 is the height measured off the art; because the art is drawn in 3/4 it includes some of the object's own lid, so the honest measurement usually reads a little tall."},
 	{"group": "World", "node": "BoardMirror", "prop": "tuft_scale", "label": "Grass tuft scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the plants on a grass tile stand -- the flowers and weeds that pop up off a tile which is also still painted flat. 1.0 draws each one at the size the art draws it. Only the height changes: where they sit in the cell comes off the art."},
-	{"group": "World", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
-		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
 	# The lamp defaults (#255's light, #380's rows -- these four had NO surface anywhere before
 	# this). Tuning one re-lights every standing lamp through BoardMirror's sweep; a lamp whose
 	# tile authors its own light deliberately does not move, since an authored override wins.
@@ -177,6 +175,18 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Brightness of the real point light each fire casts. This is what makes fire LIGHT the board -- units, walls and neighbouring tiles -- rather than merely glow on its own tile."},
 	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_range", "label": "Flame light range", "min": 0.5, "max": 12.0, "step": 0.1,
 		"tip": "How far a fire's light reaches, in world units (roughly cells). Range and energy together decide whether a burning tile lights a room or just its own corner."},
+	{"group": "Fire", "node": "BoardMirror", "prop": "flame_light_color", "label": "Flame light colour",
+		"tip": "The colour a fire casts onto everything around it. Its twin one row down is what the flame itself gives off; this one is what the neighbours are lit BY, the way Prop light colour is for lamps."},
+	# The per-source half of glow (#420). Scene-wide bloom is a Moods knob and always will be -- one
+	# Environment per board -- so what belongs here is only how hard THIS source burns.
+	{"group": "Fire", "node": "BoardMirror", "prop": "flame_glow_color", "label": "Flame glow colour",
+		"tip": "The colour the flame itself gives off -- its emission, the thing the bloom pass picks up. Push it past white and the fire reads as hotter than its own art. This is the flame's own light, not what it throws onto the board: that is Flame light colour above."},
+	{"group": "Fire", "node": "BoardMirror", "prop": "flame_glow_energy", "label": "Flame glow strength", "min": 0.0, "max": 8.0, "step": 0.05,
+		"tip": "How hard the flame glows. NOTHING blooms until it clears the mood's Glow HDR threshold on the Moods tab -- so if raising this only makes the fire brighter without haloing, that threshold is what to look at, not this."},
+
+	# --- Cover (#326's bump; a Fire-shaped terrain state, moved off World by #420) ---
+	{"group": "Cover", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
 
 	# --- Playback (#259 rework: the animated shove) ---
 	{"group": "Playback", "node": "UnitMirror", "prop": "shove_fall_speed", "label": "Shove fall speed", "min": 0.5, "max": 20.0, "step": 0.1,
@@ -283,7 +293,11 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Unit HUD": "Unit HUD",
 	"Camera handling": "Camera",
 	"World": "World",
-	"Fire": "Fire",
+	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
+	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
+	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
+	"Fire": "Elemental",
+	"Cover": "Elemental",
 	"Playback": "Playback",
 }
 

@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #432 (2026-08-21).**
+**Canon checked through #455 (2026-08-21).**
 
 ---
 
@@ -52,23 +52,90 @@ ticket rather than three improvisations.
 **A global is the DEFAULT, an object may override it** (dev, 2026-08-16). `BoardMirror` is the only
 place that resolves the two, so nothing downstream knows a global exists.
 
-**Open — the table a value lives in and the PAGE it is shown on are different questions (captured
-2026-08-20, scratchpad).** The dev's ask: *"the glow settings belong on the Fire tab"* — move the
-glow rows to sit beside the flames they are actually being tuned against. The rows are
-`LookKnobs`'s (`WorldEnvironment.environment:glow_*`), i.e. **mission mood**; the fire block is
-`GameKnobs`'s, i.e. a **game constant**, and since #380 they are on different tabs by the rule
-above. So this is not a row move: the two have different stores, different save buttons and
-different answers to *who may disagree*, and moving the row would silently promote a per-mission
-value into a game-wide one — the exact mistake the three-row table exists to prevent. Glow is also
-**scene-wide**, not per-fire, so whatever is shown beside a flame still governs the whole board.
-What is actually being asked for is a **view**: one page composing rows that belong to two tables,
-each still saving to its own home and still labelled with which. Nothing in the panels forbids
-that — both tables reach their properties through the same `LookKnobs.read`/`write` — but no tool
-does it today, and a shared page needs a stance on what its `Save *` marker and its save buttons
-mean when the rows on it answer to two owners (#389's marker is per-panel). Worth settling before
-the next "these two knobs belong together" request, which is likely: the underlying complaint is
-that the tabs are organised by **where a value is stored** and the dev tunes by **what he is
-looking at**.
+### GLOW IS TWO QUESTIONS, and only one of them can be per-source ([#420](https://github.com/Phaazoid/Godoiosis/issues/420), 2026-08-21)
+
+The dev's ask was *"the glow settings belong on the Fire tab"*, and the ticket was filed as a
+composed-VIEW question — one page showing rows from two knob tables, each still saving to its own
+home. **That framing was wrong, and re-deriving from the code is what showed it.** The rows it
+proposed to compose are the wrong rows.
+
+| | what it is | scope it can have | where it lives |
+|---|---|---|---|
+| the bloom **pass** | `WorldEnvironment.environment:glow_*` — one screen-space post-process | scene-wide. **Cannot** be per-source: there is one Environment per board | Moods → Post, **mission mood, and staying there** |
+| what a source **throws into** it | `emission` + `emission_energy_multiplier` on the source's own material | genuinely per-source | the source's own table |
+
+The second row **had no knob anywhere**. Fire's was four hardcoded values — `Color(1, 0.55, 0.15)`
+and `2.5` in the flame material, plus `Color(1, 0.62, 0.3)` for the light it casts, while props
+have had a tunable `prop_light_color` since #380. So the only glow-shaped dial in the whole panel
+was the scene-wide one, which is exactly why it got reached for: the dev went looking for *make the
+fire glow harder* and found *make the whole image bloom harder*.
+
+**The fix was therefore to ADD the missing knobs, not to move any.** `flame_glow_color`,
+`flame_glow_energy` and `flame_light_color` are Fire-group rows beside `flame_light_energy`, its
+natural neighbours — and once they exist, the thing being tuned next to the flame IS a Fire-table
+row. **No cross-table view is needed, and none was built.** *Do not build one on spec.*
+
+The coupling to know: `glow_hdr_threshold` is a silent gate — emission below it does not bloom at
+all, so raising a source's glow under a high threshold makes it brighter without haloing. Both
+ends carry a tooltip pointing at the other; it is not an argument for moving a row.
+
+**The underlying complaint stands and is unresolved**: the tabs are organised by *where a value is
+stored*, the dev tunes by *what he is looking at*. #420 answered it the cheap way — group the rows
+better (see the Elemental tab below) rather than invent cross-table views. Expect it again.
+
+**A PROP THAT EMITS LIGHT NEEDS A FORM THAT CAN EMIT**, and that is a fact about the engine rather
+than a design call. **A `Sprite3D` cannot emit** — measured 2026-08-21, `SpriteBase3D`'s entire
+surface is `modulate`, `shaded`, `alpha_cut`, `alpha_scissor_threshold`, `alpha_antialiasing_*`,
+`billboard`, `cast_shadow`, `gi_*`. Very likely why #324 built the flame as a `MeshInstance3D` +
+`QuadMesh` + `StandardMaterial3D` in the first place. So authoring `prop_lit` on a `BILLBOARD` tile
+gets the `OmniLight3D` and silently **no glow from the art** — a half-working state with no warning,
+worth a `BoardLint` check once more than one tile can get it wrong.
+
+**Which is why lamp emission is [#454](https://github.com/Phaazoid/Godoiosis/issues/454) rather than
+part of #420**: closing that gap on the billboard path means changing the node kind, and the dev's
+own plan retires that form (*"I don't like lanterns as a billboard… the current setup is wholly
+temporary"*). The census is what makes the consequence exact — **two** `BILLBOARD` tiles exist
+(Lantern, Tree) and **exactly one tile is `prop_lit`: the Lantern**, so moving it to a solid form
+leaves **zero lit billboards** and nothing waiting on that path. On the block path emission is a
+`set_surface_override_material` over a duplicate of the generator-baked material, per surface —
+no node-kind change, no test rewrites, no UV question, roughly a third of the cost, and it survives.
+
+*(The estimate this replaces said converting the billboard path "touches every tree, banner and
+fence". Wrong — fences are `PLANE` and already go through the meshlib block path. #263's precedent:
+an assumption reversing under measurement, in the direction that made the work smaller, which is
+the direction nobody checks.)*
+
+### The Elemental tab (#420)
+
+`Fire` and `Cover` both map to an **Elemental** sub-tab of the Game tab. Cover moved off *World*
+because #326 already ruled it the same kind of thing — a terrain STATE whose art draws objects —
+and the two now sit together. **Frost has nothing to move yet**: `FROZEN` draws as a flat icon on
+`Layer.TERRAIN` with no 3D effect, so it gets a section when someone builds one.
+
+It stays a SUB-TAB rather than its own tree leaf, and that is the storage rule again: elemental VFX
+are game constants, so they want `GameTool`'s existing Save-to-source. A separate leaf would need
+its own panel and its own save — a duplicate seam for nothing. A new element is one `GROUP_TABS`
+line.
+
+**A tab named for a category with two members is a promise, not a category** — what keeps it is
+[#455](https://github.com/Phaazoid/Godoiosis/issues/455), the board channel of *elemental state made
+visible*. Its strongest single item is that **BLAZE and BURNING are still visually identical**
+(#174's one-texture ruling; #324 recorded not fixing it as deliberate), i.e. two mechanically
+different states the board refuses to distinguish. **Its sibling is
+[#358](https://github.com/Phaazoid/Godoiosis/issues/358), the UNIT channel** — wet drip, frost
+sheen, Crisis — and the two are named together because they can disagree: a CHILLED unit wearing a
+frost sheen while standing on a FROZEN tile drawn as a flat blue quad is two answers to one idea.
+Whatever #358 settles for layering and intensity is the doctrine here too. Restraint governs both
+(dev, #346): *effects in the correct places rather than everywhere* — "the tab looks empty" is not a
+reason for a state to earn one.
+
+**A knob written once at build needs a SWEEP or it is not a knob**, and this ticket paid it twice.
+`_rebuild_fires()` was already the answer for the five geometry knobs (#324); emission and the
+light's colour join them. It also caught an existing one: **`flame_light_range` had shipped with no
+setter**, so dragging it moved nothing on a board already alight — `_animate_flames` refreshes
+`light_energy` alone and the props sweep walks `_props` by design. `flame_light_energy` keeps no
+setter on purpose: the animation loop re-reads it every frame, and a second path to one property is
+a second authority.
 
 **INHERIT is zero, and that is forced rather than chosen.** `TileData.has_custom_data` answers
 whether the *layer* exists, never whether *this tile* wrote to it, so an unauthored field arrives as
@@ -185,7 +252,7 @@ Burrow's COVER pops up as three mud bumps — the dev's ask, twice: *"cover shou
 
 **The art had to answer "three" before the code could.** Measured before building, and it reversed the issue's own premise: `Cover.png`'s three mounds *touched* — one cluster 8-connected, two 4-connected — so the mechanism as shipped would have stood the whole icon up, which is the exact outcome the dev vetoed. Three pixels of seam were erased (dev's call). The general rule: **a decomposition can only find the objects the art separates**, so before reusing one, count the clusters in the art you are pointing it at.
 
-Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first. (Both were Look knobs until [#272](https://github.com/Phaazoid/Godoiosis/issues/272) moved them to the Objects tab — see *Where a presentation value is authored* below.)
+Two smaller rulings ride along. The icon is the **2D's own**, not a 3D copy, so a re-drawn Cover reaches both views — which is also why its `detect_3d/compress_to` had to be cleared in the same diff (#250's trap: first 3D use silently re-imports a shared texture to VRAM + mipmaps, degrading the 2D that draws it too). And `cover_scale` is a **second** knob beside `tuft_scale` rather than a shared one, on the lantern-vs-flame rule: two different objects at two different drawn sizes, and one number would force whoever tunes the second to un-tune the first. (Both were Look knobs until [#272](https://github.com/Phaazoid/Godoiosis/issues/272) moved them to the Objects tab, and both left again — `tuft_scale` and `cover_scale` are Game-tab globals since #380, and `cover_scale` sits on the Elemental sub-tab since #420. See *Where a presentation value is authored* below.)
 
 ### Fire is an EFFECT, not a sprite standing on a tile ([#324](https://github.com/Phaazoid/Godoiosis/issues/324), 2026-08-16)
 

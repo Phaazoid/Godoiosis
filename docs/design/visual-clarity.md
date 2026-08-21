@@ -337,10 +337,16 @@ The rulings, all dev calls, all made before building:
 Two things that generalise past this ticket:
 
 1. **A global static read is a hermeticity hazard in the SUITE, not just in the game.**
-   `PlayerSettings.is_on` falls through to `user://settings.cfg`, so any suite asserting *which*
-   units wear a bar would silently read the developer's own saved preference and red on a machine
-   where the toggle is on. Both bar suites now call `reset_for_test()` in `before_test`. Any future
-   store with a disk fallback owes the same seam on the same day it is written.
+   `PlayerSettings.is_on` fell through to `user://settings.cfg`, so any suite asserting *which*
+   units wear a bar silently read the developer's own saved preference and redded on a machine
+   where the toggle was on. The per-suite answer — `reset_for_test()` in `before_test`, which both
+   bar suites took — was never *enforceable*, and the bill arrived at
+   [#449](https://github.com/Phaazoid/Godoiosis/issues/449): **22 suites instantiate the real board
+   and none of them called it.** The rule is structural now — **a headless process honours nobody's
+   preferences**, so the store is born with persistence off and the suite reads DEFAULTS, the same
+   spelling of *nobody is watching* that `Pacing.beat` uses. Any future store with a disk fallback
+   owes the same seam on the same day it is written; `reset_for_test()` keeps its other job, wiping
+   a value a suite SET, because `_state` is a static that outlives a case.
 2. **The gate is ONE named expression, deliberately.** [#357](https://github.com/Phaazoid/Godoiosis/issues/357)'s
    state-icon row rides it rather than growing its own, so a second visibility rule in `UnitMirror`
    is the bug — the ticket said so before it was built, and what shipped is stronger than the
@@ -440,6 +446,18 @@ because `create_unit_icon` only ever adds and a squad shrinking back to one memb
 rings. It is gated on having squadmates (`Unit.has_squad`'s question) and deliberately **not** on
 `ring_hue`, which is dealt once at the first squadmate and never reset — that gate would leave a
 lone leftover wearing a colour forever.
+
+**A standing squad wears its rings AND its leader's crown** — the dev's ruling, 2026-08-21, taken on
+[#449](https://github.com/Phaazoid/Godoiosis/issues/449). `draw_squad_unit_icons` is one answer to
+*draw this squad's membership markup*, so the standing sweep raises the crown with the rings and it
+does not come back down on the way out of a hover; the setting's own description names the crown for
+that reason. **This is not the #325 law being broken.** That law is about a marker going MISSING —
+the crown badge died because the health bar's preference could hide leadership entirely — and here
+the OFF branch is exactly the pre-#435 behaviour, so no leader is ever left with no persistent
+marker. What needed ruling was a branch nobody had decided, and which a test had quietly assumed the
+other way: `test_overlay_mirror` asserted *"the crown clears on the way out"* as an unconditional
+truth after #435 had made it conditional. **A setting that forks a marker's lifecycle forks the
+tests that pin it**, and the branch left unpinned is the one that goes wrong silently.
 
 **A CHANNEL THAT IS CLEARED WHOLE HAS TO BE REDRAWN WHOLE, and the per-squad redraw is where that
 bit.** `OverlayManager.redraw_squad_unit_icons` clears every `CROWN`/`SQUADMEMBER` marker and then
