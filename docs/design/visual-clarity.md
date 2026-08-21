@@ -686,16 +686,51 @@ covers only the **destination** or **any afflicted tile the path crosses** — t
 more honest and strictly more visual noise. Precedent for the row half: `ActionQueueRow` already
 renders element icons off the shared `StateIcons.ICONS` table, so the queue surface has the art.
 
-**A queued move should still offer "Move" — re-entering move planning.** Today the row is *hidden*
-once a move is queued (`MainActionMenu._can_move` refuses on `has_action_type_queued(MOVE)`, and since #443 that one gate serves Group Move too — so re-entry is one clause to relax, not two), so
-re-planning means cancelling the unit's actions and starting over. Re-entry is plausibly "drop the
-old move, enter move mode", and the hard part is already solved: by the 2026-08-02 fork a re-planned
-move is **never refused for breaking a queued aim** — the aim falls to invalid-in-red instead — so
-the invalidation machinery a re-plan needs exists and is exercised. The open half is the gate's
-*other* clause: a unit with a **main action** queued also loses Move, and move-before-main is a real
-ordering rule (`MoveAction.actor_can_perform`), so re-entry must either preserve it or state why not.
-**A menu that greys rather than hides would explain itself** — since #166 a row can only be greyed if
-it can say why, which is the shape this wants.
+**A queued move still offers "Move" — BUILT ([#417](https://github.com/Phaazoid/Godoiosis/issues/417),
+2026-08-21).** Picking it **cancels** the queued order and re-enters move planning, so backing out of
+the pick leaves the unit with **no move** rather than the one it was replacing — the old order is
+spent on entry, not held in reserve (dev's spec). The cancel is `SquadManager.cancel_move_for_unit`,
+which already existed and already fires the `action_cancelled` the arrow and the ghost clear off;
+`revert_if_only_hold` goes with it, because that cancel leaves a hold-position filler and a solo unit
+that backs out would otherwise strand its squad **active** behind a queue panel with no X on a hold
+row and nothing for right-click to undo. Both of its existing callers already pair the two.
+
+Three things worth keeping, because they are why this was small. **The replacement was already
+built**: `Squad._queue_action` removes whatever the incoming order `displaces()` — same actor, same
+type — and `SquadManager._hypothetical_actions` previews with the same predicate, so a second move
+could never have stacked beside the first. **The invalidation was already exercised**: by the
+2026-08-02 fork a re-planned move is never refused for breaking a queued aim — the aim falls to
+invalid-in-red instead. **And a re-planned move goes to the BACK of the queue**, since displacement
+is remove-then-append; that is pre-existing and invisible today, and is written down here because
+[#412](https://github.com/Phaazoid/Godoiosis/issues/412) makes move order tactical, at which point
+drag-reorder is the escape hatch rather than a surprise.
+
+Two things deliberately did NOT change. **Move-before-main stands**: a unit holding a main action
+still loses the row, because `MoveAction.actor_can_perform` refuses the order at the chokepoint, so
+relaxing that would be a rules change and not a menu one. Greying it with a reason instead of hiding
+it stays a live idea, and stays governed by the top-level ruling above — a permanently full main menu
+is a UX change, not a readout fix. **And Group Move stays one-shot**: both rows read `_can_move`
+since #443, so the queued-move clause moved down to the Group Move row rather than being deleted.
+Re-planning a *formation* is its own ticket, and it has real content — `queue_group_move`'s
+all-or-nothing rollback cancels **every** member's move, which is already destructive and invisible
+only because a clean board has nothing to destroy. Pinned by `tests/ui/test_move_replan.gd`, which
+drives select → press the real button → click a tile, and asserts on the queue.
+
+**Round 2 (same day, dev call): right-click CYCLES through it.** A queued move is not deleted by the
+press — it re-opens its planning, exactly as if you had hit Move again — so the button now walks
+`move queued → planning → nothing`. The third rung is free: planning already spent the order on
+entry, so leaving the mode is the outright cancel. Scoped to a **lone** move, so a formation still
+pops whole (see [squad-system.md](squad-system.md) → *Right-click is a LIFO undo*).
+
+Two seams carry it, and both exist to avoid a second answer. `game.begin_move_planning` is the Move
+*gesture* — cancel the queued order, then enter the mode — called by the menu row and by the
+right-click branch alike; `game.enter_move_mode` stays the bare mode entry, because thirteen
+presentation call sites use it purely to paint the overlay and would start deleting orders otherwise.
+`game.select_unit` is the extracted select write point (#107), since re-entry has to select before
+`_click_choosing_move` can read anything. Pinned in `tests/ui/test_right_click_cancel.gd` — where
+**two existing cases had to be rewritten**: both ended on an order count of zero, which stays true
+under re-entry, so neither could have told undo from re-planning until they started asserting
+`game_state`.
 
 **Streamline move → main action.** After a move commits, open the unit's main-action menu
 automatically; or a double-click shortcut. Pure flow-feel, no model question. Open: which gesture,
