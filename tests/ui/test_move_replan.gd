@@ -12,9 +12,9 @@
 #     the queue's CONTENTS, not just about the newest move's destination.
 # So every case here drives select -> press the real button -> click a tile, and asserts on the queue.
 #
-# Group Move is deliberately still withdrawn once a move is queued -- #417 scoped to Move, since
-# queue_group_move's all-or-nothing rollback cancels EVERY member's move. Pinned below so the
-# scope is a decision rather than a gap.
+# #461 finished the job one row along: a queued FORMATION is re-plannable too, and the same
+# "spends what it replaces" rule applies to the whole squad. What #417 scoped out and #461 kept
+# scoped out is right-click -- a formation is one decision and still pops whole (#228).
 #
 # Real game scene (the #114 fixture -- root MUST be named "Main").
 extends GdUnitTestSuite
@@ -119,6 +119,21 @@ func _order_move(unit: Unit, dest: Vector2i) -> void:
 	game._click_choosing_move(dest)
 
 
+# The same gesture one row along (#461). Asks the real followable sweep rather than assuming the
+# squad can reach `dest` -- a fixture that quietly stopped forming would otherwise read as a
+# feature that quietly stopped working.
+func _group_move_to(leader: Unit, dest: Vector2i) -> bool:
+	if not await _press_row(leader, "Group Move"):
+		return false
+	assert_int(game.game_state) \
+		.override_failure_message("pressing Group Move did not enter its mode") \
+		.is_equal(game.GameState.CHOOSING_GROUP_MOVE)
+	assert_bool(game.group_move_followable.has(dest)) \
+		.override_failure_message("fixture: the squad cannot follow to %s" % str(dest)).is_true()
+	game._click_choosing_group_move(dest)
+	return true
+
+
 # ==============================================================================
 
 
@@ -183,9 +198,10 @@ func test_re_planning_replaces_rather_than_stacking() -> void:
 	assert_that(unit.get_projected_destination()).is_equal(SECOND_DEST)
 
 
-# The scoping decision, pinned: #417 relaxed Move alone. Both rows read one gate (#443), so this is
-# what stops the Group Move clause being deleted as an apparent leftover.
-func test_group_move_stays_withdrawn_once_a_move_is_queued() -> void:
+# #417 relaxed Move alone and this case pinned that scope; #461 finished the job, so it now asserts
+# the opposite. Kept rather than deleted because the two rows share one gate (#443) -- the thing
+# worth pinning was never "Group Move is withdrawn", it is that BOTH rows say what they mean.
+func test_both_movement_rows_survive_a_queued_move() -> void:
 	var leader := _spawn_player(START)
 	var member := _spawn_player(Vector2i(0, 0))
 	await await_idle_frame()
@@ -197,9 +213,26 @@ func test_group_move_stays_withdrawn_once_a_move_is_queued() -> void:
 
 	await _order_move(leader, FIRST_DEST)
 
-	var options: Array = game.main_action_menu.populate(leader)
-	assert_array(options).override_failure_message("Move should still be offered (#417)") \
-		.contains([MainActionMenu.MOVE])
-	assert_bool(options.has(MainActionMenu.GROUP_MOVE)) \
-		.override_failure_message("Group Move was offered over a queued move -- #417 scoped to Move") \
-		.is_false()
+	assert_array(game.main_action_menu.populate(leader)) \
+		.override_failure_message("a queued move withdrew a movement row (#417 Move / #461 Group Move)") \
+		.contains([MainActionMenu.MOVE, MainActionMenu.GROUP_MOVE])
+
+
+# Re-planning a FORMATION replaces it. Counting is the assertion, as in the single-unit case above:
+# a version that stacked a second batch beside the first would still report the new destinations.
+func test_re_planning_a_formation_replaces_rather_than_stacking() -> void:
+	var leader := _spawn_player(START)
+	var member := _spawn_player(Vector2i(0, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(member, leader.squad)
+
+	assert_bool(await _group_move_to(leader, FIRST_DEST)) \
+		.override_failure_message("fixture failed to queue the first formation").is_true()
+	assert_bool(await _group_move_to(leader, SECOND_DEST)) \
+		.override_failure_message("the formation could not be re-planned").is_true()
+
+	for unit in [leader, member]:
+		assert_int(_real_moves(unit).size()) \
+			.override_failure_message("%s ended with more than one move" % unit.get_unit_name()) \
+			.is_equal(1)
+	assert_that(leader.get_projected_destination()).is_equal(SECOND_DEST)

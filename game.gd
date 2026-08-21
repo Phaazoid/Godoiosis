@@ -578,6 +578,17 @@ func begin_move_planning(unit: Unit) -> void:
 		squad_manager.revert_if_only_hold(unit.squad)
 	enter_move_mode(unit)
 
+# The Group Move GESTURE, the squad-shaped twin of begin_move_planning (#461): re-planning a
+# formation SPENDS the one it replaces, so backing out of the pick leaves the squad with no moves
+# rather than the formation it was about to change. The guard is here rather than inside
+# cancel_squad_moves because the rollback's caller wants it unconditional -- see there.
+func begin_group_move_planning(unit: Unit) -> void:
+	for member in unit.squad.get_members():
+		if member.has_action_type_queued(BaseAction.ActionType.MOVE):
+			squad_manager.cancel_squad_moves(unit.squad)
+			break
+	enter_group_move_mode(unit)
+
 func enter_move_mode(unit: Unit):
 	var moverange := compute_move_range(unit)
 	game_state = GameState.CHOOSING_MOVE

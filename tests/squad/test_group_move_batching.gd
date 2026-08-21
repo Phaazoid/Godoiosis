@@ -152,6 +152,26 @@ func test_group_move_is_refused_whole_when_the_leader_holds_a_main_action() -> v
 		.is_false()
 
 
+func test_group_move_is_refused_whole_when_a_MEMBER_holds_a_main_action() -> void:
+	# #461 closed this at the MENU, which is one door: the AI and the Play API reach
+	# queue_group_move directly and must still be refused whole. Same refusal as the leader case
+	# above, one member along -- plan() authors a move for everybody and queue_action turns this
+	# one down, so the count check (#443's REFUSED half) is what sees it, not the invalid scan.
+	var board: Dictionary = _build_squad_board(2)
+	var sm: SquadManager = board.squad_manager
+	var leader: Unit = board.leader
+	_lock_a_main_action(sm, leader.squad.get_members()[1])
+
+	var queued: bool = sm.queue_group_move(leader.squad, Vector2i(3, 0), _context(board))
+
+	assert_bool(queued) \
+		.override_failure_message("queue_group_move reported success for a formation a MEMBER was refused") \
+		.is_false()
+	assert_bool(leader.has_action_type_queued(BaseAction.ActionType.MOVE)) \
+		.override_failure_message("the leader kept a move from a batch its squadmate broke") \
+		.is_false()
+
+
 func test_a_refused_group_move_leaves_nobody_walking() -> void:
 	# The load-bearing assertion: a partial formation is what strands the leader, and it is
 	# invisible in the return value alone. Hold-position moves are not walking (Unit treats them

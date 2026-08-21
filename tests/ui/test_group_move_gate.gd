@@ -88,8 +88,8 @@ func test_move_is_withdrawn_alongside_it() -> void:
 
 
 func test_a_squadmate_without_a_main_action_still_gets_move() -> void:
-	# The gate is per-UNIT, not per-squad: the leader spending its main must not freeze the
-	# squadmates who haven't. Only the leader is offered Group Move either way.
+	# The gate is per-UNIT for MOVE, not per-squad: the leader spending its main must not freeze the
+	# squadmates who haven't. Group Move is the row that asks about the whole squad -- see below.
 	var leader := _spawn_squad()
 	_lock_a_main_action(leader)
 	var member: Unit = leader.squad.get_members()[1]
@@ -98,3 +98,36 @@ func test_a_squadmate_without_a_main_action_still_gets_move() -> void:
 
 	assert_array(options).contains([MainActionMenu.MOVE])
 	assert_bool(options.has(MainActionMenu.GROUP_MOVE)).is_false()
+
+
+# ------------------------------------------------------------------------------
+#  The half #443 could not see (#461)
+# ------------------------------------------------------------------------------
+
+func test_group_move_is_withdrawn_when_a_SQUADMATE_holds_a_main_action() -> void:
+	# #443 closed this for the leader and stopped there, because _can_move only ever sees the unit
+	# whose menu is open. The member's refusal costs the same: GroupMoveSolver.plan authors a move
+	# for them anyway, queue_action turns it down (move-before-main), and queue_group_move's
+	# all-or-nothing rollback cancels EVERY member's moves. Harmless as a dead click until #461 made
+	# the row re-enterable -- at which point taking it eats the formation you already committed.
+	var leader := _spawn_squad()
+	var member: Unit = leader.squad.get_members()[1]
+	_lock_a_main_action(member)
+
+	var options: Array = game.main_action_menu.populate(leader)
+
+	assert_bool(options.has(MainActionMenu.GROUP_MOVE)) \
+		.override_failure_message("Group Move was offered while a squadmate held a main action") \
+		.is_false()
+
+
+func test_the_leader_keeps_its_own_move_when_a_squadmate_locks_a_main() -> void:
+	# The other side of the same clause, and what proves it landed on the Group Move row rather than
+	# leaking into _can_move: the leader can still walk on its own. A member's main action is not
+	# the leader's business until the leader tries to order that member around.
+	var leader := _spawn_squad()
+	_lock_a_main_action(leader.squad.get_members()[1])
+
+	assert_array(game.main_action_menu.populate(leader)) \
+		.override_failure_message("a squadmate's main action withdrew the LEADER's own Move row") \
+		.contains([MainActionMenu.MOVE])
