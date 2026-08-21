@@ -434,6 +434,7 @@ func _air_anchor(px: Vector2, from_cell: Vector2i) -> Transform3D:
 func _icons(om: OverlayManager) -> void:
 	var heads: Array[Dictionary] = []
 	var ground: Array[Dictionary] = []
+	var wards: Array[Dictionary] = []
 	for unit in om.icons_by_unit:
 		var by_type: Dictionary = om.icons_by_unit[unit]
 		for type in by_type:
@@ -441,12 +442,19 @@ func _icons(om: OverlayManager) -> void:
 			if icon == null or not is_instance_valid(icon) or not icon.has_unit():
 				continue
 			var surface := _anchor(icon.current_cell())
+			var entry := _marker(surface, icon.sprite.texture, icon.sprite.modulate)
 			if type == OverlayIcon.IconType.CROWN:
-				heads.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
+				heads.append(entry)
+			elif type == OverlayIcon.IconType.GUARD_WARD:
+				# Its own layer, not because it is a different KIND of markup -- it is a ground decal
+				# like the rings -- but because a layer is a PLANE, and sharing one with the ring put
+				# two coplanar quads on the same cell and made them z-fight (#414, found in play).
+				wards.append(entry)
 			else:
-				ground.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
+				ground.append(entry)
 	_markers(BoardOverlays.Layer.ICONS, heads)
 	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
+	_markers(BoardOverlays.Layer.GUARD_ICONS, wards)
 
 
 # Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is
