@@ -46,3 +46,27 @@ func _process(_delta: float) -> void:
 	if not has_unit() or grid == null:
 		return
 	position = grid.map_to_local(current_cell())
+
+# --- The "look at this" pulse (#442) -------------------------------------------------------
+# UnitVisuals' shape, for the same reason it has it: a live pulse OWNS sprite.modulate, so every
+# other writer yields to it (OverlayManager._style_icon checks is_pulsing) and the base is restored
+# on stop. The tween is hosted on THIS node rather than on the manager, so it dies with the icon --
+# icons are freed and rebuilt constantly, and Pulse's own contract is that a tween left running
+# keeps writing its property underneath everything else.
+var pulse_tween: Tween
+
+func is_pulsing() -> bool:
+	return pulse_tween != null
+
+# Idempotent, which is what stops a restart-per-redraw from strobing (Pulse's cadence is shared, so
+# a mid-cycle restart also drops this ring out of phase with the others).
+func start_pulse(peak: Color) -> void:
+	if sprite == null or pulse_tween != null:
+		return
+	pulse_tween = Pulse.start(self, sprite, &"modulate", sprite.modulate, peak)
+
+func stop_pulse(base: Color) -> void:
+	if pulse_tween == null:
+		return
+	Pulse.stop(pulse_tween, sprite, &"modulate", base)
+	pulse_tween = null

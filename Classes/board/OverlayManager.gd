@@ -115,6 +115,10 @@ const ICON_TEXTURES = {
 # no toggle, no second style. SQUAD_RING_ALPHA stays a live Look-tab value; it tunes a shipped
 # feature rather than picking between two.
 static var SQUAD_RING_ALPHA := 0.9
+# How much brighter a ring goes at the top of its "you may click this" pulse (#442). A GAIN on the
+# ring's own hue rather than a second colour, so a pulsing ring stays recognisably its squad's --
+# the pulse says LOOK HERE, the hue still says WHICH SQUAD.
+static var SQUAD_RING_PULSE_GAIN := 1.8
 
 # --- Arrow tints (2026-08-21) --------------------------------------------------------------
 # The trail ART is GREYSCALE, so every colour below is exactly what the board shows. It was cyan
@@ -189,6 +193,11 @@ var board_rendering := true
 # preview; its own sprite list so a plan change clears and redraws it cleanly.
 var knockback_hidden_units: Array[Unit] = []   # shoved units whose real sprite we hid behind a ghost
 var _pulsing_units: Array[Unit] = []
+
+# Which units currently wear a PULSING ring (#442). Separate from _pulsing_units above: that one is
+# the aim's "about to be hit" channel on the unit SPRITE, this one is the ground ring saying "you
+# may click this". Different channel, different meaning, deliberately not merged.
+var _pulsing_rings: Array[Unit] = []
 var _tile_pulse: Tween = null
 # What the reach fill was last painted for, so refresh_attack_reach_color can re-derive it.
 var _reach_attack: AttackData = null
@@ -556,13 +565,57 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 # What genuinely varies per UNIT is the squad hue, and only membership rings carry one; the crown
 # keeps its authored gold over the head so it never fights the palette.
 func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
+	# A live pulse OWNS modulate (#442), the same yield UnitVisuals.set_highlighted makes for the
+	# target pulse. Z is not animated, so it is still safe to set.
 	if icon.icon_type == OverlayIcon.IconType.SQUADMEMBER:
 		icon.sprite.z_index = RING_Z_INDEX
-		var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
-		icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
+		if not icon.is_pulsing():
+			icon.sprite.modulate = _ring_base(unit)
 	else:
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
-		icon.sprite.modulate = Color.WHITE
+		if not icon.is_pulsing():
+			icon.sprite.modulate = Color.WHITE
+
+# What a ring RESTS at -- one expression, so the pulse's base, its restore-on-stop and the ordinary
+# style all read the same answer.
+func _ring_base(unit: Unit) -> Color:
+	var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
+	return Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
+
+# The rings that say "you may click this" (#442's join-squad flow). A SET rather than a per-unit
+# call, and diffed rather than restarted, for the reason set_target_pulse is: restarting a live
+# pulse every time the caller re-runs strobes it, and drops it out of phase with its neighbours.
+func set_ring_pulse(units: Array[Unit]) -> void:
+	for unit in _pulsing_rings:
+		if is_instance_valid(unit) and not units.has(unit):
+			_stop_ring_pulse(unit)
+	for unit in units:
+		if not is_instance_valid(unit):
+			continue
+		var icon := _ring_icon(unit)
+		if icon != null:
+			var base := _ring_base(unit)
+			icon.start_pulse(Color(minf(base.r * SQUAD_RING_PULSE_GAIN, 1.0),
+					minf(base.g * SQUAD_RING_PULSE_GAIN, 1.0),
+					minf(base.b * SQUAD_RING_PULSE_GAIN, 1.0), 1.0))
+	_pulsing_rings = units.duplicate()
+
+# The typed local is load-bearing: a bare [] literal passed to an Array[Unit] parameter fails at
+# RUNTIME, not parse time (CLAUDE.md "Sharp edges") -- clear_target_pulse's own note.
+func clear_ring_pulse() -> void:
+	var none: Array[Unit] = []
+	set_ring_pulse(none)
+
+func _stop_ring_pulse(unit: Unit) -> void:
+	var icon := _ring_icon(unit)
+	if icon != null:
+		icon.stop_pulse(_ring_base(unit))
+
+func _ring_icon(unit: Unit) -> OverlayIcon:
+	if not icons_by_unit.has(unit):
+		return null
+	var icon := icons_by_unit[unit].get(OverlayIcon.IconType.SQUADMEMBER) as OverlayIcon
+	return icon if is_instance_valid(icon) else null
 
 # The Moods tab's ring-opacity slider restyles markers already on screen; walking the store here
 # keeps the panel ignorant of icon lifecycle.
