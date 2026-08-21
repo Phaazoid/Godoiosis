@@ -30,6 +30,14 @@ class_name UnitHealthBar
 # display of its own precisely so it cannot grow a second visibility rule: a hidden bar hides it by
 # construction, which is what #350's one-gate ruling asks for.
 #
+# Since #322 that row also carries the DOWNED glyph and the rescue clock beside it. The HP number
+# cannot separate a body from a living unit clinging on — a downed unit sits at exactly 1 HP because
+# _go_downed puts it there, so `1/20` is two completely different board states — and the fix is the
+# row saying what the number cannot, in the same icon-then-count shape the hover card already uses.
+# It rides the bar's own visibility for the same structural reason the state icons do; the fact that
+# a unit is down is carried unconditionally by its downed ART, so this disambiguates the readout
+# rather than being the only thing that marks the body.
+#
 # A dumb idempotent sink: it is TOLD a style, an HP pair and a prediction, and draws them. It never
 # reads a Unit, the plan, the board or the pointer — UnitMirror owns all of that, and owns the knobs
 # too, since the Look panel can only address nodes that exist in the scene.
@@ -56,6 +64,10 @@ var _label: Label3D
 # the same contract UnitMirror.set_ghosts and BoardOverlays use, for the same reason: the count
 # changes every time a state lands or expires.
 var _state_icons: Array[MeshInstance3D] = []
+# #322: the rescue clock's digits, sitting after the last icon in that row. Its own Label3D rather
+# than more text on _label — that one reads the HP and sits ON the bar, this one belongs to the row
+# above it, so they are placed by different rules even though they are drawn at one size.
+var _count: Label3D
 
 var _width := 32.0
 var _height := 6.0
@@ -82,6 +94,8 @@ var _state_textures: Array[Texture2D] = []
 var _state_icon_texels := 8.0
 var _state_gap_texels := 2.0
 var _state_spacing_texels := 1.0
+var _downed_turns := -1          # #322; -1 = not downed, which is a different answer from 0
+var _count_gap_texels := 1.0
 
 var _alarm: Tween
 var _alarm_peak_live := Color(1.0, 1.0, 1.0, 1.0)   # the peak the RUNNING tween was started with
@@ -114,26 +128,15 @@ func _init() -> void:
 	_fill = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 2)
 	_doomed = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 3)
 	_notch = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 4)
-	_label = Label3D.new()
-	# NOT billboarded, like everything else here — face() turns the whole group instead. Label3D
-	# draws its glyphs and its outline as two surfaces, and displacing it with Label3D.offset (the
-	# only in-plane displacement a per-object billboard permits) moved them by different amounts,
-	# which is what the dev saw as the number "appearing double and overlapping" (2026-08-15).
-	_label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
-	_label.shaded = false
-	_label.double_sided = false
-	_label.font_size = FONT_RESOLUTION
-	_label.outline_modulate = OUTLINE_COLOR
-	_label.render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6
-	_label.outline_render_priority = BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 5
-	_label.layers = BoardOverlays.UNIT_RENDER_LAYER
-	_label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_label = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
+	_count = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
 	add_child(_outline)
 	add_child(_missing)
 	add_child(_fill)
 	add_child(_doomed)
 	add_child(_notch)
 	add_child(_label)
+	add_child(_count)
 	visible = false
 	_rebuild()
 
@@ -209,6 +212,16 @@ func set_state_icons(textures: Array[Texture2D], size_texels: float, gap_texels:
 	_state_icon_texels = size_texels
 	_state_gap_texels = gap_texels
 	_state_spacing_texels = spacing_texels
+	_rebuild()
+
+
+# The rescue clock (#322): turns left before this body is lost, or -1 for a unit that is not down.
+# The GLYPH beside it arrives through set_state_icons like any other status art — one row, one
+# layout — so this setter carries only the number and where it sits. How BIG it is comes off the HP
+# digits and is not tunable apart from them; see _draw_downed_count.
+func set_downed_turns(turns: int, gap_texels: float) -> void:
+	_downed_turns = turns
+	_count_gap_texels = gap_texels
 	_rebuild()
 
 
@@ -311,6 +324,33 @@ func state_icon_offset(index: int) -> Vector3:
 	return (_state_icons[index].mesh as QuadMesh).center_offset
 
 
+# The rescue clock's rendered facts (#322), same contract as the accessors above: what is DRAWN,
+# never the value it was told, so a test can catch a count that agrees with itself and not with the
+# unit. Shown-ness is its own question because a bar can be up over a unit that is not down.
+func downed_count_text() -> String:
+	return _count.text
+
+
+func downed_count_shown() -> bool:
+	return _count.visible
+
+
+func downed_count_offset() -> Vector3:
+	return _count.position
+
+
+# Rendered glyph height, in world units, for each of the two texts — pixel_size times the atlas
+# resolution, which is what actually reaches the screen. They exist so a law can hold the dev's own
+# floor (#322 round 2: a number smaller than the HP digits is unreadable) as a RELATIONSHIP, without
+# any test naming a value that retuning could move.
+func number_glyph_height() -> float:
+	return _label.pixel_size * float(FONT_RESOLUTION)
+
+
+func downed_count_glyph_height() -> float:
+	return _count.pixel_size * float(FONT_RESOLUTION)
+
+
 func track_texels() -> float:
 	return roundf(_width)
 
@@ -330,7 +370,8 @@ func _rebuild() -> void:
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color, _notch_color, _notch_texels,
 			_current, _maximum, _predicted, _has_prediction,
-			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels]
+			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels,
+			_downed_turns, _count_gap_texels]
 	if signature == _drawn:
 		return
 	_drawn = signature
@@ -418,6 +459,42 @@ func _draw_state_row(texel: float, track_w: float, bar_h: float, edge: float) ->
 		var material := quad.material_override as StandardMaterial3D
 		material.albedo_texture = _state_textures[i]
 		material.albedo_color = Color.WHITE
+	_draw_downed_count(texel, left, icon, spacing, row_y)
+
+
+# The rescue clock (#322): how many turns this body has before it is lost, written after the last
+# icon in the row above. It reads as a COUNT ON the downed glyph rather than as a second readout,
+# which is the whole reason it goes in this row instead of beside the HP digits — the hover card
+# already spells it exactly this way, icon then number.
+#
+# It carries no lifecycle logic. UnitMirror decides who is downed and hands the turns down; -1 here
+# means only "no count", the same way _has_prediction means only "no notch".
+func _draw_downed_count(texel: float, left: float, icon: float, spacing: float, row_y: float) -> void:
+	_count.visible = _downed_turns >= 0
+	if not _count.visible:
+		return
+	_count.text = str(_downed_turns)
+	# SIZE, outline and colour all come off the HP digits, and none of them is a knob of its own:
+	# two texts on one display agree by construction rather than by a value somebody keeps in step.
+	# Size joined them in round 2 (dev, 2026-08-21) — "any number needs to be at least as big as the
+	# numbers in the healthbar to be readable. Smaller than that is just impossible." A knob whose
+	# whole lower half is unreadable is not a knob, so there is nothing here to drag.
+	_count.pixel_size = maxf(_number_height, 0.001) / float(FONT_RESOLUTION)
+	_count.outline_size = roundi(_number_outline)
+	_count.modulate = _number_color
+	# Where the icons END, in texels — n icons and the n-1 gaps between them, measured off the same
+	# left margin they lay out from. An empty row collapses to that margin, so the count still has a
+	# home if this bar is ever told a clock with no glyph beside it.
+	var shown := _state_textures.size()
+	var row_right: float = left
+	if shown > 0:
+		row_right = left + float(shown) * icon + float(shown - 1) * spacing
+	var gap: float = maxf(roundf(_count_gap_texels), 0.0)
+	# Local space, like everything else in this group — face() turns the parent, so an offset written
+	# here is a real offset at every camera angle. Position, never Label3D.offset: that displaces the
+	# glyphs and their outline by different amounts (see the note in _make_label).
+	var half_text: float = _count.get_aabb().size.x * 0.5
+	_count.position = Vector3((row_right + gap) * texel + half_text, row_y, texel)
 
 
 # The prediction (#313). The SPAN runs between where the bar is now and where the plan leaves it,
@@ -469,6 +546,25 @@ func _quad_width(quad: MeshInstance3D) -> float:
 func _paint(quad: MeshInstance3D, color: Color) -> void:
 	var material := quad.material_override as StandardMaterial3D
 	material.albedo_color = color
+
+
+# Every text in this display, built one way. NOT billboarded, like everything else here — face()
+# turns the whole group instead. Label3D draws its glyphs and its outline as two surfaces, and
+# displacing it with Label3D.offset (the only in-plane displacement a per-object billboard permits)
+# moved them by different amounts, which is what the dev saw as the number "appearing double and
+# overlapping" (2026-08-15). The OUTLINE draws one priority below the glyphs it backs.
+func _make_label(priority: int) -> Label3D:
+	var label := Label3D.new()
+	label.billboard = BaseMaterial3D.BILLBOARD_DISABLED
+	label.shaded = false
+	label.double_sided = false
+	label.font_size = FONT_RESOLUTION
+	label.outline_modulate = OUTLINE_COLOR
+	label.render_priority = priority
+	label.outline_render_priority = priority - 1
+	label.layers = BoardOverlays.UNIT_RENDER_LAYER
+	label.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	return label
 
 
 func _make_quad(priority: int) -> MeshInstance3D:

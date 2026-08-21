@@ -1,6 +1,5 @@
 extends GridContainer
 
-const DOWNED_ICON := preload("res://Art/Icons/StateIcons/Down.png")
 const SEVERED_ARM := preload("res://Art/Icons/StateIcons/SeveredArm.png")
 const SEVERED_LEG := preload("res://Art/Icons/StateIcons/SeveredLeg.png")
 const STATUS_ICON_SIZE := Vector2i(16, 16)
@@ -64,7 +63,7 @@ func _refresh_status_icons():
 		return
 	StateIcons.populate(states_row, unit.element_states)
 	if unit.is_downed() and unit.downed_turns_remaining > 0:
-		_add_status_icon(DOWNED_ICON)
+		_add_status_icon(StateIcons.DOWNED)
 		_add_status_count(unit.downed_turns_remaining)
 	if unit.unit_instance.is_maimed():
 		_add_status_icon(_maim_icon())

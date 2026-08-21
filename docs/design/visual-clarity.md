@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #461 (2026-08-21).**
+**Canon checked through #462 (2026-08-21).**
 
 ## Principles
 
@@ -389,7 +389,8 @@ Two things that generalise past this ticket:
 
 **Still open, and named rather than fixed: `render_priority` is a GLOBAL sort key in the alpha
 queue, not a per-bar one.** Each `UnitHealthBar` claims `UNIT_HUD_RENDER_PRIORITY + 0..+6` for its
-five coplanar quads and its label, so two bars that overlap on screen interleave **by layer rather
+five coplanar quads and its two labels (the HP digits and, since #322, the rescue clock — both at
++6, since neither can overlap the other), so two bars that overlap on screen interleave **by layer rather
 than by distance** — a far bar's notch and digits draw over a near bar's outline. #245 already
 proved priority beats depth here (a flame at priority 0 sat under a `Layer.TERRAIN` overlay at 2 and
 read as erased). It could not show while at most one bar was up; at always-on it can, and a bar is
@@ -625,6 +626,53 @@ schedule: `ActionQueueRow` had kept its **own** one-entry copy of the art table,
 started disagreeing the moment CHILLED existed (it now reads `StateIcons.ICONS`); and the two
 source images disagree in size (32px wet, 16px ice), so `populate` now renders every icon at
 `ICON_SIZE` — the recipe `HoverInfoPanelControl` already uses to draw these same terrain icons.
+
+**A DOWNED BODY WEARS THE GLYPH AND ITS RESCUE CLOCK ([#322](https://github.com/Phaazoid/Godoiosis/issues/322), 2026-08-21) — the section's line above about downed/maimed belonging here, made real.**
+The complaint was the readout, not the marker: `_go_downed` parks a downed unit at **exactly 1 HP**,
+so a body and a living unit clinging on both render `1/20`, and those are two completely different
+board states — one is a rescue, the other can still act, still counter, and still be finished off.
+Three things about the answer generalise.
+
+**It is a ROW ENTRY, not a fourth reason to be up.** The glyph is appended to `set_state_icons`'
+array by `UnitMirror`, in the hover card's own order (element states first, lifecycle after), so it
+inherits every property #357 bought — one gate, one layout, no second visibility expression. Riding
+the bar's gate is legitimate *here specifically* and the reason is worth stating, because #325's law
+says a marker answering "what is this unit" must not ride another marker's visibility: **the downed
+fact is already carried unconditionally by the unit's downed ART**, so the glyph disambiguates a
+readout rather than being the only thing that marks the body. A status with no art of its own could
+not make that argument.
+
+**The FORM was already decided, one shelf along.** `hover_info_grid_container` has always drawn
+downed as *icon then turns-remaining*, and `info_panel` as a `DOWN 3` badge tipped "Dies in N turns
+without rescue" — so the ticket's three candidate forms (grey the bar / a state icon / show the
+clock) were not really open: the game had picked icon-**and**-clock, and a board band inventing a
+fourth spelling would have been a second answer to a question already answered. The clock is also
+the number that drives the decision, which is what made it the interesting candidate.
+
+**The glyph got a home on the way through.** `Down.png` was preloaded independently by the hover
+card and by `AttackAction`; a third surface is where that stops being tolerable, so `StateIcons`
+gained a `DOWNED` const — deliberately **not** an `ICONS` entry, since that dictionary is keyed by
+`Elemental.State` and a lifecycle is not one. `AttackAction`'s DOWN/KILL/MAIM triple stays put: a
+predicted lethality **rung** is a different question, and it needs kill and maim art no status row
+has any use for.
+
+**THE HP DIGITS ARE THE FLOOR FOR ANY NUMBER IN THIS VOLUME (dev, in play, 2026-08-21):** *"any
+number needs to be at least as big as the numbers in the healthbar to be readable. Smaller than
+that is just impossible."* The clock shipped smaller and had to be raised — and the ruling that
+came with it is the more useful half: **that is a legibility floor, not a taste value, so it is not
+a knob.** The count reads `number_height_cells` directly, joining the colour and outline it already
+inherited, and its own size dial was deleted rather than re-defaulted — a dial whose entire lower
+range is unreadable is worse than none, and every value removed is one fewer way for two texts on
+one display to disagree. Wanting a number *bigger* than the HP digits would be a knob to add
+deliberately. Pinned as a RELATIONSHIP (`downed_count_glyph_height >= number_glyph_height`), so
+retuning the HP number moves both sides and can never red the suite — the tuning razor's own shape,
+applied to a rule rather than a value.
+
+**No 2D half, and that is not a new gap.** The flat view has no over-unit health readout of any
+kind, so there is no `1/20` there to disambiguate — the ticket's own "the 2D has the same gap" line
+was measured false. The 2D already says downed twice (the swapped sprite, the hover card's icon and
+count). #229's absent flat-view readout remains the declared
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry it always was.
 
 The doctrine governing everything that enters these channels (dev, 2026-08-18): *"Having access to
 fancy effects doesn't necessitate using them. Using them in the correct places rather than

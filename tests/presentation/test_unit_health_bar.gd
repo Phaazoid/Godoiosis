@@ -382,3 +382,110 @@ func test_the_row_rides_the_bars_own_visibility_and_not_a_rule_of_its_own() -> v
 	assert_int(bar.state_icon_count()).override_failure_message(
 			"the row did not follow the bar up — it has grown a visibility rule of its own") \
 			.is_equal(1)
+
+
+# --- The downed readout (#322) --------------------------------------------------------
+# The complaint these answer: a body and a living unit clinging on both read "1/20", because
+# _go_downed parks a downed unit at exactly 1 HP. So the claim under test is never "the glyph
+# exists" — it is that the two board states RENDER DIFFERENTLY.
+
+func _downed(cell: Vector2i) -> Unit:
+	var unit := _spawn(PLAYER, cell)
+	unit.force_down()   # the dev bypass: straight into DOWNED, no Will spend, no maim
+	return unit
+
+
+func test_a_body_and_a_living_unit_at_one_hp_read_differently() -> void:
+	var body := _downed(Vector2i(2, 2))
+	var clinging := _spawn(PLAYER, Vector2i(6, 2))
+	clinging.set_current_hp(1)
+	_point_at(Vector2i(20, 20))   # neither is hovered; the SETTING puts both bars up
+	_set_always_on(true)
+	await _settle()
+
+	var body_bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	var clinging_bar: UnitHealthBar = _unit_mirror.bar_for(clinging)
+	# The premise, asserted rather than assumed: the gauges genuinely say the same thing.
+	assert_str(body_bar.number_text()).override_failure_message(
+			"the two units no longer read the same HP — this case has stopped testing the bug") \
+			.is_equal(clinging_bar.number_text())
+
+	assert_bool(body_bar.downed_count_shown()).override_failure_message(
+			"the body wears no rescue clock — its readout is still the living unit's") \
+			.is_true()
+	assert_str(body_bar.downed_count_text()).is_equal(str(body.downed_turns_remaining))
+	assert_int(body_bar.state_icon_count()).is_equal(1)
+
+	assert_bool(clinging_bar.downed_count_shown()).override_failure_message(
+			"a living unit at 1 HP wears a rescue clock — the readout is reading the NUMBER, not the lifecycle") \
+			.is_false()
+	assert_int(clinging_bar.state_icon_count()).is_equal(0)
+
+
+func test_the_rescue_clock_follows_the_countdown_down() -> void:
+	var body := _downed(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	var opening := bar.downed_count_text()
+
+	body.tick_downed_countdown()
+	await _settle()
+
+	# A count drawn once and never again would pass every other case in this block. The redraw gate
+	# compares a signature, so a clock left out of it freezes on whatever it first drew.
+	assert_str(bar.downed_count_text()).override_failure_message(
+			"the clock did not move when the countdown ticked — it is frozen on its first value") \
+			.is_not_equal(opening)
+	assert_str(bar.downed_count_text()).is_equal(str(body.downed_turns_remaining))
+
+
+func test_standing_a_body_back_up_takes_the_glyph_and_the_clock_away() -> void:
+	var body := _downed(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	assert_int(bar.state_icon_count()).is_equal(1)   # precondition, via the real path
+
+	body.revive()
+	await _settle()
+
+	assert_bool(bar.downed_count_shown()).override_failure_message(
+			"a revived unit still wears its rescue clock").is_false()
+	assert_int(bar.state_icon_count()).is_equal(0)
+
+
+func test_the_clock_rides_the_row_rather_than_the_bar() -> void:
+	var body := _downed(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	# One icon in the row: the glyph. The count sits past its right edge.
+	var glyph_right: float = bar.state_icon_offset(0).x + bar.state_icon_size().x * 0.5
+	assert_float(bar.downed_count_offset().x).is_greater(glyph_right)
+	var alone := bar.downed_count_offset().x
+
+	body.add_element_state(Elemental.State.WET)
+	await _settle()
+
+	# A state landing on a downed body pushes the glyph rightward, and the count must go with it.
+	# Anchored to the BAR instead, the count would sit still here and start overlapping the row the
+	# moment a unit held anything — which a count-and-text test would never see.
+	assert_int(bar.state_icon_count()).is_equal(2)
+	assert_float(bar.downed_count_offset().x).override_failure_message(
+			"the clock stayed put when the row grew — it is anchored to the bar, not to the row") \
+			.is_greater(alone)
+
+
+func test_the_clock_is_never_smaller_than_the_hp_digits() -> void:
+	# The dev's floor, stated in play (2026-08-21): "any number needs to be at least as big as the
+	# numbers in the healthbar to be readable. Smaller than that is just impossible." A RELATIONSHIP,
+	# not a value — retuning the HP number moves both sides, so nothing here pins a tuning knob.
+	var body := _downed(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	assert_float(bar.number_glyph_height()).is_greater(0.0)   # non-vacuity, not a threshold
+	assert_float(bar.downed_count_glyph_height()).override_failure_message(
+			"the rescue clock is drawn smaller than the HP digits — the dev's legibility floor") \
+			.is_greater_equal(bar.number_glyph_height())

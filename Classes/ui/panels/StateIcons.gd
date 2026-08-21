@@ -10,6 +10,17 @@ const ICONS := {
 	# exists. It lands here rather than at any one surface, so all three pick it up at once.
 	Elemental.State.CHILLED: preload("res://Art/Icons/TerrainIcons/Ice.png"),
 }
+# The DOWNED body's glyph (#322). Deliberately NOT an ICONS entry: that dictionary is keyed by
+# Elemental.State, and a lifecycle is not one. It lives in this file anyway because this file is
+# where a surface asks what a STATUS looks like — the hover card and the world-space row must not
+# answer that separately, and they were two independent preloads of one PNG until a third surface
+# wanted it.
+#
+# AttackAction's DOWN/KILL/MAIM triple stays where it is: that table answers what a predicted
+# lethality RUNG looks like, a different question that also needs kill and maim art no status row
+# has any use for.
+const DOWNED := preload("res://Art/Icons/StateIcons/Down.png")
+
 # The size every icon RENDERS at, not the size the source art happens to be — those disagree (the
 # wet drop is 32px, the ice tile 16px) and an unnormalised row shows one at half the other's size.
 # 32 is the larger source, so existing surfaces are untouched and only the placeholder scales.

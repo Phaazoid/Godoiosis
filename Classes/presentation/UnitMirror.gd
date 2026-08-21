@@ -34,6 +34,11 @@ class_name UnitMirror
 # CHILDREN of the bar, so a hidden bar hides them with nothing to keep in step. A second visibility
 # rule in this file would be the bug.
 #
+# #322 puts the DOWNED glyph and its rescue clock in that same row. It is deliberately NOT a fourth
+# reason to be up: the fact that a unit is down is already carried unconditionally by its downed
+# ART, so this exists to stop the BAR contradicting it — `1/20` over a body and over a living unit
+# at 1 HP are the same readout for two completely different board states.
+#
 # It reads the MODEL for that, not the 2D — the departure from OverlayMirror's "the 2D stays the one
 # authority" that #229 already made, and for the same reason: the flat view draws no HP over units
 # at all, so there is no retained 2D state to mirror.
@@ -128,6 +133,15 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var state_icon_texels := 8.0
 @export var state_icon_gap_texels := 2.0        # clearance above the bar's outline
 @export var state_icon_spacing_texels := 1.0    # between neighbouring icons
+
+# --- The rescue clock beside the downed glyph (#322) ------------------------------------
+# Turns left before a downed body is lost, written after the last icon in that row. WHERE it sits is
+# the only knob: its size, colour and outline are all the HP digits', because the dev's legibility
+# floor makes size the same kind of fact those two already were — "any number needs to be at least
+# as big as the numbers in the healthbar to be readable. Smaller than that is just impossible."
+# (2026-08-21). A dial whose lower half is unreadable is worse than no dial, so there isn't one; if
+# this number ever wants to be BIGGER than the HP digits, that is a knob to add deliberately.
+@export var downed_count_gap_texels := 1.0      # between the last icon and the digits
 
 # How fast a SHOVED sprite's height settles, in world units/second (#259 rework). While a unit
 # slides its height EASES toward its target -- held at the launch cell's level while airborne,
@@ -399,8 +413,20 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
 	# rides THE gate rather than growing one — and the art comes from StateIcons, which stays the
 	# one answer to which icon means which state for all three surfaces that draw them.
-	bar.set_state_icons(StateIcons.textures_for(unit.element_states), state_icon_texels,
-			state_icon_gap_texels, state_icon_spacing_texels)
+	#
+	# #322 appends the DOWNED glyph to that same row, in the same order the hover card puts it —
+	# element states first, lifecycle after — because the HP the bar draws cannot tell a body from a
+	# unit clinging on at 1. ONE derived value drives the glyph and the count, or the two could
+	# disagree for a frame; the `> 0` clause is the hover card's own, since the clock emits 0 in the
+	# instant before the body is lost.
+	var downed_turns: int = unit.downed_turns_remaining if unit.is_downed() else -1
+	var row: Array[Texture2D] = StateIcons.textures_for(unit.element_states)
+	if downed_turns > 0:
+		row.append(StateIcons.DOWNED)
+	else:
+		downed_turns = -1
+	bar.set_state_icons(row, state_icon_texels, state_icon_gap_texels, state_icon_spacing_texels)
+	bar.set_downed_turns(downed_turns, downed_count_gap_texels)
 	if foretold:
 		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:
