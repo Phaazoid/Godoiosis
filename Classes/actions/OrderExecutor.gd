@@ -128,6 +128,12 @@ func _end_squad_turn(squad: Squad) -> void:
 	game.refresh_end_turn_button()
 	for member in squad.members:
 		game.overlay_manager.clear_planned_path(member)
+	# LAST, not beside the ejection sweeps above: the clear at the top of this method would wipe an
+	# earlier restore. Standing rings deliberately stand down for the WHOLE pass -- a marker sits on
+	# its unit's projected destination, which during a pass is the cell the unit has not reached
+	# yet, so a ring left up would jump ahead of the unit instead of travelling with it. Riding the
+	# animated position is a separate build; the settled board is where they come back.
+	game.refresh_squad_rings()
 
 # Why a concede happened, for the console: an AI cannot see a red flash, so this is the only place
 # the refusal is visible at all.

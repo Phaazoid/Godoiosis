@@ -155,6 +155,12 @@ const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the
 
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
+
+# Puts the STANDING markers back after this manager clears the channel whole, injected by game (the
+# squad_manager.board_source idiom). A Callable that DRAWS rather than one that returns a squad
+# list, so "what does the standing set look like" has exactly one implementation instead of one
+# here and one in game. Does nothing while ALWAYS_SHOW_SQUAD_RINGS is off.
+var standing_rings_drawer: Callable = func() -> void: pass
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
@@ -517,9 +523,8 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 		
 	var icon := ICON_SCENE.instantiate()
 	icon_overlay.add_child(icon)
-	var cell := unit.get_projected_destination()
-	icon.setup(ICON_TEXTURES[type], cell, type)
-	icon.position = board_tilemap.map_to_local(cell)
+	icon.setup(ICON_TEXTURES[type], unit, board_tilemap, type)
+	icon.position = board_tilemap.map_to_local(icon.current_cell())
 	_style_icon(icon, unit)
 
 	icons_by_unit[unit][type] = icon
@@ -589,6 +594,12 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 # screen through the enemy phase -- that is the whole point of a standing reaction being telegraphed.
 # Called from the three moments the state can move: a pass settling, a faction's turn starting, and
 # a board load. Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
+#
+# Deliberately NOT routed through #435's standing_rings_drawer, though the two are adjacent: that
+# Callable exists because redraw_squad_unit_icons clears the CROWN/SQUADMEMBER channel WHOLE and has
+# to put back squads other than the one being drawn. This channel is nobody else's to clear, and its
+# contents are derived from live ward state rather than from a player setting. Two questions, and
+# the day a third marker wants to stand is the day to generalise -- not before (Law #4 cuts both ways).
 func redraw_guard_wards(units: Array[Unit]) -> void:
 	clear_unit_icon_types([OverlayIcon.IconType.GUARD_WARD])
 	for unit in units:
@@ -599,8 +610,19 @@ func redraw_guard_wards(units: Array[Unit]) -> void:
 		create_unit_icon(unit, OverlayIcon.IconType.GUARD_WARD)
 		create_unit_icon(unit.guard.ward, OverlayIcon.IconType.GUARD_WARD)
 
+# The channel is cleared whole, so everything that should be on it after this call has to be drawn
+# by it: the STANDING set first, then the squad the caller is actually about (which may already be
+# in that set -- create_unit_icon is idempotent, so the overlap costs nothing).
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	standing_rings_drawer.call()
+	draw_squad_unit_icons(squad)
+
+# What ONE squad's markers ARE: a ring on every member, the crown on its leader. Split out of the
+# redraw above so the standing-ring sweep (game.refresh_squad_rings) can draw many squads without
+# each one wiping the last -- the alternative was a second copy of this pair, which is how the two
+# would have drifted.
+func draw_squad_unit_icons(squad: Squad) -> void:
 	for member in squad.get_members():
 		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
 		if member == squad.get_leader():

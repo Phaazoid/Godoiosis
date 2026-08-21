@@ -20,6 +20,7 @@ class_name PlayerSettings
 
 enum Setting {
 	ALWAYS_SHOW_HEALTH,
+	ALWAYS_SHOW_SQUAD_RINGS,
 	SHOW_DIALOG,
 	PHOTOSENSITIVITY,
 }
@@ -32,6 +33,11 @@ const DEFS := {
 	Setting.ALWAYS_SHOW_HEALTH: {
 		"title": "Always show health bars",
 		"desc": "Keep every unit's health bar up, not just the one under your cursor. The numbers still appear on hover.",
+		"default": false,
+	},
+	Setting.ALWAYS_SHOW_SQUAD_RINGS: {
+		"title": "Always show squad rings",
+		"desc": "Keep every squad's coloured rings under its members at all times, not just the squad you're looking at.",
 		"default": false,
 	},
 	Setting.SHOW_DIALOG: {
