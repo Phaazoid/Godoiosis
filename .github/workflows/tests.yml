@@ -45,10 +45,11 @@ jobs:
       - name: Import project
         run: godot-bin/godot --headless --path . --import
 
-      # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic's
-      # editor plugin pruned every entry whose ResourceLoader.exists() was false, which is all
-      # of them during a headless import, and saved {} over dch_directory/dtl_directory. Fixed
-      # at source in addons/dialogic/Core/DialogicResourceUtil.gd, so this never fires -- that
+      # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic
+      # mutated the Dictionary ProjectSettings handed it BY REFERENCE, pruning dch_directory
+      # and dtl_directory to {} inside the settings themselves, and the next save wrote that
+      # out. Fixed at source in addons/dialogic/Core/DialogicResourceUtil.gd, so this never
+      # fires -- that
       # is the point. The addon is VENDORED, so an upgrade can drop the patch silently, and
       # this is the canary that says so instead of leaving every fresh clone wiping registries
       # again. It warns rather than failing on purpose: a lost patch has nothing to do with the

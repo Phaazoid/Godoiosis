@@ -24,14 +24,29 @@ static func get_directory(extension:String) -> Dictionary:
 	if Engine.has_meta(extension+'_directory'):
 		return Engine.get_meta(extension+'_directory', {})
 
-	var directory: Dictionary = ProjectSettings.get_setting("dialogic/directories/"+extension+'_directory', {})
+	# LOCAL PATCH (Iosis #447) -- the `.duplicate()`. A Dictionary is a REFERENCE type, so this
+	# handed out ProjectSettings' own stored object, and update_directory() then erased entries
+	# straight out of it. Nothing had to save deliberately: the next ProjectSettings.save() by
+	# anyone wrote the already-emptied registries to project.godot. During a headless --import
+	# the prune drops everything (the .dch/.dtl format loaders come with the editor plugin, so
+	# ResourceLoader.exists() is false for all of them), which is how an import silently
+	# committed `dch_directory={}`. Copying here leaves the prune, the write in set_directory
+	# and the in-memory state during an import all exactly as upstream has them -- fixing the
+	# prune instead repopulates the registry mid-import and segfaults it (measured 2/2).
+	# A Dialogic upgrade will drop this -- see CLAUDE.md.
+	var directory: Dictionary = ProjectSettings.get_setting("dialogic/directories/"+extension+'_directory', {}).duplicate()
 	Engine.set_meta(extension+'_directory', directory)
 	return directory
 
 
 static func set_directory(extension:String, directory:Dictionary) -> void:
 	extension = extension.trim_prefix('.')
-	if Engine.is_editor_hint():
+	# LOCAL PATCH (Iosis #447) -- the headless clause, the other half of get_directory()'s copy.
+	# A headless `--import` IS an editor context, so this wrote the pruned (i.e. empty) registry
+	# to project.godot deliberately, on top of the aliasing the copy fixes. Both are needed:
+	# measured, each alone still ships `dch_directory={}`. A real editor session is not headless
+	# and keeps maintaining the registries exactly as before.
+	if Engine.is_editor_hint() and DisplayServer.get_name() != "headless":
 		ProjectSettings.set_setting("dialogic/directories/"+extension+'_directory', directory)
 		ProjectSettings.save()
 	Engine.set_meta(extension+'_directory', directory)
@@ -44,15 +59,9 @@ static func update_directory(extension:String) -> void:
 		if not resource in directory.values():
 			directory = add_resource_to_directory(resource, directory)
 
-	# LOCAL PATCH (Iosis #447) -- was `not ResourceLoader.exists(directory[key])`.
-	# The prune means "drop entries whose file was deleted", but exists() answers "is this
-	# loadable right now", which is false for .dch/.dtl during a headless --import: no plugin,
-	# so no format loader. Every entry pruned, and set_directory() saved {} over the committed
-	# registries in project.godot. A Dialogic upgrade will drop this -- see CLAUDE.md.
 	var keys_to_remove := []
 	for key in directory:
-		var path: Variant = directory[key]
-		if path is String and not FileAccess.file_exists(path):
+		if not ResourceLoader.exists(directory[key]):
 			keys_to_remove.append(key)
 	for key in keys_to_remove:
 		directory.erase(key)
