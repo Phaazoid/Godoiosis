@@ -79,6 +79,16 @@ func _ringed_units() -> Array[Unit]:
 	return ringed
 
 
+# Somewhere on the board with nobody on it. DERIVED, never a literal: update_hover_visuals returns
+# early on a tileless cell, so a hardcoded "look away" cell that stops being painted turns every
+# case using it into a silent no-op -- and which tiles exist is authored content (#449).
+func _empty_cell() -> Vector2i:
+	for cell: Vector2i in game.grid.get_used_cells():
+		if game.get_unit_at_cell(cell) == null:
+			return cell
+	return GridUtils.NO_CELL
+
+
 # --- The setting -------------------------------------------------------------------
 
 # Off is a promise that nothing changed: the channel still belongs to the selection paths, so the
@@ -202,8 +212,9 @@ func test_hovering_empty_ground_does_not_wipe_the_standing_rings() -> void:
 	await _settle()
 	assert_int(_ringed_units().size()).is_equal(2)   # precondition, not the claim
 	# The real seam: HoverPresenter's IDLE branch, over a cell with no unit on it.
-	var empty := Vector2i(1, 6)
-	assert_object(game.get_unit_at_cell(empty)).is_null()   # fixture setup
+	var empty := _empty_cell()
+	assert_bool(empty != GridUtils.NO_CELL).override_failure_message(
+			"the fixture board has no empty painted tile to look away at").is_true()
 	game.hover_presenter.update_hover_visuals(empty)
 	await _settle()
 	var ringed := _ringed_units()
@@ -242,8 +253,9 @@ func test_the_crown_stands_with_the_rings_and_outlives_a_hover_out() -> void:
 	# Hover the MEMBER and then look away: the clear that raises a selection crown and drops it.
 	game.hover_presenter.update_hover_visuals(pair[1].movement.cell)
 	await _settle()
-	var empty := Vector2i(1, 6)
-	assert_object(game.get_unit_at_cell(empty)).is_null()   # fixture setup, not the claim
+	var empty := _empty_cell()
+	assert_bool(empty != GridUtils.NO_CELL).override_failure_message(
+			"the fixture board has no empty painted tile to look away at").is_true()
 	game.hover_presenter.update_hover_visuals(empty)
 	await _settle()
 
