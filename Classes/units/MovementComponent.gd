@@ -18,6 +18,15 @@ class_name MovementComponent
 # each segment start, so a change applies from the next shove.
 static var SHOVE_SLIDE_SPEED := 120.0  # pixels per second
 
+# The void plummet (#431). How far a unit shoved into a hole keeps falling before it is removed,
+# and how long that takes. Game constants beside the slide speed, tuned on the same Game tab --
+# they are pure spectacle, and the dev asked for "a good deal longer" rather than a number.
+# VOID_PLUMMET_CELLS is read TWICE on purpose: here for the fall itself and by
+# OverlayMirror._append_drop for the preview pointer's length, so the arrow promises exactly the
+# drop the execution shows (Law #2). Split them only if they should ever disagree.
+static var VOID_PLUMMET_CELLS := 8.0     # cells below the landing surface
+static var VOID_PLUMMET_SECONDS := 0.9
+
 signal movement_finished
 
 var grid: TileMapLayer
@@ -34,6 +43,13 @@ var airborne := false
 var slide_origin: Vector2i
 var slide_landing_cell: Vector2i   # where flight ends -- the mirror forks ramp/flat contact on it
 var _flight_entries_left := 0
+
+# The void plummet's state (#431): how far below its landing surface the sprite has fallen, in
+# cells, while `plummeting` is on. UnitMirror is the one reader -- this is 3D-ONLY motion by
+# construction, because the flat board has no height to fall through, so the 2D view still simply
+# loses the unit when die() runs. A declared #292 asymmetry, not drift.
+var plummeting := false
+var plummet_depth := 0.0
 
 # `owner` rather than get_parent(): matches UnitVisuals, and survives the
 # component being reparented under a sub-node of the Unit.
@@ -118,4 +134,20 @@ func _slide_to_next_cell() -> void:
 	tween.tween_property(unit, "position", target_pos, duration)
 
 	tween.finished.connect(_slide_to_next_cell)
+
+
+# The third animation, after the walk and the slide (#431): a unit shoved into a VOID keeps falling
+# instead of blinking out at the lip. Awaited DIRECTLY rather than signalled -- movement_finished
+# was already spent by the slide that brought it here, and awaiting a signal that had already fired
+# would hang the caller forever. Same headless escape as Pacing.beat, and for the same reason: the
+# suite awaits AttackAction.execute, so a real timer here would put wall clock on every void case.
+func plummet() -> void:
+	plummet_depth = 0.0
+	if VOID_PLUMMET_SECONDS <= 0.0 or DisplayServer.get_name() == "headless":
+		return
+	plummeting = true
+	var tween := create_tween()
+	tween.tween_property(self, "plummet_depth", VOID_PLUMMET_CELLS, VOID_PLUMMET_SECONDS)
+	await tween.finished
+	plummeting = false
 

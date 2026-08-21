@@ -87,9 +87,14 @@ func execute():
 				await target.movement.movement_finished
 		# A void shove (#259): the hit's own damage may be 0, so take_damage above cannot carry
 		# the death -- removal is its own door. die() frees the node and tears the squad down.
-		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap).
+		# MIRRORED in play_session._apply_attack (the hand-copied twin, per the went_downed trap) --
+		# except for the plummet, which is pure spectacle: the sprite falls a long way past the lip
+		# before it goes (#431, dev: it used to vanish in mid-air), and the headless twin has no
+		# sprite to drop. Awaited so the removal lands after the fall, not during it.
 		if resolved.removed and is_instance_valid(target):
-			target.die()
+			await target.movement.plummet()
+			if is_instance_valid(target):   # the await spans frames; the board can go in them
+				target.die()
 	# Readiness spend (#73): the ACT of firing consumes it, hit or whiff — lead volley member
 	# only (mirrors the is_secondary_hit gate PlanResolver uses for cell-effect deposits).
 	# Counters run through here too: they stamp main (#72), so a family whose MAIN spends — a

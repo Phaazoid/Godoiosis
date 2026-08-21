@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #427 (2026-08-20).**
+**Canon checked through #432 (2026-08-21).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -358,12 +358,50 @@ resolver's flight/tumble split: launch height while airborne, then **slaved to t
 the sprite** (`BoardSpace.surface_height_at`, the ramp-aware plane — a tumble STICKS to the
 slope; an eased height cannot track a many-cells-per-second slide and floats, measured). A flat
 landing keeps fly-then-fall via the post-slide ease. The preview trail obeys the same split —
-flown cells draw in the air at launch height, and a drop onto a FULL tile hangs the trail's own
-rail sprite vertically at the entry edge of the landing, flight height down to the destination
-("in the air until he would drop, then point straight down" — dev); a fall onto a RAMP draws no
-pointer — the flat arrow lying on the slope is the whole story, and the sprite rides the slope
-from its edge. A VOID cell renders as **no column at all** in 3D: the pit is the absence of the
-block.
+flown cells draw in the air at launch height, and every break in the trail's own surface hangs a
+**drop pointer** ("in the air until he would drop, then point straight down" — dev), the rule for
+which is [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s and is stated in full below.
+A VOID cell renders as **no column at all** in 3D: the pit is the absence of the block.
+
+### The drop pointer [#431, 2026-08-21 — SUPERSEDES the "a fall onto a RAMP draws no pointer" line this section used to carry]
+
+**A trail cell drops when the two surfaces meeting at the EDGE it was entered by are not at the
+same height.** That is the whole rule, and nothing else is asked — no "did this shove fall" flag.
+The heights the trail is already drawn at answer it, and `BoardSpace.surface_height_at` carries
+what makes it work: a ramp's plane meets its neighbour's exactly at the shared edge, so a slide
+reads continuous and draws nothing with no ramp case anywhere. The flag it replaced was a second
+seam for a fact the geometry held (Law #4), and it went stale the moment the tumble learned to
+plummet — stamped on the ONE cell a flight ended on, it could not express a second drop at all.
+
+Consequences the flag version got wrong and this one gets right for free: a fall onto a ramp DOES
+draw (reversing the older ruling — the unit fell, and that is the vertical story), a pure slide
+onto one does not, and a cliff-then-slide-then-plummet draws at **both** breaks.
+
+The geometry, all of it dev-ruled in play across four rounds:
+
+- It starts falling **at the edge**, never further into the tile. The flat arrow it lands on begins
+  at the back of its tile, so a fold placed anywhere inward leaves that much shaft sticking out
+  behind the foot — worse on a slope, where the tile's centre is half a level under its top edge.
+- Both ends join the plane the neighbouring arrow is **DRAWN** in, not the surface under it. Those
+  differ on a ramp, because the layer lift rides the surface normal and a ramp's normal leans
+  ([#432](https://github.com/Phaazoid/Godoiosis/issues/432)); `OverlayMirror._ribbon_point` is that
+  question, and joining the surface instead put a seam on every ramp landing.
+- The layer's clearance is **vertical** for this marker (`lift_dir`), so its top lands in the plane
+  the flat arrows share. Lifting it along its own normal — which for a vertical quad is sideways —
+  broke that join twice, and then needed `no_depth_test` to survive the z-fight that left, which
+  turned the pointer into an x-ray visible through platforms the camera had panned behind.
+  Standing clear of the cliff face is a separate, far smaller epsilon (`WALL_CLEARANCE`).
+- **One quad, never a cross.** The rig's pitch is fixed at 40°, so a vertical quad across the trail
+  never goes edge-on — its width bottoms out at 64% and no camera-facing pick is needed.
+
+**A void removal drops the full plummet.** `MovementComponent.VOID_PLUMMET_CELLS` is one distance
+with two readers — the pointer's length and the fall the sprite actually takes — because a preview
+promising a shorter drop than playback shows is a Law #2 divergence. The fall itself is
+`MovementComponent.plummet()`, awaited by `AttackAction.execute` before `die()`, so a unit shoved
+into a hole falls a long way instead of vanishing at the lip. It is 3D-ONLY by construction (the
+flat board has no height to fall through), a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292)
+asymmetry, and `play_session`'s hand-copied twin deliberately skips it. Both the depth and the
+duration are Game-tab knobs beside *Shove slide speed*.
 
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the
@@ -382,7 +420,7 @@ word. Counter shoves are previewed too since this slice (`_preview_plan_effects`
 - **Only vertical drops give fall damage.** Slopes never do.
 - **A shove onto a descending ramp becomes a TUMBLE.**
 
-### The tumble rule
+### The tumble rule [the "no fall damage" clause was REVERSED at build — see consequence 2 below]
 
 > A shove that steps onto a descending ramp keeps descending while the next cell is another ramp
 > continuing down, and ends on the first flat or level cell it can legally enter. A wall, a rise, or
@@ -405,10 +443,16 @@ Two consequences, both ruled the conservative way:
    could never push anyone down a flight, which is the whole image. Knockback moves its N cells
    normally; if a step lands on a descending ramp, the slide is a bonus, and the tumble **ends** the
    shove rather than resuming the remainder.
-2. **The tumble stops at a lip, it does not launch you off it.** If a flight bottoms out at a sheer
-   drop, the unit stops on the lip. Fall damage stays restricted to shoves that push a unit
-   *directly* over a vertical edge, so the two mechanics never compound into a two-stage prediction
-   on day one. Tumble-then-plummet is a fine later addition once the base case has been felt.
+2. ~~**The tumble stops at a lip, it does not launch you off it.**~~ **REVERSED at build
+   (2026-08-20): the tumble PLUMMETS past a lip.** The original ruling was deliberately conservative
+   — keep fall damage to shoves that push a unit *directly* over a vertical edge, so the two
+   mechanics never compound into a two-stage prediction on day one, and add tumble-then-plummet
+   later once the base case had been felt. It was felt, and the addition landed in the same arc.
+   A downhill step below the ramp's base now accumulates `fall_levels`, steps into the lower cell,
+   and **keeps whatever descent waits below** (another ramp tumbles again, a flat cell catches it) —
+   dev: *"continue whatever descent awaits them."* One shove can therefore break its surface more
+   than once, which is what the drop pointer's per-edge rule above exists to draw. Pinned by
+   `test_the_tumble_plummets_past_a_lip` and `test_a_plummet_landing_on_a_ramp_tumbles_again`.
 
 Structurally it landed close to the prediction: the knockback stage still publishes
 `knockback_from`/`knockback_to` and threads the hypo — but the landing had to be computed BEFORE
@@ -486,10 +530,11 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
 3. **Falls.** Drop damage, void removal, the tumble, the no-push-uphill rule. Closes the
    #116 / #120 interlock.
    **BUILT as [#259](https://github.com/Phaazoid/Godoiosis/issues/259) (2026-08-20)** with the
-   AIRBORNE revision — see *Falls, shoves and tumbles* above. The interlock closed as far as it
-   can before content: the fall-damage **weight term is wired** (`FallRules`) and inert at weight
-   0; #120's distance bands + the weight-authoring pass stay on #120, and #116 stays open for its
-   water fork alone.
+   AIRBORNE revision — see *Falls, shoves and tumbles* above, and the tumble-then-plummet reversal
+   plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
+   The interlock closed as far as it can before content: the fall-damage **weight term is wired**
+   (`FallRules`) and inert at weight 0; #120's distance bands + the weight-authoring pass stay on
+   #120, and #116 stays open for its water fork alone.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
 only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then

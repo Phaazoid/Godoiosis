@@ -149,12 +149,14 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
 		landing = _knockback_landing(action, target_hypo, board)
-	if landing != null and landing.fall_levels > 0:
-		# Falls bypass DEF (dev, 2026-08-20: armor does not stop gravity) -- added after
-		# mitigation, before the Iron Will clamp so the cap stays absolute.
-		outcome.fall_damage = FallRules.damage_for(landing.fall_levels, target)
-		outcome.damage += outcome.fall_damage
-		outcome.popups.append("Fell %d!" % landing.fall_levels)
+	if landing != null:
+		outcome.fall_levels = landing.fall_levels
+		if landing.fall_levels > 0:
+			# Falls bypass DEF (dev, 2026-08-20: armor does not stop gravity) -- added after
+			# mitigation, before the Iron Will clamp so the cap stays absolute.
+			outcome.fall_damage = FallRules.damage_for(landing.fall_levels, target)
+			outcome.damage += outcome.fall_damage
+			outcome.popups.append("Fell %d!" % landing.fall_levels)
 
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
@@ -341,8 +343,10 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 
 # The tumble (#259): from a ramp, slide the slope's OWN downhill -- continuing down ramps of the
 # same rise -- until the first walkable, unoccupied cell level with the current ramp catches it.
-# A wall, a rise, an occupied cell, water, a hole or a lip stops it where it stands: no launch,
-# no fall damage (dev-ruled conservative; tumble-then-plummet is a deliberate later addition).
+# A wall, a rise, an occupied cell, water or a hole stops it where it stands: no launch, no fall
+# damage on those. A sheer DROP below the ramp's base (the deferred tumble-then-plummet) does NOT
+# stop it any more: the unit falls the remaining levels -- fall damage, folded into fall_levels --
+# and keeps whatever descent waits below (another ramp tumbles again, a flat cell catches it).
 # Terminates by construction -- every ramp continuation strictly descends.
 static func _tumble(landing: _Landing, board: BoardContext) -> void:
 	var cell := landing.cell
@@ -363,18 +367,29 @@ static func _tumble(landing: _Landing, board: BoardContext) -> void:
 			cell = next
 			landing.path.append(cell)
 			break   # the first flat or level cell it can legally enter -- the landing catches it
-		break   # a drop lip or a rise: stop where it stands
+		if next_elev < here_elev:
+			# Tumble-then-plummet: the slope bottoms out at a sheer drop, so the unit falls the
+			# remaining levels and keeps whatever descent waits below.
+			landing.fall_levels += here_elev - next_elev
+			cell = next
+			landing.path.append(cell)
+			if board.ramp_rise_at(next) != Terrain.RampRise.NONE:
+				continue   # lands on another slope -- tumble down that too
+			break   # lands on a flat cell at the lower level -- the landing catches it
+		break   # a rise: stop where it stands
 	landing.cell = cell
 
 static func _counter_actor_live(action: AttackAction, hypo: Dictionary) -> bool:
 	# R7 liveness: a counter-er downed/killed earlier in the pass can't counter. The threaded
 	# HP carries every attack's (and prior counter's) damage; <= 0 means a fatal hit landed on
-	# this unit — downed or dead, either way no counter. The counter-er (action.actor) is only
-	# in `hypo` if it was personally hit this pass; an untouched squadmate isn't -> still live.
+	# this unit — downed or dead, either way no counter. A VOID removal is the one kill that
+	# leaves HP untouched (the drop deals no HP), so the lifecycle term below catches it: KILLED
+	# threads DEAD while hp stays > 0. The counter-er (action.actor) is only in `hypo` if it was
+	# personally hit this pass; an untouched squadmate isn't -> still live.
 	var counterer := action.actor
 	if counterer == null or not hypo.has(counterer):
 		return true
-	return hypo[counterer].hp > 0
+	return hypo[counterer].hp > 0 and hypo[counterer].lifecycle == Unit.LifecycleState.ACTIVE
 
 # --- Reading the threaded hypothetical from outside the pass (R4) ---
 # A derivation that runs MID-pass -- SquadManager's reaction targeting, after the attacks have

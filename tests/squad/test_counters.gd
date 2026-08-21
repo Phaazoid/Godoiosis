@@ -186,3 +186,27 @@ func test_a_sheer_step_denies_a_melee_counter() -> void:
 
 func test_the_same_edge_ramp_connected_still_counters() -> void:
 	assert_int(_sheer_step_counters(true)).is_equal(1)
+
+
+# --- Void removal is death, not just damage (#431 follow-up) -----------------------------------
+# R7 liveness: a defender shoved into a VOID is DEAD and must not counter, even though the void
+# deals no HP (the `hp > 0` half of the liveness check would pass it). The lifecycle term catches
+# it -- the row is still derived, then marked skipped, exactly as a downed reactor is.
+func test_a_defender_shoved_into_a_void_does_not_counter() -> void:
+	const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+	var heights := BoardHeights.new()
+	var sm := H.make_manager(self, heights)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0), {}, true)
+	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, HOLE_TILE)
+
+	var attack := H.stamped_attack(a, d)
+	a.squad._queue_action(attack)
+	var plan := sm.resolve_plan(a.squad, sm.board_source.call())
+
+	assert_bool(plan.attacks[0].resolved.removed).is_true()   # the shove really did remove it
+	var counters := plan.counters
+	assert_int(counters.size()).is_equal(1)
+	assert_object(counters[0].actor).is_same(d)
+	assert_bool(counters[0].resolved.skipped).is_true()

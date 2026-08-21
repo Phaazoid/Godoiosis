@@ -491,6 +491,8 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		events.append("%s is shoved to %s" % [handle_for(target), str(r.knockback_to)])
 	# The void door (#259) — MIRRORS AttackAction.execute exactly (the hand-copied twin): a
 	# 0-damage take_damage cannot kill an ACTIVE unit, so removal is applied here or nowhere.
+	# The ONE thing deliberately not copied is that twin's plummet (#431): a headless session has
+	# no sprite to fall, and the rule outcome is identical either way.
 	if r.removed and is_instance_valid(target):
 		events.append("%s falls into the void" % handle_for(target))
 		target.die()
