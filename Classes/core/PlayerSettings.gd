@@ -37,7 +37,7 @@ const DEFS := {
 	},
 	Setting.ALWAYS_SHOW_SQUAD_RINGS: {
 		"title": "Always show squad rings",
-		"desc": "Keep every squad's coloured rings under its members at all times, not just the squad you're looking at.",
+		"desc": "Keep every squad's coloured rings under its members -- and its leader's crown -- at all times, not just the squad you're looking at.",
 		"default": false,
 	},
 	Setting.SHOW_DIALOG: {
@@ -56,11 +56,19 @@ const CONFIG_SECTION := "settings"
 
 # Where preferences persist. A static var (not const) so tests can redirect it to a temp file.
 static var config_path := "user://settings.cfg"
-# Tests flip this false to stay fully in-memory (no disk I/O).
+# Tests flip this false to stay fully in-memory (no disk I/O); _static_init clears it headlessly.
 static var persistence_enabled := true
 
 static var _state: Dictionary[Setting, bool] = {}
 static var _loaded := false
+
+# A headless process has no PLAYER at the keyboard, so it has nobody's preferences to honour: the
+# suite and the Play API read the DEFAULTS, never whatever cfg this machine happens to hold. The
+# project's existing spelling for "nobody is watching" (Pacing.beat, CameraController.pan_to).
+# A suite that wants the real disk path sets persistence_enabled back to true itself (#449).
+static func _static_init() -> void:
+	if DisplayServer.get_name() == "headless":
+		persistence_enabled = false
 
 # --- read / write API ---
 
