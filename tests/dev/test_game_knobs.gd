@@ -32,7 +32,9 @@ var _static_snapshot: Array = []
 
 func before_test() -> void:
 	_static_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE,
-		OverlayManager.SQUAD_RING_ALPHA, OverlayManager.KNOCKBACK_MODULATE]
+		OverlayManager.SQUAD_RING_ALPHA, OverlayManager.KNOCKBACK_MODULATE,
+		OverlayManager.MOVE_ARROW_MODULATE, OverlayManager.INVALID_ARROW_MODULATE,
+		OverlayManager.TRAILING_ARROW_MODULATE]
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property or a class value
@@ -47,6 +49,9 @@ func after_test() -> void:
 	OverlayManager.HEAL_ATTACK_MODULATE = _static_snapshot[1]
 	OverlayManager.SQUAD_RING_ALPHA = _static_snapshot[2]
 	OverlayManager.KNOCKBACK_MODULATE = _static_snapshot[3]
+	OverlayManager.MOVE_ARROW_MODULATE = _static_snapshot[4]
+	OverlayManager.INVALID_ARROW_MODULATE = _static_snapshot[5]
+	OverlayManager.TRAILING_ARROW_MODULATE = _static_snapshot[6]
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 

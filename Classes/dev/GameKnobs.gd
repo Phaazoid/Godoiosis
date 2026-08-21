@@ -231,7 +231,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
 	# refused order and green a member falling behind.
 	{"group": "Board markup colours", "label": "Shove trail (2D+3D)", "static": "KNOCKBACK_MODULATE",
-		"tip": "The knockback trail a predicted shove draws, and the drop pointer that hangs off it in 3D. Distinct from a planned move's white arrow, which is an order the player authored -- a shove is a consequence. Takes effect on a preview already up."},
+		"tip": "The knockback trail a predicted shove draws, and the drop pointer that hangs off it in 3D. Distinct from a planned move's arrow, which is an order the player authored -- a shove is a consequence. Takes effect on a preview already up."},
+
+	# The three planned-move tints. They were hardcoded literals inside _arrow_modulate until the
+	# trail art was desaturated (2026-08-21) -- while the art was cyan it carried most of the hue
+	# and these only shaded it, so tuning them was near-pointless. On greyscale art they ARE the
+	# colour, which is what makes them knobs.
+	{"group": "Board markup colours", "label": "Move arrow", "static": "MOVE_ARROW_MODULATE",
+		"tip": "A queued move's path arrow. Pre-set to the cyan the old art baked in, so this is what moves have always looked like -- now as a value you can move rather than a colour hidden in a PNG."},
+	{"group": "Board markup colours", "label": "Refused-move arrow", "static": "INVALID_ARROW_MODULATE",
+		"tip": "A queued move the plan has since refused -- out of the leader's cohesion range, or its destination taken. Reads brighter than before the art was desaturated, because the cyan used to multiply it down."},
+	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
+		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
 
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
@@ -311,6 +322,9 @@ static func read_static(name: String) -> Variant:
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
+		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
+		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
+		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
@@ -328,6 +342,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
+		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
+		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
+		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply
@@ -349,6 +366,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
 		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
+		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
+		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
+		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
+			manager.redraw_planned_paths()
 		_: manager.refresh_attack_reach_color()
 
 

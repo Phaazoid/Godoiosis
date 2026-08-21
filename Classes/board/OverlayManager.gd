@@ -116,12 +116,23 @@ const ICON_TEXTURES = {
 # feature rather than picking between two.
 static var SQUAD_RING_ALPHA := 0.9
 
-# The shove trail's tint. A shove and a planned move are opposite kinds of fact -- one is what a
-# unit CHOSE, the other is what is about to be done to it -- and they drew identically until now
-# (both plain white). Pale ice rather than a saturated hue because _arrow_modulate's palette already
-# means something: red is a refused order, green a member falling behind its leader (Case 1), so a
-# shove colour has to be legible AGAINST those rather than merely different from white.
+# --- Arrow tints (2026-08-21) --------------------------------------------------------------
+# The trail ART is GREYSCALE, so every colour below is exactly what the board shows. It was cyan
+# until now, and modulate MULTIPLIES: dialling yellow zeroed the blue channel and drew green, and
+# a "white" planned move had always rendered cyan. Desaturating the 14 segments is what makes these
+# four values mean what they say. (ERROR.png keeps its red -- GridUtils.ERROR_ICON draws it
+# untinted as the unknown-terrain marker.)
+#
+# A shove and a planned move are opposite kinds of fact -- one is what a unit CHOSE, the other is
+# what is about to be done to it -- and they drew identically until now.
 static var KNOCKBACK_MODULATE := Color(0.55, 0.8, 0.95, 0.9)
+# Pre-tuned to the art's own brightest pixel (136,248,248), so a planned move looks exactly as it
+# did before the desaturation rather than turning white by accident (dev, 2026-08-21).
+static var MOVE_ARROW_MODULATE := Color(0.533, 0.973, 0.973, 1.0)
+# These two keep the numbers they always had, so both now read BRIGHTER than before -- the cyan art
+# used to multiply them down. Knobs, not guesses: tune against the shove colour on the Game tab.
+static var INVALID_ARROW_MODULATE := Color(1, 0.25, 0.25, 0.85)
+static var TRAILING_ARROW_MODULATE := Color(0.4, 1, 0.45, 0.9)
 # Per-squad hues, dealt lazily by SquadManager when a squad first gains a squadmate: cool for
 # friendly squads, warm for enemy ones, so "which squad" and "whose side" read from one glance.
 # Plain consts, one per line -- edit freely; WHITE is reserved as the not-yet-dealt sentinel.
@@ -735,10 +746,10 @@ func _dirs_match(a: Vector2i, b: Vector2i, dir1: Vector2i, dir2: Vector2i) -> bo
 # shove, which has no MoveAction to ask.
 func _arrow_modulate(move: MoveAction) -> Color:
 	if not move.is_valid:
-		return Color(1, .25, .25, .85)
+		return INVALID_ARROW_MODULATE
 	if move.is_trailing:
-		return Color(.4, 1, .45, .9)
-	return Color.WHITE
+		return TRAILING_ARROW_MODULATE
+	return MOVE_ARROW_MODULATE
 
 func _create_arrow_sprite(cell: Vector2i, texture: Texture2D, tint: Color) -> Sprite2D:
 	var sprite := Sprite2D.new()
