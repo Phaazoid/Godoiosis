@@ -475,3 +475,17 @@ func test_the_clock_rides_the_row_rather_than_the_bar() -> void:
 	assert_float(bar.downed_count_offset().x).override_failure_message(
 			"the clock stayed put when the row grew — it is anchored to the bar, not to the row") \
 			.is_greater(alone)
+
+
+func test_the_clock_is_never_smaller_than_the_hp_digits() -> void:
+	# The dev's floor, stated in play (2026-08-21): "any number needs to be at least as big as the
+	# numbers in the healthbar to be readable. Smaller than that is just impossible." A RELATIONSHIP,
+	# not a value — retuning the HP number moves both sides, so nothing here pins a tuning knob.
+	var body := _downed(Vector2i(2, 2))
+	_point_at(Vector2i(2, 2))
+	await _settle()
+	var bar: UnitHealthBar = _unit_mirror.bar_for(body)
+	assert_float(bar.number_glyph_height()).is_greater(0.0)   # non-vacuity, not a threshold
+	assert_float(bar.downed_count_glyph_height()).override_failure_message(
+			"the rescue clock is drawn smaller than the HP digits — the dev's legibility floor") \
+			.is_greater_equal(bar.number_glyph_height())

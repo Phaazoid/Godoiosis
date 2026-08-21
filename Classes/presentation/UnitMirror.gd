@@ -135,12 +135,12 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var state_icon_spacing_texels := 1.0    # between neighbouring icons
 
 # --- The rescue clock beside the downed glyph (#322) ------------------------------------
-# Turns left before a downed body is lost, written after the last icon in that row. Sized in CELLS
-# like the HP digits, because a font atlas is not the game's pixel art and neither number is
-# measured in texels; smaller than them on purpose — this is a count ON the glyph, not a second
-# readout competing with the gauge. Its colour and outline are the HP digits', deliberately not
-# knobs: two texts on one display should agree by construction.
-@export var downed_count_height_cells := 0.09
+# Turns left before a downed body is lost, written after the last icon in that row. WHERE it sits is
+# the only knob: its size, colour and outline are all the HP digits', because the dev's legibility
+# floor makes size the same kind of fact those two already were — "any number needs to be at least
+# as big as the numbers in the healthbar to be readable. Smaller than that is just impossible."
+# (2026-08-21). A dial whose lower half is unreadable is worse than no dial, so there isn't one; if
+# this number ever wants to be BIGGER than the HP digits, that is a knob to add deliberately.
 @export var downed_count_gap_texels := 1.0      # between the last icon and the digits
 
 # How fast a SHOVED sprite's height settles, in world units/second (#259 rework). While a unit
@@ -426,7 +426,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	else:
 		downed_turns = -1
 	bar.set_state_icons(row, state_icon_texels, state_icon_gap_texels, state_icon_spacing_texels)
-	bar.set_downed_turns(downed_turns, downed_count_height_cells, downed_count_gap_texels)
+	bar.set_downed_turns(downed_turns, downed_count_gap_texels)
 	if foretold:
 		bar.set_prediction(_predicted_hp(unit, plan), PlanResolver.plan_fells(unit, plan.hypo))
 	else:

@@ -95,7 +95,6 @@ var _state_icon_texels := 8.0
 var _state_gap_texels := 2.0
 var _state_spacing_texels := 1.0
 var _downed_turns := -1          # #322; -1 = not downed, which is a different answer from 0
-var _count_height := 0.09
 var _count_gap_texels := 1.0
 
 var _alarm: Tween
@@ -218,10 +217,10 @@ func set_state_icons(textures: Array[Texture2D], size_texels: float, gap_texels:
 
 # The rescue clock (#322): turns left before this body is lost, or -1 for a unit that is not down.
 # The GLYPH beside it arrives through set_state_icons like any other status art — one row, one
-# layout — so this setter carries only the number and the two knobs that size it.
-func set_downed_turns(turns: int, height_cells: float, gap_texels: float) -> void:
+# layout — so this setter carries only the number and where it sits. How BIG it is comes off the HP
+# digits and is not tunable apart from them; see _draw_downed_count.
+func set_downed_turns(turns: int, gap_texels: float) -> void:
 	_downed_turns = turns
-	_count_height = height_cells
 	_count_gap_texels = gap_texels
 	_rebuild()
 
@@ -340,6 +339,18 @@ func downed_count_offset() -> Vector3:
 	return _count.position
 
 
+# Rendered glyph height, in world units, for each of the two texts — pixel_size times the atlas
+# resolution, which is what actually reaches the screen. They exist so a law can hold the dev's own
+# floor (#322 round 2: a number smaller than the HP digits is unreadable) as a RELATIONSHIP, without
+# any test naming a value that retuning could move.
+func number_glyph_height() -> float:
+	return _label.pixel_size * float(FONT_RESOLUTION)
+
+
+func downed_count_glyph_height() -> float:
+	return _count.pixel_size * float(FONT_RESOLUTION)
+
+
 func track_texels() -> float:
 	return roundf(_width)
 
@@ -360,7 +371,7 @@ func _rebuild() -> void:
 			_doomed_color, _heal_color, _notch_color, _notch_texels,
 			_current, _maximum, _predicted, _has_prediction,
 			_state_textures, _state_icon_texels, _state_gap_texels, _state_spacing_texels,
-			_downed_turns, _count_height, _count_gap_texels]
+			_downed_turns, _count_gap_texels]
 	if signature == _drawn:
 		return
 	_drawn = signature
@@ -463,9 +474,12 @@ func _draw_downed_count(texel: float, left: float, icon: float, spacing: float, 
 	if not _count.visible:
 		return
 	_count.text = str(_downed_turns)
-	_count.pixel_size = maxf(_count_height, 0.001) / float(FONT_RESOLUTION)
-	# Outline and colour come off the HP digits deliberately: two texts on one display, agreeing by
-	# construction rather than by a knob somebody has to keep in step with the other.
+	# SIZE, outline and colour all come off the HP digits, and none of them is a knob of its own:
+	# two texts on one display agree by construction rather than by a value somebody keeps in step.
+	# Size joined them in round 2 (dev, 2026-08-21) — "any number needs to be at least as big as the
+	# numbers in the healthbar to be readable. Smaller than that is just impossible." A knob whose
+	# whole lower half is unreadable is not a knob, so there is nothing here to drag.
+	_count.pixel_size = maxf(_number_height, 0.001) / float(FONT_RESOLUTION)
 	_count.outline_size = roundi(_number_outline)
 	_count.modulate = _number_color
 	# Where the icons END, in texels — n icons and the n-1 gaps between them, measured off the same

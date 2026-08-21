@@ -102,8 +102,9 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_spacing_texels", "label": "State icon spacing", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "Gap between neighbouring state icons, in texels. Only visible on a unit holding more than one state, which today means wet AND chilled at once -- with two states the row cannot crowd, and this is the dial that matters when the vocabulary grows."},
 	# --- The rescue clock beside the downed glyph (#322) ---
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "downed_count_height_cells", "label": "Downed clock size", "min": 0.02, "max": 0.4, "step": 0.005,
-		"tip": "Height of the turns-left digits beside the downed glyph, in cells -- the same unit the HP number uses, and deliberately smaller than it. This is a count ON the glyph rather than a second readout, so at the HP digits' size it starts competing with the gauge for the eye."},
+	# No SIZE row on purpose: the digits are the HP number's height, which is not tunable apart from
+	# it. See UnitMirror's own note -- a dial whose readable range is only its top end is worse than
+	# none, and "Number size" already moves both.
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "downed_count_gap_texels", "label": "Downed clock inset", "min": 0.0, "max": 16.0, "step": 1.0,
 		"tip": "Gap between the last icon in the row and the turns-left digits, in texels. Zero puts the number flush against the glyph so the two read as one badge; widen it and the count starts reading as its own thing floating beside the body."},
 
