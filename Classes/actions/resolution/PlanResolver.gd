@@ -27,6 +27,7 @@ static func resolve_attacks(plan: ResolvedPlan, hypo: Dictionary, reactions: Arr
 # has resolved, so expanding every volley up front put all victim-gathering strictly before all
 # shoves — and no aim could ever see one.
 static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	_apply_guards(group, plan, hypo)
 	for atk in group:
 		_resolve_one(atk, reactions, hypo, board)
 		if board != null and not atk.is_secondary_hit:
@@ -36,6 +37,16 @@ static func resolve_attack_group(group: Array[AttackAction], plan: ResolvedPlan,
 # Phase 2: counters, threaded off the SAME hypo so a counter-er downed by an attack this pass can't counter (R7).
 static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
 	for ctr in plan.counters:
+		# A counter is an attack with a volley like any other, so it gets the same one-blast-one-
+		# moment read. plan.counters is FLAT (create_counter_volley's members are appended in
+		# order), so the volley's lead member is where its snapshot is taken.
+		if not ctr.is_secondary_hit:
+			var volley: Array[AttackAction] = []
+			if ctr.volley.is_empty():
+				volley.append(ctr)      # hand-built counter (test fixtures); a real one always has one
+			else:
+				volley.assign(ctr.volley)
+			_apply_guards(volley, plan, hypo)
 		if not _counter_actor_live(ctr, hypo):
 			var no_op := ResolvedOutcome.new()
 			no_op.skipped = true
@@ -45,6 +56,58 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 		if board != null and not ctr.is_secondary_hit:
 			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
+
+# --- Guard substitution (#414, docs/design/standing-reactions.md) ---------------------------
+#
+# ONE BLAST, ONE MOMENT: this runs once per volley, BEFORE any member resolves, so standing-reaction
+# liveness (spent + lifecycle + range) is read at the volley's start and the outcome can never hinge
+# on gather order — the order the player neither authors nor sees. Between volleys the answer moves
+# freely: a shove earlier in the pass has already threaded new positions into the hypo.
+#
+# The substitution itself is a VICTIM REWRITE on the DERIVED action (resolve_plan expands every
+# stored aim fresh each pass, #15), which is what makes "the entire payload, from the blocker's own
+# cell" fall out with no second copy of anything: mitigation, elemental immunity, Iron Will, the
+# knockback direction and landing, the elevation stamp, the lethality rung, execution's playback and
+# the queue row all just run with a different victim. The player's stored aim is untouched.
+static func _apply_guards(group: Array[AttackAction], plan: ResolvedPlan, hypo: Dictionary) -> void:
+	if plan.guards.is_empty():
+		return
+	for action in group:
+		# A substituted hit is never Guard-bait — no chains (ON HOLD, not buried: the doc leaves
+		# the door open for a wanted tank conga). Walking the group once already guarantees it;
+		# this says so out loud.
+		if action.blocked_for != null:
+			continue
+		var guard := _guard_for(action, plan, hypo)
+		if guard == null:
+			continue
+		action.blocked_for = action.target
+		action.target = guard.blocker
+		guard.spent = true              # a COPY (ResolvedPlan.guards); the live ward is spent by execution
+
+# The Guard that catches this hit, or null. Order is arm order, so stacked Guards absorb
+# earliest-first with no precedence rule of its own.
+static func _guard_for(action: AttackAction, plan: ResolvedPlan, hypo: Dictionary) -> GuardWard:
+	var victim := action.target
+	if victim == null or not is_instance_valid(victim):
+		return null                     # a cell-targeted attack (#47) has nobody to guard
+	var attack := action.fired_attack
+	if attack != null and (attack.heals or attack.deals_no_damage or attack.pierces_guard):
+		return null                     # heals and pure utility pass through; pierce is the authored counter
+	for guard in plan.guards:
+		if guard.spent or not guard.is_intact() or guard.ward != victim:
+			continue
+		# A Guard cannot shield someone from its OWN swing. Only reachable through an AoE counter
+		# (a unit gets one main action, so it can never both Guard and attack in one turn), and
+		# absorbing your own attack for someone is incoherent rather than funny.
+		if guard.blocker == action.actor:
+			continue
+		if projected_lifecycle(guard.blocker, hypo) != Unit.LifecycleState.ACTIVE:
+			continue
+		if not guard.pair_in_range(projected_position(guard.blocker, hypo), projected_position(victim, hypo)):
+			continue
+		return guard
+	return null
 
 static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
 	var outcome := ResolvedOutcome.new()
@@ -124,7 +187,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# final damage (E8): round(base * mult + bonus), then flat DEF mitigation (#84), never negative.
 	# DEF subtracts AFTER elemental scaling and BEFORE the 0-floor; a revved Chainsword attacker
 	# pierces it entirely. Iron Will (below) stays the last clamp — an absolute cap on damage taken.
-	var mitigation := _mitigation_for(action, target, target_hypo, board)
+	var mitigation := _mitigation_for(action, target, target_hypo, board, outcome)
 	outcome.damage = max(0, int(round(base * mult + bonus)) - mitigation)
 
 	# Insulation (a granted PASSIVE ability, #90 — from gear today, from any source the kit knows
@@ -224,12 +287,19 @@ static func _surviving_elements(elements: Array[Elemental.Element], target: Unit
 # read from RulesService's shared breakdown so the inspect panel's DEF readout is the same number.
 # DEF is gear-and-terrain only (stats.md — no base DEF), so "ignore DEF bonuses" means ignore all
 # of it: a revved Chainsword attacker (WeaponInstance.ignores_def()) returns 0, armor AND cover.
-static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> int:
+static func _mitigation_for(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext, outcome: ResolvedOutcome) -> int:
 	var weapon := action.actor.get_equipped_weapon() as WeaponInstance
 	if weapon != null and weapon.ignores_def():
-		return 0
+		return 0   # brace_bonus stays 0: a Chainsword pierces it with the rest of DEF
 	var def := RulesService.def_breakdown(target, target_hypo.position, board)
-	return def["total"]
+	# The brace bonus (#414): extra DEF the blocker brings to a hit it ABSORBED, on top of its own
+	# armour and cover, and only ever on a substituted instance -- which is why it is added here and
+	# not inside def_breakdown, whose sum is also the inspect panel's standing DEF readout. Stamped
+	# on the outcome in the same breath it is applied, so the queue row can never name a different
+	# number than the one subtracted.
+	if action.blocked_for != null:
+		outcome.brace_bonus = target.get_brace_bonus()
+	return def["total"] + outcome.brace_bonus
 
 # The attack's source surface: the order's stamped fired_attack — a carving OR a specific weapon
 # attack. A NULL stamp means this unit fired NO attack at all (bare fists, an aura-dry rune, a
@@ -410,6 +480,17 @@ static func projected_lifecycle(unit: Unit, hypo: Dictionary) -> Unit.LifecycleS
 	if not hypo.has(unit):
 		return unit.lifecycle_state
 	return (hypo[unit] as _Hypo).lifecycle
+
+# Where the pass has put the unit so far — a shove earlier in this plan has already threaded its
+# landing here (#414's range check reads it, so a mid-pass displacement really does move who is
+# still covered). Same read-only contract as the two above: a unit the pass has not touched has no
+# entry, and its live projection IS its answer.
+static func projected_position(unit: Unit, hypo: Dictionary) -> Vector2i:
+	if unit == null or not is_instance_valid(unit):
+		return Vector2i.ZERO
+	if not hypo.has(unit):
+		return unit.get_projected_destination()
+	return (hypo[unit] as _Hypo).position
 
 # Does this pass MOVE the unit's rung -- the alarm's question (#313), re-asked against the hypo's own
 # baseline rather than the live unit (#354). DOWNED and MAIMED move the lifecycle, KILLED moves it

@@ -49,6 +49,12 @@ class_name ScenarioUnitEntry
 @export var crisis_surge_pending := false
 @export var rally_count := 0
 @export var squad_has_acted := false   # LEADER's entry only, beside squad_name/archetype/zone
+# The Guard this unit had armed (#414), as an INDEX into ScenarioData.unit_entries — a live Unit ref
+# cannot serialize and a name is not unique, so this is the limb_prosthetic_items re-link pattern.
+# -1 = guarding nobody. Written and re-linked by ScenarioManager (a pair needs every entry to exist
+# first), not by capture_unit_state/apply_unit_state, which only ever see one unit.
+@export var guard_ward_index := -1
+@export var guard_spent := false
 
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_equippable()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An

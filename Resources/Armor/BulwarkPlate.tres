@@ -1,6 +1,8 @@
 [gd_resource type="Resource" script_class="ArmorData" format=3]
 
 [ext_resource type="Script" uid="uid://dj0617uewvdny" path="res://Classes/items/ArmorData.gd" id="1_armor"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="2_ability"]
+[ext_resource type="Resource" path="res://Resources/Abilities/Brace.tres" id="3_brace"]
 
 [resource]
 script = ExtResource("1_armor")
@@ -9,6 +11,7 @@ flat_def = 1
 stat_minimums = Dictionary[int, int]({
 6: 8
 })
+granted_abilities = Array[ExtResource("2_ability")]([ExtResource("3_brace")])
 display_name = "Bulwark Plate"
-description = "Layered slab plating. Only a powerful frame can carry it -- and the stronger the frame, the more of it bites. The plate's own bulk turns aside a little no matter who wears it."
+description = "Layered slab plating. Only a powerful frame can carry it -- and the stronger the frame, the more of it bites. The plate's own bulk turns aside a little no matter who wears it, and a wearer who plants themselves in front of someone else turns aside a great deal more."
 metadata/_custom_type_script = "uid://dj0617uewvdny"

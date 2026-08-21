@@ -1,8 +1,8 @@
 # Standing Reactions — Guard & Overwatch
 
-**RATIFIED DIRECTION (grilled 2026-08-20, dev + Claude); numbers playtest-tunable. Nothing built.** Build issues: [#412](https://github.com/Phaazoid/Godoiosis/issues/412) (queue order becomes real — the prerequisite) → [#413](https://github.com/Phaazoid/Godoiosis/issues/413) (Overwatch, blocked by #412) + [#414](https://github.com/Phaazoid/Godoiosis/issues/414) (Guard, deliberately independent). All three sit on the **Demo** milestone.
+**RATIFIED DIRECTION (grilled 2026-08-20, dev + Claude); numbers playtest-tunable. GUARD IS BUILT ([#414](https://github.com/Phaazoid/Godoiosis/issues/414), 2026-08-21); the rest is not.** Build issues: [#412](https://github.com/Phaazoid/Godoiosis/issues/412) (queue order becomes real — the prerequisite) → [#413](https://github.com/Phaazoid/Godoiosis/issues/413) (Overwatch, blocked by #412) + **#414 (Guard, deliberately independent — landed first, exactly as the dependency note said it could)**. All three sit on the **Demo** milestone.
 
-**Canon checked through #414 (2026-08-20).**
+**Canon checked through #414 (2026-08-21).**
 
 **Why these exist (the throughline, dev 2026-08-19):** push the player from *"does my queued plan work"* toward genuinely predicting what the ENEMY PHASE will do — more of the puzzle living in anticipating reactive/triggered events, not just resolving an already-known queue. A reactive defense (Guard) and a reactive attack (Overwatch) are the two halves of one idea, which is why they share a grammar and a doc. Secondary motives, both real: **Overwatch is Carbine identity** ("finally give Carbines a real feel"), and **Guard is heritage** — an adaptation of the guarding feature from the GameMaker-era demo (the pre-squad parallel battle system; most of that build died, guarding was always loved).
 
@@ -46,7 +46,7 @@ The rejected cuts, for the record: **(a)** spatial precedence ("nearest crosser 
 - **Queue representation: an annotation on the crossing move's own row** ("triggers Overwatch — takes 12 from Carbine (E)"), stacking when one route crosses several watches. A **deliberate divergence** from how counters display (they have their own section): chosen because #412's whole payoff is dragging a move row and watching who eats the shot change — the feedback must live on the row being dragged. The watcher's own declaration is an ordinary main-action row.
 - **Board display: always visible, both directions** — your watches to the enemy, theirs to you (Axiom 4's telegraph; the *victim* stays undirected). Its own visual vocabulary: crosshair/flash-shaped threat marks, **not** a filled-square range layer (dev: "they shouldn't just be filled in squares"). Exact look is build-time work behind knobs. **Parity is mandatory** — this is gameplay information; it reaches both the 2D and 3D views, no [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry.
 
-## Guard ([#414](https://github.com/Phaazoid/Godoiosis/issues/414))
+## Guard ([#414](https://github.com/Phaazoid/Godoiosis/issues/414)) — **BUILT 2026-08-21**
 
 **A main action: pick a unit in range and become its bodyguard — the next hit that would land on them lands on you instead.** Named **Guard**, not "Defend," to stay distinct from DEF the stat (Glossary entries at build time keep the two legible side by side); it **absorbs** [jobs.md](jobs.md)'s unbuilt "Guard redirects" follow-up — one mechanic, many sources, rather than a jobs-side guard and a weapon-side defend answering the same question twice (Law #4).
 
@@ -59,6 +59,22 @@ The rejected cuts, for the record: **(a)** spatial precedence ("nearest crosser 
 - **Stacked Guards are legal** — two blockers may ward the same unit; the earlier-queued Guard absorbs the first hit. Queue-order vocabulary settling precedence, no refusal rule.
 - **The counterplay set, all authored, all previewed:** a pierce flag on the attack (`AttackData`, the scratchpad's own idea); shove the *blocker* out of range (note a knockback hit on a Guard shoves the blocker — the disarm is a combo target); shove the *ward*; or **AoE the cluster** and double-bill the tank. Bodyguarding forces clustering; area damage is its natural predator.
 - **Presentation:** the ward link rides the **ground marker channel** ([#346](https://github.com/Phaazoid/Godoiosis/issues/346)'s rule — ground = the interaction): a shield icon under the defendee with a connecting mark from the defender, one clear mark under the restraint doctrine, both views or declared on #292. The **slice-one block moment reuses the existing attack lunge** — defender lunges toward defendee at the block; the *visually loud* jump-in-front the scratchpad wanted is saved for battle-zoom animations (noted on [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s sprite-FX stack — no bespoke animation machinery ahead of it).
+
+### How it was built (#414, 2026-08-21) — and the rulings the build had to make
+
+**Substitution is a VICTIM REWRITE inside the resolve pass, not a new stage.** `SquadManager.resolve_plan` already expands every stored aim into *derived* `AttackAction`s each pass (the #15 rule), so the resolver rewrites the derived hit's `target` to the blocker and stamps `AttackAction.blocked_for` with who it was aimed at. That is this doc's own sentence — *"every pipeline stage just runs with a different victim"* — made literal: DEF mitigation, elemental immunity, Iron Will, the knockback direction and landing, the elevation stamp, the lethality rung, execution's playback, the headless twin and the queue row all inherit the substitution with no second copy of anything. The player's stored aim is untouched.
+
+**Liveness is ONE query fed by two projections of the same fact** (`ResolvedPlan.guards`, in arm order): wards armed in an EARLIER pass, copied off the units oldest-first, plus Guards queued in THIS plan, appended by `resolve_plan`'s own queue walk when it reaches their slot. That append point *is* "arms at its queue slot" — an attack expanded earlier simply never sees the entry, with no index bookkeeping and no second authority. The relationship is `MoveAction` ↔ `movement.cell` through `get_projected_destination()`, not a duplicate seam. The pass mutates COPIES; the live ward is spent by execution.
+
+**A Guard that ate its owner's own splash arms ALREADY SPENT.** Side-channel verbs execute after the attack phase, so without this the queue would preview a used Guard and execution would hand back a live one. The resolver stamps `GuardAction.resolved_spent` each pass (the R8 "write the outcome onto the action" pattern, for an order with no `ResolvedOutcome` of its own) and the queue row says so.
+
+Three rulings the doc did not spell out, decided at build time and open to argument:
+
+- **The blocker's party counters, not the ward's.** `calculate_reactions_for_squad` reads the hit's victim, which is now the blocker — total substitution applied honestly. It only differs from the old behaviour when blocker and ward are in different squads.
+- **A Guard never shields anyone from its own blocker's swing.** Only reachable through an AoE counter (one main action per turn means a unit can never both Guard and attack), and absorbing your own attack on someone else's behalf is incoherent rather than funny.
+- **Wards are allies, alive, self excluded; range is manhattan distance with no line-of-sight and no height gate** — Guard is a stance, not an attack. A DOWNED ally stays a legal ward on purpose: a body waiting on a rescue is exactly what someone might stand over.
+
+Shipped beside the mechanic: `AttackData.pierces_guard` (the authored counterplay flag), `Abilities.Id.BRACE` + `BRACE_DEF_BONUS` riding the ability union and authored onto **Bulwark Plate**, `GUARD_BASE_RANGE`, a ground-channel ward marker on both ends of the pair (real shields as of 2026-08-21, cut from `ProjectUtumno_full` row 38 — the dev's picks, cols 30 and 35; the *connector* from defender to defendee is still owed, so the pair is marked at both ends rather than shield-plus-link), and the live ward in the save snapshot as an entry-index re-link. **The access fork stays open**: Guard ships basic-for-everyone, and every ruling above is gate-independent, so playtest can still flip it.
 
 ## AI — deferred whole (dev, 2026-08-20)
 

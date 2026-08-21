@@ -201,6 +201,25 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
 	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}
 
+# Guard (#414): become a nearby ally's bodyguard — the same GuardAction the menu queues, gated on the
+# same RulesService.guard_candidates query the menu's row is built from. Its own verb rather than a
+# queue_simple_action pass-through, for the reason rescue/intimidate have one: it takes a real unit.
+func guard(handle: String, ward_handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	var ward := unit_by_handle(ward_handle)
+	if ward == null:
+		return {"ok": false, "error": "no unit '%s'" % ward_handle}
+	if not RulesService.guard_candidates(unit, _board()).has(ward):
+		return {"ok": false, "error": "%s is not an ally within %s's Guard range" % [ward_handle, handle]}
+	var action := GuardAction.new()
+	action.init(unit, ward)
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't Guard now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> guard %s" % [handle, ward_handle]}
+
 # Rally: self-targeted Will restore (a main action) — the same RallyAction the menu queues.
 func rally(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -478,6 +497,10 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		return
 	if r.skipped:
 		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
+	# Guard (#414) — MIRRORS AttackAction.execute (the hand-copied twin): the resolver already moved
+	# the victim to the blocker, so the only thing left for execution is spending the live ward.
+	if atk.blocked_for != null:
+		target.spend_guard()
 	target.take_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
 	for s in r.states_removed:
 		target.remove_element_state(s)

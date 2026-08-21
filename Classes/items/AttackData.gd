@@ -42,6 +42,11 @@ enum VerticalRule { TOLERANCE, STEP }
 # sneak damage into a damageless effect. Only the attack's own contribution — an elemental reaction's
 # damage_bonus still lands, deliberately (dev, 2026-08-08). Mutually exclusive with `heals`.
 @export var deals_no_damage := false
+# Ignores a Guard (#414): the hit lands on whoever it was aimed at, bodyguard or no. The first entry
+# in Guard's authored counterplay set — the others are positional (shove the blocker out of range,
+# shove the ward, AoE the cluster) and need no flag. On the shared base beside the two above, so a
+# weapon attack and a carving author it identically.
+@export var pierces_guard := false
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
 

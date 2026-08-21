@@ -1026,6 +1026,103 @@ func test_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -
 			"the crown outlived the hover that raised it").is_equal(0)
 
 
+# --- Guard ward marker (#414) -------------------------------------------------------
+
+# The channel wire: an armed Guard's ground mark has to REACH the 3D view, because that is what the
+# game boots into — a mark that only exists in the hidden 2D board is a mark nobody sees. The
+# 2D-side store is pinned in tests/flow/test_guard_lifecycle_wires.gd; this is the other half, and
+# it is exactly the split that made the marker look "not showing up" in play.
+func test_an_armed_guards_ground_mark_reaches_the_3d_ward_channel() -> void:
+	var pair := _squad_pair()
+	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
+	game.refresh_guard_markers()
+	await _settle()
+
+	var ward_art: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.GUARD_WARD]
+	var found := 0
+	for marker in _overlays.markers_of(BoardOverlays.Layer.GUARD_ICONS):
+		if marker["texture"] == ward_art:
+			found += 1
+	assert_int(found).override_failure_message(
+			"the Guard's ward mark never reached its 3D channel — 3D is the view the game boots into"
+			).is_equal(2)
+
+
+# The Z-FIGHT, as a rule rather than a bug report. A layer IS a plane (_lift_of is
+# fill_lift + sort * lift_step), so two markers that share a cell AND a sort are coplanar by
+# construction and flicker. The ward mark and the squad ring share cells constantly — a blocker
+# wears both — so they must never share a sort. Found in play, 2026-08-21.
+func test_the_ward_mark_and_the_squad_ring_are_on_different_planes() -> void:
+	var ring_sort: int = BoardOverlays.LAYERS[BoardOverlays.Layer.GROUND_ICONS]["sort"]
+	var ward_sort: int = BoardOverlays.LAYERS[BoardOverlays.Layer.GUARD_ICONS]["sort"]
+	assert_int(ward_sort).override_failure_message(
+			"the ward mark shares a sort with the squad ring, so the two lift to the same plane "
+			+ "and z-fight on any cell that carries both").is_not_equal(ring_sort)
+	assert_float(_overlays.marker_lift(BoardOverlays.Layer.GUARD_ICONS)).override_failure_message(
+			"same lift, so same plane — the sorts differ but the planes did not"
+			).is_not_equal(_overlays.marker_lift(BoardOverlays.Layer.GROUND_ICONS))
+
+
+# A ward mark can also share a cell with an aim fill, a target-pick marker, an arrow or a sight
+# trace, so its sort has to be free of EVERY other layer's, not just the ring's. This is the rule
+# that says why 8 and not 4 -- and it goes red the day someone else takes the slot.
+func test_the_ward_channels_sort_is_unshared() -> void:
+	for layer in BoardOverlays.LAYERS:
+		if layer == BoardOverlays.Layer.GUARD_ICONS:
+			continue
+		assert_int(BoardOverlays.LAYERS[layer]["sort"]).override_failure_message(
+				"%s now shares the ward channel's sort — they will lift to one plane and z-fight"
+				% BoardOverlays.Layer.keys()[layer]
+			).is_not_equal(BoardOverlays.LAYERS[BoardOverlays.Layer.GUARD_ICONS]["sort"])
+
+
+# The SIZE law, and the reason this channel needs one at all: BoardOverlays sizes a ground quad as
+# texture pixels / ART_PIXELS_PER_CELL, so 16px of art is exactly ONE cell. A 32px marker is a
+# FOUR-cell decal sprawling over its neighbours — which is what shipping the Utumno tile at its
+# native size did. Every board icon must be authored at the cell size, not the sheet's.
+func test_every_board_icon_is_authored_at_one_cell() -> void:
+	for type in OverlayManager.ICON_TEXTURES:
+		var art: Texture2D = OverlayManager.ICON_TEXTURES[type]
+		var cells: Vector2 = art.get_size() / BoardOverlays.ART_PIXELS_PER_CELL
+		assert_that(cells).override_failure_message(
+				"%s is %s px, i.e. %s cells wide in 3D — board icons are authored at %d px"
+				% [OverlayIcon.IconType.keys()[type], str(art.get_size()), str(cells),
+					int(BoardOverlays.ART_PIXELS_PER_CELL)]
+			).is_equal(Vector2.ONE)
+
+
+# The CENTRING law, the other half of the size one. A ground marker is drawn centred on its cell,
+# so art that does not sit centred on its own canvas lands off-centre on the board -- which is what
+# the first cut of the ward shield did (its art centred on (8.5, 6.5) against the ring's (7.5, 7.5),
+# i.e. a pixel right and a pixel up, spotted by eye in play).
+#
+# CROWN is exempt and that is the point of the split: it is a head billboard, so where it sits
+# vertically is its own business, not the cell's centre.
+func test_every_ground_marker_is_centred_on_its_canvas() -> void:
+	for type in [OverlayIcon.IconType.SQUADMEMBER, OverlayIcon.IconType.GUARD_WARD]:
+		var art: Image = (OverlayManager.ICON_TEXTURES[type] as Texture2D).get_image()
+		var centre := _solid_centre(art)
+		var canvas := (Vector2(art.get_width(), art.get_height()) - Vector2.ONE) / 2.0
+		assert_that(centre).override_failure_message(
+				"%s's art centres on %s, but its canvas centres on %s -- it will draw off-centre "
+				% [OverlayIcon.IconType.keys()[type], str(centre), str(canvas)]
+				+ "on every cell it marks").is_equal(canvas)
+
+
+# The bounding box of what is actually SOLID, centred. Alpha above 0.5 rather than above 0, because
+# a smooth downscale leaves a faint halo on the border that would drag the box out to the canvas
+# edge and make every icon look perfectly centred (measured: 29 of 256 px on the ward shield).
+func _solid_centre(art: Image) -> Vector2:
+	var min_p := Vector2i(9999, 9999)
+	var max_p := Vector2i(-1, -1)
+	for y in art.get_height():
+		for x in art.get_width():
+			if art.get_pixel(x, y).a > 0.5:
+				min_p = Vector2i(mini(min_p.x, x), mini(min_p.y, y))
+				max_p = Vector2i(maxi(max_p.x, x), maxi(max_p.y, y))
+	return (Vector2(min_p) + Vector2(max_p)) / 2.0
+
+
 # --- The shove trail's own colour (2026-08-21) ----------------------------------------------
 
 # A predicted shove and an authored move used to draw IDENTICALLY -- show_knockback_preview passed

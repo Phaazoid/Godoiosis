@@ -26,6 +26,10 @@ var knockback_path: Array[Vector2i] = []
 # void removal) happens on; cells after it are the landing tumble. The resolver's own split — the
 # shove animation and the 3D trail read it here rather than re-deriving (Law #2).
 var knockback_landing_index: int = 0
+# The brace bonus actually subtracted from this hit (#414) — non-zero only when a Guard substituted
+# and the attack did not pierce DEF. Already folded into the mitigation; recorded so the queue row
+# can name it without re-deriving (Law #2's spirit applied to a readout).
+var brace_bonus: int = 0
 var fall_damage: int = 0    # the drop's own component (#259), already folded into `damage` above
 var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): the flight drop plus
 							# any tumble-then-plummet. The distance fall_damage is derived from and

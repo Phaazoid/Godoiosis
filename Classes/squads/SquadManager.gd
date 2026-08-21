@@ -579,6 +579,18 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	for unit in board.units:
 		unit.clear_projected_knockback()
 
+	# Standing Guards armed in an EARLIER pass (#414) — the enemy-phase case, and the whole point of
+	# the mechanic. Copied, oldest arm first, so "earlier-queued absorbs first" holds across passes
+	# and not merely inside one; board iteration order is not an arming order. Guards queued in THIS
+	# plan join the list below, at their own slot in the walk.
+	var live_guards: Array[GuardWard] = []
+	for unit in board.units:
+		if unit.guard != null and unit.guard.is_intact() and not unit.guard.spent:
+			live_guards.append(unit.guard.copy())
+	live_guards.sort_custom(func(a: GuardWard, b: GuardWard) -> bool: return a.sequence < b.sequence)
+	plan.guards.append_array(live_guards)
+	var guard_orders: Dictionary = {}   # GuardWard (this pass's copy) -> the GuardAction that armed it
+
 	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
 	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
 	# projection-aware, so a re-planned move re-targets the blast — like counters.
@@ -589,6 +601,17 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# shoved OUT of a later blast was still hit by it. Interleaving costs nothing — same order,
 	# same hypo, same cell-effect sequence.
 	for action in squad.action_queue:
+		# A Guard ARMS AT ITS QUEUE SLOT (#414). This walk is already the pass's clock, so appending
+		# here — and nowhere else — is the whole rule: an attack expanded EARLIER never sees the
+		# entry, which is what lets a player sequence their own splash before their own bodyguard.
+		if action.action_type == BaseAction.ActionType.GUARD:
+			var order := action as GuardAction
+			order.resolved_spent = false   # rewritten below; a re-resolve must not inherit last pass's verdict
+			if order.target != null and is_instance_valid(order.target):
+				var ward := GuardWard.make(order.actor, order.target, order.guard_range)
+				plan.guards.append(ward)
+				guard_orders[ward] = order
+			continue
 		if action.action_type != BaseAction.ActionType.ATTACK:
 			continue
 		var aim := action as AttackAction
@@ -657,6 +680,14 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			cover.cell = action.actor.get_projected_destination()
 			cover.states_added.append(Terrain.TileState.COVER)
 			plan.cell_effects.append(cover)
+
+	# Hand each queued Guard the pass's verdict on itself (#414). Side-channel verbs execute AFTER
+	# the attack phase, so a Guard that absorbed a hit from an attack queued after its own slot has
+	# to arm already-spent — otherwise the queue previews a used Guard and execution hands back a
+	# live one (Law #2). The resolver's copy holds the answer; this is the R8 "write the outcome onto
+	# the action" pattern for an order that has no ResolvedOutcome of its own.
+	for ward in guard_orders:
+		(guard_orders[ward] as GuardAction).resolved_spent = (ward as GuardWard).spent
 
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad

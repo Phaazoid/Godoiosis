@@ -75,6 +75,7 @@ static func _run_pass(squad: Squad, actions: Array[BaseAction], board: BoardCont
 	_revalidate_rescues(actions)
 	_revalidate_intimidates(actions)
 	_revalidate_captures(actions)
+	_revalidate_guards(actions)
 
 # A non-leader squadmate must end inside the leader's projected cohesion range -- SquadCohesion's
 # path-based bubble since #151, asked per member because traversal is per-unit. Group Move may leave
@@ -152,6 +153,24 @@ static func _revalidate_intimidates(actions: Array[BaseAction]) -> void:
 			continue
 		if not _actor_ends_adjacent_to(intimidate, victim, actions):
 			intimidate.add_validation_error("No longer adjacent to the intimidate target")
+
+# The pair must still be together WHEN THE GUARD ARMS, so a re-planned move that walks the blocker
+# out of range refuses the order rather than arming a Guard that covers nothing (#414).
+#
+# Only at arming: the pair drifting apart AFTERWARDS is not an invalid order, it is the authored
+# counterplay (shove the blocker, shove the ward). That question is asked per hit, against threaded
+# positions, by PlanResolver._guard_for — same rule (GuardWard.in_range), different positional fact.
+static func _revalidate_guards(actions: Array[BaseAction]) -> void:
+	for action in actions:
+		if not (action is GuardAction):
+			continue
+		var guard := action as GuardAction
+		var ward: Unit = guard.target
+		if ward == null or not is_instance_valid(ward) or ward.is_dead():
+			guard.add_validation_error("Guard target is gone")
+			continue
+		if not GuardWard.in_range(projected_cell_for(guard.actor, actions), ward.get_projected_destination(), guard.guard_range):
+			guard.add_validation_error("Too far from the unit being guarded")
 
 # A re-planned move that walks the actor out of the zone invalidates the capture, rather than
 # claiming wherever it ended up. Same shape as rescue/intimidate; the context is a CELL.

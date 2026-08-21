@@ -48,6 +48,7 @@ const ABILITY_ACTION := 15
 const WEAPON_ACTION := 16
 const CAPTURE := 17
 const TRANSMUTATION := 18
+const GUARD := 19
 
 # Display data AND print order: declaration order here IS the menu's order (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
@@ -61,6 +62,7 @@ const ACTION_DATA := {
 	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION},
 	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION},
 	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION},
+	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD},
 	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE},
 	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY},
 	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE},
@@ -217,6 +219,11 @@ func populate(unit: Unit) -> Array:
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():
 		options.append(ATTACK)
 
+	# A basic main action everyone has (#414) — no ability gate, no verb lock; what kit grants is the
+	# brace bonus, not the verb. Listed only when there is somebody in range to stand in front of.
+	if _can_take_main_action(unit) and not RulesService.guard_candidates(unit, game._board()).is_empty():
+		options.append(GUARD)
+
 	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
 		options.append(RESCUE)
 
@@ -300,6 +307,10 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
 			# (#124) must be pickable exactly where the row said it would be.
 			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)), func(target: Unit): game.queue_rescue(unit, target))
+		GUARD:
+			# Same query as the populate gate above — the pick layer must agree with the rule layer
+			# (the #126 lesson pinned by tests/ui/test_target_pick_projection.gd).
+			game.enter_target_pick_mode(RulesService.guard_candidates(unit, game._board()), func(target: Unit): game.queue_guard(unit, target))
 		RALLY:
 			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
 		ABILITY_ACTION:

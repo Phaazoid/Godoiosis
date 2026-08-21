@@ -292,6 +292,25 @@ static func adjacent_enemies(unit: Unit, board: BoardContext) -> Array[Unit]:
 			result.append(other)
 	return result
 	
+# Who `unit` could become the bodyguard of right now (#414) — same shape as adjacent_enemies above,
+# projected on BOTH sides for the same reason (#126): Guard arms after the move phase, so it meets
+# its ward at the cell every queued move and every shove this pass has already moved it to.
+#
+# Allies, never enemies, and never yourself. A DOWNED ally stays a legal ward on purpose: a body
+# waiting on a rescue is exactly what someone might stand over. Range is the guard's own
+# (Unit.get_guard_range), not a hardcoded 1, so authored content widening it reaches the menu free.
+static func guard_candidates(unit: Unit, board: BoardContext) -> Array[Unit]:
+	var result: Array[Unit] = []
+	var origin := unit.get_projected_destination()
+	for cell in GridUtils.cells_within_manhattan_range(origin, unit.get_guard_range()):
+		if cell == origin:
+			continue
+		var other := board.projected_unit_at_cell(cell)
+		if other != null and other != unit and not other.is_dead() \
+				and not Team.is_enemy(unit.get_faction(), other.get_faction()):
+			result.append(other)
+	return result
+
 # Every source of DEF for `unit` standing on `cell`, itemized (#84). ONE composition point: the
 # resolver sums it to mitigate damage, the inspect panel shows it — so the readout can never claim
 # a different number than the one actually subtracted (Law #2's spirit applied to a stat readout).

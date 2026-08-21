@@ -31,6 +31,7 @@ enum Layer {
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
+	GUARD_ICONS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -91,6 +92,17 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# moved up one to open this slot. Colour stays WHITE: the tint is per-entry (the squad hue,
 	# copied off the 2D sprite), which is also why this layer can never take a GameKnobs colour row.
 	Layer.GROUND_ICONS: {"color": Color.WHITE, "sort": 3, "kind": Kind.SPRITE},
+	# The armed-Guard ward mark (#414) gets its OWN layer purely so it stops Z-FIGHTING the squad
+	# ring, which it shared a cell and a layer with. A layer IS a plane here -- _lift_of is
+	# fill_lift + sort * lift_step -- so two markers on one layer are coplanar by construction and
+	# no per-marker nudge can separate them without breaking that rule (#432's own lesson).
+	#
+	# Sort 8 rather than 4: it may not share a sort with any layer whose CELLS it can overlap, and a
+	# warded unit's cell can carry an aim fill (4), a target-pick marker (5), an arrow (6) or a sight
+	# trace (7). 8 is the first free slot above all of them. Consequence, deliberate: the ward mark
+	# reads OVER ground markup, which is #346's rule -- the interaction is the thing you must not
+	# miss, and ambient membership yielding to it is the trade. One integer if that reads wrong.
+	Layer.GUARD_ICONS: {"color": Color.WHITE, "sort": 8, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.

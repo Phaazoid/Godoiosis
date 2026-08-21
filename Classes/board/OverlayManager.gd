@@ -106,8 +106,24 @@ enum OverlayType {
 # 2026-08-19); the legacy green square lost, and SquadHighlightIcon.png is now unreferenced.
 const ICON_TEXTURES = {
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
-	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
+	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png"),
+	# ProjectUtumno_full row 38 col 35 (dev pick, 2026-08-21), downscaled 32 -> 16.
+	#
+	# 16px is not a style choice, it is the CELL SIZE: BoardOverlays sizes a 3D ground quad as
+	# texture pixels / ART_PIXELS_PER_CELL (16), so 32px art is a FOUR-CELL decal sprawling over its
+	# neighbours -- which is exactly how this shipped once and read as "the marker isn't showing up".
+	# Pinned by test_every_board_icon_is_authored_at_one_cell.
+	#
+	# LANCZOS here where the queue-row icon uses NEAREST, and the difference is the ART, not a rule:
+	# that one's features are 2px+ and survive pixel-dropping, this one's are 1px planks that only a
+	# smooth filter keeps legible. Look at the result before picking either.
+	OverlayIcon.IconType.GUARD_WARD: preload("res://Art/Icons/BoardIcons/GuardWardIcon.png")
 }
+
+# The armed-Guard pair's ground mark (#414). Neutral by default now the art is real -- these stay as
+# the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
+static var GUARD_RING_COLOR := Color.WHITE
+static var GUARD_RING_SCALE := 1.0
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
@@ -571,6 +587,14 @@ func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
 		icon.sprite.z_index = RING_Z_INDEX
 		if not icon.is_pulsing():
 			icon.sprite.modulate = _ring_base(unit)
+	elif icon.icon_type == OverlayIcon.IconType.GUARD_WARD:
+		icon.sprite.z_index = RING_Z_INDEX + 1   # underfoot with the squad ring, and above it
+		icon.sprite.scale = Vector2.ONE * GUARD_RING_SCALE
+		# Yields to a live pulse for #442's reason, even though nothing pulses this channel yet:
+		# the rule is "a pulse owns modulate", and a branch that ignores it is the one that breaks
+		# the day someone pulses a ward mark.
+		if not icon.is_pulsing():
+			icon.sprite.modulate = GUARD_RING_COLOR
 	else:
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
 		if not icon.is_pulsing():
@@ -658,6 +682,27 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 			continue
 		for type in types:
 			clear_unit_icon(unit, type)
+
+# Every armed, unspent Guard on the board (#414), marked at BOTH ends of the pair. Its own redraw
+# rather than a clause in redraw_squad_unit_icons: a Guard is not selection markup and must stay on
+# screen through the enemy phase -- that is the whole point of a standing reaction being telegraphed.
+# Called from the three moments the state can move: a pass settling, a faction's turn starting, and
+# a board load. Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
+#
+# Deliberately NOT routed through #435's standing_rings_drawer, though the two are adjacent: that
+# Callable exists because redraw_squad_unit_icons clears the CROWN/SQUADMEMBER channel WHOLE and has
+# to put back squads other than the one being drawn. This channel is nobody else's to clear, and its
+# contents are derived from live ward state rather than from a player setting. Two questions, and
+# the day a third marker wants to stand is the day to generalise -- not before (Law #4 cuts both ways).
+func redraw_guard_wards(units: Array[Unit]) -> void:
+	clear_unit_icon_types([OverlayIcon.IconType.GUARD_WARD])
+	for unit in units:
+		if not is_instance_valid(unit) or unit.guard == null:
+			continue
+		if unit.guard.spent or not unit.guard.is_intact():
+			continue   # a used Guard protects nobody; drawing it would promise cover that is gone
+		create_unit_icon(unit, OverlayIcon.IconType.GUARD_WARD)
+		create_unit_icon(unit.guard.ward, OverlayIcon.IconType.GUARD_WARD)
 
 # The channel is cleared whole, so everything that should be on it after this call has to be drawn
 # by it: the STANDING set first, then the squad the caller is actually about (which may already be

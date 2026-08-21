@@ -61,6 +61,12 @@ var element_states: Array[Elemental.State] = []
 # no longer exists. Deliberately NOT captured by ScenarioUnitEntry, same as element_states.
 var stat_effects: Array[StatEffect] = []
 
+# The Guard this unit currently has ARMED (#414) — null when it is guarding nobody. Battle-scoped
+# like the states above; unlike them it IS captured by ScenarioUnitEntry, because a save taken
+# between a pass and the enemy phase is exactly when a live Guard is the whole point.
+# Written only through the four doors below.
+var guard: GuardWard = null
+
 # Fired once per settled stat change, for READOUTS only. It is not how plan validity is decided —
 # "may this be queued?" is a question about the PROJECTED stat and belongs to SquadPlanValidator
 # (#113); answering it in a listener would put Law #2 one race away from breaking.
@@ -400,6 +406,45 @@ func has_live_ability(id: Abilities.Id) -> bool:
 		if ability.id == id:
 			return true
 	return false
+
+# --- Guard (#414, docs/design/standing-reactions.md) ---
+# The four doors on the armed ward. Everything that reads WHETHER a Guard covers a given hit goes
+# through PlanResolver; these only own the state's life.
+
+# How far this unit's Guard may hold its pair apart. One answer, three readers (the menu's candidate
+# query, the validator's clause, the resolver's range check) — authored on the granting content
+# later, the base constant today.
+func get_guard_range() -> int:
+	return Abilities.GUARD_BASE_RANGE
+
+# The bonus DEF this unit brings to a hit it ABSORBS (the doc's brace bonus). Bare Guard blocks at
+# +0; kit raises it. Deliberately NOT part of RulesService.def_breakdown: this applies to one
+# substituted instance, not to the unit's standing DEF, and the inspect panel must never show it as
+# though a Guard were walking around tougher (Iron Will's cap sits outside the breakdown for the
+# same reason).
+func get_brace_bonus() -> int:
+	return Abilities.BRACE_DEF_BONUS if has_live_ability(Abilities.Id.BRACE) else 0
+
+# `spent` is not a defaulted convenience: a Guard that absorbed a hit during its OWN pass (your
+# splash landing after its queue slot) must arm already-used, and GuardAction.execute is the only
+# caller that can know — the resolver told it (GuardAction.resolved_spent).
+func arm_guard(warded_unit: Unit, ward_range: int, spent := false) -> void:
+	if warded_unit == null or not is_instance_valid(warded_unit) or warded_unit == self:
+		return
+	guard = GuardWard.arm(self, warded_unit, ward_range)
+	guard.spent = spent
+
+# Absorbed its one trigger. The ward object stays (spent), rather than clearing: "you already used
+# your Guard" and "you never had one" are different facts, and the save round-trip carries both.
+func spend_guard() -> void:
+	if guard != null:
+		guard.spent = true
+
+# The lifetime rule, fired from the owning faction's turn-start tick pass: last turn's Guard is gone
+# BEFORE this turn's move phase, which is what makes "no Guard is live during its own faction's move
+# phase" structural rather than a special case.
+func lapse_guard() -> void:
+	guard = null
 
 # The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
 # marker answers "is it chilled", the effect carries the stat change and the clock. The two

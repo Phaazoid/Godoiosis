@@ -23,6 +23,10 @@ var volley: Array[AttackAction] = []
 # The attack chosen to fire — a carving or a WeaponAttackData. Null means NO attack (bare fists),
 # not the weapon's main: since #102 that fallback is gone (#30, #72).
 var fired_attack: AttackData = null
+# Who this hit was AIMED at, when a Guard substituted its victim (#414). Null on every ordinary hit.
+# `target` is always the unit that actually takes the payload — the resolver rewrote it — so this is
+# an annotation for the readouts and the block lunge, never a second answer to "who is hit".
+var blocked_for: Unit = null
 
 var preview_sprites: Array[Node2D] = []
 
@@ -67,9 +71,22 @@ func execute():
 	if not is_secondary_hit:
 		await actor.visuals.play_attack_lunge(direction)
 
+	# The block moment (#414), slice one: the bodyguard lunges toward the unit it is covering, the
+	# same lunge an attack plays. The loud jump-in-front the design wants waits on the battle-zoom /
+	# sprite-FX stack (#358) — no bespoke animation machinery ahead of it. Secondary volley members
+	# skip it for the reason they skip the attacker's lunge: one gesture per blast.
+	if blocked_for != null and not is_secondary_hit and is_instance_valid(blocked_for):
+		var block_dir = GridUtils.cardinal_direction_between(target.get_projected_destination(), blocked_for.get_projected_destination())
+		await target.visuals.play_attack_lunge(block_dir)
+
 	# Pure playback of the resolved outcome (R3) — no recomputation. A cell attack (target
 	# null) has no unit consequence; it still plays out and (later, #50) deposits terrain effects.
 	if target != null and resolved != null:
+		# The Guard absorbs exactly one trigger, and THIS was it (#414). Spent before the payload
+		# lands, so a shove into the void that frees the node below cannot skip it. Only the LIVE
+		# ward is touched here — the resolver spent its own per-pass copy.
+		if blocked_for != null:
+			target.spend_guard()
 		if fired_attack != null and fired_attack.heals:
 			target.heal(resolved.heal_amount)
 		else:
@@ -145,6 +162,10 @@ func actor_can_perform() -> bool:
 	return actor.can_wield_equipped() and actor.is_attack_fireable(fired_attack)
 
 func get_description() -> String:
+	# A blocked hit names BOTH ends: the row would otherwise read as an attack on a unit that was
+	# never aimed at, and the whole point of Guard is that the player can see it coming (#414).
+	if blocked_for != null and is_instance_valid(blocked_for):
+		return "%s -> %s (guarding %s)" % [actor.get_unit_name(), get_target_name(), blocked_for.get_unit_name()]
 	return "%s -> %s" % [actor.get_unit_name(), get_target_name()]
 
 func clear_preview_sprites():
@@ -219,6 +240,8 @@ func get_outcome_summary() -> String:
 			parts.append("MAIMS (no Will)")
 		ResolvedOutcome.Lethality.KILLED:
 			parts.append("KILLS")
+	if resolved.brace_bonus > 0:
+		parts.append("+%d brace" % resolved.brace_bonus)
 	for p in resolved.popups:
 		parts.append(p)
 	for s in resolved.states_added:
