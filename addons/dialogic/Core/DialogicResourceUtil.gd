@@ -44,9 +44,15 @@ static func update_directory(extension:String) -> void:
 		if not resource in directory.values():
 			directory = add_resource_to_directory(resource, directory)
 
+	# LOCAL PATCH (Iosis #447) -- was `not ResourceLoader.exists(directory[key])`.
+	# The prune means "drop entries whose file was deleted", but exists() answers "is this
+	# loadable right now", which is false for .dch/.dtl during a headless --import: no plugin,
+	# so no format loader. Every entry pruned, and set_directory() saved {} over the committed
+	# registries in project.godot. A Dialogic upgrade will drop this -- see CLAUDE.md.
 	var keys_to_remove := []
 	for key in directory:
-		if not ResourceLoader.exists(directory[key]):
+		var path: Variant = directory[key]
+		if path is String and not FileAccess.file_exists(path):
 			keys_to_remove.append(key)
 	for key in keys_to_remove:
 		directory.erase(key)
