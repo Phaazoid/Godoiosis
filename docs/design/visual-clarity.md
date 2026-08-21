@@ -539,8 +539,15 @@ same value and needs a declared relationship with the authored default, not a se
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
 landed as #229 above; the PANEL half and Will are both still open); squad-target
-cursor color-coding; muted squad icons when another squad is active; simultaneous-movement
-legibility (needs design first — the umbrella's core problem).
+cursor color-coding; simultaneous-movement legibility (needs design first — the umbrella's core
+problem).
+
+**Dropped 2026-08-21 (dev), not deferred — deleted from the umbrella rather than left to rot:**
+*muted squad icons when another squad is active* (the mute motif above stands; this particular
+application does not), *fade queued move arrows and restore on hover* (the move to 3D made it
+unnecessary), and *downed units respond to no sprite effect* (since #222/#232/#321 the mirror
+copies `modulate` and `animation_offset` off the hidden 2D node ungated by lifecycle, so highlight,
+flash and pulse already reach a downed unit in the boot view).
 
 **A unit IN CRISIS must read as unmistakable at board glance (dev, 2026-08-09 — filed with
 [#158](https://github.com/Phaazoid/Godoiosis/issues/158)'s ability re-homing):** the skull in the

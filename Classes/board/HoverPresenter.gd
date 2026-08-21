@@ -124,7 +124,10 @@ func _hover_idle(cell: Vector2i) -> Dictionary:
 	_show_hover_panel(hovered, cell)
 	game.overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, moverange.squad_unreachable.keys(), OverlayManager.ATLAS_COORDS)
 
-	if hovered.has_squad() and game.squad_manager.active_squad == null:   #TODO later change this to muted colors if other squads are active
+	# Idle only: an active squad's own markers are already up, and a second set for whoever the
+	# mouse happens to be over competes with them. The "draw them muted instead" TODO that used to
+	# sit here was dropped rather than built (dev, 2026-08-21, #44).
+	if hovered.has_squad() and game.squad_manager.active_squad == null:
 		return game.get_squad_icons(hovered.squad)
 	return {}
 
