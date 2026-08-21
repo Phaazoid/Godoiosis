@@ -23,11 +23,12 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 # take_damage carries that rung out directly and the unit never goes DOWNED.)
 var _downed_pending: Array[Unit] = []
 
-# The plan THIS pass is playing out, non-null only while one is running (#354). It exists because
-# SquadManager._last_resolved_plan is not stable across a pass: a kill mid-pass fires unit_died ->
-# game._on_unit_died -> refresh_action_queue -> resolve_plan, which re-resolves a queue whose earlier
-# attacks have already landed. Anything PREVIEWING the pass has to read the plan being executed, not
-# whatever the last resolve left behind. Nothing here consumes it -- execute_orders holds its own
+# The plan THIS pass is playing out, non-null only while one is running. Two readers, both outside:
+# battle3d._previewed_plan prefers it over the last resolve (#354), and game.refresh_action_queue
+# reads it as "a pass is running, refuse to re-derive" (#361). That refusal is what now KEEPS
+# SquadManager._last_resolved_plan stable across a pass -- before it, a kill mid-pass fired
+# unit_died -> game._on_unit_died -> refresh_action_queue -> resolve_plan, re-resolving a queue whose
+# earlier attacks had already landed. Nothing here consumes it -- execute_orders holds its own
 # local -- so this is a published fact, not a second source of truth.
 var executing_plan: ResolvedPlan = null
 
