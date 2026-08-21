@@ -185,6 +185,13 @@ func _wire_signals() -> void:
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 
+	# Standing squad rings follow membership (#423 slice 1). squad_created covers every LEAVE as
+	# well as every birth -- leave_squad ends in create_squad -- so the two ejection sweeps that
+	# nobody authored need no signal of their own.
+	squad_manager.squad_created.connect(func(_s: Squad): refresh_squad_rings())
+	squad_manager.squad_deleted.connect(func(_s: Squad): refresh_squad_rings())
+	squad_manager.squad_member_joined.connect(func(_s: Squad, _u: Unit): refresh_squad_rings())
+
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
@@ -294,6 +301,9 @@ func _open_pause_menu() -> void:
 			_open_pause_menu()
 		PauseMenu.Choice.SETTINGS:
 			await SettingsScreen.show_screen(self)
+			# PlayerSettings has no changed signal by design, so the ring setting is applied
+			# where the player hands the board back rather than by polling for it.
+			refresh_squad_rings()
 			# GLOSSARY's shape exactly, restore included -- a settings page is another read-only
 			# detour that must hand the player back to the menu they opened it from.
 			game_state = prior
@@ -437,6 +447,8 @@ func _on_turn_started(faction: Team.Faction):
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
 	# (#151) -- the other way a squad splits without any move having authored it.
 	squad_manager.enforce_contact()
+	# An ejection here changed membership without any signal a redraw path listens to.
+	refresh_squad_rings()
 	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
 	# happens outside a resolution pass (#96).
 	mission_controller.check()
@@ -1005,8 +1017,28 @@ func clear_icons(icons: Array[OverlayIcon.IconType]):
 func clear_selection_icons() -> void:
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
 
-# ==============================================================================
-#  Board queries
+# --- Standing squad rings (ALWAYS_SHOW_SQUAD_RINGS) ----------------------------------------
+# THE answer to which units wear a membership marker when nothing is selected. Off by default, and
+# while it is off this does NOTHING: the selection paths own the channel exactly as they did, so
+# the setting cannot regress the old behaviour by existing.
+#
+# When it is on the channel is rebuilt from membership rather than added to, which is what makes a
+# marker DISAPPEAR again -- create_unit_icon only ever adds, so a squad dropping back to one member
+# would otherwise leave its rings on the board. A selected squad is already in the standing set,
+# and target-pick markers are redrawn by their own mode, so the clear costs nothing visible.
+#
+# Gated on the squad having squadmates -- Unit.has_squad's question, the one _repaint_squad_plan
+# also asks -- and NOT on ring_hue: a hue is dealt once at the first squadmate and never reset, so
+# a squad that shrank back to one would keep wearing its colour.
+func refresh_squad_rings() -> void:
+	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
+		return
+	clear_selection_icons()
+	for squad: Squad in squad_manager.squads:
+		if not is_instance_valid(squad) or squad.get_members().size() <= 1:
+			continue
+		overlay_manager.draw_squad_unit_icons(squad)
+
 # ==============================================================================
 
 func _board() -> BoardContext:

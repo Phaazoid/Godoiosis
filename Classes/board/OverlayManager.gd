@@ -501,9 +501,8 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 		
 	var icon := ICON_SCENE.instantiate()
 	icon_overlay.add_child(icon)
-	var cell := unit.get_projected_destination()
-	icon.setup(ICON_TEXTURES[type], cell, type)
-	icon.position = board_tilemap.map_to_local(cell)
+	icon.setup(ICON_TEXTURES[type], unit, board_tilemap, type)
+	icon.position = board_tilemap.map_to_local(icon.current_cell())
 	_style_icon(icon, unit)
 
 	icons_by_unit[unit][type] = icon
@@ -566,6 +565,13 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	draw_squad_unit_icons(squad)
+
+# What ONE squad's markers ARE: a ring on every member, the crown on its leader. Split out of the
+# redraw above so the standing-ring sweep (game.refresh_squad_rings) can draw many squads without
+# each one wiping the last -- the alternative was a second copy of this pair, which is how the two
+# would have drifted.
+func draw_squad_unit_icons(squad: Squad) -> void:
 	for member in squad.get_members():
 		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
 		if member == squad.get_leader():

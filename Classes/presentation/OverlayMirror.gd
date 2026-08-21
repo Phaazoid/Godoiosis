@@ -414,11 +414,15 @@ func _air_anchor(px: Vector2, from_cell: Vector2i) -> Transform3D:
 	return Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y))
 
 
-# Selection icons, routed by TYPE rather than by a style mode (#325 verdict, dev call after playing
+# Unit markers, routed by TYPE rather than by a style mode (#325 verdict, dev call after playing
 # both, 2026-08-19). CROWN rides ICONS as a head billboard -- leadership is what a unit IS, and
 # nothing has read better over a head than the original crown. Everything else (today, SQUADMEMBER)
 # rides GROUND_ICONS as a surface decal in the squad's own hue, texture and tint arriving BY COPY
 # from the 2D sprite, so the hue is authored in one place and never re-derived here.
+#
+# They were SELECTION icons until #423 slice 1; ALWAYS_SHOW_SQUAD_RINGS can now keep membership
+# rings standing, which is why the anchor below asks the ICON where its unit is instead of reading
+# a cell stamped when the marker was built.
 #
 # The leader wears BOTH: a ring because they are a member, the crown because they lead.
 #
@@ -431,9 +435,9 @@ func _icons(om: OverlayManager) -> void:
 		var by_type: Dictionary = om.icons_by_unit[unit]
 		for type in by_type:
 			var icon := by_type[type] as OverlayIcon
-			if icon == null or not is_instance_valid(icon):
+			if icon == null or not is_instance_valid(icon) or not icon.has_unit():
 				continue
-			var surface := _anchor(icon.target_cell)
+			var surface := _anchor(icon.current_cell())
 			if type == OverlayIcon.IconType.CROWN:
 				heads.append(_marker(surface, icon.sprite.texture, icon.sprite.modulate))
 			else:
