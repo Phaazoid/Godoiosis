@@ -594,19 +594,21 @@ func test_a_drop_onto_a_ramp_draws_a_drop_rail() -> void:
 	# And its FOOT lands in the plane the slope's own arrow is DRAWN in, at the edge the fall
 	# arrives on. Three candidate answers, and only one is right: not the ramp's CENTRE (half a
 	# level lower -- the tail of #431 round 5), and not the raw SURFACE at the edge either, because
-	# the sink lifts a ramp's markers along the ramp's own NORMAL, which leans, so the arrow sits
-	# downhill and above the ground it lies on. Every term derived from the board and the sink.
+	# the sink lifts every marker clear of the ground it lies on. Since #432 that lift is a CONSTANT
+	# straight up, so the drawn plane is the surface plus it on a slope exactly as on the flat -- a
+	# lift that leaned with the normal again would miss this band by most of its own length. Every
+	# term derived from the board and the sink.
 	var ramp := Vector2i(4, 2)
 	var basis: Basis = rails[0]["basis"]
 	var foot: float = (rails[0]["pos"] as Vector3).y - absf(basis.x.y) * 0.5
 	var surface := BoardSpace.surface_transform(ramp, game.board_heights)
 	var lift := _overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK)
 	var edge_y := BoardSpace.surface_height_at(ramp, 4.0, 2.5, game.board_heights)
-	var drawn_at_edge := edge_y + surface.basis.y.y * lift
+	var drawn_at_edge := edge_y + lift
 	assert_bool(edge_y > surface.origin.y).override_failure_message(
 			"the ramp's edge and centre are level; the case cannot tell them apart").is_true()
 	assert_bool(absf(surface.basis.y.y - 1.0) > 0.01).override_failure_message(
-			"the ramp's normal is upright; the case cannot see the lean the seam came from").is_true()
+			"the ramp is not sloped; a tilt-dependent lift could not show itself here").is_true()
 	assert_float(foot).override_failure_message(
 			"the pointer's foot misses the plane the slope's arrow is drawn in") \
 			.is_between(drawn_at_edge - OverlayMirror.JOIN_OVERLAP - 0.001, drawn_at_edge + 0.001)
@@ -670,11 +672,12 @@ func test_a_tumble_that_plummets_draws_a_pointer_at_both_breaks() -> void:
 	for marker: Dictionary in rails:
 		xs.append((marker["pos"] as Vector3).x)
 	xs.sort()
-	# Each pointer stands at the edge it falls over, within the layer's own clearance. A BAND
-	# rather than a point because an end that lands on a slope leans by the ramp normal's
-	# horizontal part -- and still an order of magnitude narrower than the half cell a wrong edge
-	# would be off by, which is what these two are guarding.
-	var slack := _overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK) + OverlayMirror.WALL_CLEARANCE
+	# Each pointer stands AT the edge it falls over, offset only by the hair of WALL_CLEARANCE that
+	# keeps it off the cliff face. This band used to be a whole marker_lift wider, because an end
+	# landing on a slope leaned downhill by the ramp normal's horizontal part; #432 took that lean
+	# out, so the tight band is the claim now -- it reds if the lift ever leans again. The second
+	# term is float slop, not clearance.
+	var slack := OverlayMirror.WALL_CLEARANCE + 0.0005
 	assert_float(xs[0]).is_between(3.0, 3.0 + slack)   # the fall onto the ramp, at its top edge
 	assert_float(xs[1]).is_between(4.0, 4.0 + slack)   # the plummet, at the lip it goes over
 

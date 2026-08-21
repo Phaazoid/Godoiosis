@@ -361,14 +361,13 @@ func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
 	elif top <= here or is_equal_approx(top, here):
 		return
 	# The ENDS are the points the arrows above and below are actually DRAWN at, never the raw
-	# surface heights the break was measured from. The sink lifts every marker along its own
-	# surface normal, and a ramp's normal leans -- so the slope's arrow is displaced downhill as
-	# well as up, and its uphill edge sits a visible step inside the cell boundary. Joining the
-	# surface instead of the drawn plane is what put a seam on every ramp landing. Above the edge
-	# the ribbon is the FLIGHT (flat, lifted straight up) unless this is a tumble step, where it is
-	# the neighbouring slope; below it is always this cell's own markup.
-	# The flight hangs FLAT at the launch level whatever it is passing over, so its ribbon is
-	# lifted straight up -- it is not lying on the cell below and never took that cell's tilt.
+	# surface heights the break was measured from: the sink lifts every marker clear of the ground,
+	# and joining the surface instead of the drawn plane put a seam on every ramp landing (#431).
+	# Above the edge the ribbon is the FLIGHT unless this is a tumble step, where it is the
+	# neighbouring slope; below it is always this cell's own markup. The flight hangs FLAT at the
+	# launch level whatever it is passing over, so it takes the lift on its own height rather than
+	# on the ground's -- it is not lying on the cell below and never took that cell's tilt, which is
+	# the only reason it is spelled out here instead of going through _ribbon_point.
 	var head := Vector3(edge.x, top, edge.z) + Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK) \
 			if flown else _ribbon_point(cell - dir_2d, edge)
 	var foot := _ribbon_point(cell, edge) - Vector3.UP * (here - bottom)
@@ -398,18 +397,14 @@ func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
 			"basis": Basis(down, normal, band), "double_sided": true})
 
 
-# Where the markup DRAWN on this cell actually sits at a given (x, z): the surface point there,
-# plus the clearance the sink lifts that cell's markers by, along the surface's OWN normal (#281's
-# rule). On flat ground that is straight up and the distinction never shows. On a ramp the normal
-# LEANS, so the arrow lying on the slope is displaced downhill as well as up and its uphill edge
-# retreats from the cell boundary -- which is why anything joining that arrow has to ask where it
-# was drawn rather than where the ground is.
+# Where the markup DRAWN on this cell actually sits at a given (x, z): the surface there, plus the
+# clearance the sink lifts that cell's markers by. Since #432 that lift is straight UP on a slope
+# as much as on the flat, so this is a plain surface read again and a ramp's arrow no longer
+# retreats from its own cell boundary. It stays a seam rather than being inlined because both ends
+# of a pointer have to ask ONE question about where markup lies.
 func _ribbon_point(cell: Vector2i, at: Vector3) -> Vector3:
-	var heights := _heights()
-	var surface := BoardSpace.surface_transform(cell, heights)
-	var y := BoardSpace.surface_height_at(cell, at.x, at.z, heights)
-	var lift := overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK)
-	return Vector3(at.x, y, at.z) + surface.basis.y * lift
+	var y := BoardSpace.surface_height_at(cell, at.x, at.z, _heights())
+	return Vector3(at.x, y, at.z) + Vector3.UP * overlays.marker_lift(BoardOverlays.Layer.KNOCKBACK)
 
 
 # A FLYING trail arrow: flat at the shove's launch height, no tilt -- it hangs in the air rather

@@ -382,15 +382,20 @@ The geometry, all of it dev-ruled in play across four rounds:
 - It starts falling **at the edge**, never further into the tile. The flat arrow it lands on begins
   at the back of its tile, so a fold placed anywhere inward leaves that much shaft sticking out
   behind the foot — worse on a slope, where the tile's centre is half a level under its top edge.
-- Both ends join the plane the neighbouring arrow is **DRAWN** in, not the surface under it. Those
-  differ on a ramp, because the layer lift rides the surface normal and a ramp's normal leans
-  ([#432](https://github.com/Phaazoid/Godoiosis/issues/432)); `OverlayMirror._ribbon_point` is that
-  question, and joining the surface instead put a seam on every ramp landing.
-- The layer's clearance is **vertical** for this marker (`lift_dir`), so its top lands in the plane
-  the flat arrows share. Lifting it along its own normal — which for a vertical quad is sideways —
-  broke that join twice, and then needed `no_depth_test` to survive the z-fight that left, which
-  turned the pointer into an x-ray visible through platforms the camera had panned behind.
-  Standing clear of the cliff face is a separate, far smaller epsilon (`WALL_CLEARANCE`).
+- Both ends join the plane the neighbouring arrow is **DRAWN** in, not the surface under it — the
+  sink lifts every marker clear of the ground, and joining the surface instead put a seam on every
+  ramp landing. `OverlayMirror._ribbon_point` is that one question. Since
+  [#432](https://github.com/Phaazoid/Godoiosis/issues/432) the layer lift is a **constant, straight
+  up**, so the drawn plane is the surface plus it on a slope exactly as on the flat and
+  `_ribbon_point` is a plain surface read again. Until then it rode the surface *normal*, and a
+  ramp's normal leans, so the slope's arrow was displaced downhill out of its own cell and anything
+  joining it had to ask where it had been drawn rather than where the ground was.
+- **The pointer takes no layer lift at all** (`lift_dir` ZERO): its ends are already the
+  neighbouring arrows' own drawn points, so lifting it again would double the clearance and float
+  it off the join it exists to make. Lifting it along its own normal — which for a vertical quad is
+  sideways — broke that join twice, and then needed `no_depth_test` to survive the z-fight that
+  left, which turned the pointer into an x-ray visible through platforms the camera had panned
+  behind. Standing clear of the cliff face is a separate, far smaller epsilon (`WALL_CLEARANCE`).
 - **One quad, never a cross.** The rig's pitch is fixed at 40°, so a vertical quad across the trail
   never goes edge-on — its width bottoms out at 64% and no camera-facing pick is needed.
 
