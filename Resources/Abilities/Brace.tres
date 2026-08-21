@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="AbilityData" format=3]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_ability"]
+
+[resource]
+script = ExtResource("1_ability")
+id = 7
+display_name = "Brace"
+kind = 2
+description = "Adds DEF to a hit you absorb by Guarding"
+metadata/_custom_type_script = "uid://7w7ajveltxx5"

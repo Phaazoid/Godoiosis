@@ -478,6 +478,10 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		return
 	if r.skipped:
 		return   # counter-er was downed/killed earlier this pass — no-op (matches the preview)
+	# Guard (#414) — MIRRORS AttackAction.execute (the hand-copied twin): the resolver already moved
+	# the victim to the blocker, so the only thing left for execution is spending the live ward.
+	if atk.blocked_for != null:
+		target.spend_guard()
 	target.take_damage(r.damage)   # routes through Unit.take_damage -> down/kill rung
 	for s in r.states_removed:
 		target.remove_element_state(s)

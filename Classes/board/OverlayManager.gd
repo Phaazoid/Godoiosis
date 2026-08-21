@@ -104,10 +104,18 @@ enum OverlayType {
 # so _style_icon below never touches a texture, and there is no second place a marker's art can come
 # from. Membership is a per-squad ring underfoot, leadership the crown over the head (#325, settled
 # 2026-08-19); the legacy green square lost, and SquadHighlightIcon.png is now unreferenced.
+# PLACEHOLDER for GUARD_WARD: the squad ring stands in until a shield exists. Swapping it is this
+# one line, because this table is the only place a marker's art comes from.
 const ICON_TEXTURES = {
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
-	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
+	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png"),
+	OverlayIcon.IconType.GUARD_WARD: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
 }
+
+# The armed-Guard pair's ground mark (#414). Its own hue and a size step so it stays legible over the
+# squad ring it shares a cell with -- both are placeholder shape, and both are one line to retire.
+static var GUARD_RING_COLOR := Color(0.85, 0.9, 1.0, 0.95)
+const GUARD_RING_SCALE := 1.35
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
@@ -518,6 +526,10 @@ func _style_icon(icon: OverlayIcon, unit: Unit) -> void:
 		icon.sprite.z_index = RING_Z_INDEX
 		var hue: Color = unit.squad.ring_hue if unit.squad != null else Color.WHITE
 		icon.sprite.modulate = Color(hue.r, hue.g, hue.b, SQUAD_RING_ALPHA)
+	elif icon.icon_type == OverlayIcon.IconType.GUARD_WARD:
+		icon.sprite.z_index = RING_Z_INDEX + 1   # underfoot with the squad ring, and above it
+		icon.sprite.modulate = GUARD_RING_COLOR
+		icon.sprite.scale = Vector2.ONE * GUARD_RING_SCALE
 	else:
 		icon.sprite.z_index = HEAD_ICON_Z_INDEX
 		icon.sprite.modulate = Color.WHITE
@@ -563,6 +575,21 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 			continue
 		for type in types:
 			clear_unit_icon(unit, type)
+
+# Every armed, unspent Guard on the board (#414), marked at BOTH ends of the pair. Its own redraw
+# rather than a clause in redraw_squad_unit_icons: a Guard is not selection markup and must stay on
+# screen through the enemy phase -- that is the whole point of a standing reaction being telegraphed.
+# Called from the three moments the state can move: a pass settling, a faction's turn starting, and
+# a board load. Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
+func redraw_guard_wards(units: Array[Unit]) -> void:
+	clear_unit_icon_types([OverlayIcon.IconType.GUARD_WARD])
+	for unit in units:
+		if not is_instance_valid(unit) or unit.guard == null:
+			continue
+		if unit.guard.spent or not unit.guard.is_intact():
+			continue   # a used Guard protects nobody; drawing it would promise cover that is gone
+		create_unit_icon(unit, OverlayIcon.IconType.GUARD_WARD)
+		create_unit_icon(unit.guard.ward, OverlayIcon.IconType.GUARD_WARD)
 
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])

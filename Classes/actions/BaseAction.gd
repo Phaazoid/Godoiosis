@@ -29,7 +29,8 @@ enum ActionType {
 	RELOAD,
 	REV,
 	BURROW,
-	CAPTURE
+	CAPTURE,
+	GUARD
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -46,7 +47,8 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
-	ActionType.CAPTURE
+	ActionType.CAPTURE,
+	ActionType.GUARD
 ]
 
 # Execution order of the side-channel tail — stored orders that bypass PlanResolver
@@ -59,7 +61,10 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.RELOAD,
 	ActionType.REV,
 	ActionType.BURROW,
-	ActionType.CAPTURE
+	ActionType.CAPTURE,
+	# LAST in the tail deliberately (#414): a Guard armed this pass must arm AFTER every hit it was
+	# resolved against has played back, or the ward it just absorbed for would be re-armed live.
+	ActionType.GUARD
 ]
 
 func is_main_action() -> bool:

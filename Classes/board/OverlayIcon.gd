@@ -14,9 +14,13 @@ var target_cell: Vector2i
 # (#346 -- ground markup carries the interaction). CURSOR/TARGET/INVALID lived here and are
 # retired: CURSOR and INVALID never had a producer, and TARGET duplicated the target-pick
 # ground marker. Ordinals are read by OverlayMirror's z-stagger and persisted nowhere.
+# GUARD_WARD (#414) is a GROUND marker by #346's rule -- an armed Guard is an INTERACTION between
+# two units, not something either of them IS. It is hung on BOTH ends of the pair; which end is
+# which is read from the queue row today, and becomes a shield-plus-connector when the art exists.
 enum IconType {
 	CROWN,
-	SQUADMEMBER
+	SQUADMEMBER,
+	GUARD_WARD
 }
 
 func setup(texture: Texture2D, cell: Vector2i, type: IconType):

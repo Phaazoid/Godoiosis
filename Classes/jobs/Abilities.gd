@@ -8,10 +8,20 @@ class_name Abilities
 # counter path / action / movement), but every site reads its id and numbers from here,
 # so the roster and the balance surface both live in one place.
 
-enum Id { NONE, IRON_WILL, INTIMIDATION, TAUNT, WATERWALK, INSULATED_SHOCK, CRISIS }
+enum Id { NONE, IRON_WILL, INTIMIDATION, TAUNT, WATERWALK, INSULATED_SHOCK, CRISIS, BRACE }
 
 const IRON_WILL_DAMAGE_CAP := 6      # playtest-tunable
 const INTIMIDATION_WILL_DRAIN := 3   # playtest-tunable
+
+# Guard (#414, docs/design/standing-reactions.md). Guard itself is a BASIC main action everyone has
+# — the doc's working model, and the one fork it deliberately left open — so there is no GUARD
+# ability id here. What KIT grants is BRACE: bonus DEF applied to the absorbed instance, the single
+# block-quality knob (bleed-through to the ward was dropped, not deferred). Bare Guard blocks at +0.
+# Source-agnostic by construction: it rides the ability union (innate -> jobs -> worn gear), so a
+# job, a carving or a piece of armour all grant it through one door. Weapons are not an ability
+# source yet; that decision opens when the first weapon-granted bonus ships, not before.
+const BRACE_DEF_BONUS := 3           # playtest-tunable
+const GUARD_BASE_RANGE := 1          # authored on the granting content later; adjacency today
 
 # Crisis (#158, 2026-08-09 — a Reaction-kind ability, the Berserker job's signature): while held,
 # a full-Will would-be-down ALWAYS becomes the gambit — deterministic, previewed, no prompt for any

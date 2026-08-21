@@ -171,6 +171,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.captured_zones = game.mission_controller.captured_zone_names()
 	scenario.contested = game.mission_controller.is_contested()
 
+	var entry_of: Dictionary = {}   # Unit -> its ScenarioUnitEntry, for the guard re-link below
 	for unit: Unit in units_root.get_children():
 		if unit.is_queued_for_deletion():
 			continue
@@ -197,7 +198,21 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 		if entry.state_saved:
 			entry.capture_unit_state(unit)
 
+		entry_of[unit] = entry
 		scenario.unit_entries.append(entry)
+
+	# An armed Guard (#414) is a pair, so it can only be written once every entry exists -- the same
+	# after-the-loop shape the squad rebuild uses on load. Stored as an INDEX into unit_entries, the
+	# limb-prosthetic re-link pattern: a Unit reference cannot serialize, and a name is not unique.
+	# A reference entry (#177) captured no battle state and gets none here either.
+	for unit: Unit in entry_of:
+		var entry: ScenarioUnitEntry = entry_of[unit]
+		if not entry.state_saved or unit.guard == null or not unit.guard.is_intact():
+			continue
+		if not entry_of.has(unit.guard.ward):
+			continue   # ward is leaving the board this frame -- the Guard goes with it
+		entry.guard_ward_index = scenario.unit_entries.find(entry_of[unit.guard.ward])
+		entry.guard_spent = unit.guard.spent
 
 	return scenario
 
@@ -233,6 +248,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	var leaders_by_squad_id := {}
 	var members_by_squad_id := {}
 	var acted_squad_ids: Array[int] = []
+	var unit_of_entry: Dictionary = {}   # ScenarioUnitEntry -> the Unit it spawned, for the #414 re-link
 
 	for entry in valid_entries(scenario):
 		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
@@ -244,6 +260,8 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 		if entry.state_saved:
 			entry.apply_unit_state(unit)
+
+		unit_of_entry[entry] = unit
 
 		if entry.squad_id == -1:
 			continue
@@ -275,6 +293,19 @@ func apply_scenario(scenario: ScenarioData) -> void:
 		var acted_leader: Unit = leaders_by_squad_id.get(squad_id)
 		if acted_leader != null:
 			squad_manager.set_has_acted(acted_leader.squad, true)
+
+	# Armed Guards (#414), after every spawn: a pair cannot be re-linked until both ends exist. A ward
+	# whose entry never spawned (blocked cell, off-map) simply loses the Guard rather than failing the
+	# load, matching how a squad saved without a leader degrades to solos above.
+	for entry in unit_of_entry:
+		if entry.guard_ward_index < 0 or entry.guard_ward_index >= scenario.unit_entries.size():
+			continue
+		var ward_entry: ScenarioUnitEntry = scenario.unit_entries[entry.guard_ward_index]
+		if not unit_of_entry.has(ward_entry):
+			continue
+		var guarding_unit: Unit = unit_of_entry[entry]
+		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
+	game.refresh_guard_markers()
 
 	turn_manager.set_active_faction(scenario.active_faction)
 	game.refresh_end_turn_button()   # a resumed save can load straight into an already-spent faction (#189)

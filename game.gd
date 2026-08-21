@@ -434,6 +434,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 
 func _on_turn_started(faction: Team.Faction):
 	_run_turn_start_ticks(faction)
+	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
 	# (#151) -- the other way a squad splits without any move having authored it.
 	squad_manager.enforce_contact()
@@ -505,6 +506,7 @@ func _run_turn_start_ticks(faction: Team.Faction) -> void:
 		unit.tick_stat_effects()      # BEFORE the surge below: an effect applied this turn must not tick this turn
 		unit.advance_crisis_surge()
 		unit.tick_weapon_rev()
+		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
 # end-of-mission card is up, and while Mission Select is up.
@@ -671,6 +673,11 @@ func queue_intimidate(intimidator: Unit, target: Unit) -> void:
 	var intimidate := IntimidateAction.new()
 	intimidate.init(intimidator, target)
 	squad_manager.queue_action(intimidator.squad, intimidate)
+
+func queue_guard(guarding_unit: Unit, ward: Unit) -> void:
+	var guard := GuardAction.new()
+	guard.init(guarding_unit, ward)
+	squad_manager.queue_action(guarding_unit.squad, guard)
 
 # ==============================================================================
 #  The action-queue panel
@@ -1004,6 +1011,12 @@ func clear_icons(icons: Array[OverlayIcon.IconType]):
 # runtime, not at parse time). Keeping the literal on this side of the boundary avoids it.
 func clear_selection_icons() -> void:
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+
+# Armed-Guard markers (#414). Deliberately NOT part of clear_selection_icons' channel: a Guard is
+# board information that has to survive selection changes and the whole enemy phase. Called from the
+# three moments a ward can appear, be spent, or lapse -- a settled pass, a turn start, a board load.
+func refresh_guard_markers() -> void:
+	overlay_manager.redraw_guard_wards(_all_units())
 
 # ==============================================================================
 #  Board queries

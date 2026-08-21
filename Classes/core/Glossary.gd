@@ -22,7 +22,7 @@ enum Term {
 	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF,
 	# Actions (one per MainActionMenu.ACTION_DATA row, plus ATTACK_TARGETING — the channel axis)
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
-	RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
+	GUARD, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
@@ -310,6 +310,20 @@ static func _build_entries() -> Dictionary:
 		"short": "Verbs granted by a unit's abilities, like Intimidate.",
 		"long": "Actions a unit's abilities unlock. Intimidate — draining an adjacent enemy's Will — "
 			+ "is the first; more arrive with new abilities."}
+	# Guard vs DEF, said plainly in both halves: the mechanic is named Guard precisely so it never
+	# reads as the stat, and the glossary is where the two sit side by side (#414).
+	e[Term.GUARD] = {"category": Category.ACTIONS, "title": "Guard",
+		"short": "Bodyguard a nearby ally: the next hit that would land on them lands on you instead.",
+		"long": "Guard is an ACTION, not the DEF stat. Pick an ally within %d, and you become their "
+			% Abilities.GUARD_BASE_RANGE
+			+ "bodyguard: the next damaging hit aimed at them — from anyone, including your own "
+			+ "squad — resolves against YOU instead, from your cell, against your DEF and armor. "
+			+ "They take nothing. It catches exactly one hit, and lapses when your next turn "
+			+ "begins. It arms at its place in the queue, so an attack you queued first is not "
+			+ "blocked. Kit can add a brace bonus (+%d DEF) to the hit you absorb; bare Guard "
+			% Abilities.BRACE_DEF_BONUS
+			+ "absorbs at full price. Counterplay: pierce it, shove either of you apart, or catch "
+			+ "the pair in one blast — a bodyguard caught beside their ward is billed twice."}
 	e[Term.RESCUE] = {"category": Category.ACTIONS, "title": "Rescue",
 		"short": "Stand an adjacent downed ally back up at 1 HP.",
 		"long": "Revives an adjacent downed ally at 1 HP before their clock runs out. The rescued "
