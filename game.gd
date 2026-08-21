@@ -587,11 +587,15 @@ func enter_attack_mode(unit: Unit):
 # Generic "pick one highlighted unit" mode (rescue, intimidate, future targeted actions):
 # overlay the candidates' cells, hand the clicked unit to on_pick. Attack targeting stays
 # its own mode — directional aiming doesn't fit this shape.
-func enter_target_pick_mode(candidates: Array[Unit], on_pick: Callable) -> void:
+# mark_candidates false means the CALLER is already marking them some other way (#442: join-squad's
+# pulsing rings). target_pick_cells is filled either way -- _click_picking_target validates against
+# it, so suppressing the draw must never suppress the click.
+func enter_target_pick_mode(candidates: Array[Unit], on_pick: Callable, mark_candidates := true) -> void:
 	game_state = GameState.PICKING_TARGET
 	target_pick_cells = _unit_cells(candidates)
 	_target_pick_callback = on_pick
-	overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, target_pick_cells, OverlayManager.TARGET_ATLAS_COORDS)
+	if mark_candidates:
+		overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, target_pick_cells, OverlayManager.TARGET_ATLAS_COORDS)
 
 func set_dev_mode(active: bool):
 	# Intent first: exit_current_mode's clear_selection rests the board on _base_state.
@@ -603,6 +607,7 @@ func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 	overlay_manager.clear_target_pulse()
+	overlay_manager.clear_ring_pulse()
 	overlay_manager.clear_sight_trace()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
@@ -843,12 +848,26 @@ func create_squad(unit: Unit):
 	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(picked, unit.squad))
 
 func join_squad_mode(unit: Unit):
-	draw_joinable_squads(unit)
+	var joinable := joinable_squads(unit)
+	draw_joinable_squads(unit, joinable)
 	var candidates: Array[Unit] = []
-	for other in _all_units():
-		if squad_manager.can_join_squad(unit, other.squad):
-			candidates.append(other)
-	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(unit, picked.squad))
+	for squad: Squad in joinable:
+		candidates.append_array(squad.get_members())
+	# The rings ARE the candidate marking now (#442), so the generic ground marker would be a second
+	# spelling of the same fact -- #346's own complaint about the TARGET icon Squad Up already lost.
+	# The cells still go in: what is suppressed is the DRAW, never the clickability.
+	enter_target_pick_mode(candidates, func(picked: Unit): squad_manager.join_squad(unit, picked.squad), false)
+	overlay_manager.set_ring_pulse(candidates)
+
+# WHICH squads this unit could join -- THE one answer, read by the marking and by the candidate list
+# alike. They used to enumerate it separately and disagree: the drawing marked LEADERS, while every
+# member of a joinable squad was clickable.
+func joinable_squads(joining_unit: Unit) -> Array[Squad]:
+	var joinable: Array[Squad] = []
+	for squad: Squad in squad_manager.squads:
+		if is_instance_valid(squad) and squad_manager.can_join_squad(joining_unit, squad):
+			joinable.append(squad)
+	return joinable
 
 func _on_squad_became_active(squad: Squad, action: BaseAction):
 	if squad.leader.has_squad():
@@ -994,17 +1013,22 @@ func draw_create_squad(unit: Unit):
 			cells.append(cell)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OverlayManager.ATLAS_COORDS)
 
-func draw_joinable_squads(joining_unit: Unit):
+# The joinable squads' own rings ARE the marking (#442) -- drawn through draw_squad_unit_icons, so
+# with ALWAYS_SHOW_SQUAD_RINGS on this is idempotent over the standing set and only the PULSE
+# changes, while with it off this is what puts them on screen. One path, both of the dev's cases.
+#
+# The cohesion bubble stays: WHERE THE JOINER WOULD STAND is a different fact from WHOSE SQUAD THIS
+# IS, so it is not the duplication this ticket removed.
+func draw_joinable_squads(joining_unit: Unit, joinable: Array[Squad]):
 	overlay_manager.clear_selection_overlays()
 	var cells: Array[Vector2i] = []
-	for unit in units_root.get_children():
-		if squad_manager.can_join_squad(joining_unit, unit.squad) and unit.is_leader():
-			# Subject = the JOINER: these are cells it would stand on, so its own traversal decides.
-			for cell in SquadCohesion.cells(unit.squad, unit.get_projected_destination(), joining_unit, _board()):
-				if get_unit_at_cell(cell) == null:
-					cells.append(cell)
-			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.CROWN)
-			overlay_manager.create_unit_icon(unit, OverlayIcon.IconType.SQUADMEMBER)
+	for squad: Squad in joinable:
+		var leader: Unit = squad.get_leader()
+		# Subject = the JOINER: these are cells it would stand on, so its own traversal decides.
+		for cell in SquadCohesion.cells(squad, leader.get_projected_destination(), joining_unit, _board()):
+			if get_unit_at_cell(cell) == null:
+				cells.append(cell)
+		overlay_manager.draw_squad_unit_icons(squad)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.SQUAD, cells, OverlayManager.ATLAS_COORDS)
 
 func get_squad_icons(squad: Squad) -> Dictionary: #Includes hovered unit
