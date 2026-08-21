@@ -45,6 +45,25 @@ jobs:
       - name: Import project
         run: godot-bin/godot --headless --path . --import
 
+      # THE IMPORT MUST NOT REWRITE COMMITTED PROJECT SETTINGS (#447). It used to: Dialogic
+      # mutated the Dictionary ProjectSettings handed it BY REFERENCE, pruning dch_directory
+      # and dtl_directory to {} inside the settings themselves, and the next save wrote that
+      # out. Fixed at source in addons/dialogic/Core/DialogicResourceUtil.gd, so this never
+      # fires -- that
+      # is the point. The addon is VENDORED, so an upgrade can drop the patch silently, and
+      # this is the canary that says so instead of leaving every fresh clone wiping registries
+      # again. It warns rather than failing on purpose: a lost patch has nothing to do with the
+      # PR that happens to hit it, and reddening every PR for someone else's cause is worse
+      # than an annotation naming the real one. The restore keeps tests/law/
+      # test_dialogic_registries.gd reading what was committed either way.
+      - name: Guard committed project settings
+        run: |
+          if ! git diff --quiet project.godot; then
+            echo "::warning::The import rewrote project.godot. The #447 patch in addons/dialogic/Core/DialogicResourceUtil.gd may have been lost to an addon upgrade. Restoring the committed file; see the diff below."
+            git diff project.godot
+            git checkout -- project.godot
+          fi
+
       # THE VERDICT IS gdUnit4'S, NOT THE PROCESS'S -- mirrors tests/run_tests.ps1 (#93).
       # Godot can die with SIGSEGV while tearing the engine down, AFTER every test has run and
       # been counted, which reports failure on a clean pass. Today the full-tree run happens not
