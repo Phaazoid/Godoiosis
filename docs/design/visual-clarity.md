@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #443 (2026-08-21).**
+**Canon checked through #460 (2026-08-21).**
 
 ## Principles
 
@@ -293,12 +293,47 @@ Two things that generalise past this ticket:
    sentenced unit's number onto what execution will really leave it at — which is exactly the
    information a "did anything change?" question needs, destroyed. Ask the raw threaded value.
 2. **The previewed plan and the last resolve are different questions while a pass is running.** A
-   kill mid-pass fires `unit_died` → `game._on_unit_died` → `refresh_action_queue` → `resolve_plan`,
-   re-resolving a queue whose earlier attacks have already landed. `OrderExecutor.executing_plan` is
-   the plan being played out, and `battle3d._previewed_plan` prefers it. **That re-resolve is also a
-   live Law #2 break in EXECUTION** — it overwrites `AttackAction.resolved` on attacks that have not
-   run yet, and `execute` is pure playback of that field — filed separately; this change only makes
-   the readout immune to it.
+   kill mid-pass fired `unit_died` → `game._on_unit_died` → `refresh_action_queue` → `resolve_plan`,
+   re-resolving a queue whose earlier attacks had already landed. `OrderExecutor.executing_plan` is
+   the plan being played out, and `battle3d._previewed_plan` prefers it. *(This paragraph used to end
+   by calling that re-resolve a live Law #2 break in EXECUTION as well. It was not — see the next
+   section, which closed the re-resolve at its source. The preference stays as belt-and-braces.)*
+
+## A running pass owns its plan ([#361](https://github.com/Phaazoid/Godoiosis/issues/361), FIXED 2026-08-21)
+
+`game.refresh_action_queue` now refuses to re-derive while `order_executor.executing_plan` is
+non-null. The gate sits at that shared entry point rather than at the death handler because
+**thirteen callers ask that one function the same question**, and `_on_unit_died` is merely today's
+loudest; one gate covers the rows, `_preview_plan_effects`' shove and deposit overlays,
+`validate_squad_plan`'s `is_valid` writes, `SquadManager._last_resolved_plan`, and
+`GuardAction.resolved_spent`. A null squad still clears the panel — *"there is no squad to show"* is
+a different question, and a mission ending mid-pass must empty it.
+
+Three things generalise:
+
+1. **The ticket's own diagnosis was wrong, and re-deriving it from the code is what found the real
+   shape.** #361 was filed claiming the re-resolve overwrote `AttackAction.resolved` on attacks that
+   had not run yet. It never could: `resolve_plan` builds fresh `AttackAction`s every call (victims
+   are derived, never stored — the #15 rule) and `execute_orders` iterates a plan it captured in a
+   local, so the phantom and the pass share no objects. Damage always landed as previewed. Read the
+   code, not the issue text — including the issue's own account of the cause.
+2. **It was the READOUT, which inverts #354's parting line.** That ticket said the presentation seam
+   could not fix a value execution was reading; in fact execution read nothing, and presentation was
+   exactly where this lived. #354 fixed only the health-bar half; the queue rows and the board
+   overlays were still being rebuilt from the phantom, mid-pass, in front of the player.
+3. **"Cosmetic by accident" is not a settled boundary.** Nothing read the re-resolve's output during
+   a pass *yet* — but `GuardAction.resolved_spent` is a stored, still-pending order the resolver
+   rewrites, i.e. the door already standing open. The next reader of `_last_resolved_plan` or of a
+   stored order during a pass would have inherited a real damage bug for free.
+
+The regression law (`tests/law/test_no_reresolve_mid_pass.gd`) runs a real pass with the kill in the
+**middle** of the queue — a kill in slot one leaves no already-landed damage to double-count, so the
+phantom comes out numerically identical and the case is blind to its own bug. Falsified two ways:
+deleting the gate reds the row assertion with the double-count printed, and *moving the gate below
+the resolve* — paint suppressed, re-derivation still running — leaves the rows correct and is caught
+only by the stored-plan assertion. The second mutant is the one worth copying: **a gate that
+suppresses an EFFECT is not a gate that suppresses the CAUSE, and only a mutant that moves the gate
+can tell the two apart.**
 
 ## Every bar, if the player says so ([#350](https://github.com/Phaazoid/Godoiosis/issues/350), BUILT 2026-08-19)
 
