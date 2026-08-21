@@ -139,8 +139,24 @@ const FLAME_FRAMES := 8
 # both are Y-billboards through one cell centre, i.e. one plane. The switch only picks
 # which surface the flame argues with; see _make_fire.
 @export var flame_writes_depth := false: set = _set_flame_writes_depth
+
+# What the flame throws INTO the bloom pass — its own emission, never the pass itself (#420). Only
+# this half can be per-source: there is one Environment per board, so `environment:glow_*` is scene
+# mood (a Moods row) while every source decides for itself how hard it burns. Both were hardcoded
+# here until now, which is why the only glow-shaped dial in the panel was the scene-wide one.
+#
+# Nothing blooms below the mood's Glow HDR threshold — turn these up under a high threshold and the
+# flame gets brighter without ever glowing.
+@export var flame_glow_color := Color(1, 0.55, 0.15): set = _set_flame_glow_color
+@export var flame_glow_energy := 2.5: set = _set_flame_glow_energy
+
 @export var flame_light_energy := 2.0
-@export var flame_light_range := 4.0
+# Range and colour are baked into the OmniLight3D at build and _animate_flames refreshes ENERGY
+# alone, so both need the sweep or they move nothing on a board already alight — #264's born-dead
+# slider, which flame_light_range had shipped with. Energy deliberately keeps no setter: the
+# animation loop re-reads it every frame, and a second path to one property is a second authority.
+@export var flame_light_range := 4.0: set = _set_flame_light_range
+@export var flame_light_color := Color(1, 0.62, 0.3): set = _set_flame_light_color
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
@@ -686,7 +702,7 @@ func _make_fire(cell: Vector2i, at: Vector3) -> Node3D:
 	root.position = at
 	for i in maxi(1, flame_count):
 		root.add_child(_make_flame(cell, i))
-	_add_light(root, Color(1, 0.62, 0.3), flame_light_energy, flame_light_range, 0.6)
+	_add_light(root, flame_light_color, flame_light_energy, flame_light_range, 0.6)
 	return root
 
 
@@ -726,8 +742,8 @@ func _make_flame(cell: Vector2i, index: int) -> MeshInstance3D:
 	material.albedo_color = Color(0, 0, 0, 1)
 	material.albedo_texture = load(FLAME_TEXTURE_PATH) as Texture2D
 	material.emission_enabled = true
-	material.emission = Color(1, 0.55, 0.15)
-	material.emission_energy_multiplier = 2.5
+	material.emission = flame_glow_color
+	material.emission_energy_multiplier = flame_glow_energy
 	material.emission_texture = material.albedo_texture
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_FIXED_Y
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
@@ -795,6 +811,29 @@ func _set_flame_spread(value: float) -> void:
 # both ways without relighting the board.
 func _set_flame_writes_depth(value: bool) -> void:
 	flame_writes_depth = value
+	_rebuild_fires()
+
+
+# The emission pair and the light's two build-time values, all four dead-until-relit for the same
+# reason as the geometry above: written once into a material or an OmniLight3D that is then left
+# standing (#420).
+func _set_flame_glow_color(value: Color) -> void:
+	flame_glow_color = value
+	_rebuild_fires()
+
+
+func _set_flame_glow_energy(value: float) -> void:
+	flame_glow_energy = value
+	_rebuild_fires()
+
+
+func _set_flame_light_color(value: Color) -> void:
+	flame_light_color = value
+	_rebuild_fires()
+
+
+func _set_flame_light_range(value: float) -> void:
+	flame_light_range = value
 	_rebuild_fires()
 
 
