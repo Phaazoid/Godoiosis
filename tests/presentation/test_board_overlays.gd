@@ -320,6 +320,103 @@ func test_a_fill_pooled_off_a_ramp_drops_the_tilt_too() -> void:
 	assert_that(_normal_of(overlays)).is_equal(Vector3.UP)
 
 
+# --- Markup stays on the cell it marks (#432) --------------------------------------
+
+# Every visible quad in the order set_cells wrote them -- the pool is appended to and its nodes are
+# children in that same order -- so a case can match a marker to the cell it asked for.
+func _visible_quads(overlays: BoardOverlays) -> Array[MeshInstance3D]:
+	var quads: Array[MeshInstance3D] = []
+	for child in overlays.get_children():
+		var quad := child as MeshInstance3D
+		if quad != null and quad.visible:
+			quads.append(quad)
+	return quads
+
+
+# The height of the PLANE a quad lies in at a given (x, z), which is not its centre's. What markup
+# joining across a cell edge has to agree about is the plane; a tilted quad's centre says nothing
+# about where its edge ended up.
+func _plane_height(quad: MeshInstance3D, x: float, z: float) -> float:
+	var n := quad.basis.y.normalized()
+	var p := quad.position
+	return p.y - ((x - p.x) * n.x + (z - p.z) * n.z) / n.y
+
+
+# #432: the lift used to ride the marker's OWN basis.y, and a ramp's normal leans -- so a slope's
+# markers were pushed downhill as well as up, out of the cell they mark, by lift*sin(45). Straight
+# up keeps them centred. Compared against the cell's own surface point, so no lift value is pinned
+# and the case survives any retune of fill_lift.
+func test_a_fill_on_a_ramp_stays_centred_on_its_own_cell() -> void:
+	var cell := Vector2i(3, 2)
+	var heights := _ramp_at(cell, 1)
+	var surface := BoardSpace.surface_transform(cell, heights)
+	assert_bool(absf(surface.basis.y.y - 1.0) > 0.01).override_failure_message(
+			"the ramp's normal is upright; the case cannot see the lean it is about").is_true()
+
+	var overlays := _bare_overlays()
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], heights)
+	var fill := _only_visible_quad(overlays)
+	assert_float(fill.position.x).override_failure_message(
+			"the fill slid off its own cell along the slope -- the lift is leaning downhill") \
+			.is_equal_approx(surface.origin.x, 0.0001)
+	assert_float(fill.position.z).is_equal_approx(surface.origin.z, 0.0001)
+	assert_float(fill.position.y).override_failure_message(
+			"the fill is not clear of the ground at all").is_greater(surface.origin.y)
+
+
+# The same for the set_markers path, which applies the lift at its own site (_apply_marker's
+# lift_dir) and can therefore drift from the fill's rule.
+func test_a_sprite_marker_on_a_ramp_stays_centred_on_its_own_cell() -> void:
+	var cell := Vector2i(3, 2)
+	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 1))
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
+		"pos": surface.origin, "texture": GridUtils.ERROR_ICON,
+		"modulate": Color.WHITE, "basis": surface.basis,
+	}])
+	var arrow := _only_visible_quad(overlays)
+	assert_float(arrow.position.x).override_failure_message(
+			"the arrow slid off its own cell along the slope").is_equal_approx(surface.origin.x, 0.0001)
+	assert_float(arrow.position.z).is_equal_approx(surface.origin.z, 0.0001)
+
+
+# What the lift is FOR is a shared PLANE -- markup the same distance off the ground everywhere, so
+# one ribbon can run through several markers (#431). BoardSpace.surface_height_at already meets
+# exactly at a shared edge, so only a CONSTANT vertical offset leaves the markup meeting there too.
+# Both candidate fixes for #432 centre the marker; only this one keeps the plane continuous, which
+# is why the case reconstructs each quad's PLANE instead of reading its centre.
+func test_markup_meets_across_a_flat_to_ramp_edge() -> void:
+	var ramp := Vector2i(3, 2)
+	var flat := Vector2i(2, 2)                    # the ramp rises EAST, so this is its low side
+	var heights := _ramp_at(ramp, 1)
+	heights.set_cell(flat, 1)                     # level with the ramp's low edge
+	var edge_x := float(ramp.x)
+	var mid_z := float(ramp.y) + 0.5
+	var ground := BoardSpace.surface_height_at(ramp, edge_x, mid_z, heights)
+	assert_float(BoardSpace.surface_height_at(flat, edge_x, mid_z, heights)).override_failure_message(
+			"the two surfaces do not meet at the edge; markup on them has nothing to match") \
+			.is_equal_approx(ground, 0.0001)
+
+	var overlays := _bare_overlays()
+	overlays.set_cells(BoardOverlays.Layer.MOVE,
+			[BoardSpace.of_cell(ramp, 1), BoardSpace.of_cell(flat, 1)], heights)
+	var quads := _visible_quads(overlays)
+	assert_int(quads.size()).is_equal(2)
+	assert_bool(quads[0].basis.y.normalized().is_equal_approx(Vector3.UP)).override_failure_message(
+			"the first quad is not the ramp's -- set_cells wrote the pool in another order").is_false()
+	assert_bool(quads[1].basis.y.normalized().is_equal_approx(Vector3.UP)).override_failure_message(
+			"the second quad is not the flat cell's").is_true()
+
+	var on_ramp := _plane_height(quads[0], edge_x, mid_z)
+	var on_flat := _plane_height(quads[1], edge_x, mid_z)
+	assert_float(on_flat).override_failure_message(
+			"the fill is not clear of the ground, so the case would pass with no lift at all") \
+			.is_greater(ground)
+	assert_float(on_ramp).override_failure_message(
+			"the markup steps at the ramp's edge -- the two cells' fills no longer meet") \
+			.is_equal_approx(on_flat, 0.0001)
+
+
 # --- find_reachable under the traversal ruling -------------------------------------
 
 func test_reachable_respects_the_ramp_ruling_and_the_cap() -> void:

@@ -284,28 +284,36 @@ func _pool_for(layer: Layer) -> Array:
 
 
 # A BRACKET marks a cell VOLUME, so it keeps the centre and stays axis-aligned; a FILL is ground
-# markup and rides the surface, tilt included (#281). The clearance is applied along the surface's
-# OWN normal, so stacked coplanar layers stay parallel to what they sit on rather than shearing
-# apart on a slope.
+# markup and rides the surface, tilt included (#281). The clearance itself is VERTICAL and not
+# along the surface's own normal (#432) -- see _lift_of, where the direction turns out to be the
+# whole question on a slope.
 func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) -> Transform3D:
 	if spec["kind"] == Kind.BRACKET:
 		return Transform3D(Basis.IDENTITY, BoardSpace.cell_center(cell))
 	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(BoardSpace.flat(cell))
 	var surface := BoardSpace.lie_on(cell, rise)
-	return Transform3D(surface.basis, surface.origin + surface.basis.y * _lift_of(spec))
+	return Transform3D(surface.basis, surface.origin + Vector3.UP * _lift_of(spec))
 
 
 # Per-sort spacing keeps coplanar stacked fills apart; render_priority (set at
 # construction) keeps the alpha blend order stable regardless.
+#
+# Applied STRAIGHT UP, never along the surface's normal (#432). What the lift buys is a shared
+# PLANE -- every marker on a layer the same distance off the ground, which is what lets one
+# ribbon run through several of them -- and BoardSpace.surface_height_at already meets exactly at
+# shared edges, so a CONSTANT vertical offset stays continuous wherever the ground is. A normal
+# lift does not: a ramp's leans, so it decomposed into half up and half DOWNHILL, sliding every
+# marker out of its own cell by lift*sin(slope) and stepping the plane at every flat-to-ramp edge.
+# The price is that a 45-degree slope's PERPENDICULAR clearance is cos(45) of the flat ground's
+# -- fill_lift is the knob if a ramp ever speckles.
 func _lift_of(spec: Dictionary) -> float:
 	return fill_lift + spec["sort"] * lift_step
 
 
 # How far off its surface this layer's markup sits. Public because a marker that has to MEET other
 # markers rather than lie beside them -- the knockback drop pointer, which joins the flat arrows at
-# a right angle -- has to land in the plane they were lifted INTO, not on the raw surface. That
-# distinction is invisible on flat ground and 0.7x this value sideways on a ramp, whose normal
-# leans, which is exactly where joining to the surface leaves a seam (#431).
+# a right angle -- has to land in the plane they were lifted INTO, not on the raw surface (#431).
+# Since #432 that plane is the surface plus this, straight up, on a slope as much as on the flat.
 func marker_lift(layer: Layer) -> float:
 	return _lift_of(LAYERS[layer])
 
@@ -330,15 +338,13 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	if texture != null:
 		var size: Vector2 = texture.get_size() / ART_PIXELS_PER_CELL
 		art = Vector3(size.x, 1.0, size.y)
-	# The layer lift rides the marker's own basis.y by default -- the surface normal, so a marker
-	# lying on a ramp floats off the ramp rather than off the world. What the lift actually buys is
-	# a shared PLANE: every marker on a layer ends up the same distance off the ground, which is
-	# what lets one ribbon run through several of them. A marker that does not LIE on the surface
-	# says so (lift_dir): the knockback drop pointer is vertical, so its own basis.y is horizontal,
-	# and lifting along it drops the pointer's top out of the plane of the flat arrows it has to
-	# meet -- and slides it off the edge besides. Twice now (#431), which is why the default is
-	# documented rather than merely defaulted.
-	var lift_dir: Vector3 = marker.get("lift_dir", tilt.y)
+	# The layer lift goes straight UP whatever the marker lies on (#432; _lift_of holds the why).
+	# Riding the marker's own basis.y instead leaned a ramp's markers downhill out of their cells.
+	# A marker that already carries its lift says so with a ZERO lift_dir -- and those two are the
+	# only values the key has, now that the direction is no longer a free choice: the knockback drop
+	# pointer's ends are the neighbouring arrows' own DRAWN points, so lifting it again would double
+	# the clearance and float it off the join it exists to make (#431).
+	var lift_dir: Vector3 = marker.get("lift_dir", Vector3.UP)
 	quad.transform = Transform3D(tilt * Basis.from_scale(art), pos + lift_dir * _lift_of(spec))
 	var material := quad.material_override as StandardMaterial3D
 	material.albedo_texture = texture
