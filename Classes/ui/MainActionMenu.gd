@@ -202,10 +202,25 @@ func _can_take_main_action(unit: Unit) -> bool:
 # formation queue_group_move would then refuse the leader half of (#443). One gate now, so the next
 # clause added here reaches both rows.
 #
-# An ALREADY-QUEUED move is deliberately NOT a clause here (#417): Move re-enters planning over its
-# own queued order. The rule survives at the Group Move row alone -- see populate().
+# An ALREADY-QUEUED move is deliberately NOT a clause here (#417/#461): both rows re-enter planning
+# over their own queued order. Move stays a PER-UNIT question -- it must never start reading
+# squadmates, which is why #461's member clause sits on _can_group_move rather than here.
 func _can_move(unit: Unit) -> bool:
 	return _can_take_main_action(unit)
+
+# Group Move asks _can_move of the whole SQUAD, not just of the leader (#461). The batch authors a
+# move for every member, and queue_action refuses a member who has locked a main -- which fires
+# queue_group_move's all-or-nothing rollback and cancels everyone's moves. #443 closed exactly this
+# hole for the leader and stopped there, because _can_move only ever sees the unit whose menu is
+# open. The menu is one door: the AI and the Play API reach queue_group_move directly, so the
+# rollback stays their backstop rather than being replaced by this.
+func _can_group_move(unit: Unit) -> bool:
+	if not (_can_move(unit) and unit.is_leader() and unit.has_squad()):
+		return false
+	for member in unit.squad.get_members():
+		if not _can_move(member):
+			return false
+	return true
 
 func populate(unit: Unit) -> Array:
 	var options = []
@@ -222,9 +237,7 @@ func populate(unit: Unit) -> Array:
 	if _can_move(unit):
 		options.append(MOVE)
 
-	# One-shot, unlike Move: re-planning a whole FORMATION is its own question (#417 scoped to Move).
-	if _can_move(unit) and not unit.has_action_type_queued(BaseAction.ActionType.MOVE) \
-		and unit.is_leader() and unit.has_squad():
+	if _can_group_move(unit):
 		options.append(GROUP_MOVE)
 
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():
@@ -333,7 +346,8 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 		CAPTURE:
 			game.queue_capture(unit)
 		GROUP_MOVE:
-			game.enter_group_move_mode(unit)
+			# The gesture, not the bare mode: re-planning spends the queued formation (#461).
+			game.begin_group_move_planning(unit)
 		WEAPON_ACTION:
 			show_weapon_action_menu(unit)
 
