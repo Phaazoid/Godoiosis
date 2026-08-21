@@ -147,27 +147,70 @@ func test_right_click_closes_an_open_mode_and_leaves_the_queue_alone() -> void:
 	assert_int(_active_orders().size()).is_equal(1)   # the order survived the mode exit
 
 
-func test_a_second_right_click_pops_the_order() -> void:
-	# The other half of the same sequence: once the board is at rest, the press undoes.
+func test_a_second_right_click_reaches_the_queue() -> void:
+	# The other half of the same sequence: once the board is at rest, the press acts on the queue.
+	# The newest gesture here is the MOVE, so what it reaches is the re-plan rung (#417 round 2)
+	# rather than the undo -- asserted on game_state, because the order count alone cannot tell
+	# the two apart: re-planning spends the order on entry, so both leave zero behind.
 	var unit := _player_units()[0]
 	_queue_move(unit)
 	game._on_left_click(unit.movement.cell)
 	_pick_menu_action(MainActionMenu.ATTACK, unit)
 
 	game._on_right_click()   # closes the mode
-	game._on_right_click()   # pops the order
+	game._on_right_click()   # reaches the queue: the move re-opens its planning
 
+	assert_int(game.game_state).is_equal(game.GameState.CHOOSING_MOVE)
 	assert_int(_active_orders().size()).is_equal(0)
 
 
-func test_right_click_from_rest_pops_the_last_order() -> void:
+func test_right_click_from_rest_reopens_a_queued_move() -> void:
+	# The dev's cycle, rung two: a queued move is not deleted, it is re-planned -- exactly as if
+	# you had pressed Move again. Same assertion pair as above, and for the same reason.
 	var unit := _player_units()[0]
 	_queue_move(unit)
 	assert_int(_active_orders().size()).is_equal(1)
 
 	game._on_right_click()
 
+	assert_int(game.game_state).is_equal(game.GameState.CHOOSING_MOVE)
 	assert_int(_active_orders().size()).is_equal(0)
+
+
+# Rung three. Nothing in game.gd implements this -- planning already spent the order on entry, so
+# leaving the mode is the outright cancel. Pinned because it is the half of the cycle the dev
+# asked for by name, and a future "restore the move on abort" would break it silently.
+func test_right_clicking_out_of_the_re_plan_cancels_outright() -> void:
+	var unit := _player_units()[0]
+	_queue_move(unit)
+
+	game._on_right_click()   # re-opens planning
+	assert_int(game.game_state).is_equal(game.GameState.CHOOSING_MOVE)
+	game._on_right_click()   # and out
+
+	assert_int(game.game_state).is_equal(game.GameState.IDLE)
+	assert_int(_active_orders().size()).is_equal(0)
+	assert_that(unit.get_projected_destination()).is_equal(unit.movement.cell)
+
+
+# The half an order count cannot see: re-entry has to SELECT the unit, because _click_choosing_move
+# reads game.selected_unit and nothing else. Without it the mode opens onto nobody and the next
+# click queues nothing -- which is #107's bug, one door along.
+func test_the_re_planned_unit_is_the_one_the_next_click_moves() -> void:
+	var unit := _player_units()[0]
+	_queue_move(unit)
+
+	game._on_right_click()
+
+	assert_object(game.selected_unit).is_same(unit)
+	var step := _a_step_for(unit)
+	assert_that(step).is_not_equal(unit.movement.cell)
+	game._on_left_click(step)
+
+	var orders := _active_orders()
+	assert_int(orders.size()).is_equal(1)
+	assert_object(orders[0].actor).is_same(unit)
+	assert_that((orders[0] as MoveAction).destination).is_equal(step)
 
 
 # ------------------------------------------------------------------------------
@@ -178,6 +221,11 @@ func test_a_group_move_pops_as_one_gesture() -> void:
 	# A formation is ONE decision, so one press takes the whole thing -- this is the entire
 	# reason BaseAction.batch_id exists. Popping member-by-member would leave a half-dissolved
 	# formation the validator then has to refuse.
+	#
+	# It also pins #417 round 2's SCOPE: the re-plan rung fires for a lone move only, so a
+	# formation still pops rather than re-opening planning. And it is where the pop loop's own
+	# has() guard is exercised -- cancelling the first move fires revert_if_only_hold, which
+	# clears the queue out from under the loop before it reaches the second.
 	var units := _player_units()
 	assert_int(units.size()).is_greater(2)   # the sandbox must field units[1] and units[2]
 
@@ -284,9 +332,11 @@ func test_right_click_on_an_empty_board_state_is_a_no_op() -> void:
 
 
 func test_pressing_past_the_last_order_stays_quiet() -> void:
-	# Repeated presses after the queue empties must not crash or resurrect an activation --
-	# revert_if_only_hold clears the queue out from under the pop loop when the last real order
-	# goes, and a stale entry re-queueing a hold would silently reactivate the squad.
+	# The whole cycle, then one press past the end of it: re-plan, out, nothing. Presses beyond
+	# the last order must not crash or resurrect an activation -- re-planning drops the squad
+	# through revert_if_only_hold, and a third press meets a null active_squad.
+	# (The pop LOOP's own out-from-under guard is exercised by the group-move case above; a lone
+	# move never reaches the loop any more.)
 	var unit := _player_units()[0]
 	_queue_move(unit)
 
