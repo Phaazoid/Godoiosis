@@ -392,8 +392,11 @@ func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
 	# not add the layer lift a second time -- lift_dir ZERO says exactly that. What it does still
 	# need is WALL_CLEARANCE: at the edge this quad is coplanar with the cliff face, and a hair of
 	# depth keeps it from stippling through without being wide enough to read as a gap.
+	# The tint is COPIED off the trail sprite the pointer hangs from, never a constant of its own:
+	# the pointer is part of that trail, so a second answer here would leave it white the moment the
+	# shove colour is tuned -- which reads as a bug rather than as a knob (Law #4).
 	trails.append({"pos": (head + foot) * 0.5 + d * WALL_CLEARANCE,
-			"texture": rail, "modulate": Color.WHITE, "lift_dir": Vector3.ZERO,
+			"texture": rail, "modulate": sprite.modulate, "lift_dir": Vector3.ZERO,
 			"basis": Basis(down, normal, band), "double_sided": true})
 
 
