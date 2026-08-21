@@ -676,7 +676,7 @@ relaxing that would be a rules change and not a menu one. Greying it with a reas
 it stays a live idea, and stays governed by the top-level ruling above — a permanently full main menu
 is a UX change, not a readout fix. **And Group Move stays one-shot**: both rows read `_can_move`
 since #443, so the queued-move clause moved down to the Group Move row rather than being deleted.
-Re-planning a *formation* is its own ticket, and it has real content — `queue_group_move`'s
+Re-planning a *formation* is [#461](https://github.com/Phaazoid/Godoiosis/issues/461), and it has real content — `queue_group_move`'s
 all-or-nothing rollback cancels **every** member's move, which is already destructive and invisible
 only because a clean board has nothing to destroy. Pinned by `tests/ui/test_move_replan.gd`, which
 drives select → press the real button → click a tile, and asserts on the queue.
