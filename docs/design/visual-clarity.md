@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #450 (2026-08-21).**
+**Canon checked through #455 (2026-08-21).**
 
 ## Principles
 
@@ -662,6 +662,22 @@ Re-planning a *formation* is its own ticket, and it has real content — `queue_
 all-or-nothing rollback cancels **every** member's move, which is already destructive and invisible
 only because a clean board has nothing to destroy. Pinned by `tests/ui/test_move_replan.gd`, which
 drives select → press the real button → click a tile, and asserts on the queue.
+
+**Round 2 (same day, dev call): right-click CYCLES through it.** A queued move is not deleted by the
+press — it re-opens its planning, exactly as if you had hit Move again — so the button now walks
+`move queued → planning → nothing`. The third rung is free: planning already spent the order on
+entry, so leaving the mode is the outright cancel. Scoped to a **lone** move, so a formation still
+pops whole (see [squad-system.md](squad-system.md) → *Right-click is a LIFO undo*).
+
+Two seams carry it, and both exist to avoid a second answer. `game.begin_move_planning` is the Move
+*gesture* — cancel the queued order, then enter the mode — called by the menu row and by the
+right-click branch alike; `game.enter_move_mode` stays the bare mode entry, because thirteen
+presentation call sites use it purely to paint the overlay and would start deleting orders otherwise.
+`game.select_unit` is the extracted select write point (#107), since re-entry has to select before
+`_click_choosing_move` can read anything. Pinned in `tests/ui/test_right_click_cancel.gd` — where
+**two existing cases had to be rewritten**: both ended on an order count of zero, which stays true
+under re-entry, so neither could have told undo from re-planning until they started asserting
+`game_state`.
 
 **Streamline move → main action.** After a move commits, open the unit's main-action menu
 automatically; or a double-click shortcut. Pure flow-feel, no model question. Open: which gesture,

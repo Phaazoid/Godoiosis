@@ -52,7 +52,7 @@ var game_state: GameState = GameState.IDLE
 # dev_overlay.sync_dev_mode_button, and a second consumer (the 3D badge) would have made that push
 # one of two ways the same fact travels. Both listeners connect; nothing polls.
 signal dev_mode_changed(active: bool)
-signal unit_selected(unit: Unit)   # fired at the one select write point (_click_idle); #182 lesson triggers
+signal unit_selected(unit: Unit)   # fired at the one select write point (select_unit); #182 lesson triggers
 # Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
 # RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
