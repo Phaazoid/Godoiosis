@@ -351,6 +351,10 @@ func _on_left_click(cell: Vector2i) -> void:
 # and it can never eat a queued order out from under someone mid-aim. Position-blind either way.
 # Both callers gate on _board_locked_for_player (_unhandled_input, battle3d._cancel), so this is
 # unreachable during an AI turn -- do not add a third guard here.
+#
+# MOVES get one extra rung in between (#417 round 2, dev call): a queued move re-opens its
+# planning rather than being deleted, so the press cycles move queued -> planning -> nothing.
+# The second press needs no code -- planning already spent the order on entry.
 func _on_right_click() -> void:
 	if game_state == GameState.CHOOSING_MOVE:
 		overlay_manager.clear_planned_path(selected_unit)
@@ -370,9 +374,26 @@ func _pop_last_gesture() -> void:
 	var squad: Squad = squad_manager.active_squad
 	if squad == null:
 		return
-	for action in squad_manager.last_gesture_actions(squad):
+	var gesture := squad_manager.last_gesture_actions(squad)
+	var replan := _lone_queued_move(gesture)
+	if replan != null:
+		select_unit(replan.actor, replan.actor.movement.cell)
+		begin_move_planning(replan.actor)
+		return
+	for action in gesture:
 		if squad.action_queue.has(action):
 			_on_queue_cancel_requested(action)
+
+# The newest gesture when it is one unit's OWN move -- the only shape right-click re-plans instead
+# of undoing. A formation stays one decision and pops whole: "as if you hit Move again" has no
+# meaning for it, since Group Move is itself hidden once a move is queued (#417).
+func _lone_queued_move(gesture: Array[BaseAction]) -> MoveAction:
+	if gesture.size() != 1:
+		return null
+	var move := gesture[0] as MoveAction
+	if move == null or move.is_hold_position:
+		return null
+	return move
 
 # Clicking a unit selects it and opens its action menu. Controlling enemies is deliberately
 # still allowed here for hotseat/testing; the AI_TURN lock above is what stops it in play.
@@ -380,11 +401,16 @@ func _click_idle(cell: Vector2i) -> void:
 	var target := unit_at_pointer(cell)
 	if target == null:
 		return
-	last_clicked_cell = cell
-	selected_unit = target
-	unit_selected.emit(target)   # the one select write point; ScenarioDirector's lesson listens (#182)
+	select_unit(target, cell)
 	game_state = GameState.TILE_SELECTED
 	main_action_menu.show_main_menu(target, get_viewport().get_mouse_position())
+
+# THE select write point (#107) -- the selection is stored, never re-derived from a cell. Two doors
+# reach it: a click on the board, and right-click re-opening a queued move's planning.
+func select_unit(unit: Unit, cell: Vector2i) -> void:
+	last_clicked_cell = cell
+	selected_unit = unit
+	unit_selected.emit(unit)   # ScenarioDirector's lesson listens (#182)
 
 func _click_choosing_move(cell: Vector2i) -> void:
 	var unit := selected_unit
@@ -539,6 +565,18 @@ func can_control(unit: Unit) -> bool:
 # ==============================================================================
 #  Modes — entering and leaving
 # ==============================================================================
+
+# The Move GESTURE, as against enter_move_mode's bare mode entry below (which several presentation
+# suites use purely to paint the overlay -- folding this in would start deleting their orders).
+# Re-planning SPENDS the order it replaces (#417), so backing out of the pick leaves no move;
+# revert_if_only_hold goes with the cancel or a hold-only queue strands the squad active.
+# The CALLER owns the selection -- _click_choosing_move reads selected_unit, and both doors have it
+# already: the menu opened on a click, the right-click cycle selects before it calls here.
+func begin_move_planning(unit: Unit) -> void:
+	if unit.has_action_type_queued(BaseAction.ActionType.MOVE):
+		squad_manager.cancel_move_for_unit(unit)
+		squad_manager.revert_if_only_hold(unit.squad)
+	enter_move_mode(unit)
 
 func enter_move_mode(unit: Unit):
 	var moverange := compute_move_range(unit)

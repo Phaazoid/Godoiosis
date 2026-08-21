@@ -290,14 +290,9 @@ func populate(unit: Unit) -> Array:
 func on_pressed(action_id: int, unit: Unit) -> void:
 	match action_id:
 		MOVE:
-			# Re-planning cancels first (#417), so backing out of the pick leaves NO move rather
-			# than the old one. cancel_move_for_unit leaves a hold filler; revert_if_only_hold is
-			# what stops that stranding the squad active behind a panel with nothing to cancel.
-			# Hold fillers aren't real orders -- has_action_type_queued already skips them.
-			if unit.has_action_type_queued(BaseAction.ActionType.MOVE):
-				game.squad_manager.cancel_move_for_unit(unit)
-				game.squad_manager.revert_if_only_hold(unit.squad)
-			game.enter_move_mode(unit)
+			# The gesture, not the bare mode: re-planning spends the queued move (#417). One
+			# answer, because right-click reaches the same gesture from the other side.
+			game.begin_move_planning(unit)
 		ATTACK:
 			begin_attack(unit)
 		CANCEL:
