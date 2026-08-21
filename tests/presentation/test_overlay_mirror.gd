@@ -1021,3 +1021,40 @@ func test_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -
 	await _settle()
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.ICONS).size()).override_failure_message(
 			"the crown outlived the hover that raised it").is_equal(0)
+
+
+# --- Guard ward marker (#414) -------------------------------------------------------
+
+# The channel wire: an armed Guard's ground mark has to REACH the 3D ground channel, because the
+# 3D view is what the game boots into — a mark that only exists in the hidden 2D board is a mark
+# nobody sees. The 2D-side store is pinned in tests/flow/test_guard_lifecycle_wires.gd; this is the
+# other half, and it is exactly the split that made the marker look "not showing up" in play.
+func test_an_armed_guards_ground_mark_reaches_the_3d_ground_channel() -> void:
+	var pair := _squad_pair()
+	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
+	game.refresh_guard_markers()
+	await _settle()
+
+	var ward_art: Texture2D = OverlayManager.ICON_TEXTURES[OverlayIcon.IconType.GUARD_WARD]
+	var found := 0
+	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
+		if marker["texture"] == ward_art:
+			found += 1
+	assert_int(found).override_failure_message(
+			"the Guard's ground mark never reached the 3D channel — 3D is the view the game boots into"
+			).is_equal(2)
+
+
+# The SIZE law, and the reason this channel needs one at all: BoardOverlays sizes a ground quad as
+# texture pixels / ART_PIXELS_PER_CELL, so 16px of art is exactly ONE cell. A 32px marker is a
+# FOUR-cell decal sprawling over its neighbours — which is what shipping the Utumno tile at its
+# native size did. Every board icon must be authored at the cell size, not the sheet's.
+func test_every_board_icon_is_authored_at_one_cell() -> void:
+	for type in OverlayManager.ICON_TEXTURES:
+		var art: Texture2D = OverlayManager.ICON_TEXTURES[type]
+		var cells: Vector2 = art.get_size() / BoardOverlays.ART_PIXELS_PER_CELL
+		assert_that(cells).override_failure_message(
+				"%s is %s px, i.e. %s cells wide in 3D — board icons are authored at %d px"
+				% [OverlayIcon.IconType.keys()[type], str(art.get_size()), str(cells),
+					int(BoardOverlays.ART_PIXELS_PER_CELL)]
+			).is_equal(Vector2.ONE)

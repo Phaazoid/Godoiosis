@@ -89,6 +89,34 @@ func test_an_armed_guard_marks_both_ends_of_the_pair() -> void:
 	assert_bool(_guard_marked(ward)).is_true()
 
 
+func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> void:
+	# THE sequence a player performs, which every other case in this file skips: queue the order,
+	# press Execute, look at the board. The cases below arm the ward by calling arm_guard and then
+	# call refresh_guard_markers by hand — i.e. they set the state directly instead of driving the
+	# real path, which is the blind spot #114 exists to name. If the marker never appears in play,
+	# this is the case that says so.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var _enemy := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(ward, blocker.squad)
+
+	game.queue_guard(blocker, ward)
+	assert_bool(blocker.has_action_type_queued(BaseAction.ActionType.GUARD)) \
+		.override_failure_message("fixture failed to queue the Guard").is_true()
+
+	await game.order_executor.execute_orders(blocker.squad.get_leader())
+
+	assert_object(blocker.guard) \
+		.override_failure_message("the pass did not arm the Guard at all").is_not_null()
+	assert_bool(_guard_marked(ward)) \
+		.override_failure_message("no ground marker under the WARD after a real queue-and-execute") \
+		.is_true()
+	assert_bool(_guard_marked(blocker)) \
+		.override_failure_message("no ground marker under the BLOCKER after a real queue-and-execute") \
+		.is_true()
+
+
 func test_a_spent_guard_stops_being_marked() -> void:
 	# It protects nobody now; leaving the mark up would promise cover that is gone.
 	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))

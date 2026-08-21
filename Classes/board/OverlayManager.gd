@@ -107,9 +107,16 @@ enum OverlayType {
 const ICON_TEXTURES = {
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
 	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png"),
-	# ProjectUtumno_full row 38 col 35 (dev pick, 2026-08-21), kept at its native 32x32 -- exactly one
-	# board cell (CameraController.CELL_WORLD), which is the right footprint for a floor decal and
-	# twice the squad ring's 16px, so the two marks sharing a cell read as different things.
+	# ProjectUtumno_full row 38 col 35 (dev pick, 2026-08-21), downscaled 32 -> 16.
+	#
+	# 16px is not a style choice, it is the CELL SIZE: BoardOverlays sizes a 3D ground quad as
+	# texture pixels / ART_PIXELS_PER_CELL (16), so 32px art is a FOUR-CELL decal sprawling over its
+	# neighbours -- which is exactly how this shipped once and read as "the marker isn't showing up".
+	# Pinned by test_every_board_icon_is_authored_at_one_cell.
+	#
+	# LANCZOS here where the queue-row icon uses NEAREST, and the difference is the ART, not a rule:
+	# that one's features are 2px+ and survive pixel-dropping, this one's are 1px planks that only a
+	# smooth filter keeps legible. Look at the result before picking either.
 	OverlayIcon.IconType.GUARD_WARD: preload("res://Art/Icons/BoardIcons/GuardWardIcon.png")
 }
 
