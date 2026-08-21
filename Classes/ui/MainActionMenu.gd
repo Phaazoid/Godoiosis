@@ -201,8 +201,11 @@ func _can_take_main_action(unit: Unit) -> bool:
 # own hand-copy of this, which had drifted -- missing the main-action clause, so the menu offered a
 # formation queue_group_move would then refuse the leader half of (#443). One gate now, so the next
 # clause added here reaches both rows.
+#
+# An ALREADY-QUEUED move is deliberately NOT a clause here (#417): Move re-enters planning over its
+# own queued order. The rule survives at the Group Move row alone -- see populate().
 func _can_move(unit: Unit) -> bool:
-	return not unit.has_action_type_queued(BaseAction.ActionType.MOVE) and _can_take_main_action(unit)
+	return _can_take_main_action(unit)
 
 func populate(unit: Unit) -> Array:
 	var options = []
@@ -219,7 +222,9 @@ func populate(unit: Unit) -> Array:
 	if _can_move(unit):
 		options.append(MOVE)
 
-	if _can_move(unit) and unit.is_leader() and unit.has_squad():
+	# One-shot, unlike Move: re-planning a whole FORMATION is its own question (#417 scoped to Move).
+	if _can_move(unit) and not unit.has_action_type_queued(BaseAction.ActionType.MOVE) \
+		and unit.is_leader() and unit.has_squad():
 		options.append(GROUP_MOVE)
 
 	if _can_take_main_action(unit) and unit.has_equipped_weapon() and unit.can_wield_equipped() and unit.can_fire_default_attack():
@@ -285,6 +290,13 @@ func populate(unit: Unit) -> Array:
 func on_pressed(action_id: int, unit: Unit) -> void:
 	match action_id:
 		MOVE:
+			# Re-planning cancels first (#417), so backing out of the pick leaves NO move rather
+			# than the old one. cancel_move_for_unit leaves a hold filler; revert_if_only_hold is
+			# what stops that stranding the squad active behind a panel with nothing to cancel.
+			# Hold fillers aren't real orders -- has_action_type_queued already skips them.
+			if unit.has_action_type_queued(BaseAction.ActionType.MOVE):
+				game.squad_manager.cancel_move_for_unit(unit)
+				game.squad_manager.revert_if_only_hold(unit.squad)
 			game.enter_move_mode(unit)
 		ATTACK:
 			begin_attack(unit)
