@@ -267,6 +267,41 @@ func test_a_substituted_hit_is_never_guard_bait() -> void:
 	assert_bool(plan.hypo.has(second)).is_false()
 
 
+func test_the_range_check_reads_the_resolvers_own_threaded_position() -> void:
+	# Two SEPARATE volleys through one bare resolver pass, with no SquadManager to publish anything:
+	# volley 1 pierces the Guard and shoves the ward two cells clear, volley 2 aims at it again.
+	#
+	# This case exists because the obvious version of it does NOT discriminate. Driven through
+	# resolve_plan, the shove is republished as a projected knockback between aims, so reading the
+	# live projection gives the same answer as reading the hypo and a mutant that ignores the hypo
+	# entirely still passes (measured). The resolver must not depend on a publisher only ONE of its
+	# callers runs -- R4's own rule, the reason projected_hp exists -- and this is where that shows.
+	var piercer := _attacker(Vector2i(0, 0))
+	var second := _attacker(Vector2i(6, 0))
+	var ward := _defender(Vector2i(1, 0))
+	var blocker := _defender(Vector2i(1, 1))
+	(piercer.get_equipped_weapon() as WeaponInstance).template.main_attack.pierces_guard = true
+	(piercer.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 2
+
+	var plan := _guarded_plan(blocker, ward)
+	var board := _board_with([piercer, second, ward, blocker])
+	var no_reactions: Array[ElementalReaction] = []
+	var no_terrain: Array[TerrainReaction] = []
+
+	var shove: Array[AttackAction] = [H.stamped_attack(piercer, ward)]
+	PlanResolver.resolve_attack_group(shove, plan, plan.hypo, no_reactions, board, no_terrain)
+	assert_that(shove[0].resolved.knockback_to) \
+		.override_failure_message("fixture failed to shove the ward").is_equal(Vector2i(3, 0))
+
+	var follow_up: Array[AttackAction] = [H.stamped_attack(second, ward)]
+	PlanResolver.resolve_attack_group(follow_up, plan, plan.hypo, no_reactions, board, no_terrain)
+
+	assert_object(follow_up[0].target) \
+		.override_failure_message("the range check read a stale position -- the pair is three cells apart") \
+		.is_same(ward)
+	assert_object(follow_up[0].blocked_for).is_null()
+
+
 func test_a_guard_cannot_shield_someone_from_its_own_swing() -> void:
 	# Only reachable through an AoE counter — a unit gets one main action, so it can never both
 	# Guard and attack in the same turn — and absorbing your own attack for somebody is incoherent.

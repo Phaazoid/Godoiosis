@@ -62,6 +62,7 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | `legal_moves(unit_id)` / `legal_targets(unit_id)` | reachable cells / hittable cells + victims |
 | `squad_up / join / leave / disband` | new squad state |
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell)` | validity + updated plan |
+| `rescue / rally / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
 | `cancel(unit_id)` / `wait(unit_id)` | updated plan |
 | `preview()` | `resolve_plan(active_squad)` outcomes **without applying** (damage, state deltas, deaths, counters) |
 | `execute()` | apply the resolved plan headlessly; return the event log — plus a `mission` key the pass that ends the mission (#96) |
