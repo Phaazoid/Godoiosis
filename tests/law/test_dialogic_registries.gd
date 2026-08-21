@@ -13,6 +13,8 @@
 # editing this suite. If a registry is legitimately empty, the dialog content is gone with it.
 extends GdUnitTestSuite
 
+const PROJECT_FILE := "res://project.godot"
+
 # Extension -> what a missing entry costs, for the failure message.
 const REGISTRIES := {
 	"dch": "characters (a speaker loses its name, colour and portrait)",
@@ -20,33 +22,43 @@ const REGISTRIES := {
 }
 
 
-# The addon's own accessor -- every production lookup resolves through it, so the law reads the
-# same dictionary the game does rather than re-reading ProjectSettings beside it.
-func _registry(extension: String) -> Dictionary:
-	return DialogicResourceUtil.get_directory(extension)
+# THE COMMITTED FILE, deliberately not DialogicResourceUtil.get_directory() -- measured, not
+# assumed. The running process REPAIRS the registry as a side effect of using it: parsing a
+# timeline re-registers the characters it names, so a live read is circular. Falsified
+# 2026-08-21 -- against a totally wiped project.godot, a live read passed every case here.
+# The committed file is also the only surface that answers the question this suite asks, since
+# the wipe is a thing that gets COMMITTED rather than anything the runtime ever sees.
+func _committed_registry(extension: String) -> Dictionary:
+	var config := ConfigFile.new()
+	var err := config.load(PROJECT_FILE)
+	assert_int(err) \
+		.override_failure_message("could not read %s -- this suite cannot check anything" % PROJECT_FILE) \
+		.is_equal(OK)
+	var stored: Variant = config.get_value("dialogic", "directories/%s_directory" % extension, {})
+	return stored if stored is Dictionary else {}
 
 
-# The addon's own scanner, deliberately NOT ResourceDir (#141). This has to compare the registry
+# Dialogic's own scanner, deliberately NOT ResourceDir (#141). The registry has to be compared
 # against the same filesystem truth `update_directory` registers from; a second listing could
-# disagree with what Dialogic actually writes, and then the law would police its own answer.
+# disagree with what Dialogic actually writes. Being a plain DirAccess walk, it has nothing to
+# repair, so the caveat above does not apply to it.
 func _files_on_disk(extension: String) -> Array:
 	return DialogicResourceUtil.list_resources_of_type("." + extension)
 
 
 func test_both_registries_are_populated() -> void:
 	for extension: String in REGISTRIES:
-		assert_int(_registry(extension).size()) \
+		assert_int(_committed_registry(extension).size()) \
 			.override_failure_message("dialogic/directories/%s_directory is EMPTY in project.godot -- %s. Restore it with `git checkout -- project.godot` (#447)."
 				% [extension, REGISTRIES[extension]]) \
 			.is_greater(0)
 
 
 func test_every_registered_path_points_at_a_file_that_exists() -> void:
-	# FileAccess, not ResourceLoader: the .dch/.dtl format loaders are not registered in a
-	# headless run, so `ResourceLoader.exists` is false for every one of them here. That wrong
-	# predicate is what caused #447 in the first place -- do not reintroduce it.
+	# FileAccess, not ResourceLoader: the .dch/.dtl format loaders are absent in some headless
+	# contexts, and that wrong predicate is exactly what caused #447 -- do not reintroduce it.
 	for extension: String in REGISTRIES:
-		var registry: Dictionary = _registry(extension)
+		var registry: Dictionary = _committed_registry(extension)
 		for identifier: String in registry:
 			var path: String = str(registry[identifier])
 			assert_bool(FileAccess.file_exists(path)) \
@@ -57,7 +69,7 @@ func test_every_registered_path_points_at_a_file_that_exists() -> void:
 
 func test_every_dialog_file_on_disk_is_registered() -> void:
 	for extension: String in REGISTRIES:
-		var registered: Array = _registry(extension).values()
+		var registered: Array = _committed_registry(extension).values()
 		var found: Array = _files_on_disk(extension)
 		assert_int(found.size()) \
 			.override_failure_message("no .%s files found at all -- the scan is broken, so this case would pass vacuously"
@@ -71,10 +83,10 @@ func test_every_dialog_file_on_disk_is_registered() -> void:
 
 
 func test_every_speaker_in_a_timeline_is_a_registered_character() -> void:
-	# The wire the registry exists to carry. Parsed through Dialogic's own text parser rather
-	# than a second one here -- and via from_text() rather than load(), because the .dtl format
-	# loader is absent headlessly (see above).
-	var characters: Dictionary = _registry("dch")
+	# The wire the registry exists to carry, and the one case that also catches an authoring
+	# typo. Parsed through Dialogic's own text parser rather than a second one here -- via
+	# from_text() rather than load(), because the .dtl format loader is absent headlessly.
+	var characters: Dictionary = _committed_registry("dch")
 	var checked := 0
 	for path: Variant in _files_on_disk("dtl"):
 		var timeline := DialogicTimeline.new()
@@ -83,7 +95,14 @@ func test_every_speaker_in_a_timeline_is_a_registered_character() -> void:
 		for event: Variant in timeline.events:
 			if not event is DialogicTextEvent:
 				continue
-			var speaker: String = (event as DialogicTextEvent).character_identifier
+			var text_event := event as DialogicTextEvent
+			# The event's OWN regex against its OWN raw line, which is the only reading of the
+			# speaker with no registry in it. `character_identifier` cannot be used: outside the
+			# editor its backing field is never set, and its getter answers from the resolved
+			# character, which derives its name by finding its path in the LIVE registry -- so
+			# it would compare the registry with itself.
+			var parsed: RegExMatch = text_event.regex.search(text_event.event_node_as_text)
+			var speaker: String = parsed.get_string("name") if parsed != null else ""
 			if speaker.is_empty() or speaker.begins_with("{"):
 				continue   # narration, or an expression resolved at runtime
 			checked += 1
