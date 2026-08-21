@@ -232,6 +232,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad markers", "label": "Ring opacity", "static": "SQUAD_RING_ALPHA",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "Alpha of the per-squad membership rings under each member (the leader's crown, over the head, stays opaque). Takes effect on markers already up."},
+	{"group": "Squad markers", "label": "Ring pulse brightness", "static": "SQUAD_RING_PULSE_GAIN",
+		"min": 1.0, "max": 3.0, "step": 0.05,
+		"tip": "How much brighter a squad ring goes at the top of its pulse while Join Squad is picking a squad. A gain on the ring's own hue, so a pulsing ring still reads as its squad's colour. 1.0 is no pulse at all. Takes effect on the next pick."},
 
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
@@ -303,6 +306,7 @@ static func read_static(name: String) -> Variant:
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
+		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
@@ -319,6 +323,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
+		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply

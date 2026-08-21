@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #432 (2026-08-21).**
+**Canon checked through #443 (2026-08-21).**
 
 ## Principles
 
@@ -469,6 +469,41 @@ another in `game`.
 Both misses were writers that clear the channel for a reason unrelated to the new feature, and the
 second was reachable by a mouse movement on a board with nothing selected — the most ordinary state
 the game has.
+
+**JOIN SQUAD PICKS WITH THE RINGS THEMSELVES ([#442](https://github.com/Phaazoid/Godoiosis/issues/442), 2026-08-21).**
+Dev, on seeing the standing rings in play: *"when joining a squad, a target icon appears the units
+that are joinable. However, with the squad rings, now we have two icons kinda representing the same
+thing."* Entering the mode now draws each joinable squad's own rings and **pulses** them, and the
+generic target-pick ground marker is suppressed **for this flow only**.
+
+**This refines #346 rather than excepting it.** Ground markup still carries the interaction; what
+changes is the *form* inside that channel when the thing being picked is a **squad**, because then
+the squad's own ring already says what the pick marker repeats. The other three pick flows keep the
+marker and are untouched — rescue and intimidate target a unit with no ring to collide with, and
+Squad Up's candidates are solo units who by definition have none. Squad Up had already been through
+this reduction: `draw_create_squad`'s comment records #346 deleting its TARGET icon as *"two markings
+of one fact"*, and join-squad was the half left behind.
+
+**Three things the build settled, each worth keeping.** The **hue is never the undealt sentinel
+here** — `can_join_squad` ends in `squad.leader.has_squad()`, so a joinable squad always has
+squadmates and therefore a dealt colour, which is why #441's `Color.WHITE` trap cannot reach this
+flow. **The ring pulses and the crown does not**: principle 2's motif rule, and #346's channel split
+in miniature — the ring is what the interaction is about, the crown is what the unit is. And
+**suppressing a marker must never suppress the CLICK**: `target_pick_cells` is still filled, since
+`_click_picking_target` validates against it, and the two are set two lines apart — a case pins the
+pair, falsified by moving the cell list inside the same guard, which reads in play as *"Join Squad
+does nothing"* rather than as a missing marker.
+
+**One answer replaced two that disagreed.** `draw_joinable_squads` marked **leaders** while the
+candidate query made **every member** clickable — the marking and the clickable set were separate
+enumerations of one question. `game.joinable_squads` is now that question, read by both.
+
+The pulse is `Classes/core/Pulse.gd`, the shared "look at this" cadence, and the tween is hosted on
+the ICON so it dies with it rather than depending on a call site to stop it — `Pulse`'s own contract
+is that one left running keeps writing its property underneath everything else. `_style_icon` yields
+to a live pulse, the same way `UnitVisuals.set_highlighted` does. Peak brightness is a `GameKnobs`
+row (`SQUAD_RING_PULSE_GAIN`) — a **gain on the ring's own hue**, so a pulsing ring still reads as
+its squad's colour: the pulse says LOOK HERE, the hue still says WHICH SQUAD.
 
 **Two findings worth keeping.** First, **persistence is what made a stale copy visible**:
 `OverlayIcon` stored the cell it was built on and `OverlayMirror` anchored on that copy, which was
