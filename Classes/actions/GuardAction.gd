@@ -6,13 +6,13 @@ class_name GuardAction
 # DEF, armour and cell, plus their brace bonus. The substitution itself is entirely the resolver's
 # (PlanResolver._guard_for / _apply_guards); this order only ARMS the ward.
 #
-# PLACEHOLDER ART: Rescue.png stands in for the queue row until a Guard icon exists — one line, and
-# the only place this action's art comes from.
-#
 # A basic action everyone has (the doc's working model, and the one fork it left deliberately open),
 # so actor_can_perform is the inherited `true`; what kit grants is the brace bonus, not the verb.
 
-const GUARD_ICON := preload("res://Art/Icons/ActionIcons/Rescue.png")
+# Cut from ProjectUtumno_full row 38 col 30 (dev pick, 2026-08-21), downscaled 32 -> 16 with NEAREST
+# — the exact 2:1 every other ActionIcon is sized at, and a smooth filter mushes art this small.
+# The only place this action's art comes from.
+const GUARD_ICON := preload("res://Art/Icons/ActionIcons/GuardIcon.png")
 
 var target: Unit         # the ward — the unit being bodyguarded
 var guard_range: int = 1 # stamped at declare (Law #2 provenance, CaptureAction's shape)

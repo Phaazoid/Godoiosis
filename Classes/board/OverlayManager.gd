@@ -104,18 +104,19 @@ enum OverlayType {
 # so _style_icon below never touches a texture, and there is no second place a marker's art can come
 # from. Membership is a per-squad ring underfoot, leadership the crown over the head (#325, settled
 # 2026-08-19); the legacy green square lost, and SquadHighlightIcon.png is now unreferenced.
-# PLACEHOLDER for GUARD_WARD: the squad ring stands in until a shield exists. Swapping it is this
-# one line, because this table is the only place a marker's art comes from.
 const ICON_TEXTURES = {
 	OverlayIcon.IconType.CROWN: preload("res://Art/Icons/BoardIcons/CrownIcon.png"),
 	OverlayIcon.IconType.SQUADMEMBER: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png"),
-	OverlayIcon.IconType.GUARD_WARD: preload("res://Art/Icons/BoardIcons/SquadRingIcon.png")
+	# ProjectUtumno_full row 38 col 35 (dev pick, 2026-08-21), kept at its native 32x32 -- exactly one
+	# board cell (CameraController.CELL_WORLD), which is the right footprint for a floor decal and
+	# twice the squad ring's 16px, so the two marks sharing a cell read as different things.
+	OverlayIcon.IconType.GUARD_WARD: preload("res://Art/Icons/BoardIcons/GuardWardIcon.png")
 }
 
-# The armed-Guard pair's ground mark (#414). Its own hue and a size step so it stays legible over the
-# squad ring it shares a cell with -- both are placeholder shape, and both are one line to retire.
-static var GUARD_RING_COLOR := Color(0.85, 0.9, 1.0, 0.95)
-const GUARD_RING_SCALE := 1.35
+# The armed-Guard pair's ground mark (#414). Neutral by default now the art is real -- these stay as
+# the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
+static var GUARD_RING_COLOR := Color.WHITE
+static var GUARD_RING_SCALE := 1.0
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
