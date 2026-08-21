@@ -63,7 +63,7 @@ const LEAVES: Array[Dictionary] = [
 	{"scope": "Project", "label": "Moods", "page": "%Moods",
 		"tip": "Scene mood, tuned live — lighting, post, fog, camera framing. Saves as a named mood a mission wears, or rewrites the default every other board gets."},
 	{"scope": "Project", "label": "Game", "page": "%Game",
-		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, fire. Save to source writes each value into the declaration that authors it."},
+		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, elemental effects. Save to source writes each value into the declaration that authors it."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
 ]
