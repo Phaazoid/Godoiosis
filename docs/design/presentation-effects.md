@@ -435,7 +435,12 @@ The tier nobody else can copy, because it renders systems Iosis alone has.
 - **Render the future.** Law #2 means the resolver computes the exact post-execution world — every other tactics game's preview is RNG soup; ours is truth. A hold-to-peek "spectral diorama" of the resolved end state (ghost sprites, ghost fires, ghost outcomes staged on the board) is a marketing-grade feature whose data structure (`ResolvedPlan`) already exists. The strongest single idea on this wall.
 - **Alchemy as art direction.** Glowing ground sigils for channeled carvings (aura-colored, per-affinity palettes), channel-threads of light from alchemist to carving — and the thesis-level version: the classical alchemical stages are *color* stages (blackening → whitening → yellowing → **reddening: iosis itself**). A mission or campaign arc whose grading walks that sequence makes the game's name its visual spine. **This one has left the wall: `Opus 1 Nigredo` / `2 Albedo` / `3 Citrinitas` / `4 Rubedo` ship as real presets (#253 part 3), so the question is no longer "would it read" but "does it" — load them in order and look.** They are grades only; the per-affinity sigils and channel-threads above are untouched.
 - **Will and Crisis**: entering Crisis desaturates the world for a beat while the berserker alone stays vivid (screen grade + per-sprite exemption).
-- **The downed clock** as a fading ring decal under the body — readable and moody.
+- **The downed clock** as a fading ring decal under the body — readable and moody. **It now has a plain
+  readout to earn its way past** ([#322](https://github.com/Phaazoid/Godoiosis/issues/322),
+  2026-08-21): the turns left are digits beside the downed glyph in the head channel. So this is the
+  #259 shape — a built number owed a presentation — with one question attached, since a ring under
+  the body would put *what this unit IS* in the channel #346 gave to *what this INTERACTION is
+  about*.
 - **Squad cohesion** drawn as a soft light tether/field (the `SquadCohesion.field` is already computed; render it instead of tile fills).
 - **Zones**: capture/extraction as diegetic alchemical light columns, intensity tracking progress.
 - **Turn count drives the sun** — dawn on turn 1, dusk by turn 12; time pressure made visible. (Pure presentation; the rules never read the clock.)
