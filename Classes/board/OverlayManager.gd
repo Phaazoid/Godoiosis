@@ -139,6 +139,12 @@ const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the
 
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
+
+# Puts the STANDING markers back after this manager clears the channel whole, injected by game (the
+# squad_manager.board_source idiom). A Callable that DRAWS rather than one that returns a squad
+# list, so "what does the standing set look like" has exactly one implementation instead of one
+# here and one in game. Does nothing while ALWAYS_SHOW_SQUAD_RINGS is off.
+var standing_rings_drawer: Callable = func() -> void: pass
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
@@ -501,9 +507,8 @@ func create_unit_icon(unit: Unit, type: OverlayIcon.IconType) -> OverlayIcon:
 		
 	var icon := ICON_SCENE.instantiate()
 	icon_overlay.add_child(icon)
-	var cell := unit.get_projected_destination()
-	icon.setup(ICON_TEXTURES[type], cell, type)
-	icon.position = board_tilemap.map_to_local(cell)
+	icon.setup(ICON_TEXTURES[type], unit, board_tilemap, type)
+	icon.position = board_tilemap.map_to_local(icon.current_cell())
 	_style_icon(icon, unit)
 
 	icons_by_unit[unit][type] = icon
@@ -564,8 +569,19 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 		for type in types:
 			clear_unit_icon(unit, type)
 
+# The channel is cleared whole, so everything that should be on it after this call has to be drawn
+# by it: the STANDING set first, then the squad the caller is actually about (which may already be
+# in that set -- create_unit_icon is idempotent, so the overlap costs nothing).
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	standing_rings_drawer.call()
+	draw_squad_unit_icons(squad)
+
+# What ONE squad's markers ARE: a ring on every member, the crown on its leader. Split out of the
+# redraw above so the standing-ring sweep (game.refresh_squad_rings) can draw many squads without
+# each one wiping the last -- the alternative was a second copy of this pair, which is how the two
+# would have drifted.
+func draw_squad_unit_icons(squad: Squad) -> void:
 	for member in squad.get_members():
 		create_unit_icon(member, OverlayIcon.IconType.SQUADMEMBER)
 		if member == squad.get_leader():

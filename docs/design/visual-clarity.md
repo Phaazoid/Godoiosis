@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #427 (2026-08-20).**
+**Canon checked through #432 (2026-08-21).**
 
 ## Principles
 
@@ -415,6 +415,75 @@ law — *an issue's own premises are stale-able; re-derive from the code before 
 crown, so there is nothing here for [#292](https://github.com/Phaazoid/Godoiosis/issues/292) to
 carry.
 
+**The ring became a STANDING marker behind a player setting (#423 slice 1, dev call 2026-08-21).**
+Planning [#423](https://github.com/Phaazoid/Godoiosis/issues/423)'s form/dissolve/shatter animation
+found that the thing it proposed to animate does not persist: `SQUADMEMBER` icons are produced only
+by selection and hover paths and destroyed by `clear_selection_icons`, exactly as the sentence above
+says — *the icon lifecycle never moved*. #325 relocated the ring from head to ground and left it a
+**selection** marker wearing a membership meaning.
+
+**That killed the half #423 called most valuable, and the reason generalises.** The ticket's best
+argument was that the two *un-previewed* ejections are where feedback earns most. But
+`OrderExecutor.execute_orders` clears the icon channel BEFORE the pass and both ejection sweeps run
+after it, and the turn-start sweep fires when nothing is selected — so **at both settle points there
+was no ring on screen to shatter.** A marker's visibility schedule is part of what it can express:
+an interaction-scoped marker cannot carry an event that happens when no interaction is open, however
+right the marker looks the rest of the time. Fifth instance of
+[#228](https://github.com/Phaazoid/Godoiosis/issues/228)'s law.
+
+So the animation waits, and what shipped first is the lifecycle it needs:
+`PlayerSettings.ALWAYS_SHOW_SQUAD_RINGS`, **off by default**, which keeps every multi-member squad's
+rings up instead of only the squad being looked at. It is a toggle rather than a switchover on
+purpose — the same play-both-then-decide shape #325 itself used, and the loser gets deleted.
+`game.refresh_squad_rings` is the one sweep; it REBUILDS the channel rather than adding to it,
+because `create_unit_icon` only ever adds and a squad shrinking back to one member has to lose its
+rings. It is gated on having squadmates (`Unit.has_squad`'s question) and deliberately **not** on
+`ring_hue`, which is dealt once at the first squadmate and never reset — that gate would leave a
+lone leftover wearing a colour forever.
+
+**A CHANNEL THAT IS CLEARED WHOLE HAS TO BE REDRAWN WHOLE, and the per-squad redraw is where that
+bit.** `OverlayManager.redraw_squad_unit_icons` clears every `CROWN`/`SQUADMEMBER` marker and then
+draws the ONE squad it was handed — fine for a decade of selection-scoped markers, since the only
+markers that should exist belong to the thing being selected. Standing rings are the first tenant of
+that channel that has to survive somebody *else's* redraw, and `HoverPresenter` calls it on every
+hover-move preview: so hovering one squad stripped every other squad's rings, which is the state the
+board would have sat in for most of a feel-test. `standing_squads_source` (a Callable injected by
+game, the `SquadManager.board_source` idiom) is what lets the redraw put the standing set back
+without `OverlayManager` learning what a player setting is. The general form: **adding a persistent
+tenant to a channel means auditing every writer that clears the channel, not just the ones that
+draw the new thing.**
+
+**It bit a SECOND time, at a different clear, and that one reached the dev.** `clear_selection_icons`
+is called by `HoverPresenter._hover_idle` on **every hover change while nothing is selected** — bare
+ground included — so the rings drew at load and the first mouse movement wiped them: *"I toggle them
+on, go back into the level, and they are not on. I still have to hover to show them."* Every headless
+case passed because none of them ever **moved the cursor**, which is the one thing a player does
+constantly. The fix is the method's own name taken literally — it drops the SELECTION's markers, and
+standing rings are not the selection's, so they go straight back up. `game.draw_standing_rings` is
+now the single implementation of *what is on this channel with nothing selected*, called by that
+clear and, through `OverlayManager.standing_rings_drawer`, by the per-squad redraw; the injected
+Callable DRAWS rather than returning a squad list precisely so there is not one answer here and
+another in `game`.
+
+**The sharpened form: find the clears by grepping for them, not by imagining which ones matter.**
+Both misses were writers that clear the channel for a reason unrelated to the new feature, and the
+second was reachable by a mouse movement on a board with nothing selected — the most ordinary state
+the game has.
+
+**Two findings worth keeping.** First, **persistence is what made a stale copy visible**:
+`OverlayIcon` stored the cell it was built on and `OverlayMirror` anchored on that copy, which was
+invisible only because markers were rebuilt constantly — the instant one outlived a move it sat on
+the cell its unit had walked off, in both views. The marker now asks its UNIT where it is
+(`OverlayIcon.current_cell`), one answer read by the 2D position and the mirror alike, which is
+[#308](https://github.com/Phaazoid/Godoiosis/issues/308)'s law arriving on a second shelf. Second,
+**standing rings deliberately stand down for a whole resolution pass**: a marker sits on its unit's
+*projected destination*, which mid-pass is a cell the unit has not reached, so a ring left up would
+jump ahead of the unit rather than travel with it. Riding the animated position is a separate build.
+The restore is the LAST line of `_end_squad_turn`, because that method opens by clearing the channel.
+
+Both views move together, so there is nothing here for
+[#292](https://github.com/Phaazoid/Godoiosis/issues/292) to carry.
+
 Two things the retirement exposed, both worth keeping in mind. **The head icon was never the
 general answer**: TARGET was created in exactly one flow, so rescue, intimidate and join-squad had
 their candidates marked *nowhere in either view* until #316, and Squad Up only looked right because
@@ -482,14 +551,19 @@ hard here, since "every damaged unit" is close to "everywhere". Must reach both 
 on [#292](https://github.com/Phaazoid/Godoiosis/issues/292).
 
 **Squad join / leave feedback on the ring channel.** Animate the per-squad ring under a unit's feet
-**forming** on join and **dissolving** on leave; a forceful removal **shatters** it. The ring is
-#325's, which survived that ticket's verdict (the mix: rings for membership, crown for leadership —
-the green squares were deleted), so this decorates a marker that is now **settled** rather than one
-awaiting a verdict. The genuinely useful half is *which events to hook*, and it is wider than the
-menu: **cohesion ejection** (`SquadManager.enforce_contact`) and **downed ejection** both drop
-membership at settle points and are noted in the codebase as **un-previewed** — a squad silently
-losing a member is exactly the moment feedback earns most, and it is not a click the player made.
-Sprite-FX-shaped, so it queues behind #358.
+**forming** on join and **dissolving** on leave; a forceful removal **shatters** it. The genuinely
+useful half is *which events to hook*, and it is wider than the menu: **cohesion ejection**
+(`SquadManager.enforce_contact`) and **downed ejection** both drop membership at settle points and
+are noted in the codebase as **un-previewed** — a squad silently losing a member is exactly the
+moment feedback earns most, and it is not a click the player made.
+
+**Two of this capture's premises were measured FALSE while planning it (2026-08-21) — see the #423
+slice 1 section above.** The ring was a *selection* marker, so at both settle points there was no
+ring on screen to shatter; and the dependency on #358 was wrong, since `OverlayIcon` is its own
+overlay node while #358's stack rides the unit's `MapSprite`. The persistence this needs shipped
+first as `ALWAYS_SHOW_SQUAD_RINGS`. What remains open is the animation itself, and one design
+question the restraint doctrine sharpens: squads re-form often, and three of these firing at once
+during a settle is worth designing for rather than discovering.
 
 **Warn when a move ends on — or crosses — an element-afflicted tile.** *(Merged capture: the
 action-menu warning recorded 2026-08-18 and the queue-row warning recorded 2026-08-19 are the same

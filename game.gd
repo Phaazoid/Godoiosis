@@ -185,6 +185,15 @@ func _wire_signals() -> void:
 	squad_manager.squad_became_active.connect(_on_squad_became_active)
 	squad_manager.squad_became_empty.connect(_on_squad_has_no_actions)
 
+	# Standing squad rings follow membership (#423 slice 1). squad_created covers every LEAVE as
+	# well as every birth -- leave_squad ends in create_squad -- so the two ejection sweeps that
+	# nobody authored need no signal of their own.
+	squad_manager.squad_created.connect(func(_s: Squad): refresh_squad_rings())
+	squad_manager.squad_deleted.connect(func(_s: Squad): refresh_squad_rings())
+	squad_manager.squad_member_joined.connect(func(_s: Squad, _u: Unit): refresh_squad_rings())
+	# The per-squad redraw clears the whole channel, so it has to know the standing set too.
+	overlay_manager.standing_rings_drawer = draw_standing_rings
+
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
 	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
@@ -294,6 +303,9 @@ func _open_pause_menu() -> void:
 			_open_pause_menu()
 		PauseMenu.Choice.SETTINGS:
 			await SettingsScreen.show_screen(self)
+			# PlayerSettings has no changed signal by design, so the ring setting is applied
+			# where the player hands the board back rather than by polling for it.
+			refresh_squad_rings()
 			# GLOSSARY's shape exactly, restore included -- a settings page is another read-only
 			# detour that must hand the player back to the menu they opened it from.
 			game_state = prior
@@ -437,6 +449,8 @@ func _on_turn_started(faction: Team.Faction):
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
 	# (#151) -- the other way a squad splits without any move having authored it.
 	squad_manager.enforce_contact()
+	# An ejection here changed membership without any signal a redraw path listens to.
+	refresh_squad_rings()
 	# AFTER the ticks: an expiring downed countdown kills, and that is the one death that
 	# happens outside a resolution pass (#96).
 	mission_controller.check()
@@ -621,7 +635,7 @@ func clear_selection():
 	if squad_manager.active_squad == null:
 		overlay_manager.clear_squad_range()
 	if squad_manager.active_squad == null:
-		clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+		clear_selection_icons()
 
 # ==============================================================================
 #  Queueing orders
@@ -1002,11 +1016,52 @@ func clear_icons(icons: Array[OverlayIcon.IconType]):
 # HoverPresenter/OrderExecutor reach this through an UNTYPED `game` ref, and a bare array
 # literal sent that way never gets coerced to clear_icons' typed parameter (it fails at
 # runtime, not at parse time). Keeping the literal on this side of the boundary avoids it.
+#
+# It drops the SELECTION's markers and no others, which is why the standing rings go straight back
+# up: they are not the selection's. That is the whole of the 2026-08-21 bug the dev found by
+# playing -- _hover_idle calls this on EVERY hover change while nothing is selected, bare ground
+# included, so the first mouse movement after a board came up wiped the standing set and only a
+# hover brought it back.
 func clear_selection_icons() -> void:
 	clear_icons([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
+	draw_standing_rings()
 
-# ==============================================================================
-#  Board queries
+# --- Standing squad rings (ALWAYS_SHOW_SQUAD_RINGS) ----------------------------------------
+# WHICH squads wear a standing ring: THE one answer. Empty while the setting is off, which is what
+# keeps every path above behaving exactly as it did.
+#
+# Gated on the squad having squadmates -- Unit.has_squad's question, the one _repaint_squad_plan
+# also asks -- and NOT on ring_hue: a hue is dealt once at the first squadmate and never reset, so
+# a squad that shrank back to one would keep wearing its colour.
+func standing_ring_squads() -> Array[Squad]:
+	var standing: Array[Squad] = []
+	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
+		return standing
+	for squad: Squad in squad_manager.squads:
+		if is_instance_valid(squad) and squad.get_members().size() > 1:
+			standing.append(squad)
+	return standing
+
+# Put the standing set onto a channel that has just been cleared -- THE one implementation, called
+# by clear_selection_icons above and, through OverlayManager.standing_rings_drawer, by the
+# per-squad redraw the hover and plan paths use. A marker channel that is cleared whole has to be
+# redrawn whole, and this is the one thing that knows what "whole" means when nothing is selected.
+func draw_standing_rings() -> void:
+	for squad: Squad in standing_ring_squads():
+		overlay_manager.draw_squad_unit_icons(squad)
+
+# Membership changed, so the standing set may have gained or lost a squad. Rebuilds rather than
+# adds, which is what makes a marker DISAPPEAR again -- create_unit_icon only ever adds, so a squad
+# dropping back to one member would otherwise leave its rings behind.
+#
+# The setting guard is NOT redundant with standing_ring_squads' empty list: while the setting is
+# off this must not touch the channel at all, where clearing it would wipe the selection's markers
+# and put nothing back.
+func refresh_squad_rings() -> void:
+	if not PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS):
+		return
+	clear_selection_icons()
+
 # ==============================================================================
 
 func _board() -> BoardContext:
