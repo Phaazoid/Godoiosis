@@ -225,9 +225,6 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Cover", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
 
-	# --- Playback (#259 rework: the animated shove) ---
-	{"group": "Playback", "node": "UnitMirror", "prop": "shove_fall_speed", "label": "Shove fall speed", "min": 0.5, "max": 20.0, "step": 0.1,
-		"tip": "How fast a shoved sprite's height settles in the 3D view, in world units/second -- the drop off a cliff and the roll down a ramp both ease at this rate. The slide across the ground is the Shove slide speed knob beside it."},
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A
@@ -307,6 +304,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
 		"script": MOVEMENT_SCRIPT, "min": 60.0, "max": 960.0, "step": 10.0,
 		"tip": "How fast a shoved unit slides along its knockback trail, in pixels/second (a walk is 120). Read at each shove, so a change applies from the next one."},
+	{"group": "Playback", "label": "Shove fall speed", "static": "SHOVE_FALL_SPEED",
+		"script": MOVEMENT_SCRIPT, "min": 0.5, "max": 20.0, "step": 0.1,
+		"tip": "How fast a shoved unit DROPS at a break in its slide, in cells/second -- off a cliff, off a ramp's lip, wherever the trail hangs a drop pointer. The slide pauses for exactly this long and then carries on, which is what makes it read as fly-then-fall instead of a teleport. Read at each fall."},
 
 	# The void plummet (#431), the same shape one row along. The DEPTH is read twice -- by the fall
 	# and by the preview pointer's length -- so this one slider moves both, which is the point.
@@ -449,6 +449,7 @@ static func read_static(name: String) -> Variant:
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
+		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
 		"READOUT_BACKGROUND": return ActionMenuController.READOUT_BACKGROUND
@@ -491,6 +492,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply
+		"SHOVE_FALL_SPEED":
+			MovementComponent.SHOVE_FALL_SPEED = value
+			return   # read at each fall -- nothing standing to re-apply
 		"VOID_PLUMMET_SECONDS":
 			MovementComponent.VOID_PLUMMET_SECONDS = value
 			return   # read at each shove -- nothing standing to re-apply

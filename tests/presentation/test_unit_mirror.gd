@@ -100,26 +100,51 @@ func _settle() -> void:
 
 # The void plummet (#431): a unit shoved into a hole keeps falling past the lip instead of blinking
 # out in mid-air. The fall is 3D-ONLY -- the flat board has no height to fall through -- so the
-# mirror is where it is expressed, and it has to beat the kb_settling ease that every slide leaves
-# behind, which would otherwise haul the sprite straight back up to the surface it is leaving.
+# mirror is where it is expressed, and it has to beat the SLIDE branch, which answers an airborne
+# sprite with its launch cell's own surface and would haul this one straight back up to the lip it
+# is falling past. (Its rival used to be the kb_settling ease, which #472 deleted along with the
+# post-slide settle: a fall is a beat of the slide now, not something left over after one.)
 # Driven by setting the component's own state rather than by running plummet(), because the tween
 # is the part that does NOT run headless; what is worth pinning is the branch and its order.
 func test_a_plummeting_unit_falls_below_its_cell() -> void:
 	var unit := _live_units()[0]
 	var seat := _sprite_seat(unit.movement.cell)
 	var sprite := _mirror.sprite_for(unit)
-	# Seeded MID-SETTLE, above its cell, which is exactly the state the slide into a hole hands
-	# over: the ease reads the sprite's own last position, so parking it high gives the settle real
-	# work to do. Without this the settle finishes in one frame and the case passes against a
-	# mirror that runs it FIRST -- measured, the mutant went green before this line existed.
+	# Seeded MID-SLIDE and airborne, which is exactly the state a shove into a hole hands over --
+	# leaving the rival branch live is what gives the ordering real work to do. Without these three
+	# lines the case passes against a mirror that checks the slide FIRST.
 	sprite.position = Vector3(seat.x, seat.y + 2.0, seat.z)
-	sprite.set_meta("kb_settling", true)
+	unit.movement.sliding = true
+	unit.movement.airborne = true
+	unit.movement.slide_origin = unit.movement.cell
 	unit.movement.plummeting = true
 	unit.movement.plummet_depth = 3.0
 	await _settle()
 	assert_float(_mirror.sprite_for(unit).position.y).override_failure_message(
-			"the plummeting sprite is not falling -- the settle ease is winning") \
+			"the plummeting sprite is not falling -- the slide branch is winning") \
 			.is_equal_approx(seat.y - 3.0, 0.001)
+
+
+# The landing fall (#472) is the plummet's sibling one branch up, and needs the same ordering: it
+# runs WHILE the slide is still live (a tumble is queued behind it), so the slide branch would
+# otherwise answer over the top of it. Seeded for the same reason -- the tween does not run
+# headless -- and the top is published by the component precisely so a TUMBLE break, which falls
+# from the previous cell rather than from the flight, has a height the mirror can read.
+func test_a_falling_unit_drops_from_the_height_its_fall_started_at() -> void:
+	var unit := _live_units()[0]
+	var seat := _sprite_seat(unit.movement.cell)
+	var sprite := _mirror.sprite_for(unit)
+	sprite.position = Vector3(seat.x, seat.y + 2.0, seat.z)
+	unit.movement.sliding = true
+	unit.movement.airborne = true
+	unit.movement.slide_origin = unit.movement.cell
+	unit.movement.landing_falling = true
+	unit.movement.landing_fall_top = seat.y + 2.0
+	unit.movement.landing_fall_depth = 1.5
+	await _settle()
+	assert_float(_mirror.sprite_for(unit).position.y).override_failure_message(
+			"the falling sprite is not dropping from its own top -- the slide branch is winning") \
+			.is_equal_approx(seat.y + 0.5, 0.001)
 
 
 func test_a_downed_unit_stays_on_screen() -> void:

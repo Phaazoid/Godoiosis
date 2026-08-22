@@ -306,9 +306,12 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 # flag was a second seam for a fact the geometry holds (Law #4), and it went stale the moment the
 # tumble learned to plummet.
 #
-# BoardSpace.surface_height_at is the one answer to "how high is the surface HERE", and it carries
-# exactly what this needs: a ramp's plane meets its neighbour's precisely at the shared edge. So a
-# slide reads continuous and draws nothing, with no ramp special case anywhere.
+# BoardSpace.surface_height_at_edge is the one answer to "how high is this cell's surface AT the
+# edge it meets its neighbour on", and it carries exactly what this needs: a ramp's plane meets its
+# neighbour's precisely at that edge. So a slide reads continuous and draws nothing, with no ramp
+# special case anywhere. Since #472 the SPRITE'S OWN FALL is off the same call
+# (MovementComponent._edge_drop) -- the pointer and the drop it promises are one question now,
+# rather than two spellings that happened to agree on flat ground and not on a cliff.
 #
 # A break hangs ONE quad, and it starts falling AT THE EDGE (dev, round 5) -- the ribbon it has to
 # meet begins at the back of the tile, so a fold placed anywhere further in leaves that much flat
@@ -344,13 +347,13 @@ func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
 				else sprite.get_meta("kb_drop_from")
 		top = BoardSpace.surface_transform(launch, heights).origin.y
 	else:
-		top = BoardSpace.surface_height_at(cell - dir_2d, edge.x, edge.z, heights)
+		top = BoardSpace.surface_height_at_edge(cell - dir_2d, dir_2d, heights)
 	# The lower side of the SAME edge. Both sides must be read at the edge or the test is not a
 	# test of whether the surfaces meet: a slide onto a ramp's high shoulder enters level with the
 	# flight and only then descends, so measuring this cell at its CENTRE would call every such
 	# slide half a level of fall. An airborne cell hangs at the flight height on both sides, so it
 	# can never break and needs no case of its own.
-	var here := top if airborne else BoardSpace.surface_height_at(cell, edge.x, edge.z, heights)
+	var here := top if airborne else BoardSpace.surface_height_at_edge(cell, -dir_2d, heights)
 	# A REMOVAL skips the break test outright: a hole is a terrain KIND, invisible to the height
 	# store, so the two surfaces meet and the fall is real anyway. It drops the full plummet -- the
 	# same distance the sprite itself falls in execution, off MovementComponent's one knob, because
