@@ -130,9 +130,19 @@ func test_the_dead_centre_selects_nothing_and_a_click_there_dismisses() -> void:
 # The recoverability ruling, and the #105/#107 trap in one case. The dropdown emitted `cancelled`
 # (hence clear_selection) and freed itself on EVERY pick; doing that on the way into a category is
 # what would make a wrong turn cost a dismiss-and-reopen.
-func test_opening_a_category_keeps_the_ring_alive_and_the_unit_selected() -> void:
+func test_opening_a_category_keeps_the_ring_alive_and_the_board_selected() -> void:
 	var unit := _spawn(Vector2i(1, 0))
 	var controller := await _open(unit)
+	assert_int(game.game_state) \
+		.override_failure_message("the fixture did not reach TILE_SELECTED, so this case is vacuous") \
+		.is_equal(game.GameState.TILE_SELECTED)
+
+	# Count the signal, because `cancelled` IS the mechanism: clear_selection() does not null
+	# selected_unit (exit_current_mode does, #149), so asserting on the unit alone cannot see this
+	# and passed against a mutant that emitted here. What it resets is the game STATE and the
+	# selection overlays -- the board unlocking underneath an open menu.
+	var cancels := [0]
+	controller.cancelled.connect(func(_me) -> void: cancels[0] += 1)
 
 	var category := _index_of_a_category(controller)
 	assert_int(category).override_failure_message("the ring offered no category at all").is_greater(-1)
@@ -144,6 +154,12 @@ func test_opening_a_category_keeps_the_ring_alive_and_the_unit_selected() -> voi
 		.override_failure_message("opening a category tore the ring down").is_true()
 	assert_int(controller.level_count()) \
 		.override_failure_message("committing a category grew no ring").is_equal(2)
+	assert_int(cancels[0]) \
+		.override_failure_message("a category pick emitted `cancelled` -- the #105/#107 trap, which clears the board's selection on the way INTO the next ring") \
+		.is_equal(0)
+	assert_int(game.game_state) \
+		.override_failure_message("the board fell out of TILE_SELECTED while its own menu was still open") \
+		.is_equal(game.GameState.TILE_SELECTED)
 	# The typed read is the assertion, not a null check: a freed Unit compares == null but dies on
 	# assignment, which is the #149 lesson.
 	var still: Unit = game.selected_unit
