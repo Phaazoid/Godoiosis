@@ -62,6 +62,23 @@ static func surface_height_at(cell: Vector2i, x: float, z: float, heights: Board
 	return t.origin.y + tan(RAMP_SLOPE_ANGLE) * ((x - t.origin.x) * dir.x + (z - t.origin.z) * dir.y)
 
 
+# The surface height of `cell` AT the edge it meets its `dir` neighbour on (#472). One edge is
+# named from either side -- surface_height_at_edge(a, d) and surface_height_at_edge(a + d, -d) are
+# the same seam -- which is what lets "do these two surfaces MEET here?" be one question with one
+# answer. Both the drop pointer (OverlayMirror._append_drop) and the shove's own fall
+# (MovementComponent._edge_drop) ask it, and they must agree: the trail promises a drop exactly
+# where this says there is one, so a second spelling is a preview drawing a fall the sprite never
+# takes.
+#
+# Read AT the edge, never at the centre: a slide onto a ramp's high shoulder enters level with the
+# flight and only THEN descends, so measuring the centre would call every such slide half a level
+# of fall.
+static func surface_height_at_edge(cell: Vector2i, dir: Vector2i, heights: BoardHeights) -> float:
+	var x := (float(cell.x) + 0.5 + float(dir.x) * 0.5) * CELL_SIZE
+	var z := (float(cell.y) + 0.5 + float(dir.y) * 0.5) * CELL_SIZE
+	return surface_height_at(cell, x, z, heights)
+
+
 # One level of rise per cell of run — the authored wedge's own profile (its slope face runs corner
 # to corner, normal (0,1,1)), and the same ratio surface_point's half-level lift already encodes.
 const RAMP_SLOPE_ANGLE := atan2(CELL_SIZE, CELL_SIZE)

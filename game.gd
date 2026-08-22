@@ -1037,6 +1037,10 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 		return null
 
 	units_root.add_child(unit)
+	# The height store, after add_child because `movement` is @onready (#472). The slide reads it to
+	# find its own falls, the same way the drop pointer's preview already does -- a shove that has
+	# no heights simply never breaks, which is what a flat board means anyway.
+	unit.movement.set_heights(board_heights)
 	squad_manager.create_squad(unit)
 	unit.unit_died.connect(_on_unit_died)
 	# The DOWN twin of the line above. It goes straight to OrderExecutor rather than through a
