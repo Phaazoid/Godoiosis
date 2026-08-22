@@ -495,7 +495,54 @@ Four things that generalise past this ticket:
 under [#292](https://github.com/Phaazoid/Godoiosis/issues/292) and not a new one.
 
 **Spun off:** per-attack burst character — a heavy blow scattering wide, a pierce punching through —
-raised by the dev during the grill and deliberately out of scope here.
+filed as [#469](https://github.com/Phaazoid/Godoiosis/issues/469), raised by the dev during the grill and deliberately out of scope here.
+
+### Round 2 — the playtest (2026-08-22)
+
+The dev played it and sent eight things. **Two were bugs I shipped, and both are worth keeping for
+their shape rather than their fix.**
+
+1. **The HP digits were invisible, and no knob could have rescued them.** The label was placed at the
+   cube's CENTRE depth; a cube spans zero to a full block toward the camera, and the cubes are opaque
+   and write depth — so the text sat *inside* a solid and was depth-rejected. **The general form: the
+   moment a flat display gains DEPTH, every "just in front of it" offset in it becomes wrong, because
+   the thing it was measured against stopped being a plane.** Pinned now as a relationship (the label
+   clears the front face), not a value.
+2. **The heal pop could not animate, because it borrowed the RECESS as its travel distance.** Two
+   texels is a couple of screen pixels, and at a recess of 0 — a legal setting the dev was actively
+   considering — the animation had exactly zero distance to cover, so it read as instant however long
+   the time knob said. **An animation's amplitude must never be a knob that may legitimately be zero.**
+   It has its own `hp_pop_lift_texels` now.
+
+The six feel calls, each a dev ruling:
+
+- **A killing hit throws the RED cubes too** — *"On a killing hit, even the red blocks should fly
+  away."* So `burst` takes a colour per cube: one sweep, the standing ones leaving green and the lost
+  ones red, rather than two bursts that would each restart the stagger.
+- **A multi-cube burst MARCHES** — *"march through the bricks that blast out, from start to finish."*
+  Each cube waits its turn, and a waiting cube **sits in its socket rather than hiding**, so the grid
+  breaks apart in sequence with no gap running ahead of the cubes.
+- **Only the FRONT face wears the cage** — *"The top of the cubes blend in a little too easily, and
+  look like another row. Tops should be all one solid color."* Correct, and the cause is that the
+  cage is a texture on all six faces, so a foreshortened top renders as a squashed row of cells.
+  **The debris cube keeps all six**, because it tumbles and a blank face would read as a hole punched
+  in it — two meshes from one builder, and the split is the whole point.
+- **The grid is HELD IN PLACE by default** — *"The health bars are 3D, they should not billboard
+  towards the camera."* It sits on the board's own axes like the voxel props; a knob restores facing.
+  The cost is declared rather than fixed: orbit past one and it goes edge-on to a line, which is what
+  keeping it in place *means*.
+- **The recess needed a second pass, and the reason generalises.** *"The recessed red doesn't
+  actually look too great, it looks somewhat different than the image you built for me."* He was
+  right and the diagram was the thing at fault: it drew a socket with a dark inner rim, which the
+  geometry cannot produce — a cube pushed back is still a same-sized square head-on, because there is
+  **no socket wall to see**. It now SHRINKS and DARKENS as well, so the plate shows around its edges.
+  **A mock-up can promise a read the geometry has no way to deliver; when the in-game version differs
+  from the picture, suspect the picture.**
+- **Spun off rather than chosen:** [#474](https://github.com/Phaazoid/Godoiosis/issues/474), three
+  heal animations to try — the priest *shooting* the cubes in, cubes falling from the sky, cubes
+  sprouting from the ground. The interim pop stays as the fallback. Its blocking design question is
+  the same one #469 has: an arriving cube needs a SOURCE, and the readout deliberately knows only
+  that HP moved.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 
