@@ -82,7 +82,7 @@ func setup(unit: Unit) -> void:
 	_root.mouse_filter = Control.MOUSE_FILTER_STOP
 	# Map sprites are 16px art blown up into the centre; the default filter turns them to mush.
 	_root.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	_root.gui_input.connect(_on_input)
+	_root.gui_input.connect(_on_gui_input)
 	_root.draw.connect(_on_draw)
 	_layer.add_child(_root)
 
@@ -177,9 +177,12 @@ func _clamp_centre() -> void:
 #  Input -- the whole model
 # ==============================================================================
 
-func _on_input(event: InputEvent) -> void:
+# The MOUSE adapter, and the only place in this file that knows what a mouse is. Everything it
+# calls -- aim_at / commit / back -- is the model's own vocabulary, which is the whole portability
+# claim: another input source is another function this short, not a second hit test.
+func _on_gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		_update_selection((event as InputEventMouseMotion).position)
+		aim_at((event as InputEventMouseMotion).position)
 		return
 	if not (event is InputEventMouseButton):
 		return
@@ -189,10 +192,11 @@ func _on_input(event: InputEvent) -> void:
 	if button.button_index == MOUSE_BUTTON_RIGHT:
 		back()
 	elif button.button_index == MOUSE_BUTTON_LEFT:
-		_update_selection(button.position)
+		aim_at(button.position)
 		commit()
 
-func _update_selection(point: Vector2) -> void:
+# "The pointer is here." Distance is discarded except for the dead-zone test.
+func aim_at(point: Vector2) -> void:
 	var level := _deepest()
 	var nodes: Array = level["nodes"]
 	var start: float = level["start_deg"]
@@ -264,6 +268,36 @@ func cleanup() -> void:
 
 func _deepest() -> Dictionary:
 	return _levels[_levels.size() - 1]
+
+# What the ring is showing right now: the live level's rows, where it starts, and how deep the
+# stack is. Public because "what am I displaying" is a fair question to ask a widget -- the
+# catalogue law reads these to assert on what the player can actually see.
+func level_nodes() -> Array:
+	if _levels.is_empty():
+		return []
+	return _deepest()["nodes"]
+
+func level_start_deg() -> float:
+	if _levels.is_empty():
+		return 0.0
+	return _deepest()["start_deg"]
+
+func level_count() -> int:
+	return _levels.size()
+
+func centre() -> Vector2:
+	return _centre
+
+# Where slice `index` of the live ring is drawn, at whatever distance. Any point on that ray
+# selects it -- the radius here is only to land outside the dead zone.
+func point_in_slice(index: int, distance := 0.0) -> Vector2:
+	var nodes := level_nodes()
+	if nodes.is_empty():
+		return _centre
+	var span := 360.0 / float(nodes.size())
+	var mid := level_start_deg() + (float(index) + 0.5) * span
+	var radius: float = distance if distance > 0.0 else DEAD_ZONE_RADIUS + RING_THICKNESS
+	return point_at(_centre, radius, mid)
 
 func selected_node() -> Dictionary:
 	if _selection < 0 or _levels.is_empty():
@@ -354,7 +388,8 @@ func _draw_readout() -> void:
 	var detail: String = node.get("tooltip", "")
 	if detail == "":
 		return
-	for line in UiText.wrap(detail).split("\n"):
+	# Already wrapped by MainActionMenu._entry -- the stored text IS the displayed text.
+	for line in detail.split("\n"):
 		y += float(font_size) * 1.35
 		_draw_centred_line(font, font_size, line, y, Color(1, 1, 1, 0.6))
 

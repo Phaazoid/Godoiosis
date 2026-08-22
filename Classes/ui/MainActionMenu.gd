@@ -259,7 +259,10 @@ func _entry(name: String, blocked_reason: String = "", detail: String = "") -> D
 		entry["disabled"] = true
 		lines.append(blocked_reason)
 	if not lines.is_empty():
-		entry["tooltip"] = "\n".join(lines)
+		# Wrapped HERE, not at draw time: the stored string is what the player reads, so wrapping
+		# it later would leave the row holding one form and showing another. Godot's own tooltips
+		# never autowrapped either, which is why this call has always had to exist somewhere.
+		entry["tooltip"] = UiText.wrap("\n".join(lines))
 	return entry
 
 # One attack's menu row. Law #2: an unfireable pick (a sprung weapon, #73; a dry magazine, #84; an
