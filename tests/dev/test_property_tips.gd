@@ -2,9 +2,9 @@
 #
 # The editor draws its rows from get_property_list() and carried no text on any of them, which is
 # how a range edit landed in the wrong box of two adjacent lookalike spinboxes with nothing to say
-# so. The text lives in a PROPERTY_TIPS const beside the @export it describes, and DevWidgets walks
-# the base chain to find it -- so the two things worth pinning are that the walk actually reaches a
-# base class's table, and that the text reaches the CONTROL rather than stopping at the lookup.
+# so. The text lives in an overridable static property_tips() beside the @export it describes,
+# each class merging its parent's -- so the things worth pinning are that the merge actually
+# carries a base class's entries, and that the text reaches the CONTROL rather than the lookup.
 #
 # The nested case is the trap this was designed around: apply_tooltip recurses, so tipping an
 # object row after its nested block was built would overwrite every tip inside it with the parent's.
@@ -70,3 +70,39 @@ func test_a_nested_patterns_rows_keep_their_own_tips() -> void:
 	assert_str(nested).contains("CLOSEST")
 	# The parent row's own text must not have been painted over it.
 	assert_str(nested).not_contains("indented underneath")
+
+
+# Mirrors build_resource_editor's own filter, so a field this reports is exactly a field that gets
+# drawn. The skip lists come from AttackEditorTool rather than being restated here -- a field
+# skipped in one and not the other is a field that silently loses its text or fails a law that
+# never draws it.
+func _untipped(resource: Resource, skip: Array, missing: Array[String]) -> void:
+	for prop in resource.get_property_list():
+		if prop.name in skip:
+			continue
+		var exported: bool = (prop.usage & PROPERTY_USAGE_SCRIPT_VARIABLE) != 0 and (prop.usage & PROPERTY_USAGE_EDITOR) != 0
+		if not exported:
+			continue
+		if DevWidgets.property_tip(resource, prop.name) == "":
+			missing.append("%s.%s" % [resource.get_script().get_global_name(), prop.name])
+
+
+# The coverage law: a field the Attack Editor draws must say what it is. Scoped to that editor's
+# own resources on purpose -- the Item Editor's reflective branch only fires for an equippable that
+# is neither a rune nor a weapon, which is ArmorData and its own ticket's business.
+func test_every_field_the_attack_editor_draws_carries_text() -> void:
+	var missing: Array[String] = []
+	_untipped(WeaponAttackData.new(), AttackEditorTool.POOL_SKIP, missing)
+	_untipped(TransmutationData.new(), AttackEditorTool.CARVING_SKIP, missing)
+	_untipped(ManhattanRangePattern.new(), [], missing)
+	_untipped(ForwardLinePattern.new(), [], missing)
+	_untipped(ForwardWidePattern.new(), [], missing)
+	assert_array(missing).is_empty()
+
+
+func test_a_subclass_keeps_its_parents_entries_as_well_as_its_own() -> void:
+	# The merge is hand-written per class, so forgetting it is the live footgun. Both halves in one
+	# case, because the failure mode is exactly "one of these two answers went missing".
+	var weapon_attack := WeaponAttackData.new()
+	assert_str(DevWidgets.property_tip(weapon_attack, "requires_readiness")).is_not_empty()   # its own
+	assert_str(DevWidgets.property_tip(weapon_attack, "arc_clearance")).is_not_empty()        # AttackData's

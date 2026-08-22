@@ -383,16 +383,7 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 				add_option(container, label, prop.hint_string.split(","), value, func(s): resource.set(prop.name, s))
 			else:
 				add_lineedit(container, label, value, func(s): resource.set(prop.name, s))
-		TYPE_OBJECT:
-			if prop.hint == PROPERTY_HINT_RESOURCE_TYPE:
-				_add_resource_swapper(container, resource, prop, value, rebuild)
-			if value is Resource and value.get_script() != null:
-				var indent := MarginContainer.new()
-				indent.add_theme_constant_override("margin_left", 16)
-				container.add_child(indent)
-				var inner := VBoxContainer.new()
-				indent.add_child(inner)
-				build_resource_editor(inner, value, rebuild)
+	_tip_rows_from(container, first, tip)
 
 static func _add_resource_swapper(container: Node, resource: Resource, prop: Dictionary, value: Resource, rebuild: Callable) -> void:
 	var base_type: String = prop.hint_string
