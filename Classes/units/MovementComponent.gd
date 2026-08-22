@@ -207,9 +207,13 @@ func _edge_drop(from: Vector2i, to: Vector2i) -> float:
 		top = BoardSpace.surface_point(slide_origin, heights).y
 	else:
 		top = BoardSpace.surface_height_at_edge(from, dir, heights)
-	# _append_drop's own meeting test, spelled the same way: a ramp's plane runs through
-	# tan(45 deg), which lands a hair under 1.0 in double, so an exact compare fires a
-	# zero-length fall on every clean slide-on.
+	# _append_drop's own meeting test, spelled the same way -- ONE question, one answer, which is
+	# the whole justification: the preview draws a pointer exactly where this returns non-zero.
+	# The is_equal_approx half is a guard rather than a fix for anything observed. A ramp's plane
+	# runs through tan(45 deg), which is a hair under 1.0 in double, but on the geometry measured
+	# here the addition rounds back to the flight level exactly, so an exact compare passes too --
+	# a mutant removing this clause stayed green. Kept because it costs nothing and because
+	# diverging from _append_drop's spelling is the thing this ticket exists to stop.
 	var here := BoardSpace.surface_height_at_edge(to, -dir, heights)
 	if top <= here or is_equal_approx(top, here):
 		return 0.0

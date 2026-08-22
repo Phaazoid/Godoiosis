@@ -124,9 +124,15 @@ func test_a_one_level_slide_onto_a_matching_slope_never_falls() -> void:
 	var victim: Unit = s.d
 	await _slide(victim, outcome)
 
+	# Two reads, because one of them is weak on its own: a depth of zero is also what an
+	# un-run fall leaves behind, whereas landing_fall_top is published ONLY when a drop is real,
+	# so an untouched top is positive evidence that no fall was ever taken at any edge here.
+	assert_float(victim.movement.landing_fall_top).override_failure_message(
+			"a clean slide-on published a fall -- no edge on this board should break") \
+			.is_equal(0.0)
 	assert_float(victim.movement.landing_fall_depth).override_failure_message(
 			"a clean slide-on fell -- the surfaces meet at that edge and nothing should drop") \
-			.is_equal_approx(0.0, 0.001)
+			.is_equal(0.0)
 	assert_bool(victim.movement.cell == Vector2i(-1, 0)).is_true()
 
 
