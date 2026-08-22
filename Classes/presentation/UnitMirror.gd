@@ -74,7 +74,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # value against another, which the tuning razor forbids, so if the crown moves this moves by hand.
 # (It is the head channel's only tenant since #325's verdict -- TARGET went to the ground with #346,
 # squad membership followed it as a ring.)
-@export var hud_lift := 0.06
+@export var hud_lift := 0.24
 # --- The health grid (#314) -------------------------------------------------------------
 # One cube per point of HP. A cube is this many texels INCLUDING its black cage, and cubes are
 # pitched (block - border) apart so neighbours share that cage -- at 5/1 that is a 3-texel coloured
@@ -92,11 +92,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Depth ALONE did not read as a dent (dev, 2026-08-22) — head-on, a cube pushed back is still a
 # same-sized square, because there is no socket wall to see. Shrinking it shows plate around its
 # edges, and dimming it puts it in shadow; together they are what the dent was supposed to be.
-@export var hp_block_recess_shrink := 0.7
+@export var hp_block_recess_shrink := 0.65
 @export var hp_block_recess_shade := 0.55
 # How far the TOP face of every cube is darkened. The one thing that tells the top apart from the
 # front; taking the black cage off it instead left "a green mass with black painted on" (dev).
-@export var hp_block_top_shade := 0.7
+@export var hp_block_top_shade := 0.15
 # Whether the grid turns to face the camera. OFF by default (dev: "The health bars are 3D, they
 # should not billboard towards the camera") — held in place it sits on the board's own axes like the
 # voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
@@ -105,7 +105,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
 # missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
 # gameplay descriptor, meant to sit on top of the scene rather than blend into it.
-@export var bar_fill_color := Color(0.15, 1.0, 0.2, 1.0)
+@export var bar_fill_color := Color(0.0, 1.0, 0.2353, 1.0)
 @export var bar_missing_color := Color(0.9, 0.05, 0.05, 1.0)
 # The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
