@@ -59,6 +59,10 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 
 # Move the pointer, the way the picker does. Everything past this line is the wire under test:
 # battle3d hands the cell to HoverPresenter, which resolves the unit, which UnitMirror reads.
+#
+# It writes _pointer_cell directly, so it loses a race the poll can now start: since #471 the poll
+# re-derives on CAMERA movement, from the REAL mouse. A case that MOVES the camera therefore points
+# after the poll has settled, never before.
 func _point_at(cell: Vector2i) -> void:
 	var heights: BoardHeights = game.board_heights
 	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
@@ -239,6 +243,10 @@ func test_the_knob_puts_the_grid_back_on_the_camera_view_plane() -> void:
 	rig.rotation_degrees.y = 35.0
 	rig._target_yaw_degrees = 35.0
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	# Let the pointer poll consume the orbit BEFORE pointing. Since #471 it re-derives on camera
+	# movement, and it derives from the REAL mouse — so a poll firing after _point_at overwrites the
+	# synthetic pointer this case depends on. Ordering only: one poll settles its own baseline.
+	await _settle()
 	_point_at(unit.movement.cell)
 	await _settle()
 	var bar := _unit_mirror.bar_for(unit)

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #475 (2026-08-22).**
+**Canon checked through #476 (2026-08-22).**
 
 ## Principles
 
@@ -1058,6 +1058,27 @@ read**, so *"same amount as in the inspect menu"* stays one number rather than a
 **A preview has to be legible or it is not a preview.** `GHOST_ALPHA` went from 0.32 to 0.8, and a
 ghosted ring's LABELS stopped being dimmed at all — the label is the entire point of previewing.
 What still says *not open yet* is position and the absence of a highlight, not faintness.
+
+### Round 4: the camera comes back ([#471](https://github.com/Phaazoid/Godoiosis/issues/471), 2026-08-22)
+
+The ring deliberately does not lock the board — that is what lets the player pan around while
+deciding. It also means the unit they are deciding *for* can be off screen by the time they commit,
+and the order plays out around that unit. **So a terminal pick snaps the view back to it, and
+backing out with no order does not.** One line, drawn where the dev drew it: action versus no
+action. Every terminal pick returns for now, Inspect included; narrowing it to *verbs that need the
+board* is a play call, not a design one, and would cost `ACTION_DATA` a new fact.
+
+The mechanism belongs to the camera contract, not to the menu — see
+[`presentation-effects.md`](presentation-effects.md) → *The camera comes BACK when an order is
+committed*, which holds why the `ai_locked` mirror was the wrong place to reach for, why it snaps
+rather than glides, and the pointer-poll fix that rode along.
+
+What the ring owes it is exactly one call, and **where** that call sits is the whole of the menu's
+share: on `action_selected`, which only a TERMINAL pick emits. `cancelled` fires on commits too —
+that ordering is #467's own preserved quirk — so the cancel handler structurally cannot tell a pick
+from a back-out, and hanging the return there would return the camera on a dismiss as well. Pinned
+by a case that dismisses and asserts the camera did not move; a mutant that moves the call into the
+cancel handler reds exactly that one and nothing else.
 
 ## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
 

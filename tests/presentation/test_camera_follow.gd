@@ -89,6 +89,11 @@ func _picked(cell: Vector2i) -> Vector3i:
 func test_the_3d_camera_follows_the_ai_camera() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
+	# AI_TURN travels WITH the lock. start_faction_turn writes both in one block and clears the lock
+	# first, so `ai_locked and not _board_locked_for_player()` is a state the game cannot reach --
+	# and since #471 the pointer poll re-derives on CAMERA movement, so a fixture holding that
+	# impossible pair lets the hover snap drag the 2D camera the mirror below is reading.
+	_game.game_state = _game.GameState.AI_TURN
 	_cam().set_ai_locked(true)
 	await _cam().pan_to(unit)   # headless: lands on the destination and hands to follow
 	await _settle()
@@ -107,6 +112,7 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 	assert_that(_rig.position).override_failure_message(
 			"the 3D camera never followed the AI's pan").is_equal(expected)
 	_cam().set_ai_locked(false)
+	_game.game_state = _game.GameState.IDLE
 
 
 func test_hovering_does_not_drag_the_3d_camera() -> void:
@@ -160,6 +166,11 @@ func test_a_locked_board_refuses_the_players_camera_but_keeps_the_rig_running() 
 
 func test_a_menu_leaves_the_pointer_alone() -> void:
 	_game.game_state = _game.GameState.MENU
+	# The precondition, stated rather than inherited. It used to arrive for free — nothing picked a
+	# cell until the mouse moved — but since #471 the poll re-derives on CAMERA movement too, and
+	# framing the loaded mission is exactly that, so before_test now leaves a cell under the cursor.
+	# The rule here is that a MENU does not UPDATE the pointer, which is unchanged either way.
+	_scene._pointer_cell = BoardSpace.NO_CELL
 	var unit := _player_unit()
 	var screen := _screen_of(unit.movement.cell)
 	var motion := InputEventMouseMotion.new()
@@ -327,3 +338,56 @@ func test_space_recentres_the_diorama_on_the_pointer() -> void:
 	var point := BoardSpace.standing_point(_scene._pointer_cell)
 	assert_that(_rig.position).is_equal(Vector3(point.x, before.y, point.z))
 	assert_bool(_rig.position.distance_to(before) > 1.0).is_true()
+
+
+# --- Coming back to the acting unit (#471) ------------------------------------------
+
+# The ring does NOT lock the board, so the player can pan the diorama anywhere while choosing --
+# and then commit an order that plays out around a unit no longer on screen. Driven at
+# game.focus_view_on rather than through a menu pick: the RING's half of this wire is pinned in
+# tests/ui/test_radial_menu.gd, and this is the half only the 3D host can see. Kill battle3d's
+# connect and this is what reds.
+func test_a_committed_order_brings_the_rig_back_to_the_acting_unit() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	# The opening shot sits over the player's squad, i.e. over this very unit, so the rig has to be
+	# shoved off first -- to a corner of its own pan limit, which the clamp will leave alone.
+	_rig.position = Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y)
+	var before := _rig.position
+	# The unit's PROJECTED cell, which is what focus_view_on means by "where this unit is acting
+	# from" -- read through the same expression rather than assumed to be movement.cell.
+	var target := BoardSpace.standing_point(BoardSpace.of_cell(unit.get_projected_destination(), 0))
+	assert_bool(Vector2(before.x, before.z).distance_to(Vector2(target.x, target.z)) > 1.0) \
+		.override_failure_message("the rig was already over the unit; the case proves nothing").is_true()
+
+	_game.focus_view_on(unit)
+	await _settle()
+
+	assert_float(_rig.position.x).override_failure_message(
+			"a committed order did not bring the rig back to the acting unit").is_equal_approx(target.x, 0.01)
+	assert_float(_rig.position.z).override_failure_message(
+			"a committed order did not bring the rig back to the acting unit").is_equal_approx(target.z, 0.01)
+	# Height is the rig's own; only x/z are the board's answer.
+	assert_float(_rig.position.y).override_failure_message(
+			"the return moved the rig's height").is_equal_approx(before.y, 0.01)
+
+
+# The pointer poll re-derives on CAMERA movement, not only on mouse movement (#471). Without it the
+# hover bracket sits on the cell the pointer LEFT until the mouse moves -- true of WASD and of SPACE
+# long before this ticket, and this is what makes it frequent enough to notice.
+func test_moving_the_camera_re_picks_the_cell_under_a_still_pointer() -> void:
+	_game.game_state = _game.GameState.IDLE
+	var unit := _player_unit()
+	var cell: Vector2i = unit.movement.cell
+	_scene._update_pointer(_screen_of(cell))
+	await _settle()
+	assert_that(_scene._pointer_cell).override_failure_message(
+			"the fixture never got the pointer onto the unit's cell").is_equal(_picked(cell))
+
+	# The mouse does not move; the world does.
+	_rig.position = Vector3(_rig.position.x + 6.0, _rig.position.y, _rig.position.z + 6.0)
+	await _settle()
+
+	assert_that(_scene._pointer_cell).override_failure_message(
+			"panning under a still cursor left the pointer on the cell it had left") \
+		.is_not_equal(_picked(cell))

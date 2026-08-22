@@ -270,3 +270,76 @@ func test_the_ring_does_not_re_derive_itself_while_it_is_open() -> void:
 	assert_array(_names(controller.level_nodes())) \
 		.override_failure_message("the open ring re-derived itself from live state") \
 		.is_equal(before)
+
+
+# ==============================================================================
+#  A committed order brings the camera back (#471)
+# ==============================================================================
+
+# The fixture's 8-cell strip is SMALLER than the view, and _clamp_axis centres the map outright in
+# that case -- the camera physically cannot be anywhere but the middle, so a case driving it there
+# asserts nothing at all. Painted per case rather than in before_test: every other case here is
+# about the widget and does not want a 40x20 board.
+func _paint_a_pannable_board() -> void:
+	for x in range(40):
+		for y in range(20):
+			game.grid.set_cell(Vector2i(x, y), GRASS_SOURCE, GRASS_ATLAS)
+	game.camera_controller.refresh_bounds(game.grid)
+
+
+# The first TERMINAL slice the ring is offering. Deliberately not a NAMED verb: which rows a unit
+# gets is gating, and this case is about what a commit DOES, not about which row did it.
+func _index_of_a_terminal(controller: ActionMenuController) -> int:
+	var rows: Array = controller.level_nodes()
+	for i in range(rows.size()):
+		var children: Array = rows[i].get("children", [])
+		if children.is_empty() and not bool(rows[i].get("disabled", false)):
+			return i
+	return -1
+
+
+# #471. The ring does not lock the board, so the player can pan anywhere while choosing -- and the
+# order they commit is about the UNIT, which may by then be off screen. This is the 2D half of the
+# wire; tests/presentation/test_camera_follow.gd pins the half only the 3D rig can see.
+func test_committing_an_order_brings_the_camera_back_to_the_acting_unit() -> void:
+	_paint_a_pannable_board()
+	var unit := _spawn(Vector2i(20, 10))
+	var camera: CameraController = game.camera_controller
+	camera.snap_to_position(GridUtils.cell_world(game.grid, Vector2i(36, 17)))
+	var away: Vector2 = camera.global_position
+	var home := GridUtils.cell_world(game.grid, unit.get_projected_destination())
+	assert_bool(away.distance_to(home) > 1.0).override_failure_message(
+			"the camera clamp parked the view on the unit anyway; the case proves nothing").is_true()
+
+	var controller := await _open(unit)
+	var terminal := _index_of_a_terminal(controller)
+	assert_int(terminal).override_failure_message("the ring offered no terminal slice").is_greater(-1)
+	controller.aim_at(controller.point_in_slice(terminal, _far()))
+	controller.commit()
+	await await_idle_frame()
+
+	assert_vector(camera.global_position).override_failure_message(
+			"a committed order left the camera where the player had panned it").is_equal(home)
+
+
+# The other half of the rule, and the reason the return hangs off `action_selected` rather than off
+# the menu closing: backing out with no order leaves the view exactly where the player put it.
+func test_dismissing_the_ring_leaves_the_camera_where_the_player_panned_it() -> void:
+	_paint_a_pannable_board()
+	var unit := _spawn(Vector2i(20, 10))
+	var camera: CameraController = game.camera_controller
+	camera.snap_to_position(GridUtils.cell_world(game.grid, Vector2i(36, 17)))
+	var away: Vector2 = camera.global_position
+	assert_bool(away.distance_to(GridUtils.cell_world(game.grid, unit.get_projected_destination())) > 1.0) \
+		.override_failure_message("the camera clamp parked the view on the unit anyway; the case proves nothing") \
+		.is_true()
+
+	var controller := await _open(unit)
+	controller.aim_at(controller.centre())   # the dead zone: a click here dismisses
+	_click(controller, MOUSE_BUTTON_LEFT)
+	await await_idle_frame()
+
+	assert_bool(is_instance_valid(controller) and not controller.is_queued_for_deletion()) \
+		.override_failure_message("the fixture did not actually dismiss the ring").is_false()
+	assert_vector(camera.global_position).override_failure_message(
+			"backing out of the ring yanked the camera to the unit anyway").is_equal(away)

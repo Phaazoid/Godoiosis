@@ -293,6 +293,12 @@ func test_pointing_snaps_the_hidden_camera_to_the_hovered_cell() -> void:
 	cam.snap_to_position(Vector2(-100000.0, -100000.0))
 	assert_bool(cam.global_position.distance_to(expected) > 1.0).is_true()
 
+	# The pointer must not ALREADY be on that cell, or _update_pointer early-returns and the snap
+	# under test never runs. That precondition used to arrive for free; since #471 the poll
+	# re-derives on CAMERA movement too, so framing the loaded mission lands the pointer wherever
+	# the previous case left the mouse — which is this very cell.
+	_scene._pointer_cell = BoardSpace.NO_CELL
+
 	_parse_motion(_screen_of(unit.movement.cell))
 	await _pump()
 	assert_that(cam.global_position).is_equal(expected)
@@ -314,6 +320,11 @@ func test_a_modal_freeze_stops_3d_clicks_cold() -> void:
 	await _pump()
 	assert_bool(ModalLock.any_open(get_tree())).is_true()
 	assert_bool(_game.can_process()).is_false()
+	# "Virgin" is now stated rather than inherited: since #471 the poll re-derives on CAMERA
+	# movement, so framing the loaded mission already put a cell under the cursor. Reset AFTER the
+	# freeze, which is exactly where the claim below starts — the poll stands down on a frozen game,
+	# so nothing but a pierced click can write this, and the clause keeps every bit of its teeth.
+	_scene._pointer_cell = BoardSpace.NO_CELL
 
 	_parse_click(_screen_of(unit.movement.cell))
 	await _pump()
@@ -437,6 +448,13 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	_scene._pointer_cell = Vector3i(0, 0, 0)   # stale pointer state aimed at Prolog
 	await _paint_move_markup()
 	_game.mission_controller.begin_mission(LEVEL_1)
+	# Asserted HERE, before the awaits: the clear is synchronous inside the load funnel, and since
+	# #471 the pointer poll re-derives on CAMERA movement — which framing the new board is — so a
+	# frame later the honest answer is a cell of the NEW board. Reading it after the awaits would
+	# pass on a re-pick even with the clear deleted, i.e. the clause would keep passing while losing
+	# its teeth. Nothing is weakened: delete the clear and this still reds.
+	assert_that(_scene._pointer_cell).override_failure_message(
+			"the board swap did not drop pointer state aimed at the old board").is_equal(BoardSpace.NO_CELL)
 	await await_idle_frame()   # the swap's clear_board queue_frees the old roster
 	await await_idle_frame()
 	var board: GridMap = _scene.get_node("Board")
@@ -453,7 +471,6 @@ func test_a_board_swap_rebuilds_the_mirror_through_the_load_funnel() -> void:
 	expected.sort()
 	assert_that(mirrored).is_equal(expected)   # the 3D board IS the new 2D board
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(board))
-	assert_that(_scene._pointer_cell).is_equal(BoardSpace.NO_CELL)
 	assert_int(_overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(0)
 
 
@@ -463,9 +480,12 @@ func test_spawn_sandbox_emits_the_same_rebuild() -> void:
 	_scene._pointer_cell = Vector3i(0, 0, 0)
 	await _paint_move_markup()
 	_game.spawn_sandbox()
+	# Before the awaits, and for the same reason as the case above: the clear is synchronous, and a
+	# frame later the #471 poll has legitimately re-derived a cell of the new board.
+	assert_that(_scene._pointer_cell).override_failure_message(
+			"the sandbox build did not drop pointer state aimed at the old board").is_equal(BoardSpace.NO_CELL)
 	await await_idle_frame()
 	await await_idle_frame()
-	assert_that(_scene._pointer_cell).is_equal(BoardSpace.NO_CELL)
 	assert_int(_overlays.marker_count(BoardOverlays.Layer.MOVE)).is_equal(0)
 	assert_that(_scene._tops).is_equal(BoardPicker.column_tops_from(_scene.get_node("Board")))
 
