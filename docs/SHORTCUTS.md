@@ -5,8 +5,8 @@ Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. 
 ## Gameplay (the flat 2D game)
 | Key | Action |
 |-----|--------|
-| Left-click | Select tile / unit; choose menu option; confirm targeting |
-| Right-click | Two verbs, mode first ([#228](https://github.com/Phaazoid/Godoiosis/issues/228)): cancel the current mode — an open aim, move pick or target pick — and dismiss the action menu. From a board already at rest it instead **undoes the last order you gave**, one press per order, newest first. A group move undoes whole (it was one decision); hold-position fillers are never what a press takes |
+| Left-click | Select tile / unit; commit the action ring's current slice; confirm targeting. On an open ring the whole screen is live — the slice you get is the DIRECTION from the ring's centre, however far away the pointer is — and a click in the dead centre dismisses |
+| Right-click | Two verbs, mode first ([#228](https://github.com/Phaazoid/Godoiosis/issues/228)): cancel the current mode — an open aim, move pick or target pick. On an open action ring it instead COLLAPSES one ring (#467), dismissing only once there is nothing left to back out of. From a board already at rest it instead **undoes the last order you gave**, one press per order, newest first. A group move undoes whole (it was one decision); hold-position fillers are never what a press takes |
 | W / A / S / D (or arrow keys) | Pan camera (`cam_up`/`cam_down`/`cam_left`/`cam_right`) |
 | Space | Center camera on cursor *(outside dev mode)* |
 

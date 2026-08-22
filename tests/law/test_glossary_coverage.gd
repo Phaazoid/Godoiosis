@@ -64,12 +64,34 @@ func test_every_element_state_is_bridged() -> void:
 			.is_not_empty()
 
 
+# Both tables, because since #467 a menu row is either a verb or one of the ring's CATEGORIES, and
+# the player hovers both. Asking only ACTION_DATA would be a law aimed at a table rather than at
+# the question it was written for.
 func test_every_menu_row_names_a_term() -> void:
 	for id: int in MainActionMenu.ACTION_DATA:
 		var entry: Dictionary = MainActionMenu.ACTION_DATA[id]
 		assert_bool(entry.has("term")) \
 			.override_failure_message("ACTION_DATA row '%s' has no glossary term — its menu row would have no hover text"
 				% entry["name"]) \
+			.is_true()
+	for group: int in MainActionMenu.CATEGORIES:
+		var category: Dictionary = MainActionMenu.CATEGORIES[group]
+		assert_bool(category.has("term")) \
+			.override_failure_message("ring category '%s' has no glossary term — its slice would have no hover text"
+				% category["name"]) \
+			.is_true()
+
+
+# Every verb has to be reachable, or it is declared and undrawable. The ring only draws categories,
+# so a verb whose group is missing from CATEGORIES is a row no player can ever see.
+func test_every_menu_verb_belongs_to_a_category_the_ring_draws() -> void:
+	for id: int in MainActionMenu.ACTION_DATA:
+		var entry: Dictionary = MainActionMenu.ACTION_DATA[id]
+		assert_bool(entry.has("group")) \
+			.override_failure_message("ACTION_DATA row '%s' names no ring category" % entry["name"]) \
+			.is_true()
+		assert_bool(MainActionMenu.CATEGORIES.has(entry["group"])) \
+			.override_failure_message("ACTION_DATA row '%s' names a category the ring has no slice for" % entry["name"]) \
 			.is_true()
 
 
