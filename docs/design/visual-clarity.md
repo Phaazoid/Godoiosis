@@ -604,6 +604,36 @@ could not remove it: **zero was never *off*, it was *no margin*.** Both are dele
   another name would pass. It also subsumes round 3's z-fight case, since the fight needed something
   coplanar with a cube's back face and nothing is drawn there any more.
 
+### Round 5 — a heal FILLS IN (2026-08-22)
+
+*"Currently, heals pop in all at once, I think they should fill in in reverse order that they are
+knocked out from attacks."* The order was already decided by round 3: the burst leaves **descending**,
+so the **lowest** socket of a run is the last one knocked out — and reversing that makes it the first
+one back. Ascending is also the order the grid fills, so a heal grows it exactly the way adding max
+HP would, with no second convention to keep in step. **A cube comes back the way it left, backwards.**
+
+- **One clock, N delays — not N tweens.** The pop's driven property was a 0→1 phase every rising cube
+  read, so they shared one clock *by construction*. It is elapsed **seconds** now, tweened to a span
+  that outlives the last cube's delay, and each socket subtracts its own. The ownership rule is
+  unchanged (a redraw writes the target, never the clock), and killing a half-finished march is still
+  one `kill()` rather than a hunt.
+- **`hp_pop_stagger` is its own knob, not the burst's.** Both answer *how long until the next one*,
+  but the burst's races a cube's whole **flight** while this one races a single **rise**, so the same
+  number does not mean the same thing on the two. Its default is deliberately larger than the burst's
+  for that reason: a stagger much smaller than the pop time leaves every cube mid-rise at once, which
+  is one blob however slow you make it — the shipped `block_pop_time` of 0.54 is what made the
+  simultaneous version so visible.
+- **A SCHEDULE can be read without racing the clock that plays it.** The burst's twin case asks which
+  *slot* launched first, because a slot IS its launch order; a healed cube never leaves its socket, so
+  there is no such handle. Chasing the depths instead would have let two idle frames decide how far a
+  tween had got. `pop_delay_of(index)` is public for exactly that, and it is the SAME derivation the
+  animation runs on, so what the test reads cannot drift from what plays.
+- **Declared consequence, not designed away:** staggering creates a state that did not exist before —
+  a cube *waiting its turn*. It is GREEN while it waits, because the material comes from the HP
+  numbers and was left alone. Holding it red would couple the colour seam to the animation seam and
+  soften `filled_block_count()`, round 3's non-collapsing answer to *which sockets are full*, in the
+  middle of a pop.
+
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 
 The volume above finally has a rule about what may occupy it, and it came from measuring rather
