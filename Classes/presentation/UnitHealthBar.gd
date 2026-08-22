@@ -82,15 +82,17 @@ const OUTLINE_COLOR := Color.BLACK
 # text by font_size would have meant a 4px font to hit the size the dev asked for, which renders to
 # mush; sizing by pixel_size keeps the atlas crisp and shrinks the quad.
 const FONT_RESOLUTION := 32
+# Which entry of the face list in _build_cube_mesh is +Y. Named because two places read it and a
+# bare 4 in either is a magic number nobody could check.
+const TOP_FACE := 4
 
 # The cube and its cage, built ONCE and shared by every block of every readout on the board. Static
 # because they are a pure function of knobs pushed identically to every readout -- a mesh and a
 # texture per unit would be N copies of one answer. Rebuilt only when those knobs change, which is a
 # knob drag, not a frame.
 static var _cube_mesh: ArrayMesh
-static var _debris_mesh: ArrayMesh
 static var _cage_texture: ImageTexture
-static var _cube_key := Vector3i(-1, -1, -1)
+static var _cube_key := Vector4i(-1, -1, -1, -1)
 
 var _plate: MeshInstance3D                       # what the cubes sit on and recess into
 var _blocks: Array[MeshInstance3D] = []          # one per point of MAX hp; pooled, hidden not freed
@@ -122,6 +124,7 @@ var _per_row := 10
 var _recess := 2.0
 var _recess_shrink := 0.7
 var _recess_shade := 0.55
+var _top_shade := 0.7
 var _outline_texels := 1.0
 var _fill_color := Color(0.15, 1.0, 0.2, 1.0)
 var _missing_color := Color(0.9, 0.05, 0.05, 1.0)
@@ -236,10 +239,12 @@ func set_pop(seconds: float, lift_texels: float) -> void:
 	_pop_lift = lift_texels
 
 
-# What a sunk cube looks like: how far it shrinks, and how far its colour is dimmed.
-func set_recess_style(shrink: float, shade: float) -> void:
-	_recess_shrink = shrink
-	_recess_shade = shade
+# What a cube looks like beyond its colour: how far a SUNK one shrinks and dims, and how far the
+# TOP face of any of them is darkened.
+func set_cube_style(recess_shrink: float, recess_shade: float, top_shade: float) -> void:
+	_recess_shrink = recess_shrink
+	_recess_shade = recess_shade
+	_top_shade = top_shade
 	_rebuild()
 
 
@@ -417,6 +422,16 @@ func doomed_block_count() -> int:
 	return count
 
 
+# Whether this socket is OCCUPIED, read off the material. The knob-independent twin of
+# block_is_proud, which asks the DEPTH question and cannot answer at all once the recess is dialled
+# to 0 — its two depths become one. Anything about which sockets are full wants this one.
+func block_is_filled(index: int) -> bool:
+	if index < 0 or index >= _blocks.size():
+		return false
+	var material := _blocks[index].material_override
+	return material == _mat_fill or material == _mat_doomed
+
+
 func block_is_proud(index: int) -> bool:
 	if index < 0 or index >= _blocks.size():
 		return false
@@ -429,6 +444,18 @@ func block_world_position(index: int) -> Vector3:
 	if index < 0 or index >= _blocks.size():
 		return global_position
 	return _blocks[index].global_position
+
+
+# A socket's depth in the readout's own space, and the plate's. Both local, so they can be compared
+# without the group's yaw entering into it.
+func block_depth(index: int) -> float:
+	if index < 0 or index >= _blocks.size():
+		return 0.0
+	return _blocks[index].position.z
+
+
+func plate_depth() -> float:
+	return _plate.position.z
 
 
 func block_size_texels() -> float:
@@ -533,7 +560,7 @@ func number_shown() -> bool:
 # ==============================================================================
 
 func _rebuild() -> void:
-	var signature: Array = [_block, _border, _per_row, _recess, _recess_shrink, _recess_shade,
+	var signature: Array = [_block, _border, _per_row, _recess, _recess_shrink, _recess_shade, _top_shade,
 			_outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color,
@@ -553,13 +580,18 @@ func _draw() -> void:
 	var stack := stack_size_texels()
 	var safe_max := maxi(1, _maximum)
 
-	_ensure_cube(int(block), int(maxf(roundf(_border), 0.0)), texel)
+	_ensure_cube(int(block), int(maxf(roundf(_border), 0.0)), texel, _top_shade)
 	_paint_materials()
 
 	# The plate the cubes sit on and sink into. Full bounding box of the grid, so a unit whose top
 	# row is partial still wears a rectangle rather than an L.
 	_size_quad(_plate, (stack.x + edge * 2.0) * texel, (stack.y + edge * 2.0) * texel, 0.0)
 	(_plate.material_override as StandardMaterial3D).albedo_color = OUTLINE_COLOR
+	# BEHIND the deepest face any cube can present, never at z 0 — the plate sat exactly on the back
+	# faces of the cubes at a recess of 0, and coplanar black against green is what the dev saw
+	# z-fighting from behind (2026-08-22). Derived from the cube depth so it cannot drift with the
+	# size knob.
+	_plate.position.z = _recessed_z() - (block * 0.5 + 1.0) * texel
 
 	while _blocks.size() < safe_max:
 		var cube := MeshInstance3D.new()
@@ -792,19 +824,13 @@ func _draw_downed_count(texel: float, left: float, icon: float, spacing: float, 
 # Rebuilt only when the knobs that shape it move. The KEY carries the world size too, because
 # texels_per_unit is itself a dial (#250) and a mesh built at the old density would be silently the
 # wrong size.
-static func _ensure_cube(block: int, border: int, texel: float) -> void:
-	var key := Vector3i(block, border, roundi(texel * 100000.0))
+static func _ensure_cube(block: int, border: int, texel: float, top_shade: float) -> void:
+	var key := Vector4i(block, border, roundi(texel * 100000.0), roundi(top_shade * 1000.0))
 	if _cube_mesh != null and _cube_key == key:
 		return
 	_cube_key = key
 	_cage_texture = _build_cage_texture(block, border)
-	# TWO meshes, and the split is the fix for "the tops blend in and look like another row" (dev,
-	# 2026-08-22). A grid cube shows its front face square-on and its top foreshortened, so a cage on
-	# the TOP reads as a squashed extra row of cells; every non-front face is solid instead. A DEBRIS
-	# cube tumbles through every orientation, so it keeps the cage on all six or a blank face would
-	# read as a hole punched in it.
-	_cube_mesh = _build_cube_mesh(float(block) * texel, false)
-	_debris_mesh = _build_cube_mesh(float(block) * texel, true)
+	_cube_mesh = _build_cube_mesh(float(block) * texel, top_shade)
 
 
 # Black frame, white centre. White takes the tint and black survives it, so this one image is the
@@ -822,7 +848,15 @@ static func _build_cage_texture(block: int, border: int) -> ImageTexture:
 # Six quads with their own full-range UVs, rather than a BoxMesh: BoxMesh lays its faces out across
 # one shared UV span, so a cage texture on it would stretch across the box instead of framing each
 # face. Built the way BoardOverlays builds its bracket -- an ArrayMesh from explicit arrays.
-static func _build_cube_mesh(size: float, cage_every_face: bool) -> ArrayMesh:
+#
+# EVERY face wears the cage, and the TOP is darkened by a vertex COLOUR instead (dev, 2026-08-22:
+# taking the cage off the other five left "a green mass with black painted on" -- the cage is what
+# makes a cube read as a cube, and only the top needed telling apart). With
+# vertex_color_use_as_albedo, albedo is `albedo_color x texture x vertex colour`, so the black frame
+# stays black at any shade (zero times anything) and only the coloured core dims. It is the one way
+# to get a per-face tint from ONE mesh and ONE material; a second surface would double the draw
+# calls on every cube of every grid.
+static func _build_cube_mesh(size: float, top_shade: float) -> ArrayMesh:
 	var h := size * 0.5
 	var faces: Array[Array] = [
 		[Vector3(-h, -h, h), Vector3(h, -h, h), Vector3(h, h, h), Vector3(-h, h, h)],       # +Z
@@ -835,22 +869,25 @@ static func _build_cube_mesh(size: float, cage_every_face: bool) -> ArrayMesh:
 	var corners: Array[Vector2] = [Vector2(0, 1), Vector2(1, 1), Vector2(1, 0), Vector2(0, 0)]
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
+	var colors := PackedColorArray()
 	var indices := PackedInt32Array()
+	var shade: float = maxf(top_shade, 0.0)
 	for f in faces.size():
 		var face: Array = faces[f]
 		var base := vertices.size()
-		# Face 0 is +Z, the one a grid cube presents square-on. Every other face of a grid cube samples
-		# the cage texture's CENTRE -- one white texel, so it tints to a flat solid and carries no
-		# frame to be mistaken for another row of cells.
-		var caged: bool = cage_every_face or f == 0
+		# Face 4 is +Y, the top -- the one that was reading as a squashed extra row of cells. It is the
+		# ONLY face that differs, and it differs by shade rather than by losing its frame.
+		var tint := Color(shade, shade, shade) if f == TOP_FACE else Color.WHITE
 		for c in 4:
 			vertices.append(face[c] as Vector3)
-			uvs.append(corners[c] if caged else Vector2(0.5, 0.5))
+			uvs.append(corners[c])
+			colors.append(tint)
 		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
 	arrays[Mesh.ARRAY_VERTEX] = vertices
 	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_COLOR] = colors
 	arrays[Mesh.ARRAY_INDEX] = indices
 	var mesh := ArrayMesh.new()
 	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
@@ -866,11 +903,6 @@ static func cage_texture() -> ImageTexture:
 
 static func cube_mesh() -> ArrayMesh:
 	return _cube_mesh
-
-
-# The tumbling variant, caged on every face. What the debris pool throws.
-static func debris_mesh() -> ArrayMesh:
-	return _debris_mesh
 
 
 # The shared cube's edge in WORLD units. Read off the key the mesh was BUILT from rather than off
@@ -890,6 +922,9 @@ static func _make_block_material() -> StandardMaterial3D:
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED   # winding-proof; a solid cube hides its own back faces anyway
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	# What lets the mesh darken the TOP face without a second material: albedo becomes
+	# `albedo_color x texture x vertex colour`, so the cage's black survives any shade.
+	material.vertex_color_use_as_albedo = true
 	# The half of "not affected by lighting" that IS reachable per-object. Unshaded already skips
 	# direct light; without these two the volumetric fog still washes the readout toward the fog
 	# albedo, which is exactly what the 2026-08-15 first pass looked like.

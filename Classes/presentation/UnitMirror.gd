@@ -88,12 +88,15 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var hp_blocks_per_row := 10
 # How deep a LOST cube sinks into the plate. The dent is a second cue beside the colour, which is
 # what makes the readout survive distance and the green/red confusion this palette invites.
-@export var hp_block_recess_texels := 2.0
+@export var hp_block_recess_texels := 0.0
 # Depth ALONE did not read as a dent (dev, 2026-08-22) — head-on, a cube pushed back is still a
 # same-sized square, because there is no socket wall to see. Shrinking it shows plate around its
 # edges, and dimming it puts it in shadow; together they are what the dent was supposed to be.
 @export var hp_block_recess_shrink := 0.7
 @export var hp_block_recess_shade := 0.55
+# How far the TOP face of every cube is darkened. The one thing that tells the top apart from the
+# front; taking the black cage off it instead left "a green mass with black painted on" (dev).
+@export var hp_block_top_shade := 0.7
 # Whether the grid turns to face the camera. OFF by default (dev: "The health bars are 3D, they
 # should not billboard towards the camera") — held in place it sits on the board's own axes like the
 # voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
@@ -476,7 +479,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
-	bar.set_recess_style(hp_block_recess_shrink, hp_block_recess_shade)
+	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
 	bar.set_pop(block_pop_time, hp_pop_lift_texels)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
@@ -557,7 +560,8 @@ func _on_unit_died(_unit: Unit, id: int) -> void:
 	var standing := bar.filled_block_count()
 	var positions: Array[Vector3] = []
 	var colors := PackedColorArray()
-	for index in bar.block_count():
+	for step in bar.block_count():
+		var index := bar.block_count() - 1 - step   # see _burst_lost: the march starts at the top right
 		positions.append(bar.block_world_position(index))
 		colors.append(bar_fill_color if index < standing else bar_missing_color)
 	_throw(bar, positions, colors, block_death_power)
@@ -569,7 +573,11 @@ func _on_unit_died(_unit: Unit, id: int) -> void:
 func _burst_lost(bar: UnitHealthBar, from: int, to: int, power: float) -> void:
 	var positions: Array[Vector3] = []
 	var colors := PackedColorArray()
-	for index in range(maxi(to, 0), from):
+	# DESCENDING, because the stagger launches in array order and the march starts at the TOP RIGHT
+	# (dev, 2026-08-22: "the top right is the start of the healthbar... when we hit the second row,
+	# right side again"). The grid fills bottom-up and left-to-right, so walking the sockets backwards
+	# IS that order — top row right-to-left, then the row below. No second rule to keep in step.
+	for index in range(from - 1, maxi(to, 0) - 1, -1):
 		positions.append(bar.block_world_position(index))
 		colors.append(bar_fill_color)
 	_throw(bar, positions, colors, power)

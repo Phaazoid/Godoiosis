@@ -45,6 +45,9 @@ var _velocity: Array[Vector3] = []
 var _spin: Array[Vector3] = []
 var _age: Array[float] = []
 var _delay: Array[float] = []   # how long this cube sits in its socket before it launches
+# Where each cube STARTED, kept so a test can ask which socket the first cube out came from -- the
+# march order is otherwise unobservable once everything has moved.
+var _origin: Array[Vector3] = []
 var _bounced: Array[bool] = []
 var _live: Array[bool] = []
 
@@ -55,7 +58,7 @@ var _live: Array[bool] = []
 # for the detonation a death gets.
 func burst(positions: Array[Vector3], colors: PackedColorArray, facing: Basis,
 		power := 1.0, stagger := 0.0) -> void:
-	var mesh := UnitHealthBar.debris_mesh()
+	var mesh := UnitHealthBar.cube_mesh()
 	if mesh == null:
 		return   # nothing has drawn a readout yet, so there is no cube shape to throw
 	for i in positions.size():
@@ -78,6 +81,7 @@ func burst(positions: Array[Vector3], colors: PackedColorArray, facing: Basis,
 		_spin[slot] = Vector3(sin(angle * 1.7), cos(angle * 1.3), sin(angle * 2.1)) * spin_speed
 		_age[slot] = 0.0
 		_delay[slot] = float(i) * maxf(stagger, 0.0)
+		_origin[slot] = positions[i]
 		_bounced[slot] = false
 		_live[slot] = true
 
@@ -93,6 +97,14 @@ func live_count() -> int:
 
 func has_bounced(slot: int) -> bool:
 	return slot >= 0 and slot < _bounced.size() and _bounced[slot]
+
+
+# Where the cube in this slot started. Slots are filled in launch order, so slot 0 is the first cube
+# out and its origin is the socket the march begins at.
+func origin_of(slot: int) -> Vector3:
+	if slot < 0 or slot >= _origin.size():
+		return Vector3.ZERO
+	return _origin[slot]
 
 
 # How many cubes have actually LAUNCHED, as against how many are still waiting their turn in the
@@ -173,6 +185,7 @@ func _take_slot() -> int:
 	_spin.append(Vector3.ZERO)
 	_age.append(0.0)
 	_delay.append(0.0)
+	_origin.append(Vector3.ZERO)
 	_bounced.append(false)
 	_live.append(false)
 	return _pool.size() - 1
@@ -200,6 +213,7 @@ func _make_material() -> StandardMaterial3D:
 	material.billboard_mode = BaseMaterial3D.BILLBOARD_DISABLED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	material.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
+	material.vertex_color_use_as_albedo = true   # the mesh darkens the top face; see UnitHealthBar
 	material.disable_fog = true
 	material.disable_ambient_light = true
 	material.disable_receive_shadows = true

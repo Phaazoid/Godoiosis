@@ -183,6 +183,28 @@ func test_a_multi_cube_burst_marches_out_rather_than_leaving_all_at_once() -> vo
 			).is_greater(0)
 
 
+func test_the_march_starts_at_the_LAST_socket_not_the_first() -> void:
+	# Dev, 2026-08-22: "the cubes stagger from the wrong side, inner to outer. The top right is the
+	# start of the healthbar, that's where they should start bursting from. When we hit the second
+	# row, right side again." The grid fills bottom-up and left-to-right, so the highest socket index
+	# IS the top right — walking the lost run backwards gives top row right-to-left then the row
+	# below, with no second rule to keep in step.
+	_unit_mirror.block_burst_stagger = 5.0   # fixture: nothing else can launch and confuse the read
+	var unit := await _watched()
+	var bar := _unit_mirror.bar_for(unit)
+	var highest := unit.get_current_hp() - 1        # the last standing socket, before the hit
+	var top_right := bar.block_world_position(highest)
+
+	unit.take_damage(3)
+	await _settle()
+
+	# Slots fill in launch order, so slot 0 is the first cube out.
+	var debris := _unit_mirror.debris()
+	assert_vector(debris.origin_of(0)).override_failure_message(
+			"the first cube out did not come from the last socket — the march runs inner-to-outer"
+			).is_equal_approx(top_right, Vector3.ONE * 0.001)
+
+
 func test_the_heal_pop_travels_even_with_the_dent_dialled_to_zero() -> void:
 	# The round-1 bug, as a property. The pop borrowed the RECESS as its travel distance, so with the
 	# dent at 0 it had none — the dev saw an instant pop whatever he set the time to. The pop now has
@@ -238,10 +260,12 @@ func test_the_cubes_that_leave_come_off_the_top_of_the_grid() -> void:
 	unit.take_damage(2)
 	await _settle()
 
-	assert_bool(bar.block_is_proud(0)).override_failure_message(
+	# block_is_FILLED, not block_is_proud: this case is about WHICH sockets emptied, and the depth
+	# reading cannot answer that once the recess is dialled to 0 — which is now the default.
+	assert_bool(bar.block_is_filled(0)).override_failure_message(
 			"the bottom of the grid emptied first").is_true()
-	assert_bool(bar.block_is_proud(unit.get_max_hp() - 1)).override_failure_message(
-			"the last socket is still standing, so the grid did not drain from the top").is_false()
+	assert_bool(bar.block_is_filled(unit.get_max_hp() - 1)).override_failure_message(
+			"the last socket is still filled, so the grid did not drain from the top").is_false()
 	# And the top row really is above the bottom one, or "drains from the top" means nothing.
 	assert_float(bar.block_world_position(per_row).y).override_failure_message(
 			"the rows are not stacked, so there is no top for cubes to come off"

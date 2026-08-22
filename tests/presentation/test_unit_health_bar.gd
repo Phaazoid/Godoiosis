@@ -253,23 +253,46 @@ func test_the_knob_puts_the_grid_back_on_the_camera_view_plane() -> void:
 			"the readout is not aligned to the camera view plane").is_equal_approx(wanted, 0.001)
 
 
-func test_only_a_grid_cubes_FRONT_face_wears_the_cage() -> void:
-	# Dev, 2026-08-22: "The top of the cubes blend in a little too easily, and look like another row.
-	# Tops should be all one solid color." A cage on the top face renders as a squashed row of cells,
-	# so every non-front face of a GRID cube collapses its UVs onto one texel and tints flat. The
-	# DEBRIS cube keeps all six, because it tumbles and a blank face would read as a hole in it.
+func test_every_face_wears_the_cage_and_only_the_top_is_shaded() -> void:
+	# Round 2 took the cage OFF every non-front face to stop the tops reading as an extra row, and
+	# that overshot: "now they don't look like cubes at all, just a green mass with black painted on"
+	# (dev, 2026-08-22). The cage is what makes a cube read as a cube, so it is back on all six, and
+	# the top is told apart by a darker vertex colour instead — which the black frame survives,
+	# because black times any shade is still black.
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
 	_point_at(unit.movement.cell)
-	await _settle()   # a readout has to have drawn before the shared meshes exist
+	await _settle()   # a readout has to have drawn before the shared mesh exists
 
-	var grid: ArrayMesh = UnitHealthBar.cube_mesh()
-	var debris: ArrayMesh = UnitHealthBar.debris_mesh()
-	assert_object(grid).override_failure_message("no grid cube mesh was built").is_not_null()
-	assert_object(debris).override_failure_message("no debris cube mesh was built").is_not_null()
-	assert_int(_flat_faces(grid)).override_failure_message(
-			"a grid cube still wears the cage somewhere other than its front face").is_equal(5)
-	assert_int(_flat_faces(debris)).override_failure_message(
-			"the debris cube lost its cage, so a tumbling cube shows blank faces").is_equal(0)
+	var cube: ArrayMesh = UnitHealthBar.cube_mesh()
+	assert_object(cube).override_failure_message("no cube mesh was built").is_not_null()
+	assert_int(_flat_faces(cube)).override_failure_message(
+			"a face lost its cage — the grid reads as one mass rather than as separate bricks"
+			).is_equal(0)
+
+	var colors: PackedColorArray = cube.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_int(colors.size()).override_failure_message(
+			"the cube carries no vertex colours, so nothing can shade one face").is_equal(24)
+	assert_float(colors[UnitHealthBar.TOP_FACE * 4].r).override_failure_message(
+			"the top face is not darker than the front, so the two still read as one surface"
+			).is_less(colors[0].r)
+
+
+func test_the_plate_sits_behind_the_deepest_face_a_cube_can_present() -> void:
+	# The backs z-fought "like crazy, between the black and green" (dev, 2026-08-22): the plate sat at
+	# depth 0 and, at a recess of 0, a cube's own BACK face is exactly there too. Coplanar opaque
+	# surfaces have no defined order, so this is a RELATIONSHIP — the plate must clear the deepest
+	# face any cube can present — rather than a value some knob could move.
+	_unit_mirror.hp_block_recess_texels = 0.0   # the configuration that made them coplanar
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var back_face: float = bar.block_depth(0) - bar.block_size_texels() * 0.5 * texel
+	assert_float(bar.plate_depth()).override_failure_message(
+			"the plate is level with or in front of a cube's back face — from behind, the two fight"
+			).is_less(back_face)
 
 
 # How many of a cube's six faces collapse all four UVs onto one point — i.e. sample a single texel,

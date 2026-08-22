@@ -235,7 +235,7 @@ func test_a_queued_heal_draws_its_span_above_the_current_health() -> void:
 	# produce, and those cubes are still sunk in the plate because the heal has not happened yet.
 	assert_int(_grid_predicts(bar, true)).is_equal(_predicted(patient))
 	assert_int(bar.doomed_block_count()).is_greater(0)
-	assert_bool(bar.block_is_proud(patient.get_current_hp())).override_failure_message(
+	assert_bool(bar.block_is_filled(patient.get_current_hp())).override_failure_message(
 			"the first cube the heal would restore is already standing, so the readout is claiming "
 			+ "health the unit does not have yet").is_false()
 	assert_bool(bar.alarm_running()).override_failure_message(
