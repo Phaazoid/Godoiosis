@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #467 (2026-08-22).**
+**Canon checked through #475 (2026-08-22).**
 
 ## Principles
 
@@ -174,8 +174,9 @@ The rulings, all dev calls, all made before building:
   bars that OVERLAP is named as still-open in its section below.
 - **A bar AND a number**, world-scaled like the icons beside it rather than screen-constant: it
   belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
-- **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
-  A bar that also changes hue as it shortens says the same thing twice.
+- **Two flat colours, never a ramp.** Fill is what the unit HAS, red is what it has lost. A bar that
+  also changes hue as it shortens says the same thing twice. *(The rule survived #314 whole; only its
+  spelling moved — red was a BACKING showing through the bar, and is a shrunken red cube now.)*
 - **It stacks UNDER the selection icons.** Crown/squadmate on top, health tucked beneath. (The
   target reticle was in that list until #346 retired it to the ground channel — see below.)
 
@@ -198,10 +199,13 @@ Three findings that generalise past this ticket:
 
 **The flat view has no counterpart and that is a real gap, not a design** — filed to
 [#292](https://github.com/Phaazoid/Godoiosis/issues/292); #313 below inherits that gap rather than
-widening it, and its 3D-only scope is declared there. Successor still open:
-[#314](https://github.com/Phaazoid/Godoiosis/issues/314) (Fire Emblem-style tick blocks that
-explosively fall away). [#188](https://github.com/Phaazoid/Godoiosis/issues/188) wants damage
-numbers in the same volume and should share whatever seam #313 settled.
+widening it, and its 3D-only scope is declared there. **Successor BUILT:
+[#314](https://github.com/Phaazoid/Godoiosis/issues/314) replaced the bar with a grid of cubes — see
+its own section below; everything above about placement, the one-billboard rule, the unlit materials
+and measuring the art still holds, and only the GAUGE itself changed.**
+[#188](https://github.com/Phaazoid/Godoiosis/issues/188) wants damage numbers in the same volume;
+#314 measured that it does NOT need the shared damage event #229's ticket assumed — the mirror diffs
+HP it already reads — so #188 is free to build sprite-level feedback on its own terms.
 
 ## The same bar shows the FUTURE ([#313](https://github.com/Phaazoid/Godoiosis/issues/313), BUILT 2026-08-16)
 
@@ -210,10 +214,16 @@ Law #2 says the queue never lies and Law #1 says there is no randomness, so a qu
 unit it changes wears a readout with a **notch** at the predicted HP and the span between there and
 now filled in. **Presentation only.** It computes no damage; if it ever needs to, that is the bug.
 
+*(The NOTCH was deleted by #314 below. Everything else in this section — who wears one, what the
+alarm means, the hypo-not-`target_hp_after` rule — is unchanged; with one cube per point of HP,
+colouring the exact cubes the plan takes says where it lands more precisely than a mark beside them,
+so the notch became a second statement of one fact.)*
+
 The rulings, all dev calls, all made before building:
 
 - **A notch on ONE bar**, not a ghost twin beside it. Current and predicted are one fact about one
   unit, and a second bar over everybody the plan touches is exactly the crowding #229 deferred.
+  *(The one-readout half is what survived #314; the notch itself did not.)*
 - **Anyone the plan CHANGES** — which reaches enemies your own attack will hit, allies caught in
   splash, and anyone a derived counter strikes, which is most of the value; and it reaches nobody
   the plan leaves alone, with no second rule to maintain. *(Spelled "predicted HP differs from
@@ -281,7 +291,9 @@ arriving as a default rather than a toggle, inheriting its unanswered crowding p
   cannot go false as execution applies the very damage it predicted. No latch, no new owner, no
   "the pass is over" event to fire.
 - **Only the FILL tracks the board.** A bar now drains down to its notch as the hit lands, instead of
-  vanishing at impact. Membership, notch, span and alarm are all the plan's.
+  vanishing at impact. Membership, notch, span and alarm are all the plan's. *(Since #314 the fill is
+  a count of standing cubes and the notch is gone; the split it names is unchanged — what the unit
+  HAS tracks the board, everything the prediction says belongs to the plan.)*
 - **Nothing new dismisses them**, because `OrderExecutor._end_squad_turn` already did: it is the one
   terminal state of a pass and it always empties the queue, which nulls `active_squad` and takes the
   previewed plan with it. That covers the AI concede (same call) and a mission ending mid-pass
@@ -397,11 +409,230 @@ read as erased). It could not show while at most one bar was up; at always-on it
 `bar_width_texels` 26 ÷ 16 px-per-cell = **1.63 cells wide**, so two units on *adjacent* cells
 overlap before any camera pitch is considered. The fix, when the dev's eye says it is needed, is to
 collapse the quads into one mesh at one priority (vertex colours) so bars sort by depth against each
-other. Deliberately not built: this ticket is the toggle, and whether the crowding actually reads
+other. **#314 did most of that for a different reason and the note is now PART-STALE: the gauge is a
+grid of opaque cubes, which write depth and therefore sort against each other by distance the way
+solid objects should — the coplanar-quad ladder they used to need is gone. What still rides
+`render_priority` is the two labels in front, so a far readout's DIGITS can still draw over a near
+one's cubes; the cubes themselves cannot. (Round 4 deleted the backing quad, which was the last
+thing on that ladder besides the text.) The width figure above is also
+superseded — the grid is 41 texels ÷ 32 px-per-cell = 1.28 cells at 20 max HP, and it scales with the
+unit's max HP rather than being fixed.** Deliberately not built: that ticket was the toggle, and
+whether the crowding actually reads
 badly is a question only play answers.
 
 **3D only, inherited** — the flat view still has no health readout of any kind to toggle, which is
 #229's gap under [#292](https://github.com/Phaazoid/Godoiosis/issues/292) and not a new one.
+
+## Health is a grid of CUBES that fall away ([#314](https://github.com/Phaazoid/Godoiosis/issues/314), BUILT 2026-08-22)
+
+Dev idea from #229's own feel-check: *"In fire emblem, health bars are denoted by a green bar with
+individual ticks in it per unit of health, that visually drain. That would be cool to do with 3D
+blocks, that visually fall away, explosively."* This replaces #229's bar outright — one cube per
+point of HP, and losing HP knocks the cubes that were standing out of the grid.
+
+**Why counting beats estimating HERE.** A continuous bar communicates *roughly how hurt*, which is
+the right readout for a game where the next hit's damage is a distribution. Law #1 says there is no
+randomness and Law #2 says the queue never lies, so this game's player wants *exactly how many
+points stand between this unit and the next rung* — and a cube per point answers that at a glance.
+It is the readout the ruleset actually earns.
+
+The rulings, all dev calls, all made in a grill session before building:
+
+- **A cube is 5 texels INCLUDING a 1-texel black cage, ten to a row.** Ten is what makes it a glance
+  rather than a count — one full row plus four reads as 14 without counting. Rows grow upward, the
+  BOTTOM row fills first, so losses show along the top where a cube has clearance to leave.
+- **The cage is where the 3D read comes from, not lighting.** Dev's words: *"each edge of the cube
+  should be black, corner to corner. I'm thinking little green squares, with black outlines."* It is
+  a generated texture — black frame, white centre — on all six faces, tinted per role through
+  `albedo_color`, which is #325's ring-outline trick reused: black survives the tint and white takes
+  it, so one texture serves green, red and amber alike. **Lighting was ruled out rather than
+  forgotten**: #229 already established this display must be fog- and light-immune, so a lit gauge
+  would change with the time-of-day preset and wash exactly as its first pass did.
+- **A lost cube is RECESSED and RED, not gone.** Every socket keeps a cube, so max HP stays readable
+  from the grid's shape, and the dent is a second cue beside the colour — which is what makes the
+  readout survive distance, peripheral vision, and the green-against-red pair. *(Rounds 3–4 moved the
+  dent from depth to SHRINK — see below — and the "full rectangle" half was always the backing quad's
+  doing rather than the grid's: a max HP that does not fill its last row is an L now.)*
+- **#313's notch is DELETED.** Colouring the exact cubes the plan will take says where it lands more
+  precisely than a mark beside them, so keeping both would state one fact twice (Law #4).
+- **Losing HP pops the cubes out, tumbling, with ONE bounce off the board.** Scatter is derived from
+  the cube's index, never `randf()` — Law #1 is about gameplay so a random sparkle would not break
+  it, but a deterministic fan costs nothing, keeps RNG out of presentation entirely, and lets a test
+  assert where a cube went.
+- **A heal RAISES cubes out of their dents rather than flying them in.** The socket is a restored
+  cube's natural origin; an arriving cube would need an invented one.
+- **A death detonates the whole remaining grid**, harder than an ordinary hit. *Going DOWN needs no
+  special case* — `_go_downed` parks the unit at exactly 1 HP, so the ordinary diff bursts everything
+  above 1 for free.
+- **No readout, no burst.** Cubes are pieces of a thing you can see. Damage taken with nothing on
+  screen is #188's gap, and it wants a shake on the SPRITE, which is visible either way.
+- **The HP digits survive.** The cubes are the glance read and the digits the exact one — different
+  speeds of reading, not a duplicate. It also keeps #322's rescue clock anchored to the size
+  reference it takes from them.
+
+Four things that generalise past this ticket:
+
+1. **A TICKET'S OWN PREMISES ARE STALE-ABLE, and three of #314's were.** It asked for a shared damage
+   EVENT with #188 — `UnitInstance.hp_changed` already existed, and the readout is told HP every
+   frame anyway, so the mirror diffs what it already reads and no seam was built. It claimed the flat
+   view's answer was in scope — the flat view has no over-unit health readout at all, which this doc
+   had already declared. And it implied the falling cubes might not be seen — measured false: the
+   plan a readout rides is live for the whole resolution pass on player *and* AI passes, so a unit
+   taking a hit already wears one at default settings.
+2. **A BASELINE THAT ONLY ADVANCES WHILE A DISPLAY IS UP GOES STALE.** `UnitMirror` tracks every
+   unit's HP every frame, *before* the visibility gate — because a baseline refreshed only while a
+   readout was up would read the entire hidden loss as damage taken this frame the moment the readout
+   reappeared. The general form: **when a diff drives an effect that is gated, the diff and the gate
+   are two different questions and must be evaluated in that order.**
+3. **A POLL CANNOT SEE A DEATH.** `die()` emits and `queue_free()`s in the same frame and `reconcile`
+   skips a unit already queued for deletion, so the mirror never observes HP at 0; and noticing the
+   unit VANISH instead would fire on `clear_board`, which frees without dying. `unit_died` is
+   therefore the one signal this deliberately poll-based node listens to, and the exception is
+   structural rather than a preference.
+4. **A TEST'S PRECONDITION THAT IS NEVER ESTABLISHED IS NOT A PRECONDITION.** The baseline case
+   (2 above) originally never let the readout be up *before* the damage, so `_last_hp` was never
+   seeded and the `.get(id, current)` default silently stood in for it — the case passed against a
+   mutant that froze the baseline behind the gate. Found by falsification, fixed by hovering first.
+   The mutant that PASSES is the finding.
+
+**3D only, inherited** — the flat view still has no health readout of any kind, which is #229's gap
+under [#292](https://github.com/Phaazoid/Godoiosis/issues/292) and not a new one.
+
+**Spun off:** per-attack burst character — a heavy blow scattering wide, a pierce punching through —
+filed as [#469](https://github.com/Phaazoid/Godoiosis/issues/469), raised by the dev during the grill and deliberately out of scope here.
+
+### Round 2 — the playtest (2026-08-22)
+
+The dev played it and sent eight things. **Two were bugs I shipped, and both are worth keeping for
+their shape rather than their fix.**
+
+1. **The HP digits were invisible, and no knob could have rescued them.** The label was placed at the
+   cube's CENTRE depth; a cube spans zero to a full block toward the camera, and the cubes are opaque
+   and write depth — so the text sat *inside* a solid and was depth-rejected. **The general form: the
+   moment a flat display gains DEPTH, every "just in front of it" offset in it becomes wrong, because
+   the thing it was measured against stopped being a plane.** Pinned now as a relationship (the label
+   clears the front face), not a value.
+2. **The heal pop could not animate, because it borrowed the RECESS as its travel distance.** Two
+   texels is a couple of screen pixels, and at a recess of 0 — a legal setting the dev was actively
+   considering — the animation had exactly zero distance to cover, so it read as instant however long
+   the time knob said. **An animation's amplitude must never be a knob that may legitimately be zero.**
+   It has its own `hp_pop_lift_texels` now.
+
+The six feel calls, each a dev ruling:
+
+- **A killing hit throws the RED cubes too** — *"On a killing hit, even the red blocks should fly
+  away."* So `burst` takes a colour per cube: one sweep, the standing ones leaving green and the lost
+  ones red, rather than two bursts that would each restart the stagger.
+- **A multi-cube burst MARCHES** — *"march through the bricks that blast out, from start to finish."*
+  Each cube waits its turn, and a waiting cube **sits in its socket rather than hiding**, so the grid
+  breaks apart in sequence with no gap running ahead of the cubes.
+- ~~**Only the FRONT face wears the cage**~~ — **REVERSED BY ROUND 3, and the reversal is the more
+  useful entry; see below.** The complaint was *"The top of the cubes blend in a little too easily,
+  and look like another row. Tops should be all one solid color."* Taking the cage off five faces
+  answered a bigger question than the one asked, and cost the cubes their read entirely.
+- **The grid is HELD IN PLACE by default** — *"The health bars are 3D, they should not billboard
+  towards the camera."* It sits on the board's own axes like the voxel props; a knob restores facing.
+  The cost is declared rather than fixed: orbit past one and it goes edge-on to a line, which is what
+  keeping it in place *means*.
+- **The recess needed a second pass, and the reason generalises.** *"The recessed red doesn't
+  actually look too great, it looks somewhat different than the image you built for me."* He was
+  right and the diagram was the thing at fault: it drew a socket with a dark inner rim, which the
+  geometry cannot produce — a cube pushed back is still a same-sized square head-on, because there is
+  **no socket wall to see**. It now SHRINKS and DARKENS as well, so a lost cube pulls away from its
+  neighbours' cages. **A mock-up can promise a read the geometry has no way to deliver; when the
+  in-game version differs from the picture, suspect the picture.** *(Round 3 then took the depth out
+  of the default entirely — it and holding the grid still are incompatible.)*
+- **Spun off rather than chosen:** [#474](https://github.com/Phaazoid/Godoiosis/issues/474), three
+  heal animations to try — the priest *shooting* the cubes in, cubes falling from the sky, cubes
+  sprouting from the ground. The interim pop stays as the fallback. Its blocking design question is
+  the same one #469 has: an arriving cube needs a SOURCE, and the readout deliberately knows only
+  that HP moved.
+
+### Round 3 — the cage comes back (2026-08-22)
+
+*"We were only supposed to differentiate the tops of the cube from the rest of the bar — now they
+don't look like cubes at all, just a green mass with black painted on."* He was describing round 2's
+own fix, and the finding is about the SCOPE of a fix rather than about cubes:
+
+**A fix scoped to ONE element is not made stronger by applying it to the whole class the element
+belongs to — it becomes a different fix.** The ask was *tell the top apart from the front*; what
+shipped was *take the cage off everything that is not the front*, which also removed the thing the
+cage was for. The tell was available before the build: the complaint named the top and the fix named
+five faces.
+
+- **The cage is back on all six faces; the TOP is darkened instead** (his own suggestion). Per-face
+  **vertex colours** carry it — with `vertex_color_use_as_albedo`, albedo is
+  `albedo_color × texture × vertex colour`, so the black frame survives any shade (zero times
+  anything is zero) and only the coloured core dims. One mesh and one material still; a second
+  surface with its own material would double the draw calls on every cube of every grid. This also
+  collapsed the grid and debris meshes back into one, which is what round 2's fork had split.
+- **Not billboarding WINS over depth.** *"I think pushing them back and having the thing not
+  billboard are incompatible, and having it not billboard is more important to me. I do like the
+  slightly shrunken effect, though."* So the recess depth defaults to 0 and the shrink carries the
+  empty socket alone. The knob stays — *"I'll have to play around with it"* — it just starts out of
+  the way.
+- **An accessor that collapses at a legal knob value is not one a test can lean on.** `block_is_proud`
+  reads DEPTH, so at a recess of 0 it answers true for every socket. Anything asking *which sockets
+  are full* reads the material now.
+- **The march starts at the TOP RIGHT** — *"The top right is the start of the healthbar… when we hit
+  the second row, right side again."* Since the grid fills bottom-up and left-to-right, that is the
+  burst order simply REVERSED, with no second rule to keep in step.
+
+### Round 4 — there is no background (2026-08-22)
+
+*"This is a 3D display, we don't need one at all, and my option slider can't get rid of it. It's just
+a weird black rectangle floating in space."*
+
+**The backing quad was a VESTIGE of the 2D bar, and its knob had stopped meaning what it said.**
+`bar_outline_texels` was the flat bar's black border — a quad drawn slightly larger than it — and
+#314 kept the quad, renamed it the plate, and gave it a second job (something for a lost cube to sink
+into). At an outline of 0 that leaves the grid's exact bounding box in black, which is why the slider
+could not remove it: **zero was never *off*, it was *no margin*.** Both are deleted.
+
+- **A knob that survives the thing it names will be read as still meaning it.** The dev spent a round
+  dragging a slider whose whole range was margin, on a rectangle he wanted gone. The general form:
+  when a feature absorbs an older one's node, its knob needs re-justifying or retiring — inheriting
+  it silently is how a dial ends up unable to say the thing its name promises.
+- **The L is the honest shape.** Max HP is base ± the CON band, so 18 and 22 are real, and at ten per
+  row that leaves a partial top row. The backing painted black behind the sockets that do not exist,
+  which read as *lost* HP rather than as *absent* — a small lie, since lost HP is red. The grid now
+  shows exactly the sockets a unit has.
+- **The state-icon row measures off the GRID now**, not the deleted quad's edge — at the shipped
+  outline of 0 those were the same place, which is why nothing moved.
+- **The law pins the ABSENCE as a relationship** — no quad the readout draws sits behind the cubes'
+  front plane — rather than as *there is no node called the plate*, which the next backing under
+  another name would pass. It also subsumes round 3's z-fight case, since the fight needed something
+  coplanar with a cube's back face and nothing is drawn there any more.
+
+### Round 5 — a heal FILLS IN (2026-08-22)
+
+*"Currently, heals pop in all at once, I think they should fill in in reverse order that they are
+knocked out from attacks."* The order was already decided by round 3: the burst leaves **descending**,
+so the **lowest** socket of a run is the last one knocked out — and reversing that makes it the first
+one back. Ascending is also the order the grid fills, so a heal grows it exactly the way adding max
+HP would, with no second convention to keep in step. **A cube comes back the way it left, backwards.**
+
+- **One clock, N delays — not N tweens.** The pop's driven property was a 0→1 phase every rising cube
+  read, so they shared one clock *by construction*. It is elapsed **seconds** now, tweened to a span
+  that outlives the last cube's delay, and each socket subtracts its own. The ownership rule is
+  unchanged (a redraw writes the target, never the clock), and killing a half-finished march is still
+  one `kill()` rather than a hunt.
+- **`hp_pop_stagger` is its own knob, not the burst's.** Both answer *how long until the next one*,
+  but the burst's races a cube's whole **flight** while this one races a single **rise**, so the same
+  number does not mean the same thing on the two. Its default is deliberately larger than the burst's
+  for that reason: a stagger much smaller than the pop time leaves every cube mid-rise at once, which
+  is one blob however slow you make it — the shipped `block_pop_time` of 0.54 is what made the
+  simultaneous version so visible.
+- **A SCHEDULE can be read without racing the clock that plays it.** The burst's twin case asks which
+  *slot* launched first, because a slot IS its launch order; a healed cube never leaves its socket, so
+  there is no such handle. Chasing the depths instead would have let two idle frames decide how far a
+  tween had got. `pop_delay_of(index)` is public for exactly that, and it is the SAME derivation the
+  animation runs on, so what the test reads cannot drift from what plays.
+- **Declared consequence, not designed away:** staggering creates a state that did not exist before —
+  a cube *waiting its turn*. It is GREEN while it waits, because the material comes from the HP
+  numbers and was left alone. Holding it red would couple the colour seam to the animation seam and
+  soften `filled_block_count()`, round 3's non-collapsing answer to *which sockets are full*, in the
+  middle of a pop.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 

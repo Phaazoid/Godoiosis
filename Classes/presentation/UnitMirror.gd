@@ -74,19 +74,43 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # value against another, which the tuning razor forbids, so if the crown moves this moves by hand.
 # (It is the head channel's only tenant since #325's verdict -- TARGET went to the ground with #346,
 # squad membership followed it as a ring.)
-@export var hud_lift := 0.06
-@export var bar_width_texels := 26.0
-@export var bar_height_texels := 5.0
-@export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
+@export var hud_lift := 0.24
+# --- The health grid (#314) -------------------------------------------------------------
+# One cube per point of HP. A cube is this many texels INCLUDING its black cage, and cubes are
+# pitched (block - border) apart so neighbours share that cage -- at 5/1 that is a 3-texel coloured
+# core in a 1-texel frame, which is the smallest that still reads as a bordered square.
+#
+# TEN to a row is the whole reason the readout is countable: one full row plus four reads as 14
+# without counting. Rows grow upward and the BOTTOM row fills first, so losses show along the top
+# where a knocked-off cube has clearance to leave.
+@export var hp_block_texels := 4.0
+@export var hp_block_border_texels := 1.0
+@export var hp_blocks_per_row := 10
+# How far back a LOST cube sits. The dent is a second cue beside the colour, which is what makes the
+# readout survive distance and the green/red confusion this palette invites.
+@export var hp_block_recess_texels := 0.0
+# Depth ALONE did not read as a dent (dev, 2026-08-22) — head-on, a cube pushed back is still a
+# same-sized square, because there is no socket wall to see. Shrinking it pulls it away from its
+# neighbours' cages, and dimming it puts it in shadow; together they are the dent.
+@export var hp_block_recess_shrink := 0.65
+@export var hp_block_recess_shade := 0.55
+# How far the TOP face of every cube is darkened. The one thing that tells the top apart from the
+# front; taking the black cage off it instead left "a green mass with black painted on" (dev).
+@export var hp_block_top_shade := 0.15
+# Whether the grid turns to face the camera. OFF by default (dev: "The health bars are 3D, they
+# should not billboard towards the camera") — held in place it sits on the board's own axes like the
+# voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
+@export var hp_grid_faces_camera := false
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
-# missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
-# gameplay descriptor, meant to sit on top of the scene rather than blend into it.
-@export var bar_fill_color := Color(0.15, 1.0, 0.2, 1.0)
+# missing colour what it has LOST — a cube in both cases, since the readout draws no backing for one
+# to show through. Both fully opaque on purpose — this is a gameplay descriptor, meant to sit on top
+# of the scene rather than blend into it.
+@export var bar_fill_color := Color(0.0, 1.0, 0.2353, 1.0)
 @export var bar_missing_color := Color(0.9, 0.05, 0.05, 1.0)
 # The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
 # have meant a 4px font to reach the size asked for, which renders to mush.
-@export var number_height_cells := 0.13
+@export var number_height_cells := 0.125
 # Glyph-atlas units, so what reaches the screen is this times pixel_size. That indirection is why
 # the first two values were far too thin to read: at 5 against FONT_RESOLUTION 32 and a 0.13-cell
 # glyph, the outline came out 0.020 world units — under ONE art texel (0.031), i.e. thinner than a
@@ -108,12 +132,39 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # means opposite things in the two directions and the geometry cannot say which.
 @export var bar_doomed_color := Color(1.0, 0.75, 0.1, 1.0)
 @export var bar_heal_color := Color(0.4, 0.9, 1.0, 1.0)
-@export var notch_color := Color.WHITE
-@export var notch_texels := 1.0
-# What the doomed span pulses TO when the plan predicts a named rung — a down, a kill, or Crisis.
+# #313's NOTCH is gone with #314's grid: with one cube per point, colouring the exact cubes the
+# plan takes says it more precisely than a marker beside them, and both would be one fact twice.
+# What the doomed cubes pulse TO when the plan predicts a named rung — a down, a kill, or Crisis.
 # Only the peak is a knob: the resting colour is bar_doomed_color, so the alarm cannot drift away
 # from the thing it is alarming about.
 @export var alarm_peak_color := Color(1.0, 1.0, 1.0, 1.0)
+
+# --- The cubes a unit LOSES (#314) ------------------------------------------------------
+# Losing HP knocks the cubes that were standing out of the grid: they pop up and away, tumble,
+# bounce once off the board and fade. Every value here is feel, so every one is a Game-tab row.
+@export var block_burst_speed := 2.3
+@export var block_burst_spread := 0.6      # how wide the fan is; 0 sends every cube straight up
+@export var block_spin_speed := 8.5
+@export var block_gravity := 7.0
+@export var block_bounce := 0.45           # how much of the fall a cube keeps on the way back up
+@export var block_lifetime := 2.35
+# How long each cube waits before its own launch, so a multi-cube burst MARCHES through the grid
+# rather than leaving all at once (dev, 2026-08-22). A waiting cube sits in its socket rather than
+# hiding, so the grid breaks apart in sequence with no gap running ahead of it.
+@export var block_burst_stagger := 0.04
+# A DEATH detonates the whole remaining grid, harder than an ordinary hit -- the loudest thing the
+# readout ever does, for the loudest thing that happens on the board.
+@export var block_death_power := 1.8
+# How long a healed cube takes to rise back out of its dent, and HOW FAR it travels while doing it.
+# The distance is its OWN value rather than the recess depth: round 1 borrowed the dent, which made
+# the pop a couple of screen pixels and exactly nothing once the dent was dialled to 0.
+@export var block_pop_time := 0.54
+@export var hp_pop_lift_texels := 5.0
+# How long each restored cube waits before its own rise, so a heal FILLS IN rather than popping as one
+# block (dev, 2026-08-22). The run rises ASCENDING -- the burst leaves descending, so a cube comes back
+# the way it left, backwards. Its own value rather than block_burst_stagger's: that one races a cube's
+# whole flight, this one races block_pop_time, so the same number does not mean the same thing.
+@export var hp_pop_stagger := 0.08
 
 # --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
 # Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
@@ -130,9 +181,9 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 #
 # 8 is half a cell, and deliberate rather than arbitrary: both source icons are powers of two (the
 # wet drop 32px, the frozen-tile placeholder 16px), so both land on exact 4:1 and 2:1 reductions.
-@export var state_icon_texels := 8.0
-@export var state_icon_gap_texels := 2.0        # clearance above the bar's outline
-@export var state_icon_spacing_texels := 1.0    # between neighbouring icons
+@export var state_icon_texels := 9.0
+@export var state_icon_gap_texels := 1.0        # clearance above the bar's outline
+@export var state_icon_spacing_texels := 2.0    # between neighbouring icons
 
 # --- The rescue clock beside the downed glyph (#322) ------------------------------------
 # Turns left before a downed body is lost, written after the last icon in that row. WHERE it sits is
@@ -172,10 +223,20 @@ var _mirrored: Dictionary[int, UnitSprite3D] = {}
 var _bars: Dictionary[int, UnitHealthBar] = {}   # #229; keyed like _mirrored, never by object ref
 var _ghosts: Array[UnitSprite3D] = []
 var _camera_right := Vector3.ZERO   # last camera basis facing was judged against
+# What each unit's HP was last frame (#314), keyed like _mirrored. Updated for EVERY live unit,
+# BEFORE the readout's own visibility gate -- a baseline only refreshed while a readout is up goes
+# stale the moment one hides, and the next time it appears the whole hidden loss reads as damage
+# taken this frame and bursts.
+var _last_hp: Dictionary[int, int] = {}
+var _debris: HealthBlockDebris
 
 
 func _ready() -> void:
 	UnitSprite3D.texels_per_unit = texels_per_unit
+	# The knocked-off cubes live HERE rather than under a readout, because they must outlive the one
+	# they fell off: a readout hides the instant the pointer moves or the plan settles.
+	_debris = HealthBlockDebris.new()
+	add_child(_debris)
 
 
 func _process(_delta: float) -> void:
@@ -211,6 +272,7 @@ func reconcile() -> void:
 	# The player's standing preference (#350), asked once for the same reason: it cannot change
 	# mid-frame, and a static read per unit would be N reads answering one question.
 	var always_on := PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH)
+	_push_debris_knobs()
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
 		var unit := child as Unit
@@ -226,12 +288,20 @@ func reconcile() -> void:
 			var bar := UnitHealthBar.new()
 			add_child(bar)
 			_bars[id] = bar
+			# THE ONE SIGNAL THIS NODE LISTENS TO (#314), and the exception is structural rather
+			# than a preference: die() emits and queue_free()s in the same frame, and the loop
+			# above skips a unit already queued for deletion, so the poll NEVER observes HP at 0.
+			# Noticing the unit vanish instead would fire on clear_board, which frees without
+			# dying. Nothing else here needs a wire; this cannot be answered without one.
+			unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
 		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, always_on)
+		_settle_health_change(unit, id, _bars[id])
 	for id: int in _mirrored.keys():
 		if not live.has(id):
 			_mirrored[id].queue_free()
 			_mirrored.erase(id)
+			_last_hp.erase(id)
 			if _bars.has(id):
 				_bars[id].queue_free()
 				_bars.erase(id)
@@ -247,6 +317,12 @@ func sprite_for(unit: Unit) -> UnitSprite3D:
 
 func bar_for(unit: Unit) -> UnitHealthBar:
 	return _bars.get(unit.get_instance_id())
+
+
+# The cubes currently in the air (#314). Board-wide rather than per unit, and deliberately so: a
+# thrown cube has left the readout it came from and does not belong to a unit any more.
+func debris() -> HealthBlockDebris:
+	return _debris
 
 
 # Planning ghosts (#222): the 2D projected/knockback stand-ins, mirrored as pooled
@@ -403,11 +479,13 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_shown(shown)
 	if not shown:
 		return
-	bar.set_style(bar_width_texels, bar_height_texels, bar_outline_texels, bar_fill_color,
+	bar.set_style(hp_block_texels, hp_block_border_texels, hp_blocks_per_row,
+			hp_block_recess_texels, bar_fill_color,
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
-	bar.set_prediction_style(bar_doomed_color, bar_heal_color, notch_color, notch_texels,
-			alarm_peak_color)
+	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
+	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
+	bar.set_pop(block_pop_time, hp_pop_lift_texels, hp_pop_stagger)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
@@ -438,7 +516,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	if is_inside_tree():
 		var camera := get_viewport().get_camera_3d()
 		if camera != null:
-			bar.face(camera.global_transform.basis)
+			bar.face(camera.global_transform.basis, hp_grid_faces_camera)
 
 
 # The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a
@@ -457,3 +535,73 @@ func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
 	if not unit.visuals.projected:
 		return sprite.position + lift
 	return BoardSpace.surface_point(unit.get_projected_destination(), heights) + lift
+
+
+# HP moving, and what the readout does about it (#314). The BASELINE is written before anything
+# else, hidden readouts included — see _last_hp. Everything after it is presentation, so it is
+# gated on the readout actually being up: cubes are pieces of a thing you can see, and a burst over
+# a unit wearing no readout would be cubes materialising out of empty air. Damage taken with no
+# readout up is #188's gap, and it wants a shake on the SPRITE, which is visible either way.
+func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
+	var current := unit.get_current_hp()
+	var previous: int = _last_hp.get(id, current)
+	_last_hp[id] = current
+	if previous == current or not bar.visible:
+		return
+	if current > previous:
+		bar.play_heal_from(previous)   # the restored cubes rise out of the dents they were in
+		return
+	_burst_lost(bar, previous, current, 1.0)
+
+
+# A death detonates the WHOLE grid — the red cubes go too (dev, 2026-08-22: "On a killing hit, even
+# the red blocks should fly away"). Reached by signal because nothing else can reach it: see the
+# connect site in reconcile. The standing/lost split comes off the RENDERED count, so each cube
+# leaves wearing what it was showing rather than what an HP number says it should have been.
+func _on_unit_died(_unit: Unit, id: int) -> void:
+	var bar: UnitHealthBar = _bars.get(id)
+	if bar == null or not is_instance_valid(bar) or not bar.visible:
+		return
+	var standing := bar.filled_block_count()
+	var positions: Array[Vector3] = []
+	var colors := PackedColorArray()
+	for step in bar.block_count():
+		var index := bar.block_count() - 1 - step   # see _burst_lost: the march starts at the top right
+		positions.append(bar.block_world_position(index))
+		colors.append(bar_fill_color if index < standing else bar_missing_color)
+	_throw(bar, positions, colors, block_death_power)
+
+
+# The cubes between two HP readings, thrown from the sockets they were standing in. They leave in the
+# FILL colour rather than whatever those sockets are showing now: the readout has already redrawn, so
+# they read as missing — which is what they BECAME, not what left.
+func _burst_lost(bar: UnitHealthBar, from: int, to: int, power: float) -> void:
+	var positions: Array[Vector3] = []
+	var colors := PackedColorArray()
+	# DESCENDING, because the stagger launches in array order and the march starts at the TOP RIGHT
+	# (dev, 2026-08-22: "the top right is the start of the healthbar... when we hit the second row,
+	# right side again"). The grid fills bottom-up and left-to-right, so walking the sockets backwards
+	# IS that order — top row right-to-left, then the row below. No second rule to keep in step.
+	for index in range(from - 1, maxi(to, 0) - 1, -1):
+		positions.append(bar.block_world_position(index))
+		colors.append(bar_fill_color)
+	_throw(bar, positions, colors, power)
+
+
+func _throw(bar: UnitHealthBar, positions: Array[Vector3], colors: PackedColorArray,
+		power: float) -> void:
+	if positions.is_empty():
+		return
+	_debris.burst(positions, colors, bar.global_transform.basis, power, block_burst_stagger)
+
+
+# Pushed once a frame rather than at build time: these are Game-tab knobs, and a value read only at
+# construction is a slider that moves and does nothing (#264's born-dead slider).
+func _push_debris_knobs() -> void:
+	_debris.heights = heights
+	_debris.burst_speed = block_burst_speed
+	_debris.burst_spread = block_burst_spread
+	_debris.spin_speed = block_spin_speed
+	_debris.gravity = block_gravity
+	_debris.bounce = block_bounce
+	_debris.lifetime = block_lifetime

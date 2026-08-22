@@ -100,22 +100,28 @@ func test_pointing_at_empty_ground_puts_every_readout_away() -> void:
 	assert_array(_shown_bars()).is_empty()
 
 
-func test_the_fill_says_what_the_unit_says() -> void:
+func test_the_grid_says_what_the_unit_says() -> void:
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
 	unit.set_current_hp(int(unit.get_max_hp() * 0.4))
 	_point_at(unit.movement.cell)
 	await _settle()
 
 	var bar := _unit_mirror.bar_for(unit)
-	var expected := float(unit.get_current_hp()) / float(unit.get_max_hp())
-	# Within one texel of the bar's OWN width, read off the bar rather than pinned: the fill is
-	# rounded to whole texels on purpose, so the achievable precision is a function of a tuning
-	# value, and asserting tighter than that would make a width knob able to turn the suite red.
-	var quantum := 1.0 / bar.track_texels()
-	assert_float(bar.fill_fraction()).is_equal_approx(expected, quantum)
-	# Non-vacuity: a bar stuck full or stuck empty would satisfy a loose tolerance on some board.
-	assert_bool(bar.fill_fraction() > 0.0 and bar.fill_fraction() < 1.0).override_failure_message(
-			"the fixture did not actually wound the unit, so the fraction proves nothing").is_true()
+	# EXACT counts, no tolerance. #229's bar was rounded to whole texels, so its achievable
+	# precision rode a width knob and this case had to carry a quantum; one cube per point of HP is
+	# a COUNT, which is the whole argument for the grid — a player can read the number off it.
+	assert_int(bar.block_count()).override_failure_message(
+			"the grid does not have one socket per point of max HP").is_equal(unit.get_max_hp())
+	assert_int(bar.filled_block_count()).override_failure_message(
+			"the cubes standing proud do not match the unit's HP").is_equal(unit.get_current_hp())
+	# Non-vacuity: a grid stuck full or stuck empty would satisfy a sloppier claim on some board.
+	assert_bool(unit.get_current_hp() > 0 and unit.get_current_hp() < unit.get_max_hp()) \
+			.override_failure_message(
+			"the fixture did not actually wound the unit, so the counts prove nothing").is_true()
+	# The two halves of the grid account for the whole of it — a lost cube is RECESSED, not gone,
+	# which is what keeps max HP readable from the grid's own shape.
+	assert_int(bar.block_count() - bar.filled_block_count()).is_equal(
+			unit.get_max_hp() - unit.get_current_hp())
 	assert_str(bar.number_text()).contains(str(unit.get_current_hp()))
 
 
@@ -183,7 +189,14 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 		assert_int(material.billboard_mode).override_failure_message(
 				"'%s' billboards itself; only the parent may carry the orientation"
 				% quad.name).is_equal(BaseMaterial3D.BILLBOARD_DISABLED)
-		if absf((quad.mesh as QuadMesh).center_offset.x) > 0.0001:
+		# Two shapes since #314, displaced two ways: the plate and the state icons are quads that
+		# carry their offset in the MESH, while an HP cube is a real solid placed by node position.
+		# Both are legal here for the same reason — neither turns about its own origin.
+		var mesh := quad.mesh as QuadMesh
+		if mesh != null:
+			if absf(mesh.center_offset.x) > 0.0001:
+				displaced += 1
+		elif absf(quad.position.x) > 0.0001:
 			displaced += 1
 	# Non-vacuity: "nothing billboards" is trivially true of a readout whose parts all sit dead
 	# centre. The half-full fill and the inset number must BOTH actually be off-centre.
@@ -191,16 +204,152 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 			"nothing was displaced, so laying it out in the parent's space proves nothing"
 			).is_greater_equal(2)
 
-	# And the other half: something has to turn it now that its parts do not turn themselves --
-	# to the camera VIEW PLANE, which is what BILLBOARD_FIXED_Y does to every sprite around it
-	# (#325 follow-up). Pointing at the camera POSITION instead is the same angle only at screen
-	# centre, which is why the crown and the bar read as sitting on different axes.
+	# The other half — WHO turns it — forks on a knob since #314 round 2, so it lives in the two
+	# cases below rather than here. What this case still owns is that no CHILD turns itself,
+	# whichever way the parent is pointed.
+
+
+# The facing knob FORKS the cases that pin it (#449's law: a setting that forks a marker's
+# lifecycle forks the cases that pin it). Each of the two below declares which branch it is in, so
+# neither can pass by accident on a machine set the other way.
+
+func test_held_in_place_the_grid_sits_on_the_boards_own_axes() -> void:
+	# The DEFAULT since round 2 (dev: "they should not billboard towards the camera").
+	_unit_mirror.hp_grid_faces_camera = false
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_true()
+	assert_float(bar.global_rotation.y).override_failure_message(
+			"the readout turned even though it is meant to be held in place").is_equal_approx(
+			0.0, 0.001)
+
+
+func test_the_knob_puts_the_grid_back_on_the_camera_view_plane() -> void:
+	# The opt-in branch, and it must be the VIEW PLANE rather than the camera POSITION (#325
+	# follow-up): FIXED_Y gives one yaw board-wide, while aiming each readout at the camera agrees
+	# only at screen centre, which is what read as the crown and the bar sitting on different axes.
+	_unit_mirror.hp_grid_faces_camera = true
+	# ORBIT THE RIG FIRST. The fixture camera rests at yaw 0, where "held in place" and "facing the
+	# camera" produce the identical rotation — so without this the case passes in both modes and
+	# proves nothing (its own guard below caught exactly that). Both fields, because the rig eases
+	# toward its target and would swing straight back.
+	var rig: CameraRig3D = _scene.get_node("CameraRig")
+	rig.rotation_degrees.y = 35.0
+	rig._target_yaw_degrees = 35.0
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
 	var camera := bar.get_viewport().get_camera_3d()
 	assert_object(camera).is_not_null()
 	var facing: Vector3 = camera.global_transform.basis.z
+	var wanted := atan2(facing.x, facing.z)
+	assert_bool(absf(wanted) > 0.001).override_failure_message(
+			"the camera happens to sit on the zero yaw, so this case cannot tell the two modes apart"
+			).is_true()
 	assert_float(bar.global_rotation.y).override_failure_message(
-			"the readout is not aligned to the camera view plane").is_equal_approx(
-			atan2(facing.x, facing.z), 0.001)
+			"the readout is not aligned to the camera view plane").is_equal_approx(wanted, 0.001)
+
+
+func test_every_face_wears_the_cage_and_only_the_top_is_shaded() -> void:
+	# Round 2 took the cage OFF every non-front face to stop the tops reading as an extra row, and
+	# that overshot: "now they don't look like cubes at all, just a green mass with black painted on"
+	# (dev, 2026-08-22). The cage is what makes a cube read as a cube, so it is back on all six, and
+	# the top is told apart by a darker vertex colour instead — which the black frame survives,
+	# because black times any shade is still black.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()   # a readout has to have drawn before the shared mesh exists
+
+	var cube: ArrayMesh = UnitHealthBar.cube_mesh()
+	assert_object(cube).override_failure_message("no cube mesh was built").is_not_null()
+	assert_int(_flat_faces(cube)).override_failure_message(
+			"a face lost its cage — the grid reads as one mass rather than as separate bricks"
+			).is_equal(0)
+
+	var colors: PackedColorArray = cube.surface_get_arrays(0)[Mesh.ARRAY_COLOR]
+	assert_int(colors.size()).override_failure_message(
+			"the cube carries no vertex colours, so nothing can shade one face").is_equal(24)
+	assert_float(colors[UnitHealthBar.TOP_FACE * 4].r).override_failure_message(
+			"the top face is not darker than the front, so the two still read as one surface"
+			).is_less(colors[0].r)
+
+
+func test_the_readout_draws_NOTHING_behind_the_cubes() -> void:
+	# "This is a 3D display, we don't need one at all... it's just a weird black rectangle floating in
+	# space" (dev, 2026-08-22). The backing quad is DELETED, and its absence is what this pins: every
+	# cube wears its own cage, so nothing needs a surface behind it to be separated from the board.
+	# Stated as a RELATIONSHIP — no quad sits behind the frontmost face a cube presents — rather than
+	# as "there is no node called the plate", which the next backing under another name would pass.
+	# It also covers the z-fight that killed the last version: at a recess of 0 a cube's own back face
+	# sits at depth 0, so anything drawn there is coplanar with it.
+	# A unit carrying a STATE, so the readout really does draw a quad — the state row's icons are the
+	# only ones left. Otherwise the walk below would have nothing to enumerate and would pass on an
+	# empty set, which is a true answer reached without looking at anything.
+	var unit := _wet(Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	# The cubes' own front plane: proud centre plus half a block.
+	var front: float = bar.block_depth(0) + bar.block_size_texels() * 0.5 * texel
+	var quads := 0
+	for child in bar.get_children():
+		var quad := child as MeshInstance3D
+		if quad == null or not (quad.mesh is QuadMesh):
+			continue
+		quads += 1
+		assert_float(quad.position.z).override_failure_message(
+				"a flat quad is drawn behind the grid — the readout has grown a backing again"
+				).is_greater_equal(front)
+	assert_int(quads).override_failure_message(
+			"the readout drew no quads at all, so this case checked nothing"
+			).is_greater(0)
+
+
+# How many of a cube's six faces collapse all four UVs onto one point — i.e. sample a single texel,
+# and so tint to a flat colour carrying no frame.
+func _flat_faces(mesh: ArrayMesh) -> int:
+	var uvs: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV]
+	var flat := 0
+	for face in 6:
+		var first: Vector2 = uvs[face * 4]
+		var same := true
+		for corner in 4:
+			if not uvs[face * 4 + corner].is_equal_approx(first):
+				same = false
+		if same:
+			flat += 1
+	return flat
+
+
+func test_the_hp_digits_sit_in_FRONT_of_the_cubes_rather_than_inside_them() -> void:
+	# Round 1 shipped the digits INVISIBLE and no knob could have rescued them: the label was placed
+	# at the cube's CENTRE depth, the cubes are opaque and write depth, so the text was buried inside
+	# a solid and depth-rejected. Asserted as the relationship rather than a value — the label must
+	# clear the front FACE, which is half a block further toward the camera than the centre.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.number_shown()).override_failure_message(
+			"the digits are not up, so their depth proves nothing").is_true()
+
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var cube_front: float = bar.block_size_texels() * texel   # a cube spans 0 .. block, front at the top
+	var label: Label3D = null
+	for child in bar.get_children():
+		var found := child as Label3D
+		if found != null and found.visible and found.text == bar.number_text():
+			label = found
+			break
+	assert_object(label).override_failure_message("no visible HP label to measure").is_not_null()
+	assert_float(label.position.z).override_failure_message(
+			"the HP digits sit at or behind the cubes' front face, so an opaque cube hides them"
+			).is_greater(cube_front)
 
 
 func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
@@ -310,25 +459,28 @@ func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> voi
 	await _settle()
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
 
-	# Derived from the knobs, never pinned: the claim is the RELATIONSHIP (clear of the outline's
-	# top, flush with its left), which survives every retune of the values underneath it.
+	# Derived from the knobs, never pinned: the claim is the RELATIONSHIP (clear of the grid's top,
+	# flush with its left), which survives every retune of the values underneath it.
 	var texel := 1.0 / UnitSprite3D.texels_per_unit
 	var icon: float = roundf(_unit_mirror.state_icon_texels)
-	var edge: float = roundf(_unit_mirror.bar_outline_texels)
-	var bar_h: float = roundf(_unit_mirror.bar_height_texels)
-	var track: float = roundf(_unit_mirror.bar_width_texels)
+	# The grid's own extent, ASKED of the readout rather than rebuilt from the knobs: since #314 it
+	# is derived from cube size, cage and row width together, and a second derivation here is a copy
+	# that would go stale the next time the layout grows an input.
+	var stack: Vector2 = bar.stack_size_texels()
+	var bar_h: float = stack.y
+	var track: float = stack.x
 	var gap: float = roundf(_unit_mirror.state_icon_gap_texels)
 
 	assert_float(bar.state_icon_size().x).is_equal_approx(icon * texel, 0.001)
 	assert_float(bar.state_icon_size().y).is_equal_approx(icon * texel, 0.001)
 
 	var offset := bar.state_icon_offset(0)
-	# Its BOTTOM edge clears the outline's top edge by the gap.
+	# Its BOTTOM edge clears the grid's top edge by the gap.
 	assert_float(offset.y - bar.state_icon_size().y * 0.5).is_equal_approx(
-			(bar_h * 0.5 + edge + gap) * texel, 0.001)
-	# Its LEFT edge sits on the outline's left edge — "centered left", the dev's words.
+			(bar_h * 0.5 + gap) * texel, 0.001)
+	# Its LEFT edge sits on the grid's left edge — "centered left", the dev's words.
 	assert_float(offset.x - bar.state_icon_size().x * 0.5).is_equal_approx(
-			-(track * 0.5 + edge) * texel, 0.001)
+			-track * 0.5 * texel, 0.001)
 
 
 func test_the_row_grows_rightward_without_moving_the_first_icon() -> void:

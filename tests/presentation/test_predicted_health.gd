@@ -156,7 +156,17 @@ func test_cancelling_the_order_puts_every_prediction_away() -> void:
 #  What it draws
 # ------------------------------------------------------------------------------
 
-func test_the_notch_sits_at_the_hp_the_plan_predicts() -> void:
+# What the grid says the plan leaves this unit at, read off the CUBES: the ones still standing once
+# the doomed go, or the standing ones plus the sockets a heal will refill. This is what #313's notch
+# said in one mark, and with one cube per point of HP it is a COUNT rather than a pixel-snapped
+# position — so these cases carry no tolerance, and no width knob can turn them red.
+func _grid_predicts(bar: UnitHealthBar, healing: bool) -> int:
+	if healing:
+		return bar.filled_block_count() + bar.doomed_block_count()
+	return bar.filled_block_count() - bar.doomed_block_count()
+
+
+func test_the_doomed_cubes_are_exactly_the_ones_the_plan_takes() -> void:
 	var attacker := _spawn(PLAYER, Vector2i(2, 2))
 	var victim := _spawn(ENEMY, Vector2i(3, 2))
 	_aim_at(attacker, victim.movement.cell)
@@ -164,20 +174,18 @@ func test_the_notch_sits_at_the_hp_the_plan_predicts() -> void:
 
 	var bar := _unit_mirror.bar_for(victim)
 	var predicted := _predicted(victim)
-	# Non-vacuity: a notch at 0 or at full would satisfy a loose tolerance without saying anything.
-	# This is a precondition on the FIXTURE (did the hit land, did it leave them standing), stated
+	# Non-vacuity: a prediction at 0 or at full would satisfy the arithmetic below without saying
+	# anything. A precondition on the FIXTURE (did the hit land, did it leave them standing), stated
 	# as a message rather than as a threshold the tuning could move.
 	assert_bool(predicted > 0 and predicted < victim.get_max_hp()).override_failure_message(
-			"the fixture attack did not wound-but-spare the victim, so the notch proves nothing"
+			"the fixture attack did not wound-but-spare the victim, so the cubes prove nothing"
 			).is_true()
 
-	var expected := float(predicted) / float(victim.get_max_hp())
-	# Within one texel of the bar's OWN width: the notch is pixel-snapped like the fill, so the
-	# achievable precision is a function of a width knob and asserting tighter would let a tuning
-	# value turn this red.
-	assert_float(bar.notch_fraction()).is_equal_approx(expected, 1.0 / bar.track_texels())
-	# And the span between now and then is actually drawn, or the notch is a mark on nothing.
-	assert_float(bar.doomed_fraction()).is_greater(0.0)
+	assert_int(bar.block_count()).is_equal(victim.get_max_hp())
+	assert_int(bar.filled_block_count()).is_equal(victim.get_current_hp())
+	assert_int(_grid_predicts(bar, false)).is_equal(predicted)
+	# And the span is actually drawn, or "the plan takes some" is a claim about nothing.
+	assert_int(bar.doomed_block_count()).is_greater(0)
 
 
 func test_a_predicted_down_shows_one_hp_and_raises_the_alarm() -> void:
@@ -198,8 +206,8 @@ func test_a_predicted_down_shows_one_hp_and_raises_the_alarm() -> void:
 			"the raw prediction is not negative, so the clamp is not being exercised").is_less(0)
 
 	var bar := _unit_mirror.bar_for(victim)
-	assert_float(bar.notch_fraction()).is_equal_approx(1.0 / float(victim.get_max_hp()),
-			1.0 / bar.track_texels())
+	assert_int(_grid_predicts(bar, false)).override_failure_message(
+			"the grid does not leave exactly the one cube a downed unit clings at").is_equal(1)
 	assert_bool(bar.alarm_running()).override_failure_message(
 			"a plan that fells a unit did not raise the alarm").is_true()
 
@@ -222,10 +230,14 @@ func test_a_queued_heal_draws_its_span_above_the_current_health() -> void:
 	assert_bool(bar.visible).override_failure_message(
 			"the heal put no readout over its target").is_true()
 	assert_int(_predicted(patient)).is_greater(patient.get_current_hp())
-	# The span is the same SHAPE in both directions, so the only structural claim is which side of
-	# the fill it lands on — above it for a heal, and drawn rather than collapsed to nothing.
-	assert_float(bar.notch_fraction()).is_greater(bar.fill_fraction())
-	assert_float(bar.doomed_fraction()).is_greater(0.0)
+	# The span is the same SHAPE in both directions, so the structural claim is which cubes it lands
+	# on — a heal marks EMPTY sockets it will refill, which is the half a damage prediction cannot
+	# produce, and those cubes are still sunk in the plate because the heal has not happened yet.
+	assert_int(_grid_predicts(bar, true)).is_equal(_predicted(patient))
+	assert_int(bar.doomed_block_count()).is_greater(0)
+	assert_bool(bar.block_is_filled(patient.get_current_hp())).override_failure_message(
+			"the first cube the heal would restore is already standing, so the readout is claiming "
+			+ "health the unit does not have yet").is_false()
 	assert_bool(bar.alarm_running()).override_failure_message(
 			"a heal raised the felling alarm").is_false()
 
@@ -248,8 +260,7 @@ func test_the_queue_panel_and_the_bar_predict_the_same_hp() -> void:
 	var bar := _unit_mirror.bar_for(victim)
 	var panel_says := _queue_row_after()
 	assert_int(panel_says).is_equal(_predicted(victim))
-	assert_float(bar.notch_fraction()).is_equal_approx(
-			float(panel_says) / float(victim.get_max_hp()), 1.0 / bar.track_texels())
+	assert_int(_grid_predicts(bar, false)).is_equal(panel_says)
 
 
 # ------------------------------------------------------------------------------
