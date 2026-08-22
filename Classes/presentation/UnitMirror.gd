@@ -98,7 +98,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # should not billboard towards the camera") — held in place it sits on the board's own axes like the
 # voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
 @export var hp_grid_faces_camera := false
-@export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
+@export var bar_outline_texels := 0.0   # black border thickness; the colour itself is not a knob
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
 # missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
 # gameplay descriptor, meant to sit on top of the scene rather than blend into it.
@@ -107,7 +107,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
 # resolution and this scales the quad instead, so small text stays crisp. Sizing by font_size would
 # have meant a 4px font to reach the size asked for, which renders to mush.
-@export var number_height_cells := 0.13
+@export var number_height_cells := 0.125
 # Glyph-atlas units, so what reaches the screen is this times pixel_size. That indirection is why
 # the first two values were far too thin to read: at 5 against FONT_RESOLUTION 32 and a 0.13-cell
 # glyph, the outline came out 0.020 world units — under ONE art texel (0.031), i.e. thinner than a
@@ -139,10 +139,10 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # --- The cubes a unit LOSES (#314) ------------------------------------------------------
 # Losing HP knocks the cubes that were standing out of the grid: they pop up and away, tumble,
 # bounce once off the board and fade. Every value here is feel, so every one is a Game-tab row.
-@export var block_burst_speed := 2.2
-@export var block_burst_spread := 0.8      # how wide the fan is; 0 sends every cube straight up
-@export var block_spin_speed := 9.0
-@export var block_gravity := 9.0
+@export var block_burst_speed := 2.3
+@export var block_burst_spread := 0.6      # how wide the fan is; 0 sends every cube straight up
+@export var block_spin_speed := 8.5
+@export var block_gravity := 7.0
 @export var block_bounce := 0.45           # how much of the fall a cube keeps on the way back up
 @export var block_lifetime := 0.75
 # How long each cube waits before its own launch, so a multi-cube burst MARCHES through the grid
@@ -173,9 +173,9 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 #
 # 8 is half a cell, and deliberate rather than arbitrary: both source icons are powers of two (the
 # wet drop 32px, the frozen-tile placeholder 16px), so both land on exact 4:1 and 2:1 reductions.
-@export var state_icon_texels := 8.0
-@export var state_icon_gap_texels := 2.0        # clearance above the bar's outline
-@export var state_icon_spacing_texels := 1.0    # between neighbouring icons
+@export var state_icon_texels := 9.0
+@export var state_icon_gap_texels := 1.0        # clearance above the bar's outline
+@export var state_icon_spacing_texels := 2.0    # between neighbouring icons
 
 # --- The rescue clock beside the downed glyph (#322) ------------------------------------
 # Turns left before a downed body is lost, written after the last icon in that row. WHERE it sits is
