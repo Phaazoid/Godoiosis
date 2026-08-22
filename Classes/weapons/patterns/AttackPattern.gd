@@ -21,3 +21,9 @@ func get_affected_cells(user: Unit, origin_cell: Vector2i, target_cell: Vector2i
 # a specific in-range cell. game.gd targeting branches on this. See #25.
 func is_directional() -> bool:
 	return false
+
+
+# Per-field text for the dev tools' reflective editor (#473) -- see AttackData.property_tips for
+# why this is a function. Empty here: this base declares no @export of its own. A subclass merges.
+static func property_tips() -> Dictionary:
+	return {}

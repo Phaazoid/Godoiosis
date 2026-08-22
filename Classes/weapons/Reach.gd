@@ -24,7 +24,7 @@ class_name Reach
 # adjacency: selectable = Manhattan range 1, affected = the aimed cell alone. That fallback is
 # load-bearing in the tests -- a pattern-less weapon is how they get trivial geometry.
 #
-# Verticality (#258): the aim question also asks the attack's own vertical rule (STEP for melee,
+# Verticality (#258): the aim question also asks the attack's own vertical rule (MELEE = the step rule,
 # up/down tolerance for everything else) AND walks its sight trace -- can_hit_cell_from takes the
 # board for exactly that (required, not optional: an optional would give one question two answers,
 # the movement_cost precedent). The FOOTPRINT question (get_affected_cells_from) stays board-blind
@@ -61,9 +61,9 @@ class SightTrace:
 
 
 # May this attack cross the height difference between two cells (#258)? Two clauses, both required:
-# the attack's own VERTICAL RULE (STEP for melee -- same step or a facing half step, judged by the
-# movement system's own RulesService.height_step_ok; TOLERANCE for everything else, -1 = unlimited),
-# and a CLEAR SIGHT TRACE (the bead path below). A null attack (bare fists) is melee, so STEP. A
+# the attack's own VERTICAL RULE (MELEE -- same step or a facing half step, judged by the
+# movement system's own RulesService.height_step_ok; RANGED for everything else, -1 = unlimited),
+# and a CLEAR SIGHT TRACE (the bead path below). A null attack (bare fists) is melee. A
 # null board reads flat, matching BoardContext's null-heights contract. Directional attacks are
 # EXEMPT in v1 -- their spread is the footprint question -- so the gate reaches point aims,
 # counters, and the AI's mirrors of both.
@@ -76,7 +76,7 @@ static func vertical_aim_ok(attack: AttackData, origin_cell: Vector2i, target_ce
 
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
-	if attack == null or attack.vertical_rule == AttackData.VerticalRule.STEP:
+	if attack == null or attack.vertical_rule == AttackData.VerticalRule.MELEE:
 		# Melee (dev, 2026-08-20): same step at any range; a +/-1 edge only when adjacent AND
 		# ramp-connected ("a facing half step"); a sheer edge refuses in BOTH directions.
 		if board.elevation_at(target_cell) == board.elevation_at(origin_cell):
@@ -91,13 +91,13 @@ static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_
 
 
 # Whether the aim READOUT draws this attack's sight line (dev, 2026-08-20): ranged point attacks
-# only. Melee (STEP, bare fists included) is "visually obvious anytime" -- the hatch and the
+# only. Melee (bare fists included) is "visually obvious anytime" -- the hatch and the
 # refusal carry its verdict -- and a directional spread has no single line. The GATE is unaffected:
 # vertical_aim_ok judges every point aim's trace whether or not it is drawn.
 static func draws_sight_trace(attack: AttackData) -> bool:
 	if attack == null or is_directional_attack(attack):
 		return false
-	return attack.vertical_rule == AttackData.VerticalRule.TOLERANCE
+	return attack.vertical_rule == AttackData.VerticalRule.RANGED
 
 
 # The sight line (#258): endpoints at eye height over each cell's surface, lifted mid-flight by the
