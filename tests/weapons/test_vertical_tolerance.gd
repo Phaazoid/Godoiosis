@@ -54,7 +54,7 @@ func test_bare_fists_are_melee_step() -> void:
 
 func _step_attack() -> AttackData:
 	var attack := AttackData.new()
-	attack.vertical_rule = AttackData.VerticalRule.STEP
+	attack.vertical_rule = AttackData.VerticalRule.MELEE
 	return attack
 
 

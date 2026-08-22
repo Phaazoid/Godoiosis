@@ -22,14 +22,17 @@ extends Resource
 # PlanResolver, applied on execute; the Kinetic Mace's Blowback is the first user.
 # How this attack answers the height question at aim time (#258; judged by Reach.vertical_aim_ok,
 # directional spreads exempt in v1 — their per-cell height question is the deferred footprint one):
-#   TOLERANCE — the target may sit up to up_tolerance above / down_tolerance below the attacker
-#               (-1 = unlimited). A lob's climb ceiling is its up_tolerance; a gun stays -1.
-#   STEP      — melee (dev ruling 2026-08-20): same step, or a facing half step — same elevation,
-#               or adjacent across a ramp-legal edge (RulesService.height_step_ok). A sheer 1-level
-#               edge is melee-illegal in BOTH directions; the tolerances are ignored.
-# A null attack (bare fists) reads as STEP — punching is melee.
-enum VerticalRule { TOLERANCE, STEP }
-@export var vertical_rule: VerticalRule = VerticalRule.TOLERANCE
+#   RANGED — the target may sit up to up_tolerance above / down_tolerance below the attacker
+#            (-1 = unlimited). A lob's climb ceiling is its up_tolerance; a gun stays -1.
+#   MELEE  — dev ruling 2026-08-20: same step, or a facing half step — same elevation, or adjacent
+#            across a ramp-legal edge (RulesService.height_step_ok). A sheer 1-level edge is
+#            melee-illegal in BOTH directions; the tolerances are ignored.
+# A null attack (bare fists) reads as MELEE — punching is melee.
+# Named for what they MEAN, not the mechanism each uses (#473, was TOLERANCE/STEP): the dev read
+# "tolerance" as the lob setting, which is arc_clearance below. Members keep their order, so every
+# authored `vertical_rule = 1` still means melee — this was a source rename, never a content one.
+enum VerticalRule { RANGED, MELEE }
+@export var vertical_rule: VerticalRule = VerticalRule.RANGED
 @export var up_tolerance: int = -1
 @export var down_tolerance: int = -1
 # How high the shot arcs above its own sightline mid-flight (#218's number, built 2026-08-20).
