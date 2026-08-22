@@ -100,22 +100,28 @@ func test_pointing_at_empty_ground_puts_every_readout_away() -> void:
 	assert_array(_shown_bars()).is_empty()
 
 
-func test_the_fill_says_what_the_unit_says() -> void:
+func test_the_grid_says_what_the_unit_says() -> void:
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
 	unit.set_current_hp(int(unit.get_max_hp() * 0.4))
 	_point_at(unit.movement.cell)
 	await _settle()
 
 	var bar := _unit_mirror.bar_for(unit)
-	var expected := float(unit.get_current_hp()) / float(unit.get_max_hp())
-	# Within one texel of the bar's OWN width, read off the bar rather than pinned: the fill is
-	# rounded to whole texels on purpose, so the achievable precision is a function of a tuning
-	# value, and asserting tighter than that would make a width knob able to turn the suite red.
-	var quantum := 1.0 / bar.track_texels()
-	assert_float(bar.fill_fraction()).is_equal_approx(expected, quantum)
-	# Non-vacuity: a bar stuck full or stuck empty would satisfy a loose tolerance on some board.
-	assert_bool(bar.fill_fraction() > 0.0 and bar.fill_fraction() < 1.0).override_failure_message(
-			"the fixture did not actually wound the unit, so the fraction proves nothing").is_true()
+	# EXACT counts, no tolerance. #229's bar was rounded to whole texels, so its achievable
+	# precision rode a width knob and this case had to carry a quantum; one cube per point of HP is
+	# a COUNT, which is the whole argument for the grid — a player can read the number off it.
+	assert_int(bar.block_count()).override_failure_message(
+			"the grid does not have one socket per point of max HP").is_equal(unit.get_max_hp())
+	assert_int(bar.filled_block_count()).override_failure_message(
+			"the cubes standing proud do not match the unit's HP").is_equal(unit.get_current_hp())
+	# Non-vacuity: a grid stuck full or stuck empty would satisfy a sloppier claim on some board.
+	assert_bool(unit.get_current_hp() > 0 and unit.get_current_hp() < unit.get_max_hp()) \
+			.override_failure_message(
+			"the fixture did not actually wound the unit, so the counts prove nothing").is_true()
+	# The two halves of the grid account for the whole of it — a lost cube is RECESSED, not gone,
+	# which is what keeps max HP readable from the grid's own shape.
+	assert_int(bar.block_count() - bar.filled_block_count()).is_equal(
+			unit.get_max_hp() - unit.get_current_hp())
 	assert_str(bar.number_text()).contains(str(unit.get_current_hp()))
 
 
@@ -183,7 +189,14 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 		assert_int(material.billboard_mode).override_failure_message(
 				"'%s' billboards itself; only the parent may carry the orientation"
 				% quad.name).is_equal(BaseMaterial3D.BILLBOARD_DISABLED)
-		if absf((quad.mesh as QuadMesh).center_offset.x) > 0.0001:
+		# Two shapes since #314, displaced two ways: the plate and the state icons are quads that
+		# carry their offset in the MESH, while an HP cube is a real solid placed by node position.
+		# Both are legal here for the same reason — neither turns about its own origin.
+		var mesh := quad.mesh as QuadMesh
+		if mesh != null:
+			if absf(mesh.center_offset.x) > 0.0001:
+				displaced += 1
+		elif absf(quad.position.x) > 0.0001:
 			displaced += 1
 	# Non-vacuity: "nothing billboards" is trivially true of a readout whose parts all sit dead
 	# centre. The half-full fill and the inset number must BOTH actually be off-centre.
@@ -315,8 +328,12 @@ func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> voi
 	var texel := 1.0 / UnitSprite3D.texels_per_unit
 	var icon: float = roundf(_unit_mirror.state_icon_texels)
 	var edge: float = roundf(_unit_mirror.bar_outline_texels)
-	var bar_h: float = roundf(_unit_mirror.bar_height_texels)
-	var track: float = roundf(_unit_mirror.bar_width_texels)
+	# The grid's own extent, ASKED of the readout rather than rebuilt from the knobs: since #314 it
+	# is derived from cube size, cage and row width together, and a second derivation here is a copy
+	# that would go stale the next time the layout grows an input.
+	var stack: Vector2 = bar.stack_size_texels()
+	var bar_h: float = stack.y
+	var track: float = stack.x
 	var gap: float = roundf(_unit_mirror.state_icon_gap_texels)
 
 	assert_float(bar.state_icon_size().x).is_equal_approx(icon * texel, 0.001)
