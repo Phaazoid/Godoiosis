@@ -167,16 +167,25 @@ var _drawn: Array = []
 
 # The heal pop (#314). Restored cubes rise out of the dent they were sitting in rather than
 # appearing already proud -- the socket is their natural origin, so nothing has to be invented for
-# them to arrive from. _pop_from is the first index of the run that is rising; _pop_phase is driven
-# by a tween, and a redraw writes the TARGET only and never the phase, which is the same ownership
-# rule alarm_color follows so the redraw cannot stomp the animation.
+# them to arrive from. _pop_from is the first index of the run that is rising.
+#
+# THE RUN FILLS IN ORDER, ASCENDING (dev, 2026-08-22: "they should fill in in reverse order that they
+# are knocked out from attacks"). The burst launches DESCENDING, so the last cube to leave is the
+# first one back -- and ascending is also the order the grid fills, so the heal grows it exactly the
+# way adding max HP would. One rule, no second convention to keep in step.
+#
+# _pop_clock is SECONDS since the pop began, tweened to _pop_span; a per-cube phase is derived from
+# it below rather than each cube owning a tween. A redraw writes the TARGET only and never the clock,
+# which is the same ownership rule alarm_color follows so the redraw cannot stomp the animation.
 var _pop_from := -1
 var _pop_tween: Tween
 var _pop_time := 0.18
 var _pop_lift := 3.0
-var _pop_phase := 1.0:
+var _pop_stagger := 0.08
+var _pop_span := 0.0
+var _pop_clock := 0.0:
 	set(value):
-		_pop_phase = value
+		_pop_clock = value
 		_place_blocks()
 
 
@@ -232,12 +241,15 @@ func set_prediction_style(doomed: Color, heal: Color, alarm_peak: Color) -> void
 	_rebuild()
 
 
-# How long a restored cube takes to rise out of its socket, and HOW FAR it travels. The distance is
-# the round-2 addition and it is not optional: borrowing the recess made the pop vanish whenever the
-# recess was dialled to 0. See _z_for.
-func set_pop(seconds: float, lift_texels: float) -> void:
+# How long ONE restored cube takes to rise out of its socket, how far it travels while doing it, and
+# how long the next one waits before starting. The distance is the round-2 addition and it is not
+# optional: borrowing the recess made the pop vanish whenever the recess was dialled to 0 (see
+# _z_for). The stagger wants to be a real fraction of the time -- near zero and the run rises as one
+# blob, which is what it did before round 5.
+func set_pop(seconds: float, lift_texels: float, stagger: float) -> void:
 	_pop_time = seconds
 	_pop_lift = lift_texels
+	_pop_stagger = stagger
 
 
 # What a cube looks like beyond its colour: how far a SUNK one shrinks and dims, and how far the
@@ -268,11 +280,15 @@ func play_heal_from(previous: int) -> void:
 	if previous >= _current:
 		return
 	_pop_from = previous
+	# The span runs to the LAST cube's finish, not the first's: one tween drives the whole march, so
+	# it has to outlive every delay it hands out.
+	var rising: int = maxi(_current - previous, 1)
+	_pop_span = maxf(_pop_time, 0.001) + float(rising - 1) * maxf(_pop_stagger, 0.0)
 	if _pop_tween != null:
 		_pop_tween.kill()
-	_pop_phase = 0.0
+	_pop_clock = 0.0
 	_pop_tween = create_tween()
-	_pop_tween.tween_property(self, ^"_pop_phase", 1.0, maxf(_pop_time, 0.001))
+	_pop_tween.tween_property(self, ^"_pop_clock", _pop_span, _pop_span)
 
 
 # What the queued plan leaves this unit at (#313), already run through the display clamp -- this node
@@ -670,9 +686,7 @@ func _place_blocks() -> void:
 func _sunk_fraction(index: int, shown: int) -> float:
 	if index >= shown:
 		return 1.0
-	if _pop_from < 0 or index < _pop_from or _pop_phase >= 1.0:
-		return 0.0
-	return 1.0 - _pop_ease()
+	return 1.0 - _pop_ease(_pop_phase_for(index))
 
 
 # Proud if the cube is there, recessed if the socket is empty -- and mid-rise while a heal pop is
@@ -686,15 +700,37 @@ func _sunk_fraction(index: int, shown: int) -> float:
 func _z_for(index: int, shown: int) -> float:
 	if index >= shown:
 		return _recessed_z()
-	if _pop_from < 0 or index < _pop_from or _pop_phase >= 1.0:
+	var phase := _pop_phase_for(index)
+	if phase >= 1.0:
 		return _proud_z()
 	var lift: float = maxf(_pop_lift, 0.0) * _texel()
-	var overshoot: float = sin(clampf(_pop_phase, 0.0, 1.0) * PI) * 0.35
-	return _proud_z() - lift * (1.0 - _pop_ease()) + lift * overshoot
+	var overshoot: float = sin(phase * PI) * 0.35
+	return _proud_z() - lift * (1.0 - _pop_ease(phase)) + lift * overshoot
 
 
-func _pop_ease() -> float:
-	return 1.0 - pow(1.0 - clampf(_pop_phase, 0.0, 1.0), 3.0)
+# How far along ITS OWN rise this socket is, 0..1. Every cube in the run reads the same clock and
+# subtracts its own delay, so one tween drives the whole march -- N tweens would be N places for the
+# sequence to drift, and killing a half-finished march would have to find all of them.
+#
+# 1.0 for anything not in the rising run, which is what folds "no pop is playing" and "this cube was
+# already standing" into the same answer both callers want: at rest.
+func _pop_phase_for(index: int) -> float:
+	if _pop_from < 0 or index < _pop_from:
+		return 1.0
+	return clampf((_pop_clock - pop_delay_of(index)) / maxf(_pop_time, 0.001), 0.0, 1.0)
+
+
+# How long this socket waits before its own rise begins. Public because it IS the ordering — the
+# march is a schedule, and a schedule can be read without racing the clock that plays it. ONE
+# derivation, so the answer a test reads cannot drift from the one the animation runs on.
+func pop_delay_of(index: int) -> float:
+	if _pop_from < 0 or index < _pop_from:
+		return 0.0
+	return float(index - _pop_from) * maxf(_pop_stagger, 0.0)
+
+
+func _pop_ease(phase: float) -> float:
+	return 1.0 - pow(1.0 - clampf(phase, 0.0, 1.0), 3.0)
 
 
 # The cube's CENTRE, which is half a block short of the face you can see.

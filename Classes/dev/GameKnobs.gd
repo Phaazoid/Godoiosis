@@ -136,6 +136,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How long a healed cube takes to rise back out of its dent, in seconds. It overshoots slightly on the way so it reads as popping rather than sliding. Deliberately quicker and quieter than a burst -- being healed should not upstage being hit."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_pop_lift_texels", "label": "Heal pop travel", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far a healed cube sinks before it springs back, in texels. Deliberately its OWN value rather than the lost-cube depth: tying it to that made the pop invisible the moment the depth was dialled to zero, since an animation whose distance is a knob that may legitimately be 0 has no distance at all. At 0 here the pop looks instant however long you give it."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_pop_stagger", "label": "Heal fill stagger", "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How long each restored cube waits before its own rise, so a multi-point heal FILLS IN one socket at a time instead of popping as one block. The run goes lowest socket first, which is the burst order reversed -- the last cube knocked out is the first one back. Judge this against Heal pop time rather than on its own: near zero and every cube is mid-rise at once, which is one blob however slow you make it, while something like a fifth of the pop time reads as a wave. It is separate from Burst stagger because that one races a cube's whole flight and this one races a single rise."},
 
 	# --- Camera handling ---
 	# How the camera DRAGS, never how the board is framed: pitch, FOV, the opening shot and the fit

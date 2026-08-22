@@ -160,6 +160,11 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # the pop a couple of screen pixels and exactly nothing once the dent was dialled to 0.
 @export var block_pop_time := 0.54
 @export var hp_pop_lift_texels := 5.0
+# How long each restored cube waits before its own rise, so a heal FILLS IN rather than popping as one
+# block (dev, 2026-08-22). The run rises ASCENDING -- the burst leaves descending, so a cube comes back
+# the way it left, backwards. Its own value rather than block_burst_stagger's: that one races a cube's
+# whole flight, this one races block_pop_time, so the same number does not mean the same thing.
+@export var hp_pop_stagger := 0.08
 
 # --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
 # Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
@@ -480,7 +485,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			number_gap, number_shows_max)
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
 	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
-	bar.set_pop(block_pop_time, hp_pop_lift_texels)
+	bar.set_pop(block_pop_time, hp_pop_lift_texels, hp_pop_stagger)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row

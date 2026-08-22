@@ -226,6 +226,35 @@ func test_the_heal_pop_travels_even_with_the_dent_dialled_to_zero() -> void:
 			).is_less(bar.block_world_position(0).z)
 
 
+func test_a_heal_FILLS_IN_from_the_lowest_socket_of_its_run() -> void:
+	# "They should fill in in reverse order that they are knocked out from attacks" (dev, 2026-08-22).
+	# The burst leaves DESCENDING, so the LOWEST socket of a run is the last one knocked out — and
+	# reversing that makes it the first one back.
+	#
+	# Read as a SCHEDULE rather than as a race: the burst's twin case can ask which slot launched
+	# first because a slot IS its launch order, but a healed cube never leaves its socket, so the
+	# equivalent clock-free question is which one waits least. Chasing the depths instead would mean
+	# two idle frames deciding how far a tween had got.
+	_unit_mirror.hp_pop_stagger = 5.0   # fixture: far enough apart that no two delays can be confused
+	var unit := await _watched()
+	unit.take_damage(4)
+	await _settle()
+	unit.heal(3)
+	await _settle()
+
+	var bar := _unit_mirror.bar_for(unit)
+	var shown := unit.get_current_hp()
+	var first := shown - 3   # the run's lowest socket: the last one that left
+	assert_float(bar.pop_delay_of(first)).override_failure_message(
+			"the run's lowest socket does not go first, so the fill is not the burst reversed"
+			).is_equal(0.0)
+	for i in 2:
+		var earlier := first + i
+		assert_float(bar.pop_delay_of(earlier)).override_failure_message(
+				"socket %d waits at least as long as the one above it — the run fills out of order" % earlier
+				).is_less(bar.pop_delay_of(earlier + 1))
+
+
 func test_a_thrown_cube_outlives_the_readout_it_fell_off() -> void:
 	# The reason debris lives under UnitMirror in world space rather than under a readout: a readout
 	# hides the instant the pointer moves, and a cube parented to one would wink out mid-air.
