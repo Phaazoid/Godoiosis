@@ -494,7 +494,9 @@ func test_the_board_hide_spares_the_ui_and_the_authoring_layer() -> void:
 	# CanvasLayer UI went dark WITH it. Hence the per-node helper.
 	var unit := _pickable_player_unit()
 	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
-	end_turn.set_active(true)   # its own visibility is #189's rule, not this claim's
+	# No arming call: since #467 the End Turn button is permanently visible, because the action
+	# ring dropped its End Turn row and this is the only door left. Its FLASH is what #189's rule
+	# became, and neither is this claim's business.
 	await await_idle_frame()
 
 	assert_bool(unit.visuals.sprite.is_visible_in_tree()).is_false()
@@ -511,7 +513,6 @@ func test_a_ui_click_over_the_3d_board_stays_in_the_ui() -> void:
 	# The payoff: a Control is clicked at its REAL screen rect (identity transform —
 	# no container math), the 2D consumes it, and nothing leaks to the 3D picker.
 	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
-	end_turn.set_active(true)
 	await await_idle_frame()
 	var presses: Array[bool] = []
 	end_turn.end_turn_requested.connect(func() -> void: presses.append(true))

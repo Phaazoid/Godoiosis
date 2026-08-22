@@ -915,10 +915,10 @@ func has_any_fireable_attack() -> bool:
 			return true
 	return false
 	
-# Can the ATTACK menu entry do anything? Since the 2026-07-24 refactor Attack always fires the
-# DEFAULT attack with no submenu, so the entry gates on that ONE attack. Deliberately NOT
-# get_fired_attack(): that returns a live active_attack, but begin_attack() clears the pick
-# before aiming — so the gate would judge the entry by an attack it will never fire (#102).
+# Can the ATTACK entry offer anything? It gates on the ONE default attack, which the action ring
+# then lists by its own name (#467 — there is no generic "Attack" row any more). Deliberately NOT
+# get_fired_attack(): that returns a live active_attack, i.e. an aiming cursor left over from a
+# previous aim, so the gate would judge the entry by an attack it will never fire (#102).
 # A weapon with NO main attack (the #80 data-rot shape) fires nothing, so the entry closes:
 # is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
 # answer to "is this gated?" and the wrong one to "is there anything here?".
