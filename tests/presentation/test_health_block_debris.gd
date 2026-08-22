@@ -108,10 +108,17 @@ func test_a_second_hit_throws_its_own_cubes_on_top_of_the_first() -> void:
 
 
 func test_health_lost_while_no_readout_is_up_throws_nothing() -> void:
-	# THE BASELINE TRAP. The unit is never pointed at, so it wears no readout while it is hurt;
-	# pointing at it afterwards must simply draw the new number. A baseline that only advanced
-	# while a readout was up would fire the entire hidden loss here, at the moment of hovering.
-	var unit := _spawn(Vector2i(2, 2))
+	# THE BASELINE TRAP, and the ORDER here is the whole case. The readout must be up FIRST so a
+	# baseline is on record, then hidden, then the unit hurt — which is the ordinary shape of play:
+	# point at a unit, move the mouse away, let an AI pass hurt it, point back. A baseline that only
+	# advanced while a readout was up would fire the entire hidden loss at the moment of pointing
+	# back.
+	#
+	# Found by falsification: without the hover-first leg, `_last_hp` is never seeded at all and the
+	# `.get(id, current)` default silently stands in for it — so the case passed against a mutant
+	# that froze the baseline behind the visibility gate. A precondition that is never established
+	# is not a precondition.
+	var unit := await _watched()
 	_point_away()
 	await _settle()
 	assert_bool(_unit_mirror.bar_for(unit).visible).override_failure_message(
