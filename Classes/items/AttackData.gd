@@ -73,3 +73,32 @@ func targets_text() -> String:
 	if targets == EquippableData.TargetMode.BOTH:
 		return "(unit/tile)"
 	return "(tile)" if targets == EquippableData.TargetMode.MAP else "(unit)"
+
+
+# What each field MEANS, for the dev tools' reflective editor (#473). Every field above carries a
+# comment already, but a comment reaches nobody editing in the running game -- the Attack Editor
+# draws these rows from get_property_list() and had no text on any of them, which is how a range
+# edit landed in the wrong box of two adjacent lookalike spinboxes with nothing to say so.
+#
+# A FUNCTION rather than a const table, and not by preference: GDScript refuses to let a subclass
+# declare a member its parent already has, so a `const PROPERTY_TIPS` here makes one on
+# WeaponAttackData a parse error. A subclass overrides this and merges instead. It lives beside the
+# @export it describes rather than in a table inside DevWidgets, so the tip and the field cannot
+# drift apart in different files.
+static func property_tips() -> Dictionary:
+	return {
+		"power": "Base damage before scaling. A weapon attack scales this off its weapon's stat blend and fitted mods; a carving scales it off the wielder's aura.",
+		"attack_pattern": "The geometry -- which cells this attack may be aimed at. Pick the class here; that class's own fields appear indented underneath.",
+		"can_counter": "May this attack be used when countering? A weapon always counters with its MAIN attack whatever is picked, so this only matters on a main.",
+		"hits_allies": "Splash reaches your own side too, not just enemies.",
+		"hits_self": "The attacker is a legal victim of its own attack.",
+		"targets": "What an aim may land on -- a unit, a tile, or either.",
+		"knockback": "Tiles the target is shoved directly away from the attacker, stopping at the first wall, unit or board edge. 0 = no shove.",
+		"vertical_rule": "MELEE: same elevation at any range, or ONE adjacent ramp-connected half step. A sheer edge refuses in both directions and the two tolerances below are ignored entirely.\nRANGED: the tolerances below decide.\nThis also decides whether the in-game sight-line beads are DRAWN -- only a RANGED attack with a point (non-directional) pattern draws them.",
+		"up_tolerance": "RANGED only: how many levels ABOVE the attacker a target may stand. -1 = unlimited, which is what a gun wants. A lob's climb ceiling.",
+		"down_tolerance": "RANGED only: how many levels BELOW the attacker a target may stand. -1 = unlimited.",
+		"arc_clearance": "How high the shot arcs above its own sight line mid-flight -- this is the LOB setting, not the tolerances above. 0 = a flat, straight shot. Higher clears taller walls to the far side. There is deliberately no unlimited value.",
+		"heals": "Reinterprets the damage number as HP restored instead. An attack is either damage or a heal, never both.",
+		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
+		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
+	}

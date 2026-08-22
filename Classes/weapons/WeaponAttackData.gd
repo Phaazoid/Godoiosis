@@ -27,3 +27,17 @@ extends AttackData
 # silently inert. false = today's behavior for every existing attack. What "readiness" IS remains
 # the wielding WeaponInstance's call: a bool for the Springspear, a magazine for the Carbine, a
 # charge bank for the mace.
+
+
+# The four fields this subclass adds (#473); the shared ones are AttackData's answer, merged in
+# rather than restated. Forgetting the merge loses every base tip silently, which is what
+# tests/dev/test_property_tips.gd's coverage law is for.
+static func property_tips() -> Dictionary:
+	var tips := AttackData.property_tips()
+	tips.merge({
+		"elemental_damage_type": "Which element this attack's damage carries, for reactions and resistances. NONE = plain physical damage.",
+		"requires_readiness": "This attack can only be fired while its weapon is READY. What ready MEANS is the weapon family's own call: a magazine with shots left on a Carbine, a wound spring on a Springspear, banked charge on a Kinetic Mace.",
+		"consumes_readiness": "Firing leaves the weapon un-ready -- spends a shot, releases the spring, drains the bank. Independent of Requires Readiness: an attack can spend without needing.",
+		"builds_readiness": "Firing RESTORES readiness to the weapon -- reloads, winds, banks charge. The third state: needs one / spends one / banks one.",
+	})
+	return tips
