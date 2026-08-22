@@ -189,6 +189,60 @@ func test_right_click_collapses_one_ring_at_a_time_and_then_dismisses() -> void:
 
 
 # ==============================================================================
+#  A category of one, when the one IS the category (#467 round 2)
+# ==============================================================================
+
+# "There is no reason to put Move under Move" (dev). A lone unit has no Group Move, so the Move
+# category holds nothing but the Move verb and must hand it up as a TERMINAL slice -- committing it
+# plans a move rather than growing a ring of one.
+func test_move_is_a_terminal_slice_when_group_move_is_not_offered() -> void:
+	var unit := _spawn(Vector2i(1, 0))
+	assert_bool(unit.has_squad()) \
+		.override_failure_message("a squadmate would offer Group Move and this case would prove nothing") \
+		.is_false()
+
+	var controller := await _open(unit)
+	var move := _row_named(controller.level_nodes(), "Move")
+	assert_bool(move.is_empty()).override_failure_message("the ring offered no Move at all").is_false()
+	assert_bool((move.get("children", []) as Array).is_empty()) \
+		.override_failure_message("Move opened a ring holding nothing but Move").is_true()
+
+
+# Inspect is top level, and it is the same rule doing it: a group of one holding the verb of its own
+# name. Nothing about Inspect is special-cased, which is the point.
+func test_inspect_is_a_terminal_top_level_slice() -> void:
+	var unit := _spawn(Vector2i(1, 0))
+	var controller := await _open(unit)
+
+	var inspect := _row_named(controller.level_nodes(), "Inspect")
+	assert_bool(inspect.is_empty()) \
+		.override_failure_message("Inspect was not on the inner ring").is_false()
+	assert_bool((inspect.get("children", []) as Array).is_empty()) \
+		.override_failure_message("Inspect grew a ring of one").is_true()
+
+
+# The other side of the same rule, and the reason it is not just "collapse when there is one child":
+# a lone Squad Up says something the word Squad does not, so it keeps its ring.
+func test_a_lone_child_with_its_own_name_keeps_its_ring() -> void:
+	var unit := _spawn(Vector2i(1, 0))
+	_spawn(Vector2i(2, 0))   # somebody to squad up WITH
+	var controller := await _open(unit)
+
+	var squad := _row_named(controller.level_nodes(), "Squad")
+	assert_bool(squad.is_empty()).override_failure_message("Squad Up was not offered at all").is_false()
+	assert_bool((squad.get("children", []) as Array).is_empty()) \
+		.override_failure_message("the Squad category collapsed into the verb inside it") \
+		.is_false()
+
+
+func _row_named(rows: Array, text: String) -> Dictionary:
+	for row: Dictionary in rows:
+		if String(row.get("name", "")) == text:
+			return row
+	return {}
+
+
+# ==============================================================================
 #  The tree is a snapshot
 # ==============================================================================
 
