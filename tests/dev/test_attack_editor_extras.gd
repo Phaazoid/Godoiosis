@@ -29,9 +29,11 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	# The idle frame is load-bearing, not politeness: populate() tears its old rows down with
-	# remove_child + queue_free, so freeing the scene in the same frame strands every queued row as
-	# an orphan -- 1017 of them (#473). test_board_lint.gd awaits for the same reason.
+	# FALSE orphans, not a leak (tests/README.md #162): populate() tears its old rows down with
+	# remove_child + queue_free, and a parentless-pending node is exactly what the orphan monitor
+	# counts if the suite ends in the same frame. It reported 1017. The idle frame is the prescribed
+	# teardown for any suite that clears or reloads a board -- and it stops being needed the day we
+	# vendor gdUnit4 v6.2.1, whose upstream fix (GD-1291) filters queued-for-deletion nodes out.
 	await await_idle_frame()
 	get_tree().root.remove_child(_scene)
 	_scene.free()
