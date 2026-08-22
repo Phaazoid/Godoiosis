@@ -83,7 +83,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # TEN to a row is the whole reason the readout is countable: one full row plus four reads as 14
 # without counting. Rows grow upward and the BOTTOM row fills first, so losses show along the top
 # where a knocked-off cube has clearance to leave.
-@export var hp_block_texels := 5.0
+@export var hp_block_texels := 4.0
 @export var hp_block_border_texels := 1.0
 @export var hp_blocks_per_row := 10
 # How far back a LOST cube sits. The dent is a second cue beside the colour, which is what makes the
@@ -147,7 +147,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var block_spin_speed := 8.5
 @export var block_gravity := 7.0
 @export var block_bounce := 0.45           # how much of the fall a cube keeps on the way back up
-@export var block_lifetime := 0.75
+@export var block_lifetime := 2.35
 # How long each cube waits before its own launch, so a multi-cube burst MARCHES through the grid
 # rather than leaving all at once (dev, 2026-08-22). A waiting cube sits in its socket rather than
 # hiding, so the grid breaks apart in sequence with no gap running ahead of it.
@@ -158,8 +158,8 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # How long a healed cube takes to rise back out of its dent, and HOW FAR it travels while doing it.
 # The distance is its OWN value rather than the recess depth: round 1 borrowed the dent, which made
 # the pop a couple of screen pixels and exactly nothing once the dent was dialled to 0.
-@export var block_pop_time := 0.18
-@export var hp_pop_lift_texels := 3.0
+@export var block_pop_time := 0.54
+@export var hp_pop_lift_texels := 5.0
 
 # --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
 # Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
