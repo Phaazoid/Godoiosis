@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #462 (2026-08-21).**
+**Canon checked through #476 (2026-08-22).**
 
 ---
 
@@ -227,6 +227,50 @@ The original contract locked **"yaw snapping in 90° steps"**. The dev asked the
 Bindings are knobs, not canon: `orbit_button` was built to default to middle-drag so right-click could keep its press-to-cancel meaning, with the click/drag threshold built so flipping it was an inspector change. **The dev flipped it to right-drag after playing it (2026-08-14)** — *"you don't need to drag the mouse when canceling orders, so the overlap is a non issue"* — which is the knob working as intended; cancel now fires on release-under-slop, and moving the binding back moves it back to press.
 
 Also settled here: **the camera follows the action by mirroring the 2D camera** (which `AIController` already pans to each acting squad) rather than growing a second follow seam — so `Pacing.AI_SQUAD_PAN` keeps one number and one reader, and the 3D inherits the 2D's easing exactly. The gate is `ai_locked`, deliberately *not* the broader board lock, which also covers menus. **Entering an AI turn also squares the camera up** to the nearest detent (dev call, 2026-08-14): free orbit is the player's, but an enemy phase reads on an axis-aligned board. It fires on the *edge* into the turn rather than every frame, so the day orbit is allowed to stay live under an AI turn it squares up once instead of fighting the drag.
+
+### The camera comes BACK when an order is committed ([#471](https://github.com/Phaazoid/Godoiosis/issues/471), 2026-08-22)
+
+The mirror above answers *the AI is acting somewhere else*. #467's ring raised the other half: the ring
+does **not** lock the board, so the player can pan the diorama anywhere while choosing — and then
+commit an order that plays out around a unit no longer on screen. **A terminal pick brings the view
+back to the acting unit; backing out with no order leaves it exactly where the player put it.** The
+dev's line drawn once: *action versus no action*, not board-verbs versus UI-verbs. Inspect and Wait
+yank the camera too, and that is a knob to turn in play rather than a rule to guess at.
+
+- **The gate above is untouched, and reaching for it would have been the wrong fix.** `pan_to` moves
+  the hidden 2D camera, which under `HD_2D` nobody is looking at, so widening `ai_locked` was the
+  obvious answer and would have produced a change that runs and does nothing visible ([#103](https://github.com/Phaazoid/Godoiosis/issues/103)'s shape).
+  `battle3d` already had a **player-initiated** rig recentre that never touches the mirror — SPACE —
+  so this is a second caller of `_center_rig_on(cell)`, and the two guard cases in
+  `test_camera_follow.gd` keep saying exactly what they said before.
+- **SNAP, not glide** (dev call). Two reasons beyond the feel: the rig smooths yaw and distance but
+  **not position** — every writer, WASD included, assigns it outright — so a glide is a mechanism to
+  invent, not a duration to pick; and the 2D twin's `center_on_position` sets `lock_manual_input`,
+  refusing the player's own camera on the way in, which is the wrong answer for someone who just
+  gave an order.
+- **`game.focus_view_on(unit)` derives the cell ONCE and emits it.** The **projected** destination,
+  which is already what every gate and pick layer means by "where this unit acts from" ([#126](https://github.com/Phaazoid/Godoiosis/issues/126)),
+  so a queued move is followed rather than second-guessed. The 2D camera is written there and the 3D
+  rig on the signal — one question, two cameras, no second answer about which cell.
+- **The 2D write stands down under a 3D host, and that is load-bearing.** `battle3d._update_pointer`
+  snaps that hidden camera on every motion purely to park the hover card, so writing it from here
+  would mis-anchor the card and change nothing else. Same flag, same reason, as the WASD poll's.
+- **2D/3D** ([#292](https://github.com/Phaazoid/Godoiosis/issues/292)): both views answer it. `CORNER` deliberately does not — it is a debug PiP whose
+  2D camera is already being dragged by the pointer.
+
+**Riding along: the pointer poll re-derives on CAMERA movement, not only on mouse movement.** The
+pick depends on both, and the early-out only compared the mouse — so panning the world under a still
+cursor left the hover bracket on the cell the pointer had *left*, until you jiggled the mouse. True
+of WASD and of SPACE long before this ticket; the return-to-unit is what made it frequent enough to
+be worth fixing. It compares the camera's whole transform rather than the rig's position, because
+yaw and zoom move the pick too and both lerp for frames after the input that started them.
+
+**The invariant that keeps two authorities apart, worth stating because nothing in the code says
+it:** `_update_pointer` WRITES the hidden 2D camera and `_mirror_camera` READS it, so the two would
+chase each other if they ever ran in the same frame. They cannot, because `ai_locked` is only ever
+set in the same block as `AI_TURN` and the poll stands down on any locked board. That is now a fact
+the poll depends on rather than a coincidence — a fixture holding `ai_locked` *without* `AI_TURN` is
+in a state the game cannot reach, and `test_camera_follow.gd` says so where it sets both.
 
 **The opening shot is the player's squad, not the board (dev feel-check, 2026-08-14: fitting all 64×40 of Prolog opened too far out to play from).** These are two different questions and the rig now takes both — `frame(shot, bounds)`: the *shot* is what is on screen at load, the *bounds* are the box the view may never leave, and only the bounds set the zoom ceiling and the pan limit. Solving the ceiling off a close shot would have clamped the player out of ever seeing the rest of the map, which is the same class of bug as the cells-passed-as-a-distance one this stage fixed. Falsification note worth keeping: the obvious test — *are the player's units on screen at load?* — **passes against a window aimed at the board's centre** on both authored missions, because both squads start near the middle. The aim itself has to be asserted, or "opens on your squad" is pinned by nothing.
 
