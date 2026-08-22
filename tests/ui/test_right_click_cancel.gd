@@ -100,8 +100,8 @@ func _arm(unit: Unit) -> void:
 func _pick_first_attack(unit: Unit) -> void:
 	var controller := MD.controller_of(game)
 	assert_object(controller).override_failure_message("no action menu opened").is_not_null()
-	var leaf := MD.first_leaf_under(controller.level_nodes(), "Attack")
-	assert_bool(leaf.is_empty()).override_failure_message("the ring offered no attack at all").is_false()
+	var leaf := MD.first_leaf_under(controller.level_nodes(), MD.kit_category(game, unit))
+	assert_bool(leaf.is_empty()).override_failure_message("the ring offered no kit slice at all").is_false()
 	controller.cancelled.emit(controller)
 	controller.action_selected.emit(int(leaf.get("id", 0)), unit)
 

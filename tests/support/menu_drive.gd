@@ -42,6 +42,16 @@ static func path_to(nodes: Array, label: String) -> Array[int]:
 	return none
 
 
+# What the KIT slice is called for this unit -- "Weapon" or "Rune" since #467 round 3, because it
+# holds Reload and Burrow and carvings, none of which are attacks. Asked of MainActionMenu rather
+# than typed here: a suite that spells the label itself is a second answer to what the slice is
+# called, and goes stale the next time it is tuned. (It did, once, which is why this exists.)
+static func kit_category(game: Node, unit: Unit) -> String:
+	var menu: MainActionMenu = game.main_action_menu
+	var display: Dictionary = menu.category_display(MainActionMenu.Group.ATTACK_GROUP, unit)
+	return String(display.get("name", ""))
+
+
 # The first leaf inside the named category, or {} -- and {} for a category that collapsed to a
 # terminal slice, since then there is nothing "inside" it.
 static func first_leaf_under(nodes: Array, category: String) -> Dictionary:

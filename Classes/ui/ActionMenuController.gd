@@ -39,6 +39,7 @@ const MAX_RING_DEPTH := 3      # categories, their children, and a preview beyon
 const SPRITE_FIT := 1.4        # sprite box as a multiple of DEAD_ZONE_RADIUS (< 2.0 keeps it inside)
 const ARC_SAMPLES_PER_SLICE := 12
 const MIN_LABEL_FONT_SIZE := 8   # a shrunk label stops here; below it the name is not a readout
+const READOUT_PADDING := 8.0     # breathing room between the readout's text and its panel edge
 
 # Look values, tuned live through GameKnobs.CLASS_KNOBS. Statics rather than exports because the
 # menu is transient -- there is no standing node for a knob to address, and nothing to re-apply
@@ -58,7 +59,10 @@ static var PAINT_FRACTION_FALLOFF := 0.1
 # the sectors still tile the full circle, so the leftover angle simply belongs to the nearest
 # wedge and the always-drawn highlight says which.
 static var MAX_WEDGE_DEGREES := 120.0
-static var GHOST_ALPHA := 0.32
+# A PREVIEW has to be legible or it is not a preview (dev, round 3: "can't very well preview what
+# I can't see"). It reads as not-open-yet by being one ring further out and carrying no highlight,
+# NOT by being faint -- so this is opaque enough to read against a live board.
+static var GHOST_ALPHA := 0.8
 static var SLICE_COLOR := Color(0.08, 0.09, 0.12, 0.92)
 static var SLICE_SELECTED_COLOR := Color(0.30, 0.45, 0.66, 0.96)
 static var SLICE_DISABLED_COLOR := Color(0.08, 0.09, 0.12, 0.5)
@@ -67,6 +71,14 @@ static var SLICE_DISABLED_COLOR := Color(0.08, 0.09, 0.12, 0.5)
 static var CENTRE_COLOR := Color(0.05, 0.06, 0.09, 0.94)
 static var CENTRE_RIM_COLOR := Color(0.55, 0.62, 0.75, 0.85)
 static var CENTRE_RIM_WIDTH := 2.0
+# The readout below the ring. Both text colours are fully opaque on purpose: the hierarchy between
+# a name and its explanation is BRIGHTNESS, because alpha over a live board is what made the first
+# version hard to read at all.
+static var READOUT_BACKGROUND := Color(0.04, 0.05, 0.07, 0.94)
+static var READOUT_BORDER := Color(0.55, 0.62, 0.75, 0.7)
+static var READOUT_BORDER_WIDTH := 1.0
+static var READOUT_TITLE_COLOR := Color(1, 1, 1, 1)
+static var READOUT_DETAIL_COLOR := Color(0.78, 0.82, 0.88, 1)
 
 var local_unit: Unit
 
@@ -77,6 +89,7 @@ var _levels: Array[Dictionary] = []   # [{nodes: Array, start_deg: float}]; [0] 
 var _selection := -1                  # index within the deepest level; -1 = dead zone
 var _preview: Array = []              # the hovered category's children, ghosted; empty when none
 var _preview_start := 0.0
+var _hover_seconds := 0.0             # how long _selection has been held; gates the readout
 
 signal action_selected(action_id, local_unit)
 signal cancelled(me)
@@ -229,8 +242,21 @@ func aim_at(point: Vector2) -> void:
 	if picked == _selection:
 		return
 	_selection = picked
+	_hover_seconds = 0.0   # a new slice starts its own wait; the readout never carries over
 	_refresh_preview()
 	_root.queue_redraw()
+
+
+# The only thing this node processes: the readout's hover clock. It redraws exactly ONCE, on the
+# frame the wait is served, rather than every frame -- a menu that repainted continuously would be
+# paying for a panel that is not there yet.
+func _process(delta: float) -> void:
+	if _selection < 0 or _root == null:
+		return
+	var was_due := _readout_due()
+	_hover_seconds += delta
+	if _readout_due() != was_due:
+		_root.queue_redraw()
 
 # The ghost ring: the hovered category's children, drawn one level out in a not-open-yet state so
 # every category's contents can be read without spending a click.
@@ -399,9 +425,11 @@ func _draw_slice_label(node: Dictionary, radii: Vector2, index: int, count: int,
 		size = maxi(MIN_LABEL_FONT_SIZE, int(floor(float(size) * available / width)))
 		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
 
-	var color := Color(1, 1, 1, alpha)
+	# Deliberately NOT scaled by the ring's alpha: on a ghosted ring the label is the entire point
+	# of the preview, so it stays solid even while its wedge is not.
+	var color := READOUT_TITLE_COLOR
 	if bool(node.get("disabled", false)):
-		color.a *= 0.45
+		color = Color(color.r, color.g, color.b, 0.55)
 
 	# draw_set_transform applies to everything after it, so the identity has to go back on.
 	_root.draw_set_transform(point_at(_centre, radius, mid), rot, Vector2.ONE)
@@ -432,6 +460,8 @@ func _draw_centre() -> void:
 # The readout sits BELOW the whole stack, not in the centre: the pointer is routinely nowhere near
 # the ring, so this is the only feedback that exists, and it needs room the sprite is using.
 func _draw_readout() -> void:
+	if not _readout_due():
+		return
 	var node := selected_node()
 	if node.is_empty():
 		return
@@ -439,15 +469,55 @@ func _draw_readout() -> void:
 	if font == null:
 		return
 	var font_size := _root.get_theme_default_font_size()
-	var y: float = _centre.y + _ring_radii(_levels.size() - 1).y + font_size * 2.0
-	_draw_centred_line(font, font_size, node.get("name", ""), y, Color(1, 1, 1, 0.95))
-	var detail: String = node.get("tooltip", "")
-	if detail == "":
+
+	# Every line first, because the panel has to be sized before anything is drawn on it. The
+	# detail arrives already wrapped from MainActionMenu._entry -- the stored text IS the
+	# displayed text, so this only has to split it.
+	var lines: Array[String] = []
+	var title := String(node.get("name", ""))
+	if title != "":
+		lines.append(title)
+	var detail := String(node.get("tooltip", ""))
+	if detail != "":
+		for line in detail.split("\n"):
+			lines.append(line)
+	if lines.is_empty():
 		return
-	# Already wrapped by MainActionMenu._entry -- the stored text IS the displayed text.
-	for line in detail.split("\n"):
-		y += float(font_size) * 1.35
-		_draw_centred_line(font, font_size, line, y, Color(1, 1, 1, 0.6))
+
+	var line_height := float(font_size) * 1.35
+	var widest := 0.0
+	for line: String in lines:
+		widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x)
+
+	var top: float = _centre.y + _ring_radii(_levels.size() - 1).y + float(font_size)
+	var box := Rect2(
+		_centre.x - widest * 0.5 - READOUT_PADDING,
+		top - READOUT_PADDING,
+		widest + READOUT_PADDING * 2.0,
+		line_height * float(lines.size()) + READOUT_PADDING * 2.0)
+	_root.draw_rect(box, READOUT_BACKGROUND, true)
+	if READOUT_BORDER_WIDTH > 0.0:
+		_root.draw_rect(box, READOUT_BORDER, false, READOUT_BORDER_WIDTH)
+
+	# Solid, both of them (dev, round 3: "the transparency + lack of background hurts the eyes").
+	# The hierarchy between the name and its explanation is BRIGHTNESS, never alpha -- alpha is what
+	# made this hard to read in the first place.
+	var y := top + float(font_size)
+	for i in range(lines.size()):
+		_draw_centred_line(font, font_size, lines[i], y,
+			READOUT_TITLE_COLOR if i == 0 else READOUT_DETAIL_COLOR)
+		y += line_height
+
+
+# The readout waits out a hover, so sweeping the ring does not strobe a panel under it. The delay
+# is the PROJECT'S tooltip delay -- the same store the inspect panel's own hover text reads
+# (`gui/timers/tooltip_delay_sec`), so the two surfaces cannot drift apart or need a second number
+# to keep in sync (dev: "same amount as in the inspect menu").
+func _readout_due() -> bool:
+	return _selection >= 0 and _hover_seconds >= hover_delay()
+
+static func hover_delay() -> float:
+	return float(ProjectSettings.get_setting("gui/timers/tooltip_delay_sec", 0.5))
 
 func _draw_centred_line(font: Font, font_size: int, text: String, y: float, color: Color) -> void:
 	if text == "":

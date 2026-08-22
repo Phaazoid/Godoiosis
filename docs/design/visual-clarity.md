@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #467 (2026-08-21).**
+**Canon checked through #467 (2026-08-22).**
 
 ## Principles
 
@@ -801,6 +801,32 @@ should face outwards, on the top, inwards"* — which is the unreadable half; hi
 (*"to be readable"*) is what settled it the other way, and he asked for it built and shown rather
 than argued.
 
+
+### Round 3: naming, and making the readout readable
+
+**A slice is named after WHAT IT HOLDS, not after the most exciting thing in it.** Reload and Burrow
+are not attacks and most carvings are not either, so a slice called *Attack* was lying about half
+its contents at any given moment — and "Weapon Action" was both long and only half the story. The
+kit slice is now labelled **Weapon** or **Rune**, after whatever is equipped: it says whose verbs
+these are and claims nothing about what they do. `Act` became `Action` in the same pass. The dev
+floated *Channel* for the rune side and then answered himself — *"or maybe we could keep it simple,
+Rune and Weapon"* — which is the version that solves both complaints with one rule instead of
+mixing a verb with an object.
+
+**`MainActionMenu.category_display(group, unit)` is the ONE answer to what a slice is called**, and
+it is public for that reason: three test suites had spelled `"Attack"` themselves, and all three
+went red the moment the label moved. A label typed twice is a label that goes stale.
+
+**The readout is solid, backed, and waits.** Transparent text over a live board was the complaint
+(*"the transparency + lack of background hurts the eyes"*), so both colours are fully opaque and the
+hierarchy between a name and its explanation is **brightness** — alpha is what made it unreadable in
+the first place. It sits on a panel, and it appears only after the hover is held for
+`gui/timers/tooltip_delay_sec`: **the project setting the inspect panel's own tooltips already
+read**, so *"same amount as in the inspect menu"* stays one number rather than a copied constant.
+
+**A preview has to be legible or it is not a preview.** `GHOST_ALPHA` went from 0.32 to 0.8, and a
+ghosted ring's LABELS stopped being dimmed at all — the label is the entire point of previewing.
+What still says *not open yet* is position and the absence of a highlight, not faintness.
 
 ## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
 

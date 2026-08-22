@@ -309,6 +309,21 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action ring", "label": "Wedge fill", "static": "PAINT_FRACTION",
 		"script": ACTION_MENU_SCRIPT, "min": 0.15, "max": 1.0, "step": 0.01,
 		"tip": "How much of its own slice a wedge actually paints, on the first ring. Below 1.0 leaves air between wedges. Purely a look: the slice you are pointing at does not change, only how much of it is drawn."},
+	{"group": "Action ring", "label": "Readout panel", "static": "READOUT_BACKGROUND",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The block behind the hovered slice's name and explanation, under the ring. It sits over a live board, so opacity here is legibility -- the first version had none and was painful to read."},
+	{"group": "Action ring", "label": "Readout border", "static": "READOUT_BORDER",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The outline around that block. Enough to separate it from whatever is behind it."},
+	{"group": "Action ring", "label": "Readout border width", "static": "READOUT_BORDER_WIDTH",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.5,
+		"tip": "How thick that outline is drawn. Zero removes it."},
+	{"group": "Action ring", "label": "Readout name", "static": "READOUT_TITLE_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The hovered slice's NAME, and every wedge label too. Kept fully opaque on purpose: the hierarchy against the explanation below is brightness, never transparency."},
+	{"group": "Action ring", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The explanation under that name -- what the option does, and why it is greyed when it is. Dimmer than the name, but still solid."},
 	{"group": "Action ring", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
 		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
 		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
@@ -405,6 +420,11 @@ static func read_static(name: String) -> Variant:
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
+		"READOUT_BACKGROUND": return ActionMenuController.READOUT_BACKGROUND
+		"READOUT_BORDER": return ActionMenuController.READOUT_BORDER
+		"READOUT_BORDER_WIDTH": return ActionMenuController.READOUT_BORDER_WIDTH
+		"READOUT_TITLE_COLOR": return ActionMenuController.READOUT_TITLE_COLOR
+		"READOUT_DETAIL_COLOR": return ActionMenuController.READOUT_DETAIL_COLOR
 		"MAX_WEDGE_DEGREES": return ActionMenuController.MAX_WEDGE_DEGREES
 		"CENTRE_COLOR": return ActionMenuController.CENTRE_COLOR
 		"CENTRE_RIM_COLOR": return ActionMenuController.CENTRE_RIM_COLOR
@@ -454,6 +474,21 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# standing ring to re-apply one to. That is also why they are statics rather than KNOBS
 		# rows -- KNOBS names a property on a node in the running world, and this one is not there
 		# except while the player is holding it open.
+		"READOUT_BACKGROUND":
+			ActionMenuController.READOUT_BACKGROUND = value
+			return
+		"READOUT_BORDER":
+			ActionMenuController.READOUT_BORDER = value
+			return
+		"READOUT_BORDER_WIDTH":
+			ActionMenuController.READOUT_BORDER_WIDTH = value
+			return
+		"READOUT_TITLE_COLOR":
+			ActionMenuController.READOUT_TITLE_COLOR = value
+			return
+		"READOUT_DETAIL_COLOR":
+			ActionMenuController.READOUT_DETAIL_COLOR = value
+			return
 		"MAX_WEDGE_DEGREES":
 			ActionMenuController.MAX_WEDGE_DEGREES = value
 			return

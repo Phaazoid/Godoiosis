@@ -18,6 +18,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const MD := preload("res://tests/support/menu_drive.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 
@@ -120,15 +121,16 @@ func _enter_attack_ring(unit: Unit) -> void:
 	await await_idle_frame()
 	var controller := _controller()
 	var rows: Array = controller.level_nodes()
+	var kit := MD.kit_category(game, unit)
 	var index := -1
 	for i in range(rows.size()):
-		if String(rows[i].get("name", "")) == "Attack":
+		if String(rows[i].get("name", "")) == kit:
 			index = i
-	assert_int(index).override_failure_message("the ring offered no Attack category").is_greater(-1)
+	assert_int(index).override_failure_message("the ring offered no '%s' slice" % kit).is_greater(-1)
 	controller.aim_at(controller.point_in_slice(index))
 	controller.commit()
 	assert_int(controller.level_count()) \
-		.override_failure_message("committing Attack did not open a ring").is_equal(2)
+		.override_failure_message("committing the kit slice did not open a ring").is_equal(2)
 
 
 # ==============================================================================

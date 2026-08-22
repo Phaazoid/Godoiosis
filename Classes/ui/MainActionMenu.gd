@@ -16,10 +16,12 @@ class_name MainActionMenu
 # commits. The game is modal while the ring is up, so nothing can change underneath the snapshot.
 #
 #   MOVE    -- Move, Group Move
-#   ATTACK  -- every attack the unit owns, each by ITS OWN NAME: the weapon's main and its other
-#              attacks, its self-verbs (Reload/Rev/Burrow), and the rune's carvings
-#   ACT     -- the main actions that are not an attack (Guard, Rescue, Rally, Capture, the
-#              ability-driven verbs) plus Wait, which spends the squad's turn the same way
+#   ATTACK  -- the equipped KIT's verbs, each by ITS OWN NAME: a weapon's main and other attacks
+#              plus its self-verbs (Reload/Rev/Burrow), or a rune's carvings. The slice is LABELLED
+#              "Weapon" or "Rune" after what is equipped, never "Attack" -- see category_display.
+#   ACT     -- the main actions that are not kit use (Guard, Rescue, Rally, Capture, the
+#              ability-driven verbs) plus Wait, which spends the squad's turn the same way.
+#              Labelled "Action".
 #   SQUAD   -- Squad Up, Join, Leave, Disband
 #   INSPECT -- itself, and therefore a top-level slice; see Group below
 #
@@ -81,18 +83,28 @@ enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP }
 # of the same name; ACT and SQUAD_ACTIONS were authored for the ring.
 const CATEGORIES := {
 	Group.MOVE_GROUP: {"name": "Move", "term": Glossary.Term.MOVE},
-	Group.ATTACK_GROUP: {"name": "Attack", "term": Glossary.Term.ATTACK},
-	Group.ACT_GROUP: {"name": "Act", "term": Glossary.Term.ACT},
+	Group.ATTACK_GROUP: {"name": "Weapon", "term": Glossary.Term.WEAPON_ACTION},
+	Group.ACT_GROUP: {"name": "Action", "term": Glossary.Term.ACTION},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
 	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
 }
+
+# The kit slice is named after WHAT IS EQUIPPED, never after attacking (#467 round 3). It holds
+# more than attacks and always did: a weapon's Reload and Burrow are not attacks, and most carvings
+# are not either -- so "Attack" was lying about half its contents at any given moment. Naming it
+# for the object says whose verbs these are and claims nothing about what they do.
+#
+# A per-unit fork rather than a second table row, because it is ONE slice whose label depends on
+# the unit the ring belongs to; two rows would be two answers to "where do the kit's verbs go".
+const RUNE_CATEGORY := {"name": "Rune", "term": Glossary.Term.RUNE}
 
 # Display data AND print order: declaration order here IS the order within a category (Godot
 # dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
 # `term` names the row's Glossary entry (#135): its short text is the row's hover tooltip.
 # `group` is which ring category the verb sits under (#467).
-# `expands` marks the three ids that were only ever category headers: they contribute their
-# CHILDREN to their group rather than a row of their own.
+# `expands` marks the ids that were only ever category headers: they contribute their CHILDREN to
+# their group rather than a row of their own, so their own `name` is never DRAWN -- it documents
+# the expander, and the slice above it is labelled by category_display instead.
 const ACTION_DATA := {
 	MOVE: {"name": "Move", "term": Glossary.Term.MOVE, "group": Group.MOVE_GROUP},
 	GROUP_MOVE: {"name": "Group Move", "term": Glossary.Term.GROUP_MOVE, "group": Group.MOVE_GROUP},
@@ -162,7 +174,7 @@ func build_tree(unit: Unit) -> Array:
 		var children: Array = by_group.get(group, [])
 		if children.is_empty():
 			continue
-		var category: Dictionary = CATEGORIES[group]
+		var category := category_display(group, unit)
 		# A category whose ONE child is its own verb is the same question asked twice -- Move
 		# holding nothing but Move (dev, #467 round 2: "there is no reason to put Move under
 		# Move"). Hand the child up as a terminal slice. Deliberately NOT "collapse whenever
@@ -175,6 +187,15 @@ func build_tree(unit: Unit) -> Array:
 		node["children"] = children
 		ring.append(node)
 	return ring
+
+
+# What a category slice SAYS, for this unit. Only the kit slice forks -- see RUNE_CATEGORY. Public
+# because it is the ONE answer to "what is this slice called": a test that types "Weapon" instead
+# is a second answer that goes stale the next time the label is tuned.
+func category_display(group: int, unit: Unit) -> Dictionary:
+	if group == Group.ATTACK_GROUP and unit.get_equipped_weapon() is RuneData:
+		return RUNE_CATEGORY
+	return CATEGORIES[group]
 
 
 # Two slices with one name is a bug however it arose -- and it arises HERE by construction: a

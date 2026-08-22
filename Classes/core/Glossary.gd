@@ -26,7 +26,7 @@ enum Term {
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	GUARD, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
-	ACT, SQUAD_ACTIONS,
+	ACTION, RUNE, SQUAD_ACTIONS,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
@@ -300,11 +300,20 @@ static func _build_entries() -> Dictionary:
 			+ "itself (setting it burning, freezing water) and never touches units directly. "
 			+ "(unit/tile): does both at once. Tile-targeting is how attacks and the terrain "
 			+ "interact — see the Terrain and Elemental pages."}
-	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon Action",
-		"short": "The equipped weapon's other attacks and its self-verbs: reload, rev, burrow.",
-		"long": "Everything the equipped weapon can do beyond its main attack: alternative attacks, "
-			+ "plus the weapon's own verbs — reloading a magazine, revving a motor, digging in. "
+	# The action ring names this slice after the equipped WEAPON rather than after attacking (#467
+	# round 3), because reloading and burrowing are not attacks and a slice called Attack would be
+	# lying about half its contents. Term.RUNE below is its opposite number.
+	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon",
+		"short": "Everything the equipped weapon can do: its attacks, and its own verbs like reload, rev, burrow.",
+		"long": "One slice for the weapon in hand — its main attack, any alternative attacks, and "
+			+ "the verbs the weapon itself has: reloading a magazine, revving a motor, digging in. "
 			+ "Greyed entries say what they are missing."}
+	e[Term.RUNE] = {"category": Category.ACTIONS, "title": "Rune",
+		"short": "Everything the equipped rune can do: the carvings inscribed on it, paid for with aura.",
+		"long": "The weapon slice's opposite number, for an alchemist. A rune carries inscribed "
+			+ "carvings and firing one channels the wielder's elemental aura; many carvings are not "
+			+ "attacks at all, which is why this slice is named for the rune rather than for "
+			+ "swinging. A carving the wielder cannot pay for is listed greyed, with the reason."}
 	e[Term.TRANSMUTATION] = {"category": Category.ACTIONS, "title": "Transmutation",
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
@@ -316,7 +325,7 @@ static func _build_entries() -> Dictionary:
 	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
 	# terms of the same name; these two name a grouping the game had no word for before the ring.
 	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.
-	e[Term.ACT] = {"category": Category.ACTIONS, "title": "Act",
+	e[Term.ACTION] = {"category": Category.ACTIONS, "title": "Action",
 		"short": "Spending the turn on something other than an attack: guard, rescue, rally, capture, wait.",
 		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
 			+ "swinging a weapon — standing in front of an ally, carrying a downed one to safety, "
