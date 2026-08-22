@@ -89,6 +89,15 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # How deep a LOST cube sinks into the plate. The dent is a second cue beside the colour, which is
 # what makes the readout survive distance and the green/red confusion this palette invites.
 @export var hp_block_recess_texels := 2.0
+# Depth ALONE did not read as a dent (dev, 2026-08-22) — head-on, a cube pushed back is still a
+# same-sized square, because there is no socket wall to see. Shrinking it shows plate around its
+# edges, and dimming it puts it in shadow; together they are what the dent was supposed to be.
+@export var hp_block_recess_shrink := 0.7
+@export var hp_block_recess_shade := 0.55
+# Whether the grid turns to face the camera. OFF by default (dev: "The health bars are 3D, they
+# should not billboard towards the camera") — held in place it sits on the board's own axes like the
+# voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
+@export var hp_grid_faces_camera := false
 @export var bar_outline_texels := 1.0   # black border thickness; the colour itself is not a knob
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
 # missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
@@ -136,11 +145,18 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var block_gravity := 9.0
 @export var block_bounce := 0.45           # how much of the fall a cube keeps on the way back up
 @export var block_lifetime := 0.75
+# How long each cube waits before its own launch, so a multi-cube burst MARCHES through the grid
+# rather than leaving all at once (dev, 2026-08-22). A waiting cube sits in its socket rather than
+# hiding, so the grid breaks apart in sequence with no gap running ahead of it.
+@export var block_burst_stagger := 0.04
 # A DEATH detonates the whole remaining grid, harder than an ordinary hit -- the loudest thing the
 # readout ever does, for the loudest thing that happens on the board.
 @export var block_death_power := 1.8
-# How long a healed cube takes to rise back out of its dent.
+# How long a healed cube takes to rise back out of its dent, and HOW FAR it travels while doing it.
+# The distance is its OWN value rather than the recess depth: round 1 borrowed the dent, which made
+# the pop a couple of screen pixels and exactly nothing once the dent was dialled to 0.
 @export var block_pop_time := 0.18
+@export var hp_pop_lift_texels := 3.0
 
 # --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
 # Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
@@ -460,7 +476,8 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)
-	bar.set_pop_time(block_pop_time)
+	bar.set_recess_style(hp_block_recess_shrink, hp_block_recess_shade)
+	bar.set_pop(block_pop_time, hp_pop_lift_texels)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
 	bar.set_number_shown(hovered or unhovered_shows_number)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
@@ -491,7 +508,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	if is_inside_tree():
 		var camera := get_viewport().get_camera_3d()
 		if camera != null:
-			bar.face(camera.global_transform.basis)
+			bar.face(camera.global_transform.basis, hp_grid_faces_camera)
 
 
 # The readout rides whatever is ON SCREEN. That is the same fork _sync makes when it hides a
@@ -529,26 +546,40 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 	_burst_lost(bar, previous, current, 1.0)
 
 
-# A death detonates whatever is left standing. Reached by signal because nothing else can reach it:
-# see the connect site in reconcile. filled_block_count() is the RENDERED count, so the burst is of
-# the cubes that were actually on screen rather than of an HP number nobody drew.
+# A death detonates the WHOLE grid — the red cubes go too (dev, 2026-08-22: "On a killing hit, even
+# the red blocks should fly away"). Reached by signal because nothing else can reach it: see the
+# connect site in reconcile. The standing/lost split comes off the RENDERED count, so each cube
+# leaves wearing what it was showing rather than what an HP number says it should have been.
 func _on_unit_died(_unit: Unit, id: int) -> void:
 	var bar: UnitHealthBar = _bars.get(id)
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return
-	_burst_lost(bar, bar.filled_block_count(), 0, block_death_power)
+	var standing := bar.filled_block_count()
+	var positions: Array[Vector3] = []
+	var colors := PackedColorArray()
+	for index in bar.block_count():
+		positions.append(bar.block_world_position(index))
+		colors.append(bar_fill_color if index < standing else bar_missing_color)
+	_throw(bar, positions, colors, block_death_power)
 
 
-# The cubes between two HP readings, thrown from the sockets they were standing in. The readout has
-# already redrawn by now, so these positions are the sockets as they sit — a cube leaves from its
-# own dent, which is where it was.
+# The cubes between two HP readings, thrown from the sockets they were standing in. They leave in the
+# FILL colour rather than whatever those sockets are showing now: the readout has already redrawn, so
+# they read as missing — which is what they BECAME, not what left.
 func _burst_lost(bar: UnitHealthBar, from: int, to: int, power: float) -> void:
 	var positions: Array[Vector3] = []
+	var colors := PackedColorArray()
 	for index in range(maxi(to, 0), from):
 		positions.append(bar.block_world_position(index))
+		colors.append(bar_fill_color)
+	_throw(bar, positions, colors, power)
+
+
+func _throw(bar: UnitHealthBar, positions: Array[Vector3], colors: PackedColorArray,
+		power: float) -> void:
 	if positions.is_empty():
 		return
-	_debris.burst(positions, bar.global_transform.basis, bar_fill_color, power)
+	_debris.burst(positions, colors, bar.global_transform.basis, power, block_burst_stagger)
 
 
 # Pushed once a frame rather than at build time: these are Game-tab knobs, and a value read only at

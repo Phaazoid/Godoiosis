@@ -88,6 +88,7 @@ const FONT_RESOLUTION := 32
 # texture per unit would be N copies of one answer. Rebuilt only when those knobs change, which is a
 # knob drag, not a frame.
 static var _cube_mesh: ArrayMesh
+static var _debris_mesh: ArrayMesh
 static var _cage_texture: ImageTexture
 static var _cube_key := Vector3i(-1, -1, -1)
 
@@ -119,6 +120,8 @@ var _block := 5.0
 var _border := 1.0
 var _per_row := 10
 var _recess := 2.0
+var _recess_shrink := 0.7
+var _recess_shade := 0.55
 var _outline_texels := 1.0
 var _fill_color := Color(0.15, 1.0, 0.2, 1.0)
 var _missing_color := Color(0.9, 0.05, 0.05, 1.0)
@@ -161,6 +164,7 @@ var _drawn: Array = []
 var _pop_from := -1
 var _pop_tween: Tween
 var _pop_time := 0.18
+var _pop_lift := 3.0
 var _pop_phase := 1.0:
 	set(value):
 		_pop_phase = value
@@ -224,10 +228,24 @@ func set_prediction_style(doomed: Color, heal: Color, alarm_peak: Color) -> void
 	_rebuild()
 
 
-# How long a restored cube takes to rise out of its socket. Pushed like every other knob rather than
-# held as a const, so the Game tab can drag it.
-func set_pop_time(seconds: float) -> void:
+# How long a restored cube takes to rise out of its socket, and HOW FAR it travels. The distance is
+# the round-2 addition and it is not optional: borrowing the recess made the pop vanish whenever the
+# recess was dialled to 0. See _z_for.
+func set_pop(seconds: float, lift_texels: float) -> void:
 	_pop_time = seconds
+	_pop_lift = lift_texels
+
+
+# What a sunk cube looks like: how far it shrinks, and how far its colour is dimmed.
+func set_recess_style(shrink: float, shade: float) -> void:
+	_recess_shrink = shrink
+	_recess_shade = shade
+	_rebuild()
+
+
+func _shaded(color: Color) -> Color:
+	var shade: float = maxf(_recess_shade, 0.0)
+	return Color(color.r * shade, color.g * shade, color.b * shade, color.a)
 
 
 func set_hp(current: int, maximum: int) -> void:
@@ -345,7 +363,16 @@ func _stop_alarm() -> void:
 # which read as the crown and the readout sitting on visibly different axes. Every sprite in this
 # stack is FIXED_Y, UnitSprite3D included, so the READOUT is what moves: the unit art is the anchor
 # anything hung on it must agree with. Camera basis +Z is the direction FIXED_Y faces.
-func face(camera_basis: Basis) -> void:
+#
+# FACING THE CAMERA IS NOW OPTIONAL (dev, 2026-08-22: "The health bars are 3D, they should not
+# billboard towards the camera. Let's add an option to keep them in place."). Held in place, the grid
+# sits on the board's own axes like the voxel props do, and orbiting past it edge-on turns it into a
+# thin line -- that is what keeping it in place MEANS, not a bug. Everything above still applies to
+# the facing mode; nothing here billboards per element either way.
+func face(camera_basis: Basis, faces_camera: bool) -> void:
+	if not faces_camera:
+		global_rotation = Vector3.ZERO
+		return
 	var facing := camera_basis.z
 	if absf(facing.x) < 0.0001 and absf(facing.z) < 0.0001:
 		return   # camera straight overhead: any yaw is as good as another, so keep the last one
@@ -506,8 +533,8 @@ func number_shown() -> bool:
 # ==============================================================================
 
 func _rebuild() -> void:
-	var signature: Array = [_block, _border, _per_row, _recess, _outline_texels,
-			_fill_color, _missing_color,
+	var signature: Array = [_block, _border, _per_row, _recess, _recess_shrink, _recess_shade,
+			_outline_texels, _fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color,
 			_current, _maximum, _predicted, _has_prediction,
@@ -613,22 +640,46 @@ func _place_blocks() -> void:
 				(left + float(col) * pitch) * texel,
 				(bottom + float(row) * pitch) * texel,
 				_z_for(i, shown))
+		# SHRINKING is what actually reads as a hole (dev, 2026-08-22). Depth alone did not: a cube
+		# pushed back is still a same-sized square head-on, because there is no socket WALL to see --
+		# shrunk, the plate shows around its edges and the dent is legible at play distance.
+		cube.scale = Vector3.ONE * lerpf(1.0, maxf(_recess_shrink, 0.05), _sunk_fraction(i, shown))
+
+
+# How far INTO the plate this socket is: 1 while empty, 0 while occupied, and easing between the two
+# while a heal pop plays. Read by the scale; the depth has its own curve because it carries the pop's
+# overshoot and the scale should not bulge.
+func _sunk_fraction(index: int, shown: int) -> float:
+	if index >= shown:
+		return 1.0
+	if _pop_from < 0 or index < _pop_from or _pop_phase >= 1.0:
+		return 0.0
+	return 1.0 - _pop_ease()
 
 
 # Proud if the cube is there, recessed if the socket is empty -- and mid-rise while a heal pop is
 # playing over the run that is arriving. The overshoot is what makes it read as popping rather than
 # sliding; it is deliberately not a knob, because a pop with no overshoot is just the target value.
+#
+# THE POP HAS ITS OWN TRAVEL, and that is the round-2 fix. It borrowed the RECESS as its amplitude,
+# which made it a couple of screen pixels at the shipped depth and EXACTLY ZERO once the depth was
+# dialled to 0 -- so the dev saw an instant pop however he set the time (2026-08-22). A knob that may
+# legitimately be zero must never be an animation's distance.
 func _z_for(index: int, shown: int) -> float:
 	if index >= shown:
 		return _recessed_z()
 	if _pop_from < 0 or index < _pop_from or _pop_phase >= 1.0:
 		return _proud_z()
-	var phase := clampf(_pop_phase, 0.0, 1.0)
-	var eased: float = 1.0 - pow(1.0 - phase, 3.0)
-	var overshoot: float = sin(phase * PI) * 0.35
-	return lerpf(_recessed_z(), _proud_z(), eased) + (_proud_z() - _recessed_z()) * overshoot
+	var lift: float = maxf(_pop_lift, 0.0) * _texel()
+	var overshoot: float = sin(clampf(_pop_phase, 0.0, 1.0) * PI) * 0.35
+	return _proud_z() - lift * (1.0 - _pop_ease()) + lift * overshoot
 
 
+func _pop_ease() -> float:
+	return 1.0 - pow(1.0 - clampf(_pop_phase, 0.0, 1.0), 3.0)
+
+
+# The cube's CENTRE, which is half a block short of the face you can see.
 func _proud_z() -> float:
 	return block_size_texels() * 0.5 * _texel()
 
@@ -637,9 +688,13 @@ func _recessed_z() -> float:
 	return (block_size_texels() * 0.5 - maxf(_recess, 0.0)) * _texel()
 
 
-# Clear of the proud face, so the digits are never buried in the cubes they sit on.
+# Clear of the cube's FRONT FACE, never its centre. _proud_z is where a cube's MIDDLE sits, so the
+# solid reaches half a block further toward the camera -- and since the cubes are opaque and write
+# depth, text placed at the centre is buried inside one and depth-rejected. That is exactly how the
+# HP digits shipped invisible in round 1 (dev, 2026-08-22: "no matter what my settings are, I can't
+# see the numbers"), and no knob could have rescued it.
 func _text_z() -> float:
-	return _proud_z() + _texel()
+	return (block_size_texels() + 1.0) * _texel()
 
 
 # Cubes SHARE their black frame: pitching them a full block apart would put two frames between
@@ -650,7 +705,11 @@ func _pitch_texels() -> float:
 
 func _paint_materials() -> void:
 	_mat_fill.albedo_color = _fill_color
-	_mat_missing.albedo_color = _missing_color
+	# DARKENED as well as sunk (dev, 2026-08-22). A shade MULTIPLIER on the authored colour rather
+	# than a second colour knob -- at 1.0 it is exactly bar_missing_color, so this modifies one answer
+	# instead of becoming a rival to it. HEAL sockets are deliberately NOT shaded: they are marked to
+	# be seen, and dimming them fights the only thing they are for.
+	_mat_missing.albedo_color = _shaded(_missing_color)
 	_mat_heal.albedo_color = _heal_color
 	for material: StandardMaterial3D in [_mat_fill, _mat_missing, _mat_doomed, _mat_heal]:
 		material.albedo_texture = _cage_texture
@@ -739,7 +798,13 @@ static func _ensure_cube(block: int, border: int, texel: float) -> void:
 		return
 	_cube_key = key
 	_cage_texture = _build_cage_texture(block, border)
-	_cube_mesh = _build_cube_mesh(float(block) * texel)
+	# TWO meshes, and the split is the fix for "the tops blend in and look like another row" (dev,
+	# 2026-08-22). A grid cube shows its front face square-on and its top foreshortened, so a cage on
+	# the TOP reads as a squashed extra row of cells; every non-front face is solid instead. A DEBRIS
+	# cube tumbles through every orientation, so it keeps the cage on all six or a blank face would
+	# read as a hole punched in it.
+	_cube_mesh = _build_cube_mesh(float(block) * texel, false)
+	_debris_mesh = _build_cube_mesh(float(block) * texel, true)
 
 
 # Black frame, white centre. White takes the tint and black survives it, so this one image is the
@@ -757,7 +822,7 @@ static func _build_cage_texture(block: int, border: int) -> ImageTexture:
 # Six quads with their own full-range UVs, rather than a BoxMesh: BoxMesh lays its faces out across
 # one shared UV span, so a cage texture on it would stretch across the box instead of framing each
 # face. Built the way BoardOverlays builds its bracket -- an ArrayMesh from explicit arrays.
-static func _build_cube_mesh(size: float) -> ArrayMesh:
+static func _build_cube_mesh(size: float, cage_every_face: bool) -> ArrayMesh:
 	var h := size * 0.5
 	var faces: Array[Array] = [
 		[Vector3(-h, -h, h), Vector3(h, -h, h), Vector3(h, h, h), Vector3(-h, h, h)],       # +Z
@@ -771,11 +836,16 @@ static func _build_cube_mesh(size: float) -> ArrayMesh:
 	var vertices := PackedVector3Array()
 	var uvs := PackedVector2Array()
 	var indices := PackedInt32Array()
-	for face: Array in faces:
+	for f in faces.size():
+		var face: Array = faces[f]
 		var base := vertices.size()
+		# Face 0 is +Z, the one a grid cube presents square-on. Every other face of a grid cube samples
+		# the cage texture's CENTRE -- one white texel, so it tints to a flat solid and carries no
+		# frame to be mistaken for another row of cells.
+		var caged: bool = cage_every_face or f == 0
 		for c in 4:
 			vertices.append(face[c] as Vector3)
-			uvs.append(corners[c])
+			uvs.append(corners[c] if caged else Vector2(0.5, 0.5))
 		indices.append_array([base, base + 1, base + 2, base, base + 2, base + 3])
 	var arrays := []
 	arrays.resize(Mesh.ARRAY_MAX)
@@ -796,6 +866,11 @@ static func cage_texture() -> ImageTexture:
 
 static func cube_mesh() -> ArrayMesh:
 	return _cube_mesh
+
+
+# The tumbling variant, caged on every face. What the debris pool throws.
+static func debris_mesh() -> ArrayMesh:
+	return _debris_mesh
 
 
 # The shared cube's edge in WORLD units. Read off the key the mesh was BUILT from rather than off

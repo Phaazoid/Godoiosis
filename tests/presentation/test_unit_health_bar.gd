@@ -204,16 +204,114 @@ func test_the_readout_is_one_display_and_not_parts_that_drift() -> void:
 			"nothing was displaced, so laying it out in the parent's space proves nothing"
 			).is_greater_equal(2)
 
-	# And the other half: something has to turn it now that its parts do not turn themselves --
-	# to the camera VIEW PLANE, which is what BILLBOARD_FIXED_Y does to every sprite around it
-	# (#325 follow-up). Pointing at the camera POSITION instead is the same angle only at screen
-	# centre, which is why the crown and the bar read as sitting on different axes.
+	# The other half — WHO turns it — forks on a knob since #314 round 2, so it lives in the two
+	# cases below rather than here. What this case still owns is that no CHILD turns itself,
+	# whichever way the parent is pointed.
+
+
+# The facing knob FORKS the cases that pin it (#449's law: a setting that forks a marker's
+# lifecycle forks the cases that pin it). Each of the two below declares which branch it is in, so
+# neither can pass by accident on a machine set the other way.
+
+func test_held_in_place_the_grid_sits_on_the_boards_own_axes() -> void:
+	# The DEFAULT since round 2 (dev: "they should not billboard towards the camera").
+	_unit_mirror.hp_grid_faces_camera = false
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.visible).is_true()
+	assert_float(bar.global_rotation.y).override_failure_message(
+			"the readout turned even though it is meant to be held in place").is_equal_approx(
+			0.0, 0.001)
+
+
+func test_the_knob_puts_the_grid_back_on_the_camera_view_plane() -> void:
+	# The opt-in branch, and it must be the VIEW PLANE rather than the camera POSITION (#325
+	# follow-up): FIXED_Y gives one yaw board-wide, while aiming each readout at the camera agrees
+	# only at screen centre, which is what read as the crown and the bar sitting on different axes.
+	_unit_mirror.hp_grid_faces_camera = true
+	# ORBIT THE RIG FIRST. The fixture camera rests at yaw 0, where "held in place" and "facing the
+	# camera" produce the identical rotation — so without this the case passes in both modes and
+	# proves nothing (its own guard below caught exactly that). Both fields, because the rig eases
+	# toward its target and would swing straight back.
+	var rig: CameraRig3D = _scene.get_node("CameraRig")
+	rig.rotation_degrees.y = 35.0
+	rig._target_yaw_degrees = 35.0
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
 	var camera := bar.get_viewport().get_camera_3d()
 	assert_object(camera).is_not_null()
 	var facing: Vector3 = camera.global_transform.basis.z
+	var wanted := atan2(facing.x, facing.z)
+	assert_bool(absf(wanted) > 0.001).override_failure_message(
+			"the camera happens to sit on the zero yaw, so this case cannot tell the two modes apart"
+			).is_true()
 	assert_float(bar.global_rotation.y).override_failure_message(
-			"the readout is not aligned to the camera view plane").is_equal_approx(
-			atan2(facing.x, facing.z), 0.001)
+			"the readout is not aligned to the camera view plane").is_equal_approx(wanted, 0.001)
+
+
+func test_only_a_grid_cubes_FRONT_face_wears_the_cage() -> void:
+	# Dev, 2026-08-22: "The top of the cubes blend in a little too easily, and look like another row.
+	# Tops should be all one solid color." A cage on the top face renders as a squashed row of cells,
+	# so every non-front face of a GRID cube collapses its UVs onto one texel and tints flat. The
+	# DEBRIS cube keeps all six, because it tumbles and a blank face would read as a hole in it.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()   # a readout has to have drawn before the shared meshes exist
+
+	var grid: ArrayMesh = UnitHealthBar.cube_mesh()
+	var debris: ArrayMesh = UnitHealthBar.debris_mesh()
+	assert_object(grid).override_failure_message("no grid cube mesh was built").is_not_null()
+	assert_object(debris).override_failure_message("no debris cube mesh was built").is_not_null()
+	assert_int(_flat_faces(grid)).override_failure_message(
+			"a grid cube still wears the cage somewhere other than its front face").is_equal(5)
+	assert_int(_flat_faces(debris)).override_failure_message(
+			"the debris cube lost its cage, so a tumbling cube shows blank faces").is_equal(0)
+
+
+# How many of a cube's six faces collapse all four UVs onto one point — i.e. sample a single texel,
+# and so tint to a flat colour carrying no frame.
+func _flat_faces(mesh: ArrayMesh) -> int:
+	var uvs: PackedVector2Array = mesh.surface_get_arrays(0)[Mesh.ARRAY_TEX_UV]
+	var flat := 0
+	for face in 6:
+		var first: Vector2 = uvs[face * 4]
+		var same := true
+		for corner in 4:
+			if not uvs[face * 4 + corner].is_equal_approx(first):
+				same = false
+		if same:
+			flat += 1
+	return flat
+
+
+func test_the_hp_digits_sit_in_FRONT_of_the_cubes_rather_than_inside_them() -> void:
+	# Round 1 shipped the digits INVISIBLE and no knob could have rescued them: the label was placed
+	# at the cube's CENTRE depth, the cubes are opaque and write depth, so the text was buried inside
+	# a solid and depth-rejected. Asserted as the relationship rather than a value — the label must
+	# clear the front FACE, which is half a block further toward the camera than the centre.
+	var unit := _spawn(PLAYER, Vector2i(2, 2))
+	_point_at(unit.movement.cell)
+	await _settle()
+	var bar := _unit_mirror.bar_for(unit)
+	assert_bool(bar.number_shown()).override_failure_message(
+			"the digits are not up, so their depth proves nothing").is_true()
+
+	var texel := 1.0 / UnitSprite3D.texels_per_unit
+	var cube_front: float = bar.block_size_texels() * texel   # a cube spans 0 .. block, front at the top
+	var label: Label3D = null
+	for child in bar.get_children():
+		var found := child as Label3D
+		if found != null and found.visible and found.text == bar.number_text():
+			label = found
+			break
+	assert_object(label).override_failure_message("no visible HP label to measure").is_not_null()
+	assert_float(label.position.z).override_failure_message(
+			"the HP digits sit at or behind the cubes' front face, so an opaque cube hides them"
+			).is_greater(cube_front)
 
 
 func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:

@@ -44,6 +44,7 @@ var _materials: Array[StandardMaterial3D] = []
 var _velocity: Array[Vector3] = []
 var _spin: Array[Vector3] = []
 var _age: Array[float] = []
+var _delay: Array[float] = []   # how long this cube sits in its socket before it launches
 var _bounced: Array[bool] = []
 var _live: Array[bool] = []
 
@@ -52,8 +53,9 @@ var _live: Array[bool] = []
 # leaves along the axes it was sitting on and the burst reads as coming OUT of the display rather
 # than off in some world direction. `power` scales the whole thing -- 1.0 for an ordinary hit, more
 # for the detonation a death gets.
-func burst(positions: Array[Vector3], facing: Basis, color: Color, power := 1.0) -> void:
-	var mesh := UnitHealthBar.cube_mesh()
+func burst(positions: Array[Vector3], colors: PackedColorArray, facing: Basis,
+		power := 1.0, stagger := 0.0) -> void:
+	var mesh := UnitHealthBar.debris_mesh()
 	if mesh == null:
 		return   # nothing has drawn a readout yet, so there is no cube shape to throw
 	for i in positions.size():
@@ -65,7 +67,9 @@ func burst(positions: Array[Vector3], facing: Basis, color: Color, power := 1.0)
 		cube.global_rotation = Vector3.ZERO
 		var material: StandardMaterial3D = _materials[slot]
 		material.albedo_texture = UnitHealthBar.cage_texture()
-		material.albedo_color = color
+		# A colour PER CUBE, because a killing hit throws the whole grid at once and the red sockets
+		# must leave as red while the standing ones leave as green -- one sweep, two colours.
+		material.albedo_color = colors[i] if i < colors.size() else Color.WHITE
 		# Up and outward, in the readout's OWN frame: +Y is up the grid, and the X/Z fan is what
 		# stops a multi-cube burst leaving as one clump.
 		var angle := float(i) * GOLDEN_ANGLE
@@ -73,6 +77,7 @@ func burst(positions: Array[Vector3], facing: Basis, color: Color, power := 1.0)
 		_velocity[slot] = (facing * local) * burst_speed * power
 		_spin[slot] = Vector3(sin(angle * 1.7), cos(angle * 1.3), sin(angle * 2.1)) * spin_speed
 		_age[slot] = 0.0
+		_delay[slot] = float(i) * maxf(stagger, 0.0)
 		_bounced[slot] = false
 		_live[slot] = true
 
@@ -90,6 +95,16 @@ func has_bounced(slot: int) -> bool:
 	return slot >= 0 and slot < _bounced.size() and _bounced[slot]
 
 
+# How many cubes have actually LAUNCHED, as against how many are still waiting their turn in the
+# socket. The two differ only while a stagger is playing, which is exactly what a test of it needs.
+func launched_count() -> int:
+	var count := 0
+	for i in _pool.size():
+		if _live[i] and _age[i] >= _delay[i]:
+			count += 1
+	return count
+
+
 func _process(delta: float) -> void:
 	for i in _pool.size():
 		if not _live[i]:
@@ -100,7 +115,14 @@ func _process(delta: float) -> void:
 func _advance(slot: int, delta: float) -> void:
 	var cube: MeshInstance3D = _pool[slot]
 	_age[slot] += delta
-	if _age[slot] >= lifetime:
+	# THE STAGGER: a cube SITS in the socket it came from until its turn rather than being hidden, so
+	# the grid visibly breaks apart in sequence instead of a gap opening ahead of the cubes (dev,
+	# 2026-08-22: "march through the bricks that blast out, from start to finish").
+	var flight := _age[slot] - _delay[slot]
+	if flight < 0.0:
+		return
+	# Lifetime runs from LAUNCH, not from spawn, or the last cube out gets the least air.
+	if flight >= lifetime:
 		_retire(slot)
 		return
 	var velocity: Vector3 = _velocity[slot]
@@ -120,7 +142,7 @@ func _advance(slot: int, delta: float) -> void:
 	cube.global_rotation += _spin[slot] * delta
 	# Fades over the back half of its life, so the bounce is seen at full strength and only the
 	# settle is what disappears.
-	var fade: float = clampf((_age[slot] / lifetime - 0.5) * 2.0, 0.0, 1.0)
+	var fade: float = clampf((flight / lifetime - 0.5) * 2.0, 0.0, 1.0)
 	var material: StandardMaterial3D = _materials[slot]
 	var tint := material.albedo_color
 	tint.a = 1.0 - fade
@@ -150,6 +172,7 @@ func _take_slot() -> int:
 	_velocity.append(Vector3.ZERO)
 	_spin.append(Vector3.ZERO)
 	_age.append(0.0)
+	_delay.append(0.0)
 	_bounced.append(false)
 	_live.append(false)
 	return _pool.size() - 1

@@ -69,6 +69,12 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How many cubes before the grid wraps to another row. Ten is what makes the readout countable at a glance -- one full row plus four reads as 14 without counting. Fewer per row trades width for height, and height is the contested axis: the state icons and the crown are stacked above."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_texels", "label": "Lost cube depth", "min": 0.0, "max": 8.0, "step": 1.0,
 		"tip": "How far a LOST cube sinks into the plate, in texels. The dent is a second cue beside the colour, so the readout still reads at distance and for anyone who finds green-against-red hard. Zero makes every cube flush and leaves colour carrying the whole gauge alone."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_shrink", "label": "Lost cube shrink", "min": 0.1, "max": 1.0, "step": 0.05,
+		"tip": "How much smaller a LOST cube gets, as a fraction of a standing one. This is what actually reads as a hole: depth alone leaves a same-sized square head-on, because there is no socket wall to see, so shrinking it is what lets the plate show around its edges. 1.0 removes the effect and leaves depth and colour to carry the dent between them."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_block_recess_shade", "label": "Lost cube shade", "min": 0.1, "max": 1.0, "step": 0.05,
+		"tip": "How far a LOST cube's colour is dimmed, as a multiplier on Cube missing -- it reads as the sunk cube sitting in shadow. At 1.0 it is exactly the authored colour, so this MODIFIES that one answer rather than becoming a rival to it: if you want a different red, move Cube missing, not this."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_grid_faces_camera", "label": "Grid faces camera",
+		"tip": "On, the whole readout turns to face the camera like a billboard. Off, it stays put on the board's own axes the way the rocks and props do, which means orbiting past one takes it edge-on and squashes it to a line. That is what keeping it in place MEANS rather than a fault; the question this dial asks is whether reading as a real 3D object is worth the angles where it stops being legible."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_outline_texels", "label": "Bar outline", "min": 0.0, "max": 8.0, "step": 1.0,
 		"tip": "Thickness of the black border around the bar, in texels. This is what separates the bar from whatever it happens to be floating over; 0 removes it, and on a busy board that usually costs more than it saves."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "bar_fill_color", "label": "Cube fill",
@@ -122,10 +128,14 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How much of its fall a cube keeps on the way back up, once, when it hits the board beneath it. Zero lands it dead; 1 would return the whole drop. Only the FIRST touch bounces -- after that it rides through, so a busy pass never fills the board with rattling cubes."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_lifetime", "label": "Cube lifetime", "min": 0.1, "max": 4.0, "step": 0.05,
 		"tip": "How long a thrown cube lives, in seconds; it fades out over the back half so the bounce is seen at full strength and only the settle disappears. Long enough to read the burst, short enough that a nine-unit AI pass does not leave the board littered."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_burst_stagger", "label": "Cube burst stagger", "min": 0.0, "max": 0.3, "step": 0.005,
+		"tip": "Delay between one cube launching and the next, in seconds, so a multi-cube burst MARCHES through the grid instead of leaving all at once. A cube still waiting its turn sits in its own socket rather than hiding, so the grid breaks apart in sequence with no gap running ahead of the cubes. 0 fires the whole burst on a single frame, which is what a nine-damage hit used to look like."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_death_power", "label": "Death burst", "min": 1.0, "max": 5.0, "step": 0.1,
 		"tip": "Multiplier on the burst when a unit DIES and its whole remaining grid detonates at once, rather than losing a few cubes to a hit. Going DOWN is not a death and gets the ordinary burst of everything above 1 HP, so this is only for the rarer outright kill."},
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "block_pop_time", "label": "Heal pop time", "min": 0.02, "max": 1.0, "step": 0.01,
 		"tip": "How long a healed cube takes to rise back out of its dent, in seconds. It overshoots slightly on the way so it reads as popping rather than sliding. Deliberately quicker and quieter than a burst -- being healed should not upstage being hit."},
+	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hp_pop_lift_texels", "label": "Heal pop travel", "min": 0.0, "max": 12.0, "step": 0.5,
+		"tip": "How far a healed cube sinks before it springs back, in texels. Deliberately its OWN value rather than the lost-cube depth: tying it to that made the pop invisible the moment the depth was dialled to zero, since an animation whose distance is a knob that may legitimately be 0 has no distance at all. At 0 here the pop looks instant however long you give it."},
 
 	# --- Camera handling ---
 	# How the camera DRAGS, never how the board is framed: pitch, FOV, the opening shot and the fit

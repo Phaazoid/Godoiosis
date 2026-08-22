@@ -138,13 +138,21 @@ func test_health_lost_while_no_readout_is_up_throws_nothing() -> void:
 	assert_int(_unit_mirror.bar_for(unit).filled_block_count()).is_equal(unit.get_current_hp())
 
 
-func test_a_death_detonates_every_cube_that_was_still_standing() -> void:
+func test_a_death_detonates_the_whole_grid_red_cubes_included() -> void:
+	# Round 2 (dev: "On a killing hit, even the red blocks should fly away"). The LOST sockets go too,
+	# so the count is max HP rather than what was still standing — which is why the fixture wounds
+	# the unit first: with a full grid the two answers are identical and the case proves nothing.
 	var unit := await _watched()
-	unit.take_damage(2)          # so the detonation is demonstrably not just "max HP cubes"
+	unit.take_damage(2)
 	await _settle()
 	var standing := _unit_mirror.bar_for(unit).filled_block_count()
-	assert_int(standing).is_equal(unit.get_max_hp() - 2)
+	assert_int(standing).override_failure_message(
+			"the fixture did not wound the unit, so standing and max HP agree and this cannot tell "
+			+ "a whole-grid detonation from a standing-only one").is_equal(unit.get_max_hp() - 2)
 	var already_flying := _live()
+	# Read BEFORE the kill: die() queue_free()s, and a typed read off a freed Unit dies on the
+	# type-check rather than returning null (#149's rule, one shelf along).
+	var sockets := unit.get_max_hp()
 
 	unit.die()
 	await _settle()
@@ -152,7 +160,48 @@ func test_a_death_detonates_every_cube_that_was_still_standing() -> void:
 	# die() emits and queue_free()s in the same frame, and reconcile skips a unit already queued for
 	# deletion — so no poll can ever see this and the count is what proves the signal is wired.
 	assert_int(_live() - already_flying).override_failure_message(
-			"a death did not detonate the cubes that were still standing").is_equal(standing)
+			"a death did not throw every cube in the grid — the lost ones stayed behind"
+			).is_equal(sockets)
+
+
+func test_a_multi_cube_burst_marches_out_rather_than_leaving_all_at_once() -> void:
+	# Round 2 (dev: "march through the bricks that blast out, from start to finish"). A waiting cube
+	# is LIVE but has not LAUNCHED — it sits in its own socket — which is the distinction the two
+	# counts draw, and the only headless-visible form of the rhythm.
+	_unit_mirror.block_burst_stagger = 5.0   # fixture: long enough that the march cannot finish
+	var unit := await _watched()
+	unit.take_damage(4)
+	await _settle()
+
+	var debris := _unit_mirror.debris()
+	assert_int(debris.live_count()).override_failure_message(
+			"the hit did not throw one cube per point").is_equal(4)
+	assert_int(debris.launched_count()).override_failure_message(
+			"every cube launched at once, so nothing is marching").is_less(4)
+	assert_int(debris.launched_count()).override_failure_message(
+			"nothing launched at all, so the burst is stalled rather than staggered"
+			).is_greater(0)
+
+
+func test_the_heal_pop_travels_even_with_the_dent_dialled_to_zero() -> void:
+	# The round-1 bug, as a property. The pop borrowed the RECESS as its travel distance, so with the
+	# dent at 0 it had none — the dev saw an instant pop whatever he set the time to. The pop now has
+	# its own amplitude, and this is the configuration that could not animate before.
+	_unit_mirror.hp_block_recess_texels = 0.0
+	_unit_mirror.block_pop_time = 5.0        # fixture: hold it mid-flight so a frame count can see it
+	var unit := await _watched()
+	unit.take_damage(4)
+	await _settle()
+	unit.heal(2)
+	await _settle()
+
+	var bar := _unit_mirror.bar_for(unit)
+	# The cube that is rising must sit BEHIND one that is simply standing. Index 0 is never in the
+	# pop's run, so it is the control; comparing two live sockets means no value is pinned.
+	var rising := unit.get_current_hp() - 1
+	assert_float(bar.block_world_position(rising).z).override_failure_message(
+			"the restored cube is already at its resting depth, so the pop covered no distance"
+			).is_less(bar.block_world_position(0).z)
 
 
 func test_a_thrown_cube_outlives_the_readout_it_fell_off() -> void:
