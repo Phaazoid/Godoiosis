@@ -20,10 +20,13 @@ enum Term {
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
 	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF,
-	# Actions (one per MainActionMenu.ACTION_DATA row, plus ATTACK_TARGETING — the channel axis)
+	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
+	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
+	# plus ATTACK_TARGETING, the channel axis)
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	GUARD, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
+	ACT, SQUAD_ACTIONS, TURN_ACTIONS,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
@@ -310,6 +313,22 @@ static func _build_entries() -> Dictionary:
 		"short": "Verbs granted by a unit's abilities, like Intimidate.",
 		"long": "Actions a unit's abilities unlock. Intimidate — draining an adjacent enemy's Will — "
 			+ "is the first; more arrive with new abilities."}
+	# The action ring's three invented categories (#467). Move and Attack reuse the verb terms of
+	# the same name; these three name a grouping the game had no word for before the ring.
+	e[Term.ACT] = {"category": Category.ACTIONS, "title": "Act",
+		"short": "The main actions that are not an attack: guard, rescue, rally, capture, ability verbs.",
+		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
+			+ "swinging a weapon — standing in front of an ally, carrying a downed one to safety, "
+			+ "steadying a shaken squad, taking a zone, or an ability's own verb."}
+	e[Term.SQUAD_ACTIONS] = {"category": Category.ACTIONS, "title": "Squad",
+		"short": "Forming and breaking squads: squad up, join, leave, disband.",
+		"long": "Changing who marches with whom. A squad's shape is fixed once it has orders "
+			+ "queued or has acted, so these are offered only while it is still free to change."}
+	e[Term.TURN_ACTIONS] = {"category": Category.ACTIONS, "title": "Turn",
+		"short": "Running the turn: execute orders, wait, end turn, cancel, inspect.",
+		"long": "The verbs that are about the turn rather than about this unit's body — sending "
+			+ "the squad's queued plan, standing the squad down, ending the faction's turn early, "
+			+ "cancelling what is queued, or just reading the unit's sheet."}
 	# Guard vs DEF, said plainly in both halves: the mechanic is named Guard precisely so it never
 	# reads as the stat, and the glossary is where the two sit side by side (#414).
 	e[Term.GUARD] = {"category": Category.ACTIONS, "title": "Guard",

@@ -6,25 +6,37 @@ class_name MainActionMenu
 # coordinator (mirrors DevController/AIController/HoverPresenter) for everything it reads from
 # or calls back into.
 #
-# Menu CONSTRUCTION moved here from game.gd 2026-07-26 to sit next to the gating and dispatch
-# it belongs with -- three near-identical copies of the ActionMenuController boilerplate
-# collapsed into _open_menu(), and two copies of the fireable-or-disabled row into
-# _attack_entry(). The coordinator now only says "open the menu for this unit at this point".
+# Menu CONSTRUCTION moved here from game.gd 2026-07-26 to sit next to the gating and dispatch it
+# belongs with; the coordinator only says "open the menu for this unit at this point".
 #
-# The MAIN menu (ACTION_DATA) is the top level; below it sit THREE submenu categories, and Attack
-# itself is submenu-free for every kind of equipped item (#88, 2026-07-29):
-#   WEAPON ACTION  -- the equipped weapon's non-main attacks plus its self-abilities (Reload/Rev/
-#                     Burrow). A weapon HAS an authored main_attack, so Attack fires that.
-#   TRANSMUTATION  -- a rune's carvings. A rune has NO authored main, so they're interchangeable
-#                     equals and all of them list; Attack fires whichever is default (first
-#                     channelable). Built on show_attack_menu, the shared attack picker.
-#   ABILITY ACTION -- ability-driven verbs (Intimidate today; Fortitude/Guard later).
-# Transmutation is deliberately NOT folded under Ability Action even though #88's own text proposed
-# it: runes are equippables and a carving is not ability use (dev call). All three are purely a
-# menu-layer grouping -- the queued ActionType is unchanged, so resolver/queue panel/AI see nothing.
+# SINCE #467 the menu is a RADIAL of five CATEGORIES, and this file's job is the TREE behind it:
+# build_tree() answers "what can this unit do, arranged how the ring draws it" in one pass, at
+# open. One pass is not an optimisation -- a hovered category is GHOSTED before it is opened, so
+# its contents must exist before the click, and a preview that re-queried could disagree with what
+# commits. The game is modal while the ring is up, so nothing can change underneath the snapshot.
 #
-# Adding a general verb touches the main menu; a weapon-specific one touches only
-# show_weapon_action_menu; an ability-driven one touches only ability_action_entries and its
+#   MOVE   -- Move, Group Move
+#   ATTACK -- the default attack, the weapon's other attacks and self-verbs (Reload/Rev/Burrow),
+#             and the rune's carvings
+#   ACT    -- the main actions that are not an attack: Guard, Rescue, Rally, Capture, and the
+#             ability-driven verbs (Intimidate today)
+#   SQUAD  -- Squad Up, Join, Leave, Disband
+#   TURN   -- Execute Orders, Wait, End Turn, Cancel Actions, Inspect
+#
+# #88 HELD WEAPON ACTION AND TRANSMUTATION APART and this file said so as settled law: "runes are
+# equippables and a carving is not ability use". That was a HOLDING POSITION pending a menu rework,
+# not a principle -- the dev overturned it on #467 ("I was going to get around to grouping attack
+# and transmutation option in the old menu anyways"), so both now live under ATTACK. The grouping
+# is still purely a menu-layer fact: the queued ActionType is unchanged, and resolver, queue panel
+# and AI see nothing.
+#
+# A category is drawn only when it has live children, which is the ring's compaction rule one level
+# up -- and it is also why has_weapon_actions()/has_transmutations()/ability_action_entries() are no
+# longer read as menu gates. populate() is untouched and still answers the flat "what can this unit
+# do"; the grouping is applied on top of it.
+#
+# Adding a general verb touches ACTION_DATA (name, term, group); a weapon-specific one touches only
+# _weapon_children; an ability-driven one touches only ability_action_entries and its
 # _pick_ability_action arm -- see CLAUDE.md's new-action checklist.
 
 var game   # the Game coordinator (Node2D); set by game._ready()
@@ -50,112 +62,188 @@ const CAPTURE := 17
 const TRANSMUTATION := 18
 const GUARD := 19
 
-# Display data AND print order: declaration order here IS the menu's order (Godot
-# dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
-# `term` names the row's Glossary entry (#135): its short text is the row's hover tooltip,
-# pinned complete by tests/law/test_glossary_coverage.gd.
-const ACTION_DATA := {
-	EXECUTE_ORDERS: {"name": "Execute Orders", "term": Glossary.Term.EXECUTE_ORDERS},
-	MOVE: {"name": "Move", "term": Glossary.Term.MOVE},
-	GROUP_MOVE: {"name": "Group Move", "term": Glossary.Term.GROUP_MOVE},
-	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK},
-	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION},
-	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION},
-	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION},
-	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD},
-	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE},
-	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY},
-	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE},
-	SQUADUP: {"name": "Squad Up", "term": Glossary.Term.SQUAD_UP},
-	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD},
-	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD},
-	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD},
-	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT},
-	CANCEL: {"name": "Cancel Actions", "term": Glossary.Term.CANCEL_ACTIONS},
-	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT},
-	ENDTURN: {"name": "End Turn", "term": Glossary.Term.END_TURN},
+# The ring's five categories, and their order IS the inner ring's clockwise order.
+enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, TURN_GROUP }
+
+# A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
+# it, pinned by tests/law/test_glossary_coverage.gd). Move and Attack reuse the verb terms of the
+# same name; ACT/SQUAD_ACTIONS/TURN_ACTIONS were authored for the ring.
+const CATEGORIES := {
+	Group.MOVE_GROUP: {"name": "Move", "term": Glossary.Term.MOVE},
+	Group.ATTACK_GROUP: {"name": "Attack", "term": Glossary.Term.ATTACK},
+	Group.ACT_GROUP: {"name": "Act", "term": Glossary.Term.ACT},
+	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
+	Group.TURN_GROUP: {"name": "Turn", "term": Glossary.Term.TURN_ACTIONS},
 }
+
+# Display data AND print order: declaration order here IS the order within a category (Godot
+# dicts iterate in insertion order). One entry per item — nothing else to keep in sync.
+# `term` names the row's Glossary entry (#135): its short text is the row's hover tooltip.
+# `group` is which ring category the verb sits under (#467).
+# `expands` marks the three ids that were only ever category headers: they contribute their
+# CHILDREN to their group rather than a row of their own.
+const ACTION_DATA := {
+	EXECUTE_ORDERS: {"name": "Execute Orders", "term": Glossary.Term.EXECUTE_ORDERS, "group": Group.TURN_GROUP},
+	MOVE: {"name": "Move", "term": Glossary.Term.MOVE, "group": Group.MOVE_GROUP},
+	GROUP_MOVE: {"name": "Group Move", "term": Glossary.Term.GROUP_MOVE, "group": Group.MOVE_GROUP},
+	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK, "group": Group.ATTACK_GROUP},
+	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION, "group": Group.ATTACK_GROUP, "expands": true},
+	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION, "group": Group.ATTACK_GROUP, "expands": true},
+	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION, "group": Group.ACT_GROUP, "expands": true},
+	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD, "group": Group.ACT_GROUP},
+	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE, "group": Group.ACT_GROUP},
+	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY, "group": Group.ACT_GROUP},
+	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE, "group": Group.ACT_GROUP},
+	SQUADUP: {"name": "Squad Up", "term": Glossary.Term.SQUAD_UP, "group": Group.SQUAD_GROUP},
+	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD, "group": Group.SQUAD_GROUP},
+	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD, "group": Group.SQUAD_GROUP},
+	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD, "group": Group.SQUAD_GROUP},
+	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT, "group": Group.TURN_GROUP},
+	CANCEL: {"name": "Cancel Actions", "term": Glossary.Term.CANCEL_ACTIONS, "group": Group.TURN_GROUP},
+	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.TURN_GROUP},
+	ENDTURN: {"name": "End Turn", "term": Glossary.Term.END_TURN, "group": Group.TURN_GROUP},
+}
+
+# A child that is not an ACTION_DATA verb (a carving, a weapon's secondary, an ability verb) needs
+# an id the controller can hand back. They are allocated NEGATIVE, per open, so they can never
+# collide with a verb id and a stale one from a previous open is unmistakable. Cleared by
+# build_tree, which is the same moment the tree is snapshotted.
+var _pick_by_id: Dictionary = {}
+var _next_synthetic_id := -1
 
 # ==============================================================================
 #  Opening menus
 # ==============================================================================
 
-# Rows go through _entry like every other menu's (#166's law, applied here by #135): the
-# glossary short text is the hover readout on every option. Nothing is greyed at this level —
-# populate() still hides what a unit can't do, a deliberate per-menu policy (#166).
+# The one door: build the whole tree, hand it to one controller, place it at the cursor. The
+# controller owns every level from here -- there is no second open for a submenu, which is what
+# lets the ring survive a category pick.
 func show_main_menu(unit: Unit, pos: Vector2i) -> void:
-	var data := {}
-	for id in ACTION_DATA:
-		data[id] = _entry(ACTION_DATA[id]["name"], "", Glossary.short(ACTION_DATA[id]["term"]))
-	_open_menu(unit, populate(unit), data, pos, on_pressed)
-
-# Attack entry (weapons-only Weapon Action refactor, 2026-07-24): a WEAPON always fires its default
-# (main) attack — no submenu; its extras + self-abilities live under Weapon Action now. A RUNE keeps
-# the carving pick-menu (its carvings become an Ability Action category later, #88). Reset the pick
-# so a stale one never leaks into a new aim.
-func begin_attack(unit: Unit) -> void:
-	unit.active_attack = null
-	game.enter_attack_mode(unit)
-
-# Synthetic items: index -> {name}, so the Control-based ActionMenuController (#26) renders the
-# attack list without a bespoke menu class. Works for either kind since display_name lives on
-# the shared AttackData base (#72).
-func show_attack_menu(unit: Unit, attacks: Array[AttackData], pos: Vector2i) -> void:
-	var items := []
-	var data := {}
-	for i in range(attacks.size()):
-		items.append(i)
-		data[i] = _attack_entry(unit, attacks[i])
-
-	_open_menu(unit, items, data, pos, func(idx, picking_unit): _pick_attack(picking_unit, attacks[idx]))
-
-# Weapon Action submenu (2026-07-24): the equipped weapon's non-main attacks + its self-abilities
-# (Reload / Rev / Burrow), gathered under one menu entry instead of a top-level slot each. A picked
-# attack routes to targeting; a picked self-ability queues immediately. Purely a menu grouping — the
-# queued orders stay ATTACK/RELOAD/REV/BURROW, so nothing downstream changes. Reload's LABEL is
-# per-family (Springspear says "Spring Load", a Carbine says "Reload") while the order is one type.
-func show_weapon_action_menu(unit: Unit) -> void:
-	var items := []
-	var data := {}
-	var entries := []   # index -> {"attack": WeaponAttackData} OR {"self": BaseAction.ActionType}
-	var idx := 0
-
-	for atk in unit.get_weapon_secondary_attacks():
-		items.append(idx)
-		data[idx] = _attack_entry(unit, atk)
-		entries.append({"attack": atk})
-		idx += 1
-	if unit.can_reload_weapon():
-		items.append(idx)
-		data[idx] = {"name": unit.reload_label()}
-		entries.append({"self": BaseAction.ActionType.RELOAD})
-		idx += 1
-	if unit.can_rev_weapon():
-		items.append(idx)
-		data[idx] = {"name": "Rev"}
-		entries.append({"self": BaseAction.ActionType.REV})
-		idx += 1
-	if unit.can_burrow_weapon():
-		items.append(idx)
-		data[idx] = {"name": "Burrow"}
-		entries.append({"self": BaseAction.ActionType.BURROW})
-		idx += 1
-
-	_open_menu(unit, items, data, game.get_viewport().get_mouse_position(),
-		func(sel_idx, picking_unit): _pick_weapon_action(picking_unit, entries[sel_idx]))
-
-# Shared plumbing for all three menus: spin up a controller, wire it the same way, fill, place.
-# `on_selected` takes (item_id, unit) — the ActionMenuController.action_selected signature.
-func _open_menu(unit: Unit, items: Array, data: Dictionary, pos: Vector2i, on_selected: Callable) -> void:
 	var controller := ActionMenuController.new()
 	game.add_child(controller)
 	controller.setup(unit)
 
-	controller.action_selected.connect(on_selected)
+	controller.action_selected.connect(on_pressed)
 	controller.cancelled.connect(_on_menu_cancelled)
 
-	controller.populate(items, data)
-	controller.setpos(pos)
+	controller.open(build_tree(unit), Vector2(pos))
+
+
+# THE snapshot (#467): every ring the player can reach this open, built now. Categories in
+# CATEGORIES order, verbs within one in ACTION_DATA order, and a category with no live children is
+# simply absent -- the ring's compaction rule, applied one level up.
+func build_tree(unit: Unit) -> Array:
+	_pick_by_id = {}
+	_next_synthetic_id = -1
+
+	var by_group := {}
+	for id: int in populate(unit):
+		var entry: Dictionary = ACTION_DATA[id]
+		var group: int = entry["group"]
+		if not by_group.has(group):
+			by_group[group] = []
+		var bucket: Array = by_group[group]
+		if bool(entry.get("expands", false)):
+			bucket.append_array(_expanded_children(unit, id))
+		else:
+			bucket.append(_verb_node(id))
+
+	var ring: Array = []
+	for group: int in CATEGORIES:
+		var children: Array = by_group.get(group, [])
+		if children.is_empty():
+			continue
+		var category: Dictionary = CATEGORIES[group]
+		var node := _entry(category["name"], "", Glossary.short(category["term"]))
+		node["children"] = children
+		ring.append(node)
+	return ring
+
+
+# An ACTION_DATA verb as a leaf. Its id IS the ACTION_DATA id, so on_pressed's match is reached
+# exactly as it was from the dropdown.
+func _verb_node(id: int) -> Dictionary:
+	var entry: Dictionary = ACTION_DATA[id]
+	var node := _entry(entry["name"], "", Glossary.short(entry["term"]))
+	node["id"] = id
+	return node
+
+
+# A leaf that is not a verb: it gets a negative id and its own Callable, both dropped at the next
+# build_tree. Keeping ONE signal out of the controller is why these route through ids at all.
+func _synthetic_leaf(node: Dictionary, pick: Callable) -> Dictionary:
+	node["id"] = _next_synthetic_id
+	_pick_by_id[_next_synthetic_id] = pick
+	_next_synthetic_id -= 1
+	return node
+
+
+func _expanded_children(unit: Unit, id: int) -> Array:
+	match id:
+		WEAPON_ACTION:
+			return _weapon_children(unit)
+		TRANSMUTATION:
+			return _transmutation_children(unit)
+		ABILITY_ACTION:
+			return _ability_children(unit)
+	push_error("MainActionMenu: no children builder for expander %s" % id)
+	return []
+
+
+# Every attack is a leaf that routes to targeting. Law #2 still holds here and this is now the
+# surface it holds ON: an unfireable pick (a sprung weapon #73, a dry magazine #84, an
+# unchannelable carving #166) stays LISTED and greyed with its reason. The ring COMPACTS at the
+# category level and must never compact here.
+func _attack_leaf(unit: Unit, attack: AttackData) -> Dictionary:
+	return _synthetic_leaf(_attack_entry(unit, attack),
+		func(picking_unit: Unit) -> void: _pick_attack(picking_unit, attack))
+
+
+# The equipped weapon's non-main attacks plus its self-verbs. Reload's LABEL is per-family
+# (a Springspear says "Spring Load", a Carbine says "Reload") while the order is one type.
+func _weapon_children(unit: Unit) -> Array:
+	var children: Array = []
+	for atk: AttackData in unit.get_weapon_secondary_attacks():
+		children.append(_attack_leaf(unit, atk))
+	if unit.can_reload_weapon():
+		children.append(_self_verb_leaf(unit.reload_label(), BaseAction.ActionType.RELOAD))
+	if unit.can_rev_weapon():
+		children.append(_self_verb_leaf("Rev", BaseAction.ActionType.REV))
+	if unit.can_burrow_weapon():
+		children.append(_self_verb_leaf("Burrow", BaseAction.ActionType.BURROW))
+	return children
+
+
+func _self_verb_leaf(label: String, type: BaseAction.ActionType) -> Dictionary:
+	return _synthetic_leaf(_entry(label),
+		func(picking_unit: Unit) -> void: game.queue_simple_action(picking_unit, type))
+
+
+# A rune has NO authored main attack, so its carvings are interchangeable equals and all of them
+# list; the ATTACK verb beside them fires whichever is default (the first channelable).
+func _transmutation_children(unit: Unit) -> Array:
+	var children: Array = []
+	for atk: AttackData in unit.get_transmutation_choices():
+		children.append(_attack_leaf(unit, atk))
+	return children
+
+
+func _ability_children(unit: Unit) -> Array:
+	var children: Array = []
+	for ability_entry: Dictionary in ability_action_entries(unit):
+		var type: BaseAction.ActionType = ability_entry["type"]
+		children.append(_synthetic_leaf(_entry(ability_entry["name"]),
+			func(picking_unit: Unit) -> void: _pick_ability_action(picking_unit, type)))
+	return children
+
+# The ATTACK verb: fire whatever the unit would fire by default — a weapon's authored main attack,
+# or a rune's first channelable carving. It sits in the Attack group beside the named alternatives
+# rather than above them, so "just swing" stays one pick. Reset the live pick so a stale one never
+# leaks into a new aim.
+func begin_attack(unit: Unit) -> void:
+	unit.active_attack = null
+	game.enter_attack_mode(unit)
+
 
 # ONE menu row, and the catalogue law in one place (#166): an option the unit OWNS is listed
 # whether or not it can be used right now, and a greyed row always says why. A non-empty
@@ -301,6 +389,16 @@ func populate(unit: Unit) -> Array:
 # ==============================================================================
 
 func on_pressed(action_id: int, unit: Unit) -> void:
+	# A NEGATIVE id is one of this open's synthetic leaves (a carving, a weapon secondary, an
+	# ability verb). One signal out of the controller, two kinds of leaf behind it.
+	if action_id < 0:
+		var pick: Callable = _pick_by_id.get(action_id, Callable())
+		if pick.is_valid():
+			pick.call(unit)
+		else:
+			push_error("MainActionMenu: no pick for synthetic id %s" % action_id)
+		return
+
 	match action_id:
 		MOVE:
 			# The gesture, not the bare mode: re-planning spends the queued move (#417). One
@@ -339,49 +437,26 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.enter_target_pick_mode(RulesService.guard_candidates(unit, game._board()), func(target: Unit): game.queue_guard(unit, target))
 		RALLY:
 			game.queue_simple_action(unit, BaseAction.ActionType.RALLY)
-		ABILITY_ACTION:
-			show_ability_action_menu(unit)
-		TRANSMUTATION:
-			show_attack_menu(unit, unit.get_transmutation_choices(), game.get_viewport().get_mouse_position())
 		CAPTURE:
 			game.queue_capture(unit)
 		GROUP_MOVE:
 			# The gesture, not the bare mode: re-planning spends the queued formation (#461).
 			game.begin_group_move_planning(unit)
-		WEAPON_ACTION:
-			show_weapon_action_menu(unit)
 
 func _pick_attack(unit: Unit, attack: AttackData) -> void:
 	unit.active_attack = attack
 	game.enter_attack_mode(unit)
 
-func _pick_weapon_action(unit: Unit, entry: Dictionary) -> void:
-	if entry.has("attack"):
-		_pick_attack(unit, entry["attack"])
-	else:
-		game.queue_simple_action(unit, entry["self"])
-
 # Every ability-driven main action this unit could take RIGHT NOW (#88). ONE list, two readers:
-# populate() gates the top-level entry on it being non-empty, and show_ability_action_menu builds
-# the submenu from it — so the category can never open empty, nor hide an option that was live.
-# Each entry is {name, type}; the queued ActionType is unchanged, which is what keeps the resolver,
-# the queue panel and the AI untouched by this refactor.
+# populate() gates ABILITY_ACTION on it being non-empty, and _ability_children builds the ring's
+# leaves from it — so the group can never carry an option that was not live. Each entry is
+# {name, type}; the queued ActionType is unchanged, which is what keeps the resolver, the queue
+# panel and the AI untouched by the menu rework.
 func ability_action_entries(unit: Unit) -> Array[Dictionary]:
 	var entries: Array[Dictionary] = []
 	if unit.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
 		entries.append({"name": "Intimidate", "type": BaseAction.ActionType.INTIMIDATE})
 	return entries
-
-func show_ability_action_menu(unit: Unit) -> void:
-	var entries := ability_action_entries(unit)
-	var items := []
-	var data := {}
-	for i in range(entries.size()):
-		items.append(i)
-		data[i] = {"name": entries[i]["name"]}
-
-	_open_menu(unit, items, data, game.get_viewport().get_mouse_position(),
-		func(idx, picking_unit): _pick_ability_action(picking_unit, entries[idx]["type"]))
 
 # Per-type dispatch, not one uniform queue call: an ability action can need a TARGET pick where a
 # weapon self-ability never does. Same reasoning that keeps queue_intimidate separate from
