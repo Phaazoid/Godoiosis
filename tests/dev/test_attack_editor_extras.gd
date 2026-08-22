@@ -29,7 +29,12 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	_scene.queue_free()
+	# The idle frame is load-bearing, not politeness: populate() tears its old rows down with
+	# remove_child + queue_free, so freeing the scene in the same frame strands every queued row as
+	# an orphan -- 1017 of them (#473). test_board_lint.gd awaits for the same reason.
+	await await_idle_frame()
+	get_tree().root.remove_child(_scene)
+	_scene.free()
 
 
 # Put the editor in Family mode over a family nothing else shares.

@@ -19,7 +19,8 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	_box.queue_free()
+	remove_child(_box)
+	_box.free()
 
 
 func _attack() -> WeaponAttackData:
