@@ -756,6 +756,52 @@ They are `CLASS_KNOBS` statics rather than `KNOBS` rows because **the menu is tr
 no standing node for a knob to name and nothing to re-apply a change to, which is
 `MovementComponent.SHOVE_SLIDE_SPEED`'s shape exactly.
 
+### Round 2: what the first play-through changed (dev, same day)
+
+Six items, and three of them had something underneath worth recording.
+
+**A category whose ONE child is its own verb collapses to a terminal slice.** *"There is no reason
+to put Move under Move."* Deliberately **not** "collapse whenever there is one child" — a lone Squad
+Up names something the word Squad does not, and single-option submenus are explicitly meant to
+survive (they just draw small, below). The same rule is the entire implementation of **"Inspect is
+top level"**: a group of one holding the verb of its own name. No special case, no new key.
+
+**The generic Attack row is gone and the ring lists every attack by its own name** — *"the whole
+point of that was to save time, but if we already have to navigate through a menu to get to it,
+it's pointless."* The trap under it: `WeaponInstance.secondary_attacks()` **excludes** the main
+attack, so the Attack verb was the only way to reach it, and deleting the row as literally asked
+would have left a plain sword unable to attack at all. What the ask actually requires is the MAIN
+attack listing by name alongside the alternatives. Two consequences: a rune's default attack *is*
+one of its carvings, so a group is filled with a name-dedupe; and a weapon family whose main attack
+was never given a `display_name` now says so on screen, which the dev noted as the point (*"maybe
+it'll give us a reason to actually name the basic attack names for each weapon family"*).
+
+**Three verbs left the ring entirely** — Execute Orders, Cancel Actions, End Turn — because each
+already had a richer HUD door. The principle worth keeping: **the unit's menu is what the UNIT does;
+the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
+has queued in one press"*, which is now N presses of the queue row's X.
+
+**So the End Turn button is permanent.** What its old visibility rule became is the FLASH, and the
+same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
+so a flashing button never interrupts and a still one always does, and the cue and the confirmation
+cannot disagree. Two notes measured rather than assumed while making it permanent: `MissionStatusPanel`
+already reserved its corner slot *even while it was hidden*, so nothing reflows; and the queue dock
+occupies y 25..490 against the button's y 676..712, so the old "these two are never on screen
+together" argument was retired without its conclusion changing.
+
+**A wedge is capped at how much it PAINTS** (`MAX_WEDGE_DEGREES`) — *"the massive balloon arcs just
+don't look great."* A compacting ring produces rings of one and two constantly, and without a cap
+those are a full donut and two hemispheres. It moves no hit boundary, which is the drawn/hit split
+paying for itself a second time: the sectors still tile the circle, the leftover angle belongs to
+the nearest wedge, and the always-drawn highlight says which.
+
+**Labels ride the curve of their own wedge**, flipped on the bottom half so they are never upside
+down, and shrink to a floor rather than overrun. Note the dev's wording was *"ones on the bottom
+should face outwards, on the top, inwards"* — which is the unreadable half; his own purpose clause
+(*"to be readable"*) is what settled it the other way, and he asked for it built and shown rather
+than argued.
+
+
 ## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
 
 Six inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in

@@ -1,14 +1,16 @@
 # The action ring's BEHAVIOUR (#467), on the real game scene — the geometry has its own pure suite
 # next door, this one is about what the widget does with it.
 #
-# Three of these four cases exist because the design has properties nothing else in the tree can
-# see, and each is a property a plausible "simplification" would quietly remove:
+# Every case here exists because the design has a property nothing else in the tree can see, and
+# each is a property a plausible "simplification" would quietly remove:
 #   * the hit area is UNBOUNDED, so a pointer nowhere near the drawn ring still selects;
 #   * a CATEGORY pick keeps the menu alive and the unit selected, which is the whole recoverability
 #     ruling and also the #105/#107 trap (state wiped on the way INTO the next mode);
+#   * right-click collapses ONE ring, driven through the real gui_input rather than by calling
+#     back() — a signal with no listener is legal GDScript (#103);
+#   * a category whose one child is its own VERB collapses, and one whose child has a different
+#     name does not — the pair is what says the rule is about the name rather than the count;
 #   * the tree is SNAPSHOTTED at open, so a preview cannot disagree with what commits.
-# Right-click's back-one-ring is the fourth, driven through the real gui_input rather than by
-# calling back() — a signal with no listener is legal GDScript (#103).
 #
 # Fixture is tests/ui/test_menu_catalogue_rows.gd's — see tests/README.md -> Testing the game scene.
 extends GdUnitTestSuite
