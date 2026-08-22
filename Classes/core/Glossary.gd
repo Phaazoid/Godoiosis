@@ -20,10 +20,13 @@ enum Term {
 	SQUAD, LEADER, COHESION, SQUAD_SIZE,
 	# Stats (one per Stats.Stat, plus the derived readout rows)
 	MHP, STR, LDR, WIL, DEX, PER, CON, COH, MOV, WEIGHT, DEF,
-	# Actions (one per MainActionMenu.ACTION_DATA row, plus ATTACK_TARGETING — the channel axis)
+	# Actions (one per MainActionMenu.ACTION_DATA row, one per MainActionMenu.CATEGORIES row --
+	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
+	# plus ATTACK_TARGETING, the channel axis)
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
 	GUARD, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
+	ACTION, RUNE, SQUAD_ACTIONS,
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
@@ -297,11 +300,20 @@ static func _build_entries() -> Dictionary:
 			+ "itself (setting it burning, freezing water) and never touches units directly. "
 			+ "(unit/tile): does both at once. Tile-targeting is how attacks and the terrain "
 			+ "interact — see the Terrain and Elemental pages."}
-	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon Action",
-		"short": "The equipped weapon's other attacks and its self-verbs: reload, rev, burrow.",
-		"long": "Everything the equipped weapon can do beyond its main attack: alternative attacks, "
-			+ "plus the weapon's own verbs — reloading a magazine, revving a motor, digging in. "
+	# The action ring names this slice after the equipped WEAPON rather than after attacking (#467
+	# round 3), because reloading and burrowing are not attacks and a slice called Attack would be
+	# lying about half its contents. Term.RUNE below is its opposite number.
+	e[Term.WEAPON_ACTION] = {"category": Category.ACTIONS, "title": "Weapon",
+		"short": "Everything the equipped weapon can do: its attacks, and its own verbs like reload, rev, burrow.",
+		"long": "One slice for the weapon in hand — its main attack, any alternative attacks, and "
+			+ "the verbs the weapon itself has: reloading a magazine, revving a motor, digging in. "
 			+ "Greyed entries say what they are missing."}
+	e[Term.RUNE] = {"category": Category.ACTIONS, "title": "Rune",
+		"short": "Everything the equipped rune can do: the carvings inscribed on it, paid for with aura.",
+		"long": "The weapon slice's opposite number, for an alchemist. A rune carries inscribed "
+			+ "carvings and firing one channels the wielder's elemental aura; many carvings are not "
+			+ "attacks at all, which is why this slice is named for the rune rather than for "
+			+ "swinging. A carving the wielder cannot pay for is listed greyed, with the reason."}
 	e[Term.TRANSMUTATION] = {"category": Category.ACTIONS, "title": "Transmutation",
 		"short": "Fire a carving inscribed on the equipped rune, paid for with elemental aura.",
 		"long": "A rune carries inscribed carvings; firing one channels the wielder's elemental "
@@ -310,6 +322,19 @@ static func _build_entries() -> Dictionary:
 		"short": "Verbs granted by a unit's abilities, like Intimidate.",
 		"long": "Actions a unit's abilities unlock. Intimidate — draining an adjacent enemy's Will — "
 			+ "is the first; more arrive with new abilities."}
+	# The action ring's two invented categories (#467). Move, Attack and Inspect reuse the verb
+	# terms of the same name; these two name a grouping the game had no word for before the ring.
+	# A third, "Turn", died in round 2 along with the category — the turn's verbs are the HUD's.
+	e[Term.ACTION] = {"category": Category.ACTIONS, "title": "Action",
+		"short": "Spending the turn on something other than an attack: guard, rescue, rally, capture, wait.",
+		"long": "A unit spends its turn on one main action. Act gathers the ones that are not "
+			+ "swinging a weapon — standing in front of an ally, carrying a downed one to safety, "
+			+ "steadying a shaken squad, taking a zone, or an ability's own verb — and Wait, which "
+			+ "spends the squad's turn on nothing at all."}
+	e[Term.SQUAD_ACTIONS] = {"category": Category.ACTIONS, "title": "Squad",
+		"short": "Forming and breaking squads: squad up, join, leave, disband.",
+		"long": "Changing who marches with whom. A squad's shape is fixed once it has orders "
+			+ "queued or has acted, so these are offered only while it is still free to change."}
 	# Guard vs DEF, said plainly in both halves: the mechanic is named Guard precisely so it never
 	# reads as the stat, and the glossary is where the two sit side by side (#414).
 	e[Term.GUARD] = {"category": Category.ACTIONS, "title": "Guard",

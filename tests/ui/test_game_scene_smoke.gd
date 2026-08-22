@@ -18,6 +18,8 @@
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
+const MD := preload("res://tests/support/menu_drive.gd")
+const SF := preload("res://tests/support/squad_fixtures.gd")
 
 var _main: Node
 var game: Node2D
@@ -79,6 +81,37 @@ func _pick_menu_action(action_id: int, unit: Unit) -> void:
 	assert_object(controller).is_not_null()   # the menu never opened
 	controller.cancelled.emit(controller)
 	controller.action_selected.emit(action_id, unit)
+
+
+# Pick the ring's first ATTACK the way a player does. It cannot be reached by id: an attack is a
+# synthetic leaf allocated per open (#467), so the tree has to be walked. Emitting the two signals
+# in order is still the point -- that ordering is what #105 and #107 were.
+
+
+# The sandbox cast is authored content and not every unit on it carries a weapon it can actually
+# fire -- and populate() only offers Attack to one that can. Arm it explicitly rather than assuming
+# the board does. Worth knowing WHY this is new: the old version of this suite emitted the ATTACK
+# id straight into the controller, so it drove a row the real menu would never have shown it.
+func _arm(unit: Unit) -> void:
+	if unit.can_fire_default_attack():
+		return
+	# add_item only auto-equips into an EMPTY hand, so a unit already holding something unfireable
+	# needs the explicit swap -- the door the inventory panel uses.
+	assert_bool(unit.add_item(SF.make_weapon())).override_failure_message("no inventory room to arm the fixture").is_true()
+	for i in range(unit.inventory.size()):
+		if unit.inventory[i] is WeaponInstance:
+			unit.equip_weapon_from_inventory(i)
+			if unit.can_fire_default_attack():
+				return
+	assert_bool(unit.can_fire_default_attack()).override_failure_message("the fixture could not be armed").is_true()
+
+func _pick_first_attack(unit: Unit) -> void:
+	var controller := MD.controller_of(game)
+	assert_object(controller).override_failure_message("no action menu opened").is_not_null()
+	var leaf := MD.first_leaf_under(controller.level_nodes(), MD.kit_category(game, unit))
+	assert_bool(leaf.is_empty()).override_failure_message("the ring offered no kit slice at all").is_false()
+	controller.cancelled.emit(controller)
+	controller.action_selected.emit(int(leaf.get("id", 0)), unit)
 
 
 # ------------------------------------------------------------------------------
@@ -226,8 +259,9 @@ func test_attack_targeting_queues_an_attack_order() -> void:
 	var beside := victim.movement.cell + Vector2i.LEFT
 	attacker.movement.cell = beside
 
+	_arm(attacker)
 	game._on_left_click(attacker.movement.cell)
-	_pick_menu_action(MainActionMenu.ATTACK, attacker)
+	_pick_first_attack(attacker)
 	assert_int(game.game_state).is_equal(game.GameState.ATTACK_TARGETING)
 	game._on_left_click(victim.movement.cell)
 

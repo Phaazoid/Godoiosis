@@ -915,18 +915,24 @@ func has_any_fireable_attack() -> bool:
 			return true
 	return false
 	
-# Can the ATTACK menu entry do anything? Since the 2026-07-24 refactor Attack always fires the
-# DEFAULT attack with no submenu, so the entry gates on that ONE attack. Deliberately NOT
-# get_fired_attack(): that returns a live active_attack, but begin_attack() clears the pick
-# before aiming — so the gate would judge the entry by an attack it will never fire (#102).
+# Can the ATTACK entry offer anything? It gates on the ONE default attack, which the action ring
+# then lists by its own name (#467 — there is no generic "Attack" row any more). Deliberately NOT
+# get_fired_attack(): that returns a live active_attack, i.e. an aiming cursor left over from a
+# previous aim, so the gate would judge the entry by an attack it will never fire (#102).
 # A weapon with NO main attack (the #80 data-rot shape) fires nothing, so the entry closes:
 # is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
 # answer to "is this gated?" and the wrong one to "is there anything here?".
 func can_fire_default_attack() -> bool:
-	if equipped_weapon == null:
-		return false
-	var atk := equipped_weapon.default_attack(self)
+	var atk := get_default_attack()
 	return atk != null and is_attack_fireable(atk)
+
+# What this unit swings if it just attacks -- a weapon's authored main, a rune's first channelable
+# carving. A thin delegator to whatever is equipped, the same shape as get_weapon_secondary_attacks
+# beside it; the action ring lists it by its own NAME since #467, so it needs a public reader.
+func get_default_attack() -> AttackData:
+	if equipped_weapon == null:
+		return null
+	return equipped_weapon.default_attack(self)
 
 # --- The equipped thing's self-abilities ---
 # Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack

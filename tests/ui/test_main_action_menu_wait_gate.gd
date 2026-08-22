@@ -52,5 +52,7 @@ func test_wait_is_withdrawn_once_the_squad_has_acted() -> void:
 	assert_bool(options.has(MainActionMenu.WAIT)) \
 		.override_failure_message("Wait was still offered to a squad that already acted") \
 		.is_false()
-	# End Turn is unaffected -- ending the faction's turn stays meaningful either way.
-	assert_array(options).contains([MainActionMenu.ENDTURN])
+	# End Turn used to be asserted here as the unaffected neighbour. It left the ring entirely in
+	# #467 -- ending the faction's turn is the corner button's job now, and never hiding is
+	# tests/ui/test_end_turn_button.gd's rule. Inspect is the neighbour that stayed.
+	assert_array(options).contains([MainActionMenu.INSPECT])

@@ -1,12 +1,16 @@
 # #166: a menu LISTS what the unit owns and greys what it can't use, with a reason on every
 # greyed row and a readout on every row.
 #
-# This suite asserts on the RENDERED BUTTONS, not on the lists behind them, and that is the whole
-# point of it existing. `get_transmutation_choices()` returning three carvings tells you nothing
-# about whether the menu drew three rows, disabled two, or attached a single word of explanation —
-# and the row-building path (MainActionMenu._entry -> ActionMenuController.populate) is where every
-# one of those decisions actually happens. Same lesson as #114, #126 and #131: a test that stops
-# short of the thing the player looks at is blind to bugs in the thing the player looks at.
+# This suite asserts on WHAT THE MENU DREW, not on the lists behind it, and that is the whole point
+# of it existing. `get_transmutation_choices()` returning three carvings tells you nothing about
+# whether the menu drew three slices, greyed two, or attached a single word of explanation — and the
+# row-building path (MainActionMenu._entry -> build_tree -> the ring's live level) is where every one
+# of those decisions actually happens. Same lesson as #114, #126 and #131: a test that stops short of
+# the thing the player looks at is blind to bugs in the thing the player looks at.
+#
+# Re-pointed by #467 from the dropdown's Buttons to the ring's live level, and the DRILL-DOWN is
+# driven by ANGLE (aim_at + commit) rather than by calling a pick — the ring compacts, so which
+# slice an angle lands on is exactly the thing that can break.
 #
 # Fixture is tests/squad/test_downed_ejection.gd's real game scene — see tests/README.md ->
 # Testing the game scene.
@@ -14,6 +18,7 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
+const MD := preload("res://tests/support/menu_drive.gd")
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 
@@ -75,26 +80,57 @@ func _alchemist_with_a_partial_rune() -> Unit:
 	return alch
 
 
-# The live menu's rendered rows. MainActionMenu._open_menu parents its controller to Game, so the
-# most recently opened one is the submenu under test.
-func _open_rows() -> Array[Button]:
-	var rows: Array[Button] = []
+# The open ring. MainActionMenu parents its controller to Game and there is only ever one now --
+# a category grows a ring on the SAME controller rather than opening a second menu (#467).
+func _controller() -> ActionMenuController:
 	var controller: ActionMenuController = null
 	for child in game.get_children():
 		if child is ActionMenuController:
 			controller = child
 	assert_object(controller).override_failure_message("no menu was opened at all").is_not_null()
-	for node in controller._button_box.get_children():
-		if node is Button:
-			rows.append(node)
-	return rows
+	return controller
 
 
-func _row_named(rows: Array[Button], text: String) -> Button:
-	for row in rows:
-		if row.text == text:
+# What the LIVE ring is drawing. Still the widget's own display list rather than the data behind
+# it, which is this suite's whole reason for existing.
+func _open_rows() -> Array:
+	return _controller().level_nodes()
+
+
+func _row_named(rows: Array, text: String) -> Dictionary:
+	for row: Dictionary in rows:
+		if String(row.get("name", "")) == text:
 			return row
-	return null
+	return {}
+
+
+func _disabled(row: Dictionary) -> bool:
+	return bool(row.get("disabled", false))
+
+
+func _tooltip(row: Dictionary) -> String:
+	return String(row.get("tooltip", ""))
+
+
+# Open the unit's ring and drill into Attack the way a player does: point at the slice, click.
+# Carvings AND weapon secondaries both live there since #467 -- the #88 separation was overturned
+# with the rework. Pointing rather than calling a pick is the point: selection is the ANGLE, so a
+# test that set an index directly would not exercise the thing that can break.
+func _enter_attack_ring(unit: Unit) -> void:
+	game.main_action_menu.show_main_menu(unit, Vector2i(400, 300))
+	await await_idle_frame()
+	var controller := _controller()
+	var rows: Array = controller.level_nodes()
+	var kit := MD.kit_category(game, unit)
+	var index := -1
+	for i in range(rows.size()):
+		if String(rows[i].get("name", "")) == kit:
+			index = i
+	assert_int(index).override_failure_message("the ring offered no '%s' slice" % kit).is_greater(-1)
+	controller.aim_at(controller.point_in_slice(index))
+	controller.commit()
+	assert_int(controller.level_count()) \
+		.override_failure_message("committing the kit slice did not open a ring").is_equal(2)
 
 
 # ==============================================================================
@@ -104,16 +140,19 @@ func _row_named(rows: Array[Button], text: String) -> Button:
 func test_the_submenu_lists_every_carving_and_greys_the_unaffordable_ones() -> void:
 	var alch := _alchemist_with_a_partial_rune()
 
-	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
-	await await_idle_frame()
+	await _enter_attack_ring(alch)
 	var rows := _open_rows()
 
-	assert_int(rows.size()).override_failure_message("the catalogue did not list all three carvings").is_equal(3)
-	assert_bool(_row_named(rows, "Ember").disabled) \
+	# Named rows rather than a count: since #467 the ATTACK verb shares this ring with the carvings,
+	# so a total would be a claim about the grouping rather than about the catalogue.
+	for carving: String in ["Ember", "Pyre", "Inferno"]:
+		assert_bool(_row_named(rows, carving).is_empty()) \
+			.override_failure_message("the catalogue did not list '%s'" % carving).is_false()
+	assert_bool(_disabled(_row_named(rows, "Ember"))) \
 		.override_failure_message("the covered carving was greyed").is_false()
-	assert_bool(_row_named(rows, "Pyre").disabled) \
+	assert_bool(_disabled(_row_named(rows, "Pyre"))) \
 		.override_failure_message("a wildcard-covered carving was greyed").is_false()
-	assert_bool(_row_named(rows, "Inferno").disabled) \
+	assert_bool(_disabled(_row_named(rows, "Inferno"))) \
 		.override_failure_message("an unchannelable carving was left pickable").is_true()
 
 
@@ -122,14 +161,13 @@ func test_the_submenu_lists_every_carving_and_greys_the_unaffordable_ones() -> v
 func test_every_greyed_row_says_what_it_needs() -> void:
 	var alch := _alchemist_with_a_partial_rune()
 
-	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
-	await await_idle_frame()
+	await _enter_attack_ring(alch)
 	var rows := _open_rows()
 
 	var inferno := _row_named(rows, "Inferno")
-	assert_str(inferno.tooltip_text).override_failure_message("a greyed row explained nothing").is_not_empty()
-	assert_str(inferno.tooltip_text).contains("wildcard")   # names the shortfall in the model's currency
-	assert_str(inferno.tooltip_text).contains("2")
+	assert_str(_tooltip(inferno)).override_failure_message("a greyed row explained nothing").is_not_empty()
+	assert_str(_tooltip(inferno)).contains("wildcard")   # names the shortfall in the model's currency
+	assert_str(_tooltip(inferno)).contains("2")
 
 
 # The descriptions half of #166: a row you CAN pick still says what it does. Blocked by the old
@@ -137,15 +175,14 @@ func test_every_greyed_row_says_what_it_needs() -> void:
 func test_an_enabled_row_still_carries_its_readout() -> void:
 	var alch := _alchemist_with_a_partial_rune()
 
-	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
-	await await_idle_frame()
+	await _enter_attack_ring(alch)
 	var rows := _open_rows()
 
 	var ember := _row_named(rows, "Ember")
-	assert_bool(ember.disabled).is_false()
-	assert_str(ember.tooltip_text) \
+	assert_bool(_disabled(ember)).is_false()
+	assert_str(_tooltip(ember)) \
 		.override_failure_message("an enabled row has no hover readout").is_not_empty()
-	assert_str(ember.tooltip_text).contains("Damage")
+	assert_str(_tooltip(ember)).contains("Damage")
 
 
 # The tooltip law (visual-clarity #1): Godot tooltips don't autowrap, so every rendered one must
@@ -153,14 +190,13 @@ func test_an_enabled_row_still_carries_its_readout() -> void:
 func test_every_rendered_tooltip_is_wrapped() -> void:
 	var alch := _alchemist_with_a_partial_rune()
 
-	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
-	await await_idle_frame()
+	await _enter_attack_ring(alch)
 
-	for row in _open_rows():
-		if row.tooltip_text != "":
-			assert_str(row.tooltip_text) \
-				.override_failure_message("an unwrapped tooltip reached the screen: '%s'" % row.tooltip_text) \
-				.is_equal(UiText.wrap(row.tooltip_text))
+	for row: Dictionary in _open_rows():
+		if _tooltip(row) != "":
+			assert_str(_tooltip(row)) \
+				.override_failure_message("an unwrapped tooltip reached the screen: '%s'" % _tooltip(row)) \
+				.is_equal(UiText.wrap(_tooltip(row)))
 
 
 # The generalization, proven on the OTHER kind: the reason a weapon row gives is now the family's
@@ -171,14 +207,13 @@ func test_a_weapon_row_greys_with_its_familys_own_words() -> void:
 	unit.add_item(spear)
 	assert_object(unit.get_equipped_weapon()).is_same(spear)
 
-	game.main_action_menu.on_pressed(MainActionMenu.WEAPON_ACTION, unit)
-	await await_idle_frame()
+	await _enter_attack_ring(unit)
 	var rows := _open_rows()
 
 	var stab := _row_named(rows, "Spring Stab")
-	assert_object(stab).override_failure_message("the secondary attack was not listed").is_not_null()
-	assert_bool(stab.disabled).is_true()
-	assert_str(stab.tooltip_text) \
+	assert_bool(stab.is_empty()).override_failure_message("the secondary attack was not listed").is_false()
+	assert_bool(_disabled(stab)).is_true()
+	assert_str(_tooltip(stab)) \
 		.override_failure_message("the row fell back to the generic reason instead of the family's") \
 		.contains("Spring Load")
 
@@ -193,13 +228,13 @@ func test_every_main_menu_row_carries_its_glossary_readout() -> void:
 
 	var rows := _open_rows()
 	assert_int(rows.size()).override_failure_message("the main menu opened with no rows").is_greater(0)
-	for row in rows:
-		assert_str(row.tooltip_text) \
-			.override_failure_message("main-menu row '%s' has no hover readout" % row.text) \
+	for row: Dictionary in rows:
+		assert_str(_tooltip(row)) \
+			.override_failure_message("main-menu row '%s' has no hover readout" % row["name"]) \
 			.is_not_empty()
-		assert_str(row.tooltip_text) \
-			.override_failure_message("main-menu row '%s' rendered an unwrapped tooltip: '%s'" % [row.text, row.tooltip_text]) \
-			.is_equal(UiText.wrap(row.tooltip_text))
+		assert_str(_tooltip(row)) \
+			.override_failure_message("main-menu row '%s' rendered an unwrapped tooltip: '%s'" % [row["name"], _tooltip(row)]) \
+			.is_equal(UiText.wrap(_tooltip(row)))
 
 
 # #135 round 2: every attack row's readout ends with its targeting channel, in the concise
@@ -207,23 +242,21 @@ func test_every_main_menu_row_carries_its_glossary_readout() -> void:
 # fixtures' attacks default to TargetMode.UNIT, so "(unit)" is the data-derived expectation.
 func test_attack_rows_name_their_targeting_channel() -> void:
 	var alch := _alchemist_with_a_partial_rune()
-	game.main_action_menu.on_pressed(MainActionMenu.TRANSMUTATION, alch)
-	await await_idle_frame()
+	await _enter_attack_ring(alch)
 	var ember := _row_named(_open_rows(), "Ember")
-	assert_object(ember).is_not_null()
-	assert_str(ember.tooltip_text) \
-		.override_failure_message("a carving row's readout has no targeting channel: '%s'" % ember.tooltip_text) \
+	assert_bool(ember.is_empty()).override_failure_message("row not found on the ring").is_false()
+	assert_str(_tooltip(ember)) \
+		.override_failure_message("a carving row's readout has no targeting channel: '%s'" % _tooltip(ember)) \
 		.contains("(unit)")
 
 	var unit := _spawn(Vector2i(4, 0))
 	var spear := _sprung_springspear()
 	unit.add_item(spear)
-	game.main_action_menu.on_pressed(MainActionMenu.WEAPON_ACTION, unit)
-	await await_idle_frame()
+	await _enter_attack_ring(unit)
 	var stab := _row_named(_open_rows(), "Spring Stab")
-	assert_object(stab).is_not_null()
-	assert_str(stab.tooltip_text) \
-		.override_failure_message("a weapon row's readout has no targeting channel: '%s'" % stab.tooltip_text) \
+	assert_bool(stab.is_empty()).override_failure_message("row not found on the ring").is_false()
+	assert_str(_tooltip(stab)) \
+		.override_failure_message("a weapon row's readout has no targeting channel: '%s'" % _tooltip(stab)) \
 		.contains("(unit)")
 
 

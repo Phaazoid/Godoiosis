@@ -36,7 +36,7 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 ## 📥 Inbox (drop ideas here)
 
-*(Empty — last swept 2026-08-20. Drop new ideas here.)*
+- Hover-until-appear time should maybe be a dev-mode toggle *(dev, 2026-08-22, filed at his request during #467 round 3 — "maybe hover until appear time should be a dev mode toggle, file that away")*. Context so the sweep does not have to re-derive it: the action ring's readout now waits out `gui/timers/tooltip_delay_sec`, the **project** setting the inspect panel's own tooltips already read, so there is exactly one number and no second seam. A dev toggle would be a *second writer* of that number, which is [#422](https://github.com/Phaazoid/Godoiosis/issues/422)'s question (dev defaults vs player settings) rather than a knob-table line — and note the same value is arguably a **player** setting, not a dev one, since a slow reader and a fast one want different waits.
 
 ## 🗂 Dispersed (log)
 

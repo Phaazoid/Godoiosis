@@ -85,27 +85,41 @@ func _open_menu(unit: Unit) -> Node:
 	return null
 
 
-func _find_button(node: Node, label: String) -> Button:
-	for child in node.get_children():
-		if child is Button and (child as Button).text == label:
-			return child as Button
-		var found := _find_button(child, label)
-		if found != null:
-			return found
-	return null
+# Indices from the ring's live level down to the LEAF carrying `label`, or [] if nothing reachable
+# does. Leaves only, so the Move category and the Move verb inside it are not confused.
+func _path_to(nodes: Array, label: String) -> Array[int]:
+	for i in range(nodes.size()):
+		var node: Dictionary = nodes[i]
+		var children: Array = node.get("children", [])
+		if children.is_empty():
+			if String(node.get("name", "")) == label:
+				var leaf: Array[int] = [i]
+				return leaf
+			continue
+		var deeper := _path_to(children, label)
+		if not deeper.is_empty():
+			var path: Array[int] = [i]
+			path.append_array(deeper)
+			return path
+	var none: Array[int] = []
+	return none
 
 
-# Press a row the way a player does: the Button's own signal, so the controller's
-# cancelled-then-action_selected ordering runs. Returns false when the row isn't on the menu.
+# Press a row the way a player does since #467: point at its slice and click, one ring at a time,
+# so the ANGULAR selection runs and so does the cancelled-then-action_selected ordering on the
+# terminal pick. Returns false when no reachable row carries that label.
 func _press_row(unit: Unit, label: String) -> bool:
-	var controller := _open_menu(unit)
+	var controller: ActionMenuController = _open_menu(unit)
 	assert_object(controller).override_failure_message("no action menu opened").is_not_null()
-	var button := _find_button(controller, label)
-	if button == null:
+	var path := _path_to(controller.level_nodes(), label)
+	if path.is_empty():
 		return false
-	assert_bool(button.disabled) \
-		.override_failure_message("the %s row was listed but greyed" % label).is_false()
-	button.pressed.emit()
+	for step: int in path:
+		controller.aim_at(controller.point_in_slice(step))
+		var node: Dictionary = controller.selected_node()
+		assert_bool(bool(node.get("disabled", false))) \
+			.override_failure_message("the %s row was listed but greyed" % label).is_false()
+		controller.commit()
 	await await_idle_frame()   # let the pressed menu's queue_free() land before the next one opens
 	return true
 

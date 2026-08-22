@@ -15,6 +15,8 @@
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
+const MD := preload("res://tests/support/menu_drive.gd")
+const SF := preload("res://tests/support/squad_fixtures.gd")
 
 var _main: Node
 var game: Node2D
@@ -71,6 +73,37 @@ func _pick_menu_action(action_id: int, unit: Unit) -> void:
 	assert_object(controller).is_not_null()
 	controller.cancelled.emit(controller)
 	controller.action_selected.emit(action_id, unit)
+
+
+# Pick the ring's first ATTACK the way a player does. It cannot be reached by id: an attack is a
+# synthetic leaf allocated per open (#467), so the tree has to be walked. Emitting the two signals
+# in order is still the point -- that ordering is what #105 and #107 were.
+
+
+# The sandbox cast is authored content and not every unit on it carries a weapon it can actually
+# fire -- and populate() only offers Attack to one that can. Arm it explicitly rather than assuming
+# the board does. Worth knowing WHY this is new: the old version of this suite emitted the ATTACK
+# id straight into the controller, so it drove a row the real menu would never have shown it.
+func _arm(unit: Unit) -> void:
+	if unit.can_fire_default_attack():
+		return
+	# add_item only auto-equips into an EMPTY hand, so a unit already holding something unfireable
+	# needs the explicit swap -- the door the inventory panel uses.
+	assert_bool(unit.add_item(SF.make_weapon())).override_failure_message("no inventory room to arm the fixture").is_true()
+	for i in range(unit.inventory.size()):
+		if unit.inventory[i] is WeaponInstance:
+			unit.equip_weapon_from_inventory(i)
+			if unit.can_fire_default_attack():
+				return
+	assert_bool(unit.can_fire_default_attack()).override_failure_message("the fixture could not be armed").is_true()
+
+func _pick_first_attack(unit: Unit) -> void:
+	var controller := MD.controller_of(game)
+	assert_object(controller).override_failure_message("no action menu opened").is_not_null()
+	var leaf := MD.first_leaf_under(controller.level_nodes(), MD.kit_category(game, unit))
+	assert_bool(leaf.is_empty()).override_failure_message("the ring offered no kit slice at all").is_false()
+	controller.cancelled.emit(controller)
+	controller.action_selected.emit(int(leaf.get("id", 0)), unit)
 
 
 # A cell this unit can actually reach, asked of the real move range rather than assumed -- the
@@ -137,8 +170,12 @@ func test_right_click_closes_an_open_mode_and_leaves_the_queue_alone() -> void:
 	_queue_move(unit)
 	assert_int(_active_orders().size()).is_equal(1)
 
-	game._on_left_click(unit.movement.cell)
-	_pick_menu_action(MainActionMenu.ATTACK, unit)
+	_arm(unit)
+	# The unit's SPRITE is at its projected destination once a move is queued, and the ring
+	# belongs to whoever is under the pointer -- clicking the origin cell opens somebody else's
+	# menu, or none. The old direct-id emit could not tell the difference.
+	game._on_left_click(unit.get_projected_destination())
+	_pick_first_attack(unit)
 	assert_int(game.game_state).is_not_equal(game.GameState.IDLE)   # a mode really is open
 
 	game._on_right_click()
@@ -154,8 +191,12 @@ func test_a_second_right_click_reaches_the_queue() -> void:
 	# the two apart: re-planning spends the order on entry, so both leave zero behind.
 	var unit := _player_units()[0]
 	_queue_move(unit)
-	game._on_left_click(unit.movement.cell)
-	_pick_menu_action(MainActionMenu.ATTACK, unit)
+	_arm(unit)
+	# The unit's SPRITE is at its projected destination once a move is queued, and the ring
+	# belongs to whoever is under the pointer -- clicking the origin cell opens somebody else's
+	# menu, or none. The old direct-id emit could not tell the difference.
+	game._on_left_click(unit.get_projected_destination())
+	_pick_first_attack(unit)
 
 	game._on_right_click()   # closes the mode
 	game._on_right_click()   # reaches the queue: the move re-opens its planning
@@ -300,8 +341,9 @@ func test_popping_a_main_leaves_the_co_queued_move_standing() -> void:
 	_queue_move(attacker)                                        # gesture 1
 	assert_bool(_park_beside(victim, attacker.get_projected_destination())).is_true()
 
+	_arm(attacker)
 	game._on_left_click(attacker.get_projected_destination())
-	_pick_menu_action(MainActionMenu.ATTACK, attacker)
+	_pick_first_attack(attacker)
 	game._on_left_click(victim.movement.cell)                    # gesture 2
 
 	var squad := attacker.squad

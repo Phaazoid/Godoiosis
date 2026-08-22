@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #462 (2026-08-21).**
+**Canon checked through #467 (2026-08-22).**
 
 ## Principles
 
@@ -679,6 +679,155 @@ fancy effects doesn't necessitate using them. Using them in the correct places r
 everywhere makes them have more effect."* Unit status (#358) is a sanctioned place; a fancy effect
 everywhere is a fancy effect nowhere.
 
+## The action menu is a RING ([#467](https://github.com/Phaazoid/Godoiosis/issues/467), BUILT 2026-08-21)
+
+The floating dropdown became a radial with the unit's own map sprite in the middle. The dev's two
+complaints were separable and only one of them was a widget problem: the look, and the bloat —
+`ACTION_DATA` declares nineteen verbs and a leader with a rune on a capture point beside a downed
+ally is offered fifteen at once. **A ring does not fix that by being a ring.** It fixes it by
+nesting, which is arithmetic: at the same arc length per slice, a ring at twice the radius holds
+twice the slices, so no single ring has to hold nineteen.
+
+Five rulings, all the dev's, none of them re-derivable from the code:
+
+1. **The ring COMPACTS** — only live verbs are drawn. *"There are far too many unit dependent
+   actions. Group move only shows for squad leader, etc."* A fixed ring of greyed slices would be
+   mostly empty wedges on most units. The price is positional constancy: a verb's angle moves with
+   the unit. `ACTION_DATA` order is still the clockwise order, so the *sequence* holds still even
+   when the angles do not — which is the half of the muscle memory that was recoverable for free.
+   **This leaves #166's deferred decision deferred**: top-level rows stay omit-when-unavailable, so
+   the reason-first ladder is not owed at this level. **Compaction is the MAIN ring's membership
+   policy and nothing else's** — a rune's un-channelable carvings are still listed and greyed with
+   a reason one ring out, which is where #166's catalogue law now lives.
+2. **CATEGORIES all the way down** — five slices (Move / Attack / Act / Squad / Turn), verbs one
+   ring out. Chosen over a flat ring of live verbs having seen both laid out: *"better in every
+   scenario."* It also **overturned #88's separation of Weapon Action and Transmutation**, which
+   `MainActionMenu`'s header had recorded as settled law — *"I was going to get around to grouping
+   attack and transmutation option in the old menu anyways, I just was waiting for a full rework."*
+   Worth carrying: that was a **holding position pending this rework**, which is a different thing
+   from a ruling being wrong, and the file asserted it as law either way.
+3. **CONCENTRIC expansion, and the ring PERSISTS** — a category grows a full ring around the one it
+   came from, and the inner rings stay drawn. The reason given is stronger than "more room" and is
+   the actual requirement: *"the whole menu sticks around until we've made a final choice, making
+   it easy to choose again if we click wrong without having to start over."* A deeper ring is
+   **rotated to begin at its parent's angle**, so a group blooms out of where you pointed.
+4. **Selection is ANGULAR and the hit area is UNBOUNDED** — *"we don't even need the clicks to be
+   on the menu; as long as the mouse is in the radial area of where an option would open up to on
+   the map, they are hovering it."* Hover previews the next ring in a not-open-yet state, so every
+   category's contents are readable without spending a click; right-click goes back one ring, so
+   *"we never need to even see the mouse."* **Radius means nothing**: the deepest open ring owns
+   every angle, and shallower rings are drawn as the path taken rather than pointed at. The
+   rejected alternative (radius picks the level) gives the unbounded area to *one* level and a thin
+   annulus to every other, and cannot port — a stick holds an angle indefinitely but not a radius.
+5. **A deeper ring PAINTS less than the one inside it** — *"if we try to fill in a full radial
+   circle for every secondary or tertiary menu, it will look ugly."*
+
+### What the build had to declare, because two of those rulings only work together
+
+**The drawn shape and the hit sector are two different things.** Sectors always tile the full 360°
+— that is what "the deepest ring owns every angle" means — and a wedge merely *paints* part of the
+sector it owns. `selection_at` therefore does not take a paint fraction and `slice_polygon` is the
+only function that knows about one. The falsifiable form is a 360° sweep asserting every degree
+resolves to exactly one slice; teach the hit test about the paint and it reds immediately.
+
+The consequence is that **pointing into the air between two painted wedges still selects the
+neighbour**, which would be a lie if nothing showed it — and ruling 4 already requires the current
+selection to be drawn at all times. The two rulings are consistent only *together*, which is worth
+knowing before anyone simplifies either one alone.
+
+**Two behaviour losses, both deliberate.** With an unbounded hit area there is no "miss", so
+clicking the board no longer dismisses the menu (a click anywhere commits the direction you were
+pointing) — the replacements are right-click and a dead zone at the centre. And right-click no
+longer means dismiss first; it means collapse one ring, dismissing only at the top.
+
+**The tree is snapshotted at open.** A ghosted category shows its contents before it is opened, and
+those contents come from real board walks (`guard_candidates`, `adjacent_downed_allies`). Querying
+per hover would be wasteful and, more importantly, *wrong*: a preview that re-queries can disagree
+with what commits. Safe by construction, since the menu is modal.
+
+**The portability is a seam, not a side effect.** `(level, index)` is the one authority and the
+mouse is one adapter feeding it — `aim_at` / `commit` / `back` is the whole vocabulary. This ticket
+ships no gamepad bindings (there are none in `project.godot` at all); what it ships is the shape
+that keeps them from being a rewrite.
+
+**The look is knobs, not guesses** (#253's rule): centre gap, ring thickness, gap, dead zone, wedge
+fill and its per-level falloff, preview opacity, and three slice colours, all on the Game tab.
+They are `CLASS_KNOBS` statics rather than `KNOBS` rows because **the menu is transient** — there is
+no standing node for a knob to name and nothing to re-apply a change to, which is
+`MovementComponent.SHOVE_SLIDE_SPEED`'s shape exactly.
+
+### Round 2: what the first play-through changed (dev, same day)
+
+Six items, and three of them had something underneath worth recording.
+
+**A category whose ONE child is its own verb collapses to a terminal slice.** *"There is no reason
+to put Move under Move."* Deliberately **not** "collapse whenever there is one child" — a lone Squad
+Up names something the word Squad does not, and single-option submenus are explicitly meant to
+survive (they just draw small, below). The same rule is the entire implementation of **"Inspect is
+top level"**: a group of one holding the verb of its own name. No special case, no new key.
+
+**The generic Attack row is gone and the ring lists every attack by its own name** — *"the whole
+point of that was to save time, but if we already have to navigate through a menu to get to it,
+it's pointless."* The trap under it: `WeaponInstance.secondary_attacks()` **excludes** the main
+attack, so the Attack verb was the only way to reach it, and deleting the row as literally asked
+would have left a plain sword unable to attack at all. What the ask actually requires is the MAIN
+attack listing by name alongside the alternatives. Two consequences: a rune's default attack *is*
+one of its carvings, so a group is filled with a name-dedupe; and a weapon family whose main attack
+was never given a `display_name` now says so on screen, which the dev noted as the point (*"maybe
+it'll give us a reason to actually name the basic attack names for each weapon family"*).
+
+**Three verbs left the ring entirely** — Execute Orders, Cancel Actions, End Turn — because each
+already had a richer HUD door. The principle worth keeping: **the unit's menu is what the UNIT does;
+the turn is the HUD's business.** The one capability genuinely lost is *"wipe everything this unit
+has queued in one press"*, which is now N presses of the queue row's X.
+
+**So the End Turn button is permanent.** What its old visibility rule became is the FLASH, and the
+same predicate (`faction_all_squads_acted`) now also decides whether pressing it **asks first** —
+so a flashing button never interrupts and a still one always does, and the cue and the confirmation
+cannot disagree. Two notes measured rather than assumed while making it permanent: `MissionStatusPanel`
+already reserved its corner slot *even while it was hidden*, so nothing reflows; and the queue dock
+occupies y 25..490 against the button's y 676..712, so the old "these two are never on screen
+together" argument was retired without its conclusion changing.
+
+**A wedge is capped at how much it PAINTS** (`MAX_WEDGE_DEGREES`) — *"the massive balloon arcs just
+don't look great."* A compacting ring produces rings of one and two constantly, and without a cap
+those are a full donut and two hemispheres. It moves no hit boundary, which is the drawn/hit split
+paying for itself a second time: the sectors still tile the circle, the leftover angle belongs to
+the nearest wedge, and the always-drawn highlight says which.
+
+**Labels ride the curve of their own wedge**, flipped on the bottom half so they are never upside
+down, and shrink to a floor rather than overrun. Note the dev's wording was *"ones on the bottom
+should face outwards, on the top, inwards"* — which is the unreadable half; his own purpose clause
+(*"to be readable"*) is what settled it the other way, and he asked for it built and shown rather
+than argued.
+
+
+### Round 3: naming, and making the readout readable
+
+**A slice is named after WHAT IT HOLDS, not after the most exciting thing in it.** Reload and Burrow
+are not attacks and most carvings are not either, so a slice called *Attack* was lying about half
+its contents at any given moment — and "Weapon Action" was both long and only half the story. The
+kit slice is now labelled **Weapon** or **Rune**, after whatever is equipped: it says whose verbs
+these are and claims nothing about what they do. `Act` became `Action` in the same pass. The dev
+floated *Channel* for the rune side and then answered himself — *"or maybe we could keep it simple,
+Rune and Weapon"* — which is the version that solves both complaints with one rule instead of
+mixing a verb with an object.
+
+**`MainActionMenu.category_display(group, unit)` is the ONE answer to what a slice is called**, and
+it is public for that reason: three test suites had spelled `"Attack"` themselves, and all three
+went red the moment the label moved. A label typed twice is a label that goes stale.
+
+**The readout is solid, backed, and waits.** Transparent text over a live board was the complaint
+(*"the transparency + lack of background hurts the eyes"*), so both colours are fully opaque and the
+hierarchy between a name and its explanation is **brightness** — alpha is what made it unreadable in
+the first place. It sits on a panel, and it appears only after the hover is held for
+`gui/timers/tooltip_delay_sec`: **the project setting the inspect panel's own tooltips already
+read**, so *"same amount as in the inspect menu"* stays one number rather than a copied constant.
+
+**A preview has to be legible or it is not a preview.** `GHOST_ALPHA` went from 0.32 to 0.8, and a
+ghosted ring's LABELS stopped being dimmed at all — the label is the entire point of previewing.
+What still says *not open yet* is position and the absence of a highlight, not faintness.
+
 ## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
 
 Six inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in
@@ -808,12 +957,15 @@ give-up-the-advance caller too — not free, and not this ticket.
 **Right-click still pops a formation whole** (dev call) — `game._lone_queued_move` scopes the
 re-plan rung to a single move, and a formation is one decision (#228).
 
-**Streamline move → main action.** After a move commits, open the unit's main-action menu
+**Streamline move -> main action.** After a move commits, open the unit's main-action menu
 automatically; or a double-click shortcut. Pure flow-feel, no model question. Open: which gesture,
 and whether auto-open irritates on the turns a player only wanted to move. **One caution from this
-codebase specifically** — `game.clear_selection()` runs on every menu *pick*, not just cancel
-(`ActionMenuController` emits `cancelled` before `action_selected`), and that ordering has already
-produced two bugs; anything that chains one menu into the next lands directly on it.
+codebase specifically** — `game.clear_selection()` runs on every *terminal* menu pick, not just
+cancel (`ActionMenuController` emits `cancelled` before `action_selected`), and that ordering has
+already produced two bugs; anything that chains one menu into the next lands directly on it.
+*(#467 narrowed it: a CATEGORY pick no longer emits `cancelled` at all, which is the same fix one
+level down — but a terminal pick still does, so this caution stands for whatever auto-open ends up
+chaining into.)*
 
 **Player-chosen aim / attack reticule colours.** The dev's half-joking aside at #212 (*"a color
 slider to set whatever color they want"*), kept because it is closer than it sounds: the reach fill

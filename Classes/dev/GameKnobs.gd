@@ -220,6 +220,7 @@ const KNOBS: Array[Dictionary] = [
 const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
 const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
 const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
+const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -284,6 +285,72 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
 		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
+
+	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
+	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
+	# row to name and nothing to re-apply a change to -- the next open reads them.
+	#
+	# The centre gap is wide and the bands are thin on the dev's call: the unit's sprite is what the
+	# centre is FOR, and thin rings read as a menu rather than as a pie chart. Paint fraction is the
+	# other half of that -- it narrows the drawn wedge WITHOUT moving a single hit boundary, since
+	# the sectors always tile the full circle whatever they paint.
+	{"group": "Action ring", "label": "Centre gap", "static": "RING_INNER_RADIUS",
+		"script": ACTION_MENU_SCRIPT, "min": 30.0, "max": 200.0, "step": 1.0,
+		"tip": "Radius from the unit's sprite out to the first ring of options. Wide enough that the sprite in the middle reads as the subject rather than as decoration."},
+	{"group": "Action ring", "label": "Ring thickness", "static": "RING_THICKNESS",
+		"script": ACTION_MENU_SCRIPT, "min": 12.0, "max": 90.0, "step": 1.0,
+		"tip": "How deep each ring of options is. Thin reads as a menu; thick starts reading as a pie chart, which is the thing this menu is trying not to be."},
+	{"group": "Action ring", "label": "Ring gap", "static": "RING_GAP",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 40.0, "step": 1.0,
+		"tip": "Empty space between one ring and the next one out. Enough to read as two rings, not so much that a submenu looks unrelated to what opened it."},
+	{"group": "Action ring", "label": "Dead zone", "static": "DEAD_ZONE_RADIUS",
+		"script": ACTION_MENU_SCRIPT, "min": 10.0, "max": 200.0, "step": 1.0,
+		"tip": "Radius around the centre that selects NOTHING -- the only place a click cancels, since every other point on the screen belongs to some slice. Keep it inside the centre gap."},
+	{"group": "Action ring", "label": "Wedge fill", "static": "PAINT_FRACTION",
+		"script": ACTION_MENU_SCRIPT, "min": 0.15, "max": 1.0, "step": 0.01,
+		"tip": "How much of its own slice a wedge actually paints, on the first ring. Below 1.0 leaves air between wedges. Purely a look: the slice you are pointing at does not change, only how much of it is drawn."},
+	{"group": "Action ring", "label": "Readout panel", "static": "READOUT_BACKGROUND",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The block behind the hovered slice's name and explanation, under the ring. It sits over a live board, so opacity here is legibility -- the first version had none and was painful to read."},
+	{"group": "Action ring", "label": "Readout border", "static": "READOUT_BORDER",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The outline around that block. Enough to separate it from whatever is behind it."},
+	{"group": "Action ring", "label": "Readout border width", "static": "READOUT_BORDER_WIDTH",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.5,
+		"tip": "How thick that outline is drawn. Zero removes it."},
+	{"group": "Action ring", "label": "Readout name", "static": "READOUT_TITLE_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The hovered slice's NAME, and every wedge label too. Kept fully opaque on purpose: the hierarchy against the explanation below is brightness, never transparency."},
+	{"group": "Action ring", "label": "Readout detail", "static": "READOUT_DETAIL_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The explanation under that name -- what the option does, and why it is greyed when it is. Dimmer than the name, but still solid."},
+	{"group": "Action ring", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
+		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
+		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
+	{"group": "Action ring", "label": "Centre disc", "static": "CENTRE_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The disc the unit's sprite sits on. It is exactly the DEAD ZONE drawn, so its edge is a promise about where clicking selects nothing -- opaque enough to lift the sprite off the board behind it."},
+	{"group": "Action ring", "label": "Centre rim", "static": "CENTRE_RIM_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The ring around that disc. Reads as the boundary between the unit and its options."},
+	{"group": "Action ring", "label": "Centre rim width", "static": "CENTRE_RIM_WIDTH",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 12.0, "step": 0.5,
+		"tip": "How thick that rim is drawn. Zero removes it and leaves the bare disc."},
+	{"group": "Action ring", "label": "Wedge fill falloff", "static": "PAINT_FRACTION_FALLOFF",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 0.4, "step": 0.01,
+		"tip": "How much less each ring further out paints than the one inside it, so a submenu builds out lighter instead of stacking full circles. Zero paints every ring the same."},
+	{"group": "Action ring", "label": "Preview opacity", "static": "GHOST_ALPHA",
+		"script": ACTION_MENU_SCRIPT, "min": 0.05, "max": 1.0, "step": 0.01,
+		"tip": "Opacity of the ring PREVIEWED under the category you are hovering -- what you would open if you clicked. Faint enough to read as not-open-yet, solid enough to read at all."},
+	{"group": "Action ring", "label": "Slice", "static": "SLICE_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "An ordinary option's wedge. It sits over the board, so its alpha is what decides whether you can still see what you are acting on."},
+	{"group": "Action ring", "label": "Slice (pointed at)", "static": "SLICE_SELECTED_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The one slice your angle currently picks. The pointer is routinely nowhere near the ring, so this highlight is the only feedback saying what a click would do."},
+	{"group": "Action ring", "label": "Slice (unavailable)", "static": "SLICE_DISABLED_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "An option the unit owns but cannot use right now -- a dry magazine, a carving it cannot pay for. It stays listed and says why, so this must read as present-but-dead, not as absent."},
 ]
 
 
@@ -305,6 +372,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Fire": "Elemental",
 	"Cover": "Elemental",
 	"Playback": "Playback",
+	"Action ring": "Action ring",
 }
 
 # Which table an edit came from, carried through the save report. The two tables share an index
@@ -352,6 +420,25 @@ static func read_static(name: String) -> Variant:
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
+		"READOUT_BACKGROUND": return ActionMenuController.READOUT_BACKGROUND
+		"READOUT_BORDER": return ActionMenuController.READOUT_BORDER
+		"READOUT_BORDER_WIDTH": return ActionMenuController.READOUT_BORDER_WIDTH
+		"READOUT_TITLE_COLOR": return ActionMenuController.READOUT_TITLE_COLOR
+		"READOUT_DETAIL_COLOR": return ActionMenuController.READOUT_DETAIL_COLOR
+		"MAX_WEDGE_DEGREES": return ActionMenuController.MAX_WEDGE_DEGREES
+		"CENTRE_COLOR": return ActionMenuController.CENTRE_COLOR
+		"CENTRE_RIM_COLOR": return ActionMenuController.CENTRE_RIM_COLOR
+		"CENTRE_RIM_WIDTH": return ActionMenuController.CENTRE_RIM_WIDTH
+		"RING_INNER_RADIUS": return ActionMenuController.RING_INNER_RADIUS
+		"RING_THICKNESS": return ActionMenuController.RING_THICKNESS
+		"RING_GAP": return ActionMenuController.RING_GAP
+		"DEAD_ZONE_RADIUS": return ActionMenuController.DEAD_ZONE_RADIUS
+		"PAINT_FRACTION": return ActionMenuController.PAINT_FRACTION
+		"PAINT_FRACTION_FALLOFF": return ActionMenuController.PAINT_FRACTION_FALLOFF
+		"GHOST_ALPHA": return ActionMenuController.GHOST_ALPHA
+		"SLICE_COLOR": return ActionMenuController.SLICE_COLOR
+		"SLICE_SELECTED_COLOR": return ActionMenuController.SLICE_SELECTED_COLOR
+		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -381,6 +468,68 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			# Its SECOND reader is the preview pointer, which needs no re-apply either: OverlayMirror
 			# rebuilds every knockback marker from the 2D sprites each frame and value-diffs, so a
 			# standing preview re-lengthens on the next one. Not #324's redraw case.
+			return
+		# The action ring (#467). Every one of these takes SHOVE_SLIDE_SPEED's early return for the
+		# same reason: the menu is transient and reads them at each open, so there is never a
+		# standing ring to re-apply one to. That is also why they are statics rather than KNOBS
+		# rows -- KNOBS names a property on a node in the running world, and this one is not there
+		# except while the player is holding it open.
+		"READOUT_BACKGROUND":
+			ActionMenuController.READOUT_BACKGROUND = value
+			return
+		"READOUT_BORDER":
+			ActionMenuController.READOUT_BORDER = value
+			return
+		"READOUT_BORDER_WIDTH":
+			ActionMenuController.READOUT_BORDER_WIDTH = value
+			return
+		"READOUT_TITLE_COLOR":
+			ActionMenuController.READOUT_TITLE_COLOR = value
+			return
+		"READOUT_DETAIL_COLOR":
+			ActionMenuController.READOUT_DETAIL_COLOR = value
+			return
+		"MAX_WEDGE_DEGREES":
+			ActionMenuController.MAX_WEDGE_DEGREES = value
+			return
+		"CENTRE_COLOR":
+			ActionMenuController.CENTRE_COLOR = value
+			return
+		"CENTRE_RIM_COLOR":
+			ActionMenuController.CENTRE_RIM_COLOR = value
+			return
+		"CENTRE_RIM_WIDTH":
+			ActionMenuController.CENTRE_RIM_WIDTH = value
+			return
+		"RING_INNER_RADIUS":
+			ActionMenuController.RING_INNER_RADIUS = value
+			return
+		"RING_THICKNESS":
+			ActionMenuController.RING_THICKNESS = value
+			return
+		"RING_GAP":
+			ActionMenuController.RING_GAP = value
+			return
+		"DEAD_ZONE_RADIUS":
+			ActionMenuController.DEAD_ZONE_RADIUS = value
+			return
+		"PAINT_FRACTION":
+			ActionMenuController.PAINT_FRACTION = value
+			return
+		"PAINT_FRACTION_FALLOFF":
+			ActionMenuController.PAINT_FRACTION_FALLOFF = value
+			return
+		"GHOST_ALPHA":
+			ActionMenuController.GHOST_ALPHA = value
+			return
+		"SLICE_COLOR":
+			ActionMenuController.SLICE_COLOR = value
+			return
+		"SLICE_SELECTED_COLOR":
+			ActionMenuController.SLICE_SELECTED_COLOR = value
+			return
+		"SLICE_DISABLED_COLOR":
+			ActionMenuController.SLICE_DISABLED_COLOR = value
 			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
