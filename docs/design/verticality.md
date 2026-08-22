@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #432 (2026-08-21).**
+**Canon checked through #476 (2026-08-22).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -356,12 +356,32 @@ target slides the resolver's own `knockback_path` (`MovementComponent.slide_alon
 held — being moved is not moving), and in 3D its height rides `knockback_landing_index`, the
 resolver's flight/tumble split: launch height while airborne, then **slaved to the surface under
 the sprite** (`BoardSpace.surface_height_at`, the ramp-aware plane — a tumble STICKS to the
-slope; an eased height cannot track a many-cells-per-second slide and floats, measured). A flat
-landing keeps fly-then-fall via the post-slide ease. The preview trail obeys the same split —
-flown cells draw in the air at launch height, and every break in the trail's own surface hangs a
-**drop pointer** ("in the air until he would drop, then point straight down" — dev), the rule for
-which is [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s and is stated in full below.
-A VOID cell renders as **no column at all** in 3D: the pit is the absence of the block.
+slope; an eased height cannot track a many-cells-per-second slide and floats, measured). The
+preview trail obeys the same split — flown cells draw in the air at launch height, and every break
+in the trail's own surface hangs a **drop pointer** ("in the air until he would drop, then point
+straight down" — dev), the rule for which is
+[#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s and is stated in full below. A VOID cell
+renders as **no column at all** in 3D: the pit is the absence of the block.
+
+**The fall is a BEAT of the slide, and it happens where the pointer hangs
+([#472](https://github.com/Phaazoid/Godoiosis/issues/472), 2026-08-22).** A segment whose entry
+edge breaks is travelled in two halves with the drop between them — fly sideways, turn ninety
+degrees, fall, carry on — so the playback takes exactly the fall its own trail draws. **The trigger
+is #431's rule and nothing else**: `BoardSpace.surface_height_at_edge` is the one spelling of "how
+high is this cell's surface at the edge it meets its neighbour on", and both `_append_drop` and
+`MovementComponent._edge_drop` read it. Asked per EDGE rather than per landing, which is what lets
+a cliff-then-tumble-then-lip shove fall at **both** breaks; a landing-shaped answer could express
+only the first, which is the same reason #431 deleted its flag.
+
+This REPLACES the flat-landing-only promise this paragraph used to carry ("a flat landing keeps
+fly-then-fall via the post-slide ease"), and the ease with it. It was never true of a RAMP landing:
+the mirror began ground contact on any ramp landing, on the theory that a ramp's high shoulder
+meets the flight level — which holds only at a drop of exactly 1 down a matching slope, the one
+case `_knockback_landing` zeroes. Every other ramp landing snapped by the difference, in one frame,
+halfway through the final flight segment; through the pitched camera that reads as the unit
+skipping forward along its travel, which is how it was reported. Two of the dev's own boards
+isolated it and are reproduced as `tests/presentation/test_shove_fall.gd`. Rate is
+`MovementComponent.SHOVE_FALL_SPEED`, in cells per second, on the Game tab beside the slide speed.
 
 ### The drop pointer [#431, 2026-08-21 — SUPERSEDES the "a fall onto a RAMP draws no pointer" line this section used to carry]
 
