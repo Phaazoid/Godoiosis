@@ -69,6 +69,13 @@ var _help_wheel_is_level := false
 # cannot fire a move that never happened and yank the pointer off its starting cell.
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
+# The camera at the last poll. The pick depends on the CAMERA as much as on the mouse — pan the
+# world under a still cursor and the cell beneath it genuinely changes — so a mouse-only early-out
+# leaves the bracket on a cell the pointer has left. True of WASD and of SPACE since 4d; #471's
+# return-to-the-acting-unit is what made it frequent enough to be worth fixing. The whole
+# TRANSFORM rather than the rig's position, because yaw and zoom move the pick too and both lerp
+# for frames after the input that started them.
+@onready var _last_polled_camera: Transform3D = _camera.global_transform
 @onready var _help: Label = $UI/Help
 @onready var _checkout: Label = $UI/Checkout
 @onready var _dev_badge: Label = $UI/DevMode
@@ -133,6 +140,9 @@ func _ready() -> void:
 	_overlay_mirror.unit_mirror = _unit_mirror
 	_overlay_mirror.board_mirror = _board_mirror
 	game.scenario_manager.board_loaded.connect(_on_board_loaded)
+	# The visible camera answers "look at this cell" (#471). Wired unconditionally, beside the other
+	# game-tells-us signals: demo_mode has no action ring to fire it, so there is nothing to branch on.
+	game.view_focus_requested.connect(_center_rig_on)
 	if auto_play:
 		_start.call_deferred()
 
@@ -626,9 +636,11 @@ func _poll_pointer() -> void:
 	if _rig.is_orbiting():   # a drag is camera work, not pointing — same rule the events use
 		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
-	if mouse == _last_polled_mouse:
+	var camera_now := _camera.global_transform
+	if mouse == _last_polled_mouse and camera_now == _last_polled_camera:
 		return
 	_last_polled_mouse = mouse
+	_last_polled_camera = camera_now
 	_update_pointer(mouse)
 
 
@@ -750,7 +762,16 @@ func _handle_space() -> void:
 func _center_on_pointer() -> void:
 	if _pointer_cell == BoardSpace.NO_CELL:
 		return
-	var point := BoardSpace.standing_point(_pointer_cell)
+	_center_rig_on(BoardSpace.flat(_pointer_cell))
+
+
+# THE recentre, and the one answer to "put the rig over this cell": SPACE above, and #471's return
+# to the acting unit, which arrives as game.view_focus_requested. Only x/z are read, so the
+# column's LEVEL never enters into it — the rig keeps its own height, exactly as the AI mirror
+# does. Snap rather than glide: this node has always written position outright, and the rig
+# smooths yaw and distance but not position.
+func _center_rig_on(cell: Vector2i) -> void:
+	var point := BoardSpace.standing_point(BoardSpace.of_cell(cell, 0))
 	_rig.position = Vector3(point.x, _rig.position.y, point.z)
 
 

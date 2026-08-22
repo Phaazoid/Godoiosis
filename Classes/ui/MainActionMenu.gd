@@ -435,6 +435,17 @@ func populate(unit: Unit) -> Array:
 # ==============================================================================
 
 func on_pressed(action_id: int, unit: Unit) -> void:
+	_dispatch(action_id, unit)
+	# The ring leaves the board unlocked, so the camera can be anywhere the player panned it while
+	# choosing. A committed order is about THIS unit, so the view comes back to it (#471) — AFTER
+	# the dispatch, because a verb can respend the plan and move where "this unit" is (#417).
+	# Hung off action_selected, which ONLY a terminal pick emits: `cancelled` fires on commits too,
+	# so _on_menu_cancelled cannot tell a pick from a back-out.
+	game.focus_view_on(unit)
+
+# Every terminal row's arm. Split from on_pressed purely so the camera return above cannot be
+# skipped by one of the early returns in here.
+func _dispatch(action_id: int, unit: Unit) -> void:
 	# A NEGATIVE id is one of this open's synthetic leaves (a carving, a weapon secondary, an
 	# ability verb). One signal out of the controller, two kinds of leaf behind it.
 	if action_id < 0:
