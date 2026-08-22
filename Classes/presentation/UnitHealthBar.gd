@@ -98,7 +98,13 @@ var _blocks: Array[MeshInstance3D] = []          # one per point of MAX hp; pool
 # one and a shared material would pulse it over every unit on the board, alarmed or not.
 var _mat_fill: StandardMaterial3D
 var _mat_missing: StandardMaterial3D
+# The two directions of a prediction are two MATERIALS rather than one that swaps colour, because
+# they say opposite things about the cube wearing them: a doomed cube is STANDING and about to go,
+# a heal-marked one is an empty socket about to be refilled. One material could not tell the two
+# apart, and every rendered count below would then have to guess the direction — or read depth,
+# which the recess knob is allowed to set to zero.
 var _mat_doomed: StandardMaterial3D
+var _mat_heal: StandardMaterial3D
 var _label: Label3D
 # #357: the element-state row above the grid. A POOL, grown on demand and hidden rather than freed --
 # the same contract UnitMirror.set_ghosts and BoardOverlays use, for the same reason: the count
@@ -178,6 +184,7 @@ func _init() -> void:
 	_mat_fill = _make_block_material()
 	_mat_missing = _make_block_material()
 	_mat_doomed = _make_block_material()
+	_mat_heal = _make_block_material()
 	# Text draws in FRONT of cubes that now stand proud of the plate, so its priority sits above the
 	# whole grid and _text_z pushes it clear in Z as well.
 	_label = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
@@ -309,15 +316,17 @@ func set_alarm(on: bool) -> void:
 	if on == (_alarm != null):
 		return
 	if on:
-		alarm_color = _segment_color()
+		# The RESTING colour is always the doomed one: an alarm is raised for a predicted down, kill
+		# or Crisis, and none of those is something a heal can predict.
+		alarm_color = _doomed_color
 		_alarm_peak_live = _alarm_peak_color
-		_alarm = Pulse.start(self, self, &"alarm_color", _segment_color(), _alarm_peak_color)
+		_alarm = Pulse.start(self, self, &"alarm_color", _doomed_color, _alarm_peak_color)
 	else:
 		_stop_alarm()
 
 
 func _stop_alarm() -> void:
-	Pulse.stop(_alarm, self, &"alarm_color", _segment_color())
+	Pulse.stop(_alarm, self, &"alarm_color", _doomed_color)
 	_alarm = null
 
 
@@ -359,20 +368,24 @@ func block_count() -> int:
 	return count
 
 
-# How many cubes stand PROUD, which is current HP. Read off the transform rather than off the HP,
-# because proud-versus-recessed is the thing the display actually says.
+# How many cubes the readout is claiming, which is current HP. Read off the MATERIAL rather than off
+# the depth: a doomed cube is still one the unit has, and the recess knob may legitimately be zero,
+# which would leave a depth reading unable to answer at all.
 func filled_block_count() -> int:
 	var count := 0
-	for i in _blocks.size():
-		if _blocks[i].visible and block_is_proud(i):
+	for block: MeshInstance3D in _blocks:
+		if block.visible and (block.material_override == _mat_fill
+				or block.material_override == _mat_doomed):
 			count += 1
 	return count
 
 
+# The prediction's span, in either direction — cubes the plan takes plus sockets it refills.
 func doomed_block_count() -> int:
 	var count := 0
 	for block: MeshInstance3D in _blocks:
-		if block.visible and block.material_override == _mat_doomed:
+		if block.visible and (block.material_override == _mat_doomed
+				or block.material_override == _mat_heal):
 			count += 1
 	return count
 
@@ -568,7 +581,7 @@ func _material_for(index: int) -> StandardMaterial3D:
 		# say "this much is coming off" and "this much is coming back", and the colour is what names
 		# the direction, because the geometry cannot.
 		if index >= mini(shown, predicted) and index < maxi(shown, predicted):
-			return _mat_doomed
+			return _mat_heal if predicted > shown else _mat_doomed
 	return _mat_fill if index < shown else _mat_missing
 
 
@@ -638,17 +651,12 @@ func _pitch_texels() -> float:
 func _paint_materials() -> void:
 	_mat_fill.albedo_color = _fill_color
 	_mat_missing.albedo_color = _missing_color
-	_mat_fill.albedo_texture = _cage_texture
-	_mat_missing.albedo_texture = _cage_texture
-	_mat_doomed.albedo_texture = _cage_texture
+	_mat_heal.albedo_color = _heal_color
+	for material: StandardMaterial3D in [_mat_fill, _mat_missing, _mat_doomed, _mat_heal]:
+		material.albedo_texture = _cage_texture
 	# The alarm owns the doomed colour while it runs; otherwise the resting one. Reading alarm_color
 	# here rather than skipping the paint keeps one writer either way.
-	_mat_doomed.albedo_color = alarm_color if _alarm != null else _segment_color()
-
-
-# Losing HP or gaining it -- the span is the same shape either way, and only this says which.
-func _segment_color() -> Color:
-	return _heal_color if _has_prediction and _predicted > _current else _doomed_color
+	_mat_doomed.albedo_color = alarm_color if _alarm != null else _doomed_color
 
 
 # The element-state row (#357): square icons ABOVE the grid, the first one flush with the plate's

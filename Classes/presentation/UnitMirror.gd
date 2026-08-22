@@ -295,6 +295,12 @@ func bar_for(unit: Unit) -> UnitHealthBar:
 	return _bars.get(unit.get_instance_id())
 
 
+# The cubes currently in the air (#314). Board-wide rather than per unit, and deliberately so: a
+# thrown cube has left the readout it came from and does not belong to a unit any more.
+func debris() -> HealthBlockDebris:
+	return _debris
+
+
 # Planning ghosts (#222): the 2D projected/knockback stand-ins, mirrored as pooled
 # UnitSprite3Ds. One entry per ghost: {"pos": Vector3, "texture": Texture2D,
 # "modulate": Color} — texture and tint arrive by copy, the 2D stays the authority.
