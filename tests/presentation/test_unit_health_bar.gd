@@ -277,22 +277,37 @@ func test_every_face_wears_the_cage_and_only_the_top_is_shaded() -> void:
 			).is_less(colors[0].r)
 
 
-func test_the_plate_sits_behind_the_deepest_face_a_cube_can_present() -> void:
-	# The backs z-fought "like crazy, between the black and green" (dev, 2026-08-22): the plate sat at
-	# depth 0 and, at a recess of 0, a cube's own BACK face is exactly there too. Coplanar opaque
-	# surfaces have no defined order, so this is a RELATIONSHIP — the plate must clear the deepest
-	# face any cube can present — rather than a value some knob could move.
-	_unit_mirror.hp_block_recess_texels = 0.0   # the configuration that made them coplanar
-	var unit := _spawn(PLAYER, Vector2i(2, 2))
+func test_the_readout_draws_NOTHING_behind_the_cubes() -> void:
+	# "This is a 3D display, we don't need one at all... it's just a weird black rectangle floating in
+	# space" (dev, 2026-08-22). The backing quad is DELETED, and its absence is what this pins: every
+	# cube wears its own cage, so nothing needs a surface behind it to be separated from the board.
+	# Stated as a RELATIONSHIP — no quad sits behind the frontmost face a cube presents — rather than
+	# as "there is no node called the plate", which the next backing under another name would pass.
+	# It also covers the z-fight that killed the last version: at a recess of 0 a cube's own back face
+	# sits at depth 0, so anything drawn there is coplanar with it.
+	# A unit carrying a STATE, so the readout really does draw a quad — the state row's icons are the
+	# only ones left. Otherwise the walk below would have nothing to enumerate and would pass on an
+	# empty set, which is a true answer reached without looking at anything.
+	var unit := _wet(Vector2i(2, 2))
 	_point_at(unit.movement.cell)
 	await _settle()
 	var bar := _unit_mirror.bar_for(unit)
 
 	var texel := 1.0 / UnitSprite3D.texels_per_unit
-	var back_face: float = bar.block_depth(0) - bar.block_size_texels() * 0.5 * texel
-	assert_float(bar.plate_depth()).override_failure_message(
-			"the plate is level with or in front of a cube's back face — from behind, the two fight"
-			).is_less(back_face)
+	# The cubes' own front plane: proud centre plus half a block.
+	var front: float = bar.block_depth(0) + bar.block_size_texels() * 0.5 * texel
+	var quads := 0
+	for child in bar.get_children():
+		var quad := child as MeshInstance3D
+		if quad == null or not (quad.mesh is QuadMesh):
+			continue
+		quads += 1
+		assert_float(quad.position.z).override_failure_message(
+				"a flat quad is drawn behind the grid — the readout has grown a backing again"
+				).is_greater_equal(front)
+	assert_int(quads).override_failure_message(
+			"the readout drew no quads at all, so this case checked nothing"
+			).is_greater(0)
 
 
 # How many of a cube's six faces collapse all four UVs onto one point — i.e. sample a single texel,
@@ -444,11 +459,10 @@ func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> voi
 	await _settle()
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
 
-	# Derived from the knobs, never pinned: the claim is the RELATIONSHIP (clear of the outline's
-	# top, flush with its left), which survives every retune of the values underneath it.
+	# Derived from the knobs, never pinned: the claim is the RELATIONSHIP (clear of the grid's top,
+	# flush with its left), which survives every retune of the values underneath it.
 	var texel := 1.0 / UnitSprite3D.texels_per_unit
 	var icon: float = roundf(_unit_mirror.state_icon_texels)
-	var edge: float = roundf(_unit_mirror.bar_outline_texels)
 	# The grid's own extent, ASKED of the readout rather than rebuilt from the knobs: since #314 it
 	# is derived from cube size, cage and row width together, and a second derivation here is a copy
 	# that would go stale the next time the layout grows an input.
@@ -461,12 +475,12 @@ func test_the_row_sits_clear_above_the_bar_and_flush_with_its_left_edge() -> voi
 	assert_float(bar.state_icon_size().y).is_equal_approx(icon * texel, 0.001)
 
 	var offset := bar.state_icon_offset(0)
-	# Its BOTTOM edge clears the outline's top edge by the gap.
+	# Its BOTTOM edge clears the grid's top edge by the gap.
 	assert_float(offset.y - bar.state_icon_size().y * 0.5).is_equal_approx(
-			(bar_h * 0.5 + edge + gap) * texel, 0.001)
-	# Its LEFT edge sits on the outline's left edge — "centered left", the dev's words.
+			(bar_h * 0.5 + gap) * texel, 0.001)
+	# Its LEFT edge sits on the grid's left edge — "centered left", the dev's words.
 	assert_float(offset.x - bar.state_icon_size().x * 0.5).is_equal_approx(
-			-(track * 0.5 + edge) * texel, 0.001)
+			-track * 0.5 * texel, 0.001)
 
 
 func test_the_row_grows_rightward_without_moving_the_first_icon() -> void:

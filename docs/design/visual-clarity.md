@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #467 (2026-08-22).**
+**Canon checked through #475 (2026-08-22).**
 
 ## Principles
 
@@ -174,8 +174,9 @@ The rulings, all dev calls, all made before building:
   bars that OVERLAP is named as still-open in its section below.
 - **A bar AND a number**, world-scaled like the icons beside it rather than screen-constant: it
   belongs to the scene, not to the glass. Consequence to accept: it shrinks as you zoom out.
-- **Two flat colours, never a ramp.** Fill is what the unit HAS, red backing is what it has lost.
-  A bar that also changes hue as it shortens says the same thing twice.
+- **Two flat colours, never a ramp.** Fill is what the unit HAS, red is what it has lost. A bar that
+  also changes hue as it shortens says the same thing twice. *(The rule survived #314 whole; only its
+  spelling moved — red was a BACKING showing through the bar, and is a shrunken red cube now.)*
 - **It stacks UNDER the selection icons.** Crown/squadmate on top, health tucked beneath. (The
   target reticle was in that list until #346 retired it to the ground channel — see below.)
 
@@ -411,8 +412,9 @@ collapse the quads into one mesh at one priority (vertex colours) so bars sort b
 other. **#314 did most of that for a different reason and the note is now PART-STALE: the gauge is a
 grid of opaque cubes, which write depth and therefore sort against each other by distance the way
 solid objects should — the coplanar-quad ladder they used to need is gone. What still rides
-`render_priority` is the plate behind them and the two labels in front, so a far readout's DIGITS can
-still draw over a near one's plate; the cubes themselves cannot. The width figure above is also
+`render_priority` is the two labels in front, so a far readout's DIGITS can still draw over a near
+one's cubes; the cubes themselves cannot. (Round 4 deleted the backing quad, which was the last
+thing on that ladder besides the text.) The width figure above is also
 superseded — the grid is 41 texels ÷ 32 px-per-cell = 1.28 cells at 20 max HP, and it scales with the
 unit's max HP rather than being fixed.** Deliberately not built: that ticket was the toggle, and
 whether the crowding actually reads
@@ -446,9 +448,11 @@ The rulings, all dev calls, all made in a grill session before building:
   it, so one texture serves green, red and amber alike. **Lighting was ruled out rather than
   forgotten**: #229 already established this display must be fog- and light-immune, so a lit gauge
   would change with the time-of-day preset and wash exactly as its first pass did.
-- **A lost cube is RECESSED and RED, not gone.** The grid is always a full rectangle, so max HP stays
-  readable from its shape, and the dent is a second cue beside the colour — which is what makes the
-  readout survive distance, peripheral vision, and the green-against-red pair.
+- **A lost cube is RECESSED and RED, not gone.** Every socket keeps a cube, so max HP stays readable
+  from the grid's shape, and the dent is a second cue beside the colour — which is what makes the
+  readout survive distance, peripheral vision, and the green-against-red pair. *(Rounds 3–4 moved the
+  dent from depth to SHRINK — see below — and the "full rectangle" half was always the backing quad's
+  doing rather than the grid's: a max HP that does not fill its last row is an L now.)*
 - **#313's notch is DELETED.** Colouring the exact cubes the plan will take says where it lands more
   precisely than a mark beside them, so keeping both would state one fact twice (Law #4).
 - **Losing HP pops the cubes out, tumbling, with ONE bounce off the board.** Scatter is derived from
@@ -522,11 +526,10 @@ The six feel calls, each a dev ruling:
 - **A multi-cube burst MARCHES** — *"march through the bricks that blast out, from start to finish."*
   Each cube waits its turn, and a waiting cube **sits in its socket rather than hiding**, so the grid
   breaks apart in sequence with no gap running ahead of the cubes.
-- **Only the FRONT face wears the cage** — *"The top of the cubes blend in a little too easily, and
-  look like another row. Tops should be all one solid color."* Correct, and the cause is that the
-  cage is a texture on all six faces, so a foreshortened top renders as a squashed row of cells.
-  **The debris cube keeps all six**, because it tumbles and a blank face would read as a hole punched
-  in it — two meshes from one builder, and the split is the whole point.
+- ~~**Only the FRONT face wears the cage**~~ — **REVERSED BY ROUND 3, and the reversal is the more
+  useful entry; see below.** The complaint was *"The top of the cubes blend in a little too easily,
+  and look like another row. Tops should be all one solid color."* Taking the cage off five faces
+  answered a bigger question than the one asked, and cost the cubes their read entirely.
 - **The grid is HELD IN PLACE by default** — *"The health bars are 3D, they should not billboard
   towards the camera."* It sits on the board's own axes like the voxel props; a knob restores facing.
   The cost is declared rather than fixed: orbit past one and it goes edge-on to a line, which is what
@@ -535,14 +538,71 @@ The six feel calls, each a dev ruling:
   actually look too great, it looks somewhat different than the image you built for me."* He was
   right and the diagram was the thing at fault: it drew a socket with a dark inner rim, which the
   geometry cannot produce — a cube pushed back is still a same-sized square head-on, because there is
-  **no socket wall to see**. It now SHRINKS and DARKENS as well, so the plate shows around its edges.
-  **A mock-up can promise a read the geometry has no way to deliver; when the in-game version differs
-  from the picture, suspect the picture.**
+  **no socket wall to see**. It now SHRINKS and DARKENS as well, so a lost cube pulls away from its
+  neighbours' cages. **A mock-up can promise a read the geometry has no way to deliver; when the
+  in-game version differs from the picture, suspect the picture.** *(Round 3 then took the depth out
+  of the default entirely — it and holding the grid still are incompatible.)*
 - **Spun off rather than chosen:** [#474](https://github.com/Phaazoid/Godoiosis/issues/474), three
   heal animations to try — the priest *shooting* the cubes in, cubes falling from the sky, cubes
   sprouting from the ground. The interim pop stays as the fallback. Its blocking design question is
   the same one #469 has: an arriving cube needs a SOURCE, and the readout deliberately knows only
   that HP moved.
+
+### Round 3 — the cage comes back (2026-08-22)
+
+*"We were only supposed to differentiate the tops of the cube from the rest of the bar — now they
+don't look like cubes at all, just a green mass with black painted on."* He was describing round 2's
+own fix, and the finding is about the SCOPE of a fix rather than about cubes:
+
+**A fix scoped to ONE element is not made stronger by applying it to the whole class the element
+belongs to — it becomes a different fix.** The ask was *tell the top apart from the front*; what
+shipped was *take the cage off everything that is not the front*, which also removed the thing the
+cage was for. The tell was available before the build: the complaint named the top and the fix named
+five faces.
+
+- **The cage is back on all six faces; the TOP is darkened instead** (his own suggestion). Per-face
+  **vertex colours** carry it — with `vertex_color_use_as_albedo`, albedo is
+  `albedo_color × texture × vertex colour`, so the black frame survives any shade (zero times
+  anything is zero) and only the coloured core dims. One mesh and one material still; a second
+  surface with its own material would double the draw calls on every cube of every grid. This also
+  collapsed the grid and debris meshes back into one, which is what round 2's fork had split.
+- **Not billboarding WINS over depth.** *"I think pushing them back and having the thing not
+  billboard are incompatible, and having it not billboard is more important to me. I do like the
+  slightly shrunken effect, though."* So the recess depth defaults to 0 and the shrink carries the
+  empty socket alone. The knob stays — *"I'll have to play around with it"* — it just starts out of
+  the way.
+- **An accessor that collapses at a legal knob value is not one a test can lean on.** `block_is_proud`
+  reads DEPTH, so at a recess of 0 it answers true for every socket. Anything asking *which sockets
+  are full* reads the material now.
+- **The march starts at the TOP RIGHT** — *"The top right is the start of the healthbar… when we hit
+  the second row, right side again."* Since the grid fills bottom-up and left-to-right, that is the
+  burst order simply REVERSED, with no second rule to keep in step.
+
+### Round 4 — there is no background (2026-08-22)
+
+*"This is a 3D display, we don't need one at all, and my option slider can't get rid of it. It's just
+a weird black rectangle floating in space."*
+
+**The backing quad was a VESTIGE of the 2D bar, and its knob had stopped meaning what it said.**
+`bar_outline_texels` was the flat bar's black border — a quad drawn slightly larger than it — and
+#314 kept the quad, renamed it the plate, and gave it a second job (something for a lost cube to sink
+into). At an outline of 0 that leaves the grid's exact bounding box in black, which is why the slider
+could not remove it: **zero was never *off*, it was *no margin*.** Both are deleted.
+
+- **A knob that survives the thing it names will be read as still meaning it.** The dev spent a round
+  dragging a slider whose whole range was margin, on a rectangle he wanted gone. The general form:
+  when a feature absorbs an older one's node, its knob needs re-justifying or retiring — inheriting
+  it silently is how a dial ends up unable to say the thing its name promises.
+- **The L is the honest shape.** Max HP is base ± the CON band, so 18 and 22 are real, and at ten per
+  row that leaves a partial top row. The backing painted black behind the sockets that do not exist,
+  which read as *lost* HP rather than as *absent* — a small lie, since lost HP is red. The grid now
+  shows exactly the sockets a unit has.
+- **The state-icon row measures off the GRID now**, not the deleted quad's edge — at the shipped
+  outline of 0 those were the same place, which is why nothing moved.
+- **The law pins the ABSENCE as a relationship** — no quad the readout draws sits behind the cubes'
+  front plane — rather than as *there is no node called the plate*, which the next backing under
+  another name would pass. It also subsumes round 3's z-fight case, since the fight needed something
+  coplanar with a cube's back face and nothing is drawn there any more.
 
 ## Two marker channels, one rule ([#346](https://github.com/Phaazoid/Godoiosis/issues/346))
 

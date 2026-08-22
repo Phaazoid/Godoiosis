@@ -86,12 +86,12 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var hp_block_texels := 5.0
 @export var hp_block_border_texels := 1.0
 @export var hp_blocks_per_row := 10
-# How deep a LOST cube sinks into the plate. The dent is a second cue beside the colour, which is
-# what makes the readout survive distance and the green/red confusion this palette invites.
+# How far back a LOST cube sits. The dent is a second cue beside the colour, which is what makes the
+# readout survive distance and the green/red confusion this palette invites.
 @export var hp_block_recess_texels := 0.0
 # Depth ALONE did not read as a dent (dev, 2026-08-22) — head-on, a cube pushed back is still a
-# same-sized square, because there is no socket wall to see. Shrinking it shows plate around its
-# edges, and dimming it puts it in shadow; together they are what the dent was supposed to be.
+# same-sized square, because there is no socket wall to see. Shrinking it pulls it away from its
+# neighbours' cages, and dimming it puts it in shadow; together they are the dent.
 @export var hp_block_recess_shrink := 0.65
 @export var hp_block_recess_shade := 0.55
 # How far the TOP face of every cube is darkened. The one thing that tells the top apart from the
@@ -101,10 +101,10 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # should not billboard towards the camera") — held in place it sits on the board's own axes like the
 # voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
 @export var hp_grid_faces_camera := false
-@export var bar_outline_texels := 0.0   # black border thickness; the colour itself is not a knob
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
-# missing colour is the backing showing through behind it. Both fully opaque on purpose — this is a
-# gameplay descriptor, meant to sit on top of the scene rather than blend into it.
+# missing colour what it has LOST — a cube in both cases, since the readout draws no backing for one
+# to show through. Both fully opaque on purpose — this is a gameplay descriptor, meant to sit on top
+# of the scene rather than blend into it.
 @export var bar_fill_color := Color(0.0, 1.0, 0.2353, 1.0)
 @export var bar_missing_color := Color(0.9, 0.05, 0.05, 1.0)
 # The number's WORLD height in cells, NOT a font size: the glyph atlas is held at a fixed high
@@ -475,7 +475,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	if not shown:
 		return
 	bar.set_style(hp_block_texels, hp_block_border_texels, hp_blocks_per_row,
-			hp_block_recess_texels, bar_outline_texels, bar_fill_color,
+			hp_block_recess_texels, bar_fill_color,
 			bar_missing_color, number_height_cells, number_outline_size, number_color,
 			number_gap, number_shows_max)
 	bar.set_prediction_style(bar_doomed_color, bar_heal_color, alarm_peak_color)

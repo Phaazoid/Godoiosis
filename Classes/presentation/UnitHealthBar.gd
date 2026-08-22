@@ -40,12 +40,19 @@ class_name UnitHealthBar
 # with no depth to separate them, so they were TRANSPARENCY_ALPHA purely to buy render_priority
 # ordering -- "no transparency" was about the alpha value, not the queue. Cubes have real depth and
 # sit at real distances, so they sort by DEPTH like the solid objects they are, and the priority
-# ladder they needed is gone. The plate behind them and the text in front of them keep theirs.
+# ladder they needed is gone. Only the two labels in front of them still keep theirs.
 #
-# LOST HEALTH IS A RECESSED RED CUBE (dev, 2026-08-21). The grid is always a full rectangle, so max
-# HP is readable from its shape; a lost cube sinks into the plate rather than vanishing, so the
-# readout carries a DENT as well as a colour. That second cue is what makes it survive distance,
-# peripheral vision, and the green/red confusion this palette otherwise invites.
+# THERE IS NO BACKING (dev, 2026-08-22). The readout is CUBES AND NOTHING ELSE: the black quad behind
+# them was the flat bar's own outline, kept through #314 as something for a lost cube to sink into,
+# and over a 3D board it reads as "just a weird black rectangle floating in space". Every cube wears
+# its own black cage, which is what an outline was for. Consequence, and it is the honest one: a max
+# HP that does not fill its last row leaves an L rather than a rectangle, because the grid now shows
+# exactly the sockets that exist instead of painting black behind ones that never did.
+#
+# LOST HEALTH IS A SHRUNKEN RED CUBE (dev, 2026-08-21). A lost cube stays in place and dwindles
+# rather than vanishing, so the readout carries a DENT as well as a colour. That second cue is what
+# makes it survive distance, peripheral vision, and the green/red confusion this palette otherwise
+# invites.
 #
 # World-scaled, not screen-constant (dev, 2026-08-15): it shrinks with distance like the icons
 # beside it, because it belongs to the scene rather than to the glass.
@@ -75,8 +82,9 @@ class_name UnitHealthBar
 # history it keeps is the heal pop, which is an animation and cannot be a pure function of current
 # HP; it follows the same ownership discipline as the alarm.
 
-# Not knobs: an outline exists to separate a shape from whatever is behind it, and over a board that
-# can be any colour, black is the only value that does the job.
+# Not a knob: an outline exists to separate a shape from whatever is behind it, and over a board that
+# can be any colour, black is the only value that does the job. The cubes carry theirs in the cage
+# texture; this is what is left for the TEXT, which has no cage.
 const OUTLINE_COLOR := Color.BLACK
 # Glyph resolution, held high and fixed while the DISPLAYED size rides pixel_size instead. Sizing
 # text by font_size would have meant a 4px font to hit the size the dev asked for, which renders to
@@ -94,7 +102,6 @@ static var _cube_mesh: ArrayMesh
 static var _cage_texture: ImageTexture
 static var _cube_key := Vector4i(-1, -1, -1, -1)
 
-var _plate: MeshInstance3D                       # what the cubes sit on and recess into
 var _blocks: Array[MeshInstance3D] = []          # one per point of MAX hp; pooled, hidden not freed
 # One material per ROLE rather than one per cube: every cube of a role is the same colour, so three
 # materials answer what N would. Per READOUT rather than static, because the alarm pulses the doomed
@@ -125,7 +132,6 @@ var _recess := 2.0
 var _recess_shrink := 0.7
 var _recess_shade := 0.55
 var _top_shade := 0.7
-var _outline_texels := 1.0
 var _fill_color := Color(0.15, 1.0, 0.2, 1.0)
 var _missing_color := Color(0.9, 0.05, 0.05, 1.0)
 var _number_height := 0.13
@@ -185,18 +191,14 @@ var alarm_color := Color.WHITE:
 
 
 func _init() -> void:
-	# The plate stays a coplanar alpha quad on the old priority ladder: it has no depth of its own,
-	# and the cubes standing in front of it do the sorting.
-	_plate = _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY)
 	_mat_fill = _make_block_material()
 	_mat_missing = _make_block_material()
 	_mat_doomed = _make_block_material()
 	_mat_heal = _make_block_material()
-	# Text draws in FRONT of cubes that now stand proud of the plate, so its priority sits above the
-	# whole grid and _text_z pushes it clear in Z as well.
+	# Text draws in FRONT of the cubes, so its priority sits above the whole grid and _text_z pushes
+	# it clear in Z as well.
 	_label = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
 	_count = _make_label(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
-	add_child(_plate)
 	add_child(_label)
 	add_child(_count)
 	visible = false
@@ -206,14 +208,13 @@ func _init() -> void:
 # The knob values, pushed by UnitMirror. Explicit parameters rather than public fields because this
 # is one call site and a signature is what keeps it typed end to end. The PREDICTION's own knobs sit
 # in their own setter below rather than growing this one past the point a call site can be read.
-func set_style(block: float, border: float, per_row: int, recess: float, outline: float,
+func set_style(block: float, border: float, per_row: int, recess: float,
 		fill: Color, missing: Color, number_height: float, number_outline: float,
 		number_color: Color, gap: float, shows_max: bool) -> void:
 	_block = block
 	_border = border
 	_per_row = per_row
 	_recess = recess
-	_outline_texels = outline
 	_fill_color = fill
 	_missing_color = missing
 	_number_height = number_height
@@ -446,23 +447,19 @@ func block_world_position(index: int) -> Vector3:
 	return _blocks[index].global_position
 
 
-# A socket's depth in the readout's own space, and the plate's. Both local, so they can be compared
-# without the group's yaw entering into it.
+# A socket's depth in the readout's own space. Local, so depths can be compared without the group's
+# yaw entering into it.
 func block_depth(index: int) -> float:
 	if index < 0 or index >= _blocks.size():
 		return 0.0
 	return _blocks[index].position.z
 
 
-func plate_depth() -> float:
-	return _plate.position.z
-
-
 func block_size_texels() -> float:
 	return maxf(roundf(_block), 1.0)
 
 
-# The grid's own extent in texels, which is what the state row and the plate lay out against.
+# The grid's own extent in texels, which is what the state row lays out against.
 func stack_size_texels() -> Vector2:
 	var block := block_size_texels()
 	var pitch := _pitch_texels()
@@ -561,7 +558,7 @@ func number_shown() -> bool:
 
 func _rebuild() -> void:
 	var signature: Array = [_block, _border, _per_row, _recess, _recess_shrink, _recess_shade, _top_shade,
-			_outline_texels, _fill_color, _missing_color,
+			_fill_color, _missing_color,
 			_number_height, _number_outline, _number_color, _gap, _shows_max, _number_shown,
 			_doomed_color, _heal_color,
 			_current, _maximum, _predicted, _has_prediction,
@@ -576,22 +573,11 @@ func _rebuild() -> void:
 func _draw() -> void:
 	var texel := _texel()
 	var block := block_size_texels()
-	var edge: float = maxf(roundf(_outline_texels), 0.0)
 	var stack := stack_size_texels()
 	var safe_max := maxi(1, _maximum)
 
 	_ensure_cube(int(block), int(maxf(roundf(_border), 0.0)), texel, _top_shade)
 	_paint_materials()
-
-	# The plate the cubes sit on and sink into. Full bounding box of the grid, so a unit whose top
-	# row is partial still wears a rectangle rather than an L.
-	_size_quad(_plate, (stack.x + edge * 2.0) * texel, (stack.y + edge * 2.0) * texel, 0.0)
-	(_plate.material_override as StandardMaterial3D).albedo_color = OUTLINE_COLOR
-	# BEHIND the deepest face any cube can present, never at z 0 — the plate sat exactly on the back
-	# faces of the cubes at a recess of 0, and coplanar black against green is what the dev saw
-	# z-fighting from behind (2026-08-22). Derived from the cube depth so it cannot drift with the
-	# size knob.
-	_plate.position.z = _recessed_z() - (block * 0.5 + 1.0) * texel
 
 	while _blocks.size() < safe_max:
 		var cube := MeshInstance3D.new()
@@ -621,12 +607,12 @@ func _draw() -> void:
 	# Sits ON the grid, inset from its left edge, in the parent's local space. get_aabb() is read for
 	# the text's WIDTH only, which does not depend on where the label sits, so this cannot feed back
 	# on itself frame to frame; the digit count changes with the HP, which is why it is measured
-	# rather than assumed. Z clears the PROUD face of a cube rather than the plate, because the cubes
-	# now stand in front of it.
+	# rather than assumed. Z clears the PROUD face of a cube, which is the nearest thing to the camera
+	# the readout draws.
 	var half_text: float = _label.get_aabb().size.x * 0.5
 	_label.position = Vector3(-stack.x * 0.5 * texel + _gap + half_text, 0.0, _text_z())
 
-	_draw_state_row(texel, stack, edge)
+	_draw_state_row(texel, stack)
 
 
 # Which role a socket is wearing. ONE derivation, read by both the material assignment and the
@@ -674,12 +660,12 @@ func _place_blocks() -> void:
 				_z_for(i, shown))
 		# SHRINKING is what actually reads as a hole (dev, 2026-08-22). Depth alone did not: a cube
 		# pushed back is still a same-sized square head-on, because there is no socket WALL to see --
-		# shrunk, the plate shows around its edges and the dent is legible at play distance.
+		# shrunk, it pulls away from its neighbours' cages and the dent is legible at play distance.
 		cube.scale = Vector3.ONE * lerpf(1.0, maxf(_recess_shrink, 0.05), _sunk_fraction(i, shown))
 
 
-# How far INTO the plate this socket is: 1 while empty, 0 while occupied, and easing between the two
-# while a heal pop plays. Read by the scale; the depth has its own curve because it carries the pop's
+# How far SUNK this socket is: 1 while empty, 0 while occupied, and easing between the two while a
+# heal pop plays. Read by the scale; the depth has its own curve because it carries the pop's
 # overshoot and the scale should not bulge.
 func _sunk_fraction(index: int, shown: int) -> float:
 	if index >= shown:
@@ -750,14 +736,17 @@ func _paint_materials() -> void:
 	_mat_doomed.albedo_color = alarm_color if _alarm != null else _doomed_color
 
 
-# The element-state row (#357): square icons ABOVE the grid, the first one flush with the plate's
+# The element-state row (#357): square icons ABOVE the grid, the first one flush with the grid's
 # left edge and the rest growing rightward. Sized in texels rather than as a multiple of the grid's
 # height: nothing ties a status icon to how tall the gauge happens to be, and the two want to be
 # tunable apart.
 #
+# It measured off the PLATE's edges until the plate was deleted (2026-08-22), which at the shipped
+# outline of 0 was the same place: the grid's own extent is what that margin always resolved to.
+#
 # Local space again, and that is the whole reason this lives inside the group: face() turns the
 # parent, so an offset written here is a real offset at every camera angle.
-func _draw_state_row(texel: float, stack: Vector2, edge: float) -> void:
+func _draw_state_row(texel: float, stack: Vector2) -> void:
 	while _state_icons.size() < _state_textures.size():
 		var quad := _make_quad(BoardOverlays.UNIT_HUD_RENDER_PRIORITY + 6)
 		var fresh := quad.material_override as StandardMaterial3D
@@ -767,10 +756,10 @@ func _draw_state_row(texel: float, stack: Vector2, edge: float) -> void:
 	var icon: float = maxf(roundf(_state_icon_texels), 1.0)
 	var gap: float = maxf(roundf(_state_gap_texels), 0.0)
 	var spacing: float = maxf(roundf(_state_spacing_texels), 0.0)
-	# Clear of the plate's TOP edge, and flush with its LEFT one, so the row and the gauge share a
+	# Clear of the grid's TOP edge, and flush with its LEFT one, so the row and the gauge share a
 	# left margin rather than each finding its own.
-	var row_y: float = (stack.y * 0.5 + edge + gap + icon * 0.5) * texel
-	var left: float = -(stack.x * 0.5 + edge)
+	var row_y: float = (stack.y * 0.5 + gap + icon * 0.5) * texel
+	var left: float = -stack.x * 0.5
 	for i in _state_icons.size():
 		var quad: MeshInstance3D = _state_icons[i]
 		quad.visible = i < _state_textures.size()
