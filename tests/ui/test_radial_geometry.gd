@@ -133,12 +133,49 @@ func test_child_start_is_defined_for_degenerate_rings() -> void:
 func test_a_painted_wedge_never_leaves_its_own_sector() -> void:
 	var radii := Vector2(80.0, 110.0)
 	for count: int in COUNTS:
-		for fraction: float in [0.98, 0.86, 0.5, 0.2]:   # never exactly 1.0: that lands a vertex ON the boundary
+		# Spans come through painted_span, the way the widget gets them -- passing a raw number
+		# here would keep passing while asserting nothing, since any small wedge sits inside its
+		# own sector by construction. Never exactly 1.0: that lands a vertex ON the boundary.
+		for fraction: float in [0.98, 0.86, 0.5, 0.2]:
+			var span := AMC.painted_span(count, fraction, 360.0)
 			for i in range(count):
-				var polygon := AMC.slice_polygon(CENTRE, radii.x, radii.y, i, count, 0.0, fraction)
+				var polygon := AMC.slice_polygon(CENTRE, radii.x, radii.y, i, count, 0.0, span)
 				assert_int(polygon.size()).is_greater(0)
 				for point: Vector2 in polygon:
 					assert_int(AMC.index_at(AMC.angle_of(point, CENTRE), count, 0.0)) \
 						.override_failure_message("count %d, fraction %s: slice %d painted into another sector"
 							% [count, fraction, i]) \
 						.is_equal(i)
+
+
+# ==============================================================================
+#  The wedge cap: a ring of one must not balloon into a donut
+# ==============================================================================
+
+# The cap is a LOOK rule and must stay one: it narrows what is painted and moves no boundary, which
+# the sweep above already guarantees by never consulting it. What this pins is that the cap binds
+# where a compacting ring would otherwise produce hemispheres, and yields where it would not.
+func test_the_widest_wedge_is_capped_without_moving_a_boundary() -> void:
+	assert_float(AMC.painted_span(1, 1.0, 120.0)) \
+		.override_failure_message("a lone option still painted the whole circle").is_equal_approx(120.0, 0.001)
+	assert_float(AMC.painted_span(2, 1.0, 120.0)) \
+		.override_failure_message("two options still painted hemispheres").is_equal_approx(120.0, 0.001)
+	# Five slices are 72 degrees before any fraction, so the cap has nothing to say about them.
+	assert_float(AMC.painted_span(5, 1.0, 120.0)).is_equal_approx(72.0, 0.001)
+	assert_float(AMC.painted_span(5, 0.5, 120.0)).is_equal_approx(36.0, 0.001)
+
+	# And a capped wedge still sits inside the sector it owns, at the count where it bites hardest.
+	var span := AMC.painted_span(1, 1.0, 120.0)
+	for point: Vector2 in AMC.slice_polygon(CENTRE, 80.0, 110.0, 0, 1, 0.0, span):
+		assert_int(AMC.index_at(AMC.angle_of(point, CENTRE), 1, 0.0)).is_equal(0)
+
+
+func test_a_lone_wedge_paints_where_the_parent_pointed() -> void:
+	# The bloom, with the cap on: a single child is drawn AT its parent's direction, not opposite
+	# it -- which is what makes a one-option submenu read as belonging to the slice that opened it.
+	var start := AMC.child_start_deg(0.0, 1, 4, 1)     # parent slice 1 of 4 points at 135 degrees
+	# Wrapped, because slice_mid_deg answers in the ring's own unwrapped degrees -- it may hand
+	# back 495 for the same direction, and only index_at ever needs it normalised.
+	assert_float(wrapf(AMC.slice_mid_deg(0, 1, start), 0.0, 360.0)) \
+		.override_failure_message("the lone child did not sit on its parent's own direction") \
+		.is_equal_approx(135.0, 0.001)

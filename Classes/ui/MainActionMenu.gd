@@ -15,13 +15,18 @@ class_name MainActionMenu
 # its contents must exist before the click, and a preview that re-queried could disagree with what
 # commits. The game is modal while the ring is up, so nothing can change underneath the snapshot.
 #
-#   MOVE   -- Move, Group Move
-#   ATTACK -- the default attack, the weapon's other attacks and self-verbs (Reload/Rev/Burrow),
-#             and the rune's carvings
-#   ACT    -- the main actions that are not an attack: Guard, Rescue, Rally, Capture, and the
-#             ability-driven verbs (Intimidate today)
-#   SQUAD  -- Squad Up, Join, Leave, Disband
-#   TURN   -- Execute Orders, Wait, End Turn, Cancel Actions, Inspect
+#   MOVE    -- Move, Group Move
+#   ATTACK  -- every attack the unit owns, each by ITS OWN NAME: the weapon's main and its other
+#              attacks, its self-verbs (Reload/Rev/Burrow), and the rune's carvings
+#   ACT     -- the main actions that are not an attack (Guard, Rescue, Rally, Capture, the
+#              ability-driven verbs) plus Wait, which spends the squad's turn the same way
+#   SQUAD   -- Squad Up, Join, Leave, Disband
+#   INSPECT -- itself, and therefore a top-level slice; see Group below
+#
+# THREE VERBS LEFT THE RING in round 2 because each already had a better door: Execute Orders (the
+# queue panel's button, with three readiness states), Cancel Actions (that panel's per-row X, plus
+# right-click's LIFO undo) and End Turn (the corner button, permanently on screen since this row
+# went). The unit's menu is what the UNIT does; the turn is the HUD's business.
 #
 # #88 HELD WEAPON ACTION AND TRANSMUTATION APART and this file said so as settled law: "runes are
 # equippables and a carving is not ability use". That was a HOLDING POSITION pending a menu rework,
@@ -32,8 +37,9 @@ class_name MainActionMenu
 #
 # A category is drawn only when it has live children, which is the ring's compaction rule one level
 # up -- and it is also why has_weapon_actions()/has_transmutations()/ability_action_entries() are no
-# longer read as menu gates. populate() is untouched and still answers the flat "what can this unit
-# do"; the grouping is applied on top of it.
+# longer read as menu gates. populate() still answers the flat "what can this unit do" and the
+# grouping is applied on top of it; the only thing round 2 took out of it is the three verbs above,
+# whose clauses went with their rows.
 #
 # Adding a general verb touches ACTION_DATA (name, term, group); a weapon-specific one touches only
 # _weapon_children; an ability-driven one touches only ability_action_entries and its
@@ -41,18 +47,19 @@ class_name MainActionMenu
 
 var game   # the Game coordinator (Node2D); set by game._ready()
 
+# Explicit values, so removing a verb never renumbers the ones beside it. Three left the ring in
+# #467 round 2 and their ids went with them: EXECUTE_ORDERS and CANCEL both have richer HUD doors
+# (the queue panel's Execute button and its per-row X, plus right-click's LIFO undo), and END TURN
+# has the corner button, which is now permanently on screen precisely because this row is gone.
 const MOVE := 0
 const ATTACK := 1
 const OTHER := 2
-const CANCEL := 3
 const WAIT := 4
-const ENDTURN := 5
 const SQUADUP := 6
 const JOINSQUAD := 7
 const LEAVESQUAD := 8
 const DISBAND_SQUAD := 9
 const INSPECT := 10
-const EXECUTE_ORDERS := 11
 const RESCUE := 12
 const RALLY := 13
 const GROUP_MOVE := 14
@@ -62,18 +69,22 @@ const CAPTURE := 17
 const TRANSMUTATION := 18
 const GUARD := 19
 
-# The ring's five categories, and their order IS the inner ring's clockwise order.
-enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, TURN_GROUP }
+# The ring's categories, and their order IS the inner ring's clockwise order.
+#
+# INSPECT_GROUP is a category of ONE, holding the verb of the same name, which means the collapse
+# rule in build_tree hands it up as a plain terminal slice -- "Inspect is top level" (dev, #467
+# round 2) costs no new mechanism, just a group nobody else joins.
+enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP }
 
 # A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
-# it, pinned by tests/law/test_glossary_coverage.gd). Move and Attack reuse the verb terms of the
-# same name; ACT/SQUAD_ACTIONS/TURN_ACTIONS were authored for the ring.
+# it, pinned by tests/law/test_glossary_coverage.gd). Move / Attack / Inspect reuse the verb terms
+# of the same name; ACT and SQUAD_ACTIONS were authored for the ring.
 const CATEGORIES := {
 	Group.MOVE_GROUP: {"name": "Move", "term": Glossary.Term.MOVE},
 	Group.ATTACK_GROUP: {"name": "Attack", "term": Glossary.Term.ATTACK},
 	Group.ACT_GROUP: {"name": "Act", "term": Glossary.Term.ACT},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
-	Group.TURN_GROUP: {"name": "Turn", "term": Glossary.Term.TURN_ACTIONS},
+	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
 }
 
 # Display data AND print order: declaration order here IS the order within a category (Godot
@@ -83,10 +94,9 @@ const CATEGORIES := {
 # `expands` marks the three ids that were only ever category headers: they contribute their
 # CHILDREN to their group rather than a row of their own.
 const ACTION_DATA := {
-	EXECUTE_ORDERS: {"name": "Execute Orders", "term": Glossary.Term.EXECUTE_ORDERS, "group": Group.TURN_GROUP},
 	MOVE: {"name": "Move", "term": Glossary.Term.MOVE, "group": Group.MOVE_GROUP},
 	GROUP_MOVE: {"name": "Group Move", "term": Glossary.Term.GROUP_MOVE, "group": Group.MOVE_GROUP},
-	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK, "group": Group.ATTACK_GROUP},
+	ATTACK: {"name": "Attack", "term": Glossary.Term.ATTACK, "group": Group.ATTACK_GROUP, "expands": true},
 	WEAPON_ACTION: {"name": "Weapon Action", "term": Glossary.Term.WEAPON_ACTION, "group": Group.ATTACK_GROUP, "expands": true},
 	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION, "group": Group.ATTACK_GROUP, "expands": true},
 	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION, "group": Group.ACT_GROUP, "expands": true},
@@ -94,14 +104,12 @@ const ACTION_DATA := {
 	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE, "group": Group.ACT_GROUP},
 	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY, "group": Group.ACT_GROUP},
 	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE, "group": Group.ACT_GROUP},
+	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT, "group": Group.ACT_GROUP},
 	SQUADUP: {"name": "Squad Up", "term": Glossary.Term.SQUAD_UP, "group": Group.SQUAD_GROUP},
 	JOINSQUAD: {"name": "Join Squad", "term": Glossary.Term.JOIN_SQUAD, "group": Group.SQUAD_GROUP},
 	LEAVESQUAD: {"name": "Leave Squad", "term": Glossary.Term.LEAVE_SQUAD, "group": Group.SQUAD_GROUP},
 	DISBAND_SQUAD: {"name": "Disband Squad", "term": Glossary.Term.DISBAND_SQUAD, "group": Group.SQUAD_GROUP},
-	WAIT: {"name": "Wait", "term": Glossary.Term.WAIT, "group": Group.TURN_GROUP},
-	CANCEL: {"name": "Cancel Actions", "term": Glossary.Term.CANCEL_ACTIONS, "group": Group.TURN_GROUP},
-	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.TURN_GROUP},
-	ENDTURN: {"name": "End Turn", "term": Glossary.Term.END_TURN, "group": Group.TURN_GROUP},
+	INSPECT: {"name": "Inspect", "term": Glossary.Term.INSPECT, "group": Group.INSPECT_GROUP},
 }
 
 # A child that is not an ACTION_DATA verb (a carving, a weapon's secondary, an ability verb) needs
@@ -144,9 +152,10 @@ func build_tree(unit: Unit) -> Array:
 			by_group[group] = []
 		var bucket: Array = by_group[group]
 		if bool(entry.get("expands", false)):
-			bucket.append_array(_expanded_children(unit, id))
+			for child: Dictionary in _expanded_children(unit, id):
+				_append_unique(bucket, child)
 		else:
-			bucket.append(_verb_node(id))
+			_append_unique(bucket, _verb_node(id))
 
 	var ring: Array = []
 	for group: int in CATEGORIES:
@@ -154,10 +163,29 @@ func build_tree(unit: Unit) -> Array:
 		if children.is_empty():
 			continue
 		var category: Dictionary = CATEGORIES[group]
+		# A category whose ONE child is its own verb is the same question asked twice -- Move
+		# holding nothing but Move (dev, #467 round 2: "there is no reason to put Move under
+		# Move"). Hand the child up as a terminal slice. Deliberately NOT "collapse whenever
+		# there is one child": Squad holding only Squad Up names something the category does not,
+		# so it keeps its ring -- drawn small, which is what MAX_WEDGE_DEGREES is for.
+		if children.size() == 1 and String(children[0].get("name", "")) == String(category["name"]):
+			ring.append(children[0])
+			continue
 		var node := _entry(category["name"], "", Glossary.short(category["term"]))
 		node["children"] = children
 		ring.append(node)
 	return ring
+
+
+# Two slices with one name is a bug however it arose -- and it arises HERE by construction: a
+# rune's default attack is also one of its carvings, so the ATTACK and TRANSMUTATION expanders
+# both offer it. First listing wins, so ACTION_DATA's order decides which.
+func _append_unique(bucket: Array, node: Dictionary) -> void:
+	var node_name := String(node.get("name", ""))
+	for existing: Dictionary in bucket:
+		if String(existing.get("name", "")) == node_name:
+			return
+	bucket.append(node)
 
 
 # An ACTION_DATA verb as a leaf. Its id IS the ACTION_DATA id, so on_pressed's match is reached
@@ -180,6 +208,8 @@ func _synthetic_leaf(node: Dictionary, pick: Callable) -> Dictionary:
 
 func _expanded_children(unit: Unit, id: int) -> Array:
 	match id:
+		ATTACK:
+			return _default_attack_children(unit)
 		WEAPON_ACTION:
 			return _weapon_children(unit)
 		TRANSMUTATION:
@@ -197,6 +227,18 @@ func _expanded_children(unit: Unit, id: int) -> Array:
 func _attack_leaf(unit: Unit, attack: AttackData) -> Dictionary:
 	return _synthetic_leaf(_attack_entry(unit, attack),
 		func(picking_unit: Unit) -> void: _pick_attack(picking_unit, attack))
+
+
+# The weapon's MAIN attack, under its own name. There is no generic "Attack" row any more (dev,
+# #467 round 2): the ring already lists every alternative by name, so a row saying "Attack" was a
+# second door to one of them, and its only virtue -- saving a click -- was spent the moment the
+# ring made you navigate anyway. Note what this makes newly visible: a weapon family whose main
+# attack is unnamed now says so on screen.
+func _default_attack_children(unit: Unit) -> Array:
+	var atk := unit.get_default_attack()
+	if atk == null:
+		return []
+	return [_attack_leaf(unit, atk)]
 
 
 # The equipped weapon's non-main attacks plus its self-verbs. Reload's LABEL is per-family
@@ -235,15 +277,6 @@ func _ability_children(unit: Unit) -> Array:
 		children.append(_synthetic_leaf(_entry(ability_entry["name"]),
 			func(picking_unit: Unit) -> void: _pick_ability_action(picking_unit, type)))
 	return children
-
-# The ATTACK verb: fire whatever the unit would fire by default — a weapon's authored main attack,
-# or a rune's first channelable carving. It sits in the Attack group beside the named alternatives
-# rather than above them, so "just swing" stays one pick. Reset the live pick so a stale one never
-# leaks into a new aim.
-func begin_attack(unit: Unit) -> void:
-	unit.active_attack = null
-	game.enter_attack_mode(unit)
-
 
 # ONE menu row, and the catalogue law in one place (#166): an option the unit OWNS is listed
 # whether or not it can be used right now, and a greyed row always says why. A non-empty
@@ -318,12 +351,7 @@ func populate(unit: Unit) -> Array:
 
 	if not game.can_control(unit):
 		options.append(INSPECT)
-		if not game.squad_manager.any_squad_active():
-			options.append(ENDTURN)
 		return options
-
-	if unit.squad.has_any_queued_actions() and unit.is_leader():
-		options.append(EXECUTE_ORDERS)
 
 	if _can_move(unit):
 		options.append(MOVE)
@@ -371,15 +399,9 @@ func populate(unit: Unit) -> Array:
 	if unit != null:
 		options.append(INSPECT)
 
-	if game.squad_manager.active_squad == null:
-		# Wait is a choice a squad makes ONCE; an acted squad has nothing left to end (#190).
-		# End Turn stays unconditional -- it's about the faction's turn, not this squad's state.
-		if not unit.squad.has_acted:
-			options.append(WAIT)
-		options.append(ENDTURN)
-
-	if unit != null and unit.has_any_actions(): #TODO separate general cancel and cancel queued plans
-		options.append(CANCEL)
+	# Wait is a choice a squad makes ONCE; an acted squad has nothing left to end (#190).
+	if game.squad_manager.active_squad == null and not unit.squad.has_acted:
+		options.append(WAIT)
 
 	var ordered := []
 	for id in ACTION_DATA:
@@ -407,17 +429,10 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			# The gesture, not the bare mode: re-planning spends the queued move (#417). One
 			# answer, because right-click reaches the same gesture from the other side.
 			game.begin_move_planning(unit)
-		ATTACK:
-			begin_attack(unit)
-		CANCEL:
-			game.squad_manager.remove_actions_for_unit(unit)
-			game.clear_selection()
 		WAIT:
 			game.squad_manager.set_has_acted(unit.squad, true)
 			game.refresh_end_turn_button()
 			game.clear_selection()
-		ENDTURN:
-			game.end_turn()
 		SQUADUP:
 			game.create_squad(unit)
 		JOINSQUAD:
@@ -428,8 +443,6 @@ func on_pressed(action_id: int, unit: Unit) -> void:
 			game.squad_manager.leave_squad(unit)
 		INSPECT:
 			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
-		EXECUTE_ORDERS:
-			game.order_executor.execute_orders(unit)
 		RESCUE:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
 			# (#124) must be pickable exactly where the row said it would be.

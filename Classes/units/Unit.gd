@@ -923,10 +923,16 @@ func has_any_fireable_attack() -> bool:
 # is_attack_fireable(null) answers true (null isn't a WeaponAttackData), which is the right
 # answer to "is this gated?" and the wrong one to "is there anything here?".
 func can_fire_default_attack() -> bool:
-	if equipped_weapon == null:
-		return false
-	var atk := equipped_weapon.default_attack(self)
+	var atk := get_default_attack()
 	return atk != null and is_attack_fireable(atk)
+
+# What this unit swings if it just attacks -- a weapon's authored main, a rune's first channelable
+# carving. A thin delegator to whatever is equipped, the same shape as get_weapon_secondary_attacks
+# beside it; the action ring lists it by its own NAME since #467, so it needs a public reader.
+func get_default_attack() -> AttackData:
+	if equipped_weapon == null:
+		return null
+	return equipped_weapon.default_attack(self)
 
 # --- The equipped thing's self-abilities ---
 # Each is asked of the EQUIPPABLE, which answers for its own kind — same pattern as the attack

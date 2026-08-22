@@ -38,6 +38,7 @@ const MENU_MARGIN := 8.0
 const MAX_RING_DEPTH := 3      # categories, their children, and a preview beyond both
 const SPRITE_FIT := 1.4        # sprite box as a multiple of DEAD_ZONE_RADIUS (< 2.0 keeps it inside)
 const ARC_SAMPLES_PER_SLICE := 12
+const MIN_LABEL_FONT_SIZE := 8   # a shrunk label stops here; below it the name is not a readout
 
 # Look values, tuned live through GameKnobs.CLASS_KNOBS. Statics rather than exports because the
 # menu is transient -- there is no standing node for a knob to address, and nothing to re-apply
@@ -51,10 +52,21 @@ static var RING_GAP := 7.0
 static var DEAD_ZONE_RADIUS := 66.0
 static var PAINT_FRACTION := 0.86
 static var PAINT_FRACTION_FALLOFF := 0.1
+# The ceiling on how wide any one wedge PAINTS. Without it a ring of one balloons into a whole
+# donut and a ring of two into two hemispheres, which is what a compacting ring produces most of
+# the time (dev: "the massive balloon arcs just don't look great"). Hit-testing is untouched --
+# the sectors still tile the full circle, so the leftover angle simply belongs to the nearest
+# wedge and the always-drawn highlight says which.
+static var MAX_WEDGE_DEGREES := 120.0
 static var GHOST_ALPHA := 0.32
 static var SLICE_COLOR := Color(0.08, 0.09, 0.12, 0.92)
 static var SLICE_SELECTED_COLOR := Color(0.30, 0.45, 0.66, 0.96)
 static var SLICE_DISABLED_COLOR := Color(0.08, 0.09, 0.12, 0.5)
+# The dead zone made visible: the disc IS the region that selects nothing, so its edge is a
+# promise rather than decoration. The sprite sits on it.
+static var CENTRE_COLOR := Color(0.05, 0.06, 0.09, 0.94)
+static var CENTRE_RIM_COLOR := Color(0.55, 0.62, 0.75, 0.85)
+static var CENTRE_RIM_WIDTH := 2.0
 
 var local_unit: Unit
 
@@ -135,16 +147,29 @@ static func child_start_deg(parent_start_deg: float, parent_index: int, parent_c
 	var parent_mid := parent_start_deg + (float(parent_index) + 0.5) * (360.0 / float(parent_count))
 	return wrapf(parent_mid - (360.0 / float(child_count)) * 0.5, 0.0, 360.0)
 
-# The DRAWN wedge: an annulus sector narrowed to `paint_fraction` of its own sector and centred on
-# it. Godot's draw_arc strokes an arc rather than filling a wedge, so the polygon is built.
+# How wide a wedge actually PAINTS: its share of the circle, narrowed by the look's fraction, then
+# capped. Pure and separate from slice_polygon so the cap can be asserted on its own -- and note
+# selection_at still knows nothing about any of it.
+static func painted_span(count: int, paint_fraction: float, max_degrees: float) -> float:
+	if count <= 0:
+		return 0.0
+	return minf(360.0 / float(count) * clampf(paint_fraction, 0.05, 1.0), maxf(max_degrees, 1.0))
+
+# Where a slice's own sector points, whatever it paints there.
+static func slice_mid_deg(index: int, count: int, start_deg: float) -> float:
+	if count <= 0:
+		return start_deg
+	return start_deg + (float(index) + 0.5) * (360.0 / float(count))
+
+# The DRAWN wedge: an annulus sector `span_deg` wide, centred on the slice's own sector. Godot's
+# draw_arc strokes an arc rather than filling a wedge, so the polygon is built.
 static func slice_polygon(centre: Vector2, r0: float, r1: float, index: int, count: int,
-		start_deg: float, paint_fraction: float) -> PackedVector2Array:
+		start_deg: float, span_deg: float) -> PackedVector2Array:
 	var points := PackedVector2Array()
 	if count <= 0:
 		return points
-	var span := 360.0 / float(count)
-	var mid := start_deg + (float(index) + 0.5) * span
-	var half := span * clampf(paint_fraction, 0.05, 1.0) * 0.5
+	var mid := slice_mid_deg(index, count, start_deg)
+	var half := span_deg * 0.5
 	for i in range(ARC_SAMPLES_PER_SLICE + 1):
 		var t := float(i) / float(ARC_SAMPLES_PER_SLICE)
 		points.append(point_at(centre, r1, mid - half + (half * 2.0) * t))
@@ -337,30 +362,61 @@ func _draw_ring(nodes: Array, start_deg: float, level: int, live: bool, alpha: f
 		color.a *= alpha
 		if not live:
 			color.a *= 0.7
+		var span := painted_span(nodes.size(), _paint_fraction(level), MAX_WEDGE_DEGREES)
 		_root.draw_colored_polygon(
-			slice_polygon(_centre, radii.x, radii.y, i, nodes.size(), start_deg, _paint_fraction(level)),
-			color)
-		_draw_slice_label(node, radii, i, nodes.size(), start_deg, font, font_size, alpha)
+			slice_polygon(_centre, radii.x, radii.y, i, nodes.size(), start_deg, span), color)
+		_draw_slice_label(node, radii, i, nodes.size(), start_deg, span, font, font_size, alpha)
 
+# A label rides the CURVE of its own wedge rather than sitting flat across it, which is what keeps
+# a long name inside the paint instead of hanging off both ends (dev: "words should do their best
+# to never leave the menu buttons"). Two things make it readable:
+#
+#   THE FLIP. Rotating by the slice's own angle points the text's head OUTWARD, which reads
+#   upright on the top half and upside-down on the bottom, so the bottom half turns a further
+#   180 degrees and reads with its head INWARD. Standard rubber-stamp arrangement, and the reason
+#   `cos` is the test: it is positive exactly on the half where outward is up-screen.
+#
+#   THE SHRINK. If the name is still wider than the arc it has, the font drops until it fits, to
+#   a floor -- a name that overruns is worse than a name that is small.
 func _draw_slice_label(node: Dictionary, radii: Vector2, index: int, count: int, start_deg: float,
-		font: Font, font_size: int, alpha: float) -> void:
+		span_deg: float, font: Font, font_size: int, alpha: float) -> void:
 	if font == null:
 		return
 	var text: String = node.get("name", "")
 	if text == "":
 		return
-	var mid := start_deg + (float(index) + 0.5) * (360.0 / float(count))
-	var at := point_at(_centre, (radii.x + radii.y) * 0.5, mid)
-	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size).x
+
+	var mid := slice_mid_deg(index, count, start_deg)
+	var radius := (radii.x + radii.y) * 0.5
+	var rot := deg_to_rad(mid)
+	if cos(rot) < 0.0:
+		rot += PI
+
+	var available := deg_to_rad(span_deg) * radius
+	var size := font_size
+	var width := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+	if width > available and width > 0.0:
+		size = maxi(MIN_LABEL_FONT_SIZE, int(floor(float(size) * available / width)))
+		width = font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1.0, size).x
+
 	var color := Color(1, 1, 1, alpha)
 	if bool(node.get("disabled", false)):
 		color.a *= 0.45
-	_root.draw_string(font, at + Vector2(-width * 0.5, font_size * 0.35), text,
-		HORIZONTAL_ALIGNMENT_LEFT, -1.0, font_size, color)
+
+	# draw_set_transform applies to everything after it, so the identity has to go back on.
+	_root.draw_set_transform(point_at(_centre, radius, mid), rot, Vector2.ONE)
+	_root.draw_string(font, Vector2(-width * 0.5, float(size) * 0.35), text,
+		HORIZONTAL_ALIGNMENT_LEFT, -1.0, size, color)
+	_root.draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 # The centre is the unit's map sprite and nothing else -- the whole point of the wide gap. Same
 # accessor the action queue's actor icon reads, so the two surfaces can never show different art.
 func _draw_centre() -> void:
+	# The disc first, and it is drawn whether or not there is a sprite: it is the dead zone made
+	# visible, so its absence would be a lie about where clicking does nothing.
+	_root.draw_circle(_centre, DEAD_ZONE_RADIUS, CENTRE_COLOR)
+	if CENTRE_RIM_WIDTH > 0.0:
+		_root.draw_arc(_centre, DEAD_ZONE_RADIUS, 0.0, TAU, 64, CENTRE_RIM_COLOR, CENTRE_RIM_WIDTH, true)
 	if local_unit == null or not is_instance_valid(local_unit):
 		return
 	var tex := local_unit.get_map_sprite_texture()

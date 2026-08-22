@@ -36,42 +36,68 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
-func _visible() -> bool:
-	return game.end_turn_button.visible
+func _flashing() -> bool:
+	return game.end_turn_button.is_urgent()
+
+
+# The card the early-press confirm puts up, if any.
+func _open_confirm() -> ConfirmCard:
+	for child in game.ui_layer.get_children():
+		if child is ConfirmCard:
+			return child
+	return null
 
 
 # ==============================================================================
-#  Visibility
+#  The flash -- what the old visibility rule became (#467)
 # ==============================================================================
 
-func test_hidden_with_one_unacted_squad() -> void:
+# THE #467 rule, and the reason every case below asks about the flash instead: End Turn left the
+# action ring, so this button is the only door there is and may never hide. Asserted across the
+# states that used to hide it -- nothing acted, and a locked board.
+func test_the_button_is_never_hidden() -> void:
+	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	game.refresh_end_turn_button()
+	assert_bool(game.end_turn_button.visible) \
+		.override_failure_message("hidden with actions still to spend -- the only door to ending a turn").is_true()
+
+	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
+	assert_bool(game.end_turn_button.visible).is_true()
+
+	game.game_state = game.GameState.AI_TURN
+	game.refresh_end_turn_button()
+	assert_bool(game.end_turn_button.visible) \
+		.override_failure_message("hidden while the board was locked").is_true()
+
+
+func test_not_flashing_with_one_unacted_squad() -> void:
 	_spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	game.refresh_end_turn_button()
-	assert_bool(_visible()).is_false()
+	assert_bool(_flashing()).is_false()
 
 
-func test_appears_once_the_last_squad_waits_through_the_real_menu_pick() -> void:
+func test_flashes_once_the_last_squad_waits_through_the_real_menu_pick() -> void:
 	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
-	assert_bool(_visible()).is_false()
+	assert_bool(_flashing()).is_false()
 
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
 
-	assert_bool(_visible()) \
+	assert_bool(_flashing()) \
 		.override_failure_message("End Turn button did not appear once the only squad waited") \
 		.is_true()
 
 
-func test_stays_hidden_until_every_squad_has_acted() -> void:
+func test_stays_unlit_until_every_squad_has_acted() -> void:
 	var first := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	var second := _spawn(Team.Faction.PLAYER, Vector2i(2, 2))
 
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, first)
-	assert_bool(_visible()) \
+	assert_bool(_flashing()) \
 		.override_failure_message("Button showed with a second squad still unacted") \
 		.is_false()
 
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, second)
-	assert_bool(_visible()).is_true()
+	assert_bool(_flashing()).is_true()
 
 
 func test_a_downed_squadmate_does_not_block_the_others() -> void:
@@ -84,7 +110,7 @@ func test_a_downed_squadmate_does_not_block_the_others() -> void:
 
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, standing)
 
-	assert_bool(_visible()).is_true()
+	assert_bool(_flashing()).is_true()
 
 
 # ==============================================================================
@@ -107,17 +133,72 @@ func test_pressing_the_button_ends_the_turn() -> void:
 		.is_false()
 
 
-func test_hides_again_after_the_turn_handoff() -> void:
+# The other half of the same fact (#467): the button asks EXACTLY when it is not flashing, so a
+# press that arrives with work left cannot quietly throw the turn away. Two squads, one waited --
+# `has_acted` on the waited one is the observable, since only a real handoff resets it.
+func test_pressing_with_actions_left_asks_first_and_no_means_no() -> void:
+	var waited := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.PLAYER, Vector2i(4, 1))
+	game.main_action_menu.on_pressed(MainActionMenu.WAIT, waited)
+	game.refresh_end_turn_button()
+	assert_bool(_flashing()) \
+		.override_failure_message("the fixture had everyone done, so this case asks nothing").is_false()
+
+	game.end_turn_button.end_turn_requested.emit()
+	await await_idle_frame()
+
+	var card := _open_confirm()
+	assert_object(card) \
+		.override_failure_message("a press with a squad still unspent ended the turn without asking").is_not_null()
+
+	card.answered.emit(false)
+	await await_idle_frame()
+	assert_bool(waited.squad.has_acted) \
+		.override_failure_message("answering No ended the turn anyway").is_true()
+
+
+func test_answering_yes_to_the_early_press_ends_the_turn() -> void:
+	var waited := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	_spawn(Team.Faction.PLAYER, Vector2i(4, 1))
+	game.main_action_menu.on_pressed(MainActionMenu.WAIT, waited)
+
+	game.end_turn_button.end_turn_requested.emit()
+	await await_idle_frame()
+	var card := _open_confirm()
+	assert_object(card).is_not_null()
+
+	card.answered.emit(true)
+	await await_idle_frame()
+	assert_bool(waited.squad.has_acted) \
+		.override_failure_message("answering Yes did not reach the turn handoff").is_false()
+
+
+# A press while everyone IS done goes straight through -- no card, which is what makes the flash
+# mean "this will not interrupt you".
+func test_a_press_while_the_button_flashes_never_asks() -> void:
 	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
-	assert_bool(_visible()).is_true()
+	game.refresh_end_turn_button()
+	assert_bool(_flashing()).is_true()
+
+	game.end_turn_button.end_turn_requested.emit()
+	await await_idle_frame()
+
+	assert_object(_open_confirm()) \
+		.override_failure_message("a flashing button still asked").is_null()
+
+
+func test_stops_flashing_after_the_turn_handoff() -> void:
+	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
+	assert_bool(_flashing()).is_true()
 
 	game.end_turn_button.end_turn_requested.emit()
 	await await_idle_frame()
 
 	# Only PLAYER units are on the board, so the cycle hands the turn straight back to PLAYER --
 	# freshly reset, nothing has acted yet.
-	assert_bool(_visible()) \
+	assert_bool(_flashing()) \
 		.override_failure_message("Button stayed up into the next turn instead of resetting")\
 		.is_false()
 
@@ -140,7 +221,7 @@ func test_the_button_and_the_objectives_box_never_overlap() -> void:
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
 	await await_idle_frame()
 
-	assert_bool(_visible()).is_true()
+	assert_bool(_flashing()).is_true()
 	assert_bool(game.mission_status_panel._panel.visible).is_true()
 	var button_rect: Rect2 = game.end_turn_button._button.get_global_rect()
 	var panel_rect: Rect2 = game.mission_status_panel._panel.get_global_rect()
@@ -178,12 +259,12 @@ func test_the_objectives_box_clears_the_execute_orders_button() -> void:
 #  Locked-board guard
 # ==============================================================================
 
-func test_hidden_while_the_board_is_locked() -> void:
+func test_stops_flashing_while_the_board_is_locked() -> void:
 	var unit := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
 	game.main_action_menu.on_pressed(MainActionMenu.WAIT, unit)
-	assert_bool(_visible()).is_true()
+	assert_bool(_flashing()).is_true()
 
 	game.game_state = game.GameState.AI_TURN
 	game.refresh_end_turn_button()
 
-	assert_bool(_visible()).is_false()
+	assert_bool(_flashing()).is_false()

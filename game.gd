@@ -524,11 +524,22 @@ func end_turn():
 	turn_manager.end_turn(_board().present_factions())
 
 # The bottom-right End Turn button's one caller (#189) -- same guard `_on_queue_execute_requested`
-# uses, since the button can only be reached while the board is unlocked anyway, but a stale frame
-# shouldn't be trusted over the live state.
+# uses. It stopped being belt-and-braces with #467: the button is permanently on screen now, so a
+# press really can arrive during an AI turn or over a finished mission, and this is what refuses it.
+#
+# It also ASKS when there is anything left to do (dev call, #467). The question is
+# `faction_all_squads_acted` -- the same predicate that decides whether the button is flashing --
+# so a flashing button never interrupts and a still one always does. Re-checked after the await
+# because a card is a frame boundary and the turn may have ended underneath it.
 func _on_end_turn_button_pressed() -> void:
 	if _board_locked_for_player():
 		return
+	if not squad_manager.faction_all_squads_acted(turn_manager.active_faction()):
+		var sure: bool = await ConfirmCard.ask(self,
+			"Some of your squads still have actions left. End the turn anyway?",
+			"End Turn", "Keep Playing")
+		if not sure or _board_locked_for_player():
+			return
 	end_turn()
 
 func _on_round_completed() -> void:
@@ -852,10 +863,13 @@ func refresh_mission_status() -> void:
 # handoff -- the refresh_mission_status pattern above (#134), a write-point call, not a signal.
 func refresh_end_turn_button() -> void:
 	var faction: Team.Faction = turn_manager.active_faction()
-	var show: bool = (not _board_locked_for_player()
+	# Since #467 this decides the FLASH, not the visibility -- the button is the only door to
+	# ending a turn now, so it is always up. Same predicate the early-press confirm reads, which
+	# is what makes "it is flashing" and "it will not ask" the same fact.
+	var urgent: bool = (not _board_locked_for_player()
 		and not ai_controller.is_ai_faction(faction)
 		and squad_manager.faction_all_squads_acted(faction))
-	end_turn_button.set_active(show)
+	end_turn_button.set_urgent(urgent)
 
 # Law #2 board preview: consequences of the active plan the queue panel also shows, derived from
 # the same resolver pass and ghosted as "pending" — terrain ignites (#50) + knockback shoves (#84).

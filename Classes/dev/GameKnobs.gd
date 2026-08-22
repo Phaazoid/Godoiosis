@@ -309,6 +309,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Action ring", "label": "Wedge fill", "static": "PAINT_FRACTION",
 		"script": ACTION_MENU_SCRIPT, "min": 0.15, "max": 1.0, "step": 0.01,
 		"tip": "How much of its own slice a wedge actually paints, on the first ring. Below 1.0 leaves air between wedges. Purely a look: the slice you are pointing at does not change, only how much of it is drawn."},
+	{"group": "Action ring", "label": "Widest wedge", "static": "MAX_WEDGE_DEGREES",
+		"script": ACTION_MENU_SCRIPT, "min": 20.0, "max": 360.0, "step": 1.0,
+		"tip": "Ceiling on how many degrees any one wedge PAINTS. Without it a submenu holding a single option balloons into a whole donut. It never moves a hit boundary -- the sectors still tile the circle, so the leftover angle belongs to the nearest wedge and the highlight says which."},
+	{"group": "Action ring", "label": "Centre disc", "static": "CENTRE_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The disc the unit's sprite sits on. It is exactly the DEAD ZONE drawn, so its edge is a promise about where clicking selects nothing -- opaque enough to lift the sprite off the board behind it."},
+	{"group": "Action ring", "label": "Centre rim", "static": "CENTRE_RIM_COLOR",
+		"script": ACTION_MENU_SCRIPT,
+		"tip": "The ring around that disc. Reads as the boundary between the unit and its options."},
+	{"group": "Action ring", "label": "Centre rim width", "static": "CENTRE_RIM_WIDTH",
+		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 12.0, "step": 0.5,
+		"tip": "How thick that rim is drawn. Zero removes it and leaves the bare disc."},
 	{"group": "Action ring", "label": "Wedge fill falloff", "static": "PAINT_FRACTION_FALLOFF",
 		"script": ACTION_MENU_SCRIPT, "min": 0.0, "max": 0.4, "step": 0.01,
 		"tip": "How much less each ring further out paints than the one inside it, so a submenu builds out lighter instead of stacking full circles. Zero paints every ring the same."},
@@ -393,6 +405,10 @@ static func read_static(name: String) -> Variant:
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
 		"VOID_PLUMMET_SECONDS": return MovementComponent.VOID_PLUMMET_SECONDS
+		"MAX_WEDGE_DEGREES": return ActionMenuController.MAX_WEDGE_DEGREES
+		"CENTRE_COLOR": return ActionMenuController.CENTRE_COLOR
+		"CENTRE_RIM_COLOR": return ActionMenuController.CENTRE_RIM_COLOR
+		"CENTRE_RIM_WIDTH": return ActionMenuController.CENTRE_RIM_WIDTH
 		"RING_INNER_RADIUS": return ActionMenuController.RING_INNER_RADIUS
 		"RING_THICKNESS": return ActionMenuController.RING_THICKNESS
 		"RING_GAP": return ActionMenuController.RING_GAP
@@ -438,6 +454,18 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# standing ring to re-apply one to. That is also why they are statics rather than KNOBS
 		# rows -- KNOBS names a property on a node in the running world, and this one is not there
 		# except while the player is holding it open.
+		"MAX_WEDGE_DEGREES":
+			ActionMenuController.MAX_WEDGE_DEGREES = value
+			return
+		"CENTRE_COLOR":
+			ActionMenuController.CENTRE_COLOR = value
+			return
+		"CENTRE_RIM_COLOR":
+			ActionMenuController.CENTRE_RIM_COLOR = value
+			return
+		"CENTRE_RIM_WIDTH":
+			ActionMenuController.CENTRE_RIM_WIDTH = value
+			return
 		"RING_INNER_RADIUS":
 			ActionMenuController.RING_INNER_RADIUS = value
 			return
