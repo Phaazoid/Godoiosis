@@ -57,7 +57,7 @@ const LEAVES: Array[Dictionary] = [
 	{"scope": "Project", "label": "Items", "page": "%Item Editor",
 		"tip": "Author items — weapons and runes. Load a preset or start new, edit, name, save."},
 	{"scope": "Project", "label": "Attacks", "page": "%Attack Editor",
-		"tip": "Author attacks — Transmutation, Weapon Attack, or Family Mains (edit an established family's main in place); toggle at top."},
+		"tip": "Author attacks — Transmutation, Weapon Attack, or Weapon Families (edit a family's main in place and pick its extra attacks); toggle at top."},
 	{"scope": "Project", "label": "Objects", "page": "%Objects",
 		"tip": "What a terrain object TYPE is — its own light, its own size — written into the tileset the tile itself carries."},
 	{"scope": "Project", "label": "Moods", "page": "%Moods",

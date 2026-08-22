@@ -173,3 +173,14 @@ func _resolved_element(e: Elemental.Element) -> Elemental.Element:
 		if derived != Elemental.Element.NONE:
 			return derived
 	return e
+
+
+# The carving's own two reflective rows (#473); sigils and flourishes get bespoke weight/slot UI in
+# the Attack Editor and are skipped there, so they need no text. AttackData's shared fields merge in.
+static func property_tips() -> Dictionary:
+	var tips := AttackData.property_tips()
+	tips.merge({
+		"popup": "Floating text shown over the target when this carving lands. Blank = nothing.",
+		"icon": "The carving's icon in the rune and attack menus.",
+	})
+	return tips

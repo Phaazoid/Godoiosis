@@ -129,15 +129,15 @@ up); melee authors the STEP rule instead (below) — the tolerance illustration 
 give for a sword did not survive play.
 
 **BUILT as [#258](https://github.com/Phaazoid/Godoiosis/issues/258), REWORKED in review the same
-day:** each attack authors its **vertical rule** — `AttackData.VerticalRule.STEP` for melee (below),
-`TOLERANCE` with `up_tolerance` / `down_tolerance` for everything else (`-1` = unlimited, the
+day:** each attack authors its **vertical rule** — `AttackData.VerticalRule.MELEE` for melee (below),
+`RANGED` with `up_tolerance` / `down_tolerance` for everything else (`-1` = unlimited, the
 default — so a flat board and every heights-less fixture behave exactly as before, the slice-1
 contract) — and every point aim must also have a **clear sight trace** (the sight line, below). The
 one gate is `Reach.vertical_aim_ok`, and `Reach.can_hit_cell_from` conjoins it with membership — it
 takes the `BoardContext` as a REQUIRED parameter (the `movement_cost` precedent: an optional would
-give one question two answers). Starter content: melee mains are STEP; Fireball is 3 up with
+give one question two answers). Starter content: melee mains are MELEE; Fireball is 3 up with
 `arc_clearance = 3` (clears 1/2/3-walls to the far side, dies on a 4 — the dev's asked-for shape);
-guns and the other carvings TOLERANCE-unlimited with clearance 0.
+guns and the other carvings RANGED-unlimited with clearance 0.
 
 ### Lobs vs guns need no second mechanism [DECIDED 2026-08-20]
 
@@ -185,7 +185,7 @@ dev, reviewing the build: *"Melee units should have to be on the same step, or o
 step to hit each other. If a unit is next to another unit but on different elevations, melee
 attacks shouldn't be queuable."* A sheer 1-level edge is melee-illegal in BOTH directions — which
 `1 up / 2 down` wrongly allowed — while the ramp's half step stays legal, which `0 / 0` would
-wrongly forbid. So melee authors `VerticalRule.STEP`: same elevation at any range, or an adjacent
+wrongly forbid. So melee authors `VerticalRule.MELEE`: same elevation at any range, or an adjacent
 edge that is ramp-connected — judged by `RulesService.height_step_ok`, the height core extracted
 from `can_step` so melee and movement can never disagree about which edges connect. (The sideways
 guards stay movement-only: swinging past a ramp's side is not walking onto it.) Bare fists are

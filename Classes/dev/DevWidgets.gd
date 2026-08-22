@@ -320,9 +320,53 @@ static func build_resource_editor(container: Node, resource: Resource, rebuild: 
 			continue
 		_add_property_control(container, resource, prop, rebuild)
 		
+# The text for one reflectively-drawn field, from the resource's own property_tips() -- which each
+# class overrides and merges into its parent's, so WeaponAttackData answers for AttackData's fields
+# without restating them. The text lives beside the @export it describes rather than in a table
+# here (#473): a tip in this file and the field in another is the pair that drifts, and nothing
+# would say so. "" = a resource with no table, or a field with no entry, which draws an untipped
+# row exactly as before.
+static func property_tip(resource: Resource, prop_name: String) -> String:
+	if not resource.has_method("property_tips"):
+		return ""
+	var tips: Dictionary = resource.call("property_tips")
+	if not tips.has(prop_name):
+		return ""
+	var text: String = tips[prop_name]
+	return wrap_tooltip(text)
+
+
+# Tooltip every control a row just added, add_knob_row's shape -- these builders return void or a
+# single row, and Godot's tooltip does not walk up to a parent, so the row is identified by the
+# children that appeared rather than by a handle.
+static func _tip_rows_from(container: Node, first: int, tip: String) -> void:
+	if tip == "":
+		return
+	for i in range(first, container.get_child_count()):
+		apply_tooltip(container.get_child(i), tip)
+
+
 static func _add_property_control(container: Node, resource: Resource, prop: Dictionary, rebuild: Callable) -> void:
 	var value = resource.get(prop.name)
 	var label: String = prop.name.capitalize()
+	var tip := property_tip(resource, prop.name)
+	var first := container.get_child_count()
+
+	# Split out because a nested resource's OWN rows must not inherit this field's tip: apply_tooltip
+	# recurses, so tipping the object row after the nested block was built would overwrite every tip
+	# inside it with the parent's.
+	if prop.type == TYPE_OBJECT:
+		if prop.hint == PROPERTY_HINT_RESOURCE_TYPE:
+			_add_resource_swapper(container, resource, prop, value, rebuild)
+		_tip_rows_from(container, first, tip)
+		if value is Resource and value.get_script() != null:
+			var indent := MarginContainer.new()
+			indent.add_theme_constant_override("margin_left", 16)
+			container.add_child(indent)
+			var inner := VBoxContainer.new()
+			indent.add_child(inner)
+			build_resource_editor(inner, value, rebuild)
+		return
 
 	match prop.type:
 		TYPE_INT:
@@ -339,16 +383,7 @@ static func _add_property_control(container: Node, resource: Resource, prop: Dic
 				add_option(container, label, prop.hint_string.split(","), value, func(s): resource.set(prop.name, s))
 			else:
 				add_lineedit(container, label, value, func(s): resource.set(prop.name, s))
-		TYPE_OBJECT:
-			if prop.hint == PROPERTY_HINT_RESOURCE_TYPE:
-				_add_resource_swapper(container, resource, prop, value, rebuild)
-			if value is Resource and value.get_script() != null:
-				var indent := MarginContainer.new()
-				indent.add_theme_constant_override("margin_left", 16)
-				container.add_child(indent)
-				var inner := VBoxContainer.new()
-				indent.add_child(inner)
-				build_resource_editor(inner, value, rebuild)
+	_tip_rows_from(container, first, tip)
 
 static func _add_resource_swapper(container: Node, resource: Resource, prop: Dictionary, value: Resource, rebuild: Callable) -> void:
 	var base_type: String = prop.hint_string

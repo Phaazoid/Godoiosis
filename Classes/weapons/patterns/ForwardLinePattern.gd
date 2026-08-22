@@ -24,3 +24,11 @@ func get_affected_cells(user: Unit, origin_cell: Vector2i, target_cell: Vector2i
 
 func is_directional() -> bool:
 	return true
+
+
+static func property_tips() -> Dictionary:
+	var tips := AttackPattern.property_tips()
+	tips.merge({
+		"length": "How many cells ahead the line runs, starting from the cell in front of the attacker. This attack aims by FACING -- the player points a direction and the whole line fires that way.",
+	})
+	return tips

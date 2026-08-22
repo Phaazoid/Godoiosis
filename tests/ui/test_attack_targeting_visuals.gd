@@ -324,7 +324,7 @@ func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
 # previews; only the trace stays away. Ranged aims keep theirs (the cases above).
 func test_a_melee_aim_draws_no_sight_line() -> void:
 	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.STEP
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.MELEE
 
 	_aim_at(attacker, FOE_CELL)
 

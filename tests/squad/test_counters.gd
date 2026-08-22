@@ -174,7 +174,7 @@ func _sheer_step_counters(with_ramp: bool) -> int:
 	var sm := H.make_manager(self, heights)
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))    # on the step
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0))     # below it
-	(d.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.STEP
+	(d.get_equipped_weapon() as WeaponInstance).template.main_attack.vertical_rule = AttackData.VerticalRule.MELEE
 
 	var attack := AttackAction.create(a, a.movement.cell, d, d.movement.cell)
 	a.squad._queue_action(attack)

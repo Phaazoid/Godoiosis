@@ -33,3 +33,12 @@ func _build_spread(origin_cell: Vector2i, dir: Vector2i) -> Array[Vector2i]:
 			cells.append(center + side * w)
 
 	return cells
+
+
+static func property_tips() -> Dictionary:
+	var tips := AttackPattern.property_tips()
+	tips.merge({
+		"length": "How many cells ahead the spread runs, starting from the cell in front of the attacker. This attack aims by FACING -- the player points a direction and the whole spread fires that way.",
+		"width": "Cells across the facing line, symmetric about it. Odd only: an even width cannot be centred, and produced a tile that highlighted but could not be targeted.",
+	})
+	return tips
