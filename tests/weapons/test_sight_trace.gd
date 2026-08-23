@@ -30,31 +30,32 @@ func _shot(clearance: int, max_range: int = 3) -> AttackData:
 
 # The Noemie report: a flat shot (clearance 0) at a same-level target dies on the wall between.
 func test_a_flat_shot_dies_on_a_wall() -> void:
-	var trace := Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(3))
+	var trace := Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(6))
 	assert_bool(trace.blocked).is_true()
 	assert_bool(trace.blocked_cell == Vector2i(1, 0)).is_true()
-	assert_bool(Reach.vertical_aim_ok(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(3))).is_false()
+	assert_bool(Reach.vertical_aim_ok(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(6))).is_false()
 
 
-# The Isaac report: a clearance-2 lob arcs to eye + 2 mid-flight -- a 4-wall stops it, a 2-wall
-# does not.
+# The Isaac report: a one-level lob arcs to eye + a level mid-flight -- a two-level wall stops it,
+# a one-level wall does not. Heights and clearance are both in units (#427), so all four numbers
+# doubled together and the geometry is unchanged.
 func test_a_lob_clears_low_walls_and_dies_on_high_ones() -> void:
-	assert_bool(Reach.sight_trace(_shot(2), Vector2i(0, 0), Vector2i(2, 0), _wall_board(4)).blocked).is_true()
-	assert_bool(Reach.sight_trace(_shot(2), Vector2i(0, 0), Vector2i(2, 0), _wall_board(2)).blocked).is_false()
+	assert_bool(Reach.sight_trace(_shot(4), Vector2i(0, 0), Vector2i(2, 0), _wall_board(8)).blocked).is_true()
+	assert_bool(Reach.sight_trace(_shot(4), Vector2i(0, 0), Vector2i(2, 0), _wall_board(4)).blocked).is_false()
 
 
 # Touch = blocked: a bead grazing a wall-top stops, so even a 1-high wall stops a flat shot
 # (the dev's standing "1-block-tall blocks line of sight").
 func test_a_one_high_wall_blocks_a_flat_shot() -> void:
-	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(1)).blocked).is_true()
+	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _wall_board(2)).blocked).is_true()
 
 
 # The original slice-2 point survives: a gun up a ramp staircase hugs the rising line from below.
 func test_a_flat_shot_up_a_ramp_staircase_is_clear() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 0), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(2, 0), 1, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(3, 0), 2)
+	heights.set_cell(Vector2i(2, 0), 2, Terrain.RampRise.EAST)
+	heights.set_cell(Vector2i(3, 0), 4)
 	var board := _board_with(heights)
 	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_false()
 
@@ -64,11 +65,11 @@ func test_a_flat_shot_up_a_ramp_staircase_is_clear() -> void:
 # your own lip occludes the steep shot -- real lip occlusion; step forward to take it.
 func test_shooting_down_from_the_lip_clears_and_one_back_is_occluded() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(0, 0), 2)   # the shooter stands ON the edge
+	heights.set_cell(Vector2i(0, 0), 4)   # the shooter stands ON the edge
 	var board := _board_with(heights)
 	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_false()
 
-	heights.set_cell(Vector2i(1, 0), 2)   # now the edge is one cell ahead -- the lip occludes
+	heights.set_cell(Vector2i(1, 0), 4)   # now the edge is one cell ahead -- the lip occludes
 	assert_bool(Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(3, 0), board).blocked).is_true()
 
 
@@ -77,10 +78,11 @@ func test_shooting_down_from_the_lip_clears_and_one_back_is_occluded() -> void:
 # the drawn path is the rule, so this is the one number a player could measure off the screen.
 func test_the_line_starts_at_the_sprites_center() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(0, 0), 2)
+	heights.set_cell(Vector2i(0, 0), 4)
 	var trace := Reach.sight_trace(_shot(0), Vector2i(0, 0), Vector2i(2, 0), _board_with(heights))
 	var first: Vector3 = trace.points[0]
-	assert_float(first.y).is_equal_approx(2.5, 0.0001)
+	# Height 4 plus EYE_HEIGHT (1 unit = half a level), in the trace's own unit.
+	assert_float(first.y).is_equal_approx(5.0, 0.0001)
 	assert_float(first.x).is_equal_approx(0.5, 0.0001)
 
 
@@ -88,9 +90,9 @@ func test_the_line_starts_at_the_sprites_center() -> void:
 # verdict must agree (the attack's tolerances are unlimited, so the trace is the only vertical
 # clause in play).
 func test_the_gate_and_the_trace_never_disagree() -> void:
-	for wall_height in [0, 1, 2, 3, 4]:
+	for wall_height in [0, 2, 4, 6, 8]:
 		var board := _wall_board(wall_height)
-		var shot := _shot(2)
+		var shot := _shot(4)
 		var hit: bool = Reach.can_hit_cell_from(null, Vector2i(0, 0), Vector2i(2, 0), shot, board)
 		var clear: bool = not Reach.sight_trace(shot, Vector2i(0, 0), Vector2i(2, 0), board).blocked
 		assert_bool(hit == clear) \

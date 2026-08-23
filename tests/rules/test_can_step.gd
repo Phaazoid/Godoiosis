@@ -6,10 +6,14 @@
 # straight off the grid. Elevation itself needs no new tiles or art — it is a per-cell store, which
 # is exactly why the design put it there instead of in tileset custom data.
 #
-# Ramp geometry used throughout, laid out west→east on row y=1 (a ramp's own elevation is its LOW
+# Heights are in UNITS (#427): one level is 2, so a 45 degree ramp climbs 2. The numbers below are
+# LITERAL on purpose — writing them as Terrain.UNITS_PER_LEVEL would make this suite agree with any
+# value that constant took, and these boards are only ramps while a level really is 2.
+#
+# Ramp geometry used throughout, laid out west→east on row y=1 (a ramp's own height is its LOW
 # side, so the climb happens LEAVING it):
 #
-#   (0,1) flat h0   (1,1) RAMP h0 rising EAST   (2,1) flat h1
+#   (0,1) flat h0   (1,1) RAMP h0 rising EAST   (2,1) flat h2
 extends GdUnitTestSuite
 
 const BoardBuilder := preload("res://play/board_builder.gd")
@@ -39,7 +43,7 @@ func _ramp_board() -> Dictionary:
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(2, 1), 1)
+	heights.set_cell(Vector2i(2, 1), 2)
 	return board
 
 
@@ -73,23 +77,50 @@ func test_flat_step_is_legal() -> void:
 
 func test_a_climb_without_a_ramp_is_refused() -> void:
 	var board := _board()
-	_heights(board).set_cell(Vector2i(1, 1), 1)   # a bare rise: no ramp anywhere
+	_heights(board).set_cell(Vector2i(1, 1), 2)   # a bare rise: no ramp anywhere
 	var unit := _spawn(board, Vector2i(0, 1))
 	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
 
 func test_a_drop_without_a_ramp_is_refused() -> void:
 	# The mirror clause, and a separate one in the code: descending reads the DESTINATION's ramp.
 	var board := _board()
-	_heights(board).set_cell(Vector2i(0, 1), 1)
+	_heights(board).set_cell(Vector2i(0, 1), 2)
 	var unit := _spawn(board, Vector2i(0, 1))
 	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
 
 func test_two_levels_is_never_one_step() -> void:
-	# Ramps connect exactly +/-1. A cliff of five is a staircase of five ramps or it is unclimbable.
+	# Ramps connect exactly one level. A cliff of five is a staircase of five ramps or unclimbable.
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(2, 1), 2)
+	heights.set_cell(Vector2i(2, 1), 4)
+	var unit := _spawn(board, Vector2i(0, 1))
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))).is_false()
+
+
+# --- the HALF level, newly representable (#427) ---
+
+func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
+	# Dev, 2026-08-23: "half height still blocks movement and melee range."
+	#
+	# OVER-DETERMINED, deliberately kept: on flat ground the ramp clause refuses this edge too, so a
+	# mutant that relaxed the LEVEL clause alone left this case green (measured while falsifying).
+	# It pins the ruling; the case below is the one that isolates the rule.
+	var board := _board()
+	_heights(board).set_cell(Vector2i(1, 1), 1)
+	var unit := _spawn(board, Vector2i(0, 1))
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
+
+func test_a_ramp_does_not_connect_a_half_level_either() -> void:
+	# A ramp is not a licence to cross any gap: its own rise is a full level, so a neighbour half a
+	# level above its top is still unreachable from it.
+	#
+	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the level
+	# clause is the only thing left that can refuse. Falsified by relaxing it to `>`.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
+	heights.set_cell(Vector2i(2, 1), 1)
 	var unit := _spawn(board, Vector2i(0, 1))
 	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))).is_false()
 
@@ -117,7 +148,7 @@ func test_climbing_the_wrong_way_off_a_ramp_is_refused() -> void:
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(0, 1), 1)   # high ground on the ramp's LOW side
+	heights.set_cell(Vector2i(0, 1), 2)   # high ground on the ramp's LOW side
 	var unit := _spawn(board, Vector2i(2, 1))
 	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(0, 1), unit, _context(board, unit))).is_false()
 
@@ -143,12 +174,12 @@ func test_a_ramp_refuses_sideways_EXIT() -> void:
 
 func test_a_staircase_of_ramps_chains() -> void:
 	# Each ramp's low side equals the previous ramp's height, which is what makes the chain work
-	# without any Z arithmetic beyond +/-1.
+	# without any Z arithmetic beyond one level either way.
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(2, 1), 1, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(3, 1), 2)
+	heights.set_cell(Vector2i(2, 1), 2, Terrain.RampRise.EAST)
+	heights.set_cell(Vector2i(3, 1), 4)
 	var unit := _spawn(board, Vector2i(0, 1))
 	var context := _context(board, unit)
 
@@ -162,7 +193,7 @@ func test_an_unramped_cliff_severs_the_connectivity_field() -> void:
 	var board := _board()
 	var heights := _heights(board)
 	for y in range(0, 3):
-		heights.set_cell(Vector2i(2, y), 1)   # a full-height ridge across the board, no ramps
+		heights.set_cell(Vector2i(2, y), 2)   # a full-height ridge across the board, no ramps
 	var unit := _spawn(board, Vector2i(0, 1))
 	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit)
 
@@ -175,10 +206,10 @@ func test_one_ramp_reopens_the_cliff() -> void:
 	var board := _board()
 	var heights := _heights(board)
 	for y in range(0, 3):
-		heights.set_cell(Vector2i(2, y), 1)
+		heights.set_cell(Vector2i(2, y), 2)
 	heights.set_cell(Vector2i(2, 0), 0, Terrain.RampRise.NORTH)   # unreachable rise dir on purpose
 	heights.set_cell(Vector2i(2, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(3, 1), 1)
+	heights.set_cell(Vector2i(3, 1), 2)
 	var unit := _spawn(board, Vector2i(0, 1))
 	var field := RulesService.path_hops(Vector2i(0, 1), _context(board, unit), unit)
 
@@ -191,7 +222,7 @@ func test_move_range_refuses_an_unramped_cliff() -> void:
 	var board := _board()
 	var heights := _heights(board)
 	for y in range(0, 3):
-		heights.set_cell(Vector2i(2, y), 1)
+		heights.set_cell(Vector2i(2, y), 2)
 	var unit := _spawn(board, Vector2i(0, 1))
 	var result := RulesService.compute_move_range(unit, _context(board, unit))
 
@@ -199,22 +230,44 @@ func test_move_range_refuses_an_unramped_cliff() -> void:
 	assert_bool(result.reachable.has(Vector2i(2, 1))).is_false()
 
 
+# --- the corner store (#427): both accessors are DERIVED, so pin what they derive ---
+
+func test_a_cells_height_is_its_lowest_corner() -> void:
+	# Canon's "a ramp's height is its LOW side" (verticality.md, DECIDED) — the property that lets
+	# every rule keep reading elevation_at unchanged across the corner migration.
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 1), 4, Terrain.RampRise.EAST)
+	assert_bool(heights.corners_at(Vector2i(1, 1)) == Vector4i(4, 6, 6, 4)) \
+		.override_failure_message("EAST at height 4 should raise its two east corners a level: got %s"
+			% heights.corners_at(Vector2i(1, 1))).is_true()
+	assert_int(heights.elevation_at(Vector2i(1, 1))).is_equal(4)
+
+func test_every_cardinal_rise_round_trips_through_the_corners() -> void:
+	# rise_of_corners is the ONLY reading RampRise's callers get now, so a direction that composed
+	# one way and read back another would be silently wrong on a quarter of every ramp.
+	var heights := BoardHeights.new()
+	for rise in [Terrain.RampRise.NONE, Terrain.RampRise.NORTH, Terrain.RampRise.SOUTH,
+			Terrain.RampRise.EAST, Terrain.RampRise.WEST]:
+		heights.set_cell(Vector2i(0, 0), 2, rise)
+		assert_int(heights.ramp_rise_at(Vector2i(0, 0))).is_equal(rise)
+
+
 # --- persistence ---
 
 func test_heights_round_trip_through_a_scenario() -> void:
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(2, 1), 3)
+	heights.set_cell(Vector2i(2, 1), 6)
 
 	var scenario := ScenarioData.new()
-	scenario.elevations = heights.to_elevation_dict()
-	scenario.ramp_rises = heights.to_ramp_dict()
+	scenario.corner_heights = heights.to_corner_dict()
 
 	var restored := BoardHeights.new()
-	restored.load_dicts(scenario.elevations, scenario.ramp_rises)
+	restored.load_corner_dict(scenario.corner_heights)
 
-	assert_int(restored.elevation_at(Vector2i(2, 1))).is_equal(3)
+	assert_int(restored.elevation_at(Vector2i(2, 1))).is_equal(6)
 	assert_int(restored.ramp_rise_at(Vector2i(1, 1))).is_equal(Terrain.RampRise.EAST)
-	# A ramp at height 0 is legal and must survive — which is why the two facts serialize separately.
+	# A ramp at height 0 is legal and must survive the round trip — its corners are NOT all zero,
+	# which is what lets one sparse field carry what two used to.
 	assert_int(restored.elevation_at(Vector2i(1, 1))).is_equal(0)
 	assert_bool(restored.is_ramp(Vector2i(1, 1))).is_true()

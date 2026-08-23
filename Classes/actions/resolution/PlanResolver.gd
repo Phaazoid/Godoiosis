@@ -213,13 +213,16 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
 		landing = _knockback_landing(action, target_hypo, board)
 	if landing != null:
-		outcome.fall_levels = landing.fall_levels
-		if landing.fall_levels > 0:
+		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
+		# readout and the popup have always meant (#427). A half-level drop reports zero and costs
+		# nothing -- dev, 2026-08-23.
+		outcome.fall_levels = Terrain.level_of(landing.fall_units)
+		if outcome.fall_levels > 0:
 			# Falls bypass DEF (dev, 2026-08-20: armor does not stop gravity) -- added after
 			# mitigation, before the Iron Will clamp so the cap stays absolute.
-			outcome.fall_damage = FallRules.damage_for(landing.fall_levels, target)
+			outcome.fall_damage = FallRules.damage_for(landing.fall_units, target)
 			outcome.damage += outcome.fall_damage
-			outcome.popups.append("Fell %d!" % landing.fall_levels)
+			outcome.popups.append("Fell %d!" % outcome.fall_levels)
 
 	# Iron Will (Passive, docs/design/jobs.md "The ability chassis"): a deterministic per-hit
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
@@ -348,7 +351,7 @@ class _Landing:
 	var cell: Vector2i
 	var path: Array[Vector2i] = []   # start + every cell entered, flight then tumble
 	var landing_index := 0           # path index where flight ends -- the drop cell; tumble follows
-	var fall_levels := 0
+	var fall_units := 0              # in height units (#427); the outcome converts to whole levels
 	var removed := false
 
 
@@ -402,9 +405,10 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 	# The doc's original tumble entry: a connected descending ramp -- its high edge meets the
 	# flight level, so sliding on is not a fall ("slopes never deal fall damage").
 	var rise := board.ramp_rise_at(pos)
-	if drop == 1 and rise != Terrain.RampRise.NONE and Terrain.rise_direction(rise) == -dir:
+	if drop == Terrain.UNITS_PER_LEVEL and rise != Terrain.RampRise.NONE \
+			and Terrain.rise_direction(rise) == -dir:
 		drop = 0
-	landing.fall_levels = drop
+	landing.fall_units = drop
 	# "When a unit lands, if they land on a slope, they tumble down that too" (dev, 2026-08-20).
 	if rise != Terrain.RampRise.NONE:
 		_tumble(landing, board)
@@ -415,7 +419,7 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 # same rise -- until the first walkable, unoccupied cell level with the current ramp catches it.
 # A wall, a rise, an occupied cell, water or a hole stops it where it stands: no launch, no fall
 # damage on those. A sheer DROP below the ramp's base (the deferred tumble-then-plummet) does NOT
-# stop it any more: the unit falls the remaining levels -- fall damage, folded into fall_levels --
+# stop it any more: the unit falls the remaining height -- fall damage, folded into fall_units --
 # and keeps whatever descent waits below (another ramp tumbles again, a flat cell catches it).
 # Terminates by construction -- every ramp continuation strictly descends.
 static func _tumble(landing: _Landing, board: BoardContext) -> void:
@@ -429,7 +433,7 @@ static func _tumble(landing: _Landing, board: BoardContext) -> void:
 			break
 		var here_elev := board.elevation_at(cell)
 		var next_elev := board.elevation_at(next)
-		if board.ramp_rise_at(next) == rise and next_elev == here_elev - 1:
+		if board.ramp_rise_at(next) == rise and next_elev == here_elev - Terrain.UNITS_PER_LEVEL:
 			cell = next
 			landing.path.append(cell)
 			continue   # another ramp continuing down the same slope
@@ -440,7 +444,7 @@ static func _tumble(landing: _Landing, board: BoardContext) -> void:
 		if next_elev < here_elev:
 			# Tumble-then-plummet: the slope bottoms out at a sheer drop, so the unit falls the
 			# remaining levels and keeps whatever descent waits below.
-			landing.fall_levels += here_elev - next_elev
+			landing.fall_units += here_elev - next_elev
 			cell = next
 			landing.path.append(cell)
 			if board.ramp_rise_at(next) != Terrain.RampRise.NONE:

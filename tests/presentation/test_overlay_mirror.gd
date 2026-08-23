@@ -200,7 +200,7 @@ func test_raising_the_ground_under_a_flame_re_seats_it() -> void:
 	var before := marker.position
 	var id := marker.get_instance_id()
 
-	game.board_heights.set_cell(cell, 2)
+	game.board_heights.set_cell(cell, 4)
 	await _settle()
 
 	var after := mirror.fire_marker_at(cell)
@@ -262,7 +262,7 @@ func test_blocked_reach_cells_route_to_their_own_layer() -> void:
 	attacker.equipped_weapon = H.make_weapon(3)
 	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
 	var ledge := Vector2i(3, 2)
-	game.board_heights.set_cell(ledge, 2)
+	game.board_heights.set_cell(ledge, 4)
 	game.enter_attack_mode(attacker)
 	await _settle()
 
@@ -294,9 +294,10 @@ func test_sight_trace_line_reaches_the_diorama_and_clears() -> void:
 	var line := _overlays.line_of(BoardOverlays.Layer.SIGHT_TRACE)
 	assert_int(line.size()).is_equal(trace.points.size())
 	var first: Vector3 = trace.points[0]
+	# The trace's y counts height UNITS (#427), so the world lift divides by UNITS_PER_LEVEL.
 	assert_that(line[0]).is_equal(Vector3(
 		first.x * BoardSpace.CELL_SIZE,
-		BoardSpace.surface_y(0) + first.y * BoardSpace.CELL_SIZE,
+		BoardSpace.surface_y(0) + first.y * BoardSpace.CELL_SIZE / float(Terrain.UNITS_PER_LEVEL),
 		first.z * BoardSpace.CELL_SIZE))
 
 	game.exit_current_mode()
@@ -446,7 +447,7 @@ func test_knockback_preview_mirrors_trail_and_landing_ghost() -> void:
 # edge to that cell's CENTRE, then the RAIL falling from there onto the destination surface.
 func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void:
 	var origin := Vector2i(3, 2)
-	game.board_heights.set_cell(origin, 2)   # the cliff edge; (4,2)/(5,2) stay ground level
+	game.board_heights.set_cell(origin, 4)   # the cliff edge; (4,2)/(5,2) stay ground level
 	var foe := _spawn(ENEMY, origin)
 	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(5, 2)]
 	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(5, 2),
@@ -561,7 +562,7 @@ func test_a_cliff_shove_draws_its_trail_in_the_air_with_a_drop_pointer() -> void
 # LEFT keeps the same +Z band as RIGHT; only the face normal flips to the travel.
 func test_a_left_shove_keeps_the_rail_band_consistent() -> void:
 	var origin := Vector2i(5, 2)
-	game.board_heights.set_cell(origin, 2)
+	game.board_heights.set_cell(origin, 4)
 	var foe := _spawn(ENEMY, origin)
 	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(3, 2)]
 	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(3, 2),
@@ -587,7 +588,7 @@ func test_a_left_shove_keeps_the_rail_band_consistent() -> void:
 # ramp's HIGH shoulder, a whole level below the flight.
 func test_a_drop_onto_a_ramp_draws_a_drop_rail() -> void:
 	var origin := Vector2i(3, 2)
-	game.board_heights.set_cell(origin, 2)
+	game.board_heights.set_cell(origin, 4)
 	game.board_heights.set_cell(Vector2i(4, 2), 0, Terrain.RampRise.WEST)
 	var foe := _spawn(ENEMY, origin)
 	var path: Array[Vector2i] = [origin, Vector2i(4, 2)]
@@ -630,7 +631,7 @@ func test_a_drop_onto_a_ramp_draws_a_drop_rail() -> void:
 func test_a_slide_onto_a_ramp_draws_no_drop_rail() -> void:
 	var origin := Vector2i(3, 2)
 	var ramp := Vector2i(4, 2)
-	game.board_heights.set_cell(origin, 1)
+	game.board_heights.set_cell(origin, 2)
 	game.board_heights.set_cell(ramp, 0, Terrain.RampRise.WEST)   # high shoulder faces the shove
 	var foe := _spawn(ENEMY, origin)
 	var flight_y := BoardSpace.surface_transform(origin, game.board_heights).origin.y
@@ -653,8 +654,8 @@ func test_a_tumble_that_plummets_draws_a_pointer_at_both_breaks() -> void:
 	var origin := Vector2i(2, 2)
 	var ramp := Vector2i(3, 2)
 	var floor_cell := Vector2i(4, 2)
-	game.board_heights.set_cell(origin, 4)
-	game.board_heights.set_cell(ramp, 2, Terrain.RampRise.WEST)   # entered at its high shoulder
+	game.board_heights.set_cell(origin, 8)
+	game.board_heights.set_cell(ramp, 4, Terrain.RampRise.WEST)   # entered at its high shoulder
 	game.board_heights.set_cell(floor_cell, 0)                    # the lip: a sheer 2-drop
 	var foe := _spawn(ENEMY, origin)
 	# Both breaks stated from the board, not from constants: the flight clears the ramp's shoulder,
@@ -695,7 +696,7 @@ func test_a_tumble_that_plummets_draws_a_pointer_at_both_breaks() -> void:
 # fold), so the cell-centre test below still means "no arrowhead" and not "no markers at all".
 func test_a_void_removal_draws_no_arrowhead_but_a_rail() -> void:
 	var origin := Vector2i(3, 2)
-	game.board_heights.set_cell(origin, 2)
+	game.board_heights.set_cell(origin, 4)
 	var foe := _spawn(ENEMY, origin)
 	var path: Array[Vector2i] = [origin, Vector2i(4, 2)]
 	var shoves: Array = [{"target": foe, "path": path, "to": Vector2i(4, 2),
@@ -1165,7 +1166,7 @@ func test_a_shove_trail_does_not_wear_a_planned_moves_colour() -> void:
 # copies the sprite it hangs from now, the way every other flat marker already does.
 func test_the_drop_pointer_wears_the_trail_it_hangs_from() -> void:
 	var origin := Vector2i(3, 2)
-	game.board_heights.set_cell(origin, 2)   # a cliff, so there is a break to point at
+	game.board_heights.set_cell(origin, 4)   # a cliff, so there is a break to point at
 	var foe := _spawn(ENEMY, origin)
 	var path: Array[Vector2i] = [origin, Vector2i(4, 2), Vector2i(5, 2)]
 	_om().show_knockback_preview([{"target": foe, "path": path, "to": Vector2i(5, 2),

@@ -249,7 +249,7 @@ func test_the_ghost_previews_the_brushs_level_not_the_cells() -> void:
 	_arm_brush()
 	var cell: Vector2i = game.dev_controller._mouse_cell()
 	game.grid.set_cell(cell, _brush.selected_source, _brush.selected_tile)
-	game.board_heights.set_cell(cell, 1)
+	game.board_heights.set_cell(cell, 2)
 	_brush.set_elevation(4)
 	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(Terrain.RampRise.EAST))
 
@@ -285,13 +285,13 @@ func test_the_flat_view_draws_the_tile_and_leaves_the_height_to_the_readout() ->
 	# pick; the level rides the same intent and is 2D's to ignore (HeightDebugOverlay reads it out as
 	# numbers). Before #340 this asserted the opposite, because the elevation preview carried no tile.
 	_arm_brush()
-	_brush.set_elevation(3)
+	_brush.set_elevation(6)
 	await await_idle_frame()
 
 	assert_bool(_ghost().visible).override_failure_message(
 			"the 2D tile ghost went down for a paint that does place a tile").is_true()
 	assert_int(game.dev_controller.brush_ghost().level).override_failure_message(
-			"the intent dropped the level 2D cannot draw, instead of carrying it").is_equal(3)
+			"the intent dropped the level 2D cannot draw, instead of carrying it").is_equal(6)
 
 
 func test_an_unknown_kind_number_warns_instead_of_crashing() -> void:

@@ -231,9 +231,9 @@ func _bare_overlays() -> BoardOverlays:
 	return overlays
 
 
-func _ramp_at(cell: Vector2i, level: int) -> BoardHeights:
+func _ramp_at(cell: Vector2i, height: int) -> BoardHeights:
 	var heights := BoardHeights.new()
-	heights.set_cell(cell, level, Terrain.RampRise.EAST)
+	heights.set_cell(cell, height, Terrain.RampRise.EAST)
 	return heights
 
 
@@ -253,7 +253,7 @@ func test_a_fill_on_a_ramp_lies_on_the_slope_instead_of_hanging_level_through_it
 	# midpoint, so a move tile and a path arrow on one ramp cell disagreed by half a level.
 	# Both halves are derived from the seam here, never from a literal.
 	var cell := Vector2i(3, 2)
-	var heights := _ramp_at(cell, 1)
+	var heights := _ramp_at(cell, 2)
 	var overlays := _bare_overlays()
 	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], heights)
 
@@ -273,7 +273,7 @@ func test_a_fill_on_a_ramp_lies_on_the_slope_instead_of_hanging_level_through_it
 
 func test_a_marker_lies_on_the_slope_its_own_cell_carries() -> void:
 	var cell := Vector2i(3, 2)
-	var heights := _ramp_at(cell, 1)
+	var heights := _ramp_at(cell, 2)
 	var surface := BoardSpace.surface_transform(cell, heights)
 	var overlays := _bare_overlays()
 	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
@@ -296,7 +296,7 @@ func test_a_pooled_marker_reused_on_flat_ground_drops_the_tilt_it_had() -> void:
 	# when a cell ramps. A mutant that sets the basis only for ramps passes every case above and
 	# fails here: walk an arrow off a ramp and it keeps sloping over flat ground forever.
 	var cell := Vector2i(3, 2)
-	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 1))
+	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 2))
 	var overlays := _bare_overlays()
 	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
 		"pos": surface.origin, "texture": GridUtils.ERROR_ICON,
@@ -313,7 +313,7 @@ func test_a_fill_pooled_off_a_ramp_drops_the_tilt_too() -> void:
 	# The same reuse hazard on the set_cells path, which writes a whole transform per frame.
 	var cell := Vector2i(3, 2)
 	var overlays := _bare_overlays()
-	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], _ramp_at(cell, 1))
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], _ramp_at(cell, 2))
 	assert_that(_normal_of(overlays)).is_not_equal(Vector3.UP)
 
 	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(Vector2i(9, 9), 0)], BoardHeights.new())
@@ -348,7 +348,7 @@ func _plane_height(quad: MeshInstance3D, x: float, z: float) -> float:
 # and the case survives any retune of fill_lift.
 func test_a_fill_on_a_ramp_stays_centred_on_its_own_cell() -> void:
 	var cell := Vector2i(3, 2)
-	var heights := _ramp_at(cell, 1)
+	var heights := _ramp_at(cell, 2)
 	var surface := BoardSpace.surface_transform(cell, heights)
 	assert_bool(absf(surface.basis.y.y - 1.0) > 0.01).override_failure_message(
 			"the ramp's normal is upright; the case cannot see the lean it is about").is_true()
@@ -368,7 +368,7 @@ func test_a_fill_on_a_ramp_stays_centred_on_its_own_cell() -> void:
 # lift_dir) and can therefore drift from the fill's rule.
 func test_a_sprite_marker_on_a_ramp_stays_centred_on_its_own_cell() -> void:
 	var cell := Vector2i(3, 2)
-	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 1))
+	var surface := BoardSpace.surface_transform(cell, _ramp_at(cell, 2))
 	var overlays := _bare_overlays()
 	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
 		"pos": surface.origin, "texture": GridUtils.ERROR_ICON,
@@ -388,8 +388,8 @@ func test_a_sprite_marker_on_a_ramp_stays_centred_on_its_own_cell() -> void:
 func test_markup_meets_across_a_flat_to_ramp_edge() -> void:
 	var ramp := Vector2i(3, 2)
 	var flat := Vector2i(2, 2)                    # the ramp rises EAST, so this is its low side
-	var heights := _ramp_at(ramp, 1)
-	heights.set_cell(flat, 1)                     # level with the ramp's low edge
+	var heights := _ramp_at(ramp, 2)
+	heights.set_cell(flat, 2)                     # level with the ramp's low edge
 	var edge_x := float(ramp.x)
 	var mid_z := float(ramp.y) + 0.5
 	var ground := BoardSpace.surface_height_at(ramp, edge_x, mid_z, heights)

@@ -343,11 +343,14 @@ func _build_extra_controls() -> void:
 	# add_option builds a one-shot list (the #179 trap).
 	_elevation_row = HBoxContainer.new()
 	var level_label := Label.new()
-	level_label.text = "Level"
+	level_label.text = "Height"
 	_elevation_row.add_child(level_label)
 	_elevation_spin = SpinBox.new()
-	_elevation_spin.min_value = -99
-	_elevation_spin.max_value = 99
+	_elevation_spin.min_value = -99 * Terrain.UNITS_PER_LEVEL
+	_elevation_spin.max_value = 99 * Terrain.UNITS_PER_LEVEL
+	# A whole LEVEL per notch (#427). The store can hold a half level, but nothing DRAWS one until
+	# slice 2, and Terrain.level_of truncates -- so the door authors only what the renderer can say.
+	_elevation_spin.step = Terrain.UNITS_PER_LEVEL
 	_elevation_spin.value = _elevation
 	_elevation_spin.value_changed.connect(func(v: float): set_elevation(int(v)))
 	_elevation_row.add_child(_elevation_spin)
@@ -357,8 +360,10 @@ func _build_extra_controls() -> void:
 	_elevation_row.add_child(reset)
 	add_child(_elevation_row)
 	DevWidgets.apply_tooltip(_elevation_row, DevWidgets.wrap_tooltip(
-		"Scroll the mouse wheel over the board to change the level the brush paints at. "
-		+ "Reset returns the brush to flat ground: level 0, no ramp. Negative levels are dips."))
+		"Height the brush paints at, in half-level units — one full level is %d, so a 45-degree ramp "
+		% Terrain.UNITS_PER_LEVEL
+		+ "climbs that much. Scroll the mouse wheel over the board to change it, one level per notch. "
+		+ "Reset returns the brush to flat ground: height 0, no ramp. Negative heights are dips."))
 
 	_rise_row = HBoxContainer.new()
 	var rise_label := Label.new()
@@ -373,8 +378,8 @@ func _build_extra_controls() -> void:
 	add_child(_rise_row)
 	DevWidgets.apply_tooltip(_rise_row, DevWidgets.wrap_tooltip(
 		"Which way this cell RISES — Z and C turn it, the way Q and E turn the board. A ramp's own "
-		+ "level is its LOW side, so a ramp at level 2 rising North connects level 2 to level 3 to "
-		+ "the north. None = ordinary flat ground. Greyed out for a tile that stands up (a rock, a "
+		+ "height is its LOW side, so a ramp at height 4 rising North connects height 4 to height 6 "
+		+ "to the north. None = ordinary flat ground. Greyed out for a tile that stands up (a rock, a "
 		+ "lantern): only flat ground can slope, and the ramp wears whatever ground you paint on it."))
 
 	_set_paint_mode(PaintMode.TERRAIN)
@@ -411,8 +416,10 @@ func set_elevation(value: int) -> void:
 	if _elevation_spin != null:
 		_elevation_spin.set_value_no_signal(value)
 
+# One wheel notch is one whole LEVEL, matching the SpinBox's step (#427): the caller passes a
+# direction, not an amount.
 func nudge_elevation(delta: int) -> void:
-	set_elevation(_elevation + delta)
+	set_elevation(_elevation + delta * Terrain.UNITS_PER_LEVEL)
 
 # The ONE writer of the rise, the set_elevation twin: the dropdown, the Z/C keys and Reset all land
 # here, so the picker always shows what the next click will paint.

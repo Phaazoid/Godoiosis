@@ -432,7 +432,7 @@ func _clear_column(cell: Vector2i, floor_level: int) -> void:
 # Public since #319: the authoring poll compares it frame to frame, because a LOWERED floor is the
 # one edit that invalidates every column at once and so cannot be reconciled incrementally.
 func floor_level_of(heights: BoardHeights) -> int:
-	return heights.lowest_elevation()
+	return Terrain.level_of(heights.lowest_elevation())
 
 
 # One cell's whole COLUMN (#273): the surface block repeated down to the shared floor, which is the
@@ -449,7 +449,7 @@ func floor_level_of(heights: BoardHeights) -> int:
 # cell -- almost every cell -- has no wedge to pick art for.
 func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: BoardHeights,
 		floor_level: int) -> void:
-	var level := heights.elevation_at(cell)
+	var level := Terrain.level_of(heights.elevation_at(cell))   # units -> drawn level (#427)
 	var rise := heights.ramp_rise_at(cell)
 	for y in range(floor_level, level + 1):
 		var at := Vector3i(cell.x, y, cell.y)

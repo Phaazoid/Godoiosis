@@ -33,9 +33,13 @@ extends Resource
 # authored `vertical_rule = 1` still means melee — this was a source rename, never a content one.
 enum VerticalRule { RANGED, MELEE }
 @export var vertical_rule: VerticalRule = VerticalRule.RANGED
+# In height UNITS since #427 — two per level, so a weapon reaching one level up authors 2. The whole
+# stack speaks one unit (dev, 2026-08-23), which is what keeps Reach free of conversions and lets a
+# later weapon reach a HALF level if that is ever wanted.
 @export var up_tolerance: int = -1
 @export var down_tolerance: int = -1
-# How high the shot arcs above its own sightline mid-flight (#218's number, built 2026-08-20).
+# How high the shot arcs above its own sightline mid-flight (#218's number, built 2026-08-20), in the
+# same height units as the tolerances above.
 # 0 = a flat shot; there is deliberately no unlimited sentinel ("nothing clears infinity" — dev).
 # The sightline runs at eye height and the arc is the ONE trajectory both the legality check and
 # the in-game bead trace read (Reach.sight_trace) — the drawn path IS the rule.

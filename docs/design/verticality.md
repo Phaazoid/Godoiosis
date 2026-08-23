@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #476 (2026-08-22).**
+**Canon checked through #486 (2026-08-23).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -28,6 +28,21 @@ below follows from taking that literally.
 
 **A per-cell store, serialized into `ScenarioData` beside `terrain_states`.** Two fields per cell:
 `elevation: int` and `ramp_rise: Terrain.RampRise`.
+
+> **RE-SHAPED at build time ([#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice 1,
+> 2026-08-23).** The store is now **four corner heights per cell**, `Vector4i(NW, NE, SE, SW)`,
+> serialized as one sparse `corner_heights` field. `elevation` and `ramp_rise` survive as **derived
+> views** — `elevation_at` is the lowest corner, `ramp_rise_at` reads which corner pair is high — so
+> every rule and every renderer below still asks exactly the questions it always asked. That is what
+> let the model change without a structural edit anywhere in `RulesService` or the 3D stack.
+>
+> Corners are per-TILE, **not a shared vertex grid**: two neighbours may disagree about the edge they
+> meet on, and that disagreement IS a cliff. A shared grid could not express two flat cells at
+> different heights at all.
+>
+> `ramp_rise_at` is TRANSITIONAL. Corner slopes (slice 3) are shapes `RampRise` cannot name, so a
+> corner pattern outside the five legal ones `push_error`s rather than quietly reading flat — the one
+> thing that will find every un-migrated reader when that slice lands.
 
 > **AMENDED at build time (#257).** This originally read `ramp_axis: {NONE, NS, EW}`, which cannot
 > say which side of the ramp is high — a ramp at height N with an EW axis climbs to *either*
@@ -61,6 +76,21 @@ N that connects upward to N+1, and the climb happens at its top edge.
 
 Rejected: **high side** (makes a ramp a third kind of thing rather than an annotated floor) and
 **half-steps** (turns every comparison in the system into a float, for very little).
+
+> **The half-step rejection was ANSWERED, not overturned ([#427](https://github.com/Phaazoid/Godoiosis/issues/427)
+> slice 1, 2026-08-23).** Half elevations exist now, and no comparison became a float: the UNIT was
+> re-based instead. One elevation unit is half a level, `Terrain.UNITS_PER_LEVEL` is 2, and a 45°
+> ramp climbs 2 — dev, 2026-08-23: *"our current 45 degree angle platforms will now just hop 2 levels
+> instead of one."* Every height compare is still an integer compare; the "for very little" half is
+> what changed, since the RCT-style ground the ticket is aimed at needs the gentler slope.
+>
+> **A ramp's height is still its LOW side, and that ruling is now load-bearing twice over** — it is
+> also the reason `elevation_at` can be the corners' MINIMUM and every existing caller keep working.
+>
+> Two consequences the dev ruled the same day, both of which the re-base delivers without a clause of
+> their own: a sheer HALF-level edge **blocks** movement and melee (it is not `UNITS_PER_LEVEL`, so
+> `height_step_ok` refuses it exactly as it refuses three), and a half-level drop deals **no fall
+> damage** (`FallRules` charges per whole level).
 
 The visual midpoint stays purely presentational and already is — `UnitSprite3D.stand_at` is an
 injectable `Callable` precisely so the walk demo could lower ramp cells without the component knowing
@@ -744,9 +774,12 @@ itself.
   trajectory function is already the one home the flight path would read.
 - **Terrain interlocks** — water flowing downhill, fire climbing, fog settling in low ground. A rich
   vein and a separate project; see [terrain.md](terrain.md).
-- **30° two-tile slopes** — a presentation experiment noted on #176. If adopted, traversal and the
-  ramp-height ruling above must be extended to cover them; everything here assumes 45°, one cell per
-  level.
+- ~~**30° two-tile slopes**~~ — **SUPERSEDED by [#427](https://github.com/Phaazoid/Godoiosis/issues/427)
+  (2026-08-23), and deliberately not built as described.** The gentler slope arrives as a HALF-level
+  rise over ONE cell — `atan(1/2)` ≈ 26.6°, the actual RollerCoaster Tycoon angle — never as one
+  level spread over two cells, so no multi-cell coupling enters the ramp vocabulary and every cell
+  stays self-contained. Slice 1 re-based the unit that makes it expressible; slice 2 builds the
+  form. Everything else here still assumes 45°, which is now 2 units per cell.
 - **Height-modified LDR / cohesion.** Left as pure connectivity, which already behaves correctly.
 
 ---

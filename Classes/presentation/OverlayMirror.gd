@@ -156,7 +156,7 @@ func _fill_gated(layer: BoardOverlays.Layer, source, wanted: bool) -> void:
 # argument. Null-guarded for the headless Play boards that never set `game`.
 func _level_of(cell: Vector2i) -> int:
 	var heights := _heights()
-	return heights.elevation_at(cell) if heights != null else 0
+	return Terrain.level_of(heights.elevation_at(cell)) if heights != null else 0
 
 
 # Null on the headless Play boards that never set `game`; BoardSpace.surface_point reads that as
@@ -228,9 +228,9 @@ func _sight_trace(om: OverlayManager) -> void:
 		if trace.blocked:
 			tint = SightTrace2D.BLOCKED_COLOR
 		for p in trace.points:
-			# Rule-height h sits at world surface_y(0) + h * CELL_SIZE: a level-E surface is world
-			# surface_y(E), and h counts levels above the level-0 floor plane.
-			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(0) + p.y * BoardSpace.CELL_SIZE, p.z * BoardSpace.CELL_SIZE))
+			# Rule-height h counts height UNITS (#427) above the level-0 floor plane, so it converts
+			# at UNITS_PER_LEVEL to the cell metric: a level-E surface is still world surface_y(E).
+			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(0) + p.y * BoardSpace.CELL_SIZE / float(Terrain.UNITS_PER_LEVEL), p.z * BoardSpace.CELL_SIZE))
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 

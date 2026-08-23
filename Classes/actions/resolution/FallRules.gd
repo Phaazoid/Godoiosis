@@ -18,7 +18,13 @@ static var FALL_DAMAGE_PER_LEVEL := 2
 static var WEIGHT_PER_BONUS_DAMAGE := 10
 
 
-static func damage_for(levels: int, unit: Unit) -> int:
+# Takes the drop in HEIGHT UNITS and charges per FULL level (#427): a half-level drop costs nothing
+# ("no fall damage for a half level fall" -- dev, 2026-08-23), so the conversion is the ruling.
+static func damage_for(units: int, unit: Unit) -> int:
+	if units <= 0:
+		return 0
+	@warning_ignore("integer_division")
+	var levels := units / Terrain.UNITS_PER_LEVEL
 	if levels <= 0:
 		return 0
 	var weight := 0 if unit == null else unit.get_weight()

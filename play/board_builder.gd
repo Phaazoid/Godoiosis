@@ -122,7 +122,7 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 	if board.get("terrain_states") != null:
 		board.terrain_states.load_state_dict(scenario.terrain_states)   # mirrors ScenarioManager
 	if board.get("board_heights") != null:
-		board.board_heights.load_dicts(scenario.elevations, scenario.ramp_rises)   # mirrors ScenarioManager
+		board.board_heights.load_corner_dict(scenario.corner_heights)   # mirrors ScenarioManager
 
 	var spawned: Array[Unit] = []
 	var entry_by_unit := {}            # Unit -> ScenarioUnitEntry

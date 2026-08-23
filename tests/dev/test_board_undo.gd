@@ -136,9 +136,9 @@ func test_undo_restores_the_tile_AND_its_elevation() -> void:
 	var cell := Vector2i(2, 2)
 	_brush.set_elevation(2)
 	_paint_stroke([cell] as Array[Vector2i])
-	_brush.set_elevation(5)
+	_brush.set_elevation(6)
 	_paint_stroke([cell] as Array[Vector2i])
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(5)
+	assert_int(game.board_heights.elevation_at(cell)).is_equal(6)
 
 	_dc.undo_board()
 
@@ -274,7 +274,7 @@ func test_a_restore_marks_the_whole_board_dirty() -> void:
 
 
 func test_capture_board_round_trips_through_restore_board() -> void:
-	_brush.set_elevation(3)
+	_brush.set_elevation(6)
 	_paint_stroke([Vector2i(2, 8), Vector2i(3, 8)] as Array[Vector2i])
 	var snapshot: BoardSnapshot = game.scenario_manager.capture_board()   # typed: game is untyped
 

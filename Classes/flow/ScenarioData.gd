@@ -10,12 +10,19 @@ class_name ScenarioData
 @export var unit_entries: Array[ScenarioUnitEntry] = []
 @export var tile_data: PackedByteArray
 @export var terrain_states: Dictionary = {}   # Vector2i -> Array[Terrain.TileState] deposited at runtime
-@export var elevations: Dictionary = {}   # Vector2i -> int surface height (#257). SPARSE: an absent
-										  # cell is height 0, so a flat board saves as {}. BoardHeights
-										  # owns that default and is the only reader — see verticality.md.
-@export var ramp_rises: Dictionary = {}   # Vector2i -> Terrain.RampRise. Sparse the same way (absent =
-										  # NONE = not a ramp). Separate from `elevations` because a ramp
-										  # at height 0 is legal and must survive the round trip.
+@export var corner_heights: Dictionary = {}   # Vector2i -> Vector4i(NW,NE,SE,SW) in half-level units
+											  # (#427). SPARSE: an absent cell is flat at 0, so a flat
+											  # board saves as {}. BoardHeights owns that default and is
+											  # the only reader — see verticality.md. One field, not two:
+											  # a ramp at height 0 has non-zero corners, so it survives
+											  # the round trip on its own.
+
+# DEPRECATED (#427), and NEVER read as data: a board saved before corner heights carries these and no
+# `corner_heights`. Godot ignores properties a resource no longer declares, so without them such a
+# board would load perfectly FLAT with no error at all. They exist to make that detectable — see
+# predates_corner_heights below. Delete once no stale user:// saves remain.
+@export var elevations: Dictionary = {}
+@export var ramp_rises: Dictionary = {}
 @export var active_faction: Team.Faction = Team.Faction.PLAYER # whose turn it was when saved
 @export var zones: Dictionary = {}   # zone name -> {"kind": ZoneManager.Kind, "cells": Array[Vector2i]},
 									 # painted via Tile Brush's Zone mode. Straight pass-through of
@@ -59,3 +66,11 @@ class_name ScenarioData
 @export var tutorial_steps: Array[TutorialStep] = []  # the sequential lesson (#182); same director runs it
 @export var captured_zones: Array[String] = []   # CAPTURE zones already claimed
 @export var contested := false   # "both sides were ever up at once" latch
+
+
+# Was this board saved before #427's corner heights? The one reader is BoardSnapshot.from_scenario,
+# which refuses loudly rather than letting a stale board load as a flat one. A silent flat load is
+# the failure this guards: CLAUDE.md's retyping trap, arriving through an absent field instead of a
+# mismatched one.
+func predates_corner_heights() -> bool:
+	return corner_heights.is_empty() and (not elevations.is_empty() or not ramp_rises.is_empty())

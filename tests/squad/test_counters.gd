@@ -146,7 +146,7 @@ func test_c7_bystander_parties_never_counter() -> void:
 # with the heights is passed exactly the way resolve_plan passes it.
 func _ledge_counters(defender_up_tolerance: int) -> int:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 2)   # the attacker's ledge
+	heights.set_cell(Vector2i(1, 0), 4)   # the attacker's ledge, two levels up
 	var sm := H.make_manager(self, heights)
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))   # on the ledge
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0))    # on the ground
@@ -158,11 +158,11 @@ func _ledge_counters(defender_up_tolerance: int) -> int:
 	return sm.calculate_reactions_for_squad(a.squad, attacks, sm.board_source.call()).size()
 
 func test_a_ledge_above_the_counter_tolerance_draws_no_counter() -> void:
-	assert_int(_ledge_counters(1)).is_equal(0)
+	assert_int(_ledge_counters(2)).is_equal(0)   # reaches one level; the ledge is two
 
 # The non-vacuity twin: identical geometry, tolerance loose enough -- the counter comes back.
 func test_the_same_ledge_within_tolerance_still_counters() -> void:
-	assert_int(_ledge_counters(2)).is_equal(1)
+	assert_int(_ledge_counters(4)).is_equal(1)
 
 # The melee STEP rule (dev, 2026-08-20) at the counter gate: a sheer 1-level edge draws no melee
 # counter in either direction; the same edge ramp-connected still does ("a facing half step").
@@ -170,7 +170,7 @@ func _sheer_step_counters(with_ramp: bool) -> int:
 	var heights := BoardHeights.new()
 	if with_ramp:
 		heights.set_cell(Vector2i(0, 0), 0, Terrain.RampRise.EAST)
-	heights.set_cell(Vector2i(1, 0), 1)
+	heights.set_cell(Vector2i(1, 0), 2)
 	var sm := H.make_manager(self, heights)
 	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))    # on the step
 	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(0, 0))     # below it
