@@ -59,6 +59,11 @@ func elevation_at(cell: Vector2i) -> int:
 func ramp_rise_at(cell: Vector2i) -> Terrain.RampRise:
 	return Terrain.rise_of_corners(corners_at(cell))
 
+# How far this cell climbs, in units — 0 on flat ground, so every rule that used to compare a height
+# delta against UNITS_PER_LEVEL can ask the ramp instead of the constant (#427 slice 2).
+func ramp_climb_at(cell: Vector2i) -> int:
+	return Terrain.climb_of_corners(corners_at(cell))
+
 func is_ramp(cell: Vector2i) -> bool:
 	return ramp_rise_at(cell) != Terrain.RampRise.NONE
 
@@ -81,9 +86,11 @@ func set_corners(cell: Vector2i, corners: Vector4i) -> void:
 		_lowest_stale = true
 
 # The cardinal-shape composer: what the brush authors and what every fixture builds. Not a second
-# store — it writes through set_corners — but the shape most callers actually mean.
-func set_cell(cell: Vector2i, elevation: int, rise: Terrain.RampRise = Terrain.RampRise.NONE) -> void:
-	set_corners(cell, Terrain.corners_of_ramp(elevation, rise))
+# store — it writes through set_corners — but the shape most callers actually mean. The climb
+# defaults to a full level, so a caller written before slice 2 still means a 45 degree ramp.
+func set_cell(cell: Vector2i, elevation: int, rise: Terrain.RampRise = Terrain.RampRise.NONE,
+		climb := Terrain.UNITS_PER_LEVEL) -> void:
+	set_corners(cell, Terrain.corners_of_ramp(elevation, rise, climb))
 
 func clear() -> void:
 	_corners.clear()

@@ -10,33 +10,34 @@ class_name BoardPicker
 # Semantics (stage-1 decisions, each a one-function change if play disagrees):
 # - Any hit — top face OR cliff side — returns the column's TOP cell, the
 #   standable, tactically meaningful one.
-# - Ramps count as full blocks.
+# - Ramps count as full blocks, up to the top of their OWN climb — a box around a
+#   slope either way, but a gentle slope's box is half the height of a steep one's.
 # - Rays are assumed to come from above the board (a camera); a ray passing
 #   under every column reports the first column it slips beneath.
 # - THE PLANE (#231): a column with no block still answers, if it lies inside the
-#   caller's `plane` rect — an implicit floor at BoardSpace.FLAT_TOP_LEVEL. Without
+#   caller's `plane` rect — an implicit floor at BoardSpace.FLAT_TOP_ROW. Without
 #   it, erasing a tile in the 3D dev view removed the only thing the ray could hit
 #   and the cell became permanently unpaintable. It is resolved INSIDE the walk, not
 #   as an analytic plane intersection before or after it, so a real column in front
 #   of a hole still wins by ray order rather than by a hand-written comparison.
 #   The rect is the caller's policy (board + authoring apron), never derived here.
-# - A LEVEL IS A NUMBER, NOT A TRUTH VALUE (#294): "nothing here" is NO_COLUMN, so every level in
-#   range — 0 and below included — is an ordinary answer. Nothing may gate on `level > 0`.
+# - A ROW IS A NUMBER, NOT A TRUTH VALUE (#294): "nothing here" is NO_COLUMN, so every row in
+#   range — 0 and below included — is an ordinary answer. Nothing may gate on `row > 0`.
 
 # "There is no column here" (#294). A DECLARED sentinel because 0 is a legitimate top — a cell one
 # deep occupies [-1..0], so its surface sits at 0 — and while 0 meant both, a dip was
 # unrepresentable: inside the plane it read as flat, outside it it was unclickable. Widening the
 # comparisons instead would only move the collision down to -1. -999 is BoardSpace.NO_CELL's
-# convention on the level axis (far outside any authorable board; the brush spans -99..99), and
-# _top_cell already turns a level near it into a cell whose y IS NO_CELL.y.
+# convention on the row axis (far outside any authorable board; the brush spans -99..99), and
+# _top_cell already turns a row near it into a cell whose y IS NO_CELL.y.
 const NO_COLUMN := -999
 
 const _EPS := 1e-8
 const _MAX_STEPS := 4096
 
 
-# Adapter: GridMap used cells -> {(x, z): top level}. Top level N means the
-# column's highest surface sits at y = N * BoardSpace.CELL_SIZE.
+# Adapter: GridMap used cells -> {(x, z): top row}. Top row N means the
+# column's highest surface sits at y = N * BoardSpace.ROW_HEIGHT.
 static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 	var tops: Dictionary[Vector2i, int] = {}
 	for cell in board.get_used_cells():
@@ -49,18 +50,19 @@ static func column_tops_from(board: GridMap) -> Dictionary[Vector2i, int]:
 	return tops
 
 
-# ONE column's top level, without walking the board (#319) — the incremental twin of
+# ONE column's top row, without walking the board (#319) — the incremental twin of
 # column_tops_from, for a caller reconciling the handful of columns a writer announced.
 #
 # Walks UP from the shared floor and stops at the first gap. That is exact rather than approximate
-# because BoardMirror._write_column fills floor..level contiguously; a column with a hole in it
-# would be a bug there, not a case to tolerate here. Returns NO_COLUMN for "no column" — the
-# scalar twin of the absent key the tops table uses, and never a level a real column could have.
-static func top_of(board: GridMap, column: Vector2i, floor_level: int) -> int:
-	var y := floor_level
+# because BoardMirror._write_column fills floor..top contiguously — a wedge taller than one row
+# declares its upper rows with an invisible filler for exactly this reason (#427 slice 2), so a
+# column still cannot have a hole for this to stop early on. Returns NO_COLUMN for "no column" — the
+# scalar twin of the absent key the tops table uses, and never a row a real column could have.
+static func top_of(board: GridMap, column: Vector2i, floor_row: int) -> int:
+	var y := floor_row
 	while board.get_cell_item(Vector3i(column.x, y, column.y)) != GridMap.INVALID_CELL_ITEM:
 		y += 1
-	return y if y > floor_level else NO_COLUMN
+	return y if y > floor_row else NO_COLUMN
 
 
 # The columns a tops table covers, as a rect — position = lowest column, and the rect
@@ -77,7 +79,7 @@ static func used_rect(tops: Dictionary[Vector2i, int]) -> Rect2i:
 	return Rect2i(lo, hi - lo + Vector2i.ONE)
 
 
-# The tallest column's top level, never below 0 — an empty table has no height, and an all-dipped
+# The tallest column's top row, never below 0 — an empty table has no height, and an all-dipped
 # board rises no further than the ground plane it was cut into. That floor is a DECLARED clamp and
 # not the #294 sentinel: both readers want it. pick_cell uses this as an early-out ceiling, where
 # over-estimating costs a few walk steps and under-estimating loses hits; battle3d._board_volume
@@ -85,9 +87,9 @@ static func used_rect(tops: Dictionary[Vector2i, int]) -> Rect2i:
 static func max_top(tops: Dictionary[Vector2i, int]) -> int:
 	var tallest := 0
 	for column: Vector2i in tops.keys():
-		var level: int = tops[column]
-		if level > tallest:
-			tallest = level
+		var row: int = tops[column]
+		if row > tallest:
+			tallest = row
 	return tallest
 
 
@@ -110,23 +112,26 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 	if not dir.is_finite() or dir == Vector3.ZERO:
 		return BoardSpace.NO_CELL
 	var cs := BoardSpace.CELL_SIZE
+	# The vertical metric is its OWN since #427 slice 2: a mirror cell is CELL_SIZE across and
+	# ROW_HEIGHT tall, so a row index turned into a world height must not use the horizontal one.
+	var rh := BoardSpace.ROW_HEIGHT
 
 	var extent := _extent(tops, plane)
 	var min_col := extent.position
 	var max_col := extent.end - Vector2i.ONE
 	var ceiling := max_top(tops)
 	if plane.has_area():
-		ceiling = maxi(ceiling, BoardSpace.FLAT_TOP_LEVEL)
+		ceiling = maxi(ceiling, BoardSpace.FLAT_TOP_ROW)
 
 	# Near-vertical ray: a single column to test.
 	if absf(dir.x) < _EPS and absf(dir.z) < _EPS:
 		var column := Vector2i(floori(ray_origin.x / cs), floori(ray_origin.z / cs))
-		var level := _top_level(column, tops, plane)
-		if level == NO_COLUMN:
+		var row := _top_row(column, tops, plane)
+		if row == NO_COLUMN:
 			return BoardSpace.NO_CELL
-		var h: float = level * cs
+		var h: float = row * rh
 		if ray_origin.y <= h or dir.y < 0.0:
-			return _top_cell(column, level)
+			return _top_cell(column, row)
 		return BoardSpace.NO_CELL
 
 	var col := Vector2i(floori(ray_origin.x / cs), floori(ray_origin.z / cs))
@@ -139,15 +144,15 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 
 	for i in _MAX_STEPS:
 		var y_enter := ray_origin.y + dir.y * t
-		if dir.y >= 0.0 and y_enter > ceiling * cs:
+		if dir.y >= 0.0 and y_enter > ceiling * rh:
 			return BoardSpace.NO_CELL  # level or rising, already above every top
 		var t_exit := minf(t_max_x, t_max_z)
-		var level := _top_level(col, tops, plane)
-		if level != NO_COLUMN:
-			var h: float = level * cs
+		var row := _top_row(col, tops, plane)
+		if row != NO_COLUMN:
+			var h: float = row * rh
 			var y_exit := ray_origin.y + dir.y * t_exit
 			if y_enter <= h or y_exit <= h:
-				return _top_cell(col, level)
+				return _top_cell(col, row)
 		if t_max_x < t_max_z:
 			t = t_max_x
 			t_max_x += t_delta_x
@@ -161,17 +166,17 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 	return BoardSpace.NO_CELL
 
 
-# What the ray can hit in this column: the painted column's top level, else the plane's
+# What the ray can hit in this column: the painted column's top row, else the plane's
 # implicit floor, else NO_COLUMN = nothing here. The one place the fallback is decided.
-static func _top_level(column: Vector2i, tops: Dictionary[Vector2i, int], plane: Rect2i) -> int:
+static func _top_row(column: Vector2i, tops: Dictionary[Vector2i, int], plane: Rect2i) -> int:
 	if tops.has(column):
 		return tops[column]
 	if plane.has_point(column):
-		return BoardSpace.FLAT_TOP_LEVEL
+		return BoardSpace.FLAT_TOP_ROW
 	return NO_COLUMN
 
 
-# The columns the walk may visit. Generous is safe (the hit test still needs a level),
+# The columns the walk may visit. Generous is safe (the hit test still needs a row),
 # so an empty half simply yields the other rather than dragging the origin in.
 static func _extent(tops: Dictionary[Vector2i, int], plane: Rect2i) -> Rect2i:
 	if tops.is_empty():
@@ -182,8 +187,8 @@ static func _extent(tops: Dictionary[Vector2i, int], plane: Rect2i) -> Rect2i:
 
 # Takes the LEVEL rather than re-indexing tops: a plane cell has no entry there, and the
 # unguarded lookup this replaces was reachable the moment a fallback existed.
-static func _top_cell(column: Vector2i, level: int) -> Vector3i:
-	return Vector3i(column.x, level - 1, column.y)
+static func _top_cell(column: Vector2i, row: int) -> Vector3i:
+	return Vector3i(column.x, row - 1, column.y)
 
 
 static func _step_of(component: float) -> int:

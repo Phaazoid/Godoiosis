@@ -393,7 +393,10 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 					unit.position.y / PIXELS_PER_CELL, heights)
 	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
 			stand_y, unit.position.y / PIXELS_PER_CELL)
-	sprite.cell = BoardSpace.cell_of(stand + Vector3(0, -0.5, 0))
+	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row
+	# boundary, and the cell wanted is the one BELOW it — dropping a whole row would name the one
+	# under that.
+	sprite.cell = BoardSpace.cell_of(stand - Vector3(0.0, BoardSpace.ROW_HEIGHT * 0.5, 0.0))
 	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which
 	# unit.position never sees — the one fact UnitVisuals expresses that the reads above cannot
 	# reach. Mapped through the same metric and the same axes as the stand point: a 2D y is board

@@ -83,6 +83,13 @@ func ramp_rise_at(cell: Vector2i) -> Terrain.RampRise:
 		return Terrain.RampRise.NONE
 	return heights.ramp_rise_at(cell)
 
+# How far this cell climbs (#427 slice 2). Flat on a board with no heights, which is what keeps the
+# height rules reading "a flat cell climbs 0" rather than needing a null branch of their own.
+func ramp_climb_at(cell: Vector2i) -> int:
+	if heights == null:
+		return 0
+	return heights.ramp_climb_at(cell)
+
 # Census over this board's units — shared by game.gd and the headless PlaySession so the
 # turn cycle's membership/auto-skip reads have ONE implementation.
 func present_factions() -> Array[Team.Faction]:

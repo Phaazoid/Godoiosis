@@ -7,12 +7,13 @@
 # the MeshLibrary in Scenes/LookDev/.
 #
 # The meshlib has TWO tenants since #250, and the split is the whole point:
-#   ids 0-6   the hand-picked Kind blocks + the ramp. The LookDev diorama paints
-#             these by id (board_painter.gd's GRASS/STONE/RAMP), and BoardMirror
-#             keeps them as its declared fallback -- so they are APPEND-ONLY.
-#   ids 7+    one block per real tileset tile, top face wearing that tile's own
-#             art. This is what makes the 3D board show the GAME's tiles instead
-#             of six generated stand-ins.
+#   ids 0-8   the hand-picked Kind blocks, both fallback ramps and the wedge filler. The LookDev
+#             diorama paints these by id (board_painter.gd's GRASS/STONE/RAMP), and BoardMirror
+#             keeps them as its declared fallback -- so they are APPEND-ONLY, which is why #427
+#             slice 2's gentle wedge and filler landed at 7 and 8 rather than beside the steep one.
+#   ids 9+    one block per real tileset tile, top face wearing that tile's own
+#             art, PLUS one wedge per authorable climb. This is what makes the 3D
+#             board show the GAME's tiles instead of six generated stand-ins.
 # A cell's SURFACE comes from its atlas coords (id 7+); what it is MADE OF -- the
 # side/wall material -- still comes from its Terrain.Kind. Two questions, and Kind
 # was answering both until #250.
@@ -30,8 +31,9 @@ const MESHLIB_PATH := "res://Scenes/LookDev/lookdev_meshlib.tres"
 const TILESET_PATH := "res://Resources/TestTiles.tres"
 const TILE := 32
 
-# Where the per-tileset-tile items start. Everything below is the Stage-0 set.
-const FIRST_TILE_ITEM := 7
+# Where the per-tileset-tile items start. Everything below is the Stage-0 set, plus #427 slice 2's
+# gentle fallback wedge and the wedge filler.
+const FIRST_TILE_ITEM := 9
 
 # Share of non-opaque pixels above which a tile is reported as "mostly open" — a sprite on an
 # empty field rather than ground with a soft edge. Diagnostic only; every tile is based over
@@ -305,11 +307,17 @@ func _gen_meshlib() -> int:
 	var ml := MeshLibrary.new()
 	_add_item(ml, 0, "grass_block", _block_mesh(_mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 1, "stone_block", _block_mesh(_mat(stone_top), _mat(stone_side)))
-	_add_item(ml, 2, "dirt_ramp", _ramp_mesh(_mat(grass_top), _mat(dirt_side)))
+	_add_item(ml, 2, "dirt_ramp", _ramp_mesh(Terrain.UNITS_PER_LEVEL, _mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 3, "dirt_block", _block_mesh(_mat(dirt_top), _mat(dirt_side)))
 	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
 	_add_item(ml, 5, "water_block", _block_mesh(_mat(water_top), _mat(water_top)))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
+	# Ids 0-6 are the hand-picked fallbacks and Scenes/LookDev/LookDev.tscn's diorama references them
+	# BY ID, so #427 slice 2's additions append rather than renumber. The gentle fallback wedge is the
+	# steep one's twin; the filler is an EMPTY mesh, whose whole job is to occupy the rows a tall
+	# wedge spans (see BoardMirror.RAMP_FILL_ITEM_NAME).
+	_add_item(ml, 7, BoardMirror.RAMP_ITEM_NAMES[1], _ramp_mesh(1, _mat(grass_top), _mat(dirt_side)))
+	_add_item(ml, 8, BoardMirror.RAMP_FILL_ITEM_NAME, ArrayMesh.new())
 
 	var bases: Dictionary[Terrain.Kind, Texture2D] = {
 		Terrain.Kind.GRASS: grass_top,
@@ -446,10 +454,15 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# The same surface on a SLOPE (#340). FLAT tiles only: a rock or a fence has no top face
 			# to tilt, and the brush refuses them a rise for the same reason. Without this every ramp
 			# wore the one generated dirt wedge, so a stone ramp read as dirt.
+			#
+			# ONE PER AUTHORABLE CLIMB since #427 slice 2 — the tile's art on a 45 degree wedge and on
+			# the gentle one are different geometry, and the item NAME carries the climb so the mirror
+			# picks by asking rather than by guessing which of two namespaces to look in.
 			if not stands_up:
-				_add_item(ml, next_id, BoardMirror.ramp_item_name(source_id, coords),
-						_ramp_mesh(atlas_mat, side, top_uv, side_uv))
-				next_id += 1
+				for climb: int in BoardMirror.RAMP_ITEM_NAMES:
+					_add_item(ml, next_id, BoardMirror.ramp_item_name(source_id, coords, climb),
+							_ramp_mesh(climb, atlas_mat, side, top_uv, side_uv))
+					next_id += 1
 
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
@@ -600,12 +613,14 @@ func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:
 # A box: surface 0 = top (terrain face), surface 1 = sides + bottom.
 # The UV rects default to the whole texture (the Kind blocks, whose textures are one
 # tile each); an atlas-backed item passes the tile's own region instead.
-# `size`/`center_y` default to the 1x1x1 cell block centred on the origin, which is what every
-# GROUND item is. A prop (#264) passes its measured size and lifts the box so its BASE sits at
+# `size`/`center_y` default to ONE ROW of ground centred on the origin, which is what every GROUND
+# item is. That row is half a cell tall since #427 slice 2 — the mirror's vertical index counts
+# height UNITS now, so a full-cell block would overlap the row above it and a column would be drawn
+# twice as tall. A prop (#264) passes its measured size and lifts the box so its BASE sits at
 # y = 0, because BoardMirror plants it on the cell's top face rather than inside the cell.
 func _block_mesh(top_mat: Material, side_mat: Material,
 		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1),
-		size := Vector3.ONE, center_y := 0.0) -> ArrayMesh:
+		size := Vector3(1.0, BoardSpace.ROW_HEIGHT, 1.0), center_y := 0.0) -> ArrayMesh:
 	var h := size * 0.5
 	var up := center_y + h.y
 	var down := center_y - h.y
@@ -701,38 +716,44 @@ func _uv_half(uv: Rect2, east: bool) -> Rect2:
 	return Rect2(Vector2(uv.position.x + (w if east else 0.0), uv.position.y), Vector2(w, uv.size.y))
 
 
-# A wedge: high edge at -Z falling to -0.5 at +Z. Slope face wears the terrain
-# texture; GridMap orientation (yaw steps) points the high side at the upper level.
+# A wedge `climb` height-units tall: high edge at -Z falling to the row's floor at +Z. Slope face
+# wears the terrain texture; GridMap orientation (yaw steps) points the high side at the upper level.
 # Both UVs default to the whole texture (the Stage-0 dirt_ramp, whose materials are one tile each);
 # an atlas-backed wedge passes the tile's own regions instead — the same pair _block_mesh already
 # takes, so a ramp wears the ground painted on it (#340).
+#
+# The CLIMB is a parameter since #427 slice 2 (it was a fixed 45 degrees): a wedge is placed on the
+# row directly above its cell's surface, so its base sits at that row's FLOOR whatever it climbs to,
+# and the slope normal has to follow the pitch or a gentle ramp lights like a steep one.
 #
 # side_uv is NOT optional in practice, and shipping it as a default cost a bug: a WATER tile wears
 # its own surface down the sides (side_mat is the composited atlas, not the one-tile dirt strip), so
 # an unpassed side_uv mapped the ENTIRE tilesheet onto every water slope. Whenever side_mat can be
 # the atlas, side_uv has to travel with it.
-func _ramp_mesh(top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1),
+func _ramp_mesh(climb: int, top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1),
 		side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
+	var lo := -BoardSpace.ROW_HEIGHT * 0.5
+	var hi := lo + float(climb) * BoardSpace.ROW_HEIGHT
 	var mesh := ArrayMesh.new()
-	var slope_normal := Vector3(0.0, 1.0, 1.0).normalized()
+	var slope_normal := Vector3(0.0, BoardSpace.CELL_SIZE, float(climb) * BoardSpace.ROW_HEIGHT).normalized()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
-	_quad(st, Vector3(-0.5, 0.5, -0.5), Vector3(0.5, 0.5, -0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3(-0.5, -0.5, 0.5), slope_normal, top_uv)
+	_quad(st, Vector3(-0.5, hi, -0.5), Vector3(0.5, hi, -0.5),
+			Vector3(0.5, lo, 0.5), Vector3(-0.5, lo, 0.5), slope_normal, top_uv)
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
-	_tri(st, Vector3(0.5, 0.5, -0.5), Vector3(0.5, -0.5, -0.5),
-			Vector3(0.5, -0.5, 0.5), Vector3.RIGHT, side_uv)                               # east
-	_tri(st, Vector3(-0.5, 0.5, -0.5), Vector3(-0.5, -0.5, 0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3.LEFT, side_uv)                              # west
-	_quad(st, Vector3(0.5, 0.5, -0.5), Vector3(-0.5, 0.5, -0.5),
-			Vector3(-0.5, -0.5, -0.5), Vector3(0.5, -0.5, -0.5), Vector3.FORWARD, side_uv) # back
-	_quad(st, Vector3(-0.5, -0.5, 0.5), Vector3(0.5, -0.5, 0.5),
-			Vector3(0.5, -0.5, -0.5), Vector3(-0.5, -0.5, -0.5), Vector3.DOWN, side_uv)    # bottom
+	_tri(st, Vector3(0.5, hi, -0.5), Vector3(0.5, lo, -0.5),
+			Vector3(0.5, lo, 0.5), Vector3.RIGHT, side_uv)                               # east
+	_tri(st, Vector3(-0.5, hi, -0.5), Vector3(-0.5, lo, 0.5),
+			Vector3(-0.5, lo, -0.5), Vector3.LEFT, side_uv)                              # west
+	_quad(st, Vector3(0.5, hi, -0.5), Vector3(-0.5, hi, -0.5),
+			Vector3(-0.5, lo, -0.5), Vector3(0.5, lo, -0.5), Vector3.FORWARD, side_uv)   # back
+	_quad(st, Vector3(-0.5, lo, 0.5), Vector3(0.5, lo, 0.5),
+			Vector3(0.5, lo, -0.5), Vector3(-0.5, lo, -0.5), Vector3.DOWN, side_uv)      # bottom
 	st.commit(mesh)
 	return mesh
 

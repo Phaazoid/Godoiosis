@@ -340,12 +340,12 @@ func _tile_readout_lines(cell: Vector2i) -> Array[String]:
 	var elevation: int = board.elevation_at(cell)
 	var rise: Terrain.RampRise = board.ramp_rise_at(cell)
 	if rise != Terrain.RampRise.NONE:
-		lines.append("Ramp — rises %s from height %d. Enter or leave it only along that slope."
-			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation])
+		# BOTH ends, because a ramp's steepness is authored since #427 slice 2 — "rises east from 4"
+		# no longer says where it arrives, and which heights it joins is the whole rule.
+		lines.append("Ramp — rises %s from height %d to height %d. Enter or leave it only along that slope."
+			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation,
+				elevation + board.ramp_climb_at(cell)])
 	elif elevation != 0:
-		# One LEVEL below is what a ramp connects from (#427) — the card speaks the same height unit
-		# the brush authors in.
-		lines.append("Height %d — reached only by a ramp from height %d."
-			% [elevation, elevation - Terrain.UNITS_PER_LEVEL])
+		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
 	lines.append_array(Glossary.terrain_reactions_for(kind, held))
 	return lines

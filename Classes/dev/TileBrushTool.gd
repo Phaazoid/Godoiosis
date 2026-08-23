@@ -44,17 +44,29 @@ var _clear_states_button: Button
 var _state_labels: Array[String] = []
 var _state_values: Array[Terrain.TileState] = []
 
-# The terrain brush's elevation half (#260, merged in by #340): the level the next click places at,
-# and whether that cell is a ramp.
-# One click writes BOTH, because BoardHeights.set_cell takes both — two brushes would be two ways
-# to author one cell. NOT clamped at 0: a dip has to be authorable without lifting the whole map
-# (dev, 2026-08-15).
+# The terrain brush's elevation half (#260, merged in by #340): the height the next click places at,
+# which way that cell rises, and — since #427 slice 2 — how far.
+# One click writes all THREE, because BoardHeights.set_cell takes them together; separate brushes
+# would be separate ways to author one cell. NOT clamped at 0: a dip has to be authorable without
+# lifting the whole map (dev, 2026-08-15).
+#
+# Direction and amount are separate controls by dev call (2026-08-23), against folding them into one
+# nine-entry dropdown: Z/C stay a four-step compass turn, and steepness is the rarely-touched
+# setting it actually is.
 var _elevation := 0
 var _rise := Terrain.RampRise.NONE
+var _climb := Terrain.UNITS_PER_LEVEL
 var _elevation_row: HBoxContainer
 var _elevation_spin: SpinBox
 var _rise_row: HBoxContainer
 var _rise_option: OptionButton
+var _climb_row: HBoxContainer
+var _climb_option: OptionButton
+
+# How far a ramp climbs, steepest first so the historical default sits at index 0. The list is both
+# the picker's row order and the X key's cycle order, RISE_CYCLE's rule one field along.
+const CLIMB_CYCLE: Array[int] = [Terrain.UNITS_PER_LEVEL, 1]
+const CLIMB_LABELS := ["Full (45°)", "Half (26.6°)"]   # index == CLIMB_CYCLE index
 
 # COMPASS order, not enum order, and it is both the picker's row order and the Z/C cycle order —
 # one list, so the dropdown and the keys cannot disagree about what comes next. Turning has to read
@@ -218,9 +230,11 @@ func _on_tile_dropdown_item_selected(index: int):
 # Grey the rise picker for a tile that cannot slope, so selected_rise's refusal is VISIBLE rather
 # than a setting that silently does nothing.
 func _sync_rise_availability() -> void:
-	if _rise_option == null:
-		return
-	_rise_option.disabled = not selected_tile_is_flat()
+	var flat := selected_tile_is_flat()
+	if _rise_option != null:
+		_rise_option.disabled = not flat
+	if _climb_option != null:
+		_climb_option.disabled = not flat
 
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
@@ -348,9 +362,9 @@ func _build_extra_controls() -> void:
 	_elevation_spin = SpinBox.new()
 	_elevation_spin.min_value = -99 * Terrain.UNITS_PER_LEVEL
 	_elevation_spin.max_value = 99 * Terrain.UNITS_PER_LEVEL
-	# A whole LEVEL per notch (#427). The store can hold a half level, but nothing DRAWS one until
-	# slice 2, and Terrain.level_of truncates -- so the door authors only what the renderer can say.
-	_elevation_spin.step = Terrain.UNITS_PER_LEVEL
+	# ONE UNIT per notch since #427 slice 2 -- the mirror's rows are half levels now, so a half-level
+	# platform is something the renderer can say and the door no longer has to hold it back.
+	_elevation_spin.step = 1
 	_elevation_spin.value = _elevation
 	_elevation_spin.value_changed.connect(func(v: float): set_elevation(int(v)))
 	_elevation_row.add_child(_elevation_spin)
@@ -360,10 +374,11 @@ func _build_extra_controls() -> void:
 	_elevation_row.add_child(reset)
 	add_child(_elevation_row)
 	DevWidgets.apply_tooltip(_elevation_row, DevWidgets.wrap_tooltip(
-		"Height the brush paints at, in half-level units — one full level is %d, so a 45-degree ramp "
+		"Height the brush paints at, in half-level units — one full level is %d, so an odd number is "
 		% Terrain.UNITS_PER_LEVEL
-		+ "climbs that much. Scroll the mouse wheel over the board to change it, one level per notch. "
-		+ "Reset returns the brush to flat ground: height 0, no ramp. Negative heights are dips."))
+		+ "a half-level platform. Scroll the mouse wheel over the board to change it, one full level "
+		+ "per notch. Reset returns the brush to flat ground: height 0, no ramp. Negative heights "
+		+ "are dips."))
 
 	_rise_row = HBoxContainer.new()
 	var rise_label := Label.new()
@@ -378,9 +393,28 @@ func _build_extra_controls() -> void:
 	add_child(_rise_row)
 	DevWidgets.apply_tooltip(_rise_row, DevWidgets.wrap_tooltip(
 		"Which way this cell RISES — Z and C turn it, the way Q and E turn the board. A ramp's own "
-		+ "height is its LOW side, so a ramp at height 4 rising North connects height 4 to height 6 "
-		+ "to the north. None = ordinary flat ground. Greyed out for a tile that stands up (a rock, a "
-		+ "lantern): only flat ground can slope, and the ramp wears whatever ground you paint on it."))
+		+ "height is its LOW side, so a ramp at height 4 rising North connects height 4 to whatever "
+		+ "its Rise Amount climbs to. None = ordinary flat ground. Greyed out for a tile that stands "
+		+ "up (a rock, a lantern): only flat ground can slope, and the ramp wears whatever ground you "
+		+ "paint on it."))
+
+	_climb_row = HBoxContainer.new()
+	var climb_label := Label.new()
+	climb_label.text = "Rise Amount"
+	_climb_row.add_child(climb_label)
+	_climb_option = OptionButton.new()
+	for label in CLIMB_LABELS:
+		_climb_option.add_item(label)
+	_climb_option.select(CLIMB_CYCLE.find(_climb))
+	_climb_option.item_selected.connect(func(idx: int): set_climb(CLIMB_CYCLE[idx]))
+	_climb_row.add_child(_climb_option)
+	add_child(_climb_row)
+	DevWidgets.apply_tooltip(_climb_row, DevWidgets.wrap_tooltip(
+		"How FAR a ramp climbs — X cycles it, between Z and C so the three read as one gesture. "
+		+ "Full is the 45-degree ramp that has always existed: %d units, a whole level over one cell. "
+		% Terrain.UNITS_PER_LEVEL
+		+ "Half is the gentle slope, one unit over one cell, so two of them stacked climb a level "
+		+ "across two cells. Greyed out with the direction, for the same reason."))
 
 	_set_paint_mode(PaintMode.TERRAIN)
 
@@ -396,6 +430,12 @@ func selected_elevation() -> int:
 # prop and coming back to grass restores the direction you had.
 func selected_rise() -> Terrain.RampRise:
 	return _rise if selected_tile_is_flat() else Terrain.RampRise.NONE
+
+# How far that slope climbs. NOT gated on the flat tile the way selected_rise is: a refused rise is
+# already NONE, and corners_of_ramp ignores the climb entirely then — gating both would be two
+# spellings of one refusal.
+func selected_climb() -> int:
+	return _climb
 
 # Whether the PICKED tile is ground rather than something standing on it. GridUtils.stands_up_of is
 # the one answer (derived from prop_shape); an unresolvable pick reads flat, the same permissive
@@ -428,6 +468,12 @@ func set_rise(rise: Terrain.RampRise) -> void:
 	if _rise_option != null:
 		_rise_option.select(RISE_CYCLE.find(rise))
 
+# The same for how far it climbs (#427 slice 2) — the dropdown and the X key.
+func set_climb(climb: int) -> void:
+	_climb = climb
+	if _climb_option != null:
+		_climb_option.select(CLIMB_CYCLE.find(climb))
+
 # Turn the rise one step (dev ask 2026-08-15: a menu trip per direction is the wrong cost for
 # something you change constantly). Wraps, so the keys alone reach every value including flat.
 func cycle_rise(delta: int) -> void:
@@ -436,8 +482,17 @@ func cycle_rise(delta: int) -> void:
 		index = 0
 	set_rise(RISE_CYCLE[posmod(index + delta, RISE_CYCLE.size())])
 
-# Back to plain flat ground, which is BOTH fields: a reset that left the rise armed would still
-# paint ramps, and "flat" is what the button is for.
+# Same wrap, one list along: X alternates the two steepnesses.
+func cycle_climb() -> void:
+	var index := CLIMB_CYCLE.find(_climb)
+	if index == -1:
+		index = 0
+	set_climb(CLIMB_CYCLE[posmod(index + 1, CLIMB_CYCLE.size())])
+
+# Back to plain flat ground, which is height AND direction: a reset that left the rise armed would
+# still paint ramps, and "flat" is what the button is for. The CLIMB deliberately survives — it is a
+# steepness preference rather than a piece of the shape, and re-picking it every reset is the
+# friction the separate control exists to avoid.
 func reset_elevation() -> void:
 	set_elevation(0)
 	set_rise(Terrain.RampRise.NONE)
