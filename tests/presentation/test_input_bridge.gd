@@ -260,6 +260,8 @@ func _parse_button(screen_pos: Vector2, button: MouseButton, pressed: bool) -> v
 
 func _arm_brush() -> void:
 	_game.set_dev_mode(true)
+	# The page owns the brush's input (2026-08-23), so arm it the way a human does.
+	_game.dev_overlay.show_leaf(_game.dev_overlay.tile_brush)
 	_game.dev_overlay.tile_brush.brush_active = true
 
 
@@ -813,8 +815,9 @@ func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void
 	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
 	await _pump()
 
+	# ONE UNIT per notch since 2026-08-23 -- half a level, so a gentle slope can be walked up by wheel.
 	assert_int(brush.selected_elevation()).override_failure_message(
-			"the notch never reached the brush").is_equal(Terrain.UNITS_PER_LEVEL)
+			"the notch never reached the brush").is_equal(1)
 	assert_float(_rig()._target_distance).override_failure_message(
 			"the same notch ALSO zoomed the camera: the brush is not suppressing the rig's wheel"
 			).is_equal_approx(zoom_before, 0.001)

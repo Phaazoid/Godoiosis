@@ -65,6 +65,10 @@ enum View {
 var _help_brush_armed := false
 var _help_dev_mode := false
 var _help_wheel_is_level := false
+# Which PAGE is up is a help-line input too since 2026-08-23 (SPACE spawn vs SPACE centre). It joins
+# the key rather than being read only at render: a diff key blind to one of its own render's inputs
+# is the #308 shape, and the line would sit stale until something else happened to move.
+var _help_can_spawn := false
 # Where the cursor was at the last poll. Seeded from the REAL position so the first frame
 # cannot fire a move that never happened and yank the pointer off its starting cell.
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
@@ -703,14 +707,17 @@ func _sync_brush_bindings() -> void:
 	var wheel_is_level: bool = game.dev_controller.elevation_brush_live()
 	_rig.orbit_button = MOUSE_BUTTON_MIDDLE if armed else _orbit_button_default
 	_rig.wheel_zoom_enabled = not wheel_is_level
-	# The help line names the wheel, so the MODE it depends on joins the edge — a one-shot label
-	# goes stale the moment its input starts varying, which is the trap this label already fell
-	# into once over the orbit button.
-	if armed == _help_brush_armed and dev == _help_dev_mode and wheel_is_level == _help_wheel_is_level:
+	# The help line names the wheel and SPACE, so every MODE they depend on joins the edge — a
+	# one-shot label goes stale the moment its input starts varying, which is the trap this label
+	# already fell into once over the orbit button.
+	var can_spawn: bool = game.dev_controller.spawn_armed()
+	if armed == _help_brush_armed and dev == _help_dev_mode \
+			and wheel_is_level == _help_wheel_is_level and can_spawn == _help_can_spawn:
 		return
 	_help_brush_armed = armed
 	_help_dev_mode = dev
 	_help_wheel_is_level = wheel_is_level
+	_help_can_spawn = can_spawn
 	_update_help()
 
 
@@ -724,7 +731,9 @@ func _update_help() -> void:
 	# Right-click carries two verbs since #228 and the label names both in the order they fire:
 	# it leaves an open aim first, and only from a board at rest does it undo the last order.
 	var right := "RMB erase" if game.dev_controller.brush_armed() else "RMB cancel/undo"
-	var space := "SPACE spawn" if game.game_state == game.GameState.DEV_MODE else "SPACE centre"
+	# The SAME predicate the gate reads (_handle_space), never a second answer -- this line said
+	# "spawn" for every dev page while only the Spawn one could, which is the bug it was describing.
+	var space := "SPACE spawn" if game.dev_controller.spawn_armed() else "SPACE centre"
 	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
 	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
 
@@ -759,8 +768,12 @@ func _show_dev_badge(active: bool) -> void:
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves
 # it (#231). The 3D view is not a reason for a key to mean something different than it does
 # in the flat one; the only difference is where the cell comes from.
+# SPACE spawns only while the SPAWN PAGE is showing (dev, 2026-08-23) — it was gated on DEV_MODE
+# alone, so pressing space while brushing spawned a unit. This is the 3D half of a question asked in
+# TWO places: game.gd's own handler is the 2D one, and both now read DevOverlay.showing rather than
+# each deciding what "the spawn tool is up" means.
 func _handle_space() -> void:
-	if game.game_state == game.GameState.DEV_MODE and game.dev_overlay != null:
+	if game.dev_controller.spawn_armed():
 		if _pointer_cell != BoardSpace.NO_CELL:
 			game.dev_overlay.spawn.try_spawn_at(BoardSpace.flat(_pointer_cell))
 		return

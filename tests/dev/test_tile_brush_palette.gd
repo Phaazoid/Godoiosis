@@ -142,6 +142,7 @@ func _hover_cell() -> Vector2i:
 
 func _arm_brush() -> void:
 	game.set_dev_mode(true)
+	game.dev_overlay.show_leaf(_brush)   # the page owns the brush's input (2026-08-23)
 	_brush.brush_active = true
 
 # The ghost POLLS per frame rather than riding mouse events, because while the Dev Tools OS

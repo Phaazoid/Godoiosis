@@ -304,7 +304,19 @@ func _gen_meshlib() -> int:
 		push_error("Kind textures missing (#215) -- rerun --textures, then --import, first.")
 		return 1
 
-	var ml := MeshLibrary.new()
+	# REUSE the existing library rather than building a fresh one, so the object being saved IS the
+	# cache entry and keeps its path and its UID. A MeshLibrary.new() gets a NEW uid at save time, and
+	# every .tscn naming the old one is left pointing at nothing -- Godot degrades to the path and
+	# rewrites the scene, which is exactly what #427 slice 2 did to Battle3D.tscn. take_over_path is
+	# NOT enough on its own: #481 measured DevWidgets.save_over dropping UIDs while doing precisely
+	# that. Absent file = first run, and a fresh library is then correct.
+	var previous_uid := _uid_in_file(MESHLIB_PATH)
+	var ml: MeshLibrary = ResourceLoader.load(MESHLIB_PATH, "MeshLibrary", ResourceLoader.CACHE_MODE_REPLACE)
+	if ml == null:
+		ml = MeshLibrary.new()
+	else:
+		for id in ml.get_item_list():
+			ml.remove_item(id)
 	_add_item(ml, 0, "grass_block", _block_mesh(_mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 1, "stone_block", _block_mesh(_mat(stone_top), _mat(stone_side)))
 	_add_item(ml, 2, "dirt_ramp", _ramp_mesh(Terrain.UNITS_PER_LEVEL, _mat(grass_top), _mat(dirt_side)))
@@ -334,8 +346,54 @@ func _gen_meshlib() -> int:
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
 		return 1
+	if not _restore_uid(MESHLIB_PATH, previous_uid):
+		return 1
 	print("MeshLibrary written to %s" % MESHLIB_PATH)
 	return 0
+
+
+# The `uid://...` a .tres header declares, or "" when it has none. Read from the FILE rather than
+# asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a uid
+# has already emptied for this path -- measured, it returned INVALID and the restore below silently
+# did nothing.
+func _uid_in_file(path: String) -> String:
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		return ""
+	var header := text.substr(0, maxi(text.find("\n"), 0))
+	var mark := header.find('uid="')
+	if mark < 0:
+		return ""
+	var start := mark + 5
+	var end := header.find('"', start)
+	return header.substr(start, end - start) if end > start else ""
+
+
+# Put the resource's UID back into the file just saved. ResourceSaver DROPS it -- measured here
+# twice: a fresh MeshLibrary was minted a NEW uid, and reusing the loaded one lost the uid outright.
+# Either way every .tscn naming the old uid points at nothing, Godot degrades to the `path=`
+# attribute and REWRITES the scene on open, which is how #427 slice 2 produced a phantom diff in
+# Battle3D.tscn.
+#
+# Text surgery on the header, because there is no save flag for this and take_over_path does not do
+# it (#481 measured the same drop through DevWidgets.save_over, which take_over_paths). Returns
+# false only when the file it just wrote cannot be read back.
+func _restore_uid(path: String, uid: String) -> bool:
+	if uid.is_empty():
+		return true   # never had one; nothing to preserve
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		push_error("Cannot re-read %s to restore its UID" % path)
+		return false
+	var newline := text.find("\n")
+	var header := text.substr(0, newline)
+	if header.contains("uid="):
+		return true   # the saver kept it after all -- leave the file alone
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string(header.replace("]", ' uid="%s"]' % uid) + text.substr(newline))
+	f.close()
+	print("Restored %s on %s" % [uid, path])
+	return true
 
 
 # One block per real tileset tile, top face wearing that tile's own art -- except a tile that

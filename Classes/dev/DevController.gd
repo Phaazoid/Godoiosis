@@ -201,10 +201,30 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 # Is the brush armed and taking mouse input? Asked by game.gd's 2D input arm, Battle3D's 3D
 # arm (#231) and the ghost poll below -- ONE predicate, so a third caller cannot drift a third
 # answer. Deliberately NOT paint_mode-aware: every mode paints, only the ghost is TERRAIN-only.
+#
+# The PAGE clause (2026-08-23) makes a stale `brush_active` unrepresentable rather than merely
+# prevented: leaving the Tile Brush page already calls deactivate(), and that stays -- it unticks
+# the box for the human -- but the rules now read the STATE instead of trusting an event to have
+# fired. Same rule as SPACE one file over: a page's input belongs to the page.
 func brush_armed() -> bool:
-	return game.game_state == game.GameState.DEV_MODE \
-		and game.dev_overlay != null \
+	if game.game_state != game.GameState.DEV_MODE or game.dev_overlay == null:
+		return false
+	return game.dev_overlay.showing(game.dev_overlay.tile_brush) \
 		and game.dev_overlay.tile_brush.brush_active
+
+# May SPACE spawn right now? DEV_MODE *and* the Spawn page (dev, 2026-08-23: "I should only be able
+# to spawn units while the unit spawning window is up"). Both halves, and that is not belt-and-braces:
+# Spawn is the overlay's BOOT page, so the page test alone is true before dev mode is ever entered --
+# measured, it made SPACE try to spawn during ordinary play instead of recentring the camera.
+#
+# Here rather than in either handler because there are TWO -- game.gd's flat arm and battle3d's --
+# plus the 3D help line that names the key. brush_armed() above combines the same two kinds of fact
+# for the same reason.
+func spawn_armed() -> bool:
+	if game.game_state != game.GameState.DEV_MODE or game.dev_overlay == null:
+		return false
+	return game.dev_overlay.showing(game.dev_overlay.spawn)
+
 
 # Both buttons are hold-to-drag (erase gained it 2026-08-12); paint wins if both are held.
 func handle_tile_brush(event) -> void:

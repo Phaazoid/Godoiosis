@@ -376,9 +376,9 @@ func _build_extra_controls() -> void:
 	DevWidgets.apply_tooltip(_elevation_row, DevWidgets.wrap_tooltip(
 		"Height the brush paints at, in half-level units — one full level is %d, so an odd number is "
 		% Terrain.UNITS_PER_LEVEL
-		+ "a half-level platform. Scroll the mouse wheel over the board to change it, one full level "
-		+ "per notch. Reset returns the brush to flat ground: height 0, no ramp. Negative heights "
-		+ "are dips."))
+		+ "a half-level platform. Scroll the mouse wheel over the board to change it, one unit per "
+		+ "notch -- hold Ctrl to zoom the camera instead. Reset returns the brush to flat ground: "
+		+ "height 0, no ramp. Negative heights are dips."))
 
 	_rise_row = HBoxContainer.new()
 	var rise_label := Label.new()
@@ -456,10 +456,13 @@ func set_elevation(value: int) -> void:
 	if _elevation_spin != null:
 		_elevation_spin.set_value_no_signal(value)
 
-# One wheel notch is one whole LEVEL, matching the SpinBox's step (#427): the caller passes a
-# direction, not an amount.
+# One wheel notch is one UNIT -- half a level -- matching the SpinBox's step exactly. It moved a
+# whole LEVEL when #427 slice 2 landed, on the theory that the wheel is the gesture and the SpinBox
+# the resolution. That was wrong and the dev found it immediately: the wheel is the only thing that
+# changes height MID-STROKE, so a two-cell gentle slope (heights 0 then 1) was unbuildable with it
+# -- "I have no way to connect more than one half slope together, or to anything else."
 func nudge_elevation(delta: int) -> void:
-	set_elevation(_elevation + delta * Terrain.UNITS_PER_LEVEL)
+	set_elevation(_elevation + delta)
 
 # The ONE writer of the rise, the set_elevation twin: the dropdown, the Z/C keys and Reset all land
 # here, so the picker always shows what the next click will paint.

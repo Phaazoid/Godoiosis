@@ -50,7 +50,12 @@ class_name CameraRig3D
 
 # Feel knobs, every one (the tuning rule -- these were consts until 4d).
 @export var yaw_step := 90.0
-@export var min_distance := 6.0
+# How close the camera may come. 6.0 until 2026-08-23, which was the whole of "I can't zoom in far
+# enough to see what I'm brushing" -- Ctrl+wheel was already handing notches back (battle3d's
+# _handle_brush_zoom), they just hit this floor immediately. Kept as a clamp rather than removed: a
+# literal 0 puts the camera inside the ground and through the near plane. It is a Game-tab knob, so
+# the rest is tuned live.
+@export var min_distance := 1.0
 @export var max_distance := 24.0   # frame() overwrites this from the board it fits
 @export var zoom_step := 1.5
 @export var pan_speed := 8.0

@@ -144,8 +144,8 @@ const KNOBS: Array[Dictionary] = [
 	# margin are mood and stayed in LookKnobs, where a preset still captures them. Framing is also
 	# the half Battle3D.tscn authors -- it overrides fov -- which is why these seven are the ones
 	# with an @export default to write and those four are not.
-	{"group": "Camera handling", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
-		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 0.25, "max": 20.0, "step": 0.25,
+		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density -- but the floor used to be 6.0, which was close enough to fight you while brushing."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
 		"tip": "How far one notch of the mouse wheel moves the camera."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
