@@ -78,6 +78,15 @@ func _screen_of(cell: Vector2i) -> Vector2:
 			level * BoardSpace.CELL_SIZE, (cell.y + 0.5) * BoardSpace.CELL_SIZE))
 
 
+# Where the rig should SIT to look at a world x/z: on the surface there, never at the board's
+# ceiling. Spelled from BoardSpace rather than asked of battle3d, so a case comparing against it is
+# checking the rule and not the implementation against itself.
+func _surface_aim(at: Vector3) -> Vector3:
+	var heights: BoardHeights = _game.board_heights
+	return Vector3(at.x, BoardSpace.surface_height_at(
+			Vector2i(floori(at.x), floori(at.z)), at.x, at.z, heights), at.z)
+
+
 # The mirror cell the 3D pointer reports for a 2D cell — the picker's answer, not an assumed level.
 func _picked(cell: Vector2i) -> Vector3i:
 	var tops: Dictionary[Vector2i, int] = _scene._tops
@@ -97,8 +106,9 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 	_cam().set_ai_locked(true)
 	await _cam().pan_to(unit)   # headless: lands on the destination and hands to follow
 	await _settle()
-	# Where the 2D camera went, in the 3D metric.
-	var expected := BoardSpace.of_pixels(_cam().global_position, _rig.position.y)
+	# Where the 2D camera went, in the 3D metric. The 2D answers WHERE; the BOARD answers how high
+	# (2026-08-23) — this used to read _rig.position.y, i.e. whatever the opening shot left there.
+	var expected := _surface_aim(BoardSpace.of_pixels(_cam().global_position, 0.0))
 
 	# Now prove the mirror DRIVES the rig rather than that it happened to be parked there.
 	# The opening shot sits over the player's squad, i.e. over this very unit, so the rig
@@ -335,8 +345,10 @@ func test_space_recentres_the_diorama_on_the_pointer() -> void:
 	space.pressed = true
 	_scene._unhandled_input(space)
 
-	var point := BoardSpace.standing_point(_scene._pointer_cell)
-	assert_that(_rig.position).is_equal(Vector3(point.x, before.y, point.z))
+	# The WHOLE point, height included (2026-08-23). It used to keep `before.y` — which is how the
+	# rig came to sit at the board's ceiling for ever on any board with elevation.
+	var point := BoardSpace.surface_point(BoardSpace.flat(_scene._pointer_cell), _game.board_heights)
+	assert_that(_rig.position).is_equal(point)
 	assert_bool(_rig.position.distance_to(before) > 1.0).is_true()
 
 
@@ -367,9 +379,6 @@ func test_a_committed_order_brings_the_rig_back_to_the_acting_unit() -> void:
 			"a committed order did not bring the rig back to the acting unit").is_equal_approx(target.x, 0.01)
 	assert_float(_rig.position.z).override_failure_message(
 			"a committed order did not bring the rig back to the acting unit").is_equal_approx(target.z, 0.01)
-	# Height is the rig's own; only x/z are the board's answer.
-	assert_float(_rig.position.y).override_failure_message(
-			"the return moved the rig's height").is_equal_approx(before.y, 0.01)
 
 
 # The pointer poll re-derives on CAMERA movement, not only on mouse movement (#471). Without it the
@@ -391,3 +400,51 @@ func test_moving_the_camera_re_picks_the_cell_under_a_still_pointer() -> void:
 	assert_that(_scene._pointer_cell).override_failure_message(
 			"panning under a still cursor left the pointer on the cell it had left") \
 		.is_not_equal(_picked(cell))
+
+
+# --- The aim HEIGHT (dev report, 2026-08-23) ----------------------------------------
+
+# THE rule: the rig aims ON the surface it is looking at, never at the board's CEILING.
+# CameraRig3D._aim_at lifts the OPENING shot to the top of the whole board volume — right for
+# framing a board, wrong for looking at something standing on one — and nothing ever re-derived it,
+# because every recentre kept _rig.position.y. On Level_1 (columns to level 4, plus an authored
+# start that froze aim.y = 5) that put the look-at point four cells in the air, so the unit rode
+# off the top of the frame at close zoom. Prolog is flat, which is why it never showed there.
+#
+# The absurd height is SET here rather than inherited from a mission, so this is a claim about the
+# RULE and not about what any board happens to be painted to (the content razor).
+func test_the_return_aims_at_the_surface_not_at_the_board_ceiling() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_rig.position = Vector3(_rig.position.x, 12.0, _rig.position.z)
+
+	_game.focus_view_on(unit)
+	await _settle()
+
+	var wanted := BoardSpace.surface_point(unit.get_projected_destination(), _game.board_heights)
+	assert_bool(absf(12.0 - wanted.y) > 1.0).override_failure_message(
+			"the parked height IS the surface here; the case proves nothing").is_true()
+	assert_float(_rig.position.y).override_failure_message(
+			"the rig kept its inherited aim height, so it looks at a point in the air above the unit"
+			).is_equal_approx(wanted.y, 0.01)
+
+
+# The same rule at the OTHER surface that reads it, and the one the dev actually saw it on: an AI
+# turn on Level_1. Pre-existing since 4d — the mirror kept _rig.position.y as deliberately as the
+# recentre did, so fixing one without the other would have left the enemy phase aiming at the sky.
+func test_the_ai_pan_aims_at_the_surface_too() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_ai_locked(true)
+	await _cam().pan_to(unit)
+	_rig.position = Vector3(_rig.position.x, 12.0, _rig.position.z)
+	await _settle()
+
+	var wanted := _surface_aim(BoardSpace.of_pixels(_cam().global_position, 0.0))
+	assert_bool(absf(12.0 - wanted.y) > 1.0).override_failure_message(
+			"the parked height IS the surface here; the case proves nothing").is_true()
+	assert_float(_rig.position.y).override_failure_message(
+			"the AI pan kept the rig's inherited aim height").is_equal_approx(wanted.y, 0.01)
+	_cam().set_ai_locked(false)
+	_game.game_state = _game.GameState.IDLE

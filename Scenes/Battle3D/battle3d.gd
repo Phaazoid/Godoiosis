@@ -519,7 +519,12 @@ func _mirror_camera() -> void:
 			_rig.align_to_detent()
 	if not cam.ai_locked:
 		return
-	_rig.position = BoardSpace.of_pixels(cam.global_position, _rig.position.y)
+	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
+	# _rig.position.y, i.e. whatever the opening shot had left there — see _aim_over. Continuous
+	# rather than per cell because this is a GLIDING pan: stepping the height at cell boundaries
+	# would jolt the whole diorama mid-beat.
+	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
+	_rig.position = _aim_over(flat.x, flat.z)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -766,13 +771,28 @@ func _center_on_pointer() -> void:
 
 
 # THE recentre, and the one answer to "put the rig over this cell": SPACE above, and #471's return
-# to the acting unit, which arrives as game.view_focus_requested. Only x/z are read, so the
-# column's LEVEL never enters into it — the rig keeps its own height, exactly as the AI mirror
-# does. Snap rather than glide: this node has always written position outright, and the rig
-# smooths yaw and distance but not position.
+# to the acting unit, which arrives as game.view_focus_requested. Snap rather than glide: this node
+# has always written position outright, and the rig smooths yaw and distance but not position.
+#
+# The HEIGHT comes from the cell, and that is the whole of the fix the dev's Level_1 report forced
+# (2026-08-23). surface_point is the cell-shaped door onto the same surface plane _aim_over
+# evaluates continuously — one authority, two entry points BoardSpace already ships (#273 / #259),
+# and it is the seam UnitMirror places the sprite with, so the camera looks where the unit IS.
 func _center_rig_on(cell: Vector2i) -> void:
-	var point := BoardSpace.standing_point(BoardSpace.of_cell(cell, 0))
-	_rig.position = Vector3(point.x, _rig.position.y, point.z)
+	_rig.position = BoardSpace.surface_point(cell, game.board_heights)
+
+
+# THE aim point for a continuous world x/z — the AI pan's twin of _center_rig_on, which has a cell.
+#
+# Read this against CameraRig3D._aim_at, which lifts the OPENING shot to the top of the whole board
+# volume so the pitch looks down at the surface rather than through it. That is right for FRAMING a
+# board and wrong for LOOKING AT something standing on one, and until 2026-08-23 nothing ever
+# re-derived it: every recentre kept _rig.position.y, so on Level_1 (columns to level 4, and an
+# authored start that froze aim.y = 5) the camera aimed four cells into the air above whatever it
+# had been pointed at. Invisible on a flat board, which is why Prolog never showed it.
+func _aim_over(x: float, z: float) -> Vector3:
+	var cell := Vector2i(floori(x), floori(z))
+	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
 
 
 func _update_pointer(screen_pos: Vector2) -> void:
