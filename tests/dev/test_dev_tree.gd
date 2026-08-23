@@ -133,6 +133,26 @@ func test_leaving_the_tile_brush_leaf_disarms_the_brush() -> void:
 		"the brush stayed armed after navigating away -- it will paint from any leaf").is_false()
 
 
+# The brush's page clause, which the disarm case above CANNOT see: that one arms through the real
+# checkbox, so leaving the page unticks it and brush_active is already false. A flag set from
+# anywhere else -- a fixture, a future tool, a restored panel state -- would still have armed a
+# brush on a page the dev is not looking at.
+#
+# Added because a mutant deleting the clause PASSED the whole suite. brush_armed() reads the STATE
+# (which page is up) rather than trusting the disarm EVENT to have fired.
+func test_a_stale_brush_flag_does_not_arm_from_another_page() -> void:
+	game.set_dev_mode(true)
+	await _select("Game")
+	overlay.tile_brush.brush_active = true   # deliberately NOT through the checkbox
+	assert_bool(game.dev_controller.brush_armed()).override_failure_message(
+		"the brush armed itself from the Game page -- a stale flag is enough").is_false()
+
+	await _select("Tile Brush")
+	overlay.tile_brush.brush_active = true
+	assert_bool(game.dev_controller.brush_armed()).override_failure_message(
+		"the brush refuses to arm on its own page; the clause is refusing everything").is_true()
+
+
 # --- showing(): the one answer to which page owns input (2026-08-23) -------------------------
 
 # It replaced four hand-rolled spellings, and the NESTED pair is why it has to be a function rather

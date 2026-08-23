@@ -653,13 +653,32 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > **The brush grew a STEEPNESS door in #427 slice 2 (2026-08-23), and its height step opened.** The
 > Height spinbox steps by **1 unit** now rather than a whole level, so a half-level platform is
 > authorable — slice 1 had deliberately held it at `UNITS_PER_LEVEL` because nothing could draw one.
-> The wheel still moves a whole level per notch, since that is the gesture, not the resolution.
+> The WHEEL matches it -- one UNIT per notch. It moved a whole LEVEL for a few hours, which made a
+> two-cell gentle slope unbuildable by the only gesture that changes height mid-stroke: "I have no
+> way to connect more than one half slope together." Ctrl+wheel still hands the notch to the camera,
+> and always did -- what made zooming feel broken was the camera's own floor, below.
 >
 > Steepness is a **separate control from direction** (dev call, 2026-08-23), against folding both
 > into one nine-entry dropdown: a Rise Amount picker (Full 45° / Half 26.6°) beside the compass, and
 > **X** cycles it — between Z and C, so turn-left / change-pitch / turn-right read as one gesture. It
 > greys with the direction on a tile that stands up, for the same reason. The amount deliberately
 > survives *Reset to flat*: it is a steepness preference, not a piece of the shape.
+
+> **A DEV PAGE OWNS ITS OWN INPUT (dev, 2026-08-23).** *"I should only be able to spawn units while
+> the unit spawning window is up, yet when I press space in the brush mode, it spawns a unit."*
+> `DevOverlay.showing(page)` is the one answer to which page is up — it has to be a function rather
+> than a comparison, because Spawn and Character Editor share the Unit Authoring container, so
+> either is showing only when that container is the current top-level tab AND the current authoring
+> one. Four hand-rolled spellings collapsed onto it.
+>
+> `DevController` then combines it with the game state, once per key: `brush_armed()` and its new
+> sibling `spawn_armed()`. **Both halves are load-bearing** — Spawn is the overlay's BOOT page, so
+> the page test alone made SPACE try to spawn during ordinary play. Both SPACE handlers (game.gd's
+> flat arm and battle3d's) and the 3D help line read the one predicate, which is what stops the
+> readout promising a key the gate refuses.
+>
+> The zoom-in floor came down with it (`CameraRig3D.min_distance` 6.0 → 1.0, and its Game-tab knob
+> now reaches 0.25): *"it really makes it hard to zoom in and see what I'm trying to brush paint."*
 
 
 Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush places at, with a

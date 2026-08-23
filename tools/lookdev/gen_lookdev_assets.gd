@@ -392,6 +392,15 @@ func _restore_uid(path: String, uid: String) -> bool:
 	var f := FileAccess.open(path, FileAccess.WRITE)
 	f.store_string(header.replace("]", ' uid="%s"]' % uid) + text.substr(newline))
 	f.close()
+	# Tell the ENGINE too, not just the file. ResourceUID is populated from .godot/uid_cache.bin at
+	# import, so a header patched afterwards is invisible until someone re-imports -- and
+	# tests/law/test_resource_uid_references.gd asks ResourceUID, so it reds against a file that is
+	# already correct. Registering here means the generator leaves the project consistent by itself.
+	var id := ResourceUID.text_to_id(uid)
+	if ResourceUID.has_id(id):
+		ResourceUID.set_id(id, path)
+	else:
+		ResourceUID.add_id(id, path)
 	print("Restored %s on %s" % [uid, path])
 	return true
 
