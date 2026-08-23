@@ -79,8 +79,9 @@ func handle_dev_key(event: InputEvent) -> void:
 	_handle_rise_keys(event)
 	_handle_undo_keys(event)
 
-# Z / C turn the elevation brush's ramp rise (#260 follow-up), the Q/E detent idiom applied to
-# authoring. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
+# Z / C turn the elevation brush's ramp rise (#260 follow-up) and X cycles how far it climbs (#427
+# slice 2) -- the Q/E detent idiom applied to authoring, with steepness on the key between the two
+# turns. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
 # in CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
 # Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
 # dev-layer exactly like F1/F2/F3.
@@ -96,6 +97,8 @@ func _handle_rise_keys(event: InputEvent) -> void:
 	match key.physical_keycode:
 		KEY_Z:
 			brush.cycle_rise(-1)
+		KEY_X:
+			brush.cycle_climb()   # #427 slice 2: between the two turn keys, because it is the same gesture
 		KEY_C:
 			brush.cycle_rise(1)
 
@@ -198,10 +201,30 @@ func duplicate_unit(source: Unit, cell: Vector2i) -> Unit:
 # Is the brush armed and taking mouse input? Asked by game.gd's 2D input arm, Battle3D's 3D
 # arm (#231) and the ghost poll below -- ONE predicate, so a third caller cannot drift a third
 # answer. Deliberately NOT paint_mode-aware: every mode paints, only the ghost is TERRAIN-only.
+#
+# The PAGE clause (2026-08-23) makes a stale `brush_active` unrepresentable rather than merely
+# prevented: leaving the Tile Brush page already calls deactivate(), and that stays -- it unticks
+# the box for the human -- but the rules now read the STATE instead of trusting an event to have
+# fired. Same rule as SPACE one file over: a page's input belongs to the page.
 func brush_armed() -> bool:
-	return game.game_state == game.GameState.DEV_MODE \
-		and game.dev_overlay != null \
+	if game.game_state != game.GameState.DEV_MODE or game.dev_overlay == null:
+		return false
+	return game.dev_overlay.showing(game.dev_overlay.tile_brush) \
 		and game.dev_overlay.tile_brush.brush_active
+
+# May SPACE spawn right now? DEV_MODE *and* the Spawn page (dev, 2026-08-23: "I should only be able
+# to spawn units while the unit spawning window is up"). Both halves, and that is not belt-and-braces:
+# Spawn is the overlay's BOOT page, so the page test alone is true before dev mode is ever entered --
+# measured, it made SPACE try to spawn during ordinary play instead of recentring the camera.
+#
+# Here rather than in either handler because there are TWO -- game.gd's flat arm and battle3d's --
+# plus the 3D help line that names the key. brush_armed() above combines the same two kinds of fact
+# for the same reason.
+func spawn_armed() -> bool:
+	if game.game_state != game.GameState.DEV_MODE or game.dev_overlay == null:
+		return false
+	return game.dev_overlay.showing(game.dev_overlay.spawn)
+
 
 # Both buttons are hold-to-drag (erase gained it 2026-08-12); paint wins if both are held.
 func handle_tile_brush(event) -> void:
@@ -337,7 +360,8 @@ func brush_ghost() -> BrushGhost:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	var cell := _mouse_cell()
 	if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
-		return BrushGhost.make(cell, brush.selected_elevation(), _brush_ghost, brush.selected_rise())
+		return BrushGhost.make(cell, brush.selected_elevation(), _brush_ghost, brush.selected_rise(),
+				brush.selected_climb())
 	return null
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
@@ -438,7 +462,8 @@ func _erase() -> void:
 func _paint_tile(cell: Vector2i) -> void:
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
 	game.grid.paint(cell, brush.selected_source, brush.selected_tile)
-	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise())
+	game.board_heights.set_cell(cell, brush.selected_elevation(), brush.selected_rise(),
+			brush.selected_climb())
 	_refresh_height_readout()
 	game.camera_controller.refresh_bounds(game.grid)
 

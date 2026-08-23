@@ -66,7 +66,12 @@ func _draw() -> void:
 	for cell in grid.get_used_cells():
 		var height := heights.elevation_at(cell)
 		var rise := heights.ramp_rise_at(cell)
-		var label := str(height) + RISE_ARROWS[rise]
+		# A gentle ramp wears a half sign (#427 slice 2): steepness is authored now, and an arrow
+		# alone could not tell a 26.6 degree slope from a 45 degree one.
+		var arrow := RISE_ARROWS[rise]
+		if rise != Terrain.RampRise.NONE and heights.ramp_climb_at(cell) < Terrain.UNITS_PER_LEVEL:
+			arrow += "½"
+		var label := str(height) + arrow
 		var color := FLAT_COLOR
 		if rise != Terrain.RampRise.NONE:
 			color = RAMP_COLOR

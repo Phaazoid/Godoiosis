@@ -202,6 +202,28 @@ func _show_page(page: Control) -> void:
 		tabs.current_tab = tabs.get_tab_idx_from_control(page)
 
 
+# WHICH PAGE IS SHOWING — the one answer, and the reason input can be scoped to a page at all
+# (dev, 2026-08-23: "I should only be able to spawn units while the unit spawning window is up, yet
+# when I press space in the brush mode, it spawns a unit").
+#
+# It had no single spelling: _on_tab_changed hand-checked each page, _update_zone_visibility
+# re-derived the Tile Brush one, _on_authoring_tab_changed re-derived Spawn's, and BOTH Space
+# handlers (game.gd's and battle3d's) asked only whether DEV_MODE was on. The nested container is
+# why it needs a function rather than a comparison: Spawn and Character Editor live inside Unit
+# Authoring, so either is showing only when Unit Authoring is the current top-level tab AND it is
+# the current authoring tab.
+#
+# The WINDOW being closed is not this question — a caller that cares asks `visible` too, the way
+# _update_zone_visibility does; a page can be the current one behind a shut window.
+func showing(page: Control) -> bool:
+	if page == null:
+		return false
+	if page == spawn or page == character_editor:
+		return %DevTabs.get_current_tab_control() == unit_authoring \
+			and %AuthoringTabs.get_current_tab_control() == page
+	return %DevTabs.get_current_tab_control() == page
+
+
 func _leaf_item_for(page: Control) -> TreeItem:
 	var root := tool_tree.get_root()
 	if root == null:
@@ -232,18 +254,17 @@ func _on_close_requested():
 	_update_zone_visibility()
 
 func _on_tab_changed(_tab: int):
-	var current = %DevTabs.get_current_tab_control()
-	if current == unit_authoring:
+	if showing(unit_authoring):
 		_refresh_spawn_pickers()
-	if current == unit_editor:
+	if showing(unit_editor):
 		unit_editor.refresh_catalogs()
-	if current == scenario_tool:
+	if showing(scenario_tool):
 		scenario_tool.refresh_on_show()
-	if current == squads_ai:
+	if showing(squads_ai):
 		squads_ai.refresh_on_show()
-	if current == dialog_tool:
+	if showing(dialog_tool):
 		dialog_tool.refresh_on_show()
-	if current != tile_brush:
+	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()
 
@@ -259,7 +280,7 @@ func _on_scenario_file_changed() -> void:
 # BOTH doors into it: outer tab entry above, and the sub-tab switch here -- "save a character,
 # flip to Spawn, place it" never fires an outer tab change (#179).
 func _on_authoring_tab_changed(_tab: int) -> void:
-	if %AuthoringTabs.get_current_tab_control() == spawn:
+	if showing(spawn):
 		_refresh_spawn_pickers()
 
 func _refresh_spawn_pickers() -> void:
@@ -269,7 +290,7 @@ func _refresh_spawn_pickers() -> void:
 # Zones are authoring scaffolding -- visible only while actively painting (this window up
 # AND the Tile Brush tab current), never during play.
 func _update_zone_visibility() -> void:
-	game.overlay_manager.set_zone_visibility(visible and %DevTabs.get_current_tab_control() == tile_brush)
+	game.overlay_manager.set_zone_visibility(visible and showing(tile_brush))
 
 func show_beside():
 	var main_pos := DisplayServer.window_get_position(DisplayServer.MAIN_WINDOW_ID)

@@ -66,11 +66,14 @@ func _om() -> OverlayManager:
 	return game.overlay_manager
 
 
-# The independent expectation: the 2D layer's cells, hand-lifted to flat-3D, sorted.
+# The independent expectation: the 2D layer's cells, hand-lifted to the ROW each one's height puts
+# it on, sorted. It said "flat-3D" and hardcoded row 0 until #427 slice 2, which was only ever right
+# because a ground cell's top row WAS 0 while a slab was one row deep.
 func _lifted(layer_2d: TileMapLayer) -> Array[Vector3i]:
+	var heights: BoardHeights = game.board_heights
 	var cells: Array[Vector3i] = []
 	for cell: Vector2i in layer_2d.get_used_cells():
-		cells.append(Vector3i(cell.x, 0, cell.y))
+		cells.append(BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell))))
 	cells.sort()
 	return cells
 
@@ -266,9 +269,11 @@ func test_blocked_reach_cells_route_to_their_own_layer() -> void:
 	game.enter_attack_mode(attacker)
 	await _settle()
 
-	var expected: Array[Vector3i] = [Vector3i(3, 2, 2)]   # the ledge cell, at its own level
+	# The ledge cell, on the row its own height puts it on.
+	var on_the_ledge := BoardSpace.of_cell(ledge, BoardSpace.top_row_of(4))
+	var expected: Array[Vector3i] = [on_the_ledge]
 	assert_that(_sorted_3d(BoardOverlays.Layer.ATTACK_BLOCKED)).is_equal(expected)
-	assert_bool(_sorted_3d(BoardOverlays.Layer.ATTACK).has(Vector3i(3, 2, 2))).is_false()
+	assert_bool(_sorted_3d(BoardOverlays.Layer.ATTACK).has(on_the_ledge)).is_false()
 	assert_int(_sorted_3d(BoardOverlays.Layer.ATTACK).size()) \
 		.is_equal(_om().attack_overlay.get_used_cells().size() - 1)
 	var m: Color = _om().attack_overlay.modulate
@@ -294,10 +299,11 @@ func test_sight_trace_line_reaches_the_diorama_and_clears() -> void:
 	var line := _overlays.line_of(BoardOverlays.Layer.SIGHT_TRACE)
 	assert_int(line.size()).is_equal(trace.points.size())
 	var first: Vector3 = trace.points[0]
-	# The trace's y counts height UNITS (#427), so the world lift divides by UNITS_PER_LEVEL.
+	# The trace's y counts height UNITS (#427), and since slice 2 a ROW is that same unit — so the
+	# world lift is one multiply off the height-0 surface rather than a divide down from a level.
 	assert_that(line[0]).is_equal(Vector3(
 		first.x * BoardSpace.CELL_SIZE,
-		BoardSpace.surface_y(0) + first.y * BoardSpace.CELL_SIZE / float(Terrain.UNITS_PER_LEVEL),
+		BoardSpace.surface_y(BoardSpace.top_row_of(0)) + first.y * BoardSpace.ROW_HEIGHT,
 		first.z * BoardSpace.CELL_SIZE))
 
 	game.exit_current_mode()
@@ -840,9 +846,9 @@ func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	_om().redraw_zones(game.zone_manager)
 	await _settle()
 	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_CAPTURE)) \
-		.is_equal([Vector3i(1, 0, 1), Vector3i(2, 0, 1)] as Array[Vector3i])
+		.is_equal([BoardSpace.of_cell(Vector2i(1, 1), BoardSpace.top_row_of(0)), BoardSpace.of_cell(Vector2i(2, 1), BoardSpace.top_row_of(0))] as Array[Vector3i])
 	assert_that(_sorted_3d(BoardOverlays.Layer.ZONE_EXTRACTION)) \
-		.is_equal([Vector3i(6, 0, 6)] as Array[Vector3i])
+		.is_equal([BoardSpace.of_cell(Vector2i(6, 6), BoardSpace.top_row_of(0))] as Array[Vector3i])
 	# A captured zone stops glowing in 2D (redraw_zones' hidden list) — and therefore in 3D.
 	_om().redraw_zones(game.zone_manager, ["cap"])
 	await _settle()
@@ -991,7 +997,7 @@ func test_a_reload_of_an_unchanged_board_leaves_the_zone_fills_drawn() -> void:
 # battle3d hands the cell to HoverPresenter, which resolves the unit and creates the icons.
 func _point_at(cell: Vector2i) -> void:
 	var heights: BoardHeights = game.board_heights
-	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
+	_scene._pointer_cell = BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))
 
 
 func test_with_rings_off_hovering_any_squadmate_crowns_the_leader_and_clears_on_the_way_out() -> void:

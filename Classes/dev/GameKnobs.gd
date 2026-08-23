@@ -142,10 +142,9 @@ const KNOBS: Array[Dictionary] = [
 	# --- Camera handling ---
 	# How the camera DRAGS, never how the board is framed: pitch, FOV, the opening shot and the fit
 	# margin are mood and stayed in LookKnobs, where a preset still captures them. Framing is also
-	# the half Battle3D.tscn authors -- it overrides fov -- which is why these seven are the ones
-	# with an @export default to write and those four are not.
-	{"group": "Camera handling", "node": "CameraRig", "prop": "min_distance", "label": "Zoom-in limit", "min": 2.0, "max": 20.0, "step": 0.25,
-		"tip": "How close the camera may get. Too close and sprites outrun their own pixel density."},
+	# the half Battle3D.tscn authors -- it overrides fov -- which is why these six are the ones
+	# with an @export default to write and those four are not. (Seven until the zoom-in floor was
+	# removed outright, 2026-08-23 -- a knob cannot name a property that no longer exists.)
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_step", "label": "Zoom step", "min": 0.25, "max": 5.0, "step": 0.05,
 		"tip": "How far one notch of the mouse wheel moves the camera."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,

@@ -142,6 +142,7 @@ func _hover_cell() -> Vector2i:
 
 func _arm_brush() -> void:
 	game.set_dev_mode(true)
+	game.dev_overlay.show_leaf(_brush)   # the page owns the brush's input (2026-08-23)
 	_brush.brush_active = true
 
 # The ghost POLLS per frame rather than riding mouse events, because while the Dev Tools OS
@@ -256,7 +257,7 @@ func test_the_ghost_previews_the_brushs_level_not_the_cells() -> void:
 	var ghost: BrushGhost = game.dev_controller.brush_ghost()
 
 	assert_object(ghost).is_not_null()
-	assert_int(ghost.level).override_failure_message(
+	assert_int(ghost.height).override_failure_message(
 			"the ghost previewed the cell's CURRENT height instead of the brush's").is_equal(4)
 	assert_int(ghost.rise).is_equal(Terrain.RampRise.EAST)
 	assert_object(ghost.source).override_failure_message(
@@ -277,7 +278,7 @@ func test_a_groundless_cell_still_owes_a_ghost() -> void:
 
 	assert_object(ghost).override_failure_message(
 			"refused to preview a paint that would genuinely land").is_not_null()
-	assert_int(ghost.level).is_equal(2)
+	assert_int(ghost.height).is_equal(2)
 
 
 func test_the_flat_view_draws_the_tile_and_leaves_the_height_to_the_readout() -> void:
@@ -290,7 +291,7 @@ func test_the_flat_view_draws_the_tile_and_leaves_the_height_to_the_readout() ->
 
 	assert_bool(_ghost().visible).override_failure_message(
 			"the 2D tile ghost went down for a paint that does place a tile").is_true()
-	assert_int(game.dev_controller.brush_ghost().level).override_failure_message(
+	assert_int(game.dev_controller.brush_ghost().height).override_failure_message(
 			"the intent dropped the level 2D cannot draw, instead of carrying it").is_equal(6)
 
 

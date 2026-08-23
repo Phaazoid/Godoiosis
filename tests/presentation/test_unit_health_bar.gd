@@ -65,7 +65,7 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 # after the poll has settled, never before.
 func _point_at(cell: Vector2i) -> void:
 	var heights: BoardHeights = game.board_heights
-	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
+	_scene._pointer_cell = BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))
 
 
 func _shown_bars() -> Array[Unit]:

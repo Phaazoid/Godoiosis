@@ -150,13 +150,13 @@ func _fill_gated(layer: BoardOverlays.Layer, source, wanted: bool) -> void:
 	_fill(layer, cells)
 
 
-# Which level a marked cell's overlay lies on (#273) — a move-range tile on a terrace has to sit
+# Which row a marked cell's overlay lies on (#273) — a move-range tile on a terrace has to sit
 # ON the terrace. Read off the hidden game rather than passed, unlike BoardMirror.sync: this class
 # already POLLS the game for everything it draws, and nothing here takes board state as an
 # argument. Null-guarded for the headless Play boards that never set `game`.
-func _level_of(cell: Vector2i) -> int:
+func _row_of(cell: Vector2i) -> int:
 	var heights := _heights()
-	return Terrain.level_of(heights.elevation_at(cell)) if heights != null else 0
+	return BoardSpace.top_row_of(heights.elevation_at(cell) if heights != null else 0)
 
 
 # Null on the headless Play boards that never set `game`; BoardSpace.surface_point reads that as
@@ -169,13 +169,14 @@ func _heights() -> BoardHeights:
 
 
 # The cell list is only PART of the key: how a fill lies on its cell also depends on that cell's
-# ramp rise (#281), and a Vector3i carries the level but not the rise. So a rise painted onto a
+# ramp rise (#281), and a Vector3i carries the row but not the rise. So a rise painted onto a
 # cell whose elevation did not change leaves this array identical while the render must move —
-# hence the heights gate rather than a per-cell rise lookup in the comparison (#308).
+# hence the heights gate rather than a per-cell rise lookup in the comparison (#308). Since #427
+# slice 2 the same is true of a ramp's CLIMB, which the gate already covers for the same reason.
 func _fill(layer: BoardOverlays.Layer, used: Array[Vector2i]) -> void:
 	var cells: Array[Vector3i] = []
 	for cell in used:
-		cells.append(BoardSpace.of_cell(cell, _level_of(cell)))
+		cells.append(BoardSpace.of_cell(cell, _row_of(cell)))
 	cells.sort()
 	if not _heights_moved and _last_cells.get(layer, Array()) == cells:
 		return
@@ -229,8 +230,8 @@ func _sight_trace(om: OverlayManager) -> void:
 			tint = SightTrace2D.BLOCKED_COLOR
 		for p in trace.points:
 			# Rule-height h counts height UNITS (#427) above the level-0 floor plane, so it converts
-			# at UNITS_PER_LEVEL to the cell metric: a level-E surface is still world surface_y(E).
-			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(0) + p.y * BoardSpace.CELL_SIZE / float(Terrain.UNITS_PER_LEVEL), p.z * BoardSpace.CELL_SIZE))
+			# at UNITS_PER_LEVEL. Since slice 2 a ROW is that same unit, so it is one multiply.
+			points.append(Vector3(p.x * BoardSpace.CELL_SIZE, BoardSpace.surface_y(BoardSpace.top_row_of(0)) + p.y * BoardSpace.ROW_HEIGHT, p.z * BoardSpace.CELL_SIZE))
 	overlays.set_line(BoardOverlays.Layer.SIGHT_TRACE, points, tint)
 
 

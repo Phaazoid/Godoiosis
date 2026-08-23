@@ -302,8 +302,10 @@ func _pool_for(layer: Layer) -> Array:
 func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) -> Transform3D:
 	if spec["kind"] == Kind.BRACKET:
 		return Transform3D(Basis.IDENTITY, BoardSpace.cell_center(cell))
-	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(BoardSpace.flat(cell))
-	var surface := BoardSpace.lie_on(cell, rise)
+	var flat_cell := BoardSpace.flat(cell)
+	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(flat_cell)
+	var climb := 0 if heights == null else heights.ramp_climb_at(flat_cell)
+	var surface := BoardSpace.lie_on(cell, rise, climb)
 	return Transform3D(surface.basis, surface.origin + Vector3.UP * _lift_of(spec))
 
 

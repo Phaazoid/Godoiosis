@@ -167,6 +167,42 @@ func test_canon_example_one_tumbles_the_whole_flight() -> void:
 	assert_that(_path_of(outcome)).is_equal(expected)
 
 
+# The same shape at half the pitch (#427 slice 2): a chain of GENTLE ramps, each dropping one unit.
+# The tumble's continuation asks the next ramp's own climb now, so a chain that used to be spelled
+# as "one level down" has to flow identically at half a level -- and the flight has to slide onto
+# the first one for free, which only holds if the no-fall test reads that ramp's climb too.
+func test_a_chain_of_gentle_ramps_tumbles_exactly_like_a_steep_one() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 3)                               # the shover stands level
+	heights.set_cell(Vector2i(2, 0), 3)                               # the shelf
+	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST, 1)     # high edge meets the shelf
+	heights.set_cell(Vector2i(4, 0), 1, Terrain.RampRise.WEST, 1)
+	heights.set_cell(Vector2i(5, 0), 0, Terrain.RampRise.WEST, 1)
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))       # (6,0) is flat ground
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(6, 0)) \
+		.override_failure_message("the gentle chain stopped at %s" % outcome.knockback_to).is_true()
+	assert_int(outcome.fall_damage).override_failure_message(
+			"a slide down gentle slopes charged fall damage").is_equal(0)
+	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0), Vector2i(4, 0), Vector2i(5, 0),
+			Vector2i(6, 0)]
+	assert_that(_path_of(outcome)).is_equal(expected)
+
+
+# The refusal that keeps the case above honest: a flight arriving a FULL level over a gentle ramp's
+# high edge is a drop, not a slide-on. Reading the constant instead of the ramp's climb makes this
+# free.
+func test_a_flight_landing_above_a_gentle_ramps_shoulder_still_falls() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), Terrain.UNITS_PER_LEVEL)
+	heights.set_cell(Vector2i(2, 0), Terrain.UNITS_PER_LEVEL)         # the shelf, a level up
+	heights.set_cell(Vector2i(3, 0), 0, Terrain.RampRise.WEST, 1)     # its shoulder is only 1 up
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	var outcome := _resolve(s)
+	assert_int(outcome.fall_damage).override_failure_message(
+			"the flight slid onto a shoulder it was above").is_greater(0)
+
+
 # F3 R2 F2 ... -- the landing at F2 catches it: ends on F2, never reaches R1.
 func test_canon_example_two_is_caught_by_the_landing() -> void:
 	var heights := BoardHeights.new()

@@ -40,6 +40,7 @@ func before_test() -> void:
 	game.game_state = game.GameState.DEV_MODE
 	_brush = game.dev_overlay.tile_brush
 	_dc = game.dev_controller
+	game.dev_overlay.show_leaf(_brush)   # the page owns the brush's input (2026-08-23)
 	_brush.brush_active = true
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 	_cursor = [Vector2i.ZERO]

@@ -7,19 +7,27 @@ class_name BoardSpace
 # authored cell_size must agree; pinned by test). Presentation-side only: the rules
 # layer keeps its own 2D vocabulary (GridUtils), and bridging the two is stage 2+.
 #
-# A cell Vector3i(x, y, z) occupies [x..x+1] x [y..y+1] x [z..z+1] * CELL_SIZE.
+# A mirror cell Vector3i(x, y, z) occupies [x..x+1] x [z..z+1] * CELL_SIZE horizontally and
+# [y..y+1] * ROW_HEIGHT vertically. NOT a cube since #427 slice 2 — the vertical index is a ROW of
+# one HEIGHT UNIT (half a level), because the store measures in half levels and geometry that only
+# exists at whole levels cannot draw one. A ground slab is still one LEVEL deep, i.e.
+# UNITS_PER_LEVEL rows, which is what keeps every world position exactly where it was.
 # Boundary rule: a position exactly on a face floors UPWARD (cell_of is a volume
 # query for interior points; round-trip through cell_center, not standing_point).
 
 const CELL_SIZE := 1.0
 
+# One row of the vertical index, in world units. The whole re-metric is this constant: a 45 degree
+# ramp still rises CELL_SIZE over CELL_SIZE of run, it now just spans UNITS_PER_LEVEL rows to do it.
+const ROW_HEIGHT := CELL_SIZE / Terrain.UNITS_PER_LEVEL
+
 # "No cell" sentinel — far outside any real board (GridUtils.NO_CELL's 3D twin).
 const NO_CELL := Vector3i(-999, -999, -999)
 
 
-# Center of the cell's volume. Agrees with GridMap.map_to_local at cell_size (1,1,1).
+# Center of the cell's volume. Agrees with GridMap.map_to_local at the authored cell_size.
 static func cell_center(cell: Vector3i) -> Vector3:
-	return Vector3(cell.x + 0.5, cell.y + 0.5, cell.z + 0.5) * CELL_SIZE
+	return Vector3((cell.x + 0.5) * CELL_SIZE, (cell.y + 0.5) * ROW_HEIGHT, (cell.z + 0.5) * CELL_SIZE)
 
 
 # Center of the cell's TOP face: where a unit stands, an overlay lies, a highlight sits.
@@ -27,12 +35,21 @@ static func standing_point(cell: Vector3i) -> Vector3:
 	return Vector3((cell.x + 0.5) * CELL_SIZE, surface_y(cell.y), (cell.z + 0.5) * CELL_SIZE)
 
 
-# The world Y of a surface at `level` — the top face of that level's block, since a level-E block
-# occupies [E .. E+1]. The ONE spelling of it (#273): the live board's unit placement
+# The world Y of a surface at `row` — the top face of that row's block, since a row-R block
+# occupies [R .. R+1] * ROW_HEIGHT. The ONE spelling of it (#273): the live board's unit placement
 # (UnitMirror) and the walk demo's injected stand_at both read this, so the mirrored board and
 # the demo cannot drift about where the ground is.
-static func surface_y(level: int) -> float:
-	return float(level + 1) * CELL_SIZE
+static func surface_y(row: int) -> float:
+	return float(row + 1) * ROW_HEIGHT
+
+
+# The row a cell of this rule HEIGHT tops out at (#427 slice 2) — the one conversion between the
+# store's unit and the mirror's vertical index, and the successor to Terrain.level_of at every site
+# that used to place geometry. A ground slab is one LEVEL deep, so a height-H surface is the top of
+# row H + UNITS_PER_LEVEL - 1; with a slab of exactly one row that reduces to H, which is what the
+# whole-level version silently assumed.
+static func top_row_of(height: int) -> int:
+	return height + Terrain.UNITS_PER_LEVEL - 1
 
 
 # Where a thing STANDING on this 2D cell sits — a unit, a flame, a crate (#273). ONE answer for
@@ -52,14 +69,16 @@ static func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
 # own plane evaluated at (x, z), so a sliding sprite can stick to a ramp continuously instead of
 # stepping per cell or floating over it. Flat cells are constant; a ramp's plane meets the next
 # ramp's (and the level catch's surface) exactly at the shared edge, which is what makes a tumble
-# read as one slide. Same tan as RAMP_SLOPE_ANGLE: one level of rise per cell of run.
+# read as one slide. The gradient is the ramp's OWN climb since #427 slice 2, so a gentle slope
+# slides at half the pitch of a 45 degree one rather than at the one hardcoded angle.
 static func surface_height_at(cell: Vector2i, x: float, z: float, heights: BoardHeights) -> float:
 	var t := surface_transform(cell, heights)
 	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(cell)
 	if rise == Terrain.RampRise.NONE:
 		return t.origin.y
 	var dir := Terrain.rise_direction(rise)
-	return t.origin.y + tan(RAMP_SLOPE_ANGLE) * ((x - t.origin.x) * dir.x + (z - t.origin.z) * dir.y)
+	var gradient := slope_gradient(heights.ramp_climb_at(cell))
+	return t.origin.y + gradient * ((x - t.origin.x) * dir.x + (z - t.origin.z) * dir.y)
 
 
 # The surface height of `cell` AT the edge it meets its `dir` neighbour on (#472). One edge is
@@ -79,15 +98,26 @@ static func surface_height_at_edge(cell: Vector2i, dir: Vector2i, heights: Board
 	return surface_height_at(cell, x, z, heights)
 
 
-# One level of rise per cell of run — the authored wedge's own profile (its slope face runs corner
-# to corner, normal (0,1,1)), and the same ratio surface_point's half-level lift already encodes.
-const RAMP_SLOPE_ANGLE := atan2(CELL_SIZE, CELL_SIZE)
+# How steep a ramp of this CLIMB is — the authored wedge's own profile, in the units the store
+# speaks. A climb of UNITS_PER_LEVEL is one level of rise per cell of run (45 degrees); a climb of 1
+# is half that, which is atan(1/2) = 26.6 degrees, the RCT gentle slope #427 slice 2 adds.
+#
+# Functions rather than the consts they replace, because steepness is authored per cell now — and
+# every caller already has the climb in hand, since the same store answers both questions.
+static func slope_gradient(climb: int) -> float:
+	return float(climb) * ROW_HEIGHT / CELL_SIZE
+
+
+static func slope_angle(climb: int) -> float:
+	return atan2(float(climb) * ROW_HEIGHT, CELL_SIZE)
+
 
 # A slope is LONGER than the cell it spans (1/cos of the angle), so markup that only rotated would
 # cover the cell's footprint and leave the ramp face bare at both edges. Stretching along the slope
 # is what keeps a fill covering its whole cell and an arrow foreshortening exactly as the ground
 # under it does.
-const SLOPE_STRETCH := 1.0 / cos(RAMP_SLOPE_ANGLE)
+static func slope_stretch(climb: int) -> float:
+	return 1.0 / cos(slope_angle(climb))
 
 
 # How a FLAT thing LIES on this cell's surface (#281) — a path arrow, an overlay fill, any markup
@@ -96,36 +126,39 @@ const SLOPE_STRETCH := 1.0 / cos(RAMP_SLOPE_ANGLE)
 # through it. Anything that STANDS stays upright and keeps reading surface_point (units, flames,
 # props).
 #
-# The one place a stored HEIGHT becomes a drawn LEVEL (#427): the store measures in half-level units
-# and a GridMap column is indexed in whole levels, so Terrain.level_of is the conversion the whole 3D
+# The one place a stored HEIGHT becomes a drawn ROW (#427): the store measures in half-level units
+# and the mirror's vertical index is one row per unit, so top_row_of is the conversion the whole 3D
 # stack inherits through this function.
 static func surface_transform(cell: Vector2i, heights: BoardHeights) -> Transform3D:
 	if heights == null:
-		return lie_on(of_cell(cell, 0), Terrain.RampRise.NONE)
-	return lie_on(of_cell(cell, Terrain.level_of(heights.elevation_at(cell))), heights.ramp_rise_at(cell))
+		return lie_on(of_cell(cell, top_row_of(0)), Terrain.RampRise.NONE, 0)
+	return lie_on(of_cell(cell, top_row_of(heights.elevation_at(cell))),
+			heights.ramp_rise_at(cell), heights.ramp_climb_at(cell))
 
 
-# The lie itself, for a caller that already resolved the level — the overlay fills, whose Vector3i
-# states it (of_cell's "every caller states the LEVEL it means" rule, #273; re-deriving it here
-# would look up what was already passed).
+# The lie itself, for a caller that already resolved the row — the overlay fills, whose Vector3i
+# states it (of_cell's "every caller states the ROW it means" rule, #273; re-deriving it here
+# would look up what was already passed). The CLIMB is required for the same reason: a slope's
+# steepness is authored now, and a default would be one caller silently drawing another's ramp.
 #
 # The tilt is DERIVED from Terrain.rise_direction — the same call BoardMirror._ramp_orientation
 # yaws the wedge by — so the ground and the markup on it cannot disagree about which way it climbs.
-static func lie_on(cell: Vector3i, rise: Terrain.RampRise) -> Transform3D:
+static func lie_on(cell: Vector3i, rise: Terrain.RampRise, climb: int) -> Transform3D:
 	var origin := standing_point(cell)
-	if rise == Terrain.RampRise.NONE:
+	if rise == Terrain.RampRise.NONE or climb <= 0:
 		return Transform3D(Basis.IDENTITY, origin)
 	# The midpoint of the slope, which is exactly where a quad tilted about its own centre lies flat.
-	origin.y += CELL_SIZE * 0.5
+	origin.y += float(climb) * ROW_HEIGHT * 0.5
 	var dir := Terrain.rise_direction(rise)
 	var uphill := Vector3(dir.x, 0.0, dir.y)
-	var basis := Basis(uphill.cross(Vector3.UP).normalized(), RAMP_SLOPE_ANGLE)
+	var basis := Basis(uphill.cross(Vector3.UP).normalized(), slope_angle(climb))
 	# Stretch the ONE local axis that ends up running up the slope, so the art keeps its orientation
 	# (a rotated arrow would point somewhere else) and only its length along the slope changes.
+	var stretch := slope_stretch(climb)
 	if dir.x != 0:
-		basis.x *= SLOPE_STRETCH
+		basis.x *= stretch
 	else:
-		basis.z *= SLOPE_STRETCH
+		basis.z *= stretch
 	return Transform3D(basis, origin)
 
 
@@ -133,17 +166,18 @@ static func lie_on(cell: Vector3i, rise: Terrain.RampRise) -> Transform3D:
 static func cell_of(position: Vector3) -> Vector3i:
 	return Vector3i(
 		floori(position.x / CELL_SIZE),
-		floori(position.y / CELL_SIZE),
+		floori(position.y / ROW_HEIGHT),
 		floori(position.z / CELL_SIZE)
 	)
 
 
-# The TOP of a GROUND-LEVEL column, in cells — what BoardPicker's fallback plane sits on over an
+# The TOP of a GROUND-LEVEL column, in ROWS — what BoardPicker's fallback plane sits on over an
 # erased cell (#231), since y=0 is the slab's BOTTOM and a plane there returns the wrong cell at
 # grazing angles. Elevation (#273) did NOT retire this: an unpainted column is still exactly one
-# cell tall, so this is the top of level 0 and nothing more. It equals surface_y(0), and
-# test_board_space pins the two spellings together.
-const FLAT_TOP_LEVEL := 1
+# LEVEL tall, so this is the top of a height-0 cell and nothing more — which since #427 slice 2 is
+# UNITS_PER_LEVEL rows rather than one. It equals surface_y(top_row_of(0)), and test_board_space
+# pins the two spellings together.
+const FLAT_TOP_ROW := Terrain.UNITS_PER_LEVEL
 
 # The sim<->mirror cell pair (#222): sim cells are 2D (x, y), mirror cells are (x, level, y).
 # The ONE spelling of it. flat(NO_CELL) equals GridUtils.NO_CELL by value — pinned, the pointer
@@ -152,11 +186,12 @@ static func flat(cell: Vector3i) -> Vector2i:
 	return Vector2i(cell.x, cell.z)
 
 
-# Every caller states the LEVEL it means (#273 — this took no argument and hardcoded 0 while the
+# Every caller states the ROW it means (#273 — this took no argument and hardcoded 0 while the
 # sim had no elevation). Passing beats looking up, and a required argument is what makes the old
-# flat assumption unrepresentable rather than merely discouraged.
-static func of_cell(cell: Vector2i, level: int) -> Vector3i:
-	return Vector3i(cell.x, level, cell.y)
+# flat assumption unrepresentable rather than merely discouraged. A caller holding a rule HEIGHT
+# converts with top_row_of rather than passing it raw.
+static func of_cell(cell: Vector2i, row: int) -> Vector3i:
+	return Vector3i(cell.x, row, cell.y)
 
 
 # A 2D-game world POSITION (pixels) as a 3D position at height `y`. The one spelling of

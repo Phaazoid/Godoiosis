@@ -257,7 +257,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_on_right_click()
 
 	if event is InputEventKey and event.pressed and event.keycode == Key.KEY_SPACE:
-		if game_state == GameState.DEV_MODE and dev_overlay != null:
+		if dev_controller.spawn_armed():
 			dev_overlay.spawn.try_spawn_at(hover_presenter.last_hovered_cell)
 		else:
 			camera_controller.center_on_position(get_global_mouse_position())

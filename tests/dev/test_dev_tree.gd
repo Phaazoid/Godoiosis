@@ -133,6 +133,80 @@ func test_leaving_the_tile_brush_leaf_disarms_the_brush() -> void:
 		"the brush stayed armed after navigating away -- it will paint from any leaf").is_false()
 
 
+# The brush's page clause, which the disarm case above CANNOT see: that one arms through the real
+# checkbox, so leaving the page unticks it and brush_active is already false. A flag set from
+# anywhere else -- a fixture, a future tool, a restored panel state -- would still have armed a
+# brush on a page the dev is not looking at.
+#
+# Added because a mutant deleting the clause PASSED the whole suite. brush_armed() reads the STATE
+# (which page is up) rather than trusting the disarm EVENT to have fired.
+func test_a_stale_brush_flag_does_not_arm_from_another_page() -> void:
+	game.set_dev_mode(true)
+	await _select("Game")
+	overlay.tile_brush.brush_active = true   # deliberately NOT through the checkbox
+	assert_bool(game.dev_controller.brush_armed()).override_failure_message(
+		"the brush armed itself from the Game page -- a stale flag is enough").is_false()
+
+	await _select("Tile Brush")
+	overlay.tile_brush.brush_active = true
+	assert_bool(game.dev_controller.brush_armed()).override_failure_message(
+		"the brush refuses to arm on its own page; the clause is refusing everything").is_true()
+
+
+# --- showing(): the one answer to which page owns input (2026-08-23) -------------------------
+
+# It replaced four hand-rolled spellings, and the NESTED pair is why it has to be a function rather
+# than a comparison: Spawn and Character Editor share the Unit Authoring container, so either is
+# showing only when Unit Authoring is the current top-level tab AND the current authoring tab.
+# Comparing against %DevTabs alone reports BOTH as showing whenever Unit Authoring is up.
+func test_showing_resolves_the_nested_authoring_pair() -> void:
+	await _select("Spawn")
+	assert_bool(overlay.showing(overlay.spawn)).is_true()
+	assert_bool(overlay.showing(overlay.character_editor)).override_failure_message(
+		"Character Editor reads as showing while Spawn is the page -- the nested tab is ignored") \
+		.is_false()
+
+	await _select("Characters")
+	assert_bool(overlay.showing(overlay.character_editor)).is_true()
+	assert_bool(overlay.showing(overlay.spawn)).is_false()
+
+	await _select("Tile Brush")
+	assert_bool(overlay.showing(overlay.tile_brush)).is_true()
+	assert_bool(overlay.showing(overlay.spawn)).override_failure_message(
+		"Spawn reads as showing from another leaf entirely").is_false()
+
+
+# SPACE spawns from the SPAWN page and nowhere else (dev, 2026-08-23: "when I press space in the
+# brush mode, it spawns a unit"). Driven through game.gd's real input arm rather than by calling
+# the spawner, because the gate is the thing under test -- and the roster count is what a spawn
+# actually costs, so a case asserting only that no error was raised would pass against the bug.
+func test_space_spawns_only_from_the_spawn_page() -> void:
+	game.set_dev_mode(true)
+	await _select("Tile Brush")
+	var before: int = game.units_root.get_child_count()
+	game._unhandled_input(_space())
+	await await_idle_frame()
+	var after: int = game.units_root.get_child_count()
+	assert_int(after).override_failure_message(
+		"SPACE spawned a unit while the Tile Brush page was up").is_equal(before)
+
+	await _select("Spawn")
+	game._unhandled_input(_space())
+	await await_idle_frame()
+	var after_on_spawn: int = game.units_root.get_child_count()
+	assert_int(after_on_spawn).override_failure_message(
+		"SPACE did nothing on the page that owns it -- the gate is refusing everything") \
+		.is_greater(before)
+
+
+func _space() -> InputEventKey:
+	var key := InputEventKey.new()
+	key.keycode = KEY_SPACE
+	key.physical_keycode = KEY_SPACE
+	key.pressed = true
+	return key
+
+
 # The click-a-unit jump goes through show_leaf, so the TREE moves with the page — a raw
 # current_tab write would leave the tree pointing at the leaf you left.
 func test_show_leaf_syncs_the_tree_selection() -> void:

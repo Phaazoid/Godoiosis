@@ -77,6 +77,26 @@ func _pickable_player_unit() -> Unit:
 	return null
 
 
+# The same set, ordered by how far its screen point sits from the middle of the view. A centred
+# ModalCard puts its buttons there, so a case that needs a click to land on the card's BACKDROP
+# rather than on a button asks for the far end of this — geometry, not luck.
+func _unit_furthest_from_the_screen_centre() -> Unit:
+	var centre: Vector2 = _scene.get_viewport().get_visible_rect().size * 0.5
+	var best: Unit = null
+	var best_distance := -1.0
+	for unit in _live_units():
+		if unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var at := _screen_of(unit.movement.cell)
+		if _under_ui(at) or not _click_lands_on(unit.movement.cell):
+			continue
+		var distance := at.distance_to(centre)
+		if distance > best_distance:
+			best_distance = distance
+			best = unit
+	return best
+
+
 # Does a click aimed at this cell actually resolve TO it? Asked of the real picker, because that is
 # the only thing that knows: a taller column standing between the camera and the cell shadows it,
 # and the click lands on the blocker instead. Invisible while every board is flat, routine the
@@ -129,14 +149,18 @@ func _under_ui(screen_pos: Vector2) -> bool:
 
 
 # Where this cell's surface appears on screen. Read off _scene._tops — the SAME table the picker
-# resolves against — rather than assuming level 0: BoardPicker._top_cell returns
-# Vector3i(x, level - 1, z), whose standing_point y is exactly `level * CELL_SIZE`, so aiming here
+# resolves against — rather than assuming row 0: BoardPicker._top_cell returns
+# Vector3i(x, row - 1, z), whose standing_point y is exactly `row * ROW_HEIGHT`, so aiming here
 # cannot drift from what a click actually hits, ramps included. Hardcoding 0 was a bet on the
 # fixture staying flat, and painting three tiles onto Prolog aborted this whole suite (measured).
+#
+# The vertical metric is ROW_HEIGHT and not CELL_SIZE since #427 slice 2 — multiplying a row by the
+# HORIZONTAL one aimed every synthesized click a level too high, which reads as "no reachable unit"
+# rather than as an arithmetic bug.
 func _screen_of(cell: Vector2i) -> Vector2:
 	var tops: Dictionary[Vector2i, int] = _scene._tops
-	var level: int = tops.get(cell, BoardSpace.FLAT_TOP_LEVEL)
-	var point := Vector3((cell.x + 0.5) * BoardSpace.CELL_SIZE, level * BoardSpace.CELL_SIZE,
+	var row: int = tops.get(cell, BoardSpace.FLAT_TOP_ROW)
+	var point := Vector3((cell.x + 0.5) * BoardSpace.CELL_SIZE, row * BoardSpace.ROW_HEIGHT,
 			(cell.y + 0.5) * BoardSpace.CELL_SIZE)
 	return _camera3d.unproject_position(point)
 
@@ -146,7 +170,7 @@ func _screen_of(cell: Vector2i) -> Vector2:
 # moves the expectation and the assertion together.
 func _marked(cell: Vector2i) -> Vector3i:
 	var heights: BoardHeights = _game.board_heights
-	return BoardSpace.of_cell(cell, heights.elevation_at(cell))
+	return BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))
 
 
 # A cell this unit can ACTUALLY be ordered into, taken from the game's own move range — the very set
@@ -236,6 +260,8 @@ func _parse_button(screen_pos: Vector2, button: MouseButton, pressed: bool) -> v
 
 func _arm_brush() -> void:
 	_game.set_dev_mode(true)
+	# The page owns the brush's input (2026-08-23), so arm it the way a human does.
+	_game.dev_overlay.show_leaf(_game.dev_overlay.tile_brush)
 	_game.dev_overlay.tile_brush.brush_active = true
 
 
@@ -309,7 +335,12 @@ func test_pointing_snaps_the_hidden_camera_to_the_hovered_cell() -> void:
 func test_a_modal_freeze_stops_3d_clicks_cold() -> void:
 	# Picked BEFORE the card opens: a modal is a full-rect Control on the UI layer, so
 	# _pickable_player_unit correctly finds nothing clickable once one is up.
-	var unit := _pickable_player_unit()
+	#
+	# FURTHEST from the screen centre, and that is measured rather than hoped for (#427 slice 2):
+	# the pause card's buttons sit in the middle, so a click aimed at a central cell presses Resume
+	# and the two end-state asserts below fire on the card working correctly. Halving the vertical
+	# metric moved every projection, which is how a previously-lucky cell became an unlucky one.
+	var unit := _unit_furthest_from_the_screen_centre()
 	assert_object(unit).is_not_null()
 	# Open the pause menu through the real wire: ESC parsed at the top of the pipeline.
 	var esc := InputEventKey.new()
@@ -784,8 +815,9 @@ func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void
 	_parse_wheel(MOUSE_BUTTON_WHEEL_UP)
 	await _pump()
 
+	# ONE UNIT per notch since 2026-08-23 -- half a level, so a gentle slope can be walked up by wheel.
 	assert_int(brush.selected_elevation()).override_failure_message(
-			"the notch never reached the brush").is_equal(Terrain.UNITS_PER_LEVEL)
+			"the notch never reached the brush").is_equal(1)
 	assert_float(_rig()._target_distance).override_failure_message(
 			"the same notch ALSO zoomed the camera: the brush is not suppressing the rig's wheel"
 			).is_equal_approx(zoom_before, 0.001)

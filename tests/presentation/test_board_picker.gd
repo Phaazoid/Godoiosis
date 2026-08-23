@@ -16,21 +16,44 @@ const SCENE_PATH := "res://Scenes/LookDev/LookDev.tscn"
 # their coordinates from the resulting rect rather than restating it.
 const APRON := 4
 
-# A short column, a 3-tall tower, a short column, all in row z=0.
+# The synthetic fixtures are stated as rule HEIGHTS and converted through the seam (#427 slice 2).
+# They used to be authored as raw tops, which baked "one row is one world unit" into every number —
+# so the moment a row became half a level, every ray in this file was aimed somewhere else. The
+# rays themselves are world-space and deliberately unchanged: what they cross has to stay put.
+const SHORT_HEIGHT := 0
+const TOWER_HEIGHT := 2 * Terrain.UNITS_PER_LEVEL
+const DIP_HEIGHT := -Terrain.UNITS_PER_LEVEL
+
+
+# What column_tops_from would report for a column of this height: the row above its top one.
+func _top_for(height: int) -> int:
+	return BoardSpace.top_row_of(height) + 1
+
+
+# The cell a hit on such a column comes back as — _top_cell's answer, stated once.
+func _cell_at(column: Vector2i, height: int) -> Vector3i:
+	return BoardSpace.of_cell(column, BoardSpace.top_row_of(height))
+
+
+# A short column, a tower two levels taller, a short column, all in row z=0.
 var _tower_tops: Dictionary[Vector2i, int] = {
-	Vector2i(0, 0): 1, Vector2i(1, 0): 3, Vector2i(2, 0): 1,
+	Vector2i(0, 0): _top_for(SHORT_HEIGHT),
+	Vector2i(1, 0): _top_for(TOWER_HEIGHT),
+	Vector2i(2, 0): _top_for(SHORT_HEIGHT),
 }
 
 # The same strip with (1, 0) ERASED — the shape the dev brush makes in 3D.
 var _holed_tops: Dictionary[Vector2i, int] = {
-	Vector2i(0, 0): 1, Vector2i(2, 0): 1,
+	Vector2i(0, 0): _top_for(SHORT_HEIGHT), Vector2i(2, 0): _top_for(SHORT_HEIGHT),
 }
 
-# The same strip with (1, 0) DIPPED one deep — #260's negative elevation, and the shape a top
-# level of 0 could not describe while 0 also meant "nothing here". Note it is a different fixture
+# The same strip with (1, 0) DIPPED one level deep — #260's negative elevation, and the shape a top
+# of 0 could not describe while 0 also meant "nothing here". Note it is a different fixture
 # from _holed_tops on purpose: a dip and a hole are the two answers the sentinel used to conflate.
 var _dipped_tops: Dictionary[Vector2i, int] = {
-	Vector2i(0, 0): 1, Vector2i(1, 0): 0, Vector2i(2, 0): 1,
+	Vector2i(0, 0): _top_for(SHORT_HEIGHT),
+	Vector2i(1, 0): _top_for(DIP_HEIGHT),
+	Vector2i(2, 0): _top_for(SHORT_HEIGHT),
 }
 
 
@@ -42,24 +65,24 @@ func _apron_of(tops: Dictionary[Vector2i, int]) -> Rect2i:
 
 func test_straight_down_hits_the_top_face() -> void:
 	var cell := BoardPicker.pick_cell(Vector3(0.5, 10.0, 0.5), Vector3.DOWN, _tower_tops, Rect2i())
-	assert_that(cell).is_equal(Vector3i(0, 0, 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(0, 0), SHORT_HEIGHT))
 
 
 func test_parallax_ray_skips_the_short_column_and_hits_the_tower() -> void:
 	# Passes 2.75+ units above the short column, crosses the tower's top plane inside it.
 	var cell := BoardPicker.pick_cell(Vector3(-2.5, 5.0, 0.5), Vector3(4.0, -2.0, 0.0), _tower_tops, Rect2i())
-	assert_that(cell).is_equal(Vector3i(1, 2, 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), TOWER_HEIGHT))
 
 
 func test_cliff_side_hit_returns_the_column_top_cell() -> void:
 	# Enters the tower's footprint at y 2.2 — below its top at 3 — striking the wall.
 	var cell := BoardPicker.pick_cell(Vector3(-0.5, 2.5, 0.5), Vector3(1.0, -0.2, 0.0), _tower_tops, Rect2i())
-	assert_that(cell).is_equal(Vector3i(1, 2, 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), TOWER_HEIGHT))
 
 
 func test_shallow_approach_from_outside_the_board_hits_the_first_column() -> void:
 	var cell := BoardPicker.pick_cell(Vector3(-3.5, 1.5, 0.5), Vector3(1.0, -0.15, 0.0), _tower_tops, Rect2i())
-	assert_that(cell).is_equal(Vector3i(0, 0, 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(0, 0), SHORT_HEIGHT))
 
 
 func test_level_ray_above_everything_misses() -> void:
@@ -105,17 +128,18 @@ func test_an_erased_cell_inside_the_board_is_still_pickable() -> void:
 	assert_that(BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, Rect2i())) \
 		.override_failure_message("the fixture's hole is not actually a hole").is_equal(BoardSpace.NO_CELL)
 	var cell := BoardPicker.pick_cell(over_the_hole, straight_down, _holed_tops, _apron_of(_holed_tops))
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), SHORT_HEIGHT))
 
 
 func test_the_ground_plane_sits_on_the_top_face_not_the_slab_bottom() -> void:
-	# A shallow ray across the hole. At FLAT_TOP_LEVEL the plane is the face the
+	# A shallow ray across the hole. At FLAT_TOP_ROW the plane is the face the
 	# neighbouring blocks present, so the ray lands IN the hole; at the slab's bottom it
 	# would travel a further cell and come down on the far column instead.
 	var cell := BoardPicker.pick_cell(Vector3(-1.5, 3.0, 0.5), Vector3(3.0, -2.0, 0.0),
 			_holed_tops, _apron_of(_holed_tops))
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), 0))
-	assert_int(cell.y).override_failure_message("the plane cell came back at the wrong level").is_equal(0)
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), SHORT_HEIGHT))
+	assert_int(cell.y).override_failure_message("the plane cell came back at the wrong row") \
+		.is_equal(BoardSpace.top_row_of(SHORT_HEIGHT))
 
 
 func test_a_real_column_beats_the_plane_at_the_same_ray() -> void:
@@ -136,7 +160,7 @@ func test_the_apron_bounds_where_the_plane_ends() -> void:
 	var inside := plane.end - Vector2i.ONE
 	var outside := plane.end
 	var hit := BoardPicker.pick_cell(Vector3(inside.x + 0.5, 5.0, inside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
-	assert_that(hit).is_equal(BoardSpace.of_cell(inside, 0))
+	assert_that(hit).is_equal(_cell_at(inside, SHORT_HEIGHT))
 	var miss := BoardPicker.pick_cell(Vector3(outside.x + 0.5, 5.0, outside.y + 0.5), Vector3.DOWN, _tower_tops, plane)
 	assert_that(miss).is_equal(BoardSpace.NO_CELL)
 
@@ -147,7 +171,7 @@ func test_an_empty_board_is_still_pickable_under_a_plane() -> void:
 	var empty: Dictionary[Vector2i, int] = {}
 	var plane := Rect2i(0, 0, 4, 4)
 	var cell := BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, plane)
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 1), 0))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 1), SHORT_HEIGHT))
 	assert_that(BoardPicker.pick_cell(Vector3(1.5, 5.0, 1.5), Vector3.DOWN, empty, Rect2i())) \
 		.is_equal(BoardSpace.NO_CELL)
 
@@ -157,7 +181,7 @@ func test_used_rect_and_max_top_describe_the_tops_table() -> void:
 	assert_that(BoardPicker.used_rect(_tower_tops)).is_equal(Rect2i(0, 0, 3, 1))
 	assert_bool(BoardPicker.used_rect(_tower_tops).has_point(Vector2i(2, 0))) \
 		.override_failure_message("used_rect excluded its own highest column").is_true()
-	assert_int(BoardPicker.max_top(_tower_tops)).is_equal(3)
+	assert_int(BoardPicker.max_top(_tower_tops)).is_equal(_top_for(TOWER_HEIGHT))
 	var empty: Dictionary[Vector2i, int] = {}
 	assert_that(BoardPicker.used_rect(empty)).is_equal(Rect2i())
 	assert_int(BoardPicker.max_top(empty)).is_equal(0)
@@ -172,18 +196,22 @@ func test_used_rect_and_max_top_describe_the_tops_table() -> void:
 func test_a_one_deep_dip_is_a_column_and_not_a_hole() -> void:
 	# Columns only, so no plane can answer on the dip's behalf — a top of 0 has to stand alone.
 	var cell := BoardPicker.pick_cell(Vector3(1.5, 10.0, 0.5), Vector3.DOWN, _dipped_tops, Rect2i())
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), DIP_HEIGHT))
 
 
 func test_a_dip_inside_the_plane_reads_as_the_dip_and_not_as_flat() -> void:
 	# The dev-authoring case, and the one that fails PLAUSIBLY rather than loudly: with the column
-	# missing from the table, _top_level falls through to the plane's FLAT_TOP_LEVEL and the click
+	# missing from the table, _top_level falls through to the plane's FLAT_TOP_ROW and the click
 	# resolves one level too high. A wrong cell, not a miss — so the brush paints the wrong thing.
 	var cell := BoardPicker.pick_cell(Vector3(1.5, 10.0, 0.5), Vector3.DOWN, _dipped_tops,
 			_apron_of(_dipped_tops))
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), DIP_HEIGHT))
 	assert_int(cell.y).override_failure_message(
-			"the dip resolved at its flat neighbours' level").is_equal(-1)
+			"the dip resolved at its flat neighbours' level") \
+		.is_equal(BoardSpace.top_row_of(DIP_HEIGHT))
+	assert_int(BoardSpace.top_row_of(DIP_HEIGHT)).override_failure_message(
+			"the dip fixture stopped being below its neighbours; the case is vacuous") \
+		.is_less(BoardSpace.top_row_of(SHORT_HEIGHT))
 
 
 func test_a_ray_clearing_the_rim_strikes_the_dips_own_cell() -> void:
@@ -193,7 +221,7 @@ func test_a_ray_clearing_the_rim_strikes_the_dips_own_cell() -> void:
 	# answer rather than a miss.
 	var cell := BoardPicker.pick_cell(Vector3(0.0, 3.2, 0.5), Vector3(1.0, -2.0, 0.0),
 			_dipped_tops, Rect2i())
-	assert_that(cell).is_equal(BoardSpace.of_cell(Vector2i(1, 0), -1))
+	assert_that(cell).is_equal(_cell_at(Vector2i(1, 0), DIP_HEIGHT))
 
 
 # --- The seam where it lives: the look-dev scene -------------------------------

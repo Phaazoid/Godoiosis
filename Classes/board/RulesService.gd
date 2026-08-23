@@ -62,23 +62,27 @@ static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardConte
 
 # The height core of the edge question, extracted (#258) so melee's STEP rule ("same step, or a
 # facing half step" -- dev, 2026-08-20) and movement answer it identically: equal heights connect,
-# a one-LEVEL edge connects only through a ramp whose rise runs along the step, anything else never.
+# and a height CHANGE connects only through a ramp that climbs exactly that much along the step.
 #
-# "Anything else" now includes a HALF level, and that is #427's ruling arriving for free rather than
-# as a clause: a sheer 1-unit edge is not UNITS_PER_LEVEL, so it is refused exactly like a 3-unit
-# one ("half height still blocks movement and melee range" -- dev, 2026-08-23).
+# ASK THE RAMP, never a constant (#427 slice 2). Ramps come in two steepnesses now, so the old
+# "abs(delta) != UNITS_PER_LEVEL" clause is gone rather than widened -- the ramp's own climb is what
+# a step may cross, which caps the rule at whatever the store can hold and needs no second number.
+#
+# The dev's "half height still blocks movement and melee range" (2026-08-23) survives with no clause
+# of its own, exactly as it arrived in slice 1: flat ground climbs 0, so a sheer 1-unit edge is
+# refused because 0 != 1 -- and a 45 degree ramp still refuses a half-level edge for the same reason.
 static func height_step_ok(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
 	var step := to - from
 	var delta := board.elevation_at(to) - board.elevation_at(from)
 	if delta == 0:
 		return true
-	if abs(delta) != Terrain.UNITS_PER_LEVEL:
-		return false
 	if delta > 0:
 		# climbing off the ramp we stand on
-		return Terrain.rise_direction(board.ramp_rise_at(from)) == step
+		return Terrain.rise_direction(board.ramp_rise_at(from)) == step \
+			and board.ramp_climb_at(from) == delta
 	# descending onto a ramp, against its rise
-	return Terrain.rise_direction(board.ramp_rise_at(to)) == -step
+	return Terrain.rise_direction(board.ramp_rise_at(to)) == -step \
+		and board.ramp_climb_at(to) == -delta
 
 static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)

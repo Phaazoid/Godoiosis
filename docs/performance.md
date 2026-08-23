@@ -353,8 +353,10 @@ Two things are worth knowing before touching this again:
 
 - **A lowered floor still full-syncs, and must.** Every column reaches down to one shared floor, so
   an edit that moves it invalidates the whole board. `battle3d` compares
-  `BoardMirror.floor_level_of` frame to frame and falls back to `sync()`; `BoardHeights` caches the
-  minimum so asking is O(1) rather than a walk over every painted cell.
+  `BoardMirror.floor_row_of` frame to frame and falls back to `sync()`; `BoardHeights` caches the
+  minimum so asking is O(1) rather than a walk over every painted cell. Each column is
+  `Terrain.UNITS_PER_LEVEL` rows deep per level since #427 slice 2, so a full sync writes twice the
+  GridMap cells it used to -- proportional to the same board, and still one cell per painted edit.
 - **The rect grows in place but shrinks by re-deriving.** A column added merges into `_board_rect`;
   a column *removed* cannot, because only a full pass knows the new edge. Getting that backwards
   leaves the camera panning to an edge that is gone and the paint plane answering clicks out there

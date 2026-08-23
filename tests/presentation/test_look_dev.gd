@@ -59,10 +59,13 @@ func test_sprites_are_billboarded_lit_pixel_quads() -> void:
 
 
 func test_board_cell_size_matches_the_declared_convention() -> void:
-	# BoardSpace.CELL_SIZE is the one metric; the GridMap's authored cell_size
-	# must agree or every standing_point drifts off the rendered board.
+	# BoardSpace is the one metric; the GridMap's authored cell_size must agree or every
+	# standing_point drifts off the rendered board. NOT a cube since #427 slice 2 — the vertical
+	# index counts height UNITS, and a cell_size that stayed cubic would draw every column twice
+	# as tall as the store says it is.
 	var board := _scene.get_node("Board") as GridMap
-	assert_that(board.cell_size).is_equal(Vector3.ONE * BoardSpace.CELL_SIZE)
+	assert_that(board.cell_size).is_equal(
+		Vector3(BoardSpace.CELL_SIZE, BoardSpace.ROW_HEIGHT, BoardSpace.CELL_SIZE))
 
 
 func test_board_is_painted_with_verticality() -> void:
@@ -99,17 +102,31 @@ func test_sun_casts_shadows() -> void:
 
 
 func test_tile_materials_are_nearest_filtered_and_textured() -> void:
+	# Every item that DRAWS anything, which since #427 slice 2 is not every item: the wedge filler
+	# is deliberately empty (it declares occupancy for BoardPicker and renders nothing). Named
+	# rather than skipped by geometry, so an ordinary block that lost its mesh still reds here.
 	var board := _scene.get_node("Board") as GridMap
 	var library := board.mesh_library
+	var invisible := 0
 	for item_id in library.get_item_list():
 		var mesh := library.get_item_mesh(item_id)
 		assert_object(mesh).is_not_null()
-		assert_bool(mesh.get_surface_count() >= 1).is_true()
+		if library.get_item_name(item_id) == BoardMirror.RAMP_FILL_ITEM_NAME:
+			assert_int(mesh.get_surface_count()).override_failure_message(
+					"the wedge filler grew geometry; it is meant to draw nothing").is_equal(0)
+			invisible += 1
+			continue
+		assert_bool(mesh.get_surface_count() >= 1).override_failure_message(
+				"'%s' draws nothing but is not the declared filler" % library.get_item_name(item_id)) \
+			.is_true()
 		for surface in mesh.get_surface_count():
 			var material := mesh.surface_get_material(surface) as StandardMaterial3D
 			assert_object(material).is_not_null()
 			assert_object(material.albedo_texture).is_not_null()
 			assert_int(material.texture_filter).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
+	assert_int(invisible).override_failure_message(
+			"the meshlib has no wedge filler at all; a tall ramp cannot declare its own rows") \
+		.is_equal(1)
 
 
 func test_every_bound_mood_resolves_to_the_preset_it_names() -> void:

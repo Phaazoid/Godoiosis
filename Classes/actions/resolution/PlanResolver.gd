@@ -403,9 +403,11 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 
 	var drop := flight_height - board.elevation_at(pos)
 	# The doc's original tumble entry: a connected descending ramp -- its high edge meets the
-	# flight level, so sliding on is not a fall ("slopes never deal fall damage").
+	# flight level, so sliding on is not a fall ("slopes never deal fall damage"). The high edge
+	# sits the ramp's OWN climb above its base (#427 slice 2), so a gentle slope catches a flight
+	# one unit up and a 45 degree one catches a flight two up.
 	var rise := board.ramp_rise_at(pos)
-	if drop == Terrain.UNITS_PER_LEVEL and rise != Terrain.RampRise.NONE \
+	if rise != Terrain.RampRise.NONE and drop == board.ramp_climb_at(pos) \
 			and Terrain.rise_direction(rise) == -dir:
 		drop = 0
 	landing.fall_units = drop
@@ -433,10 +435,13 @@ static func _tumble(landing: _Landing, board: BoardContext) -> void:
 			break
 		var here_elev := board.elevation_at(cell)
 		var next_elev := board.elevation_at(next)
-		if board.ramp_rise_at(next) == rise and next_elev == here_elev - Terrain.UNITS_PER_LEVEL:
+		# Another ramp continuing down the same slope: continuity is its HIGH edge meeting this
+		# cell's base (#427 slice 2), so a chain of gentle slopes flows exactly like a chain of
+		# steep ones and a mixed chain still only joins where the surfaces actually touch.
+		if board.ramp_rise_at(next) == rise and next_elev + board.ramp_climb_at(next) == here_elev:
 			cell = next
 			landing.path.append(cell)
-			continue   # another ramp continuing down the same slope
+			continue
 		if next_elev == here_elev:
 			cell = next
 			landing.path.append(cell)

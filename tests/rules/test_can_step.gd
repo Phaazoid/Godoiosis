@@ -112,11 +112,14 @@ func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
 	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
 
 func test_a_ramp_does_not_connect_a_half_level_either() -> void:
-	# A ramp is not a licence to cross any gap: its own rise is a full level, so a neighbour half a
-	# level above its top is still unreachable from it.
+	# A ramp is not a licence to cross any gap: this one climbs a full level, so a neighbour half a
+	# level above its base is still unreachable from it.
 	#
-	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the level
-	# clause is the only thing left that can refuse. Falsified by relaxing it to `>`.
+	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the height
+	# clause is the only thing left that can refuse. Falsified twice — by relaxing slice 1's level
+	# clause to `>`, and by slice 2's version of the same mistake, dropping the climb comparison so
+	# a ramp crosses whatever gap it faces. Slice 2 added a second case saying exactly this on an
+	# identical board; falsification found the duplicate and it was deleted rather than kept.
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
@@ -245,11 +248,55 @@ func test_a_cells_height_is_its_lowest_corner() -> void:
 func test_every_cardinal_rise_round_trips_through_the_corners() -> void:
 	# rise_of_corners is the ONLY reading RampRise's callers get now, so a direction that composed
 	# one way and read back another would be silently wrong on a quarter of every ramp.
+	#
+	# Every CLIMB too since slice 2 (#427): direction and steepness are two derived views of one
+	# store, and a composer that folded them would read one back through the other.
 	var heights := BoardHeights.new()
-	for rise in [Terrain.RampRise.NONE, Terrain.RampRise.NORTH, Terrain.RampRise.SOUTH,
-			Terrain.RampRise.EAST, Terrain.RampRise.WEST]:
-		heights.set_cell(Vector2i(0, 0), 2, rise)
-		assert_int(heights.ramp_rise_at(Vector2i(0, 0))).is_equal(rise)
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for rise in [Terrain.RampRise.NONE, Terrain.RampRise.NORTH, Terrain.RampRise.SOUTH,
+				Terrain.RampRise.EAST, Terrain.RampRise.WEST]:
+			heights.set_cell(Vector2i(0, 0), 2, rise, climb)
+			assert_int(heights.ramp_rise_at(Vector2i(0, 0))) \
+				.override_failure_message("rise %d at climb %d read back wrong" % [rise, climb]) \
+				.is_equal(rise)
+			var expected_climb: int = 0 if rise == Terrain.RampRise.NONE else climb
+			assert_int(heights.ramp_climb_at(Vector2i(0, 0))) \
+				.override_failure_message("rise %d at climb %d lost its steepness" % [rise, climb]) \
+				.is_equal(expected_climb)
+
+
+func test_a_half_rise_ramp_connects_a_half_level_and_nothing_else() -> void:
+	# #427 slice 2's whole point: a step crosses exactly what the ramp under it CLIMBS. The refusal
+	# half is what stops "ramps come in two sizes" from becoming "a ramp crosses any gap".
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST, 1)
+	heights.set_cell(Vector2i(2, 1), 1)                      # the half level it arrives at
+	var unit := _spawn(board, Vector2i(0, 1))
+	var context := _context(board, unit)
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, context)) \
+		.override_failure_message("a gentle ramp does not reach the half level it climbs to").is_true()
+
+	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL)   # a full level instead
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+		.override_failure_message("a gentle ramp climbed a whole level").is_false()
+
+
+func test_two_gentle_ramps_climb_a_whole_level_between_them() -> void:
+	# The RCT shape the slice exists for: half a level per cell, so a level takes two cells of run
+	# and the walk up is legal at every step.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST, 1)
+	heights.set_cell(Vector2i(2, 1), 1, Terrain.RampRise.EAST, 1)
+	heights.set_cell(Vector2i(3, 1), Terrain.UNITS_PER_LEVEL)
+	var unit := _spawn(board, Vector2i(0, 1))
+	var context := _context(board, unit)
+	for step in [[Vector2i(0, 1), Vector2i(1, 1)], [Vector2i(1, 1), Vector2i(2, 1)],
+			[Vector2i(2, 1), Vector2i(3, 1)]]:
+		assert_bool(RulesService.can_step(step[0], step[1], unit, context)) \
+			.override_failure_message("the gentle staircase breaks at %s -> %s" % [step[0], step[1]]) \
+			.is_true()
 
 
 # --- persistence ---

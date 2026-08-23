@@ -61,7 +61,7 @@ func _spawn(cell: Vector2i, overrides := {}) -> Unit:
 
 func _point_at(cell: Vector2i) -> void:
 	var heights: BoardHeights = game.board_heights
-	_scene._pointer_cell = BoardSpace.of_cell(cell, heights.elevation_at(cell))
+	_scene._pointer_cell = BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))
 
 
 func _point_away() -> void:

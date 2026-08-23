@@ -36,6 +36,9 @@ func before_test() -> void:
 	game.game_state = game.GameState.DEV_MODE
 	_brush = game.dev_overlay.tile_brush
 	_dc = game.dev_controller
+	# SHOW the page, then arm: the checkbox lives on the Tile Brush page and brush_armed() reads that
+	# since 2026-08-23, so a fixture that only set the flag was arming a brush no human could.
+	game.dev_overlay.show_leaf(_brush)
 	_brush.brush_active = true
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 	# Most cases here read a height back off a cell that already exists, so the hover cell starts
@@ -84,23 +87,24 @@ func _key(code: Key) -> InputEventKey:
 # ---- the wheel sets the level ----
 
 func test_the_wheel_moves_the_brush_level_both_ways() -> void:
-	# One notch is one whole LEVEL, which is 2 height units since #427.
+	# One notch is one UNIT -- half a level. It moved a whole level when #427 slice 2 landed, which
+	# made a two-cell gentle slope unbuildable by wheel; the dev found it the first time he tried.
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
-	assert_int(_brush.selected_elevation()).is_equal(4)
+	assert_int(_brush.selected_elevation()).is_equal(2)
 
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	# NEGATIVE is reachable on purpose (dev, 2026-08-15): authoring a dip must not require lifting
 	# the whole map. A clamp at 0 goes red here.
-	assert_int(_brush.selected_elevation()).is_equal(-2)
+	assert_int(_brush.selected_elevation()).is_equal(-1)
 
 
 func test_the_wheel_writes_through_the_spinbox_too() -> void:
 	# One writer: the widget and the value the brush paints with cannot drift.
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
-	assert_int(int(_brush._elevation_spin.value)).is_equal(2)
+	assert_int(int(_brush._elevation_spin.value)).is_equal(1)
 
 
 func test_the_wheel_is_inert_in_the_other_paint_modes() -> void:
@@ -223,7 +227,7 @@ func test_a_wheel_notch_mid_drag_does_not_end_the_drag() -> void:
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
 	_dc.handle_tile_brush(_motion())
 
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(4)   # two notches = two levels
+	assert_int(game.board_heights.elevation_at(cell)).is_equal(2)   # two notches = two units
 
 
 # NB there is no separate "erase returns the cell to flat" case any more. Erase has ONE meaning in
@@ -445,7 +449,7 @@ func test_a_wheel_notch_reaches_the_brush_through_the_games_own_input() -> void:
 	# assumed -- a wheel event is an InputEventMouseButton and must ride the same branch a click does.
 	game._unhandled_input(_press(MOUSE_BUTTON_WHEEL_UP, true))
 
-	assert_int(_brush.selected_elevation()).is_equal(2)   # one notch = one level
+	assert_int(_brush.selected_elevation()).is_equal(1)   # one notch = one unit
 
 
 func test_the_games_input_arm_ignores_the_wheel_when_the_brush_is_down() -> void:

@@ -15,21 +15,28 @@ class_name BrushGhost
 # ghost layer (which holds the brush's pick as a real placed tile); ELEVATION points it at the
 # grid itself, because raising a cell keeps the art it already has.
 #
-# `level` is the level the previewed block would OCCUPY, and `rise` is set only when the click
-# would author a ramp -- a renderer draws the wedge one level above, mirroring BoardMirror's own
-# column rule.
+# `height` is the brush's own rule HEIGHT, in the store's half-level units -- it was called `level`
+# and #427 slice 1 quietly made that a LIE, since the brush started authoring in units while
+# show_brush_ghost still read the field as a whole level and previewed every raised cell twice as
+# high. Renamed rather than converted at the call site, because the word is what caused it.
+#
+# `rise` is set only when the click would author a ramp, and `climb` is how far that ramp rises --
+# a renderer draws the wedge directly above the surface, mirroring BoardMirror's own column rule.
 
 var cell: Vector2i
-var level: int
+var height: int
 var source: TileMapLayer
 var rise: Terrain.RampRise
+var climb: int
 
 
-static func make(cell_: Vector2i, level_: int, source_: TileMapLayer,
-		rise_: Terrain.RampRise = Terrain.RampRise.NONE) -> BrushGhost:
+static func make(cell_: Vector2i, height_: int, source_: TileMapLayer,
+		rise_: Terrain.RampRise = Terrain.RampRise.NONE,
+		climb_ := Terrain.UNITS_PER_LEVEL) -> BrushGhost:
 	var ghost := BrushGhost.new()
 	ghost.cell = cell_
-	ghost.level = level_
+	ghost.height = height_
 	ghost.source = source_
 	ghost.rise = rise_
+	ghost.climb = climb_
 	return ghost

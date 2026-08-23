@@ -104,15 +104,20 @@ const UNITS_PER_LEVEL := 2
 # name yet; the slice that needs to address one can add the vocabulary then.
 #
 # The 45 deg steepness cap ("steepness cap at 45 is good" — dev, 2026-08-23) is NOT a constant here
-# for the same reason: slice 1's only writer is corners_of_ramp, which cannot exceed one level, so a
-# cap would be a rule with nothing to check. It arrives with the tool that can break it.
+# for the same reason: the only writer is corners_of_ramp, whose climb slice 2 caps at
+# UNITS_PER_LEVEL, so a cap constant would be a rule with nothing to check. It arrives with the tool
+# that can break it — the corner-drag tool of slice 4.
 
 # The four corners of a flat-or-cardinal-ramp cell. `low` is the cell's own height in units, because
-# a ramp's height is its LOW side (verticality.md, DECIDED), so the high pair sits one level above.
-static func corners_of_ramp(low: int, rise: RampRise) -> Vector4i:
-	if rise == RampRise.NONE:
+# a ramp's height is its LOW side (verticality.md, DECIDED), so the high pair sits `climb` above.
+#
+# The climb DEFAULTS to a full level (#427 slice 2), which is what every pre-slice-2 caller means and
+# why ~60 fixtures needed no sweep. A climb of 1 is the RCT gentle slope: half a level over one cell
+# of run, i.e. atan(1/2) = 26.6 deg, the angle the dev half-remembered as 30.
+static func corners_of_ramp(low: int, rise: RampRise, climb := UNITS_PER_LEVEL) -> Vector4i:
+	if rise == RampRise.NONE or climb <= 0:
 		return Vector4i(low, low, low, low)
-	var high := low + UNITS_PER_LEVEL
+	var high := low + climb
 	match rise:
 		RampRise.NORTH:
 			return Vector4i(high, high, low, low)
@@ -124,16 +129,29 @@ static func corners_of_ramp(low: int, rise: RampRise) -> Vector4i:
 			return Vector4i(high, low, low, high)
 	return Vector4i(low, low, low, low)
 
+# How far this cell's surface climbs, in units — 0 for flat ground. The SECOND question a ramp
+# answers (#427 slice 2), and its own accessor rather than a member of RampRise: which way a slope
+# faces and how steep it is are different questions, and folding them together would double an
+# append-only enum while making is_on_rise_axis unpack a direction out of a compound value.
+static func climb_of_corners(corners: Vector4i) -> int:
+	var low := mini(mini(corners.x, corners.y), mini(corners.z, corners.w))
+	return maxi(maxi(corners.x, corners.y), maxi(corners.z, corners.w)) - low
+
+
 # Which cardinal ramp these corners describe — the reading every RampRise reader now gets.
 # TRANSITIONAL: corner slopes arrive in #427 slice 3 and RampRise cannot name them, so a shape
-# outside the five legal ones refuses LOUDLY instead of quietly reading flat. Unreachable today —
+# outside the legal ones refuses LOUDLY instead of quietly reading flat. Unreachable today —
 # corners_of_ramp is the only writer — and that error is what will find every un-migrated reader.
+#
+# A climb ABOVE one level lands in the same refusal, and that is where the 45 deg cap actually
+# lives: no separate constant, because there is nothing else a too-steep cell could be.
 static func rise_of_corners(corners: Vector4i) -> RampRise:
 	var low := mini(mini(corners.x, corners.y), mini(corners.z, corners.w))
-	var high := maxi(maxi(corners.x, corners.y), maxi(corners.z, corners.w))
-	if low == high:
+	var climb := climb_of_corners(corners)
+	if climb == 0:
 		return RampRise.NONE
-	if high - low == UNITS_PER_LEVEL:
+	if climb <= UNITS_PER_LEVEL:
+		var high := low + climb
 		if corners.x == high and corners.y == high and corners.z == low and corners.w == low:
 			return RampRise.NORTH
 		if corners.z == high and corners.w == high and corners.x == low and corners.y == low:
@@ -145,9 +163,13 @@ static func rise_of_corners(corners: Vector4i) -> RampRise:
 	push_error("Terrain: corners %s are neither flat nor a cardinal ramp" % corners)
 	return RampRise.NONE
 
-# Which LEVEL a height in units sits at — the conversion the 3D stack reads through, since a GridMap
-# column is indexed in whole levels. FLOOR rather than truncation, so a dip below zero answers the
-# block it stands on. Slice 1 only ever sees even heights; what a half level DRAWS is slice 2's.
+# Which whole LEVEL a height in units amounts to. FLOOR rather than truncation, so a descent of one
+# and a half levels charges for one rather than for two.
+#
+# It is NOT a presentation conversion any more (#427 slice 2): a GridMap row is now one unit, so the
+# 3D stack reads units directly and this is left to the rules that genuinely count LEVELS — fall
+# damage, and the "Fell 2!" popup beside it. A caller reaching for it to place geometry is asking
+# the wrong question.
 static func level_of(units: int) -> int:
 	return floori(float(units) / float(UNITS_PER_LEVEL))
 
