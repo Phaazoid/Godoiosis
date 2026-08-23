@@ -76,16 +76,18 @@ func handle_dev_key(event: InputEvent) -> void:
 		var state_name: String = game.GameState.keys()[game.game_state]
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
-	_handle_rise_keys(event)
+	_handle_brush_keys(event)
 	_handle_undo_keys(event)
 
-# Z / C turn the elevation brush's ramp rise (#260 follow-up) and X cycles how far it climbs (#427
-# slice 2) -- the Q/E detent idiom applied to authoring, with steepness on the key between the two
-# turns. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
-# in CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
+# Every key the elevation brush answers to. Z / C turn its ramp rise (#260 follow-up), X cycles how
+# far that rise climbs (#427 slice 2) and V cycles how deep the 3D selector draws -- so it was named
+# _handle_rise_keys until the second passenger made that plainly wrong. The Q/E detent idiom applied
+# to authoring, with the two rarely-touched settings off the compass keys rather than on them.
+# Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent in
+# CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
 # Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
 # dev-layer exactly like F1/F2/F3.
-func _handle_rise_keys(event: InputEvent) -> void:
+func _handle_brush_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return   # echo: holding the key must not spin the rise
@@ -101,8 +103,10 @@ func _handle_rise_keys(event: InputEvent) -> void:
 			brush.cycle_climb()   # #427 slice 2: between the two turn keys, because it is the same gesture
 		KEY_C:
 			brush.cycle_rise(1)
+		KEY_V:
+			brush.cycle_depth()   # the selector's own depth -- a preview setting, so off the compass
 
-# Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (#391). Hardcoded physical keycodes for the reason the rise keys
+# Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (#391). Hardcoded physical keycodes for the reason the brush keys
 # above are: project.godot is the one file concurrent PRs reliably collide on. Both redo spellings,
 # because both are muscle memory and the branch costs a line.
 #
@@ -361,7 +365,7 @@ func brush_ghost() -> BrushGhost:
 	var cell := _mouse_cell()
 	if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
 		return BrushGhost.make(cell, brush.selected_elevation(), _brush_ghost, brush.selected_rise(),
-				brush.selected_climb())
+				brush.selected_climb(), brush.selected_depth())
 	return null
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a

@@ -412,6 +412,53 @@ func test_an_f5_readout_survives_leaving_the_terrain_brush() -> void:
 	assert_bool(readout.visible).is_true()
 
 
+# ---- X cycles the steepness, V the selector depth ----
+#
+# The X case is slice 2's, written late: RISE_CYCLE is covered nine ways above and CLIMB_CYCLE had no
+# case at all, so the key shipped on the same handler as its tested neighbours with nothing watching
+# it. Added here because V is the identical shape one field along, and covering one of a pair while
+# leaving the other bare is how the two drift.
+
+func test_x_alternates_the_two_steepnesses() -> void:
+	assert_int(_brush.selected_climb()).is_equal(Terrain.UNITS_PER_LEVEL)
+	_dc._input(_key(KEY_X))
+	assert_int(_brush.selected_climb()).override_failure_message(
+			"X did not reach the brush's steepness").is_equal(1)
+	_dc._input(_key(KEY_X))
+	assert_int(_brush.selected_climb()).override_failure_message(
+			"the steepness cycle did not wrap home").is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+func test_v_alternates_the_selector_depth() -> void:
+	# A LEVEL by default, because that is the slab a paint makes -- the whole point of the knob (dev,
+	# 2026-08-23: "I'd like it to cover 2 of our current half step levels, with a button to switch it
+	# instead to only highlighting a single of our current levels").
+	assert_int(_brush.selected_depth()).is_equal(Terrain.UNITS_PER_LEVEL)
+	_dc._input(_key(KEY_V))
+	assert_int(_brush.selected_depth()).override_failure_message(
+			"V did not reach the brush's selector depth").is_equal(1)
+	_dc._input(_key(KEY_V))
+	assert_int(_brush.selected_depth()).override_failure_message(
+			"the selector-depth cycle did not wrap home").is_equal(Terrain.UNITS_PER_LEVEL)
+
+
+func test_the_selector_depth_moves_the_picker_too() -> void:
+	# One writer, the rise picker's rule one field along: the dropdown must always show what the
+	# selector is about to draw, or the key and the menu disagree about the current setting.
+	_dc._input(_key(KEY_V))
+	assert_int(TileBrushTool.DEPTH_CYCLE[_brush._depth_option.selected]).is_equal(1)
+
+
+func test_the_selector_depth_survives_a_reset() -> void:
+	# Reset means flat GROUND -- height and direction. The selector depth is not part of the shape at
+	# all, only of how the preview draws one, so re-picking it after every reset would be exactly the
+	# friction a separate control exists to avoid. The climb survives for the same reason.
+	_dc._input(_key(KEY_V))
+	_brush.reset_elevation()
+	assert_int(_brush.selected_depth()).override_failure_message(
+			"a reset took the selector depth with it").is_equal(1)
+
+
 # ---- the dev keys reach the brush from EITHER OS window (#340 follow-up) ----
 
 func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
@@ -423,6 +470,13 @@ func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
 
 	assert_int(_brush.selected_rise()).override_failure_message(
 			"a dev key pressed in the dev-tools window never reached the brush").is_equal(NORTH)
+
+	# Every key on that handler, not just the one that found the bug: V is the newest passenger and
+	# the window forwards ALL of them or none, so a case naming only C would go on passing while a
+	# later key rode a route that never existed.
+	game.dev_overlay._input(_key(KEY_V))
+	assert_int(_brush.selected_depth()).override_failure_message(
+			"V pressed in the dev-tools window never reached the brush").is_equal(1)
 
 
 func test_typing_in_a_dev_field_does_not_fire_the_dev_keys() -> void:

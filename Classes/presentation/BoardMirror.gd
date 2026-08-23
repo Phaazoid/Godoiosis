@@ -635,6 +635,19 @@ func _ensure_item_index() -> void:
 # WYSIWYG beat the bracket I recommended). It runs item_for_cell against the 2D GHOST LAYER,
 # which is the same function sync() runs against the real grid — so the preview physically
 # cannot disagree with the paint that follows it; only the material differs.
+#
+# The flat preview spans the ghost's own DEPTH in rows, reaching DOWN from the surface the click
+# authors (#427 slice 2 follow-up, dev: "my voxel selector hovers a half height too high"). One block
+# mesh is one ROW since that slice made a row a height UNIT, so drawing a single one covered the top
+# half of the level-deep slab a paint actually makes — the top face was right and the bottom was half
+# a level up, which is exactly what that reads as.
+#
+# SCALED rather than stacked, deliberately. Stacking the column's real rows is the WYSIWYG-honest
+# move everywhere else in this file, but the ghost wears a flat translucent material_override: two
+# boxes meeting would show their shared faces as a bright band across the middle of the selector.
+# One box is what a selector should look like, and the override erases the texture so the stretch has
+# nothing to distort. It does assume a ground block is exactly one row tall -- the generator's own
+# default, pinned by test rather than left to trust.
 func show_brush_ghost(ghost: BrushGhost) -> void:
 	if ghost == null or ghost.source == null:
 		hide_brush_ghost()
@@ -656,7 +669,13 @@ func show_brush_ghost(ghost: BrushGhost) -> void:
 	if ramping:
 		basis = board.get_basis_with_orthogonal_index(_ramp_orientation(ghost.rise)) * basis
 	var at := BoardSpace.of_cell(ghost.cell, row)
-	_brush_ghost.transform = Transform3D(basis, BoardSpace.cell_center(at) + item_xform.origin)
+	var origin := BoardSpace.cell_center(at) + item_xform.origin
+	# A wedge keeps its own extent; only the flat block reads the depth. Both ends of the knob share
+	# the TOP face, so the row above is what stays put and the box grows downward from it.
+	if not ramping and ghost.depth > 1:
+		basis.y *= float(ghost.depth)
+		origin.y -= float(ghost.depth - 1) * BoardSpace.ROW_HEIGHT * 0.5
+	_brush_ghost.transform = Transform3D(basis, origin)
 	_brush_ghost.visible = true
 
 
