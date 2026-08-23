@@ -98,10 +98,14 @@ func _picked(cell: Vector2i) -> Vector3i:
 func test_the_3d_camera_follows_the_ai_camera() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
-	# AI_TURN travels WITH the lock. start_faction_turn writes both in one block and clears the lock
-	# first, so `ai_locked and not _board_locked_for_player()` is a state the game cannot reach --
-	# and since #471 the pointer poll re-derives on CAMERA movement, so a fixture holding that
-	# impossible pair lets the hover snap drag the 2D camera the mirror below is reading.
+	# `ai_locked and not _board_locked_for_player()` is the pair that must never exist -- the poll
+	# re-derives on CAMERA movement since #471, so a fixture holding it lets the hover snap drag the
+	# 2D camera the mirror below is reading, and the two march the view to the pan limit.
+	#
+	# This comment used to say the pair was unreachable BECAUSE start_faction_turn writes AI_TURN and
+	# the flag together. That was false: game_state is transient, and set_dev_mode rested it on
+	# _base_state() mid-enemy-phase, which is #484. The predicate now READS ai_locked, so the line
+	# below is what makes the pair impossible rather than a claim about who writes what.
 	_game.game_state = _game.GameState.AI_TURN
 	_cam().set_ai_locked(true)
 	await _cam().pan_to(unit)   # headless: lands on the destination and hands to follow
@@ -160,6 +164,64 @@ func test_opening_a_menu_does_not_yank_the_3d_camera() -> void:
 
 	assert_that(_rig.position).override_failure_message(
 			"the menu yanked the rig — the mirror is gated on the wrong predicate").is_equal(before)
+
+
+# #484, reported in play: the mouse became welded to the camera and ran the view to its limit in
+# whatever direction it moved. Toggling dev mode mid-enemy-phase rested game_state on _base_state(),
+# which unlocked the board while ai_locked stayed true -- opening _update_pointer's gate (it writes
+# the hidden 2D camera) at the same time as _mirror_camera's (it reads it).
+#
+# Drives the REAL door: set_dev_mode, not a game_state poke. The rig assertion is the point -- the
+# predicate going false is the rule, but the camera running away is what the dev saw, and a case
+# that only read the predicate would pass against a mirror wired straight to game_state.
+func test_toggling_dev_mode_during_an_ai_turn_leaves_the_board_locked() -> void:
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_ai_locked(true)
+	await _settle()
+	var before := _rig.position
+
+	_game.set_dev_mode(true)
+	assert_int(_game.game_state).override_failure_message(
+			"set_dev_mode no longer rests game_state -- this case is asserting nothing"
+			).is_equal(_game.GameState.DEV_MODE)
+	assert_bool(_game._board_locked_for_player()).override_failure_message(
+			"dev mode unlocked the board mid-AI-turn: game_state moved and the lock followed it"
+			).is_true()
+
+	# The runaway itself. A hover would snap the 2D camera and the mirror would drag the rig after it.
+	var unit := _player_unit()
+	var screen := _screen_of(unit.movement.cell)
+	var motion := InputEventMouseMotion.new()
+	motion.position = screen
+	motion.global_position = screen
+	Input.parse_input_event(motion)
+	Input.flush_buffered_events()
+	await _settle()
+
+	assert_that(_rig.position).override_failure_message(
+			"the mouse dragged the 3D camera -- the pointer and the mirror both ran in one frame"
+			).is_equal(before)
+	_game.set_dev_mode(false)
+	_cam().set_ai_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# The second door onto the same pair (#484): clear_board rests game_state through exit_current_mode,
+# so a reload mid-enemy-phase reaches it too. Now that the lock READS ai_locked, an interrupted AI
+# turn leaving the flag standing would lock the FRESH board for good -- so clear_board drops it,
+# beside the ai_factions reset it already does for the same "a new board inherits nothing" reason.
+func test_clearing_the_board_during_an_ai_turn_drops_the_ai_camera_lock() -> void:
+	_cam().set_ai_locked(true)
+	await _settle()
+
+	_game.scenario_manager.clear_board()
+	await _settle()
+
+	assert_bool(_cam().ai_locked).override_failure_message(
+			"a cleared board kept the last turn's camera lock -- the new board is locked for good"
+			).is_false()
+	assert_bool(_game._board_locked_for_player()).override_failure_message(
+			"the fresh board came up locked").is_false()
 
 
 func test_a_locked_board_refuses_the_players_camera_but_keeps_the_rig_running() -> void:
