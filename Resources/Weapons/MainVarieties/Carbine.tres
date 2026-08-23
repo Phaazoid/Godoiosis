@@ -3,14 +3,11 @@
 [ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="1_g3ome"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponData.gd" id="1_iwmi1"]
 [ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Carbine.tres" id="2_main"]
-[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Line Snipe.tres" id="3_i0et5"]
 [ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Crossbow.png" id="3_icon"]
-[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Super Gun.tres" id="4_super"]
 
 [resource]
 script = ExtResource("1_iwmi1")
 main_attack = ExtResource("2_main")
-extra_attacks = Array[ExtResource("1_g3ome")]([ExtResource("4_super"), ExtResource("3_i0et5")])
 weapon_type = 4
 scaling_blend = Dictionary[int, int]({
 4: 40,

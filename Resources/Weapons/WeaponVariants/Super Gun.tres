@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_qv0ro"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_uq5wr"]
+[ext_resource type="Resource" path="res://Resources/WeaponMods/Super Scope.tres" id="3_trr7y"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="4_ysp0y"]
+
+[resource]
+script = ExtResource("1_qv0ro")
+template = ExtResource("4_ysp0y")
+space_1 = Array[ExtResource("2_uq5wr")]([ExtResource("3_trr7y")])
+display_name = "Super Gun"
