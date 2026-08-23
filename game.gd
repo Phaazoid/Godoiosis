@@ -53,6 +53,10 @@ var game_state: GameState = GameState.IDLE
 # one of two ways the same fact travels. Both listeners connect; nothing polls.
 signal dev_mode_changed(active: bool)
 signal unit_selected(unit: Unit)   # fired at the one select write point (select_unit); #182 lesson triggers
+# "The view should be looking at this cell" (#471), answered by whichever camera is actually on
+# screen. A SIGNAL because the game subtree keeps no path to the 3D host that renders it -- the
+# same PUSH #212 made for the dev window, for the same reason.
+signal view_focus_requested(cell: Vector2i)
 # Dev INTENT (the toggle), written only by set_dev_mode. game_state == DEV_MODE is where the board
 # RESTS right now; the two split (declared, Law #4) because transient flows -- loads, turn handoffs,
 # mission ends -- reset game_state, and the board must return to _base_state() so dev mode survives
@@ -572,6 +576,30 @@ func can_control(unit: Unit) -> bool:
 	if not unit.is_active():        # downed/dead units can't be commanded (will-and-death.md)
 		return false
 	return unit.get_faction() == turn_manager.active_faction()
+
+# Bring the view back to `unit` (#471). The action ring does NOT lock the board, so the player can
+# pan anywhere while it is open — and a COMMITTED order is about the unit, not about wherever the
+# camera drifted to. Only a terminal pick calls this: backing out of the ring deliberately leaves
+# the view where the player put it.
+#
+# The PROJECTED destination, not movement.cell. That is already what every gate and every pick
+# layer means by "where this unit acts from" (#124/#126), so a queued move is followed rather than
+# second-guessed here.
+#
+# SNAP, not glide (dev call 2026-08-22). Two reasons beyond the feel: the 3D rig has no position
+# smoothing to glide WITH, and center_on_position's lock_manual_input would refuse the player's own
+# camera on the way in — the wrong answer for someone who just gave an order.
+func focus_view_on(unit: Unit) -> void:
+	if unit == null or not is_instance_valid(unit):
+		return
+	var cell := unit.get_projected_destination()
+	# A 3D host owns the visible camera and answers the signal below for it; THIS camera is hidden
+	# there, and battle3d._update_pointer snaps it per motion to park the hover card, so writing it
+	# here would only mis-anchor that card. Same flag and the same reason CameraController's WASD
+	# poll stands down on (#176 4d).
+	if not board_input_delegated:
+		camera_controller.snap_to_position(GridUtils.cell_world(grid, cell))
+	view_focus_requested.emit(cell)
 
 # ==============================================================================
 #  Modes — entering and leaving

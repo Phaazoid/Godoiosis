@@ -69,6 +69,13 @@ var _help_wheel_is_level := false
 # cannot fire a move that never happened and yank the pointer off its starting cell.
 @onready var _last_polled_mouse: Vector2 = get_viewport().get_mouse_position()
 @onready var _camera: Camera3D = $CameraRig/Pitch/Camera
+# The camera at the last poll. The pick depends on the CAMERA as much as on the mouse — pan the
+# world under a still cursor and the cell beneath it genuinely changes — so a mouse-only early-out
+# leaves the bracket on a cell the pointer has left. True of WASD and of SPACE since 4d; #471's
+# return-to-the-acting-unit is what made it frequent enough to be worth fixing. The whole
+# TRANSFORM rather than the rig's position, because yaw and zoom move the pick too and both lerp
+# for frames after the input that started them.
+@onready var _last_polled_camera: Transform3D = _camera.global_transform
 @onready var _help: Label = $UI/Help
 @onready var _checkout: Label = $UI/Checkout
 @onready var _dev_badge: Label = $UI/DevMode
@@ -133,6 +140,9 @@ func _ready() -> void:
 	_overlay_mirror.unit_mirror = _unit_mirror
 	_overlay_mirror.board_mirror = _board_mirror
 	game.scenario_manager.board_loaded.connect(_on_board_loaded)
+	# The visible camera answers "look at this cell" (#471). Wired unconditionally, beside the other
+	# game-tells-us signals: demo_mode has no action ring to fire it, so there is nothing to branch on.
+	game.view_focus_requested.connect(_center_rig_on)
 	if auto_play:
 		_start.call_deferred()
 
@@ -509,7 +519,12 @@ func _mirror_camera() -> void:
 			_rig.align_to_detent()
 	if not cam.ai_locked:
 		return
-	_rig.position = BoardSpace.of_pixels(cam.global_position, _rig.position.y)
+	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
+	# _rig.position.y, i.e. whatever the opening shot had left there — see _aim_over. Continuous
+	# rather than per cell because this is a GLIDING pan: stepping the height at cell boundaries
+	# would jolt the whole diorama mid-beat.
+	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
+	_rig.position = _aim_over(flat.x, flat.z)
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -626,9 +641,11 @@ func _poll_pointer() -> void:
 	if _rig.is_orbiting():   # a drag is camera work, not pointing — same rule the events use
 		return
 	var mouse: Vector2 = get_viewport().get_mouse_position()
-	if mouse == _last_polled_mouse:
+	var camera_now := _camera.global_transform
+	if mouse == _last_polled_mouse and camera_now == _last_polled_camera:
 		return
 	_last_polled_mouse = mouse
+	_last_polled_camera = camera_now
 	_update_pointer(mouse)
 
 
@@ -750,8 +767,32 @@ func _handle_space() -> void:
 func _center_on_pointer() -> void:
 	if _pointer_cell == BoardSpace.NO_CELL:
 		return
-	var point := BoardSpace.standing_point(_pointer_cell)
-	_rig.position = Vector3(point.x, _rig.position.y, point.z)
+	_center_rig_on(BoardSpace.flat(_pointer_cell))
+
+
+# THE recentre, and the one answer to "put the rig over this cell": SPACE above, and #471's return
+# to the acting unit, which arrives as game.view_focus_requested. Snap rather than glide: this node
+# has always written position outright, and the rig smooths yaw and distance but not position.
+#
+# The HEIGHT comes from the cell, and that is the whole of the fix the dev's Level_1 report forced
+# (2026-08-23). surface_point is the cell-shaped door onto the same surface plane _aim_over
+# evaluates continuously — one authority, two entry points BoardSpace already ships (#273 / #259),
+# and it is the seam UnitMirror places the sprite with, so the camera looks where the unit IS.
+func _center_rig_on(cell: Vector2i) -> void:
+	_rig.position = BoardSpace.surface_point(cell, game.board_heights)
+
+
+# THE aim point for a continuous world x/z — the AI pan's twin of _center_rig_on, which has a cell.
+#
+# Read this against CameraRig3D._aim_at, which lifts the OPENING shot to the top of the whole board
+# volume so the pitch looks down at the surface rather than through it. That is right for FRAMING a
+# board and wrong for LOOKING AT something standing on one, and until 2026-08-23 nothing ever
+# re-derived it: every recentre kept _rig.position.y, so on Level_1 (columns to level 4, and an
+# authored start that froze aim.y = 5) the camera aimed four cells into the air above whatever it
+# had been pointed at. Invisible on a flat board, which is why Prolog never showed it.
+func _aim_over(x: float, z: float) -> Vector3:
+	var cell := Vector2i(floori(x), floori(z))
+	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
 
 
 func _update_pointer(screen_pos: Vector2) -> void:
