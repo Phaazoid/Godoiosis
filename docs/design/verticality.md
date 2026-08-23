@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #486 (2026-08-23).**
+**Canon checked through #488 (2026-08-23).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -43,6 +43,20 @@ below follows from taking that literally.
 > `ramp_rise_at` is TRANSITIONAL. Corner slopes (slice 3) are shapes `RampRise` cannot name, so a
 > corner pattern outside the five legal ones `push_error`s rather than quietly reading flat — the one
 > thing that will find every un-migrated reader when that slice lands.
+
+> **The MIRROR re-metered to match, slice 2 (2026-08-23).** A GridMap row was one whole level, which
+> is simply unable to draw a half — so `BoardSpace.ROW_HEIGHT` is `CELL_SIZE / UNITS_PER_LEVEL` and
+> the mirror's vertical index counts **one row per height unit**. A mirror cell is no longer a cube.
+> `BoardSpace.top_row_of` is the ONE conversion from a rule height to a drawn row, and it replaced
+> `Terrain.level_of` at every site that places geometry; `level_of` survives only where a rule
+> genuinely counts whole LEVELS, which is fall damage.
+>
+> A ground slab is still one LEVEL deep, i.e. `UNITS_PER_LEVEL` rows — which is why every world
+> position, every camera bound and the whole LookDev diorama sit exactly where they did. The block
+> meshes halved and each flat tile gained a gentle wedge; a 45° wedge is one item spanning two rows,
+> so the row above it holds an **invisible filler**, because `BoardPicker` reads a column's height
+> from which rows are OCCUPIED and a wedge that declared only its base would be clickable to
+> mid-slope.
 
 > **AMENDED at build time (#257).** This originally read `ramp_axis: {NONE, NS, EW}`, which cannot
 > say which side of the ramp is high — a ramp at height N with an EW axis climbs to *either*
@@ -92,6 +106,23 @@ Rejected: **high side** (makes a ramp a third kind of thing rather than an annot
 > `height_step_ok` refuses it exactly as it refuses three), and a half-level drop deals **no fall
 > damage** (`FallRules` charges per whole level).
 
+> **Slice 2 made the gentle slope REAL (2026-08-23).** A ramp's steepness is authored per cell now:
+> `Terrain.corners_of_ramp` takes a `climb`, `climb_of_corners` is its derived twin beside
+> `rise_of_corners`, and the two authorable values are **1** (half a level over one cell, `atan(1/2)`
+> = **26.6°** — the RollerCoaster Tycoon slope the dev remembered as 30) and **`UNITS_PER_LEVEL`**
+> (the 45° ramp that has always existed). Their twin is a **half-level platform**: the two are
+> inseparable, since a gentle ramp from height 0 arrives at height 1 and something has to stand there.
+>
+> **`height_step_ok` stopped comparing against a constant.** The `abs(delta) != UNITS_PER_LEVEL`
+> clause is deleted rather than widened — a step connects when the ramp on the appropriate side
+> climbs *exactly* that much along it. The blocking ruling above survives untouched by that (flat
+> ground climbs 0, so a sheer 1-unit edge is refused because 0 ≠ 1), and a 45° ramp still refuses a
+> half-level edge for the same reason, which is the half a single case cannot see.
+>
+> `PlanResolver`'s two landing rules ask the same question: a flight slides onto a descending ramp
+> for free when the drop equals **that ramp's** climb, and a tumble continues when the next ramp's
+> high edge meets this cell's base.
+
 The visual midpoint stays purely presentational and already is — `UnitSprite3D.stand_at` is an
 injectable `Callable` precisely so the walk demo could lower ramp cells without the component knowing
 about boards. `BoardPicker`'s *"ramps count as full blocks"* is ray-intersection geometry, not a
@@ -108,8 +139,8 @@ engine grows one:
 - **`can_stand(cell)`** — unchanged, the existing cell-scoped answer.
 - **`can_step(from, to)`** — new. Same height → ordinary terrain rules. Different height → legal only
   if one of the two cells is a ramp whose axis matches the step direction and whose high/low sides
-  line up. **Ramps connect exactly ±1**, so a 5-tall cliff is a staircase of five ramp cells or it is
-  not climbable at all.
+  line up. **Ramps connect exactly their own CLIMB** (±1 level until #427 slice 2 made steepness
+  authored), so a 5-tall cliff is a staircase of ramp cells or it is not climbable at all.
 
   **BUILT in #257.** Because a ramp's own elevation is its LOW side, the climb happens when *leaving*
   it and the descent when *entering* it — so the two height clauses read opposite cells: `+1` is
@@ -619,6 +650,18 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 
 ## Dev tools [BUILT as #260]
 
+> **The brush grew a STEEPNESS door in #427 slice 2 (2026-08-23), and its height step opened.** The
+> Height spinbox steps by **1 unit** now rather than a whole level, so a half-level platform is
+> authorable — slice 1 had deliberately held it at `UNITS_PER_LEVEL` because nothing could draw one.
+> The wheel still moves a whole level per notch, since that is the gesture, not the resolution.
+>
+> Steepness is a **separate control from direction** (dev call, 2026-08-23), against folding both
+> into one nine-entry dropdown: a Rise Amount picker (Full 45° / Half 26.6°) beside the compass, and
+> **X** cycles it — between Z and C, so turn-left / change-pitch / turn-right read as one gesture. It
+> greys with the direction on a tile that stands up, for the same reason. The amount deliberately
+> survives *Reset to flat*: it is a steepness preference, not a piece of the shape.
+
+
 Kept deliberately minimal for now (dev): **scroll wheel sets the level the brush places at, with a
 dedicated button to reset it to 0.** Painting textures onto wall faces and other authoring niceties
 come later and do not gate anything.
@@ -778,8 +821,8 @@ itself.
   (2026-08-23), and deliberately not built as described.** The gentler slope arrives as a HALF-level
   rise over ONE cell — `atan(1/2)` ≈ 26.6°, the actual RollerCoaster Tycoon angle — never as one
   level spread over two cells, so no multi-cell coupling enters the ramp vocabulary and every cell
-  stays self-contained. Slice 1 re-based the unit that makes it expressible; slice 2 builds the
-  form. Everything else here still assumes 45°, which is now 2 units per cell.
+  stays self-contained. Slice 1 re-based the unit that makes it expressible; **slice 2 BUILT the
+  form** (2026-08-23). Everything else here still assumes 45°, which is now 2 units per cell.
 - **Height-modified LDR / cohesion.** Left as pure connectivity, which already behaves correctly.
 
 ---
