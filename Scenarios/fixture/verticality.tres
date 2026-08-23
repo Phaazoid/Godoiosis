@@ -328,8 +328,8 @@ power = 5
 attack_pattern = SubResource("Resource_7j38b")
 hits_allies = true
 targets = 2
-up_tolerance = 3
-arc_clearance = 3
+up_tolerance = 6
+arc_clearance = 6
 metadata/_custom_type_script = "uid://bgbidu2bbf33l"
 
 [sub_resource type="Resource" id="Resource_hfh5k"]
