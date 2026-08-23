@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #476 (2026-08-22).**
+**Canon checked through #478 (2026-08-23).**
 
 ---
 
@@ -271,6 +271,45 @@ chase each other if they ever ran in the same frame. They cannot, because `ai_lo
 set in the same block as `AI_TURN` and the poll stands down on any locked board. That is now a fact
 the poll depends on rather than a coincidence — a fixture holding `ai_locked` *without* `AI_TURN` is
 in a state the game cannot reach, and `test_camera_follow.gd` says so where it sets both.
+
+### The rig aims at the SURFACE, never at the board's ceiling (dev report, 2026-08-23)
+
+Found by playing the section above, and **pre-existing since 4d rather than caused by it** — which
+is what made it worth a rule instead of a patch. Recentring on a unit in Level_1 put the view above
+them, and *so did the enemy phase*.
+
+`CameraRig3D._aim_at` lifts the opening shot to **the top of the whole board volume** — its own
+comment says why: so the pitch looks down at the surface rather than through it. That is right for
+FRAMING a board and wrong for LOOKING AT something standing on one, and **nothing ever re-derived
+it**: `_center_rig_on` and `_mirror_camera` both kept `_rig.position.y`, so the opening shot's
+height was the aim height for the rest of the battle. Level_1 has columns to level 4 and an
+authored `camera_start` that froze `aim.y = 5` against a ground surface of `y = 1`, so the look-at
+point floated four cells in the air; at close zoom the unit rode off the top of the frame. Prolog
+is flat, which is why it never showed there and why the report named two boards and an AI turn.
+
+**The rule: whatever the rig is aiming AT, it aims at the surface under it.** Both readers now do:
+
+- `_center_rig_on(cell)` takes `BoardSpace.surface_point`'s WHOLE answer — the same seam
+  `UnitMirror` places the sprite with (#273), so the camera looks where the unit visibly is, ramps'
+  half-level rise included.
+- `_mirror_camera` takes the continuous twin, `surface_height_at` (#259). The 2D camera answers
+  WHERE and the board answers HOW HIGH; continuous rather than per cell because an AI pan is a
+  GLIDE, and a height that stepped at cell boundaries would jolt the diorama mid-beat.
+
+One authority, two entry points `BoardSpace` already ships — not two answers.
+
+**What is deliberately NOT fixed, and is the reason this is a rule rather than a finished feature:**
+WASD panning still leaves `position.y` where the last recentre put it, so panning from a valley
+onto a hill re-opens a smaller version of the same gap. Making the aim height track the terrain
+*continuously* would mean teaching `CameraRig3D` about the board, which it deliberately does not
+know (the look-dev scene shares it and has no board at all). Filed as its own question rather than
+smuggled in here.
+
+**The general shape, worth carrying:** a value that is correct at INITIALISATION and never
+re-derived is invisible for exactly as long as its initial answer stays close enough — and a flat
+board keeps it close enough forever. Two of this suite's own cases had pinned the inherited height
+as CORRECT (`is_equal(Vector3(point.x, before.y, point.z))`), which is how a bug outlives the tests
+written over it.
 
 **The opening shot is the player's squad, not the board (dev feel-check, 2026-08-14: fitting all 64×40 of Prolog opened too far out to play from).** These are two different questions and the rig now takes both — `frame(shot, bounds)`: the *shot* is what is on screen at load, the *bounds* are the box the view may never leave, and only the bounds set the zoom ceiling and the pan limit. Solving the ceiling off a close shot would have clamped the player out of ever seeing the rest of the map, which is the same class of bug as the cells-passed-as-a-distance one this stage fixed. Falsification note worth keeping: the obvious test — *are the player's units on screen at load?* — **passes against a window aimed at the board's centre** on both authored missions, because both squads start near the middle. The aim itself has to be asserted, or "opens on your squad" is pinned by nothing.
 
