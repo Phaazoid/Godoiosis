@@ -101,6 +101,16 @@ func test_every_field_the_attack_editor_draws_carries_text() -> void:
 	assert_array(missing).is_empty()
 
 
+# The Item Editor's mod mode (#74) -- and it skips only display_name, which has its own LineEdit
+# above the form. That is stricter than the Attack Editor's lists above, deliberately: the four
+# fields build_resource_editor cannot draw (two Arrays, two Dictionaries) get bespoke UI that is
+# handed DevWidgets.property_tip explicitly, so every one of them reaches a control and owes text.
+func test_every_field_the_mod_editor_draws_carries_text() -> void:
+	var missing: Array[String] = []
+	_untipped(WeaponModData.new(), ["display_name"], missing)
+	assert_array(missing).is_empty()
+
+
 func test_a_subclass_keeps_its_parents_entries_as_well_as_its_own() -> void:
 	# The merge is hand-written per class, so forgetting it is the live footgun. Both halves in one
 	# case, because the failure mode is exactly "one of these two answers went missing".
