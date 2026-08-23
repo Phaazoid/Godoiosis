@@ -255,7 +255,7 @@ func test_a_fill_on_a_ramp_lies_on_the_slope_instead_of_hanging_level_through_it
 	var cell := Vector2i(3, 2)
 	var heights := _ramp_at(cell, 2)
 	var overlays := _bare_overlays()
-	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], heights)
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))], heights)
 
 	var expected := BoardSpace.surface_transform(cell, heights)
 	assert_that(_normal_of(overlays)).is_equal(expected.basis.y.normalized())
@@ -313,10 +313,10 @@ func test_a_fill_pooled_off_a_ramp_drops_the_tilt_too() -> void:
 	# The same reuse hazard on the set_cells path, which writes a whole transform per frame.
 	var cell := Vector2i(3, 2)
 	var overlays := _bare_overlays()
-	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], _ramp_at(cell, 2))
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, BoardSpace.top_row_of(2))], _ramp_at(cell, 2))
 	assert_that(_normal_of(overlays)).is_not_equal(Vector3.UP)
 
-	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(Vector2i(9, 9), 0)], BoardHeights.new())
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(Vector2i(9, 9), BoardSpace.top_row_of(0))], BoardHeights.new())
 	assert_that(_normal_of(overlays)).is_equal(Vector3.UP)
 
 
@@ -354,7 +354,7 @@ func test_a_fill_on_a_ramp_stays_centred_on_its_own_cell() -> void:
 			"the ramp's normal is upright; the case cannot see the lean it is about").is_true()
 
 	var overlays := _bare_overlays()
-	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, 1)], heights)
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))], heights)
 	var fill := _only_visible_quad(overlays)
 	assert_float(fill.position.x).override_failure_message(
 			"the fill slid off its own cell along the slope -- the lift is leaning downhill") \
@@ -399,7 +399,7 @@ func test_markup_meets_across_a_flat_to_ramp_edge() -> void:
 
 	var overlays := _bare_overlays()
 	overlays.set_cells(BoardOverlays.Layer.MOVE,
-			[BoardSpace.of_cell(ramp, 1), BoardSpace.of_cell(flat, 1)], heights)
+			[BoardSpace.of_cell(ramp, BoardSpace.top_row_of(2)), BoardSpace.of_cell(flat, BoardSpace.top_row_of(2))], heights)
 	var quads := _visible_quads(overlays)
 	assert_int(quads.size()).is_equal(2)
 	assert_bool(quads[0].basis.y.normalized().is_equal_approx(Vector3.UP)).override_failure_message(

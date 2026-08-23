@@ -90,7 +90,7 @@ func test_prolog_mirrors_cell_for_cell() -> void:
 # column top: a ramp's top block is the generated wedge, not the cell's own tile.
 func _surface_of(cell: Vector2i) -> Vector3i:
 	var heights: BoardHeights = _game.board_heights
-	return BoardSpace.of_cell(cell, heights.elevation_at(cell))
+	return BoardSpace.of_cell(cell, BoardSpace.top_row_of(heights.elevation_at(cell)))
 
 
 # Which cells burn comes off the ONE enumeration form (Terrain.gd: "no reader may
@@ -190,7 +190,14 @@ func test_rebuild_tracks_the_authority_after_clear_board() -> void:
 	# clear_board deliberately leaves TERRAIN painted (the pieces clear, the map
 	# stays — sandbox behavior). The mirror's contract is parity with the
 	# authority, whatever the authority does — never an assumption of emptiness.
-	assert_int(board.get_used_cells().size()).is_equal(_game.grid.get_used_cells().size())
+	#
+	# Parity of COLUMNS, not of cells: a column is however many rows tall its height makes it
+	# (UNITS_PER_LEVEL per level since #427 slice 2), so counting mirror cells was measuring the
+	# vertical metric rather than the parity this case is about.
+	var columns: Dictionary[Vector2i, bool] = {}
+	for mirrored: Vector3i in board.get_used_cells():
+		columns[BoardSpace.flat(mirrored)] = true
+	assert_int(columns.size()).is_equal(_game.grid.get_used_cells().size())
 	var mirror := _scene.get_node("BoardMirror") as BoardMirror
 	assert_int(mirror.fire_marker_count()).is_equal(_burning().size())
 
@@ -1406,12 +1413,13 @@ func test_a_raised_cell_fills_its_whole_column() -> void:
 	_game.board_heights.set_cell(cell, 4, Terrain.RampRise.NONE)
 	await _settle()
 
-	for level in [0, 1, 2]:
-		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, level))) \
-			.override_failure_message("level %d of the column is missing" % level) \
+	var top := BoardSpace.top_row_of(4)
+	for row in range(0, top + 1):
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, row))) \
+			.override_failure_message("row %d of the column is missing" % row) \
 			.is_equal(surface)
-	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, 3))) \
-		.override_failure_message("the column runs past the level it was painted at") \
+	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, top + 1))) \
+		.override_failure_message("the column runs past the height it was painted at") \
 		.is_equal(GridMap.INVALID_CELL_ITEM)
 
 
@@ -1428,15 +1436,15 @@ func test_lowering_a_cell_clears_the_column_it_used_to_fill() -> void:
 	_game.board_heights.set_cell(cell, 0, Terrain.RampRise.NONE)
 	await _settle()
 
-	for level in [1, 2, 3]:
-		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, level))) \
-			.override_failure_message("level %d survived the cut" % level) \
+	for row in range(BoardSpace.top_row_of(0) + 1, BoardSpace.top_row_of(6) + 1):
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, row))) \
+			.override_failure_message("row %d survived the cut" % row) \
 			.is_equal(GridMap.INVALID_CELL_ITEM)
 
 
-func test_a_ramp_puts_its_wedge_one_level_above_its_own() -> void:
-	# The off-by-one that is INVISIBLE on a flat board: a level-E block occupies [E..E+1], so E's
-	# surface is E+1 and a ramp whose elevation is its LOW side must slope from E+1 to E+2.
+func test_a_ramp_puts_its_wedge_one_row_above_its_own_surface() -> void:
+	# The off-by-one that is INVISIBLE on a flat board: a ramp whose elevation is its LOW side must
+	# slope UP from its own surface, so its wedge sits on the row directly above it.
 	_scene.load_mission(PROLOG)
 	await _settle()
 	_game.game_state = _game.GameState.DEV_MODE
@@ -1447,13 +1455,43 @@ func test_a_ramp_puts_its_wedge_one_level_above_its_own() -> void:
 	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NORTH)
 	await _settle()
 
-	assert_int(mirror.ramp_item()).override_failure_message(
-			"the meshlib has no '%s'; the case is vacuous" % BoardMirror.RAMP_ITEM_NAME) \
+	assert_int(mirror.ramp_item(Terrain.UNITS_PER_LEVEL)).override_failure_message(
+			"the meshlib has no '%s'; the case is vacuous"
+			% BoardMirror.RAMP_ITEM_NAMES[Terrain.UNITS_PER_LEVEL]) \
 		.is_not_equal(GridMap.INVALID_CELL_ITEM)
 	# Which wedge is the cell's own question (#340); this case is only about WHERE it sits.
-	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, 2))) \
-		.override_failure_message("the wedge is not one level above the ramp's own") \
-		.is_equal(mirror.ramp_item_for_cell(_game.grid, cell))
+	assert_int(board.get_cell_item(BoardSpace.of_cell(cell, BoardSpace.top_row_of(2) + 1))) \
+		.override_failure_message("the wedge is not one row above the ramp's own surface") \
+		.is_equal(mirror.ramp_item_for_cell(_game.grid, cell, Terrain.UNITS_PER_LEVEL))
+
+
+# #427 slice 2. The two halves of "a wedge is as many rows tall as it climbs", checked together
+# because the second is what a gentler slope would have hidden: BoardPicker reads a column's height
+# from which rows are OCCUPIED, so a 45 degree wedge that declared only its bottom row would be
+# clickable to mid-slope. Asked of the real column rather than of _write_column's arithmetic.
+func test_a_wedge_occupies_a_row_per_unit_it_climbs() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var mirror: BoardMirror = _scene._board_mirror
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NORTH, climb)
+		await _settle()
+		var base := BoardSpace.top_row_of(2)
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, base + 1))) \
+			.override_failure_message("climb %d: the wedge is not the one the cell asks for" % climb) \
+			.is_equal(mirror.ramp_item_for_cell(_game.grid, cell, climb))
+		for row in range(base + 2, base + climb + 1):
+			assert_int(board.get_cell_item(BoardSpace.of_cell(cell, row))) \
+				.override_failure_message(
+					"climb %d: row %d is inside the wedge but reads as empty" % [climb, row]) \
+				.is_equal(mirror.ramp_fill_item())
+		assert_int(board.get_cell_item(BoardSpace.of_cell(cell, base + climb + 1))) \
+			.override_failure_message("climb %d: the column runs past the wedge's top" % climb) \
+			.is_equal(GridMap.INVALID_CELL_ITEM)
 
 
 # The first flat tile the generator actually emitted a ramp variant for. Asked of the LIBRARY rather
@@ -1464,7 +1502,7 @@ func _tile_with_a_ramp_variant(board: GridMap) -> Dictionary:
 	for id in board.mesh_library.get_item_list():
 		names[board.mesh_library.get_item_name(id)] = true
 	for tile in _tiles_that_stand(false):
-		if names.has(BoardMirror.ramp_item_name(tile.source, tile.coords)):
+		if names.has(BoardMirror.ramp_item_name(tile.source, tile.coords, Terrain.UNITS_PER_LEVEL)):
 			return tile
 	return {}
 
@@ -1487,13 +1525,13 @@ func test_a_ramp_wears_the_tile_painted_on_it_rather_than_the_generic_wedge() ->
 	_game.board_heights.set_cell(cell, 0, Terrain.RampRise.NORTH)
 	await _settle()
 
-	var wedge := board.get_cell_item(BoardSpace.of_cell(cell, 1))
+	var wedge := board.get_cell_item(BoardSpace.of_cell(cell, BoardSpace.top_row_of(0) + 1))
 	assert_int(wedge).override_failure_message(
 			"the wedge is not the one this cell's tile asks for"
-			).is_equal(mirror.ramp_item_for_cell(_game.grid, cell))
+			).is_equal(mirror.ramp_item_for_cell(_game.grid, cell, Terrain.UNITS_PER_LEVEL))
 	assert_int(wedge).override_failure_message(
 			"the ramp fell back to the generic dirt wedge instead of wearing its own tile"
-			).is_not_equal(mirror.ramp_item())
+			).is_not_equal(mirror.ramp_item(Terrain.UNITS_PER_LEVEL))
 
 
 func test_a_tile_with_no_ramp_variant_falls_back_to_the_generic_wedge() -> void:
@@ -1512,9 +1550,9 @@ func test_a_tile_with_no_ramp_variant_falls_back_to_the_generic_wedge() -> void:
 	_game.grid.paint(cell, standing[0].source, standing[0].coords)
 	await _settle()
 
-	assert_int(mirror.ramp_item_for_cell(_game.grid, cell)).override_failure_message(
+	assert_int(mirror.ramp_item_for_cell(_game.grid, cell, Terrain.UNITS_PER_LEVEL)).override_failure_message(
 			"a tile with no ramp variant did not fall back to the generic wedge"
-			).is_equal(mirror.ramp_item())
+			).is_equal(mirror.ramp_item(Terrain.UNITS_PER_LEVEL))
 
 
 # The UV rect a surface actually occupies. Surface 0 is the top face and surface 1 the sides, for
@@ -1543,20 +1581,25 @@ func test_a_ramp_variant_wears_the_same_atlas_REGIONS_its_block_does() -> void:
 	for id in lib.get_item_list():
 		by_name[lib.get_item_name(id)] = id
 
+	# EVERY authorable climb, since #427 slice 2 emits one variant each: the gentle wedge is built by
+	# the same call with the same pair, so a divergence there is the same bug one argument along.
 	var checked := 0
 	for tile in _tiles_that_stand(false):
-		var ramp: String = BoardMirror.ramp_item_name(tile.source, tile.coords)
 		var block: String = BoardMirror.tile_item_name(tile.source, tile.coords)
-		if not by_name.has(ramp) or not by_name.has(block):
+		if not by_name.has(block):
 			continue
-		var ramp_mesh: Mesh = lib.get_item_mesh(by_name[ramp])
 		var block_mesh: Mesh = lib.get_item_mesh(by_name[block])
-		for surface in [0, 1]:
-			assert_vector(_uv_bounds(ramp_mesh, surface).size).override_failure_message(
-					"%s surface %d spans a different atlas region than its block: %s vs %s"
-					% [ramp, surface, _uv_bounds(ramp_mesh, surface), _uv_bounds(block_mesh, surface)]
-					).is_equal_approx(_uv_bounds(block_mesh, surface).size, Vector2(0.001, 0.001))
-		checked += 1
+		for climb: int in BoardMirror.RAMP_ITEM_NAMES:
+			var ramp: String = BoardMirror.ramp_item_name(tile.source, tile.coords, climb)
+			if not by_name.has(ramp):
+				continue
+			var ramp_mesh: Mesh = lib.get_item_mesh(by_name[ramp])
+			for surface in [0, 1]:
+				assert_vector(_uv_bounds(ramp_mesh, surface).size).override_failure_message(
+						"%s surface %d spans a different atlas region than its block: %s vs %s"
+						% [ramp, surface, _uv_bounds(ramp_mesh, surface), _uv_bounds(block_mesh, surface)]
+						).is_equal_approx(_uv_bounds(block_mesh, surface).size, Vector2(0.001, 0.001))
+			checked += 1
 	assert_int(checked).override_failure_message(
 			"no tile had BOTH a block and a ramp variant; the law is vacuous").is_greater(0)
 
@@ -1575,7 +1618,7 @@ func test_each_rise_points_the_wedges_high_side_the_way_it_names() -> void:
 			Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
 		_game.board_heights.set_cell(cell, 0, rise)
 		await _settle()
-		var basis := board.get_cell_item_basis(BoardSpace.of_cell(cell, 1))
+		var basis := board.get_cell_item_basis(BoardSpace.of_cell(cell, BoardSpace.top_row_of(0) + 1))
 		var high := basis * BoardMirror.RAMP_MESH_HIGH_SIDE
 		var want := Terrain.rise_direction(rise)
 		assert_float(high.x).override_failure_message(
@@ -1981,31 +2024,39 @@ func test_the_tuft_knob_resizes_a_tuft_that_is_already_standing() -> void:
 
 # ---- the brush ghost at height (#285) ----
 #
-# The 3D preview of what an elevation click would produce. The level is the BRUSH's, not the
-# cell's current one, which is the whole point: hovering a flat cell with the wheel at 3 has to
-# show a block three levels up, or the ghost is previewing the thing you are replacing.
+# The 3D preview of what an elevation click would produce. The height is the BRUSH's, not the
+# cell's current one, which is the whole point: hovering a flat cell with the wheel up has to
+# show a block that far up, or the ghost is previewing the thing you are replacing.
+#
+# It is stated in the BRUSH'S OWN UNIT since #427 slice 2, and that is a correction rather than a
+# rename: #427 slice 1 made the brush author in half-level units while this case still said
+# "levels", so `3` meant one and a half — and the case kept passing only because show_brush_ghost
+# was reading the same field as a whole level. A test and the code it covers agreeing about a
+# mistake is the shape that survives every mutant.
 
 func _ghost_node() -> MeshInstance3D:
 	return (_scene._board_mirror as BoardMirror)._brush_ghost
 
 
-func test_the_ghost_hangs_at_the_level_the_click_would_produce() -> void:
+func test_the_ghost_hangs_at_the_height_the_click_would_produce() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
 	var mirror := _scene._board_mirror as BoardMirror
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 
-	# A DELTA, so no item's authored offset can be mistaken for the level -- and so the mutant
+	# A DELTA, so no item's authored offset can be mistaken for the height -- and so the mutant
 	# that reads heights.elevation_at(cell) instead reports 0 rather than a near-miss.
 	mirror.show_brush_ghost(BrushGhost.make(cell, 0, _game.grid))
 	var at_zero: float = _ghost_node().position.y
 	mirror.show_brush_ghost(BrushGhost.make(cell, 3, _game.grid))
 	var at_three: float = _ghost_node().position.y
 
+	# THREE UNITS is a level and a half, not three cells. Reading the field as a whole level -- what
+	# slice 1 shipped -- doubles this.
 	assert_float(at_three - at_zero).override_failure_message(
-			"three levels of BRUSH height moved the ghost %s, not three cells -- it is reading the "
-			% (at_three - at_zero) + "cell's own elevation").is_equal_approx(
-			3.0 * BoardSpace.CELL_SIZE, 0.01)
+			"three UNITS of BRUSH height moved the ghost %s, not three rows -- it is reading the "
+			% (at_three - at_zero) + "cell's own elevation, or reading units as levels").is_equal_approx(
+			3.0 * BoardSpace.ROW_HEIGHT, 0.01)
 
 
 func test_the_ghost_wears_the_art_the_cell_already_has() -> void:
@@ -2023,7 +2074,7 @@ func test_the_ghost_wears_the_art_the_cell_already_has() -> void:
 	assert_object(_ghost_node().mesh).is_same(want)
 
 
-func test_a_rise_previews_the_wedge_one_level_above_its_own() -> void:
+func test_a_rise_previews_the_wedge_one_row_above_its_own() -> void:
 	# _write_column's rule, mirrored: a level-E block occupies [E..E+1], so the slope that starts
 	# at E's surface sits at E+1. Preview it at E and the ramp appears to sink into the terrace.
 	_scene.load_mission(PROLOG)
@@ -2041,10 +2092,10 @@ func test_a_rise_previews_the_wedge_one_level_above_its_own() -> void:
 	# own (#340) — asked the same way show_brush_ghost asks, never assumed to be the generic one.
 	assert_object(_ghost_node().mesh).override_failure_message(
 			"a rise still previewed the flat block").is_same(
-			board.mesh_library.get_item_mesh(mirror.ramp_item_for_cell(_game.grid, cell)))
+			board.mesh_library.get_item_mesh(mirror.ramp_item_for_cell(_game.grid, cell, Terrain.UNITS_PER_LEVEL)))
 	assert_float(wedge_y - flat_y).override_failure_message(
-			"the wedge did not sit one level above the block it climbs from").is_equal_approx(
-			BoardSpace.CELL_SIZE, 0.01)
+			"the wedge did not sit one row above the block it climbs from").is_equal_approx(
+			BoardSpace.ROW_HEIGHT, 0.01)
 
 
 func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:

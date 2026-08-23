@@ -74,7 +74,7 @@ func test_a_real_walk_glides_the_sprite_to_the_destination() -> void:
 	await await_idle_frame()
 	var sprite := _mirror.sprite_for(unit)
 	assert_that(sprite.position).is_equal(_sprite_seat(to))
-	assert_that(sprite.cell).is_equal(BoardSpace.of_cell(to, _game.board_heights.elevation_at(to)))
+	assert_that(sprite.cell).is_equal(BoardSpace.of_cell(to, BoardSpace.top_row_of(_game.board_heights.elevation_at(to))))
 
 
 func test_downed_and_death_reconcile() -> void:

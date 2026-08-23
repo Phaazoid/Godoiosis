@@ -73,9 +73,9 @@ func _stand(cell: Vector2i) -> Vector3:
 # _screen_of, and correct for a ramp for the same reason.
 func _screen_of(cell: Vector2i) -> Vector2:
 	var tops: Dictionary[Vector2i, int] = _scene._tops
-	var level: int = tops.get(cell, BoardSpace.FLAT_TOP_LEVEL)
+	var level: int = tops.get(cell, BoardSpace.FLAT_TOP_ROW)
 	return _camera3d.unproject_position(Vector3((cell.x + 0.5) * BoardSpace.CELL_SIZE,
-			level * BoardSpace.CELL_SIZE, (cell.y + 0.5) * BoardSpace.CELL_SIZE))
+			level * BoardSpace.ROW_HEIGHT, (cell.y + 0.5) * BoardSpace.CELL_SIZE))
 
 
 # Where the rig should SIT to look at a world x/z: on the surface there, never at the board's
@@ -90,7 +90,7 @@ func _surface_aim(at: Vector3) -> Vector3:
 # The mirror cell the 3D pointer reports for a 2D cell — the picker's answer, not an assumed level.
 func _picked(cell: Vector2i) -> Vector3i:
 	var tops: Dictionary[Vector2i, int] = _scene._tops
-	return BoardSpace.of_cell(cell, tops.get(cell, BoardSpace.FLAT_TOP_LEVEL) - 1)
+	return BoardSpace.of_cell(cell, tops.get(cell, BoardSpace.FLAT_TOP_ROW) - 1)
 
 
 # --- Following the action ----------------------------------------------------------
