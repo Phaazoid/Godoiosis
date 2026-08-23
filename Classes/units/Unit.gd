@@ -424,7 +424,7 @@ func is_immune_to(element: Elemental.Element) -> bool:
 		return false
 	return has_live_ability(Abilities.INSULATION[element])
 
-# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ worn gear, deduped
+# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ gear, deduped
 # by id, earlier sources winning ties. THE answer — UnitInstance's version is the persistent
 # inner layer. Derived live off what's worn, never stored, which is also what makes a wear-gate
 # strip correct for free: drop the armor and its grants leave with it, no invalidation needed.
