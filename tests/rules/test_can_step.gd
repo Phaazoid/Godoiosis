@@ -112,11 +112,14 @@ func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
 	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, _context(board, unit))).is_false()
 
 func test_a_ramp_does_not_connect_a_half_level_either() -> void:
-	# A ramp is not a licence to cross any gap: its own rise is a full level, so a neighbour half a
-	# level above its top is still unreachable from it.
+	# A ramp is not a licence to cross any gap: this one climbs a full level, so a neighbour half a
+	# level above its base is still unreachable from it.
 	#
-	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the level
-	# clause is the only thing left that can refuse. Falsified by relaxing it to `>`.
+	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the height
+	# clause is the only thing left that can refuse. Falsified twice — by relaxing slice 1's level
+	# clause to `>`, and by slice 2's version of the same mistake, dropping the climb comparison so
+	# a ramp crosses whatever gap it faces. Slice 2 added a second case saying exactly this on an
+	# identical board; falsification found the duplicate and it was deleted rather than kept.
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
@@ -277,19 +280,6 @@ func test_a_half_rise_ramp_connects_a_half_level_and_nothing_else() -> void:
 	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL)   # a full level instead
 	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
 		.override_failure_message("a gentle ramp climbed a whole level").is_false()
-
-
-func test_the_two_steepnesses_do_not_cover_for_each_other() -> void:
-	# The mirror of the case above, and the one that would go quiet if height_step_ok compared the
-	# delta against a CONSTANT again rather than against the ramp's own climb: a 45 degree ramp must
-	# refuse the half level exactly as the gentle one refuses the full one.
-	var board := _board()
-	var heights := _heights(board)
-	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)   # full climb
-	heights.set_cell(Vector2i(2, 1), 1)                          # half a level up
-	var unit := _spawn(board, Vector2i(0, 1))
-	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
-		.override_failure_message("a 45 degree ramp reached a half level").is_false()
 
 
 func test_two_gentle_ramps_climb_a_whole_level_between_them() -> void:
