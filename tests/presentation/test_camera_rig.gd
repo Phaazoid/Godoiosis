@@ -93,6 +93,26 @@ func test_frame_raises_the_zoom_ceiling_so_the_fit_survives_its_own_clamp() -> v
 			"the ceiling still eats the fit").is_greater(24.0)
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
 
+# THERE IS NO ZOOM-IN FLOOR (dev, 2026-08-23, asked twice: "please remove it entirely"). It was
+# min_distance = 6.0 and it is what "I can't zoom in far enough to see what I'm brushing" meant;
+# lowering it to 1.0 first was not what he asked for and did not satisfy him either.
+#
+# The ceiling is the only bound left, so this is the pair: a tiny distance survives untouched, and
+# one past the ceiling is still pulled back. A floor re-added at ANY value reds the first half.
+func test_zooming_in_has_no_floor_while_the_ceiling_still_holds() -> void:
+	var rig := _rig()
+	rig.max_distance = 24.0
+
+	rig.set_zoom(0.05)
+	assert_float(rig._target_distance).override_failure_message(
+			"a zoom-in floor is back: 0.05 came out as %s" % rig._target_distance) \
+		.is_equal_approx(0.05, 0.0001)
+
+	rig.set_zoom(1000.0)
+	assert_float(rig._target_distance).override_failure_message(
+			"the ceiling stopped holding when the floor went").is_equal_approx(24.0, 0.0001)
+
+
 
 func test_framing_a_shot_inside_bounds_leaves_the_ceiling_and_pan_on_the_bounds() -> void:
 	# The shot/bounds split (dev feel-check 2026-08-14). Asserted by EQUIVALENCE rather than
@@ -155,7 +175,7 @@ func test_frame_adopts_the_fit_as_home_so_reset_returns_to_it() -> void:
 	assert_bool(framed_position.distance_to(Vector3(0, 1, 0)) > 1.0).is_true()
 
 	rig.position = Vector3(999, 1, 999)
-	rig.set_zoom(rig.min_distance)
+	rig.set_zoom(1.0)   # any distance other than the one R must restore
 	_key(KEY_R)
 	assert_that(rig.position).is_equal(framed_position)
 	assert_float(rig._target_distance).is_equal_approx(framed_distance, 0.001)
@@ -218,7 +238,7 @@ func test_pose_adopts_the_authored_yaw_as_home_unlike_framing() -> void:
 
 	rig.position = Vector3(5, 1, 5)
 	rig._target_yaw_degrees = 0.0
-	rig.set_zoom(rig.min_distance)
+	rig.set_zoom(1.0)   # any distance other than the one R must restore
 	_key(KEY_R)
 
 	assert_that(rig.position).is_equal(Vector3(20, 1, 14))

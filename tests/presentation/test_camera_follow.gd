@@ -296,7 +296,7 @@ func _assert_opens_at_the_authored_pose(path: String, start: CameraPose) -> void
 			).is_equal_approx(start.yaw_degrees, 0.01)
 	assert_float(_camera3d.position.z).override_failure_message(
 			"%s authors a camera start and did not open at its zoom" % path
-			).is_equal_approx(clampf(start.distance, _rig.min_distance, _rig.max_distance), 0.01)
+			).is_equal_approx(minf(start.distance, _rig.max_distance), 0.01)   # no zoom-in floor since 2026-08-23
 
 
 # The derived half — unchanged, and still the reason the shot/bounds split exists.

@@ -328,8 +328,8 @@ func test_a_tab_with_no_host_degrades_instead_of_crashing() -> void:
 const GAME_SETTING_NODES := ["BoardOverlays", "UnitMirror", "BoardMirror"]
 # CameraRig is the one node that holds BOTH, so it cannot be excluded wholesale: framing is mood and
 # handling is not, and only the property name separates them.
-const CAMERA_HANDLING := ["min_distance", "zoom_step", "smoothing", "pan_speed",
-	"orbit_sensitivity", "pan_margin_cells", "zoom_out_slack"]
+const CAMERA_HANDLING := ["zoom_step", "smoothing", "pan_speed",
+	"orbit_sensitivity", "pan_margin_cells", "zoom_out_slack"]   # min_distance went with the floor
 
 
 func test_the_look_table_holds_no_game_setting() -> void:

@@ -50,12 +50,14 @@ class_name CameraRig3D
 
 # Feel knobs, every one (the tuning rule -- these were consts until 4d).
 @export var yaw_step := 90.0
-# How close the camera may come. 6.0 until 2026-08-23, which was the whole of "I can't zoom in far
-# enough to see what I'm brushing" -- Ctrl+wheel was already handing notches back (battle3d's
-# _handle_brush_zoom), they just hit this floor immediately. Kept as a clamp rather than removed: a
-# literal 0 puts the camera inside the ground and through the near plane. It is a Game-tab knob, so
-# the rest is tuned live.
-@export var min_distance := 1.0
+# There is NO zoom-in floor (dev, 2026-08-23, asked twice: "please remove it entirely"). It was
+# min_distance, 6.0, and it was the whole of "I can't zoom in far enough to see what I'm brushing" --
+# Ctrl+wheel had always handed notches back (battle3d's _handle_brush_zoom), they just hit this the
+# instant they arrived. Lowering it to 1.0 first was not what he asked for and did not satisfy him.
+#
+# Consequence, stated rather than guarded: scrolling in past the aim point takes the distance through
+# zero and negative, and the camera passes through its target and looks back. His call; a floor at 0
+# is the one line that would stop it. Pinned by test_zooming_in_has_no_floor_while_the_ceiling_still_holds.
 @export var max_distance := 24.0   # frame() overwrites this from the board it fits
 @export var zoom_step := 1.5
 @export var pan_speed := 8.0
@@ -200,7 +202,7 @@ func _set_manual_input_enabled(value: bool) -> void:
 
 
 func set_zoom(distance: float) -> void:
-	_target_distance = clampf(distance, min_distance, max_distance)
+	_target_distance = minf(distance, max_distance)
 
 
 # Frame `volume` (in cells/world units): aim at it, sit far enough back that all of it
@@ -281,7 +283,7 @@ func rebound(bounds: AABB) -> bool:
 		return false
 	# Derived from the BOUNDS, not from any one shot: a ceiling solved off a close opening
 	# volume would clamp the player out of ever seeing the rest of the board.
-	max_distance = maxf(ceiling * zoom_out_slack, min_distance)
+	max_distance = ceiling * zoom_out_slack
 	set_zoom(_target_distance)   # re-clamp: a shrunken board can leave you outside the new ceiling
 	pan_limit = Rect2(limit_box.position.x, limit_box.position.z, limit_box.size.x, limit_box.size.z).grow(pan_margin_cells)
 	return true
@@ -311,7 +313,7 @@ func _fit_distance(box: AABB) -> float:
 	var right := basis.x
 	var up := basis.y
 	var forward := -basis.z
-	var distance := min_distance
+	var distance := 0.0   # the fit only ever grows this; there is no floor to seed from
 	for i in 8:
 		var q := box.get_endpoint(i) - aim
 		var depth := q.dot(forward)
