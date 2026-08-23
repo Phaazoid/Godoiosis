@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #478 (2026-08-23).**
+**Canon checked through #484 (2026-08-23).**
 
 ---
 
@@ -266,11 +266,28 @@ be worth fixing. It compares the camera's whole transform rather than the rig's 
 yaw and zoom move the pick too and both lerp for frames after the input that started them.
 
 **The invariant that keeps two authorities apart, worth stating because nothing in the code says
-it:** `_update_pointer` WRITES the hidden 2D camera and `_mirror_camera` READS it, so the two would
-chase each other if they ever ran in the same frame. They cannot, because `ai_locked` is only ever
-set in the same block as `AI_TURN` and the poll stands down on any locked board. That is now a fact
-the poll depends on rather than a coincidence — a fixture holding `ai_locked` *without* `AI_TURN` is
-in a state the game cannot reach, and `test_camera_follow.gd` says so where it sets both.
+it:** `_update_pointer` WRITES the hidden 2D camera and `_mirror_camera` READS it, so the two chase
+each other to the pan limit if they ever run in the same frame. `ai_locked` opens the second gate and
+the board lock shuts the first, so what keeps them apart is that a locked board is implied by
+`ai_locked` — which is why, since [#484](https://github.com/Phaazoid/Godoiosis/issues/484),
+`_board_locked_for_player()` **reads that flag** rather than only `game_state == AI_TURN`.
+
+**This paragraph used to claim the pair was unreachable, and that claim is what shipped the bug.** It
+argued the two are written in one block by `start_faction_turn`, so `ai_locked` without a locked board
+could not happen. But `game_state` is TRANSIENT — `set_dev_mode` and `clear_board` both rest it on
+`_base_state()` from anywhere — so toggling dev mode mid-enemy-phase (either direction; *off* lands on
+`IDLE`) reached it, and the mouse became welded to the camera. **The lesson is the shape, not the
+path:** an invariant that holds because of *who writes what, in what order* is a coincidence with good
+manners, and the fix is to make the pair unrepresentable rather than to enumerate the ways in. Two
+other things that same window opened, both worse than the camera: board clicks stopped refusing during
+an enemy phase, and `can_control` returns `true` for *any* unit in `DEV_MODE`, so enemy units became
+commandable.
+
+Note the containment is one-way and deliberate. `_mirror_camera` still gates on `ai_locked` alone,
+**narrower** than the board lock, because that predicate also covers `MENU` and Mission Select opts out
+of the modal lock — mirroring there would yank the rig to a stale 2D position the moment a menu opened.
+Widening *it* was the obvious-looking fix and is the wrong one; the two `test_camera_follow.gd` guard
+cases still say so.
 
 ### The rig aims at the SURFACE, never at the board's ceiling (dev report, 2026-08-23)
 
