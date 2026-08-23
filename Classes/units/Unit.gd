@@ -334,12 +334,46 @@ func _effect_modifier(stat: Stats.Stat) -> int:
 		total += effect.get_modifier(stat)
 	return total
 
+# THE answer to "whose fitted mods contribute to this unit?" (#74) -- read by _gear_modifier and
+# get_live_abilities, never re-derived, so the two can never disagree about which weapons count.
+#
+# The equipped weapon, plus every INSTALLED PROSTHETIC: a prosthetic is a limb, so its fitted
+# components ride the body that carries them whether or not it is the thing being swung. An idle
+# inventory weapon contributes nothing, the same way get_effective_def reads the worn piece rather
+# than everything carried.
+#
+# DEDUPED, and that is load-bearing rather than defensive: add_item auto-equips the first
+# weapon-shaped equippable and a ProstheticWeaponInstance qualifies, so one prosthetic arm can be
+# the equipped weapon AND a limb fitting at once. Counted twice, its mods pay out twice.
+func _mod_sources() -> Array[WeaponInstance]:
+	var sources: Array[WeaponInstance] = []
+	var held := equipped_weapon as WeaponInstance
+	if held != null:
+		sources.append(held)
+	for slot: UnitInstance.LimbSlot in unit_instance.limbs:
+		var fitting: UnitInstance.LimbFitting = unit_instance.limbs[slot]
+		if fitting.state != UnitInstance.LimbState.PROSTHETIC:
+			continue
+		var prosthetic := fitting.prosthetic_item
+		if prosthetic != null and not sources.has(prosthetic):
+			sources.append(prosthetic)
+	return sources
+
 # The "-> gear" tail of the effective-stat chain (stats.md). Derived live from what's worn,
 # the same way get_effective_def reads worn_armor live -- no stored mirror to keep in sync.
+#
+# A fitted mod contributes HERE, at the gear stage, never at the limb stage a prosthetic's own
+# built_in_stat feeds. Forced rather than chosen: the walk is proficiency-gated and
+# active_space_count needs a Unit, while UnitInstance.limb_stat(slot) has no wielder to ask.
+# The doctrine agrees -- built_in_stat is what the prosthetic IS, a mod is what is bolted to it.
 func _gear_modifier(stat: Stats.Stat) -> int:
-	if worn_armor == null:
-		return 0
-	return worn_armor.stat_modifiers.get(stat, 0)
+	var total := 0
+	if worn_armor != null:
+		total += worn_armor.stat_modifiers.get(stat, 0)
+	for weapon in _mod_sources():
+		for mod in weapon.active_modules(self):
+			total += mod.stat_modifiers.get(stat, 0)
+	return total
 
 func get_current_hp() -> int:
 	return unit_instance.get_current_hp()
@@ -390,7 +424,7 @@ func is_immune_to(element: Elemental.Element) -> bool:
 		return false
 	return has_live_ability(Abilities.INSULATION[element])
 
-# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ worn gear, deduped
+# What this unit can do RIGHT NOW: everything persistent (innate ∪ jobs) ∪ gear, deduped
 # by id, earlier sources winning ties. THE answer — UnitInstance's version is the persistent
 # inner layer. Derived live off what's worn, never stored, which is also what makes a wear-gate
 # strip correct for free: drop the armor and its grants leave with it, no invalidation needed.
@@ -399,6 +433,11 @@ func get_live_abilities() -> Array[AbilityData]:
 	AbilityData.add_live(live, unit_instance.get_live_abilities())
 	if worn_armor != null:
 		AbilityData.add_live(live, worn_armor.granted_abilities)
+	# The weapon half (#74) -- which slots contribute is _mod_sources' one answer, and the merge is
+	# add_live exactly as above, so a mod and a worn piece granting the same id dedupe by id.
+	for weapon in _mod_sources():
+		for mod in weapon.active_modules(self):
+			AbilityData.add_live(live, mod.granted_abilities)
 	return live
 
 func has_live_ability(id: Abilities.Id) -> bool:

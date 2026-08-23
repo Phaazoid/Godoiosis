@@ -17,9 +17,10 @@ const INTIMIDATION_WILL_DRAIN := 3   # playtest-tunable
 # — the doc's working model, and the one fork it deliberately left open — so there is no GUARD
 # ability id here. What KIT grants is BRACE: bonus DEF applied to the absorbed instance, the single
 # block-quality knob (bleed-through to the ward was dropped, not deferred). Bare Guard blocks at +0.
-# Source-agnostic by construction: it rides the ability union (innate -> jobs -> worn gear), so a
-# job, a carving or a piece of armour all grant it through one door. Weapons are not an ability
-# source yet; that decision opens when the first weapon-granted bonus ships, not before.
+# Source-agnostic by construction: it rides the ability union (innate -> jobs -> gear), so a job, a
+# carving, a piece of armour or a fitted weapon mod all grant it through one door. Weapons BECAME
+# an ability source in #74 -- the equipped weapon and every installed prosthetic, via
+# Unit._mod_sources. A rune still is not; that half of #90's "which slots contribute" stays open.
 const BRACE_DEF_BONUS := 3           # playtest-tunable
 const GUARD_BASE_RANGE := 1          # authored on the granting content later; adjacency today
 
