@@ -1403,7 +1403,7 @@ func test_a_raised_cell_fills_its_whole_column() -> void:
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 	var surface := board.get_cell_item(_surface_of(cell))
 
-	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NONE)
+	_game.board_heights.set_cell(cell, 4, Terrain.RampRise.NONE)
 	await _settle()
 
 	for level in [0, 1, 2]:
@@ -1422,7 +1422,7 @@ func test_lowering_a_cell_clears_the_column_it_used_to_fill() -> void:
 	_game.game_state = _game.GameState.DEV_MODE
 	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	_game.board_heights.set_cell(cell, 3, Terrain.RampRise.NONE)
+	_game.board_heights.set_cell(cell, 6, Terrain.RampRise.NONE)
 	await _settle()
 
 	_game.board_heights.set_cell(cell, 0, Terrain.RampRise.NONE)
@@ -1444,7 +1444,7 @@ func test_a_ramp_puts_its_wedge_one_level_above_its_own() -> void:
 	var mirror: BoardMirror = _scene._board_mirror
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 
-	_game.board_heights.set_cell(cell, 1, Terrain.RampRise.NORTH)
+	_game.board_heights.set_cell(cell, 2, Terrain.RampRise.NORTH)
 	await _settle()
 
 	assert_int(mirror.ramp_item()).override_failure_message(

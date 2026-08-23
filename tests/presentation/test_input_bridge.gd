@@ -785,7 +785,7 @@ func test_an_elevation_notch_moves_the_level_and_leaves_the_zoom_alone() -> void
 	await _pump()
 
 	assert_int(brush.selected_elevation()).override_failure_message(
-			"the notch never reached the brush").is_equal(1)
+			"the notch never reached the brush").is_equal(Terrain.UNITS_PER_LEVEL)
 	assert_float(_rig()._target_distance).override_failure_message(
 			"the same notch ALSO zoomed the camera: the brush is not suppressing the rig's wheel"
 			).is_equal_approx(zoom_before, 0.001)
@@ -843,9 +843,9 @@ func test_painting_a_dip_leaves_its_column_on_the_board() -> void:
 	var incremental := cells[1]
 	_game.game_state = _game.GameState.DEV_MODE
 
-	_game.board_heights.set_cell(floor_first, -1, Terrain.RampRise.NONE)
+	_game.board_heights.set_cell(floor_first, -2, Terrain.RampRise.NONE)
 	await _pump()
-	_game.board_heights.set_cell(incremental, -1, Terrain.RampRise.NONE)
+	_game.board_heights.set_cell(incremental, -2, Terrain.RampRise.NONE)
 	await _pump()
 
 	# A cell one deep occupies [-1..0], so its top level IS 0 -- the value that used to mean

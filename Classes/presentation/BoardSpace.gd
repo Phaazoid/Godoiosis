@@ -95,10 +95,14 @@ const SLOPE_STRETCH := 1.0 / cos(RAMP_SLOPE_ANGLE)
 # two cannot drift; the basis half is what makes markup follow a slope instead of hanging level
 # through it. Anything that STANDS stays upright and keeps reading surface_point (units, flames,
 # props).
+#
+# The one place a stored HEIGHT becomes a drawn LEVEL (#427): the store measures in half-level units
+# and a GridMap column is indexed in whole levels, so Terrain.level_of is the conversion the whole 3D
+# stack inherits through this function.
 static func surface_transform(cell: Vector2i, heights: BoardHeights) -> Transform3D:
 	if heights == null:
 		return lie_on(of_cell(cell, 0), Terrain.RampRise.NONE)
-	return lie_on(of_cell(cell, heights.elevation_at(cell)), heights.ramp_rise_at(cell))
+	return lie_on(of_cell(cell, Terrain.level_of(heights.elevation_at(cell))), heights.ramp_rise_at(cell))
 
 
 # The lie itself, for a caller that already resolved the level — the overlay fills, whose Vector3i

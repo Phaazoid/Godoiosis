@@ -71,13 +71,13 @@ func _slide(unit: Unit, outcome: ResolvedOutcome) -> void:
 # calls it a fall of 2 and the tumble carries on down the slope behind it.
 func test_a_cliff_onto_a_slope_falls_at_the_edge_it_lands_over() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(0, 0), 5)
-	heights.set_cell(Vector2i(1, 0), 5)
-	heights.set_cell(Vector2i(2, 0), 5)
-	heights.set_cell(Vector2i(3, 0), 3, Terrain.RampRise.WEST)   # descends east, two levels down
-	heights.set_cell(Vector2i(4, 0), 2, Terrain.RampRise.WEST)
-	heights.set_cell(Vector2i(5, 0), 1, Terrain.RampRise.WEST)
-	heights.set_cell(Vector2i(6, 0), 4, Terrain.RampRise.WEST)   # a rise: stops the tumble
+	heights.set_cell(Vector2i(0, 0), 10)
+	heights.set_cell(Vector2i(1, 0), 10)
+	heights.set_cell(Vector2i(2, 0), 10)
+	heights.set_cell(Vector2i(3, 0), 6, Terrain.RampRise.WEST)   # descends east, two levels down
+	heights.set_cell(Vector2i(4, 0), 4, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(5, 0), 2, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(6, 0), 8, Terrain.RampRise.WEST)   # a rise: stops the tumble
 	var s := _setup(heights, 2, Vector2i(0, 0), Vector2i(1, 0))
 	var outcome := _resolve(s)
 	# The premise, asserted rather than assumed: flight ends on the ramp with the tumble behind it.
@@ -109,11 +109,11 @@ func test_a_cliff_onto_a_slope_falls_at_the_edge_it_lands_over() -> void:
 # case fall is worthless if it also makes this one stutter.
 func test_a_one_level_slide_onto_a_matching_slope_never_falls() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(2, 0), 2)
-	heights.set_cell(Vector2i(1, 0), 2)
-	heights.set_cell(Vector2i(0, 0), 2)
-	heights.set_cell(Vector2i(-1, 0), 1, Terrain.RampRise.EAST)  # descends west, one level down
-	heights.set_cell(Vector2i(-2, 0), 3)                         # a rise: stops the tumble
+	heights.set_cell(Vector2i(2, 0), 4)
+	heights.set_cell(Vector2i(1, 0), 4)
+	heights.set_cell(Vector2i(0, 0), 4)
+	heights.set_cell(Vector2i(-1, 0), 2, Terrain.RampRise.EAST)  # descends west, one level down
+	heights.set_cell(Vector2i(-2, 0), 6)                         # a rise: stops the tumble
 	var s := _setup(heights, 2, Vector2i(2, 0), Vector2i(1, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(-1, 0)).override_failure_message(
@@ -144,8 +144,8 @@ func test_a_one_level_slide_onto_a_matching_slope_never_falls() -> void:
 # somewhere the sprite does not fall.
 func test_an_edge_reads_the_same_height_from_both_of_its_sides() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(3, 0), 3, Terrain.RampRise.WEST)
-	heights.set_cell(Vector2i(4, 0), 2, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(3, 0), 6, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(4, 0), 4, Terrain.RampRise.WEST)
 	var east_side := BoardSpace.surface_height_at_edge(Vector2i(3, 0), Vector2i(1, 0), heights)
 	var west_side := BoardSpace.surface_height_at_edge(Vector2i(4, 0), Vector2i(-1, 0), heights)
 	assert_float(east_side).override_failure_message(

@@ -88,6 +88,69 @@ static func is_on_rise_axis(rise: RampRise, step: Vector2i) -> bool:
 	var dir := rise_direction(rise)
 	return dir != Vector2i.ZERO and (step == dir or step == -dir)
 
+# --- Corner heights (#427) ---------------------------------------------------------------------
+# Ground geometry is FOUR CORNER HEIGHTS per cell, stored in BoardHeights; RampRise above is the
+# derived READING of a flat-or-cardinal-ramp shape, no longer stored truth. Corners are per-TILE and
+# never a shared vertex grid — neighbours may disagree, and disagreement IS a cliff.
+
+# One elevation unit is HALF a level, so a 45 deg ramp rises 2 units over one cell (dev, 2026-08-23:
+# "our current 45 degree angle platforms will now just hop 2 levels instead of one"). Re-basing the
+# integer is what lets half elevations exist without turning any comparison into a float — the
+# objection verticality.md records against half-steps.
+const UNITS_PER_LEVEL := 2
+
+# The steepest rise legal within one tile (#427 ruling: "steepness cap at 45 is good"). DERIVED from
+# the level, not a second literal: a steeper slope would move this without changing what a level is.
+const MAX_CORNER_DELTA := UNITS_PER_LEVEL
+
+# The corner order packed into a Vector4i, clockwise from north-west. North is -Y, matching
+# RISE_DIRECTIONS.
+enum Corner { NW, NE, SE, SW }
+
+# The four corners of a flat-or-cardinal-ramp cell. `low` is the cell's own height in units, because
+# a ramp's height is its LOW side (verticality.md, DECIDED), so the high pair sits one level above.
+static func corners_of_ramp(low: int, rise: RampRise) -> Vector4i:
+	if rise == RampRise.NONE:
+		return Vector4i(low, low, low, low)
+	var high := low + UNITS_PER_LEVEL
+	match rise:
+		RampRise.NORTH:
+			return Vector4i(high, high, low, low)
+		RampRise.SOUTH:
+			return Vector4i(low, low, high, high)
+		RampRise.EAST:
+			return Vector4i(low, high, high, low)
+		RampRise.WEST:
+			return Vector4i(high, low, low, high)
+	return Vector4i(low, low, low, low)
+
+# Which cardinal ramp these corners describe — the reading every RampRise reader now gets.
+# TRANSITIONAL: corner slopes arrive in #427 slice 3 and RampRise cannot name them, so a shape
+# outside the five legal ones refuses LOUDLY instead of quietly reading flat. Unreachable today —
+# corners_of_ramp is the only writer — and that error is what will find every un-migrated reader.
+static func rise_of_corners(corners: Vector4i) -> RampRise:
+	var low := mini(mini(corners.x, corners.y), mini(corners.z, corners.w))
+	var high := maxi(maxi(corners.x, corners.y), maxi(corners.z, corners.w))
+	if low == high:
+		return RampRise.NONE
+	if high - low == UNITS_PER_LEVEL:
+		if corners.x == high and corners.y == high and corners.z == low and corners.w == low:
+			return RampRise.NORTH
+		if corners.z == high and corners.w == high and corners.x == low and corners.y == low:
+			return RampRise.SOUTH
+		if corners.y == high and corners.z == high and corners.x == low and corners.w == low:
+			return RampRise.EAST
+		if corners.x == high and corners.w == high and corners.y == low and corners.z == low:
+			return RampRise.WEST
+	push_error("Terrain: corners %s are neither flat nor a cardinal ramp" % corners)
+	return RampRise.NONE
+
+# Which LEVEL a height in units sits at — the conversion the 3D stack reads through, since a GridMap
+# column is indexed in whole levels. FLOOR rather than truncation, so a dip below zero answers the
+# block it stands on. Slice 1 only ever sees even heights; what a half level DRAWS is slice 2's.
+static func level_of(units: int) -> int:
+	return floori(float(units) / float(UNITS_PER_LEVEL))
+
 # The player-facing spellings ("Burning", "Water") — Elemental.display_name's rule applied to the
 # tile vocabularies. Hover readouts and the Glossary's composed lines read these; dev readouts
 # that deliberately show the raw enum key keep doing so.

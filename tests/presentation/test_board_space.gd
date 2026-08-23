@@ -75,8 +75,9 @@ func test_a_ramp_stands_things_half_a_level_up_its_slope() -> void:
 	# side, and verticality.md rules the visual midpoint presentational. Anything standing on one
 	# rides the slope rather than sinking into its low edge.
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(2, 2), 1, Terrain.RampRise.NONE)
-	heights.set_cell(Vector2i(3, 2), 1, Terrain.RampRise.EAST)
+	# Heights are in units since #427 -- 2 is level 1, which is what surface_y below is asked for.
+	heights.set_cell(Vector2i(2, 2), 2, Terrain.RampRise.NONE)
+	heights.set_cell(Vector2i(3, 2), 2, Terrain.RampRise.EAST)
 
 	assert_float(BoardSpace.surface_point(Vector2i(2, 2), heights).y).is_equal(BoardSpace.surface_y(1))
 	assert_float(BoardSpace.surface_point(Vector2i(3, 2), heights).y) \
@@ -94,8 +95,8 @@ func test_a_board_with_no_heights_wired_reads_as_flat() -> void:
 # crossing cell borders never steps -- plus the flat constant and the null-heights fallback.
 func test_surface_height_under_a_position_is_continuous_across_a_ramp() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(2, 2), 1, Terrain.RampRise.NONE)   # the top shelf, surface y 2.0
-	heights.set_cell(Vector2i(3, 2), 1, Terrain.RampRise.EAST)   # rises toward east: high edge east
+	heights.set_cell(Vector2i(2, 2), 2, Terrain.RampRise.NONE)   # level 1: the top shelf, surface y 2.0
+	heights.set_cell(Vector2i(3, 2), 2, Terrain.RampRise.EAST)   # rises toward east: high edge east
 	# The ramp's centre is its surface_point; its EAST edge (x=4.0) meets level 2's surface, its
 	# WEST edge (x=3.0) meets level 1's -- the two levels the ramp joins (#281's own geometry).
 	var mid := BoardSpace.surface_point(Vector2i(3, 2), heights)
@@ -125,7 +126,7 @@ func test_markup_on_a_ramp_spans_the_two_levels_the_ramp_joins() -> void:
 			Terrain.RampRise.EAST, Terrain.RampRise.WEST]:
 		var cell := Vector2i(3, 2)
 		var heights := BoardHeights.new()
-		heights.set_cell(cell, 1, rise)
+		heights.set_cell(cell, 2, rise)   # level 1, in units
 		var xform := BoardSpace.surface_transform(cell, heights)
 
 		# The quad's own uphill/downhill edge midpoints, in ITS local frame: half a cell either way
@@ -152,7 +153,7 @@ func test_markup_on_a_ramp_spans_the_two_levels_the_ramp_joins() -> void:
 func test_markup_lies_flat_where_there_is_no_ramp() -> void:
 	# The pair to the above: an unrotated basis on ordinary ground, and the level the cell states.
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(2, 2), 2, Terrain.RampRise.NONE)
+	heights.set_cell(Vector2i(2, 2), 4, Terrain.RampRise.NONE)   # level 2, in units
 	var xform := BoardSpace.surface_transform(Vector2i(2, 2), heights)
 	assert_that(xform.basis).is_equal(Basis.IDENTITY)
 	assert_float(xform.origin.y).is_equal(BoardSpace.surface_y(2))

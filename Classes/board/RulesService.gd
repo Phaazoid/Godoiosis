@@ -35,8 +35,8 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 # which cannot express "only via a ramp, and only along the ramp's slope".
 #
 # The rule is platforms-and-ramps, NOT Z arithmetic (dev reframe, docs/design/verticality.md): the
-# only height maths here is equality and +/-1. A cliff of five is a staircase of five ramp cells or
-# it is not climbable at all.
+# only height maths here is equality and one LEVEL either way. A cliff of five is a staircase of
+# five ramp cells or it is not climbable at all.
 #
 # A ramp's own elevation is its LOW side, so the climb happens LEAVING it and the descent happens
 # ENTERING it -- which is why the two height clauses look at opposite cells.
@@ -61,14 +61,18 @@ static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardConte
 	return height_step_ok(from, to, board)
 
 # The height core of the edge question, extracted (#258) so melee's STEP rule ("same step, or a
-# facing half step" -- dev, 2026-08-20) and movement answer it identically: equal levels connect,
-# a +/-1 edge connects only through a ramp whose rise runs along the step, anything taller never.
+# facing half step" -- dev, 2026-08-20) and movement answer it identically: equal heights connect,
+# a one-LEVEL edge connects only through a ramp whose rise runs along the step, anything else never.
+#
+# "Anything else" now includes a HALF level, and that is #427's ruling arriving for free rather than
+# as a clause: a sheer 1-unit edge is not UNITS_PER_LEVEL, so it is refused exactly like a 3-unit
+# one ("half height still blocks movement and melee range" -- dev, 2026-08-23).
 static func height_step_ok(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
 	var step := to - from
 	var delta := board.elevation_at(to) - board.elevation_at(from)
 	if delta == 0:
 		return true
-	if abs(delta) != 1:
+	if abs(delta) != Terrain.UNITS_PER_LEVEL:
 		return false
 	if delta > 0:
 		# climbing off the ramp we stand on

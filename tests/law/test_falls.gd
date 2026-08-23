@@ -3,6 +3,10 @@
 # drop resolves where the travel ends -- so an ally can be blown OVER a hole to safety, a rise
 # braces the flight, and a landing on a slope tumbles down it. Boards are hand-painted (never
 # authored content); the two canon tumble examples are reproduced verbatim.
+#
+# Heights are in UNITS since #427 -- one level is 2 -- so every board below counts in twos. What a
+# fall COSTS is still per whole level: FallRules.damage_for takes units and divides, and
+# outcome.fall_levels reports levels, which is why those two numbers differ by a factor here.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -43,14 +47,14 @@ func _path_of(outcome: ResolvedOutcome) -> Array[Vector2i]:
 
 func test_a_shove_toward_higher_ground_stops_dead() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(3, 0), 1)
+	heights.set_cell(Vector2i(3, 0), 2)
 	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
 	assert_bool(_resolve(s).knockback_applied).is_false()
 
 
 func test_the_brace_halts_a_flight_mid_way() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(4, 0), 1)
+	heights.set_cell(Vector2i(4, 0), 2)
 	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
@@ -71,7 +75,7 @@ func test_you_can_blow_an_ally_over_a_hole_to_safety() -> void:
 
 func test_a_flight_halted_over_the_hole_drops_in() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(4, 0), 1)   # the brace one past the hole
+	heights.set_cell(Vector2i(4, 0), 2)   # the brace one past the hole
 	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
 	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, HOLE_TILE)
 	var outcome := _resolve(s)
@@ -91,13 +95,13 @@ func test_a_shove_ending_on_the_hole_removes() -> void:
 
 func test_a_drop_at_the_landing_deals_scaled_fall_damage() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 2)
-	heights.set_cell(Vector2i(2, 0), 2)   # victim starts on the terrace; (3,0) is ground level
+	heights.set_cell(Vector2i(1, 0), 4)
+	heights.set_cell(Vector2i(2, 0), 4)   # victim starts on the terrace; (3,0) is ground level
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var flat := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	var control := _resolve(flat)
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, s.d))
 	assert_int(outcome.damage).is_equal(control.damage + outcome.fall_damage)
 	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
 
@@ -107,8 +111,8 @@ func test_a_drop_can_change_the_rung() -> void:
 	# victims exactly one more HP than it: the flat twin survives, the dropped one does not.
 	var hit := _resolve(_setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))).damage
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 2)
-	heights.set_cell(Vector2i(2, 0), 2)
+	heights.set_cell(Vector2i(1, 0), 4)
+	heights.set_cell(Vector2i(2, 0), 4)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var flat := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
 	(s.d as Unit).set_current_hp(hit + 1)
@@ -119,8 +123,8 @@ func test_a_drop_can_change_the_rung() -> void:
 
 func test_the_weight_hook_raises_fall_damage() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 2)
-	heights.set_cell(Vector2i(2, 0), 2)
+	heights.set_cell(Vector2i(1, 0), 4)
+	heights.set_cell(Vector2i(2, 0), 4)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var ballast := H.make_weapon()
 	ballast.weight = 2 * FallRules.WEIGHT_PER_BONUS_DAMAGE
@@ -128,8 +132,21 @@ func test_the_weight_hook_raises_fall_damage() -> void:
 	# The scaling property, never the numbers: carried mass raises the same drop's cost, and the
 	# resolver reads the loaded unit. Inert at weight 0 -- the #120 interlock's fall-damage wire.
 	var laden := _resolve(s).fall_damage
-	assert_int(laden).is_equal(FallRules.damage_for(2, s.d))
-	assert_bool(laden > FallRules.damage_for(2, null)).is_true()
+	assert_int(laden).is_equal(FallRules.damage_for(4, s.d))
+	assert_bool(laden > FallRules.damage_for(4, null)).is_true()
+
+
+# A HALF level is free (#427 ruling, dev 2026-08-23: "no fall damage for a half level fall") --
+# newly expressible, so newly pinnable. The drop is real and the landing still happens.
+func test_a_half_level_drop_costs_nothing() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 1)
+	heights.set_cell(Vector2i(2, 0), 1)   # a half level above ground; (3,0) is 0
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
+	assert_int(outcome.fall_damage).is_equal(0)
+	assert_int(outcome.fall_levels).is_equal(0)
 
 
 # --- Tumbles: the two canon examples, verbatim -----------------------------------------------
@@ -137,10 +154,10 @@ func test_the_weight_hook_raises_fall_damage() -> void:
 # F3 R2 R1 R0 F0 -- one unbroken flight: tumbles to F0, no fall damage anywhere on a slope.
 func test_canon_example_one_tumbles_the_whole_flight() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)                            # the shover stands level too
-	heights.set_cell(Vector2i(2, 0), 3)                            # F3
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2 (rises back toward F3)
-	heights.set_cell(Vector2i(4, 0), 1, Terrain.RampRise.WEST)     # R1
+	heights.set_cell(Vector2i(1, 0), 6)                            # the shover stands level too
+	heights.set_cell(Vector2i(2, 0), 6)                            # F3
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)     # R2 (rises back toward F3)
+	heights.set_cell(Vector2i(4, 0), 2, Terrain.RampRise.WEST)     # R1
 	heights.set_cell(Vector2i(5, 0), 0, Terrain.RampRise.WEST)     # R0
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))    # (6,0) is F0
 	var outcome := _resolve(s)
@@ -153,11 +170,11 @@ func test_canon_example_one_tumbles_the_whole_flight() -> void:
 # F3 R2 F2 ... -- the landing at F2 catches it: ends on F2, never reaches R1.
 func test_canon_example_two_is_caught_by_the_landing() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)
-	heights.set_cell(Vector2i(2, 0), 3)                            # F3
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2
-	heights.set_cell(Vector2i(4, 0), 2)                            # F2 -- the catch
-	heights.set_cell(Vector2i(5, 0), 1, Terrain.RampRise.WEST)     # R1, never reached
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)                            # F3
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)     # R2
+	heights.set_cell(Vector2i(4, 0), 4)                            # F2 -- the catch
+	heights.set_cell(Vector2i(5, 0), 2, Terrain.RampRise.WEST)     # R1, never reached
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
@@ -168,14 +185,14 @@ func test_canon_example_two_is_caught_by_the_landing() -> void:
 # the ramp and drops onto F2 -- one level of genuine fall, where the knockback-1 tumble was free.
 func test_a_longer_flight_overflies_the_ramp_and_falls() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)
-	heights.set_cell(Vector2i(2, 0), 3)
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)
-	heights.set_cell(Vector2i(4, 0), 2)
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(4, 0), 4)
 	var s := _setup(heights, 2, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(1, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, s.d))
 	# No tumble here, so flight runs the whole path: the drop happens on its last cell.
 	assert_int(outcome.knockback_landing_index).is_equal(outcome.knockback_path.size() - 1)
 
@@ -199,13 +216,13 @@ func test_a_perpendicular_ramp_landing_bends_the_tumble() -> void:
 # falls the drop, pays fall damage for it, and keeps whatever descent waits below.
 func test_the_tumble_plummets_past_a_lip() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)
-	heights.set_cell(Vector2i(2, 0), 3)
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2, then a sheer 2-drop to (4,0)
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)     # R2, then a sheer 2-drop to (4,0)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	var outcome := _resolve(s)
 	assert_bool(outcome.knockback_to == Vector2i(4, 0)).is_true()  # falls the drop, not stopped
-	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(2, s.d))
+	assert_int(outcome.fall_damage).is_equal(FallRules.damage_for(4, s.d))
 	assert_int(outcome.fall_levels).is_equal(2)
 
 
@@ -213,9 +230,9 @@ func test_the_tumble_plummets_past_a_lip() -> void:
 # descent awaits them").
 func test_a_plummet_landing_on_a_ramp_tumbles_again() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)
-	heights.set_cell(Vector2i(2, 0), 3)
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)     # R2, then a 2-drop
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)     # R2, then a 2-drop
 	heights.set_cell(Vector2i(4, 0), 0, Terrain.RampRise.WEST)     # lands on R0, tumbles again
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))    # (5,0) is F0, the catch
 	var outcome := _resolve(s)
@@ -227,9 +244,9 @@ func test_a_plummet_landing_on_a_ramp_tumbles_again() -> void:
 
 func test_the_tumble_stops_at_an_occupied_cell() -> void:
 	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(1, 0), 3)
-	heights.set_cell(Vector2i(2, 0), 3)
-	heights.set_cell(Vector2i(3, 0), 2, Terrain.RampRise.WEST)
+	heights.set_cell(Vector2i(1, 0), 6)
+	heights.set_cell(Vector2i(2, 0), 6)
+	heights.set_cell(Vector2i(3, 0), 4, Terrain.RampRise.WEST)
 	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
 	H.spawn_solo(self, s.sm, ENEMY, Vector2i(4, 0))                # a body on the catch cell
 	var outcome := _resolve(s)

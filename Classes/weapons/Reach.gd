@@ -48,7 +48,8 @@ static func can_hit_cell_from(unit: Unit, origin_cell: Vector2i, target_cell: Ve
 # The sightline's height above a shooter's feet -- the SPRITE'S CENTER (dev, 2026-08-20: the line
 # "should originate from the center of the sprite"). A RULE constant, not a knob: it defines what a
 # wall is, and the #218 purpose survives (standing ON a cliff edge still shoots down past it).
-const EYE_HEIGHT := 0.5
+# In height UNITS since #427, so this is the SAME physical height it always was: half a level.
+const EYE_HEIGHT := 1.0
 # Trace samples per cell of shot length -- readout resolution only, never legality (blocking is
 # judged per crossed CELL, not per sample). Dense enough that a lob's line draws as a CURVE.
 const TRACE_SAMPLES_PER_CELL := 6
@@ -77,7 +78,7 @@ static func vertical_aim_ok(attack: AttackData, origin_cell: Vector2i, target_ce
 
 static func _vertical_rule_ok(attack: AttackData, origin_cell: Vector2i, target_cell: Vector2i, board: BoardContext) -> bool:
 	if attack == null or attack.vertical_rule == AttackData.VerticalRule.MELEE:
-		# Melee (dev, 2026-08-20): same step at any range; a +/-1 edge only when adjacent AND
+		# Melee (dev, 2026-08-20): same step at any range; a one-LEVEL edge only when adjacent AND
 		# ramp-connected ("a facing half step"); a sheer edge refuses in BOTH directions.
 		if board.elevation_at(target_cell) == board.elevation_at(origin_cell):
 			return true
@@ -133,8 +134,10 @@ static func sight_trace(attack: AttackData, origin_cell: Vector2i, target_cell: 
 	return trace
 
 
-# THE trajectory -- the one function legality and the beads both read. Heights are in rule units
-# (board levels); a level-E surface is rule-height E, so the endpoints sit at E + EYE_HEIGHT.
+# THE trajectory -- the one function legality and the beads both read. Heights are in the board's
+# own height UNITS (#427, two per level); a surface at height H is rule-height H, so the endpoints
+# sit at H + EYE_HEIGHT. `arc_clearance` and the two tolerances are authored in the same unit, which
+# is what keeps this whole function free of conversions.
 static func _trajectory_height(origin_h: float, target_h: float, clearance: float, t: float) -> float:
 	return lerpf(origin_h + EYE_HEIGHT, target_h + EYE_HEIGHT, t) + clearance * 4.0 * t * (1.0 - t)
 

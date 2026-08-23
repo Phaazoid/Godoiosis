@@ -393,9 +393,10 @@ func test_the_ai_does_not_aim_past_its_vertical_tolerance() -> void:
 	var board: Dictionary = _build_board()
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(1, 0))
-	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	# Tolerance and heights are both in units (#427): reaches one level, the ledge is two.
+	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 2
 	var heights: BoardHeights = board.board_heights
-	heights.set_cell(Vector2i(1, 0), 2)
+	heights.set_cell(Vector2i(1, 0), 4)
 
 	assert_bool(AITactics.queue_main_action(player, _heights_context(board), board.squad_manager, ATTACK_ONLY)).is_false()
 
@@ -405,9 +406,9 @@ func test_the_same_ledge_within_tolerance_is_attacked() -> void:
 	var board: Dictionary = _build_board()
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, Vector2i(1, 0))
-	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
+	(player.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 2
 	var heights: BoardHeights = board.board_heights
-	heights.set_cell(Vector2i(1, 0), 1)
+	heights.set_cell(Vector2i(1, 0), 2)
 
 	assert_bool(AITactics.queue_main_action(player, _heights_context(board), board.squad_manager, ATTACK_ONLY)).is_true()
 
@@ -420,12 +421,12 @@ func test_a_ledge_goal_has_no_firing_positions_for_a_tight_weapon() -> void:
 	var board: Dictionary = _build_board()
 	var player: Unit = _spawn(board, Team.Faction.PLAYER, Vector2i(0, 0))
 	var aiming: AttackData = (player.get_equipped_weapon() as WeaponInstance).template.main_attack
-	aiming.up_tolerance = 1
+	aiming.up_tolerance = 2
 	var goal := Vector2i(3, 0)
 	var _enemy: Unit = _spawn(board, Team.Faction.ENEMY, goal)   # a goal is an occupied enemy cell
 	var heights: BoardHeights = board.board_heights
-	heights.set_cell(goal, 2)
+	heights.set_cell(goal, 4)
 
 	assert_bool(AITactics._standable_attack_cells(player, goal, aiming, _heights_context(board)).is_empty()).is_true()
-	heights.set_cell(goal, 1)
+	heights.set_cell(goal, 2)
 	assert_bool(AITactics._standable_attack_cells(player, goal, aiming, _heights_context(board)).is_empty()).is_false()

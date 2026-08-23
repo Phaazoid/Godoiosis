@@ -84,22 +84,23 @@ func _key(code: Key) -> InputEventKey:
 # ---- the wheel sets the level ----
 
 func test_the_wheel_moves_the_brush_level_both_ways() -> void:
+	# One notch is one whole LEVEL, which is 2 height units since #427.
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
-	assert_int(_brush.selected_elevation()).is_equal(2)
+	assert_int(_brush.selected_elevation()).is_equal(4)
 
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	_wheel(MOUSE_BUTTON_WHEEL_DOWN)
 	# NEGATIVE is reachable on purpose (dev, 2026-08-15): authoring a dip must not require lifting
 	# the whole map. A clamp at 0 goes red here.
-	assert_int(_brush.selected_elevation()).is_equal(-1)
+	assert_int(_brush.selected_elevation()).is_equal(-2)
 
 
 func test_the_wheel_writes_through_the_spinbox_too() -> void:
 	# One writer: the widget and the value the brush paints with cannot drift.
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
-	assert_int(int(_brush._elevation_spin.value)).is_equal(1)
+	assert_int(int(_brush._elevation_spin.value)).is_equal(2)
 
 
 func test_the_wheel_is_inert_in_the_other_paint_modes() -> void:
@@ -222,7 +223,7 @@ func test_a_wheel_notch_mid_drag_does_not_end_the_drag() -> void:
 	_wheel(MOUSE_BUTTON_WHEEL_UP)
 	_dc.handle_tile_brush(_motion())
 
-	assert_int(game.board_heights.elevation_at(cell)).is_equal(2)
+	assert_int(game.board_heights.elevation_at(cell)).is_equal(4)   # two notches = two levels
 
 
 # NB there is no separate "erase returns the cell to flat" case any more. Erase has ONE meaning in
@@ -244,13 +245,13 @@ func test_the_injected_cell_is_where_elevation_lands() -> void:
 			).is_not_equal(by_mouse)
 	_give_ground(picked)
 	_dc.cell_source = func() -> Vector2i: return picked
-	_brush.set_elevation(3)
+	_brush.set_elevation(6)
 	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(WEST))
 
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 
 	assert_int(game.board_heights.elevation_at(picked)).override_failure_message(
-			"the 3D view's picked column took no elevation").is_equal(3)
+			"the 3D view's picked column took no elevation").is_equal(6)
 	assert_int(game.board_heights.ramp_rise_at(picked)).is_equal(WEST)
 	assert_int(game.board_heights.elevation_at(by_mouse)).override_failure_message(
 			"painted the raw mouse cell instead of the picked column").is_equal(0)
@@ -277,19 +278,19 @@ func test_painting_an_empty_cell_gives_it_ground_AND_the_brushs_level() -> void:
 	var cell := Vector2i(80, 80)
 	game.grid.erase_cell(cell)
 	_dc.cell_source = func() -> Vector2i: return cell
-	_brush.set_elevation(3)
+	_brush.set_elevation(6)
 
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 
 	assert_int(game.grid.get_cell_source_id(cell)).override_failure_message(
 			"painting an empty cell left it empty").is_equal(_brush.selected_source)
 	assert_int(game.board_heights.elevation_at(cell)).override_failure_message(
-			"the height was refused on a cell this very click had just given ground").is_equal(3)
+			"the height was refused on a cell this very click had just given ground").is_equal(6)
 
 
 func test_erasing_the_ground_takes_the_elevation_with_it() -> void:
 	var cell := _hover_cell()
-	game.board_heights.set_cell(cell, 3, EAST)
+	game.board_heights.set_cell(cell, 6, EAST)
 	_brush._set_paint_mode(TileBrushTool.PaintMode.TERRAIN)
 
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_RIGHT, true))   # the real terrain erase
@@ -444,7 +445,7 @@ func test_a_wheel_notch_reaches_the_brush_through_the_games_own_input() -> void:
 	# assumed -- a wheel event is an InputEventMouseButton and must ride the same branch a click does.
 	game._unhandled_input(_press(MOUSE_BUTTON_WHEEL_UP, true))
 
-	assert_int(_brush.selected_elevation()).is_equal(1)
+	assert_int(_brush.selected_elevation()).is_equal(2)   # one notch = one level
 
 
 func test_the_games_input_arm_ignores_the_wheel_when_the_brush_is_down() -> void:

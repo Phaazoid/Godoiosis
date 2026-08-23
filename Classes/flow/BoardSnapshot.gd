@@ -18,8 +18,7 @@ class_name BoardSnapshot
 
 var tile_data: PackedByteArray       # BoardGrid.tile_map_data -- the whole layer as bytes
 var terrain_states: Dictionary = {}  # TerrainStateManager.to_state_dict()
-var elevations: Dictionary = {}      # BoardHeights.to_elevation_dict()
-var ramp_rises: Dictionary = {}      # BoardHeights.to_ramp_dict()
+var corner_heights: Dictionary = {}  # BoardHeights.to_corner_dict()
 var zones: Dictionary = {}           # ZoneManager.to_dict()
 
 
@@ -34,8 +33,7 @@ func equals(other: BoardSnapshot) -> bool:
 	return other != null \
 		and tile_data == other.tile_data \
 		and terrain_states == other.terrain_states \
-		and elevations == other.elevations \
-		and ramp_rises == other.ramp_rises \
+		and corner_heights == other.corner_heights \
 		and zones == other.zones
 
 
@@ -43,11 +41,13 @@ func equals(other: BoardSnapshot) -> bool:
 # which fields those are is one question. capture_scenario and apply_scenario each used to answer
 # it themselves, which is two lists to keep in step every time the board grows a store.
 static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
+	if scenario.predates_corner_heights():
+		push_error("BoardSnapshot: '%s' predates #427's corner heights and would load FLAT — re-author it"
+				% scenario.scenario_name)
 	var snapshot := BoardSnapshot.new()
 	snapshot.tile_data = scenario.tile_data
 	snapshot.terrain_states = scenario.terrain_states
-	snapshot.elevations = scenario.elevations
-	snapshot.ramp_rises = scenario.ramp_rises
+	snapshot.corner_heights = scenario.corner_heights
 	snapshot.zones = scenario.zones
 	return snapshot
 
@@ -55,6 +55,5 @@ static func from_scenario(scenario: ScenarioData) -> BoardSnapshot:
 func write_into(scenario: ScenarioData) -> void:
 	scenario.tile_data = tile_data
 	scenario.terrain_states = terrain_states
-	scenario.elevations = elevations
-	scenario.ramp_rises = ramp_rises
+	scenario.corner_heights = corner_heights
 	scenario.zones = zones

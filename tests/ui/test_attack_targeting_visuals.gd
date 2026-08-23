@@ -235,8 +235,9 @@ func test_leaving_the_mode_stops_every_pulse() -> void:
 # this shape; the flat cases above are untouched because clear_board wipes the heights store.
 func _armed_attacker_below_a_ledge() -> Unit:
 	var attacker := _armed_attacker(EquippableData.TargetMode.UNIT)
-	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 1
-	game.board_heights.set_cell(AWAY_CELL, 2)
+	# Tolerance and height are both in units (#427): reaches one level, the ledge is two.
+	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.up_tolerance = 2
+	game.board_heights.set_cell(AWAY_CELL, 4)
 	return attacker
 
 
@@ -310,7 +311,7 @@ func test_a_wall_covered_aim_stores_a_blocked_trace() -> void:
 	pattern.min_range = 1
 	pattern.max_range = 2
 	(attacker.get_equipped_weapon() as WeaponInstance).template.main_attack.attack_pattern = pattern
-	game.board_heights.set_cell(Vector2i(1, 2), 3)   # a wall between (1,1) and the target at (1,3)
+	game.board_heights.set_cell(Vector2i(1, 2), 6)   # a wall between (1,1) and the target at (1,3)
 
 	_aim_at(attacker, Vector2i(1, 3))
 
