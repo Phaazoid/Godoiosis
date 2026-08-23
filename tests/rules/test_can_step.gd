@@ -101,8 +101,11 @@ func test_two_levels_is_never_one_step() -> void:
 # --- the HALF level, newly representable (#427) ---
 
 func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
-	# Dev, 2026-08-23: "half height still blocks movement and melee range." The store can express a
-	# 1-unit step now; the rule refuses it for the same reason it refuses 3 — it is not a level.
+	# Dev, 2026-08-23: "half height still blocks movement and melee range."
+	#
+	# OVER-DETERMINED, deliberately kept: on flat ground the ramp clause refuses this edge too, so a
+	# mutant that relaxed the LEVEL clause alone left this case green (measured while falsifying).
+	# It pins the ruling; the case below is the one that isolates the rule.
 	var board := _board()
 	_heights(board).set_cell(Vector2i(1, 1), 1)
 	var unit := _spawn(board, Vector2i(0, 1))
@@ -111,6 +114,9 @@ func test_a_half_level_edge_is_refused_like_any_other_sheer_edge() -> void:
 func test_a_ramp_does_not_connect_a_half_level_either() -> void:
 	# A ramp is not a licence to cross any gap: its own rise is a full level, so a neighbour half a
 	# level above its top is still unreachable from it.
+	#
+	# THE case with teeth for #427's blocking ruling: the ramp points the right way, so the level
+	# clause is the only thing left that can refuse. Falsified by relaxing it to `>`.
 	var board := _board()
 	var heights := _heights(board)
 	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.EAST)
