@@ -365,6 +365,11 @@ func clear_board():
 	# untyped, and a literal passed through it is not coerced to the typed parameter.
 	var no_ai_factions: Array[Team.Faction] = []
 	game.ai_controller.set_ai_factions(no_ai_factions)
+	# And the AI's claim on the camera (#484). A new board owns no AI turn, same reasoning as the line
+	# above -- but load-bearing rather than tidy since that flag became the board lock's authority: a
+	# reload mid-enemy-phase rests game_state on _base_state() through exit_current_mode below, so an
+	# ai_locked left standing by an interrupted turn would lock the fresh board for good.
+	game.camera_controller.set_ai_locked(false)
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager)
 	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)

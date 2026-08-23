@@ -142,8 +142,6 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 		result.append_array(space(i))
 	return result
 
-# Stock attacks this wielder can choose from — the template's list today. Mod-granted /
-# mod-replaced attacks compose here when #74 lands (why wielder is already in the signature).
 # --- Attack-source surface (EquippableData) ---
 
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
@@ -171,10 +169,25 @@ func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 			result.append(a)
 	return result
 
-func available_attacks(_wielder: Unit) -> Array[WeaponAttackData]:
+# Every attack this wielder can choose from: the family's stock list, then whatever THIS weapon's
+# proficiency-active mods add (#74). Main stays first, so the canonical order survives.
+#
+# Reads its OWN fitted mods, deliberately NOT Unit._mod_sources() -- an attack belongs to the
+# weapon that fires it, so a prosthetic leg's mod must not add a swing to the carbine in your
+# hands. That is the asymmetry against granted_abilities/stat_modifiers, which describe the
+# WIELDER and therefore union across every contributing weapon.
+#
+# Additive only: nothing here replaces or edits a stock attack (#74 keeps that half). Deduped by
+# identity, so two mods granting the same authored resource list it once.
+func available_attacks(wielder: Unit) -> Array[WeaponAttackData]:
 	if template == null:
 		return []
-	return template.attacks()
+	var result := template.attacks()
+	for mod in active_modules(wielder):
+		for attack in mod.granted_attacks:
+			if attack != null and not result.has(attack):
+				result.append(attack)
+	return result
 
 # --- Explaining an attack (#166, EquippableData surface) ---
 

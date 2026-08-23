@@ -311,6 +311,40 @@ static func add_enum_option(container: Node, label_text: String, hint_string: St
 	row.add_child(option)
 	container.add_child(row)
 
+# A SPARSE Dictionary[Stats.Stat, int] -- one spinbox per stat, and ZERO MEANS ABSENT: the key is
+# erased rather than stored as 0. That is what makes it different from the dense base-stat grids
+# the character and unit editors draw; those author what a stat IS, so every key belongs in the
+# file. This authors a DELTA, where "no entry" and "+0" are the same fact, and storing both would
+# grow a saved .tres a key for every stat nobody touched.
+#
+# It exists because build_resource_editor draws no dictionary at all -- its match has arms for
+# int/float/bool/string/object and nothing else -- so every Dictionary field in the project has
+# been silently undrawn (WeaponModData.scaling_nudge, ArmorData.stat_modifiers).
+static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "") -> void:
+	var first := container.get_child_count()
+	add_label(container, label_text)
+	var grid := GridContainer.new()
+	grid.columns = 4
+	for stat: Stats.Stat in Stats.STAT_DEFAULTS:
+		var key := stat
+		var name_label := Label.new()
+		name_label.text = Stats.Stat.keys()[key]
+		name_label.custom_minimum_size = Vector2(48, 0)
+		var spin := SpinBox.new()
+		spin.min_value = -99
+		spin.max_value = 99
+		spin.value = values.get(key, 0)
+		spin.value_changed.connect(func(v: float):
+			if int(v) == 0:
+				values.erase(key)
+			else:
+				values[key] = int(v)
+		)
+		grid.add_child(name_label)
+		grid.add_child(spin)
+	container.add_child(grid)
+	_tip_rows_from(container, first, tooltip)   # pre-wrapped, as property_tip already returns
+
 static func build_resource_editor(container: Node, resource: Resource, rebuild: Callable, skip: Array = []) -> void:
 	for prop in resource.get_property_list():
 		if prop.name in skip:

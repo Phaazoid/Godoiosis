@@ -502,12 +502,18 @@ func _process(_delta: float) -> void:
 # second follow seam, and because the 2D camera owns the tween the 3D inherits
 # Pacing.AI_SQUAD_PAN exactly — one number, one reader.
 #
-# ai_locked is the gate, NOT _board_locked_for_player(): the latter also covers MENU,
-# and Mission Select opts out of the modal lock, so mirroring there would yank the rig
+# ai_locked is the gate, NARROWER than _board_locked_for_player(): the latter also covers
+# MENU, and Mission Select opts out of the modal lock, so mirroring there would yank the rig
 # to a stale 2D position the moment a menu opened. ai_locked IS the fact "the AI owns
 # the 2D camera" — set in the same block as AI_TURN, cleared the moment it returns.
 # Re-read every frame, never latched: a turn handoff can re-enter set_ai_locked inside
 # the previous turn's stack, so the flag can legitimately flicker for a frame.
+#
+# Narrower, and since #484 strictly so: the board lock READS this flag, so whenever this gate
+# is open _update_pointer's is shut. That is what keeps the two apart, and it has to be
+# structural — they write to each other (this READS the 2D camera, _update_pointer WRITES it),
+# so a frame running both marches the view to the pan limit on every mouse move. It used to
+# rest on game_state carrying AI_TURN for the whole turn, which set_dev_mode falsified.
 func _mirror_camera() -> void:
 	var cam: CameraController = game.camera_controller
 	# Square-on for the enemy phase (dev call 2026-08-14), on the EDGE into the turn rather
