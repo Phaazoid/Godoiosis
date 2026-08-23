@@ -99,13 +99,13 @@ static func is_on_rise_axis(rise: RampRise, step: Vector2i) -> bool:
 # objection verticality.md records against half-steps.
 const UNITS_PER_LEVEL := 2
 
-# The steepest rise legal within one tile (#427 ruling: "steepness cap at 45 is good"). DERIVED from
-# the level, not a second literal: a steeper slope would move this without changing what a level is.
-const MAX_CORNER_DELTA := UNITS_PER_LEVEL
-
-# The corner order packed into a Vector4i, clockwise from north-west. North is -Y, matching
-# RISE_DIRECTIONS.
-enum Corner { NW, NE, SE, SW }
+# The corner order packed into a Vector4i is NW, NE, SE, SW — clockwise from north-west, north being
+# -Y to match RISE_DIRECTIONS. A convention rather than an enum, because nothing indexes a corner by
+# name yet; the slice that needs to address one can add the vocabulary then.
+#
+# The 45 deg steepness cap ("steepness cap at 45 is good" — dev, 2026-08-23) is NOT a constant here
+# for the same reason: slice 1's only writer is corners_of_ramp, which cannot exceed one level, so a
+# cap would be a rule with nothing to check. It arrives with the tool that can break it.
 
 # The four corners of a flat-or-cardinal-ramp cell. `low` is the cell's own height in units, because
 # a ramp's height is its LOW side (verticality.md, DECIDED), so the high pair sits one level above.
