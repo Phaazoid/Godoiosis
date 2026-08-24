@@ -64,8 +64,11 @@ func ramp_rise_at(cell: Vector2i) -> Terrain.RampRise:
 func ramp_climb_at(cell: Vector2i) -> int:
 	return Terrain.climb_of_corners(corners_at(cell))
 
+# Is this cell's ground SLOPED at all? Asks the climb rather than the cardinal name since #427
+# slice 3: a corner form has no RampRise, and reading "not a cardinal ramp" as "flat" is exactly the
+# quiet mistake the old push_error existed to prevent.
 func is_ramp(cell: Vector2i) -> bool:
-	return ramp_rise_at(cell) != Terrain.RampRise.NONE
+	return ramp_climb_at(cell) > 0
 
 # The one writer. A flat cell at height 0 is PRUNED rather than stored so to_corner_dict stays
 # sparse and two boards painted to the same shape compare equal regardless of how they got there.

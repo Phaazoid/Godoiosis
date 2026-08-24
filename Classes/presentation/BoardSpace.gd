@@ -52,6 +52,14 @@ static func top_row_of(height: int) -> int:
 	return height + Terrain.UNITS_PER_LEVEL - 1
 
 
+# The world Y a surface at this rule HEIGHT sits at, for a height that need not be a whole unit
+# (#427 slice 3 -- a corner cell's surface passes through every value between its corners). It IS
+# surface_y(top_row_of(h)) rearranged, and test_board_space pins the two spellings together: a slab
+# is one LEVEL deep and tops out at top_row_of(h), so its surface is h + UNITS_PER_LEVEL rows up.
+static func world_y_of_height(height: float) -> float:
+	return (height + float(Terrain.UNITS_PER_LEVEL)) * ROW_HEIGHT
+
+
 # Where a thing STANDING on this 2D cell sits — a unit, a flame, a crate (#273). ONE answer for
 # every such caller, because three of them eyeballing the same offset is how a flame ends up half a
 # level off the crate on its own tile. It lives here rather than on either mirror so neither has to
@@ -72,13 +80,15 @@ static func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
 # read as one slide. The gradient is the ramp's OWN climb since #427 slice 2, so a gentle slope
 # slides at half the pitch of a 45 degree one rather than at the one hardcoded angle.
 static func surface_height_at(cell: Vector2i, x: float, z: float, heights: BoardHeights) -> float:
-	var t := surface_transform(cell, heights)
-	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(cell)
-	if rise == Terrain.RampRise.NONE:
-		return t.origin.y
-	var dir := Terrain.rise_direction(rise)
-	var gradient := slope_gradient(heights.ramp_climb_at(cell))
-	return t.origin.y + gradient * ((x - t.origin.x) * dir.x + (z - t.origin.z) * dir.y)
+	if heights == null:
+		return world_y_of_height(0.0)
+	# The point's place INSIDE the cell: u east across it, v south down it, both 0..1 -- the frame
+	# Terrain.height_at_uv answers in. Clamped because a caller may be a hair outside its own cell
+	# (a sprite mid-slide is placed by the tween, not by the grid), and extrapolating a triangle
+	# past its own edge is how a foot ends up under the ground it is standing on.
+	var u := clampf(x / CELL_SIZE - float(cell.x), 0.0, 1.0)
+	var v := clampf(z / CELL_SIZE - float(cell.y), 0.0, 1.0)
+	return world_y_of_height(Terrain.height_at_uv(heights.corners_at(cell), u, v))
 
 
 # The surface height of `cell` AT the edge it meets its `dir` neighbour on (#472). One edge is
@@ -98,26 +108,10 @@ static func surface_height_at_edge(cell: Vector2i, dir: Vector2i, heights: Board
 	return surface_height_at(cell, x, z, heights)
 
 
-# How steep a ramp of this CLIMB is — the authored wedge's own profile, in the units the store
-# speaks. A climb of UNITS_PER_LEVEL is one level of rise per cell of run (45 degrees); a climb of 1
-# is half that, which is atan(1/2) = 26.6 degrees, the RCT gentle slope #427 slice 2 adds.
-#
-# Functions rather than the consts they replace, because steepness is authored per cell now — and
-# every caller already has the climb in hand, since the same store answers both questions.
-static func slope_gradient(climb: int) -> float:
-	return float(climb) * ROW_HEIGHT / CELL_SIZE
-
-
-static func slope_angle(climb: int) -> float:
-	return atan2(float(climb) * ROW_HEIGHT, CELL_SIZE)
-
-
-# A slope is LONGER than the cell it spans (1/cos of the angle), so markup that only rotated would
-# cover the cell's footprint and leave the ramp face bare at both edges. Stretching along the slope
-# is what keeps a fill covering its whole cell and an arrow foreshortening exactly as the ground
-# under it does.
-static func slope_stretch(climb: int) -> float:
-	return 1.0 / cos(slope_angle(climb))
+# The three per-CLIMB slope helpers (slope_gradient / slope_angle / slope_stretch) went with #427
+# slice 3. Steepness is no longer one number per cell: a corner form's downhill is diagonal, so the
+# angle and the stretch are derived from the four corners inside lie_on, and nothing outside ever
+# asked for them.
 
 
 # How a FLAT thing LIES on this cell's surface (#281) — a path arrow, an overlay fill, any markup
@@ -130,36 +124,45 @@ static func slope_stretch(climb: int) -> float:
 # and the mirror's vertical index is one row per unit, so top_row_of is the conversion the whole 3D
 # stack inherits through this function.
 static func surface_transform(cell: Vector2i, heights: BoardHeights) -> Transform3D:
-	if heights == null:
-		return lie_on(of_cell(cell, top_row_of(0)), Terrain.RampRise.NONE, 0)
-	return lie_on(of_cell(cell, top_row_of(heights.elevation_at(cell))),
-			heights.ramp_rise_at(cell), heights.ramp_climb_at(cell))
+	var corners := Vector4i.ZERO if heights == null else heights.corners_at(cell)
+	return lie_on(of_cell(cell, top_row_of(Terrain.low_of_corners(corners))), corners)
 
 
 # The lie itself, for a caller that already resolved the row — the overlay fills, whose Vector3i
 # states it (of_cell's "every caller states the ROW it means" rule, #273; re-deriving it here
-# would look up what was already passed). The CLIMB is required for the same reason: a slope's
-# steepness is authored now, and a default would be one caller silently drawing another's ramp.
+# would look up what was already passed). The CORNERS are required for the same reason: a cell's
+# shape is authored per cell, and a default would be one caller silently drawing another's ground.
 #
-# The tilt is DERIVED from Terrain.rise_direction — the same call BoardMirror._ramp_orientation
-# yaws the wedge by — so the ground and the markup on it cannot disagree about which way it climbs.
-static func lie_on(cell: Vector3i, rise: Terrain.RampRise, climb: int) -> Transform3D:
+# It took (rise, climb) until #427 slice 3, which could not describe a corner form at all — a shape
+# whose downhill is DIAGONAL. The tilt is now the best-fit plane through the four corners
+# (Terrain.gradient_of_corners), which reproduces a cardinal ramp exactly and simply keeps working
+# when both components are non-zero.
+static func lie_on(cell: Vector3i, corners: Vector4i) -> Transform3D:
 	var origin := standing_point(cell)
-	if rise == Terrain.RampRise.NONE or climb <= 0:
+	var gradient := Terrain.gradient_of_corners(corners)
+	if gradient.is_zero_approx():
 		return Transform3D(Basis.IDENTITY, origin)
-	# The midpoint of the slope, which is exactly where a quad tilted about its own centre lies flat.
-	origin.y += float(climb) * ROW_HEIGHT * 0.5
-	var dir := Terrain.rise_direction(rise)
-	var uphill := Vector3(dir.x, 0.0, dir.y)
-	var basis := Basis(uphill.cross(Vector3.UP).normalized(), slope_angle(climb))
-	# Stretch the ONE local axis that ends up running up the slope, so the art keeps its orientation
-	# (a rotated arrow would point somewhere else) and only its length along the slope changes.
-	var stretch := slope_stretch(climb)
-	if dir.x != 0:
-		basis.x *= stretch
-	else:
-		basis.z *= stretch
-	return Transform3D(basis, origin)
+	# The cell's CENTRE height, which is exactly where a quad tilted about its own centre lies flat.
+	# For a cardinal ramp that is its low side plus half its climb, as it always was.
+	origin.y += (Terrain.centre_height_of_corners(corners)
+			- float(Terrain.low_of_corners(corners))) * ROW_HEIGHT
+	# Rise over run, in WORLD units, so the angle is the ground's own pitch. The gradient POINTS
+	# uphill by definition -- it is the direction height increases -- and the rotation axis is its
+	# cross with UP, so a sign slip here tilts the plane the wrong way rather than failing loudly.
+	var slope := gradient * (ROW_HEIGHT / CELL_SIZE)
+	var uphill := Vector3(slope.x, 0.0, slope.y).normalized()
+	var angle := atan(slope.length())
+	var basis := Basis(uphill.cross(Vector3.UP).normalized(), angle)
+	# Stretch along the UPHILL direction only, so the art keeps its orientation (a rotated arrow
+	# would point somewhere else) and only its length up the slope changes. Applied BEFORE the tilt
+	# and along an arbitrary horizontal axis rather than to basis.x or basis.z: a diagonal downhill
+	# does not lie on either of them, and scaling the nearest one would skew every corner cell.
+	var stretch := 1.0 / cos(angle) - 1.0
+	var along := Basis(
+		Vector3.RIGHT + uphill * (stretch * uphill.x),
+		Vector3.UP,
+		Vector3.BACK + uphill * (stretch * uphill.z))
+	return Transform3D(basis * along, origin)
 
 
 # The cell containing a world position (floor per axis — see the boundary rule above).

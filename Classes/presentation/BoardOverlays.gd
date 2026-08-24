@@ -328,9 +328,10 @@ func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) 
 		centre.y = BoardSpace.surface_y(cell.y) - selector_half_height()
 		return Transform3D(Basis.IDENTITY, centre)
 	var flat_cell := BoardSpace.flat(cell)
-	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(flat_cell)
-	var climb := 0 if heights == null else heights.ramp_climb_at(flat_cell)
-	var surface := BoardSpace.lie_on(cell, rise, climb)
+	# The CORNERS since #427 slice 3, not a rise and a climb: markup on a corner form has to follow a
+	# DIAGONAL downhill, which the cardinal pair could not describe at all.
+	var corners := Vector4i.ZERO if heights == null else heights.corners_at(flat_cell)
+	var surface := BoardSpace.lie_on(cell, corners)
 	return Transform3D(surface.basis, surface.origin + Vector3.UP * _lift_of(spec))
 
 

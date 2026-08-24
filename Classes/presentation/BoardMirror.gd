@@ -84,6 +84,9 @@ const FALLBACK_ITEM := 3  # dirt
 # reason item_for_tile is name-keyed: gen_lookdev_assets.gd writes them under these exact strings, so
 # the mapping cannot drift from the artifact it maps. The full-level entry keeps its original name
 # because Scenes/LookDev/LookDev.tscn's diorama references it.
+# The GENERIC fallback cap per climb and shape — the mesh a cell gets when its own tile has none
+# (an empty cell, a rotated alternative, multi-cell art, or a prop painted onto sloped ground).
+# The wedge pair keeps its historical names so the Stage-0 dirt meshes are untouched.
 const RAMP_ITEM_NAMES: Dictionary[int, String] = {
 	1: "dirt_ramp_rise1",
 	Terrain.UNITS_PER_LEVEL: "dirt_ramp",
@@ -454,35 +457,41 @@ func floor_row_of(heights: BoardHeights) -> int:
 # texture, from Kind), so a stack of one block already reads as a cliff face of that material.
 # Painting a DIFFERENT tile under a tile is a separate ticket he scoped out.
 #
-# A ramp adds its wedge directly ABOVE its own surface, and the wedge is as many ROWS tall as the
-# ramp CLIMBS (#427 slice 2) -- so a gentle slope reads one row taller than its flat neighbour and a
+# A sloped cell adds its CAP directly ABOVE its own surface, and the cap is as many ROWS tall as the
+# cell CLIMBS (#427 slice 2) -- so a gentle slope reads one row taller than its flat neighbour and a
 # 45 degree one reads two.
-# The grid is taken so the wedge can wear the cell's own art (#340). Asked INSIDE the rise branch
+#
+# WHICH cap is the cell's corner MASK, not a RampRise (#427 slice 3): the four cardinal wedges are
+# four of the twelve legal masks, and outer and inner corners are the other eight. One mesh family
+# per SHAPE and the GridMap's own yaw for the four rotations of each, which is why eight new forms
+# cost two new meshes.
+# The grid is taken so the cap can wear the cell's own art (#340). Asked INSIDE the sloped branch
 # rather than resolved beside `item` at the caller: it costs a name format per lookup, and a flat
-# cell -- almost every cell -- has no wedge to pick art for.
+# cell -- almost every cell -- has no cap to pick art for.
 func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: BoardHeights,
 		floor_row: int) -> void:
-	var top_row := BoardSpace.top_row_of(heights.elevation_at(cell))   # units -> drawn row (#427)
-	var rise := heights.ramp_rise_at(cell)
+	var corners := heights.corners_at(cell)
+	var top_row := BoardSpace.top_row_of(Terrain.low_of_corners(corners))   # units -> drawn row
 	for y in range(floor_row, top_row + 1):
 		var at := Vector3i(cell.x, y, cell.y)
 		if board.get_cell_item(at) != item:
 			board.set_cell_item(at, item)
 	var top := top_row
-	if rise != Terrain.RampRise.NONE:
-		var climb := heights.ramp_climb_at(cell)
-		var wedge := Vector3i(cell.x, top_row + 1, cell.y)
-		var orientation := _ramp_orientation(rise)
-		var wedge_item := ramp_item_for_cell(grid, cell, climb)
-		if board.get_cell_item(wedge) != wedge_item \
-				or board.get_cell_item_orientation(wedge) != orientation:
-			board.set_cell_item(wedge, wedge_item, orientation)
-		# The wedge's own upper rows, declared but not drawn -- see RAMP_FILL_ITEM_NAME.
+	var climb := Terrain.climb_of_corners(corners)
+	if climb > 0:
+		var cap := Vector3i(cell.x, top_row + 1, cell.y)
+		var mask := Terrain.corner_mask(corners)
+		var orientation := _form_orientation(mask)
+		var cap_item := form_item_for_cell(grid, cell, mask, climb)
+		if board.get_cell_item(cap) != cap_item \
+				or board.get_cell_item_orientation(cap) != orientation:
+			board.set_cell_item(cap, cap_item, orientation)
+		# The cap's own upper rows, declared but not drawn -- see RAMP_FILL_ITEM_NAME.
 		var fill := ramp_fill_item()
 		for y in range(top_row + 2, top_row + climb + 1):
-			var above_wedge := Vector3i(cell.x, y, cell.y)
-			if board.get_cell_item(above_wedge) != fill:
-				board.set_cell_item(above_wedge, fill)
+			var above_cap := Vector3i(cell.x, y, cell.y)
+			if board.get_cell_item(above_cap) != fill:
+				board.set_cell_item(above_cap, fill)
 		top = top_row + climb
 	# LOWERING a cell strands everything the column used to hold above its new top. Walk up until
 	# the column is genuinely clear rather than assuming one stale cell — a 5-level cut leaves 5.
@@ -492,12 +501,15 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 		above += 1
 
 
-# The wedge's meshlib id for a given CLIMB, asked of the LIBRARY rather than hardcoded — the same
-# reason item_for_tile indexes by name: the library is the mapping, and a literal id here would
-# silently point at whatever the generator emitted second.
-func ramp_item(climb: int) -> int:
+# The generic cap's meshlib id for a given CLIMB and SHAPE, asked of the LIBRARY rather than
+# hardcoded — the same reason item_for_tile indexes by name: the library is the mapping, and a
+# literal id here would silently point at whatever the generator emitted second.
+func ramp_item(climb: int, form := Terrain.Form.WEDGE) -> int:
 	_ensure_item_index()
-	return _item_by_name.get(RAMP_ITEM_NAMES.get(climb, ""), GridMap.INVALID_CELL_ITEM)
+	var stem: String = RAMP_ITEM_NAMES.get(climb, "")
+	if stem == "" or form == Terrain.Form.WEDGE:
+		return _item_by_name.get(stem, GridMap.INVALID_CELL_ITEM)
+	return _item_by_name.get("%s_%s" % [stem, form_suffix(form)], GridMap.INVALID_CELL_ITEM)
 
 
 func ramp_fill_item() -> int:
@@ -513,28 +525,42 @@ func ramp_fill_item() -> int:
 # item_for_tile already documents (empty cell, rotated alternative, multi-cell art) reach here too,
 # and so does a standing prop, which is refused a rise at the brush but can still be painted onto a
 # cell that already slopes.
-func ramp_item_for_cell(grid: TileMapLayer, cell: Vector2i, climb: int) -> int:
+func ramp_item_for_cell(grid: TileMapLayer, cell: Vector2i, climb: int,
+		form := Terrain.Form.WEDGE) -> int:
 	var source_id := grid.get_cell_source_id(cell)
 	if source_id != -1 and grid.get_cell_alternative_tile(cell) == 0:
 		_ensure_item_index()
 		var own: int = _item_by_name.get(
-				ramp_item_name(source_id, grid.get_cell_atlas_coords(cell), climb),
+				ramp_item_name(source_id, grid.get_cell_atlas_coords(cell), climb, form),
 				GridMap.INVALID_CELL_ITEM)
 		if own != GridMap.INVALID_CELL_ITEM:
 			return own
-	return ramp_item(climb)
+	return ramp_item(climb, form)
 
 
-# The generator draws the wedge with its high edge at -Z and notes that "GridMap orientation (yaw
-# steps) points the high side at the upper level". -Z is NORTH in board space, so the yaw is
-# DERIVED from Terrain.rise_direction — the same vocabulary the rules use — rather than a
-# hand-written table of orthogonal indices that could drift from the mesh.
-func _ramp_orientation(rise: Terrain.RampRise) -> int:
-	var dir := Terrain.rise_direction(rise)
-	if dir == Vector2i.ZERO:
+# The cap for a cell's own MASK — ramp_item_for_cell asked the way _write_column needs it (#427
+# slice 3), so a caller holding a mask never has to know which family it belongs to.
+func form_item_for_cell(grid: TileMapLayer, cell: Vector2i, mask: int, climb: int) -> int:
+	return ramp_item_for_cell(grid, cell, climb, Terrain.form_of_mask(mask))
+
+
+# The yaw that turns an AUTHORED cap into the one this cell wants. Each shape is cut in exactly one
+# orientation (Terrain.CANONICAL_MASKS) and the GridMap rotates it, which is what makes eight new
+# corner forms cost two meshes.
+#
+# DERIVED from the ground's own uphill rather than a hand-written table of orthogonal indices, the
+# way the wedge's own yaw always was: gradient_of_corners answers for every shape including the
+# diagonal ones, so the mesh and the rules cannot drift about which way a cell climbs. A table would
+# have needed twelve entries and no way to notice when one was wrong.
+func _form_orientation(mask: int) -> int:
+	var form := Terrain.form_of_mask(mask)
+	var authored := Terrain.gradient_of_corners(
+			Terrain.corners_of_form(0, Terrain.CANONICAL_MASKS[form]))
+	var wanted := Terrain.gradient_of_corners(Terrain.corners_of_form(0, mask))
+	if authored.is_zero_approx() or wanted.is_zero_approx():
 		return 0
-	var target := Vector3(dir.x, 0.0, dir.y)
-	var angle := RAMP_MESH_HIGH_SIDE.signed_angle_to(target, Vector3.UP)
+	var angle := Vector3(authored.x, 0.0, authored.y).signed_angle_to(
+			Vector3(wanted.x, 0.0, wanted.y), Vector3.UP)
 	return board.get_orthogonal_index_from_basis(Basis(Vector3.UP, angle))
 
 
@@ -619,8 +645,27 @@ static func prop_item_name(source_id: int, coords: Vector2i) -> String:
 # The CLIMB is part of the name since #427 slice 2, because a tile's gentle wedge and its steep one
 # are different geometry off the same art — one question ("which mesh draws this tile's slope?")
 # whose answer now takes two inputs, rather than two nearly-identical name functions.
-static func ramp_item_name(source_id: int, coords: Vector2i, climb: int) -> String:
-	return "ramp_%d_%d_%d_rise%d" % [source_id, coords.x, coords.y, climb]
+#
+# The SHAPE joined it in #427 slice 3, for exactly the same reason one input along: a cell can be a
+# cardinal wedge, an outer corner or an inner one, and those are different geometry off one tile.
+# The wedge keeps its historical spelling so ~300 existing items keep their names, and the two new
+# families get their own — a suffix rather than a fourth naming function.
+static func ramp_item_name(source_id: int, coords: Vector2i, climb: int,
+		form := Terrain.Form.WEDGE) -> String:
+	var stem := "ramp_%d_%d_%d_rise%d" % [source_id, coords.x, coords.y, climb]
+	return stem if form == Terrain.Form.WEDGE else "%s_%s" % [stem, form_suffix(form)]
+
+
+# The one spelling of a shape inside an item name. A table rather than the enum's own key, because
+# the names are baked into a committed 2000-item artifact and renaming the enum must not silently
+# orphan every mesh in it.
+static func form_suffix(form: Terrain.Form) -> String:
+	match form:
+		Terrain.Form.OUTER:
+			return "outer"
+		Terrain.Form.INNER:
+			return "inner"
+	return "wedge"
 
 
 func _ensure_item_index() -> void:
@@ -669,7 +714,11 @@ func show_brush_ghost(ghost: BrushGhost) -> void:
 	var item_xform: Transform3D = board.mesh_library.get_item_mesh_transform(item)
 	var basis := item_xform.basis
 	if ramping:
-		basis = board.get_basis_with_orthogonal_index(_ramp_orientation(ghost.rise)) * basis
+		# Through the MASK, like the real column (#427 slice 3). The brush still authors only cardinal
+		# ramps, so this always lands on the wedge family -- but asking the one yaw function is what
+		# keeps the preview turning with the caps when slice 4 lets a corner be painted.
+		basis = board.get_basis_with_orthogonal_index(
+				_form_orientation(Terrain.RISE_MASKS[ghost.rise])) * basis
 	var at := BoardSpace.of_cell(ghost.cell, row)
 	var origin := BoardSpace.cell_center(at) + item_xform.origin
 	# A wedge keeps its own extent -- it already draws exactly the volume it authors, so stretching it

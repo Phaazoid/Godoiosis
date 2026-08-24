@@ -78,6 +78,16 @@ func elevation_at(cell: Vector2i) -> int:
 		return 0
 	return heights.elevation_at(cell)
 
+# The cell's four corner heights — the SHAPE, not a reading of it (#427 slice 3). The rules ask this
+# rather than an (elevation, rise, climb) triple now: a corner form is not describable that way, and
+# the edge question height_step_ok asks needs the corners themselves. Vector4i.ZERO on a board with
+# no heights, which is flat ground at 0 — the same "behaves as it did before elevation existed"
+# contract every accessor here keeps.
+func corners_at(cell: Vector2i) -> Vector4i:
+	if heights == null:
+		return Vector4i.ZERO
+	return heights.corners_at(cell)
+
 func ramp_rise_at(cell: Vector2i) -> Terrain.RampRise:
 	if heights == null:
 		return Terrain.RampRise.NONE

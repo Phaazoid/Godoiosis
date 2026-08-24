@@ -173,6 +173,109 @@ func test_a_ramp_refuses_sideways_EXIT() -> void:
 	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(1, 2), unit, _context(board, unit))).is_false()
 
 
+func test_walking_ACROSS_a_continuous_slope_is_legal() -> void:
+	# The dev's ruling, 2026-08-23: "let's allow it. I'll feel test that afterwards."
+	#
+	# #427 slice 3 deleted Terrain.is_on_rise_axis and let the shared EDGE answer instead. The two
+	# cases above keep passing under that rule -- both put a ramp beside FLAT ground, whose edges
+	# genuinely do not meet -- so they stopped being guard-specific and started riding the general
+	# comparison. Two paths converging on one assertion is how a wrong replacement ships green, and
+	# this is the case that can actually see the change: two ramps rising the SAME way, side by side,
+	# whose surfaces meet exactly along the edge between them.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.NORTH)
+	heights.set_cell(Vector2i(2, 1), 0, Terrain.RampRise.NORTH)
+	var unit := _spawn(board, Vector2i(0, 0))
+
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+		.override_failure_message("two ramps rising the same way do not connect across the slope "
+			+ "they share, so is_on_rise_axis is still refusing it somewhere").is_true()
+
+
+func test_two_slopes_that_do_NOT_meet_still_refuse() -> void:
+	# The other half, or the case above would pass under "any two ramps connect". These rise the same
+	# way but sit a level apart, so the edge between them is a cliff whatever its two ends are doing.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.NORTH)
+	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL, Terrain.RampRise.NORTH)
+	var unit := _spawn(board, Vector2i(0, 0))
+
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+		.override_failure_message("two slopes a level apart connected sideways").is_false()
+
+
+# --- corner forms (#427 slice 3) ---
+#
+# Hand-built, and that is a declared gap rather than an oversight: the brush speaks RampRise and the
+# corner-drag tool is slice 4, so nothing can AUTHOR one of these yet. The rules can still be asked.
+#
+# An OUTER corner raises one corner, so it has a flat half and a sloped half. Which sides connect is
+# not a new rule -- it is the same edge comparison, and the interesting part is that the answer
+# differs per side of ONE cell, which no (elevation, rise, climb) triple could ever express.
+
+func _corner_board(mask: int, climb := Terrain.UNITS_PER_LEVEL) -> Dictionary:
+	var board := _board()
+	_heights(board).set_corners(Vector2i(1, 1), Terrain.corners_of_form(0, mask, climb))
+	return board
+
+
+func test_an_outer_corner_connects_on_its_FLAT_sides_only() -> void:
+	# NW raised: the NE--SW diagonal cuts the raised corner off, leaving the south and east edges
+	# level with the ground and the north and west edges climbing out of it.
+	var board := _corner_board(Terrain.CORNER_NW)
+	var unit := _spawn(board, Vector2i(4, 4))
+	var context := _context(board, unit)
+	var corner := Vector2i(1, 1)
+
+	for entry in [Vector2i(1, 2), Vector2i(2, 1)]:   # from the south, from the east
+		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+				"an outer corner refused entry from %s, which is one of its LEVEL edges" % entry
+				).is_true()
+	for entry in [Vector2i(1, 0), Vector2i(0, 1)]:   # from the north, from the west
+		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+				"an outer corner accepted entry from %s, where its own ground rises out of the "
+				% entry + "neighbour's").is_false()
+
+
+func test_an_inner_corner_connects_on_its_RAISED_sides_to_ground_at_that_height() -> void:
+	# The outer corner's complement: three corners up, so its north and west edges are level a whole
+	# climb ABOVE the cell's own height, and platforms there connect to it.
+	var board := _corner_board(Terrain.CORNER_NW | Terrain.CORNER_NE | Terrain.CORNER_SW)
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 0), Terrain.UNITS_PER_LEVEL)   # the platform to its north
+	heights.set_cell(Vector2i(0, 1), Terrain.UNITS_PER_LEVEL)   # and to its west
+	var unit := _spawn(board, Vector2i(4, 4))
+	var context := _context(board, unit)
+	var corner := Vector2i(1, 1)
+
+	for entry in [Vector2i(1, 0), Vector2i(0, 1)]:
+		assert_bool(RulesService.can_step(entry, corner, unit, context)).override_failure_message(
+				"an inner corner refused the platform at %s, which its own raised edge is level with"
+				% entry).is_true()
+	# ...and the low ground to the south does NOT connect: that edge runs from the raised corner
+	# down to the low one, so it meets nothing flat.
+	assert_bool(RulesService.can_step(Vector2i(1, 2), corner, unit, context)) \
+		.override_failure_message("an inner corner's sloped edge accepted flat ground").is_false()
+
+
+func test_a_corner_form_is_not_mistaken_for_flat_ground() -> void:
+	# The failure the old push_error existed to prevent, asked as a rule rather than as an error:
+	# rise_of_corners answers NONE for a corner form, so any reader still branching on "is this a
+	# cardinal ramp?" treats it as level -- and a level cell connects on every side.
+	var board := _corner_board(Terrain.CORNER_NW)
+	var unit := _spawn(board, Vector2i(4, 4))
+	var context := _context(board, unit)
+
+	assert_int(_heights(board).ramp_rise_at(Vector2i(1, 1))).override_failure_message(
+			"the fixture is not testing what it claims -- this shape has a cardinal name"
+			).is_equal(Terrain.RampRise.NONE)
+	assert_bool(RulesService.can_step(Vector2i(0, 1), Vector2i(1, 1), unit, context)) \
+		.override_failure_message("a corner form was walked onto as though it were flat ground, so "
+			+ "something is still reading it through RampRise").is_false()
+
+
 # --- staircases and routing ---
 
 func test_a_staircase_of_ramps_chains() -> void:
