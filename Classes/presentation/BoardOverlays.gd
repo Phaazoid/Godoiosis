@@ -155,6 +155,10 @@ var _lines: Dictionary[Layer, PackedVector3Array] = {}   # set_line layers: the 
 var _layer_colors: Dictionary[Layer, Color] = {}  # runtime fill colors (set_layer_modulate)
 var _bracket_mesh: ArrayMesh
 var _quad_mesh: PlaneMesh
+# The folded quads corner-cell markup lies on (#427 slice 4 follow-up), keyed by the cell's SHAPE --
+# its corners relative to the low one -- so a whole board of corner cells costs at most twelve masks
+# times two climbs. See _surface_mesh for why a transform cannot carry the fold.
+var _bent_meshes: Dictionary[Vector4i, ArrayMesh] = {}
 
 
 func _ready() -> void:
@@ -183,14 +187,23 @@ func set_cells(layer: Layer, cells: Array[Vector3i], heights: BoardHeights = nul
 		if i < cells.size():
 			marker.visible = true
 			marker.transform = _marker_transform(spec, cells[i], heights)
+			# A FILL rides the surface, so on a corner cell the fold is in its MESH rather than in
+			# the transform above (#427 slice 4 follow-up). A BRACKET marks a VOLUME and keeps its
+			# box. Assigned unconditionally because the pool is reused: a marker that was on a
+			# corner and is now on flat ground has to be handed the flat quad back.
+			if spec["kind"] == Kind.FILL:
+				(marker as MeshInstance3D).mesh = _surface_mesh(_corners_under(cells[i], heights))
 		else:
 			marker.visible = false
 
 
 # Replaces a variant layer wholesale: one entry per marker, {"pos": Vector3 (the
 # cell's top-face anchor), "texture": Texture2D, "modulate": Color, "basis": Basis
-# (optional — how the surface under it is tilted, identity on flat ground)}. Same
-# idempotent-pool contract as set_cells. SPRITE/BILLBOARD layers only.
+# (optional — how the surface under it is tilted, identity on flat ground),
+# "corners": Vector4i (optional — the SHAPE of the cell it lies on, so a corner
+# cell's fold reaches the mesh; absent or ZERO means it lies on nothing, which is
+# what an airborne marker wants)}. Same idempotent-pool contract as set_cells.
+# SPRITE/BILLBOARD layers only.
 func set_markers(layer: Layer, markers: Array[Dictionary]) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.SPRITE and spec["kind"] != Kind.BILLBOARD:
@@ -327,12 +340,86 @@ func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) 
 		var centre := BoardSpace.cell_center(cell)
 		centre.y = BoardSpace.surface_y(cell.y) - selector_half_height()
 		return Transform3D(Basis.IDENTITY, centre)
-	var flat_cell := BoardSpace.flat(cell)
-	# The CORNERS since #427 slice 3, not a rise and a climb: markup on a corner form has to follow a
-	# DIAGONAL downhill, which the cardinal pair could not describe at all.
-	var corners := Vector4i.ZERO if heights == null else heights.corners_at(flat_cell)
-	var surface := BoardSpace.lie_on(cell, corners)
+	var surface := BoardSpace.lie_on(cell, _corners_under(cell, heights))
 	return Transform3D(surface.basis, surface.origin + Vector3.UP * _lift_of(spec))
+
+
+# The CORNERS a cell's markup lies on, since #427 slice 3 -- not a rise and a climb, because markup
+# on a corner form has to follow a DIAGONAL downhill, which the cardinal pair could not describe.
+func _corners_under(cell: Vector3i, heights: BoardHeights) -> Vector4i:
+	return Vector4i.ZERO if heights == null else heights.corners_at(BoardSpace.flat(cell))
+
+
+# Which mesh lies on these corners (#427 slice 4 follow-up). The shared flat quad for a PLANAR form,
+# which is flat ground and every cardinal ramp -- so nearly every cell on nearly every board is
+# untouched and pays one predicate.
+#
+# A corner form is not planar, and lie_on says so by handing back an identity basis: an affine
+# transform maps a plane to a plane, so the fold cannot live in the transform and lives HERE, in four
+# vertices at their true heights. That is the whole fix -- a tilted flat quad crossed the ground by a
+# quarter of the climb at every corner, which is what the z-fighting on a corner tile's flat half was.
+#
+# THE MESH CALLS THE QUERY: vertex heights and the diagonal both come from Terrain.height_at_uv, the
+# same function the cap meshes are cut by (slice 3's law). Two triangulations of one quad meet at all
+# four corners and differ only INSIDE, so a markup quad that split the other way would sit up to a
+# quarter of the climb off the ground it is drawn on -- and PlaneMesh's own split is fixed SW--NE,
+# which is the wrong one whenever NE and SW differ.
+func _surface_mesh(corners: Vector4i) -> Mesh:
+	if _quad_mesh == null:
+		_quad_mesh = PlaneMesh.new()
+		_quad_mesh.size = Vector2.ONE * BoardSpace.CELL_SIZE
+	if Terrain.is_planar_form(corners):
+		return _quad_mesh
+	# Keyed by the SHAPE, not the cell: a form is a mask plus a climb, so twelve non-cardinal masks
+	# times two climbs is the whole cache, however big the board.
+	var low := Terrain.low_of_corners(corners)
+	var shape := corners - Vector4i(low, low, low, low)
+	if _bent_meshes.has(shape):
+		return _bent_meshes[shape]
+	var mesh := _build_bent_mesh(shape)
+	_bent_meshes[shape] = mesh
+	return mesh
+
+
+# The four corners in PlaneMesh's own frame: u east across the cell, v south down it, which is the
+# frame Terrain.height_at_uv answers in. Measured off PlaneMesh rather than assumed, so a bent quad
+# and a flat one carry the same art the same way up.
+const _QUAD_UVS: Array[Vector2] = [
+	Vector2(0.0, 0.0),   # NW
+	Vector2(1.0, 0.0),   # NE
+	Vector2(1.0, 1.0),   # SE
+	Vector2(0.0, 1.0)    # SW
+]
+
+
+func _build_bent_mesh(shape: Vector4i) -> ArrayMesh:
+	var centre := Terrain.height_at_uv(shape, 0.5, 0.5)
+	var verts := PackedVector3Array()
+	var uvs := PackedVector2Array()
+	var normals := PackedVector3Array()
+	for uv in _QUAD_UVS:
+		verts.append(Vector3(
+			(uv.x - 0.5) * BoardSpace.CELL_SIZE,
+			(Terrain.height_at_uv(shape, uv.x, uv.y) - centre) * BoardSpace.ROW_HEIGHT,
+			(uv.y - 0.5) * BoardSpace.CELL_SIZE))
+		uvs.append(uv)
+		normals.append(Vector3.UP)   # unshaded markup: declared to match PlaneMesh, never lit
+	# The diagonal joins the two EQUAL corners, exactly as height_at_uv splits -- so the drawn quad
+	# and the queried surface cannot disagree. Winding replicates PlaneMesh's for each case, which is
+	# what keeps the face pointing up; the vertex ORDER is the whole of it, since a bent quad is two
+	# triangles and the wrong pair would tent the wrong way.
+	var index := PackedInt32Array([0, 1, 2, 0, 2, 3])   # NW-SE split: (NW,NE,SE) + (NW,SE,SW)
+	if shape.y == shape.w:
+		index = PackedInt32Array([2, 3, 1, 3, 0, 1])    # NE-SW split: (SE,SW,NE) + (SW,NW,NE)
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_TEX_UV] = uvs
+	arrays[Mesh.ARRAY_NORMAL] = normals
+	arrays[Mesh.ARRAY_INDEX] = index
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 # Per-sort spacing keeps coplanar stacked fills apart; render_priority (set at
@@ -373,6 +460,11 @@ func _apply_marker(spec: Dictionary, node: Node3D, marker: Dictionary) -> void:
 	# marker nodes are POOLED — a quad that was on a ramp and is now on flat ground, or that had art
 	# and now has none, would otherwise keep the tilt and the size of whatever it drew last.
 	var quad := node as MeshInstance3D
+	# Which surface this marker LIES on, if it lies on one at all (#427 slice 4 follow-up). Carried
+	# ALONGSIDE the basis rather than instead of it: the knockback drop pointer supplies an
+	# orientation of its own and STANDS in the world, so `basis` stays "how this is oriented" and
+	# `corners` is "the ground it lies flat against" -- absent when there is none, which is flat.
+	quad.mesh = _surface_mesh(marker.get("corners", Vector4i.ZERO))
 	var tilt: Basis = marker.get("basis", Basis.IDENTITY)
 	var art := Vector3.ONE
 	if texture != null:

@@ -27,7 +27,16 @@ class_name BrushGhost
 # the slab a paint makes, so the renderer states it. The knob that DOES exist answers for the hover
 # SELECTOR (BoardOverlays.selector_depth) -- a different object, in normal play, and one question.
 
+# WHAT the click moves (#427 slice 4). One answer, two shapes: a TILE preview names a cell and the
+# art that would land on it, a VERTEX preview names the point a corner drag has hold of and nothing
+# else. Declared rather than inferred from a null `source`, because "which kind of preview is this"
+# is a fixed vocabulary and reading it off a field's emptiness is the second-answer shape (Law #4) --
+# a renderer would be deciding what the tool is doing by what happens to be unset.
+enum Kind { TILE, VERTEX }
+
+var kind: Kind = Kind.TILE
 var cell: Vector2i
+var vertex: Vector2i
 var height: int
 var source: TileMapLayer
 var rise: Terrain.RampRise
@@ -43,4 +52,15 @@ static func make(cell_: Vector2i, height_: int, source_: TileMapLayer,
 	ghost.source = source_
 	ghost.rise = rise_
 	ghost.climb = climb_
+	return ghost
+
+
+# The corner tool's preview: the grid point a click would move, and where to. No `source` and no
+# cell, because a corner drag places no art and belongs to no single tile -- it moves the point four
+# of them share.
+static func at_vertex(vertex_: Vector2i, height_: int) -> BrushGhost:
+	var ghost := BrushGhost.new()
+	ghost.kind = Kind.VERTEX
+	ghost.vertex = vertex_
+	ghost.height = height_
 	return ghost

@@ -846,6 +846,27 @@ func test_a_ring_on_a_ramp_lies_tilted_with_the_slope() -> void:
 			"every ground decal came through level -- the mirror is not keeping the surface basis").is_greater(0)
 
 
+func test_a_ring_on_a_corner_cell_carries_the_shape_it_lies_on() -> void:
+	# The case above's twin, and it exists because a mutant proved it had to: a corner cell's surface
+	# is not a plane, so the basis is IDENTITY there and the FOLD travels as the cell's corners for
+	# the renderer's mesh to carry (#427 slice 4 follow-up). Delete that key from OverlayMirror and
+	# every case in this file still passes -- the renderer end is pinned in test_board_overlays and
+	# the mirror end was not, which is #103's shape exactly.
+	var pair := _squad_pair()
+	var cell: Vector2i = pair[0].movement.cell
+	var corners := Terrain.corners_of_form(0, Terrain.CORNER_NE, Terrain.UNITS_PER_LEVEL)
+	game.board_heights.set_corners(cell, corners)
+	_om().redraw_squad_unit_icons(pair[0].squad)
+	await _settle()
+	var folded := 0
+	for marker in _overlays.markers_of(BoardOverlays.Layer.GROUND_ICONS):
+		if marker.get("corners", Vector4i.ZERO) == corners:
+			folded += 1
+	assert_int(folded).override_failure_message(
+			"no ground decal carried the corner cell's shape -- the mirror is dropping it, so every "
+			+ "marker on a corner cell draws flat and cuts through the ground").is_greater(0)
+
+
 func test_zone_fills_mirror_and_captured_zones_drop() -> void:
 	var zones := {
 		"cap": {"kind": ZoneManager.Kind.CAPTURE, "cells": [Vector2i(1, 1), Vector2i(2, 1)]},

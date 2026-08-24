@@ -416,9 +416,12 @@ func _ribbon_point(cell: Vector2i, at: Vector3) -> Vector3:
 
 # A FLYING trail arrow: flat at the shove's launch height, no tilt -- it hangs in the air rather
 # than lying on a surface, so neither the level nor the slope of the cell below may touch it.
-func _air_anchor(px: Vector2, from_cell: Vector2i) -> Transform3D:
+# Flat CORNERS for the same reason and it is the literal truth: it lies on nothing, so it takes the
+# flat quad however folded the ground beneath it happens to be.
+func _air_anchor(px: Vector2, from_cell: Vector2i) -> Dictionary:
 	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
-	return Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y))
+	return {"surface": Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y)),
+			"corners": Vector4i.ZERO}
 
 
 # Unit markers, routed by TYPE rather than by a style mode (#325 verdict, dev call after playing
@@ -445,8 +448,8 @@ func _icons(om: OverlayManager) -> void:
 			var icon := by_type[type] as OverlayIcon
 			if icon == null or not is_instance_valid(icon) or not icon.has_unit():
 				continue
-			var surface := _anchor(icon.current_cell())
-			var entry := _marker(surface, icon.sprite.texture, icon.sprite.modulate)
+			var entry := _marker(_anchor(icon.current_cell()), icon.sprite.texture,
+					icon.sprite.modulate)
 			if type == OverlayIcon.IconType.CROWN:
 				heads.append(entry)
 			elif type == OverlayIcon.IconType.GUARD_WARD:
@@ -517,22 +520,35 @@ func _markers(layer: BoardOverlays.Layer, entries: Array[Dictionary]) -> void:
 
 # Both halves of a marker come off ONE surface_transform, so where it sits and how it lies can
 # never disagree. A BILLBOARD ignores the basis and stays upright; the ghost channel likewise.
-func _marker(surface: Transform3D, texture: Texture2D, tint: Color) -> Dictionary:
-	return {"pos": surface.origin, "texture": texture, "modulate": tint, "basis": surface.basis}
+#
+# It takes an ANCHOR rather than a bare transform since #427 slice 4 follow-up, because a transform
+# is no longer the whole of "how this lies": a corner cell's surface is not a plane, so the tilt is
+# identity there and the FOLD has to reach the renderer as the cell's corner shape, for the marker's
+# mesh to carry. Threading it through the anchor rather than through every call site is what keeps
+# the eight producers below unchanged -- a per-site parameter is eight chances to forget one, and a
+# forgotten one silently draws flat, which is the bug this fixes.
+func _marker(anchor: Dictionary, texture: Texture2D, tint: Color) -> Dictionary:
+	var surface: Transform3D = anchor["surface"]
+	return {"pos": surface.origin, "texture": texture, "modulate": tint,
+			"basis": surface.basis, "corners": anchor["corners"]}
 
 
 # How markup LIES on a cell — the marker anchor convention, on the cell's own SURFACE since #273 so
 # a marker on a terrace rides the terrace, and tilted with that surface since #281 so one on a ramp
 # lies flat against the slope. BoardSpace.surface_transform is the one answer.
-func _anchor(cell: Vector2i) -> Transform3D:
-	return BoardSpace.surface_transform(cell, _heights())
+func _anchor(cell: Vector2i) -> Dictionary:
+	var heights := _heights()
+	return {"surface": BoardSpace.surface_transform(cell, heights),
+			"corners": Vector4i.ZERO if heights == null else heights.corners_at(cell)}
 
 
 # The same, for a 2D world position (sprites sit at cell centers). The LEVEL and the SLOPE both come
 # from the cell those pixels fall in, so a ghost or arrow over a terrace lifts and tilts with it.
-func _anchor_px(px: Vector2) -> Transform3D:
-	var surface := BoardSpace.surface_transform(_cell_of_px(px), _heights())
-	return Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
+func _anchor_px(px: Vector2) -> Dictionary:
+	var anchor := _anchor(_cell_of_px(px))
+	var surface: Transform3D = anchor["surface"]
+	anchor["surface"] = Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
+	return anchor
 
 
 # Which 2D CELL a sprite's pixels fall in. Split out of _anchor_px because the drop pointer needs

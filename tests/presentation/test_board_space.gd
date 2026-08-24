@@ -198,3 +198,68 @@ func test_lie_on_takes_the_row_it_is_given_rather_than_looking_one_up() -> void:
 	var flat := BoardSpace.lie_on(BoardSpace.of_cell(Vector2i(6, 6), 3), Vector4i.ZERO)
 	assert_float(flat.origin.y).is_equal(BoardSpace.surface_y(3))
 	assert_that(flat.basis).is_equal(Basis.IDENTITY)
+
+
+# --- corner cells: where markup lies and where things stand (#427 slice 4 follow-up) --
+
+# Every legal form, composed the way Terrain composes them. Mask 15 is excluded by the round-trip
+# rather than by a listed exception: all four corners raised IS a flat cell at that height, so it
+# has no corner form to answer for.
+func _legal_forms() -> Array[Vector4i]:
+	var forms: Array[Vector4i] = []
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for mask in range(16):
+			var corners := Terrain.corners_of_form(0, mask, climb)
+			if Terrain.is_legal_corners(corners) and Terrain.corner_mask(corners) == mask:
+				forms.append(corners)
+	return forms
+
+
+func test_where_a_thing_stands_is_the_surface_under_it_on_every_form() -> void:
+	# The two answers that had DRIFTED. surface_point read the corners' mean (the best-fit plane's
+	# centre) while surface_height_at read Terrain.height_at_uv (the surface), and on a corner form
+	# they differ by a quarter of the climb -- so a unit, a flame or a prop floated. They are now one
+	# function evaluated at one point, which is what surface_transform's own comment always claimed.
+	var heights := BoardHeights.new()
+	var cell := Vector2i(3, 5)
+	var centre := (Vector2(cell) + Vector2(0.5, 0.5)) * BoardSpace.CELL_SIZE
+	for corners in _legal_forms():
+		heights.set_corners(cell, corners)
+		assert_float(BoardSpace.surface_point(cell, heights).y).override_failure_message(
+				"%s: what stands here is not on the surface here" % corners).is_equal_approx(
+				BoardSpace.surface_height_at(cell, centre.x, centre.y, heights), 0.0001)
+
+
+func test_no_planar_form_moves_at_all() -> void:
+	# The scope guard: flat ground and every cardinal ramp must be bit-identical to before, which is
+	# what makes this a corner-cell fix rather than a re-tune of every board that exists. Spelled
+	# from the rule (low side plus half the climb, tilt about the cross-slope axis) rather than
+	# captured from the code, so it checks the claim and not the implementation against itself.
+	var heights := BoardHeights.new()
+	var cell := Vector2i(2, 2)
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for rise in [Terrain.RampRise.NORTH, Terrain.RampRise.EAST,
+				Terrain.RampRise.SOUTH, Terrain.RampRise.WEST]:
+			heights.set_cell(cell, 4, rise, climb)
+			var xform := BoardSpace.surface_transform(cell, heights)
+			assert_float(xform.origin.y).override_failure_message(
+					"rise %d climb %d: a ramp's centre left its midpoint" % [rise, climb]) \
+				.is_equal_approx(BoardSpace.world_y_of_height(4.0 + float(climb) * 0.5), 0.0001)
+			assert_bool(xform.basis.is_equal_approx(Basis.IDENTITY)).override_failure_message(
+					"rise %d climb %d: a ramp lost its tilt" % [rise, climb]).is_false()
+
+
+func test_a_corner_cell_gets_no_tilt_because_no_transform_could_carry_one() -> void:
+	# lie_on says so rather than approximating. An affine transform maps a plane to a plane, and a
+	# corner cell's four surface points are not coplanar -- the best-fit plane CROSSES the ground by
+	# a quarter of the climb at every corner, which is the z-fighting this fixed. The fold is the
+	# renderer's to carry, in the marker's mesh.
+	var heights := BoardHeights.new()
+	var cell := Vector2i(1, 1)
+	for corners in _legal_forms():
+		heights.set_corners(cell, corners)
+		if Terrain.is_planar_form(corners):
+			continue
+		assert_that(BoardSpace.surface_transform(cell, heights).basis).override_failure_message(
+				"%s: a corner form was handed a tilt it cannot honour" % corners) \
+			.is_equal(Basis.IDENTITY)

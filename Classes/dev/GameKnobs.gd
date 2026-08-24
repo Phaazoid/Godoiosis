@@ -63,10 +63,12 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
 	# --- Dev chrome ---
-	# A group of one, and filed truthfully rather than folded into the markup above it: the ghost is
-	# the only row on this tab a player never sees.
+	# Filed truthfully rather than folded into the markup above it: these are the only rows on this
+	# tab a player never sees.
 	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
+	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_vertex_ghost_size", "label": "Corner marker size", "min": 0.05, "max": 0.6, "step": 0.01,
+		"tip": "Edge of the corner tool's marker cube, as a fraction of a cell. It marks the POINT a drag has hold of, so it wants to be grabbable by eye without growing large enough to read as a tile -- past about a third of a cell it starts covering the corner it is pointing at. Dev-only."},
 
 	# --- Unit HUD (#229) ---
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "hud_lift", "label": "Readout clearance", "min": 0.0, "max": 1.5, "step": 0.01,

@@ -251,6 +251,80 @@ static func is_legal_corners(corners: Vector4i) -> bool:
 	return not SADDLE_MASKS.has(corner_mask(corners))
 
 
+# --- The vertex layer (#427 slice 4) ---
+
+# The four corners a grid VERTEX is. `Vector2i(x, y)` is the NW corner of cell (x, y), and the same
+# physical point is (x-1, y)'s NE, (x, y-1)'s SW and (x-1, y-1)'s SE — cell OFFSET to corner BIT, and
+# the one place that mapping lives.
+#
+# Corners stay per-TILE and this is emphatically not a shared vertex grid: two neighbours disagreeing
+# about the edge they meet on IS a cliff, and the cell brush still authors that. What a vertex names
+# is the point the corner TOOL addresses, so one drag can weld the four surfaces meeting there
+# instead of leaving the cut-off gap that opened #427.
+const VERTEX_CORNERS: Dictionary[Vector2i, int] = {
+	Vector2i(0, 0): CORNER_NW,
+	Vector2i(-1, 0): CORNER_NE,
+	Vector2i(-1, -1): CORNER_SE,
+	Vector2i(0, -1): CORNER_SW
+}
+
+# Which Vector4i component each corner bit addresses — the WRITE direction of corner_mask's read, and
+# the only bridge between the two spellings. A hand-written `match` at a write site would be a second
+# mapping, i.e. a quarter of every corner drag landing silently on the wrong corner.
+const CORNER_COMPONENTS: Dictionary[int, int] = {
+	CORNER_NW: 0,
+	CORNER_NE: 1,
+	CORNER_SE: 2,
+	CORNER_SW: 3
+}
+
+static func with_corner(corners: Vector4i, bit: int, height: int) -> Vector4i:
+	var result := corners
+	result[CORNER_COMPONENTS[bit]] = height
+	return result
+
+
+static func corner_height(corners: Vector4i, bit: int) -> int:
+	return corners[CORNER_COMPONENTS[bit]]
+
+
+# THE CLAMP (#427 slice 4): the legal shape nearest to "this corner goes to `height`". It ASKS
+# is_legal_corners rather than restating which of the three refusals it tripped — the predicate stays
+# the one place legality lives, so the tool cannot grow a second opinion about saddles or the 45
+# degree cap, and a rule added there reaches the tool for free.
+#
+# The walk steps from the target TOWARD the corner's current height, which is what makes it
+# terminate: `corners` is already legal, so the worst case is the corner not moving at all. That also
+# settles the tie — with the cap at UNITS_PER_LEVEL the only value strictly between two legal ones is
+# equidistant from both, so "nearest" is genuinely ambiguous there and standing still wins.
+#
+# Consequence, and it is the "one ring, clamped" ruling working as intended rather than a shortfall:
+# a corner stops rising once its own tile would break, so a tall hill takes several strokes across
+# neighbouring points instead of one drag that cascades outward across the board.
+static func corner_toward(corners: Vector4i, bit: int, height: int) -> Vector4i:
+	var current := corner_height(corners, bit)
+	var step := signi(current - height)
+	var candidate := height
+	while candidate != current:
+		var shaped := with_corner(corners, bit, candidate)
+		if is_legal_corners(shaped):
+			return shaped
+		candidate += step
+	return corners
+
+
+# Which vertex a point INSIDE a cell is nearest — u east across it, v south down it, both 0..1, the
+# same parameterisation height_at_uv takes. ONE derivation, because the flat view and the 3D pick
+# reach it from opposite directions (a local position against a ray hit) and must not round
+# differently about which corner the cursor has hold of.
+#
+# Naturally saturating rather than clamped: a hit that lands a hair outside the cell still answers
+# that cell's nearer edge, which is the honest reading of a grazing pick.
+static func vertex_near(cell: Vector2i, u: float, v: float) -> Vector2i:
+	return cell + Vector2i(1 if u >= 0.5 else 0, 1 if v >= 0.5 else 0)
+
+
+
 # The two corner heights along the edge this cell shares with its `dir` neighbour, in a fixed SPATIAL
 # order — west-to-east for a north or south edge, north-to-south for an east or west edge (#427
 # slice 3). That ordering is the whole point: one edge named from either side gives the same two
@@ -310,10 +384,19 @@ static func gradient_of_corners(corners: Vector4i) -> Vector2:
 	return Vector2(east, south)
 
 
-# The height at the cell's CENTRE — where anything lying on the surface pivots. The corners' mean,
-# which for a cardinal ramp is its low side plus half its climb, exactly as before.
-static func centre_height_of_corners(corners: Vector4i) -> float:
-	return float(corners.x + corners.y + corners.z + corners.w) * 0.25
+# Is this cell's surface a PLANE? Flat ground and the four cardinal ramps are; an outer or inner
+# corner is not, because its four surface points are not coplanar (#427 slice 4 follow-up).
+#
+# It matters wherever a single Transform3D is asked to describe the surface: an affine transform maps
+# a plane to a plane, so on a corner form the best-fit plane CROSSES the ground — measured at a
+# quarter of the climb at every corner, alternating sign. Whoever asks has to carry the fold some
+# other way, and BoardOverlays carries it in the MESH.
+#
+# Composed from the two answers that already exist rather than testing the mask itself: a cardinal
+# rise IS the planar non-flat case, and re-deriving that from CORNER bits would be a second spelling
+# of RISE_MASKS.
+static func is_planar_form(corners: Vector4i) -> bool:
+	return climb_of_corners(corners) == 0 or rise_of_corners(corners) != RampRise.NONE
 
 
 # Which cardinal ramp these corners describe, or NONE. STILL THE AUTHORING vocabulary — the brush

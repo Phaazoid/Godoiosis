@@ -97,6 +97,10 @@ var _floor_row := 0
 # would walk every column of the board each time the mouse moves.
 var _board_rect := Rect2i()
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
+# Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
+# from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
+# freeze it for the whole tile.
+var _pointer_vertex := Vector2i.ZERO
 # The 2D game's native resolution, read in _ready off the container's authored
 # custom_minimum_size (Main.tscn) — the one source of that fact. The PiP pins the
 # container SIZE to it (GameView keeps full resolution under stretch) and shrinks
@@ -404,12 +408,17 @@ func _apply_input_ownership() -> void:
 	if flat:
 		game.hover_presenter.pointer_source = Callable()
 		game.dev_controller.cell_source = Callable()
+		game.dev_controller.vertex_source = Callable()
 		_pointer_cell = BoardSpace.NO_CELL
 		_overlays.clear(BoardOverlays.Layer.HOVER)
 	else:
 		var pointer_cell: Callable = func() -> Vector2i: return BoardSpace.flat(_pointer_cell)
 		game.hover_presenter.pointer_source = pointer_cell
 		game.dev_controller.cell_source = pointer_cell
+		# The corner tool's own question (#427 slice 4), a THIRD consumer of the same pick. It gets
+		# its own source rather than deriving off the cell one, because the answer changes within a
+		# cell and a cell has already thrown that away.
+		game.dev_controller.vertex_source = func() -> Vector2i: return _pointer_vertex
 
 
 # The real hosting: the 2D game covers the window at native scale over a
@@ -816,6 +825,12 @@ func _aim_over(x: float, z: float) -> Vector3:
 
 func _update_pointer(screen_pos: Vector2) -> void:
 	var cell := _pick(screen_pos)
+	# The VERTEX is answered ABOVE the early-out, and that placement is the whole of #471's law
+	# applied here: an early-out is a copy of the render key on the INPUT side, so a poll has to
+	# compare every input its answer depends on. The corner tool's answer changes halfway ACROSS a
+	# cell, so the cell compare below would pin the marker to whichever corner it first landed on.
+	# Everything under it is genuinely cell-keyed and stays there.
+	_pointer_vertex = _vertex_under(screen_pos, cell)
 	if cell == _pointer_cell:
 		return
 	_pointer_cell = cell
@@ -892,6 +907,28 @@ func _cancel() -> void:
 
 func _pick(screen_pos: Vector2) -> Vector3i:
 	return BoardPicker.pick_at(_camera, screen_pos, _tops, _paint_plane())
+
+
+# Which grid vertex a pick is nearest (#427 slice 4). The picker answers a CELL, so the sub-cell half
+# is recovered by dropping the same ray onto that cell's top plane and reading where it lands.
+#
+# APPROXIMATE on sloped ground and deliberately so: the plane is the cell's top face, which for a
+# ramp is its high edge rather than its actual surface, so a grazing view can pull the reading toward
+# the uphill corner by a fraction of a cell. It is exact on flat ground — which is what a hill is
+# built out of — the marker shows the answer before any click commits it, and the alternative is a
+# per-form ray/triangle intersection in the hot pointer path for a dev tool.
+func _vertex_under(screen_pos: Vector2, cell: Vector3i) -> Vector2i:
+	if cell == BoardSpace.NO_CELL:
+		return _pointer_vertex
+	var column := BoardSpace.flat(cell)
+	var origin := _camera.project_ray_origin(screen_pos)
+	var dir := _camera.project_ray_normal(screen_pos)
+	if is_zero_approx(dir.y):
+		return _pointer_vertex   # looking along the surface: no crossing to read
+	var hit := origin + dir * ((BoardSpace.surface_y(cell.y) - origin.y) / dir.y)
+	return Terrain.vertex_near(column,
+			hit.x / BoardSpace.CELL_SIZE - float(column.x),
+			hit.z / BoardSpace.CELL_SIZE - float(column.y))
 
 
 # Where a click still lands with no block under it (#231): the painted board plus the

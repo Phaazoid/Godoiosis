@@ -95,6 +95,32 @@ func set_cell(cell: Vector2i, elevation: int, rise: Terrain.RampRise = Terrain.R
 		climb := Terrain.UNITS_PER_LEVEL) -> void:
 	set_corners(cell, Terrain.corners_of_ramp(elevation, rise, climb))
 
+# The CORNER composer (#427 slice 4): move ONE named corner of one cell, clamped to a legal shape.
+# Sibling of set_cell -- not a second store, it writes through set_corners -- but the shape the
+# corner tool actually means, one point at a time. The clamp is Terrain's, so this store never has an
+# opinion about what ground may look like.
+func set_corner(cell: Vector2i, bit: int, height: int) -> void:
+	set_corners(cell, Terrain.corner_toward(corners_at(cell), bit, height))
+
+# The WELD: move the point where four cells meet, in all four of them at once. This is the corner
+# tool's whole gesture, and welding is what kills the cut-off gap between neighbours that opened
+# #427 -- the cell brush still authors a deliberate cliff, by giving two neighbours different
+# heights.
+#
+# `has_ground` gates which of the four may be written, because height goes with the ground (#245): a
+# point dragged at the board edge would otherwise leave heights in cells that have no tile, invisible
+# and riding every save until something pruned them. A PARAMETER on prune_groundless's own
+# justification -- this store cannot reach the grid, and its non-tool callers (fixtures, a scenario
+# load, the tests below it) have no ground to gate on. An invalid Callable writes all four.
+func set_vertex(vertex: Vector2i, height: int, has_ground := Callable()) -> void:
+	for offset: Vector2i in Terrain.VERTEX_CORNERS:
+		var cell := vertex + offset
+		if has_ground.is_valid():
+			var grounded: bool = has_ground.call(cell)   # typed local: .call() erases to Variant
+			if not grounded:
+				continue
+		set_corner(cell, Terrain.VERTEX_CORNERS[offset], height)
+
 func clear() -> void:
 	_corners.clear()
 	dirty.mark_all()

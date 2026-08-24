@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #488 (2026-08-23).**
+**Canon checked through #492 (2026-08-23).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -40,9 +40,12 @@ below follows from taking that literally.
 > meet on, and that disagreement IS a cliff. A shared grid could not express two flat cells at
 > different heights at all.
 >
-> `ramp_rise_at` is TRANSITIONAL. Corner slopes (slice 3) are shapes `RampRise` cannot name, so a
-> corner pattern outside the five legal ones `push_error`s rather than quietly reading flat — the one
-> thing that will find every un-migrated reader when that slice lands.
+> `ramp_rise_at` was TRANSITIONAL, and the transition is done. Corner slopes are shapes `RampRise`
+> cannot name, so through slices 1–2 a corner pattern `push_error`ed rather than quietly reading flat
+> — a migration checklist, not a rule, and it found every un-migrated reader. Slice 3 walked the last
+> of them and it answers NONE now: the surviving callers genuinely mean "is this one of the four
+> cardinal ramps?", `is_ramp` asks the CLIMB instead, and `is_legal_corners` is what refuses ground
+> that should not exist.
 
 > **CORNER FORMS, slice 3 (2026-08-23) — a cell's shape is a MASK.** Which corners are raised, plus
 > how far. Sixteen masks: `0` is flat, four singles are **outer corners**, the four **adjacent**
@@ -57,8 +60,10 @@ below follows from taking that literally.
 > RCT model the reframe asks for, and `Terrain.is_legal_corners` refuses everything outside it: a
 > third height, a climb over `UNITS_PER_LEVEL` (the 45° cap, needing no constant of its own because
 > that IS the unit), and the two saddle masks. Deliberately a PREDICATE and not a lint tier — nothing
-> can author an illegal shape until slice 4's tool exists, and a check wired to an unreachable
-> surface is a check that cannot fire ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)).
+> could author an illegal shape while it shipped, and a check wired to an unreachable surface is a
+> check that cannot fire ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)). Slice 4 built
+> the first thing that COULD, and the payoff is that it obeys this predicate instead of restating it:
+> the tool asks, and is structurally unable to author bad ground rather than merely unlikely to.
 >
 > **The surface between the corners is TWO TRIANGLES, and which diagonal splits them is real
 > geometry.** `Terrain.height_at_uv` joins the two EQUAL corners, giving every legal form a flat half
@@ -69,10 +74,99 @@ below follows from taking that literally.
 > `tests/law/test_cap_mesh_matches_the_surface.gd` samples each drawn triangle at its own centroid,
 > which is where a wrong diagonal shows.
 >
-> **Corner cells are authorable only by hand-built fixture until slice 4** — a declared, one-slice
-> gap. The 2D view's sprite forms stay with [#266](https://github.com/Phaazoid/Godoiosis/issues/266)
-> as a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry: the hidden 2D
-> authority is corner-aware, so parity of RULES is never broken, only of costume.
+> **`height_at_uv` IS THE ONE SURFACE, and slice 3 shipped a second answer beside it anyway** —
+> corrected after slice 4, found in play. `BoardSpace.lie_on` described a cell with a single
+> `Transform3D`, i.e. a PLANE, taking its height from the corners' MEAN
+> (`Terrain.centre_height_of_corners`). On a planar form the mean IS the surface at the centre; on a
+> corner form the two differ by a quarter of the climb, so `surface_point` (where a unit, a flame or
+> a prop stands) and `surface_height_at` — which already read `height_at_uv` — disagreed about the
+> same cell. The mean is deleted; `lie_on` reads the surface.
+>
+> **And no transform can describe a corner cell at all**, which is the other half of the same
+> mistake. Four non-coplanar points, and an affine transform maps a plane to a plane: the best-fit
+> plane CROSSES the ground by a quarter of the climb at every corner, alternating sign — an eighth of
+> a cell on the gentle slope against a `fill_lift` of 0.02, which is why it read as z-fighting on the
+> tile's flat half and as arrows cutting through it. So **`lie_on` returns an identity basis on a
+> non-planar form** rather than a tilt it cannot honour, `Terrain.is_planar_form` is the question, and
+> **the FOLD lives in the marker's MESH** (`BoardOverlays._surface_mesh`): four vertices at their true
+> heights, split on the diagonal `height_at_uv` splits on, cached by the cell's shape. Planar cells —
+> flat ground and every cardinal ramp, i.e. nearly every cell on every board — keep the one shared
+> `PlaneMesh` and are bit-identical to before.
+>
+> Two things that had to be threaded and are worth knowing. A SPRITE marker's surface comes from
+> `OverlayMirror`, not from a heights lookup, so the cell's shape travels in the marker entry
+> **alongside** its basis — not instead of, because the knockback drop pointer supplies an
+> orientation of its own and lies on nothing, so "how this is oriented" and "the ground it lies flat
+> against" are two questions and an absent shape means airborne. And the generalisable one: the
+> renderer's END of that key was pinned while its SOURCE was not, so a mutant deleting it passed the
+> whole mirror suite — [#103](https://github.com/Phaazoid/Godoiosis/issues/103)'s shape, caught only
+> by falsifying.
+>
+> Corner cells were authorable only by hand-built fixture for one slice — a declared gap, closed by
+> the tool below. The 2D view's sprite forms stay with
+> [#266](https://github.com/Phaazoid/Godoiosis/issues/266) as a declared
+> [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry: the hidden 2D authority is
+> corner-aware, so parity of RULES is never broken, only of costume.
+
+> **THE CORNER TOOL, slice 4 (2026-08-23) — and #427 closes.** The Tile Brush gains a fourth mode,
+> and it does NOT replace the one it sits beside: *"we would want to keep the version of the tool we
+> have now, but also have a corner mode. Different tools for different situations"* (dev). The cell
+> brush paints a whole tile AT a height and can still author a deliberate cliff between neighbours;
+> corner mode drags the POINT four cells share.
+>
+> **Absolute, not relative.** The wheel picks a height and every point the drag touches goes to it,
+> exactly as the cell brush places a level. `DevController._paint()` re-fires on every mouse-motion
+> event while the button is held, so a relative `+1` would run away down a stroke where an absolute
+> value drag-paints idempotently — the doctrine this doc already records for the cell brush, one
+> gesture along. Right-click pulls the point back DOWN to the board floor, as far as the clamp will
+> legally let it: the corner reading of "take it away", and symmetric with paint rather than a second
+> gesture, since both write one height into one point.
+>
+> **One ring, clamped.** A drag writes the point's corner in all FOUR touching tiles, so the surfaces
+> stay welded — which is what kills the cut-off gap between neighbours that opened this ticket.
+> Anything that would make a touched tile illegal is CLAMPED, never cascaded outward:
+> `Terrain.corner_toward` walks from the target toward the corner's CURRENT height until
+> `is_legal_corners` passes, which terminates by construction because the cell is already legal, so
+> the worst case is the corner not moving at all. The consequence is the ruling working as intended
+> rather than a shortfall: **a corner stops rising once its own tile would break**, so a tall hill
+> takes several strokes across neighbouring points instead of one drag that reaches across the board.
+> With the 45° cap at `UNITS_PER_LEVEL` the only height strictly between two legal ones is
+> equidistant from both, so "nearest" is genuinely ambiguous there and standing still wins.
+>
+> **A vertex is `Terrain.VERTEX_CORNERS` and nothing else knows the mapping.** `Vector2i(x, y)` is
+> cell `(x, y)`'s NW corner, `(x-1, y)`'s NE, `(x, y-1)`'s SW and `(x-1, y-1)`'s SE. Corners stay
+> per-TILE — the store is untouched, and this is still not a shared vertex grid — a vertex is what
+> the TOOL addresses. `BoardHeights.set_vertex` is the weld and takes the ground predicate as a
+> parameter, on `prune_groundless`'s own justification: a point dragged at the board edge would
+> otherwise leave heights in cells that have no tile (#245), and the store cannot reach the grid to
+> ask. `Terrain.CORNER_COMPONENTS` bridges a corner BIT to its `Vector4i` component once — the write
+> direction of `corner_mask`'s read, and a hand-written `match` at any write site would be a quarter
+> of every drag landing silently on the wrong corner.
+>
+> **The pointer's answer changes halfway ACROSS a cell**, so `battle3d._update_pointer` computes the
+> vertex ABOVE its cell early-out. That is [#471](https://github.com/Phaazoid/Godoiosis/issues/471)'s
+> law exactly: an early-out is a copy of the render key on the INPUT side, so it has to compare every
+> input the answer depends on, and below it the marker would stick to whichever corner the cursor
+> first entered the tile by. The sub-cell half is recovered by dropping the same ray onto the picked
+> cell's top plane — exact on flat ground, which is what a hill is built out of, and APPROXIMATE on a
+> slope by declared choice: the marker shows the answer before any click commits it, and the
+> alternative is a per-form ray/triangle intersection in the hot pointer path for a dev tool.
+>
+> **The preview is a POINT, not a block.** `BrushGhost` gains a declared `Kind` rather than letting a
+> renderer infer the mode from an unset `source` — "which kind of preview is this" is a fixed
+> vocabulary, and reading it off a field's emptiness is the second-answer shape. The 3D marker is a
+> small cube on the vertex at the height the click would set (`BoardMirror`, sharing the ghost NODE
+> so only one preview can ever be live); the flat view draws nothing, exactly as it draws nothing for
+> a height, and reads the KIND *before* the source — a source compare alone matches `null` against a
+> ghost layer that has never been built and paints a tile at the origin.
+>
+> **Z / X / C stand down in corner mode, and that split the one predicate that gated them.** The
+> level row is visible here and the rise and climb rows are not, so `DevController._elevation_brush`
+> (the wheel) now answers for two modes while `_shape_brush` (the shape keys) answers for one. They
+> were one function only because the two rows had always appeared together; the rule underneath —
+> *a control only moves a brush you can SEE* — is unchanged, and `tests/dev/test_height_brush.gd`
+> now derives both sweeps from the rows' own visibility rather than hand-listing "the other modes",
+> which is what went stale the moment a fourth mode landed.
 
 > **The MIRROR re-metered to match, slice 2 (2026-08-23).** A GridMap row was one whole level, which
 > is simply unable to draw a half — so `BoardSpace.ROW_HEIGHT` is `CELL_SIZE / UNITS_PER_LEVEL` and
@@ -846,9 +940,11 @@ Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two
 
 > **#427 slice 3 pays the same cost again, by dev call.** Every flat tile now gets its own **outer**
 > and **inner** corner caps at both climbs on top of its wedges: **2119 items, 4.8 MB**, and a longer
-> re-import every time. He was offered generic (non-per-tile) caps for this slice — corners are only
-> hand-authorable until slice 4, so almost nothing would have seen the wrong art — and chose to pay
-> now, so #340's rule holds with no exception. Three SHAPES and not twelve masks: the GridMap's own
+> re-import every time. He was offered generic (non-per-tile) caps for this slice — corners were only
+> hand-authorable while slice 4 was still owed, so almost nothing would have seen the wrong art — and
+> chose to pay now, so #340's rule holds with no exception. Slice 4 is what collected on that: the
+> corner tool authors real corner cells on painted ground, wearing their own tile from the first
+> stroke. Three SHAPES and not twelve masks: the GridMap's own
 > yaw supplies each shape's four rotations, which is what keeps eight new forms at two new meshes.
 > `BoardMirror._form_orientation` derives that yaw from the ground's own uphill
 > (`Terrain.gradient_of_corners`) rather than a twelve-entry table, so the mesh and the rules cannot
