@@ -265,6 +265,24 @@ func test_the_ghost_previews_the_brushs_level_not_the_cells() -> void:
 			).is_same(game.dev_controller._brush_ghost)
 
 
+func test_the_ghost_carries_the_brushs_steepness() -> void:
+	# THE WIRE. brush_ghost() is the one route from the brush's settings to any renderer, and `climb`
+	# is the field it copies that nothing else could recover -- unasserted since slice 2 shipped it.
+	# Forget it at this call and every other case still passes: the brush holds the right value, the
+	# renderer draws whatever it is handed, and the picker does nothing in play. A field with no
+	# listener is legal GDScript (#103).
+	_arm_brush()
+	var cell: Vector2i = game.dev_controller._mouse_cell()
+	game.grid.set_cell(cell, _brush.selected_source, _brush.selected_tile)
+	_brush.set_climb(1)
+
+	var ghost: BrushGhost = game.dev_controller.brush_ghost()
+
+	assert_object(ghost).is_not_null()
+	assert_int(ghost.climb).override_failure_message(
+			"the ghost carried %d, not the brush's Rise Amount" % ghost.climb).is_equal(1)
+
+
 func test_a_groundless_cell_still_owes_a_ghost() -> void:
 	# REVERSED by #340. The elevation brush could not create ground, so a hole previewed nothing;
 	# the merged brush paints the tile first, so a click on virgin board is a real paint and the

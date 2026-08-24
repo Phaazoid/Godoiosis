@@ -664,6 +664,29 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > greys with the direction on a tile that stands up, for the same reason. The amount deliberately
 > survives *Reset to flat*: it is a steepness preference, not a piece of the shape.
 
+> **THE RE-METRIC BROKE EVERY BOX THAT DRAWS A CELL VOLUME (dev, 2026-08-23, with screenshots).**
+> *"when I hover a block currently, my voxel selector hovers a half height too high ... hovering above
+> a block, and not going to the floor."* **The hover selector** (`BoardOverlays`, `Kind.BRACKET`) is
+> the one he reported. Its mesh was a **cube** — `half = 0.5 * CELL_SIZE * bracket_scale` on all three
+> axes — centred on `cell_center`, which said the right thing only while a mirror cell *was* a cube.
+> A level-tall box centred on a half-level row hangs a **quarter of a level** high at both ends. Now:
+> X and Z span a cell, **Y spans however many ROWS the selector is set to**, and the box's **top face
+> sits on the cell's surface** with its depth reaching down from there.
+>
+> A **Selector depth** picker (Level / Half) on the Game tab plus **V** say how far down. It is a
+> `GameKnobs` row rather than a Tile Brush one because the selector is up in **ordinary play**, and V
+> is a top-level dev key for the same reason — needing an armed brush would leave the thing visible
+> and the key that moves it dead. Turning the knob **rebuilds what is already standing**: the hover
+> layer only repaints when the pointer *cell* changes, so a still mouse would otherwise see nothing.
+>
+> **The brush GHOST had the same disease** — one block mesh is one row, so it previewed the top half
+> of the slab a paint makes. Fixed the same way and deliberately **without** a knob: how deep a
+> preview draws is the slab the paint makes, and a WYSIWYG preview with a setting is one that can be
+> wrong on purpose. One question, one knob, and it belongs to the selector.
+>
+> Both boxes are **scaled/sized, never stacked**: each wears a flat translucent material, so two
+> boxes meeting would show their shared faces as a bright band across the middle.
+
 > **A DEV PAGE OWNS ITS OWN INPUT (dev, 2026-08-23).** *"I should only be able to spawn units while
 > the unit spawning window is up, yet when I press space in the brush mode, it spawns a unit."*
 > `DevOverlay.showing(page)` is the one answer to which page is up — it has to be a function rather
@@ -796,7 +819,11 @@ feedback and one binding. Four rulings, all the dev's:
 - **The ghost is the block that would become the column's new TOP** — the cell's own art, at the
   level the click would produce; the **wedge at `level + 1`** when a rise is set, mirroring
   `_write_column`'s own rule. Raising a cell keeps its texture, so the preview resolves its mesh
-  off the real grid via the same `item_for_cell` call the board uses.
+  off the real grid via the same `item_for_cell` call the board uses. *Since #427 slice 2 a "block"
+  is one ROW, so the flat preview spans a LEVEL — the slab a paint makes — reaching DOWN from the
+  surface the click authors. Not a setting; the hover selector owns the only depth knob. It is
+  SCALED rather than stacked: the ghost wears a flat translucent `material_override`, so two boxes
+  meeting would show their shared faces as a bright band across the middle of the selector.*
 - **A groundless cell shows NO ghost** — *until #340 reversed it.* The elevation brush could not
   create ground, so a click over a hole was a silent no-op and the ghost stated the refusal in
   advance. The merged brush paints the tile first, so that click is now a real paint and the ghost

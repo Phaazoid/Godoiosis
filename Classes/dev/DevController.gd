@@ -76,16 +76,48 @@ func handle_dev_key(event: InputEvent) -> void:
 		var state_name: String = game.GameState.keys()[game.game_state]
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
-	_handle_rise_keys(event)
+	_handle_selector_key(event)
+	_handle_brush_keys(event)
 	_handle_undo_keys(event)
 
-# Z / C turn the elevation brush's ramp rise (#260 follow-up) and X cycles how far it climbs (#427
-# slice 2) -- the Q/E detent idiom applied to authoring, with steepness on the key between the two
-# turns. Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent
-# in CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
+
+# V cycles how deep the 3D hover selector reads (#427 slice 2 follow-up). A TOP-LEVEL dev key rather
+# than one of the brush keys below, and the distinction is load-bearing: the selector is up in
+# ORDINARY PLAY, so requiring an armed terrain brush -- or dev mode at all -- would leave the thing
+# it moves visible and the key that moves it dead. Only DevTools.enabled() gates it, which is what
+# makes it a tuning door rather than a player control.
+#
+# Here rather than in battle3d for the two-windows rule: this entry is forwarded from BOTH OS
+# windows (DevOverlay._input), and a key handled in the 3D scene alone is dead whenever the dev-tools
+# window has focus -- which is exactly where authoring leaves you.
+func _handle_selector_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.ctrl_pressed:
+		return
+	if key.physical_keycode != KEY_V:
+		return
+	# Resolved through the KNOB rather than a node path of its own: the Game tab's row edits this
+	# same property, and two spellings of where it lives is how a key and a panel come to disagree.
+	var overlay: DevOverlay = game.dev_overlay
+	var host: Node3D = null if overlay == null else overlay.host_3d
+	var overlays := LookKnobs.target_of(host, GameKnobs.SELECTOR_DEPTH) as BoardOverlays
+	if overlays == null:
+		return   # a flat Main.tscn launch has no 3D selector to deepen
+	overlays.selector_depth = BoardOverlays.SelectorDepth.LEVEL \
+			if overlays.selector_depth == BoardOverlays.SelectorDepth.HALF \
+			else BoardOverlays.SelectorDepth.HALF
+
+# Every key the elevation BRUSH answers to. Z / C turn its ramp rise (#260 follow-up) and X cycles
+# how far that rise climbs (#427 slice 2) -- so it was named _handle_rise_keys until X made that
+# plainly wrong. The Q/E detent idiom applied to authoring, with the rarely-touched steepness off the
+# compass keys rather than on them. Every key here needs an ARMED brush, which is what separates them
+# from the top-level dev keys above: V is not one of them, because the thing it moves is up in
+# ordinary play.
+# Hardcoded physical keycodes rather than Input Map actions, matching the Q/E precedent in
+# CameraRig3D -- and project.godot is the one file concurrent PRs reliably collide on.
 # Here rather than game.gd because that arm dies under a modal (#154), and because these keys are
 # dev-layer exactly like F1/F2/F3.
-func _handle_rise_keys(event: InputEvent) -> void:
+func _handle_brush_keys(event: InputEvent) -> void:
 	var key := event as InputEventKey
 	if key == null or not key.pressed or key.echo:
 		return   # echo: holding the key must not spin the rise
@@ -102,7 +134,7 @@ func _handle_rise_keys(event: InputEvent) -> void:
 		KEY_C:
 			brush.cycle_rise(1)
 
-# Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (#391). Hardcoded physical keycodes for the reason the rise keys
+# Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y (#391). Hardcoded physical keycodes for the reason the brush keys
 # above are: project.godot is the one file concurrent PRs reliably collide on. Both redo spellings,
 # because both are muscle memory and the branch costs a line.
 #

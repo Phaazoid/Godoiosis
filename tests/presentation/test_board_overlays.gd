@@ -217,8 +217,118 @@ func test_hover_is_a_bracket_mesh_at_the_cell() -> void:
 		# Brackets are the code-built ArrayMesh; fill/sprite quads share a PlaneMesh.
 		if bracket != null and bracket.visible and bracket.mesh is ArrayMesh:
 			bracket_seen = true
-			assert_that(bracket.position).is_equal(BoardSpace.cell_center(cell))
+			assert_float(bracket.position.x).is_equal_approx(BoardSpace.cell_center(cell).x, 0.001)
+			assert_float(bracket.position.z).is_equal_approx(BoardSpace.cell_center(cell).z, 0.001)
 	assert_bool(bracket_seen).is_true()
+
+
+# --- how much column the hover SELECTOR encloses (#427 slice 2 follow-up) ------------
+#
+# The dev, with screenshots: "when I hover a block currently, my voxel selector hovers a half height
+# too high ... hovering above a block, and not going to the floor." _build_bracket_mesh built a CUBE
+# and _marker_transform centred it on cell_center -- one statement while a mirror cell WAS a cube,
+# and slice 2 made a row half a level. A level-tall box centred on a half-level row hangs a QUARTER
+# of a level high at BOTH ends.
+#
+# The case above asserted `bracket.position == cell_center(cell)` throughout, so the code and its
+# test moved together and stayed green: a test and its code agreeing about a mistake, which no mutant
+# can see. It now pins only what it was ever about -- the bracket is on the right COLUMN -- and the
+# vertical half, which is what actually broke, is pinned here in ROWS.
+#
+# Measured at the box's CENTRE, and that is what makes these exact rather than fudged. The drawn AABB
+# is bigger than the volume it marks in two ways -- bracket_scale swells it, and each arm pads itself
+# by bracket_thickness -- but BOTH are symmetric, so they cancel at the centre and leave a number
+# that can be compared to 0.001. The expected value is derived from BoardSpace and
+# Terrain.UNITS_PER_LEVEL, never from BoardOverlays' own accessor, so a wrong DEPTH and a wrong
+# PLACEMENT both redden and neither case can agree with the code about a mistake.
+
+func _hover_bracket(overlays: BoardOverlays) -> MeshInstance3D:
+	for child in overlays.get_children():
+		var bracket := child as MeshInstance3D
+		if bracket != null and bracket.visible and bracket.mesh is ArrayMesh:
+			return bracket
+	return null
+
+
+# The drawn box in the board's own frame -- the frame BoardSpace.surface_y answers in.
+func _bracket_extent(overlays: BoardOverlays) -> AABB:
+	var bracket := _hover_bracket(overlays)
+	return bracket.transform * bracket.get_aabb()
+
+
+# The centre of the volume `rows` rows deep whose TOP face is this cell's surface -- the block the
+# selector is supposed to be marking, derived from the board rather than from the selector.
+func _volume_centre(cell: Vector3i, rows: int) -> float:
+	return BoardSpace.surface_y(cell.y) - float(rows) * BoardSpace.ROW_HEIGHT * 0.5
+
+
+func test_the_selector_encloses_the_whole_block() -> void:
+	# THE case the bug owns. Under it the box was a level tall but centred on a half-level ROW, so it
+	# sat a QUARTER of a level high -- proud of the block on top, short of the floor underneath.
+	var overlays := _bare_overlays()
+	var cell := Vector3i(4, BoardSpace.top_row_of(2), 4)
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
+
+	var want := _volume_centre(cell, Terrain.UNITS_PER_LEVEL)
+	assert_float(_bracket_extent(overlays).get_center().y).override_failure_message(
+			"the selector is centred at %s, not on the block it marks (%s) -- a mirror row is half a "
+			% [_bracket_extent(overlays).get_center().y, want]
+			+ "level since slice 2, so a CUBE on a row encloses the wrong volume"
+			).is_equal_approx(want, 0.001)
+
+
+func test_the_knob_narrows_the_selector_to_one_unit() -> void:
+	# The other half of the ask, and the same measurement one row along: a HALF selector marks the
+	# top unit of the column, so its own centre drops by half a row rather than the box staying put
+	# and shrinking about its middle.
+	var overlays := _bare_overlays()
+	overlays.selector_depth = BoardOverlays.SelectorDepth.HALF
+	var cell := Vector3i(4, BoardSpace.top_row_of(2), 4)
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
+
+	var want := _volume_centre(cell, 1)
+	assert_float(_bracket_extent(overlays).get_center().y).override_failure_message(
+			"the knob did not put the selector on the top UNIT of the column").is_equal_approx(
+			want, 0.001)
+
+
+func test_the_two_depths_differ_by_exactly_one_row() -> void:
+	# The depth claim on its own, as a DIFFERENCE: bracket_scale and the arms' own thickness both
+	# swell the drawn box, and both are identical in the two settings, so subtracting cancels them
+	# and leaves the one number this knob is about. Nothing here restates the geometry it checks.
+	var overlays := _bare_overlays()
+	var cell := Vector3i(4, BoardSpace.top_row_of(2), 4)
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
+	var deep := _bracket_extent(overlays).size.y
+	overlays.selector_depth = BoardOverlays.SelectorDepth.HALF
+	var shallow := _bracket_extent(overlays).size.y
+
+	assert_float(deep - shallow).override_failure_message(
+			"the two selector depths differ by %s, not the one ROW that separates a block from a "
+			% (deep - shallow) + "half one").is_equal_approx(
+			(Terrain.UNITS_PER_LEVEL - 1) * BoardSpace.ROW_HEIGHT * overlays.bracket_scale, 0.001)
+
+
+func test_the_knob_moves_a_selector_that_is_already_standing() -> void:
+	# The pointer bracket only repaints when the hovered CELL changes (battle3d._update_pointer
+	# early-outs on an unchanged one), so a knob that only took effect on the next repaint would do
+	# nothing at all while the mouse sat still -- a slider that appears dead. Both halves are
+	# asserted because neither implies the other: the box is re-MESHED at the new height and
+	# re-PLACED at the new centre.
+	var overlays := _bare_overlays()
+	var cell := Vector3i(4, BoardSpace.top_row_of(2), 4)
+	overlays.set_cells(BoardOverlays.Layer.HOVER, [cell])
+	var before := _bracket_extent(overlays)
+
+	overlays.selector_depth = BoardOverlays.SelectorDepth.HALF   # no set_cells after it
+
+	var after := _bracket_extent(overlays)
+	assert_float(after.size.y).override_failure_message(
+			"the live selector kept its old height -- the knob waits for a repaint that a still "
+			+ "mouse never triggers").is_less(before.size.y - 0.01)
+	assert_float(after.position.y).override_failure_message(
+			"the live selector was re-meshed but not re-placed, so it shrank about its old centre "
+			+ "instead of hanging from the surface").is_greater(before.position.y + 0.01)
 
 
 # --- Markup lies on the surface it marks (#281) ------------------------------------

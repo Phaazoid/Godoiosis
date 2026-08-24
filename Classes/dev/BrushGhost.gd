@@ -22,6 +22,10 @@ class_name BrushGhost
 #
 # `rise` is set only when the click would author a ramp, and `climb` is how far that ramp rises --
 # a renderer draws the wedge directly above the surface, mirroring BoardMirror's own column rule.
+#
+# There is deliberately NO depth field: how deep the flat preview draws is not a preference, it is
+# the slab a paint makes, so the renderer states it. The knob that DOES exist answers for the hover
+# SELECTOR (BoardOverlays.selector_depth) -- a different object, in normal play, and one question.
 
 var cell: Vector2i
 var height: int

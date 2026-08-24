@@ -412,6 +412,23 @@ func test_an_f5_readout_survives_leaving_the_terrain_brush() -> void:
 	assert_bool(readout.visible).is_true()
 
 
+# ---- X cycles the steepness ----
+#
+# Slice 2's case, written late: RISE_CYCLE is covered nine ways above and CLIMB_CYCLE had no case at
+# all, so the key shipped on the same handler as its tested neighbours with nothing watching it.
+# (The hover selector's own V key is NOT here -- it needs no armed brush and no dev mode, so it lives
+# with the 3D scene in tests/dev/test_game_knobs.gd.)
+
+func test_x_alternates_the_two_steepnesses() -> void:
+	assert_int(_brush.selected_climb()).is_equal(Terrain.UNITS_PER_LEVEL)
+	_dc._input(_key(KEY_X))
+	assert_int(_brush.selected_climb()).override_failure_message(
+			"X did not reach the brush's steepness").is_equal(1)
+	_dc._input(_key(KEY_X))
+	assert_int(_brush.selected_climb()).override_failure_message(
+			"the steepness cycle did not wrap home").is_equal(Terrain.UNITS_PER_LEVEL)
+
+
 # ---- the dev keys reach the brush from EITHER OS window (#340 follow-up) ----
 
 func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
@@ -423,6 +440,12 @@ func test_the_rise_keys_work_from_the_dev_tools_window_too() -> void:
 
 	assert_int(_brush.selected_rise()).override_failure_message(
 			"a dev key pressed in the dev-tools window never reached the brush").is_equal(NORTH)
+
+	# Not just the key that found the bug: the window forwards ALL of them or none, so a case naming
+	# only C would go on passing while a later key rode a route that never existed.
+	game.dev_overlay._input(_key(KEY_X))
+	assert_int(_brush.selected_climb()).override_failure_message(
+			"X pressed in the dev-tools window never reached the brush").is_equal(1)
 
 
 func test_typing_in_a_dev_field_does_not_fire_the_dev_keys() -> void:
