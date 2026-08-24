@@ -44,6 +44,36 @@ below follows from taking that literally.
 > corner pattern outside the five legal ones `push_error`s rather than quietly reading flat — the one
 > thing that will find every un-migrated reader when that slice lands.
 
+> **CORNER FORMS, slice 3 (2026-08-23) — a cell's shape is a MASK.** Which corners are raised, plus
+> how far. Sixteen masks: `0` is flat, four singles are **outer corners**, the four **adjacent**
+> pairs are exactly the cardinal ramps `RampRise` already names, the four triples are **inner
+> corners**, and the two **opposite** pairs are the saddles the dev refused. `15` is unreachable —
+> the mask names corners strictly above the cell's own low one, and a cell always has one — so flat
+> has exactly one spelling. It is [#263](https://github.com/Phaazoid/Godoiosis/issues/263)'s dividend
+> a second time: a wall facing became a mask of EDGES and the corner fell out for free; here the
+> cardinal ramp stops being its own kind of thing.
+>
+> **A form is a mask plus a climb, so a cell has at most TWO distinct corner heights.** That is the
+> RCT model the reframe asks for, and `Terrain.is_legal_corners` refuses everything outside it: a
+> third height, a climb over `UNITS_PER_LEVEL` (the 45° cap, needing no constant of its own because
+> that IS the unit), and the two saddle masks. Deliberately a PREDICATE and not a lint tier — nothing
+> can author an illegal shape until slice 4's tool exists, and a check wired to an unreachable
+> surface is a check that cannot fire ([#390](https://github.com/Phaazoid/Godoiosis/issues/390)).
+>
+> **The surface between the corners is TWO TRIANGLES, and which diagonal splits them is real
+> geometry.** `Terrain.height_at_uv` joins the two EQUAL corners, giving every legal form a flat half
+> and a sloped half — the RCT shape; the other diagonal turns an outer corner into a hip roof. **The
+> mesh generator calls that same function** rather than reimplementing its rule, because both
+> triangulations meet all four corners and only a point INSIDE can tell them apart: disagree, and a
+> unit crossing a corner cell floats or sinks by up to a quarter of the climb.
+> `tests/law/test_cap_mesh_matches_the_surface.gd` samples each drawn triangle at its own centroid,
+> which is where a wrong diagonal shows.
+>
+> **Corner cells are authorable only by hand-built fixture until slice 4** — a declared, one-slice
+> gap. The 2D view's sprite forms stay with [#266](https://github.com/Phaazoid/Godoiosis/issues/266)
+> as a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292) asymmetry: the hidden 2D
+> authority is corner-aware, so parity of RULES is never broken, only of costume.
+
 > **The MIRROR re-metered to match, slice 2 (2026-08-23).** A GridMap row was one whole level, which
 > is simply unable to draw a half — so `BoardSpace.ROW_HEIGHT` is `CELL_SIZE / UNITS_PER_LEVEL` and
 > the mirror's vertical index counts **one row per height unit**. A mirror cell is no longer a cube.
@@ -64,6 +94,13 @@ below follows from taking that literally.
 > WEST }` is **the direction the ramp rises toward**: one field carries the axis *and* the high side,
 > and "no sideways entry" collapses to a single question — does this step run along the rise axis?
 > Built as `Terrain.RampRise` with `Terrain.rise_direction` / `Terrain.is_on_rise_axis` beside it.
+>
+> **SUPERSEDED by [#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice 3.** `RampRise`
+> survives as the *authoring* vocabulary — the brush paints cardinal ramps and `corners_of_ramp`
+> composes them — but it is no longer the universal *reading*: a cell's form is a **mask of raised
+> corners** plus a climb, of which the four cardinal ramps are the four adjacent-pair masks.
+> `is_on_rise_axis` is **deleted**, because comparing the shared edge answers it (see the movement
+> section below), and `rise_of_corners` answers `NONE` for a corner form rather than erroring.
 
 **Not tileset custom data.** This was the first proposal and it is wrong: `walkable` / `move_cost` /
 `terrain_type` / `terrain_name` are per-TILE (per atlas coordinate), not per-cell. Elevation as tile
@@ -148,6 +185,22 @@ engine grows one:
   it. The sideways guard is **two clauses, one per cell**, and they are tested separately: the
   2026-08-12 stage-2 round found that a case covering only *leaving* a ramp sideways let the
   entering-guard mutant survive.
+
+  > **REPLACED by ONE COMPARISON in [#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice
+  > 3.** `height_step_ok` now asks whether the two cells' shared EDGE has the same two corner
+  > heights read from either side (`Terrain.edge_of_corners`). Both height clauses, both sideways
+  > guards and the climb arithmetic all fall out of it, so `is_on_rise_axis` was deleted rather than
+  > widened — a rule that falls out of the geometry needs no clause standing beside it. Three
+  > consequences worth stating:
+  >
+  > - **Walking ACROSS a continuous slope is now legal** (dev, 2026-08-23: *"let's allow it. I'll
+  >   feel test that afterwards"*). Two adjacent ramps rising the same way genuinely meet along the
+  >   edge between them, so a unit may cross as well as climb. Provisional, to be judged in play.
+  > - **A ramp is enterable strictly from its LOW side.** The old rule compared the two cells' low
+  >   corners, so a unit standing on flat ground could step onto a ramp's HIGH edge a level above
+  >   it; the edge comparison refuses that. Not a ruling — a bug the restatement removed.
+  > - **One cell can answer differently per side**, which is what corner forms need and what no
+  >   `(elevation, rise, climb)` triple could ever express.
 
 **Blast radius is small, which is why the movement half is slice 1.** `movement_cost` has exactly ONE
 production caller (`compute_move_range`'s BFS) and it already holds `current_cell`. `can_traverse` has
@@ -249,7 +302,9 @@ attacks shouldn't be queuable."* A sheer 1-level edge is melee-illegal in BOTH d
 wrongly forbid. So melee authors `VerticalRule.MELEE`: same elevation at any range, or an adjacent
 edge that is ramp-connected — judged by `RulesService.height_step_ok`, the height core extracted
 from `can_step` so melee and movement can never disagree about which edges connect. (The sideways
-guards stay movement-only: swinging past a ramp's side is not walking onto it.) Bare fists are
+guards stay movement-only: swinging past a ramp's side is not walking onto it. **#427 slice 3 made
+that moot** — the guards are gone and the shared core is now the whole rule, so melee and movement
+answer identically with nothing left to keep movement-only.) Bare fists are
 STEP too — punching is melee. The earlier melee worry ("I don't like not being able to melee up a
 slope") is exactly what the half step preserves.
 
@@ -788,6 +843,16 @@ wedge, whatever was painted under it — so a stone ramp read as dirt. This is t
 **FLAT** tile alongside its block, wearing that tile's own atlas UV, and
 `BoardMirror.ramp_item_for_cell` picks it by name exactly as `item_for_cell` picks the block.
 Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two rules hold it together:
+
+> **#427 slice 3 pays the same cost again, by dev call.** Every flat tile now gets its own **outer**
+> and **inner** corner caps at both climbs on top of its wedges: **2119 items, 4.8 MB**, and a longer
+> re-import every time. He was offered generic (non-per-tile) caps for this slice — corners are only
+> hand-authorable until slice 4, so almost nothing would have seen the wrong art — and chose to pay
+> now, so #340's rule holds with no exception. Three SHAPES and not twelve masks: the GridMap's own
+> yaw supplies each shape's four rotations, which is what keeps eight new forms at two new meshes.
+> `BoardMirror._form_orientation` derives that yaw from the ground's own uphill
+> (`Terrain.gradient_of_corners`) rather than a twelve-entry table, so the mesh and the rules cannot
+> drift about which way a cell climbs.
 
 - **Only FLAT tiles get a variant, and only flat tiles may slope.** The dev: *"only tiles that are
   flat, not things like rocks, lanterns, etc. grass, mud, etc."* A rock has no top face to tilt. The
