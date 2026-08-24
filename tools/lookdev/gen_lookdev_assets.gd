@@ -32,8 +32,14 @@ const TILESET_PATH := "res://Resources/TestTiles.tres"
 const TILE := 32
 
 # Where the per-tileset-tile items start. Everything below is the Stage-0 set, plus #427 slice 2's
-# gentle fallback wedge and the wedge filler.
-const FIRST_TILE_ITEM := 9
+# gentle fallback wedge and the wedge filler, plus slice 3's four generic corner caps (outer and
+# inner, at each authorable climb).
+#
+# It MOVED with slice 3, and the number is load-bearing rather than cosmetic: the generic block below
+# writes ids up to FIRST_TILE_ITEM - 1 and the tileset loop writes from it, so leaving this at 9
+# silently overwrote four tile items with fallbacks -- Godot's own create_item refused them, which is
+# the only reason it was loud.
+const FIRST_TILE_ITEM := 13
 
 # Share of non-opaque pixels above which a tile is reported as "mostly open" — a sprite on an
 # empty field rather than ground with a soft edge. Diagnostic only; every tile is based over
@@ -319,7 +325,8 @@ func _gen_meshlib() -> int:
 			ml.remove_item(id)
 	_add_item(ml, 0, "grass_block", _block_mesh(_mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 1, "stone_block", _block_mesh(_mat(stone_top), _mat(stone_side)))
-	_add_item(ml, 2, "dirt_ramp", _ramp_mesh(Terrain.UNITS_PER_LEVEL, _mat(grass_top), _mat(dirt_side)))
+	_add_item(ml, 2, "dirt_ramp", _form_mesh(_canonical_corners(Terrain.Form.WEDGE,
+			Terrain.UNITS_PER_LEVEL), _mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 3, "dirt_block", _block_mesh(_mat(dirt_top), _mat(dirt_side)))
 	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
 	_add_item(ml, 5, "water_block", _block_mesh(_mat(water_top), _mat(water_top)))
@@ -328,8 +335,20 @@ func _gen_meshlib() -> int:
 	# BY ID, so #427 slice 2's additions append rather than renumber. The gentle fallback wedge is the
 	# steep one's twin; the filler is an EMPTY mesh, whose whole job is to occupy the rows a tall
 	# wedge spans (see BoardMirror.RAMP_FILL_ITEM_NAME).
-	_add_item(ml, 7, BoardMirror.RAMP_ITEM_NAMES[1], _ramp_mesh(1, _mat(grass_top), _mat(dirt_side)))
+	_add_item(ml, 7, BoardMirror.RAMP_ITEM_NAMES[1], _form_mesh(
+			_canonical_corners(Terrain.Form.WEDGE, 1), _mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 8, BoardMirror.RAMP_FILL_ITEM_NAME, ArrayMesh.new())
+	# The generic OUTER and INNER caps (#427 slice 3), appended for the same reason the gentle wedge
+	# was: ids 0-8 are referenced BY ID from LookDev.tscn. These are the fallback a cell gets when its
+	# own tile has no cap -- an empty cell, a rotated alternative, multi-cell art, or a prop painted
+	# onto sloped ground.
+	var next_generic := 9
+	for climb: int in BoardMirror.RAMP_ITEM_NAMES:
+		for form: Terrain.Form in [Terrain.Form.OUTER, Terrain.Form.INNER]:
+			_add_item(ml, next_generic, "%s_%s" % [BoardMirror.RAMP_ITEM_NAMES[climb],
+					BoardMirror.form_suffix(form)],
+					_form_mesh(_canonical_corners(form, climb), _mat(grass_top), _mat(dirt_side)))
+			next_generic += 1
 
 	var bases: Dictionary[Terrain.Kind, Texture2D] = {
 		Terrain.Kind.GRASS: grass_top,
@@ -525,11 +544,20 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# ONE PER AUTHORABLE CLIMB since #427 slice 2 — the tile's art on a 45 degree wedge and on
 			# the gentle one are different geometry, and the item NAME carries the climb so the mirror
 			# picks by asking rather than by guessing which of two namespaces to look in.
+			#
+			# ONE PER SHAPE as well since #427 slice 3: a cell can be a cardinal wedge, an outer
+			# corner or an inner one, and those are different geometry off one tile's art. Three
+			# shapes and not twelve masks -- the GridMap's yaw supplies each shape's four rotations,
+			# which is what keeps the artifact at ~2100 items instead of ~4000.
 			if not stands_up:
 				for climb: int in BoardMirror.RAMP_ITEM_NAMES:
-					_add_item(ml, next_id, BoardMirror.ramp_item_name(source_id, coords, climb),
-							_ramp_mesh(climb, atlas_mat, side, top_uv, side_uv))
-					next_id += 1
+					for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER,
+							Terrain.Form.INNER]:
+						_add_item(ml, next_id,
+								BoardMirror.ramp_item_name(source_id, coords, climb, form),
+								_form_mesh(_canonical_corners(form, climb), atlas_mat, side,
+										top_uv, side_uv))
+						next_id += 1
 
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its
@@ -797,32 +825,78 @@ func _uv_half(uv: Rect2, east: bool) -> Rect2:
 # its own surface down the sides (side_mat is the composited atlas, not the one-tile dirt strip), so
 # an unpassed side_uv mapped the ENTIRE tilesheet onto every water slope. Whenever side_mat can be
 # the atlas, side_uv has to travel with it.
-func _ramp_mesh(climb: int, top_mat: Material, side_mat: Material, top_uv := Rect2(0, 0, 1, 1),
-		side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
+# The corner heights a shape's mesh is CUT in, at this climb -- Terrain's own canonical orientation,
+# which is the anchor BoardMirror._form_orientation measures every yaw from. Asked of Terrain rather
+# than written out here: the generator and the mirror must agree about which way an authored cap
+# faces, and a second table would be the place they stop agreeing.
+func _canonical_corners(form: Terrain.Form, climb: int) -> Vector4i:
+	return Terrain.corners_of_form(0, Terrain.CANONICAL_MASKS[form], climb)
+
+
+func _form_mesh(corners: Vector4i, top_mat: Material, side_mat: Material,
+		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1)) -> ArrayMesh:
 	var lo := -BoardSpace.ROW_HEIGHT * 0.5
-	var hi := lo + float(climb) * BoardSpace.ROW_HEIGHT
+	# The four corners in the CLOCKWISE order Terrain packs them (NW, NE, SE, SW), which is also the
+	# winding the top face and every side wall use -- so a wall is simply two consecutive corners.
+	var uv := [Vector2(0, 0), Vector2(1, 0), Vector2(1, 1), Vector2(0, 1)]
+	var height := [corners.x, corners.y, corners.z, corners.w]
+	var top: Array[Vector3] = []
+	for i in 4:
+		top.append(Vector3(uv[i].x - 0.5, lo + float(height[i]) * BoardSpace.ROW_HEIGHT,
+				uv[i].y - 0.5))
+
 	var mesh := ArrayMesh.new()
-	var slope_normal := Vector3(0.0, BoardSpace.CELL_SIZE, float(climb) * BoardSpace.ROW_HEIGHT).normalized()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
-	_quad(st, Vector3(-0.5, hi, -0.5), Vector3(0.5, hi, -0.5),
-			Vector3(0.5, lo, 0.5), Vector3(-0.5, lo, 0.5), slope_normal, top_uv)
+	# THE SURFACE, SPLIT THE WAY Terrain.height_at_uv SPLITS IT. Not "the same rule as" -- the same
+	# CALL: the diagonal is asked of the function the rules and the sprite placement read, so the
+	# drawn cap and the queried height cannot disagree. They differ only in the cell's interior, and
+	# only by up to a quarter of the climb, which is exactly the amount that would float a unit.
+	if corners.y == corners.w:
+		_surface_tri(st, top, uv, [0, 1, 3], top_uv)   # NW, NE, SW
+		_surface_tri(st, top, uv, [1, 2, 3], top_uv)   # NE, SE, SW
+	else:
+		_surface_tri(st, top, uv, [0, 1, 2], top_uv)   # NW, NE, SE
+		_surface_tri(st, top, uv, [0, 2, 3], top_uv)   # NW, SE, SW
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
-	_tri(st, Vector3(0.5, hi, -0.5), Vector3(0.5, lo, -0.5),
-			Vector3(0.5, lo, 0.5), Vector3.RIGHT, side_uv)                               # east
-	_tri(st, Vector3(-0.5, hi, -0.5), Vector3(-0.5, lo, 0.5),
-			Vector3(-0.5, lo, -0.5), Vector3.LEFT, side_uv)                              # west
-	_quad(st, Vector3(0.5, hi, -0.5), Vector3(-0.5, hi, -0.5),
-			Vector3(-0.5, lo, -0.5), Vector3(0.5, lo, -0.5), Vector3.FORWARD, side_uv)   # back
+	# One wall per edge, from that edge's two corner heights down to the row floor. A wall whose two
+	# corners both sit ON the floor has no area and is skipped rather than emitted degenerate.
+	for i in 4:
+		var next := (i + 1) % 4
+		if height[i] == 0 and height[next] == 0:
+			continue
+		var floor_here := Vector3(top[i].x, lo, top[i].z)
+		var floor_next := Vector3(top[next].x, lo, top[next].z)
+		# The edge's own midpoint, seen from the cell centre -- FORWARD, RIGHT, BACK, LEFT in turn,
+		# derived rather than tabled so the four walls cannot drift from the corner order above.
+		var outward := Vector3(top[i].x + top[next].x, 0.0, top[i].z + top[next].z).normalized()
+		_quad(st, top[i], floor_here, floor_next, top[next], outward, side_uv)
 	_quad(st, Vector3(-0.5, lo, 0.5), Vector3(0.5, lo, 0.5),
 			Vector3(0.5, lo, -0.5), Vector3(-0.5, lo, -0.5), Vector3.DOWN, side_uv)      # bottom
 	st.commit(mesh)
 	return mesh
+
+
+# One triangle of a cell's top surface: positions and UVs both indexed off the clockwise corner
+# order, so the art lands on the ground the same way whichever diagonal the cell is split on.
+func _surface_tri(st: SurfaceTool, top: Array[Vector3], uv: Array, order: Array,
+		uv_rect: Rect2) -> void:
+	var a: Vector3 = top[order[0]]
+	var b: Vector3 = top[order[1]]
+	var c: Vector3 = top[order[2]]
+	var normal := (b - a).cross(c - a).normalized()
+	if normal.y < 0.0:
+		normal = -normal   # a cap's surface always faces up; the winding is the quad's, not a guess
+	for i in 3:
+		var corner: int = order[i]
+		st.set_normal(normal)
+		st.set_uv(uv_rect.position + (uv[corner] as Vector2) * uv_rect.size)
+		st.add_vertex(top[corner])
 
 
 # Corners in clockwise order viewed from outside (Godot front-face winding).
@@ -837,14 +911,9 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3, norm
 		st.add_vertex(points[i])
 
 
-func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, normal: Vector3,
-		uv_rect := Rect2(0, 0, 1, 1)) -> void:
-	var uvs: Array[Vector2] = [Vector2(0.5, 0), Vector2(1, 1), Vector2(0, 1)]
-	var points: Array[Vector3] = [a, b, c]
-	for i in points.size():
-		st.set_normal(normal)
-		st.set_uv(uv_rect.position + uvs[i] * uv_rect.size)
-		st.add_vertex(points[i])
+# _tri went with #427 slice 3. It existed for the wedge's two triangular side walls, and a cap's
+# walls are now trapezoids built from two corner heights -- degenerating to that triangle on their
+# own when one of the two sits on the floor.
 
 
 # --- Solid props (#264) ------------------------------------------------------

@@ -338,13 +338,24 @@ func _tile_readout_lines(cell: Vector2i) -> Array[String]:
 	# Elevation (#257). Only spoken when it is non-default, so a flat board's card reads exactly as
 	# it did before verticality existed — the same rule the move_cost line above follows.
 	var elevation: int = board.elevation_at(cell)
-	var rise: Terrain.RampRise = board.ramp_rise_at(cell)
+	var corners: Vector4i = board.corners_at(cell)
+	var rise: Terrain.RampRise = Terrain.rise_of_corners(corners)
+	var climb: int = Terrain.climb_of_corners(corners)
 	if rise != Terrain.RampRise.NONE:
 		# BOTH ends, because a ramp's steepness is authored since #427 slice 2 — "rises east from 4"
 		# no longer says where it arrives, and which heights it joins is the whole rule.
-		lines.append("Ramp — rises %s from height %d to height %d. Enter or leave it only along that slope."
-			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation,
-				elevation + board.ramp_climb_at(cell)])
+		#
+		# The sideways clause went with #427 slice 3: a step is refused when the shared edge does not
+		# meet, which still refuses this ramp's sides but no longer refuses a slope continuing
+		# alongside it. Saying "only along that slope" would now be a card describing a rule the
+		# board does not follow.
+		lines.append("Ramp — rises %s from height %d to height %d."
+			% [Terrain.ramp_rise_display_name(rise).to_lower(), elevation, elevation + climb])
+	elif climb > 0:
+		# A corner form: RampRise cannot name it, so the card says what it IS rather than reaching
+		# for a direction that does not exist (#427 slice 3).
+		lines.append("Corner slope — height %d rising to %d across part of the cell."
+			% [elevation, elevation + climb])
 	elif elevation != 0:
 		lines.append("Height %d — reached only by a ramp that climbs to it." % elevation)
 	lines.append_array(Glossary.terrain_reactions_for(kind, held))

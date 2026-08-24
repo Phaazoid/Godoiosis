@@ -133,9 +133,18 @@ func test_a_fill_over_a_ramp_reaches_the_3d_tilted() -> void:
 	game.exit_current_mode()
 	await _settle()
 
-	# EAST so the ramp is entered along its own axis from the west, keeping it reachable.
-	painted.sort()
-	var ramp: Vector2i = painted[0]
+	# EAST, on the cell directly east of the mover, so the ONE step onto it runs west-to-east up the
+	# slope and costs one movement whatever the range's shape is.
+	#
+	# It used to take painted[0] blind, which worked only by a looseness #427 slice 3 removed: a ramp
+	# is now enterable strictly from its LOW side, because the rule compares the shared EDGE rather
+	# than the two cells' low corners. This ramp's east edge sits a level up, and the old rule let a
+	# unit step onto it from ground two units beneath. Any cell reached by some other route is
+	# therefore no longer guaranteed to stay in range once it becomes a ramp.
+	var ramp: Vector2i = mover.movement.cell + Vector2i.RIGHT
+	assert_bool(painted.has(ramp)).override_failure_message(
+			"the cell east of the mover is not even in range, so this case cannot see the wire"
+			).is_true()
 	game.board_heights.set_cell(ramp, 0, Terrain.RampRise.EAST)
 
 	game.enter_move_mode(mover)

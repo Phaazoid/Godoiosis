@@ -164,6 +164,44 @@ static func climb_of_corners(corners: Vector4i) -> int:
 	return maxi(maxi(corners.x, corners.y), maxi(corners.z, corners.w)) - low
 
 
+# The three sloped SHAPES, which is what the meshes are cut for (#427 slice 3). Twelve legal
+# non-flat masks, but only three shapes: the GridMap's own yaw supplies the four rotations of each,
+# so eight new forms cost TWO new meshes rather than eight.
+enum Form { FLAT, WEDGE, OUTER, INNER }
+
+# The one orientation of each shape the meshes are AUTHORED in, and the anchor every yaw is measured
+# from. WEDGE is the cardinal ramp rising NORTH, which is how the wedge mesh has always been drawn
+# (high edge at -Z); OUTER raises the NW corner; INNER lowers the SE one, so the two corner families
+# are complements in the same orientation and rotate together.
+const CANONICAL_MASKS: Dictionary[Form, int] = {
+	Form.FLAT: 0,
+	Form.WEDGE: CORNER_NW | CORNER_NE,
+	Form.OUTER: CORNER_NW,
+	Form.INNER: CORNER_NW | CORNER_NE | CORNER_SW
+}
+
+# Which shape a mask is — by how many corners it raises, which is the whole classification. An
+# illegal mask (a saddle) has no shape and answers FLAT; is_legal_corners is what refuses it, and a
+# renderer reaching here for one has already been handed ground that should not exist.
+static func form_of_mask(mask: int) -> Form:
+	match _bits_in(mask):
+		1:
+			return Form.OUTER
+		2:
+			return Form.WEDGE if not SADDLE_MASKS.has(mask) else Form.FLAT
+		3:
+			return Form.INNER
+	return Form.FLAT
+
+
+static func _bits_in(mask: int) -> int:
+	var count := 0
+	for bit in [CORNER_NW, CORNER_NE, CORNER_SE, CORNER_SW]:
+		if (mask & bit) != 0:
+			count += 1
+	return count
+
+
 # The cell's LOW corner — its rule height, and the base every other reading is relative to.
 static func low_of_corners(corners: Vector4i) -> int:
 	return mini(mini(corners.x, corners.y), mini(corners.z, corners.w))

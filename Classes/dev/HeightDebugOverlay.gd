@@ -20,6 +20,11 @@ const RISE_ARROWS: Dictionary[Terrain.RampRise, String] = {
 	Terrain.RampRise.WEST: "<"
 }
 
+# What an OUTER or INNER corner form draws instead of a cardinal arrow (#427 slice 3). One glyph for
+# both families rather than eight: this readout answers "how high is this cell and does it slope",
+# and which corners are up is the 3D view's job to show.
+const CORNER_GLYPH := "x"
+
 const FONT_SIZE := 8
 const FLAT_COLOR := Color(1, 1, 1, 0.35)     # height 0 is the overwhelming majority — keep it quiet
 const RAISED_COLOR := Color(1, 0.85, 0.4, 0.9)
@@ -64,16 +69,23 @@ func _draw() -> void:
 		return
 	var font := ThemeDB.fallback_font
 	for cell in grid.get_used_cells():
-		var height := heights.elevation_at(cell)
-		var rise := heights.ramp_rise_at(cell)
-		# A gentle ramp wears a half sign (#427 slice 2): steepness is authored now, and an arrow
+		var corners := heights.corners_at(cell)
+		var height := Terrain.low_of_corners(corners)
+		var rise := Terrain.rise_of_corners(corners)
+		var climb := Terrain.climb_of_corners(corners)
+		# A gentle slope wears a half sign (#427 slice 2): steepness is authored now, and an arrow
 		# alone could not tell a 26.6 degree slope from a 45 degree one.
-		var arrow := RISE_ARROWS[rise]
-		if rise != Terrain.RampRise.NONE and heights.ramp_climb_at(cell) < Terrain.UNITS_PER_LEVEL:
+		#
+		# A CORNER form has no cardinal arrow to draw (#427 slice 3), so it gets the mask's own
+		# glyph instead -- a readout that fell back to the flat arrow would say a sloped cell was
+		# level, which is the one thing a height debug view must never do.
+		var arrow: String = RISE_ARROWS[rise] if rise != Terrain.RampRise.NONE \
+				else ("" if climb == 0 else CORNER_GLYPH)
+		if climb > 0 and climb < Terrain.UNITS_PER_LEVEL:
 			arrow += "½"
 		var label := str(height) + arrow
 		var color := FLAT_COLOR
-		if rise != Terrain.RampRise.NONE:
+		if climb > 0:
 			color = RAMP_COLOR
 		elif height != 0:
 			color = RAISED_COLOR

@@ -193,8 +193,8 @@ func test_markup_lies_flat_where_there_is_no_ramp() -> void:
 
 
 func test_lie_on_takes_the_row_it_is_given_rather_than_looking_one_up() -> void:
-	# The fill path resolves the row itself (of_cell's rule) and asks only the RISE question here.
+	# The fill path resolves the row itself (of_cell's rule) and asks only the SHAPE question here.
 	# Were this to re-derive elevation, a caller's stated row would be silently overridden.
-	var flat := BoardSpace.lie_on(BoardSpace.of_cell(Vector2i(6, 6), 3), Terrain.RampRise.NONE, 0)
+	var flat := BoardSpace.lie_on(BoardSpace.of_cell(Vector2i(6, 6), 3), Vector4i.ZERO)
 	assert_float(flat.origin.y).is_equal(BoardSpace.surface_y(3))
 	assert_that(flat.basis).is_equal(Basis.IDENTITY)

@@ -146,9 +146,11 @@ static func lie_on(cell: Vector3i, corners: Vector4i) -> Transform3D:
 	# For a cardinal ramp that is its low side plus half its climb, as it always was.
 	origin.y += (Terrain.centre_height_of_corners(corners)
 			- float(Terrain.low_of_corners(corners))) * ROW_HEIGHT
-	# Rise over run, in WORLD units, so the angle is the ground's own pitch.
+	# Rise over run, in WORLD units, so the angle is the ground's own pitch. The gradient POINTS
+	# uphill by definition -- it is the direction height increases -- and the rotation axis is its
+	# cross with UP, so a sign slip here tilts the plane the wrong way rather than failing loudly.
 	var slope := gradient * (ROW_HEIGHT / CELL_SIZE)
-	var uphill := Vector3(-slope.x, 0.0, -slope.y).normalized()
+	var uphill := Vector3(slope.x, 0.0, slope.y).normalized()
 	var angle := atan(slope.length())
 	var basis := Basis(uphill.cross(Vector3.UP).normalized(), angle)
 	# Stretch along the UPHILL direction only, so the art keeps its orientation (a rotated arrow
