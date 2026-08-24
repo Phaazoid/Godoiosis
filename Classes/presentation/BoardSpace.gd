@@ -60,6 +60,14 @@ static func world_y_of_height(height: float) -> float:
 	return (height + float(Terrain.UNITS_PER_LEVEL)) * ROW_HEIGHT
 
 
+# Where a grid VERTEX sits in the world (#427 slice 4): the point four cells share, at a rule height.
+# cell_center's twin for a POINT rather than a volume, and the difference IS the half-cell offset --
+# a vertex takes none, because it is the cell's CORNER. That is the one thing easy to get wrong here
+# and the reason it is spelled once rather than at the marker that draws it.
+static func vertex_point(vertex: Vector2i, height: float) -> Vector3:
+	return Vector3(vertex.x * CELL_SIZE, world_y_of_height(height), vertex.y * CELL_SIZE)
+
+
 # Where a thing STANDING on this 2D cell sits — a unit, a flame, a crate (#273). ONE answer for
 # every such caller, because three of them eyeballing the same offset is how a flame ends up half a
 # level off the crate on its own tile. It lives here rather than on either mirror so neither has to

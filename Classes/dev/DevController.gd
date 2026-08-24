@@ -16,6 +16,11 @@ var game   # the Game coordinator (Node2D); set by game._ready()
 # Unset = the mouse derivation below, i.e. the flat 2D game is untouched.
 var cell_source: Callable
 
+# Its corner-mode twin (#427 slice 4): which grid VERTEX the pointer has hold of. A separate source
+# rather than a derivation off cell_source, because the answer changes WITHIN a cell -- a host
+# supplying only the cell has already thrown away the half of the pointer this needs.
+var vertex_source: Callable
+
 var _pending_action: PendingAction = PendingAction.NONE
 var _pending_unit: Unit = null
 var _brush_painting := false
@@ -107,7 +112,7 @@ func _handle_selector_key(event: InputEvent) -> void:
 			if overlays.selector_depth == BoardOverlays.SelectorDepth.HALF \
 			else BoardOverlays.SelectorDepth.HALF
 
-# Every key the elevation BRUSH answers to. Z / C turn its ramp rise (#260 follow-up) and X cycles
+# Every key the brush's SHAPE answers to. Z / C turn its ramp rise (#260 follow-up) and X cycles
 # how far that rise climbs (#427 slice 2) -- so it was named _handle_rise_keys until X made that
 # plainly wrong. The Q/E detent idiom applied to authoring, with the rarely-touched steepness off the
 # compass keys rather than on them. Every key here needs an ARMED brush, which is what separates them
@@ -123,7 +128,7 @@ func _handle_brush_keys(event: InputEvent) -> void:
 		return   # echo: holding the key must not spin the rise
 	if key.ctrl_pressed:
 		return   # Ctrl+Z is the board undo (#391) -- it must not ALSO turn the rise
-	var brush := _elevation_brush()
+	var brush := _shape_brush()
 	if brush == null:
 		return
 	match key.physical_keycode:
@@ -341,6 +346,23 @@ func _mouse_cell() -> Vector2i:
 		return injected
 	return game.grid.local_to_map(game.grid.to_local(game.get_global_mouse_position()))
 
+# Which grid VERTEX the pointer has hold of (#427 slice 4), _mouse_cell's corner-mode twin. The flat
+# derivation is the same one one layer down: map_to_local answers the cell's CENTRE, so the offset
+# from it lands in -0.5..0.5 and shifts into the 0..1 the rounding rule takes. Terrain.vertex_near is
+# what actually rounds, in BOTH views, so a pick and a mouse cannot disagree about which corner is
+# grabbed.
+func _mouse_vertex() -> Vector2i:
+	if vertex_source.is_valid():
+		var injected: Vector2i = vertex_source.call()   # typed local: .call() erases to Variant
+		return injected
+	# Typed out in full: game.gd has no class_name, so every game.* read is Variant and `:=` cannot
+	# infer through it.
+	var grid: TileMapLayer = game.grid
+	var local: Vector2 = grid.to_local(game.get_global_mouse_position())
+	var cell: Vector2i = grid.local_to_map(local)
+	var uv: Vector2 = (local - grid.map_to_local(cell)) / Vector2(grid.tile_set.tile_size)
+	return Terrain.vertex_near(cell, uv.x + 0.5, uv.y + 0.5)
+
 # The ghost POLLS the mouse per frame (HoverPresenter's mechanism), not the event stream:
 # while the Dev Tools OS window holds focus, the unfocused game window receives no mouse-motion
 # events until a click refocuses it -- the polled selector followed the cursor there while an
@@ -368,7 +390,11 @@ func _sync_brush_ghost() -> void:
 	# The flat view can only draw a TILE, and the answer also carries a level and a rise that 2D has
 	# no way to show -- it reads height out as numbers instead (HeightDebugOverlay). Not a second
 	# answer: one description, each renderer drawing the half of it it can show.
-	if ghost == null or ghost.source != _brush_ghost:
+	#
+	# The KIND is asked before the source, and that ordering is load-bearing (#427 slice 4): a VERTEX
+	# ghost carries no source, and so does this layer before anything has ever painted -- so a source
+	# compare alone reads null == null as a match and draws a tile at the origin.
+	if ghost == null or ghost.kind != BrushGhost.Kind.TILE or ghost.source != _brush_ghost:
 		hide_brush_ghost()
 		return
 	update_brush_ghost(ghost.cell)
@@ -390,10 +416,11 @@ func brush_ghost() -> BrushGhost:
 	if not brush_armed():
 		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	var cell := _mouse_cell()
 	if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN:
-		return BrushGhost.make(cell, brush.selected_elevation(), _brush_ghost, brush.selected_rise(),
-				brush.selected_climb())
+		return BrushGhost.make(_mouse_cell(), brush.selected_elevation(), _brush_ghost,
+				brush.selected_rise(), brush.selected_climb())
+	if brush.paint_mode == TileBrushTool.PaintMode.CORNER:
+		return BrushGhost.at_vertex(_mouse_vertex(), brush.selected_elevation())
 	return null
 
 # Half-transparent twin of the real paint: a second TileMapLayer on the grid's own tileset, so a
@@ -428,18 +455,32 @@ func _ensure_brush_ghost() -> void:
 	_brush_ghost.visible = false
 	game.grid.add_child(_brush_ghost)
 
-# The brush whose LEVEL the wheel and the Z/C keys move, or null when that is not the live tool.
-# ONE predicate, so the two cannot drift about when they apply: both would otherwise silently retune
-# a brush you cannot see -- the wheel and Z/C are unbound everywhere else in the 2D game, and a key
-# that does something invisible is worse than one that does nothing.
+# The brush whose LEVEL the wheel moves, or null when that is not the live tool. The rule it encodes
+# is "a control only moves a brush you can SEE": the wheel and the shape keys are unbound everywhere
+# else in the 2D game, and a key that does something invisible is worse than one that does nothing.
 #
-# The gate is TERRAIN since #340, where it was a mode of its own before: the level rows are visible
-# in exactly that mode, which is the "brush you can see" this predicate is really asking about.
+# The gate is TERRAIN since #340, where it was a mode of its own before, and CORNER since #427 slice
+# 4 -- the level row is visible in exactly those two, which is the "brush you can see" this predicate
+# is really asking about.
 func _elevation_brush() -> TileBrushTool:
 	if not brush_armed():
 		return null
 	var brush: TileBrushTool = game.dev_overlay.tile_brush
-	return brush if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN else null
+	if brush.paint_mode == TileBrushTool.PaintMode.TERRAIN \
+			or brush.paint_mode == TileBrushTool.PaintMode.CORNER:
+		return brush
+	return null
+
+# Its SHAPE half, for the Z/X/C keys. One predicate until #427 slice 4, because the level and the
+# ramp shape were visible in exactly the same mode; corner mode splits them, since it picks a height
+# and authors no cardinal shape at all. Turning an invisible rise picker is precisely the invisible
+# key the comment above refuses -- and the level and shape rows are now the answer to two different
+# questions, so they get two predicates rather than one that is right about neither.
+func _shape_brush() -> TileBrushTool:
+	var brush := _elevation_brush()
+	if brush == null or brush.paint_mode != TileBrushTool.PaintMode.TERRAIN:
+		return null
+	return brush
 
 # Does this wheel notch belong to the BRUSH rather than the camera? (#285) ONE answer, because a
 # 3D host has to suppress its own zoom on exactly the notches that move the level -- ask twice and
@@ -465,25 +506,30 @@ func _nudge_elevation(delta: int) -> void:
 	if brush != null:
 		brush.nudge_elevation(delta)
 
+# The mouse position is derived INSIDE each arm rather than once above the match (#427 slice 4):
+# CORNER mode addresses a vertex, not a cell, and hoisting one of the two would make the other a
+# conversion off an answer that has already dropped what it needs.
 func _paint() -> void:
-	var cell := _mouse_cell()
 	match game.dev_overlay.tile_brush.paint_mode:
 		TileBrushTool.PaintMode.ZONE:
-			_paint_zone(cell)
+			_paint_zone(_mouse_cell())
 		TileBrushTool.PaintMode.STATE:
-			_paint_state(cell)
+			_paint_state(_mouse_cell())
 		TileBrushTool.PaintMode.TERRAIN:
-			_paint_tile(cell)
+			_paint_tile(_mouse_cell())
+		TileBrushTool.PaintMode.CORNER:
+			_paint_corner(_mouse_vertex())
 
 func _erase() -> void:
-	var cell := _mouse_cell()
 	match game.dev_overlay.tile_brush.paint_mode:
 		TileBrushTool.PaintMode.ZONE:
-			_erase_zone(cell)
+			_erase_zone(_mouse_cell())
 		TileBrushTool.PaintMode.STATE:
-			_erase_state(cell)
+			_erase_state(_mouse_cell())
 		TileBrushTool.PaintMode.TERRAIN:
-			_erase_tile(cell)
+			_erase_tile(_mouse_cell())
+		TileBrushTool.PaintMode.CORNER:
+			_erase_corner(_mouse_vertex())
 
 # One click writes the tile AND where it sits (#340): the ground first, then the height, because
 # height goes with the ground (#245/#260) and a store write ahead of the tile would be writing under
@@ -509,6 +555,30 @@ func _erase_tile(cell: Vector2i) -> void:
 		game.overlay_manager.redraw_terrain_live(game.terrain_states)
 	_prune_groundless_heights()
 	game.camera_controller.refresh_bounds(game.grid)
+
+# Corner dragging (#427 slice 4). ABSOLUTE, not relative: the wheel picks a height and every point
+# the drag touches goes to it, exactly as the cell brush places a level. _paint() re-fires on every
+# motion event while the button is held, so a relative "+1" would run away down a stroke, while an
+# absolute one drag-paints idempotently -- the same doctrine verticality.md already records for the
+# cell brush, one gesture along.
+#
+# The ground gate is passed down rather than checked here: set_vertex owns which of the four cells
+# may be written, and #245 is its rule to keep.
+func _paint_corner(vertex: Vector2i) -> void:
+	var brush: TileBrushTool = game.dev_overlay.tile_brush
+	game.board_heights.set_vertex(vertex, brush.selected_elevation(), _has_ground)
+	_refresh_height_readout()
+
+# Right-click pulls the point down as far as the model will legally let it go -- the board floor
+# where nothing is in the way, and the clamp's answer where something is. That is the corner reading
+# of "take it away", and it is symmetric with paint rather than a second gesture: both write one
+# height into one point, and the clamp is what stops the floor from flattening a hill in one click.
+func _erase_corner(vertex: Vector2i) -> void:
+	game.board_heights.set_vertex(vertex, game.board_heights.lowest_elevation(), _has_ground)
+	_refresh_height_readout()
+
+func _has_ground(cell: Vector2i) -> bool:
+	return GridUtils.has_ground(game.grid, cell)
 
 func _paint_zone(cell: Vector2i) -> void:
 	var zone_name: String = game.dev_overlay.tile_brush.selected_zone_name()

@@ -174,6 +174,10 @@ const FLAME_FRAMES := 8
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
 
+# The corner tool's marker (#427 slice 4), as a fraction of a cell. Big enough to grab by eye at a
+# playing camera distance, small enough to still read as a POINT rather than as a tile.
+@export var brush_vertex_ghost_size := 0.22
+
 # WHICH props light the board was a name list here (LIT_PROPS = ["Lantern"]) until #272 slice 2.
 # Its own comment already said the quiet part — "which props glow is CONTENT" — and content keyed by
 # display name lived in a script, so it moved to the tile's own `prop_lit` column rather than gaining
@@ -279,6 +283,11 @@ var _art_images: Dictionary[int, Image] = {}
 var _drawn_regions: Dictionary[Vector3i, Rect2i] = {}
 
 var _brush_ghost: MeshInstance3D = null
+
+# The corner marker's mesh, generated rather than pulled from the meshlib: a point has no tile art to
+# preview, and it is the only thing this file draws that the library has no item for. Held so a drag
+# resizes one mesh instead of allocating one per frame.
+var _vertex_ghost_mesh: BoxMesh = null
 
 # Meshlib item name -> id, built once off the library itself. The library IS the mapping;
 # indexing it here beats storing a second table that could disagree with the artifact.
@@ -696,7 +705,13 @@ func _ensure_item_index() -> void:
 # nothing to distort. It does assume a ground block is exactly one row tall -- the generator's own
 # default, pinned by test rather than left to trust.
 func show_brush_ghost(ghost: BrushGhost) -> void:
-	if ghost == null or ghost.source == null:
+	if ghost == null:
+		hide_brush_ghost()
+		return
+	if ghost.kind == BrushGhost.Kind.VERTEX:
+		_show_vertex_ghost(ghost)
+		return
+	if ghost.source == null:
 		hide_brush_ghost()
 		return
 	_ensure_brush_ghost()
@@ -728,6 +743,26 @@ func show_brush_ghost(ghost: BrushGhost) -> void:
 		basis.y *= float(Terrain.UNITS_PER_LEVEL)
 		origin.y -= float(Terrain.UNITS_PER_LEVEL - 1) * BoardSpace.ROW_HEIGHT * 0.5
 	_brush_ghost.transform = Transform3D(basis, origin)
+	_brush_ghost.visible = true
+
+
+# The corner tool's preview (#427 slice 4): a small cube ON the point the drag has hold of, at the
+# height the click would set it to. A POINT and not a block, because that is what the gesture moves —
+# previewing a whole cell would name the wrong thing entirely, and there are four cells involved.
+#
+# It shares the ghost NODE with the tile preview rather than standing a second one up beside it: only
+# one paint mode is live at a time, so two nodes would be two things to remember to hide, which is
+# how a stale preview outlives its mode.
+func _show_vertex_ghost(ghost: BrushGhost) -> void:
+	_ensure_brush_ghost()
+	if _vertex_ghost_mesh == null:
+		_vertex_ghost_mesh = BoxMesh.new()
+	var edge := brush_vertex_ghost_size * BoardSpace.CELL_SIZE
+	_vertex_ghost_mesh.size = Vector3(edge, edge, edge)
+	if _brush_ghost.mesh != _vertex_ghost_mesh:
+		_brush_ghost.mesh = _vertex_ghost_mesh
+	_brush_ghost.transform = Transform3D(Basis.IDENTITY,
+			BoardSpace.vertex_point(ghost.vertex, float(ghost.height)))
 	_brush_ghost.visible = true
 
 

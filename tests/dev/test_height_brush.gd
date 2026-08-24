@@ -107,16 +107,20 @@ func test_the_wheel_writes_through_the_spinbox_too() -> void:
 	assert_int(int(_brush._elevation_spin.value)).is_equal(1)
 
 
-func test_the_wheel_is_inert_in_the_other_paint_modes() -> void:
-	# Both of them, not one: the level rows are hidden in each, so a notch that moved the level there
-	# would retune a brush the dev cannot see.
-	for mode in [TileBrushTool.PaintMode.ZONE, TileBrushTool.PaintMode.STATE]:
+func test_the_wheel_moves_the_level_in_exactly_the_modes_that_show_it() -> void:
+	# The rule, not a list of modes: a control only moves a brush you can SEE. Derived from the row's
+	# own visibility and swept over EVERY mode, because a hand-written "the other modes" list is a
+	# second answer that goes stale the moment a fifth mode lands -- which is exactly what #427 slice
+	# 4's CORNER mode did to the pair of cases this replaced.
+	for mode: TileBrushTool.PaintMode in TileBrushTool.PaintMode.values():
 		_brush.set_elevation(0)
 		_brush._set_paint_mode(mode)
+		var expected := 1 if _brush._elevation_row.visible else 0
 		_wheel(MOUSE_BUTTON_WHEEL_UP)
 		assert_int(_brush.selected_elevation()).override_failure_message(
-				"the wheel moved the level in mode %d, where the level row is hidden" % mode
-				).is_equal(0)
+				"mode %d shows the level row: %s, but the wheel %s it"
+				% [mode, _brush._elevation_row.visible, "moved" if expected == 0 else "ignored"]
+				).is_equal(expected)
 
 
 func test_reset_returns_the_brush_to_flat_ground() -> void:
@@ -171,14 +175,18 @@ func test_a_held_key_does_not_spin_the_rise() -> void:
 	assert_int(_brush.selected_rise()).is_equal(NONE)
 
 
-func test_the_rise_keys_are_inert_outside_the_terrain_brush() -> void:
-	for mode in [TileBrushTool.PaintMode.ZONE, TileBrushTool.PaintMode.STATE]:
+func test_the_rise_keys_turn_it_in_exactly_the_modes_that_show_it() -> void:
+	# Its own sweep beside the wheel's, and the two answers genuinely differ since #427 slice 4:
+	# CORNER mode picks a height and authors no cardinal shape, so it shows the level row and hides
+	# the rise one. One predicate answering both would be right about neither.
+	for mode: TileBrushTool.PaintMode in TileBrushTool.PaintMode.values():
 		_brush.set_rise(NONE)
 		_brush._set_paint_mode(mode)
+		var expected: Terrain.RampRise = NORTH if _brush._rise_row.visible else NONE
 		_dc._input(_key(KEY_C))
 		assert_int(_brush.selected_rise()).override_failure_message(
-				"Z/C turned the rise in mode %d, where the rise row is hidden" % mode
-				).is_equal(NONE)
+				"mode %d shows the rise row: %s, but Z/C disagreed"
+				% [mode, _brush._rise_row.visible]).is_equal(expected)
 
 
 func test_the_rise_keys_are_inert_when_the_brush_is_down() -> void:

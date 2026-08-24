@@ -15,15 +15,19 @@ class_name TileBrushTool
 # never a different QUESTION from "which tile", only a different store, and a mode per store made
 # authoring a raised cell two gestures. Raising a cell is now repainting it at a new level.
 # The rise is refused for a tile that stands up (see selected_rise): a rock has no face to tilt.
+# CORNER mode (#427 slice 4) is the second tool the reframe asked for and does NOT replace any of
+# that ("keep the version of the tool we have now, but also have a corner mode" — dev, 2026-08-23):
+# it drags the POINT four cells share to the level picker's height, welding them, where the cell
+# brush paints one whole tile and can still author a deliberate cliff between neighbours.
 
 const KIND_LABELS := ["Patrol", "Capture", "Extraction"]   # index == ZoneManager.Kind value
-const MODE_LABELS := ["Terrain", "Zones", "Tile States"]   # index == PaintMode value
+const MODE_LABELS := ["Terrain", "Zones", "Tile States", "Corners"]   # index == PaintMode value
 
 var brush_active := false
 var selected_tile := Vector2i(5, 0)
 var selected_source := 0
 var game   # injected by DevOverlay.init
-enum PaintMode { TERRAIN, ZONE, STATE }
+enum PaintMode { TERRAIN, ZONE, STATE, CORNER }
 var paint_mode := PaintMode.TERRAIN
 const NEW_ZONE_LABEL := "(new zone)"
 var _zone_name := ""
@@ -592,8 +596,14 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_clear_states_button.visible = mode == PaintMode.STATE
 	# Level and rise ride the TERRAIN brush rather than a mode of their own (#340): a tile is painted
 	# AT a height, so asking how high is part of asking which tile, not a separate question.
-	_elevation_row.visible = mode == PaintMode.TERRAIN
+	#
+	# CORNER (#427 slice 4) keeps the LEVEL row and drops the other two: the wheel picks the height a
+	# dragged point goes to, which is the same question, while a corner drag authors no tile and no
+	# cardinal shape. The climb row was never toggled at all until this landed -- it shipped with
+	# slice 2 and stayed visible in Zone and State mode, greying itself but describing nothing.
+	_elevation_row.visible = mode == PaintMode.TERRAIN or mode == PaintMode.CORNER
 	_rise_row.visible = mode == PaintMode.TERRAIN
+	_climb_row.visible = mode == PaintMode.TERRAIN
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
 
 # NB the height readout is NOT lit from here. Painting height into an invisible store is blind, so it
