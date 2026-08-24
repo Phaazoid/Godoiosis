@@ -889,3 +889,65 @@ func test_painting_a_dip_leaves_its_column_on_the_board() -> void:
 	assert_bool(tops.has(incremental)).override_failure_message(
 			"the second dip left the tops table: the incremental poll erased it").is_true()
 	assert_int(tops[incremental]).is_equal(0)
+
+
+# --- the corner tool's pointer (#427 slice 4) -----------------------------------------
+
+# A screen point aimed at a spot INSIDE a cell's top face, so the ray meets the plane _vertex_under
+# drops it onto exactly and the reading is tight rather than merely inside the right quarter.
+#
+# `_tops` holds the EXCLUSIVE top row -- column_tops_from stores cell.y + 1 -- so the top face is at
+# row * ROW_HEIGHT and NOT at surface_y(row), which takes the inclusive index. Spelled the way
+# test_camera_follow._screen_of already spells it.
+func _screen_in(cell: Vector2i, uv: Vector2) -> Vector2:
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	var row: int = tops.get(cell, BoardSpace.FLAT_TOP_ROW)
+	return _camera3d.unproject_position(Vector3(
+			(float(cell.x) + uv.x) * BoardSpace.CELL_SIZE,
+			float(row) * BoardSpace.ROW_HEIGHT,
+			(float(cell.y) + uv.y) * BoardSpace.CELL_SIZE))
+
+
+# A cell that picks back to ITSELF at both sample points. Found rather than assumed, twice over: the
+# content razor forbids naming a cell of an authored mission, and a taller column next door shadows
+# the far corner of its neighbour, so "any cell" is not good enough either.
+func _unshadowed_cell(a: Vector2, b: Vector2) -> Vector2i:
+	var tops: Dictionary[Vector2i, int] = _scene._tops
+	for cell: Vector2i in tops:
+		if BoardSpace.flat(_scene._pick(_screen_in(cell, a))) == cell \
+				and BoardSpace.flat(_scene._pick(_screen_in(cell, b))) == cell:
+			return cell
+	return GridUtils.NO_CELL
+
+
+func test_the_pointer_vertex_follows_the_cursor_across_one_cell() -> void:
+	# The corner tool's answer changes halfway ACROSS a cell, so it is computed ABOVE
+	# _update_pointer's cell early-out. Below it the marker sticks to whichever corner the cursor
+	# first entered the tile by -- #471's shape exactly: an early-out is a copy of the render key on
+	# the INPUT side, so it has to compare every input the answer depends on.
+	var near := Vector2(0.2, 0.2)
+	var far := Vector2(0.8, 0.8)
+	var cell := _unshadowed_cell(near, far)
+	assert_object(cell).override_failure_message(
+			"no cell on this board picks back to itself at both sample points"
+			).is_not_equal(GridUtils.NO_CELL)
+
+	_scene._update_pointer(_screen_in(cell, near))
+	assert_object(_scene._pointer_vertex).override_failure_message(
+			"the NW quarter of %s did not answer its own NW vertex" % cell).is_equal(cell)
+	_scene._update_pointer(_screen_in(cell, far))
+	assert_object(_scene._pointer_vertex).override_failure_message(
+			"the vertex did not move while the CELL stayed the same: it is being computed under the "
+			+ "cell early-out").is_equal(cell + Vector2i(1, 1))
+
+
+func test_the_vertex_and_the_cell_come_off_the_same_pick() -> void:
+	# Two consumers of one question. If the vertex were derived from a second ray, or from a stale
+	# frame, it could name a point that does not touch the cell the click lands on.
+	var uv := Vector2(0.8, 0.2)
+	var cell := _unshadowed_cell(uv, uv)
+	assert_object(cell).override_failure_message(
+			"no cell on this board picks back to itself").is_not_equal(GridUtils.NO_CELL)
+	_scene._update_pointer(_screen_in(cell, uv))
+	assert_object(BoardSpace.flat(_scene._pointer_cell)).is_equal(cell)
+	assert_object(_scene._pointer_vertex).is_equal(Terrain.vertex_near(cell, uv.x, uv.y))
