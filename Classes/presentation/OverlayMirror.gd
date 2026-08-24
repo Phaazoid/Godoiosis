@@ -327,9 +327,12 @@ func _split_knockback(om: OverlayManager, trails: Array[Dictionary], ghosts: Arr
 # quad IS the travel direction, i.e. straight out of that wall. That is what a coplanar marker has
 # always needed, and it is why the pointer can depth-test honestly rather than x-raying the board.
 func _append_drop(trails: Array[Dictionary], sprite: Sprite2D) -> void:
-	var rail: Texture2D = sprite.get_meta("kb_rail_texture", null)
-	if rail == null or not sprite.has_meta("kb_dir"):
+	# has_meta first, never a null default: get_meta(name, null) is a NO-OP -- Godot treats a null
+	# default exactly like no default and raises for an absent key, so the guard that exists to
+	# handle the missing-meta case was what error-spammed the log, once per cell per frame (#476).
+	if not sprite.has_meta("kb_rail_texture") or not sprite.has_meta("kb_dir"):
 		return   # the first cell of a trail: no edge was crossed to reach it
+	var rail: Texture2D = sprite.get_meta("kb_rail_texture")
 	var heights := _heights()
 	var px := sprite.global_position
 	var cell := _cell_of_px(px)

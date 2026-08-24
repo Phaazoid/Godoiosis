@@ -1221,6 +1221,19 @@ func test_the_drop_pointer_wears_the_trail_it_hangs_from() -> void:
 			"the cliff drew no drop pointer; the case is vacuous").is_true()
 
 
+# #476: a null default on get_meta is a NO-OP -- Godot treats it exactly like no default and
+# raises when the key is absent, so the guard that exists to handle the meta-less first trail
+# cell is what error-spammed the log, once per such cell per frame. The guard must ask has_meta
+# first. This case pins the ERROR CHANNEL rather than the early return -- the return happens
+# either way, so the log is the only observable difference. gdUnit4's assert_error registers an
+# OS logger with both report flags forced true, so the engine's ERR_FAIL_V_MSG lands in its
+# entries and is_success() fails on it.
+func test_the_drop_pointer_guard_stays_silent_on_the_meta_less_first_cell() -> void:
+	var sprite := Sprite2D.new()
+	await assert_error(func (): _mirror._append_drop([], sprite)).is_success()
+	sprite.free()
+
+
 # The knob has to move a preview that is ALREADY up, or it is a slider that appears to do nothing
 # until the next shove (#324's lesson, and the reason restyle_squad_markers exists next door).
 func test_tuning_the_shove_colour_moves_a_preview_already_on_the_board() -> void:
