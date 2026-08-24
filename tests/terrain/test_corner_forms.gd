@@ -248,13 +248,36 @@ func test_the_gradient_is_cardinal_for_a_ramp_and_diagonal_for_a_corner() -> voi
 			"an outer corner has no north-south slope, so its downhill is not diagonal").is_greater(0.1)
 
 
-func test_the_centre_height_is_where_the_corners_average() -> void:
-	# Where anything lying on the surface pivots. For a cardinal ramp it is the low side plus half
-	# the climb, which is exactly what lie_on has always used -- so the generalisation cannot move
-	# markup on the boards that already exist.
+func test_the_centre_height_is_the_surface_at_the_centre() -> void:
+	# Where anything lying on the surface pivots, and where anything standing on it stands. It used
+	# to be Terrain.centre_height_of_corners -- the corners' MEAN, i.e. the best-fit PLANE's centre --
+	# which agrees with the surface on every planar form and disagrees on a corner one by a quarter
+	# of the climb. That was a second answer to a question height_at_uv already owned, so it went.
 	var north := Terrain.corners_of_ramp(4, Terrain.RampRise.NORTH, LEVEL)
-	assert_float(Terrain.centre_height_of_corners(north)).override_failure_message(
+	assert_float(Terrain.height_at_uv(north, 0.5, 0.5)).override_failure_message(
 			"a ramp's centre is no longer its low side plus half its climb").is_equal_approx(
 			4.0 + float(LEVEL) * 0.5, 0.001)
-	assert_float(Terrain.centre_height_of_corners(Terrain.corners_of_form(4, 0))).is_equal_approx(
+	assert_float(Terrain.height_at_uv(Terrain.corners_of_form(4, 0), 0.5, 0.5)) \
+			.is_equal_approx(4.0, 0.001)
+	# The disagreement itself, so the reason the mean was deleted is on the record: an outer corner's
+	# surface at the centre is its LOW side, because the centre sits on the diagonal joining the two
+	# equal corners -- while the mean sits a quarter of the climb above it.
+	var outer := Terrain.corners_of_form(4, NW, LEVEL)
+	assert_float(Terrain.height_at_uv(outer, 0.5, 0.5)).override_failure_message(
+			"an outer corner's centre is on the flat diagonal, not above it").is_equal_approx(
 			4.0, 0.001)
+
+
+func test_only_flat_ground_and_the_cardinal_ramps_are_planar() -> void:
+	# What lets markup keep one flat quad for nearly every cell -- and, on the ones it cannot, know
+	# to fold instead of approximating. A corner form's four surface points are not coplanar, so no
+	# single transform describes it.
+	assert_bool(Terrain.is_planar_form(Terrain.corners_of_form(3, 0))).override_failure_message(
+			"flat ground is a plane").is_true()
+	for climb in [1, LEVEL]:
+		for mask in CARDINAL:
+			assert_bool(Terrain.is_planar_form(Terrain.corners_of_form(0, mask, climb))) \
+				.override_failure_message("cardinal ramp %d is a plane" % mask).is_true()
+		for mask in OUTER + INNER:
+			assert_bool(Terrain.is_planar_form(Terrain.corners_of_form(0, mask, climb))) \
+				.override_failure_message("corner form %d is NOT a plane" % mask).is_false()

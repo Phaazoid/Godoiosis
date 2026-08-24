@@ -347,8 +347,12 @@ func _ramp_at(cell: Vector2i, height: int) -> BoardHeights:
 	return heights
 
 
-# The quad's own facing, which is what "flat against the ground" means. basis.y is the normal; it
-# carries no art scale, so it compares clean.
+# The FLAT quad's own facing, which is what "flat against the ground" means. basis.y is the normal;
+# it carries no art scale, so it compares clean.
+#
+# It finds a PlaneMesh specifically, and that is a statement rather than a filter of convenience: on
+# a corner cell there is no single normal to read, because the fold lives in an ArrayMesh and the
+# basis is identity (#427 slice 4 follow-up). A case about a corner cell asks the mesh, below.
 func _normal_of(overlays: BoardOverlays) -> Vector3:
 	for child in overlays.get_children():
 		var quad := child as MeshInstance3D
@@ -728,3 +732,131 @@ func test_a_pooled_quad_drops_the_cut_uvs_when_it_next_draws_a_plain_texture() -
 	var material := quad.material_override as StandardMaterial3D
 	assert_that(material.uv1_scale).is_equal(Vector3.ONE)
 	assert_that(material.uv1_offset).is_equal(Vector3.ZERO)
+
+
+# --- markup on corner cells (#427 slice 4 follow-up) -----------------------------------
+
+# Every legal CORNER form -- the shapes no transform can describe. Cardinal ramps and flat ground
+# are excluded because they are planar and keep the shared quad; mask 15 by the round-trip, since
+# all four corners raised IS a flat cell.
+func _corner_forms() -> Array[Vector4i]:
+	var forms: Array[Vector4i] = []
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for mask in range(16):
+			var corners := Terrain.corners_of_form(0, mask, climb)
+			if Terrain.is_legal_corners(corners) and Terrain.corner_mask(corners) == mask \
+					and not Terrain.is_planar_form(corners):
+				forms.append(corners)
+	return forms
+
+
+func _one_marker(overlays: BoardOverlays, layer: BoardOverlays.Layer) -> MeshInstance3D:
+	var pool: Array = overlays._markers[layer]
+	return pool[0] as MeshInstance3D
+
+
+func test_a_fill_on_a_corner_cell_lands_on_the_ground_at_every_corner() -> void:
+	# The reported bug, at its seam. A tilted flat quad crossed a corner cell's surface by a quarter
+	# of the climb -- two corners above it, two below -- which is six times fill_lift, so it read as
+	# z-fighting on the tile's flat half. Every drawn corner must now sit exactly the layer's own
+	# lift above the surface, and the surface is asked of the seam rather than spelled here.
+	var cell := Vector2i(4, 6)
+	var heights := BoardHeights.new()
+	var overlays := _bare_overlays()
+	var lift := overlays.marker_lift(BoardOverlays.Layer.MOVE)
+	for corners in _corner_forms():
+		heights.set_corners(cell, corners)
+		overlays.set_cells(BoardOverlays.Layer.MOVE,
+				[BoardSpace.of_cell(cell, BoardSpace.top_row_of(Terrain.low_of_corners(corners)))],
+				heights)
+		var quad := _one_marker(overlays, BoardOverlays.Layer.MOVE)
+		var verts: PackedVector3Array = quad.mesh.surface_get_arrays(0)[Mesh.ARRAY_VERTEX]
+		for v in verts:
+			var world: Vector3 = quad.transform * v
+			assert_float(world.y - lift).override_failure_message(
+					"%s: a fill corner at %s is off the ground" % [corners, world]) \
+				.is_equal_approx(
+					BoardSpace.surface_height_at(cell, world.x, world.z, heights), 0.0005)
+
+
+func test_a_bent_quad_splits_on_the_diagonal_the_surface_query_splits_on() -> void:
+	# The cap law's shape one layer along. Two triangulations of one quad meet at all four CORNERS
+	# and differ only INSIDE, so each drawn triangle is sampled at its own CENTROID -- the place
+	# they are free to disagree. PlaneMesh's own split is fixed SW--NE, which is the wrong one for
+	# every form where NE and SW differ, and those are the forms this reddens on.
+	var overlays := _bare_overlays()
+	for corners in _corner_forms():
+		var arrays: Array = overlays._surface_mesh(corners).surface_get_arrays(0)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var uvs: PackedVector2Array = arrays[Mesh.ARRAY_TEX_UV]
+		var index: PackedInt32Array = arrays[Mesh.ARRAY_INDEX]
+		var centre := Terrain.height_at_uv(corners, 0.5, 0.5)
+		for t in range(0, index.size(), 3):
+			var uv := (uvs[index[t]] + uvs[index[t + 1]] + uvs[index[t + 2]]) / 3.0
+			var drawn := (verts[index[t]].y + verts[index[t + 1]].y + verts[index[t + 2]].y) / 3.0
+			assert_float(drawn).override_failure_message(
+					"%s: the drawn triangle at uv %s is not the surface there" % [corners, uv]) \
+				.is_equal_approx(
+					(Terrain.height_at_uv(corners, uv.x, uv.y) - centre) * BoardSpace.ROW_HEIGHT,
+					0.0005)
+
+
+func test_a_planar_cell_keeps_the_one_shared_flat_quad() -> void:
+	# The scope guard, and the reason this costs nothing on the boards that exist: flat ground and
+	# every cardinal ramp share ONE PlaneMesh, exactly as before. A fix that bent every cell would
+	# allocate a mesh per marker and still pass every case above.
+	var heights := BoardHeights.new()
+	var overlays := _bare_overlays()
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.NONE)
+	heights.set_cell(Vector2i(2, 1), 2, Terrain.RampRise.EAST)
+	overlays.set_cells(BoardOverlays.Layer.MOVE, [
+		BoardSpace.of_cell(Vector2i(1, 1), BoardSpace.top_row_of(0)),
+		BoardSpace.of_cell(Vector2i(2, 1), BoardSpace.top_row_of(2))], heights)
+	var pool: Array = overlays._markers[BoardOverlays.Layer.MOVE]
+	assert_object((pool[0] as MeshInstance3D).mesh).is_same((pool[1] as MeshInstance3D).mesh)
+	assert_bool((pool[0] as MeshInstance3D).mesh is PlaneMesh).override_failure_message(
+			"a planar cell stopped using the shared flat quad").is_true()
+
+
+func test_a_pooled_fill_reused_on_flat_ground_drops_the_fold_it_had() -> void:
+	# The marker nodes are REUSED, so the mesh is assigned unconditionally -- the twin of the tilt
+	# rule the ramp cases already pin. A mutant that only bends and never un-bends passes every case
+	# above and leaves a folded quad standing on flat ground forever.
+	var cell := Vector2i(3, 3)
+	var heights := BoardHeights.new()
+	var overlays := _bare_overlays()
+	heights.set_corners(cell, Terrain.corners_of_form(0, Terrain.CORNER_NE, 1))
+	overlays.set_cells(BoardOverlays.Layer.MOVE,
+			[BoardSpace.of_cell(cell, BoardSpace.top_row_of(0))], heights)
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.MOVE).mesh is PlaneMesh) \
+		.override_failure_message("precondition: a corner cell did not get a bent quad").is_false()
+
+	heights.set_corners(cell, Vector4i.ZERO)
+	overlays.set_cells(BoardOverlays.Layer.MOVE,
+			[BoardSpace.of_cell(cell, BoardSpace.top_row_of(0))], heights)
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.MOVE).mesh is PlaneMesh) \
+		.override_failure_message("a fill kept its fold after moving to flat ground").is_true()
+
+
+func test_a_sprite_marker_folds_through_the_corners_it_is_given() -> void:
+	# The arrows. A SPRITE gets its surface from OverlayMirror rather than from a heights lookup, so
+	# the cell's SHAPE has to travel in the marker entry -- drop that key and the arrow goes back to
+	# cutting through the ground while every fill case above still passes.
+	var corners := Terrain.corners_of_form(0, Terrain.CORNER_NE, Terrain.UNITS_PER_LEVEL)
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [{
+		"pos": Vector3(2.5, 1.0, 2.5), "texture": GridUtils.ERROR_ICON,
+		"modulate": Color.WHITE, "basis": Basis.IDENTITY, "corners": corners,
+	}])
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.PATH_ARROWS).mesh is PlaneMesh) \
+		.override_failure_message("a sprite over a corner cell drew a flat quad").is_false()
+
+
+func test_a_sprite_with_no_corners_lies_on_nothing_and_stays_flat() -> void:
+	# What an AIRBORNE marker wants -- the knockback trail hangs at its launch height and must not
+	# take the shape of whatever it happens to be flying over. Absent reads as flat, which is also
+	# what every caller written before this key existed gets.
+	var overlays := _bare_overlays()
+	overlays.set_markers(BoardOverlays.Layer.PATH_ARROWS, [
+		{"pos": Vector3(2.5, 1.0, 2.5), "texture": GridUtils.ERROR_ICON, "modulate": Color.WHITE}])
+	assert_bool(_one_marker(overlays, BoardOverlays.Layer.PATH_ARROWS).mesh is PlaneMesh).is_true()

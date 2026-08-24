@@ -384,10 +384,19 @@ static func gradient_of_corners(corners: Vector4i) -> Vector2:
 	return Vector2(east, south)
 
 
-# The height at the cell's CENTRE — where anything lying on the surface pivots. The corners' mean,
-# which for a cardinal ramp is its low side plus half its climb, exactly as before.
-static func centre_height_of_corners(corners: Vector4i) -> float:
-	return float(corners.x + corners.y + corners.z + corners.w) * 0.25
+# Is this cell's surface a PLANE? Flat ground and the four cardinal ramps are; an outer or inner
+# corner is not, because its four surface points are not coplanar (#427 slice 4 follow-up).
+#
+# It matters wherever a single Transform3D is asked to describe the surface: an affine transform maps
+# a plane to a plane, so on a corner form the best-fit plane CROSSES the ground — measured at a
+# quarter of the climb at every corner, alternating sign. Whoever asks has to carry the fold some
+# other way, and BoardOverlays carries it in the MESH.
+#
+# Composed from the two answers that already exist rather than testing the mask itself: a cardinal
+# rise IS the planar non-flat case, and re-deriving that from CORNER bits would be a second spelling
+# of RISE_MASKS.
+static func is_planar_form(corners: Vector4i) -> bool:
+	return climb_of_corners(corners) == 0 or rise_of_corners(corners) != RampRise.NONE
 
 
 # Which cardinal ramp these corners describe, or NONE. STILL THE AUTHORING vocabulary — the brush
