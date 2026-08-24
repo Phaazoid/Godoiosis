@@ -173,6 +173,39 @@ func test_a_ramp_refuses_sideways_EXIT() -> void:
 	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(1, 2), unit, _context(board, unit))).is_false()
 
 
+func test_walking_ACROSS_a_continuous_slope_is_legal() -> void:
+	# The dev's ruling, 2026-08-23: "let's allow it. I'll feel test that afterwards."
+	#
+	# #427 slice 3 deleted Terrain.is_on_rise_axis and let the shared EDGE answer instead. The two
+	# cases above keep passing under that rule -- both put a ramp beside FLAT ground, whose edges
+	# genuinely do not meet -- so they stopped being guard-specific and started riding the general
+	# comparison. Two paths converging on one assertion is how a wrong replacement ships green, and
+	# this is the case that can actually see the change: two ramps rising the SAME way, side by side,
+	# whose surfaces meet exactly along the edge between them.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.NORTH)
+	heights.set_cell(Vector2i(2, 1), 0, Terrain.RampRise.NORTH)
+	var unit := _spawn(board, Vector2i(0, 0))
+
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+		.override_failure_message("two ramps rising the same way do not connect across the slope "
+			+ "they share, so is_on_rise_axis is still refusing it somewhere").is_true()
+
+
+func test_two_slopes_that_do_NOT_meet_still_refuse() -> void:
+	# The other half, or the case above would pass under "any two ramps connect". These rise the same
+	# way but sit a level apart, so the edge between them is a cliff whatever its two ends are doing.
+	var board := _board()
+	var heights := _heights(board)
+	heights.set_cell(Vector2i(1, 1), 0, Terrain.RampRise.NORTH)
+	heights.set_cell(Vector2i(2, 1), Terrain.UNITS_PER_LEVEL, Terrain.RampRise.NORTH)
+	var unit := _spawn(board, Vector2i(0, 0))
+
+	assert_bool(RulesService.can_step(Vector2i(1, 1), Vector2i(2, 1), unit, _context(board, unit))) \
+		.override_failure_message("two slopes a level apart connected sideways").is_false()
+
+
 # --- staircases and routing ---
 
 func test_a_staircase_of_ramps_chains() -> void:

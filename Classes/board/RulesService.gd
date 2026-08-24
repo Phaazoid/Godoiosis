@@ -43,46 +43,35 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 static func can_step(from: Vector2i, to: Vector2i, unit: Unit, board: BoardContext) -> bool:
 	if not can_traverse(to, unit, board):
 		return false
-
-	var step := to - from
-	var from_rise := board.ramp_rise_at(from)
-	var to_rise := board.ramp_rise_at(to)
-
-	# No sideways entry (dev ruling): a ramp connects exactly its high and low sides, so any step
-	# touching one must run along its slope. Checked for BOTH cells -- leaving a ramp sideways and
-	# entering one sideways are separate clauses, and a test covering only one is blind to the other.
-	# A MOVEMENT rule only: melee's STEP gate below shares the height core but not these guards --
-	# swinging past a ramp's side is not walking onto it.
-	if from_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(from_rise, step):
-		return false
-	if to_rise != Terrain.RampRise.NONE and not Terrain.is_on_rise_axis(to_rise, step):
-		return false
-
 	return height_step_ok(from, to, board)
 
 # The height core of the edge question, extracted (#258) so melee's STEP rule ("same step, or a
-# facing half step" -- dev, 2026-08-20) and movement answer it identically: equal heights connect,
-# and a height CHANGE connects only through a ramp that climbs exactly that much along the step.
+# facing half step" -- dev, 2026-08-20) and movement answer it identically.
 #
-# ASK THE RAMP, never a constant (#427 slice 2). Ramps come in two steepnesses now, so the old
-# "abs(delta) != UNITS_PER_LEVEL" clause is gone rather than widened -- the ramp's own climb is what
-# a step may cross, which caps the rule at whatever the store can hold and needs no second number.
+# ASK THE EDGE (#427 slice 3): two cells connect when the edge they share has the same two corner
+# heights read from either side. That single comparison replaces a height DELTA measured against a
+# ramp's climb, and it is not a widening -- it is the same question asked where it actually lives.
+# Everything the old clauses said falls out of it:
 #
-# The dev's "half height still blocks movement and melee range" (2026-08-23) survives with no clause
-# of its own, exactly as it arrived in slice 1: flat ground climbs 0, so a sheer 1-unit edge is
-# refused because 0 != 1 -- and a 45 degree ramp still refuses a half-level edge for the same reason.
+# - flat to flat at one height: both edges (h, h). Connects.
+# - a sheer edge of ANY size, half a level included ("half height still blocks movement and melee
+#   range" -- dev, 2026-08-23): (h, h) against (h+n, h+n). Refused, with no clause of its own.
+# - a ramp to the platform it climbs to: its high edge is (h+climb, h+climb) and so is the
+#   platform's. Connects at whatever the ramp itself climbs, so the 45 and 26.6 degree slopes need
+#   no separate arithmetic.
+# - NO SIDEWAYS ENTRY, which used to be two guards in can_step: a north-rising ramp's east edge is
+#   (high, low) against a flat neighbour's (low, low). Refused by the same comparison, so
+#   Terrain.is_on_rise_axis is DELETED rather than relaxed.
+#
+# And one thing it says that the guards did not, which is a dev ruling rather than a side effect
+# ("let's allow it. I'll feel test that afterwards" -- 2026-08-23): two ADJACENT SLOPES whose
+# surfaces genuinely meet along the edge between them connect, so a unit may walk ACROSS a
+# continuous slope rather than only up and down it. tests/rules/test_can_step.gd pins that
+# explicitly, because both older sideways cases put a ramp beside FLAT ground and keep passing here.
 static func height_step_ok(from: Vector2i, to: Vector2i, board: BoardContext) -> bool:
 	var step := to - from
-	var delta := board.elevation_at(to) - board.elevation_at(from)
-	if delta == 0:
-		return true
-	if delta > 0:
-		# climbing off the ramp we stand on
-		return Terrain.rise_direction(board.ramp_rise_at(from)) == step \
-			and board.ramp_climb_at(from) == delta
-	# descending onto a ramp, against its rise
-	return Terrain.rise_direction(board.ramp_rise_at(to)) == -step \
-		and board.ramp_climb_at(to) == -delta
+	return Terrain.edge_of_corners(board.corners_at(from), step) \
+		== Terrain.edge_of_corners(board.corners_at(to), -step)
 
 static func movement_cost(from: Vector2i, cell: Vector2i, unit: Unit, board: BoardContext) -> int:
 	var data := board.grid.get_cell_tile_data(cell)

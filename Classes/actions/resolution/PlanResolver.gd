@@ -401,44 +401,60 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 		landing.removed = true   # halted over (or blown exactly onto) the hole -- gone
 		return landing
 
+	var corners := board.corners_at(pos)
 	var drop := flight_height - board.elevation_at(pos)
-	# The doc's original tumble entry: a connected descending ramp -- its high edge meets the
-	# flight level, so sliding on is not a fall ("slopes never deal fall damage"). The high edge
-	# sits the ramp's OWN climb above its base (#427 slice 2), so a gentle slope catches a flight
-	# one unit up and a 45 degree one catches a flight two up.
-	var rise := board.ramp_rise_at(pos)
-	if rise != Terrain.RampRise.NONE and drop == board.ramp_climb_at(pos) \
-			and Terrain.rise_direction(rise) == -dir:
+	# The doc's original tumble entry: a connected descending slope -- the edge the flight ARRIVES
+	# over meets the flight level, so sliding on is not a fall ("slopes never deal fall damage").
+	#
+	# ONE edge comparison since #427 slice 3, where it was three clauses (a rise, its climb, and the
+	# direction it faced). The entry edge sitting level with the flight is exactly what those three
+	# said together for a cardinal ramp, and it keeps meaning the same thing for a form they could
+	# not describe. A corner slope whose arrival edge is level catches the flight; one that arrives
+	# at a sloped edge does not, which is the honest answer rather than a special case.
+	if Terrain.edge_of_corners(corners, -dir) == Vector2i(flight_height, flight_height):
 		drop = 0
 	landing.fall_units = drop
 	# "When a unit lands, if they land on a slope, they tumble down that too" (dev, 2026-08-20).
-	if rise != Terrain.RampRise.NONE:
-		_tumble(landing, board)
+	if Terrain.climb_of_corners(corners) > 0:
+		_tumble(landing, board, dir)
 	return landing
 
 
-# The tumble (#259): from a ramp, slide the slope's OWN downhill -- continuing down ramps of the
-# same rise -- until the first walkable, unoccupied cell level with the current ramp catches it.
+# The tumble (#259): from a slope, slide its downhill -- continuing down slopes that keep descending
+# the same way -- until the first walkable, unoccupied cell level with the current one catches it.
 # A wall, a rise, an occupied cell, water or a hole stops it where it stands: no launch, no fall
-# damage on those. A sheer DROP below the ramp's base (the deferred tumble-then-plummet) does NOT
+# damage on those. A sheer DROP below the slope's base (the deferred tumble-then-plummet) does NOT
 # stop it any more: the unit falls the remaining height -- fall damage, folded into fall_units --
-# and keeps whatever descent waits below (another ramp tumbles again, a flat cell catches it).
-# Terminates by construction -- every ramp continuation strictly descends.
-static func _tumble(landing: _Landing, board: BoardContext) -> void:
+# and keeps whatever descent waits below (another slope tumbles again, a flat cell catches it).
+# Terminates by construction -- every continuation strictly descends.
+#
+# WHICH WAY IS DOWNHILL is a cardinal question and a corner form's answer is diagonal, which the step
+# vocabulary cannot express. The dev's ruling (2026-08-23): "For now, keep the tumble in the
+# direction the unit was shoved. We can eyeball it from there." So a cardinal ramp keeps sliding down
+# its OWN slope exactly as before, and a form that has no cardinal downhill carries on the way the
+# shove was already going -- provisional, and the one thing in this slice meant to be judged by eye.
+static func _tumble(landing: _Landing, board: BoardContext, shove_dir: Vector2i) -> void:
 	var cell := landing.cell
 	while true:
 		var rise := board.ramp_rise_at(cell)
-		var down := -Terrain.rise_direction(rise)
+		var down := shove_dir if rise == Terrain.RampRise.NONE else -Terrain.rise_direction(rise)
 		var next: Vector2i = cell + down
 		if board.unit_at_cell(next) != null or board.terrain_kind_at(next) == Terrain.Kind.VOID \
 				or not board.is_walkable(next):
 			break
 		var here_elev := board.elevation_at(cell)
 		var next_elev := board.elevation_at(next)
-		# Another ramp continuing down the same slope: continuity is its HIGH edge meeting this
-		# cell's base (#427 slice 2), so a chain of gentle slopes flows exactly like a chain of
+		# Another CARDINAL ramp continuing down the same slope: continuity is its HIGH edge meeting
+		# this cell's base (#427 slice 2), so a chain of gentle slopes flows exactly like a chain of
 		# steep ones and a mixed chain still only joins where the surfaces actually touch.
-		if board.ramp_rise_at(next) == rise and next_elev + board.ramp_climb_at(next) == here_elev:
+		#
+		# `rise != NONE` is what keeps this branch from swallowing the others (#427 slice 3), and it
+		# is load-bearing rather than tidy: a corner form reads NONE, and without the guard a FLAT
+		# next cell at the same height would satisfy "same rise, climbs match" and chain forever
+		# instead of catching. The loop terminates because every continuation strictly descends, and
+		# that is only true while a continuation requires a climb.
+		if rise != Terrain.RampRise.NONE and board.ramp_rise_at(next) == rise \
+				and next_elev + board.ramp_climb_at(next) == here_elev:
 			cell = next
 			landing.path.append(cell)
 			continue
@@ -452,8 +468,10 @@ static func _tumble(landing: _Landing, board: BoardContext) -> void:
 			landing.fall_units += here_elev - next_elev
 			cell = next
 			landing.path.append(cell)
-			if board.ramp_rise_at(next) != Terrain.RampRise.NONE:
-				continue   # lands on another slope -- tumble down that too
+			# ANY slope tumbles again, corner forms included -- "if they land on a slope, they tumble
+			# down that too" is about the ground being sloped, not about it having a cardinal name.
+			if Terrain.climb_of_corners(board.corners_at(next)) > 0:
+				continue
 			break   # lands on a flat cell at the lower level -- the landing catches it
 		break   # a rise: stop where it stands
 	landing.cell = cell

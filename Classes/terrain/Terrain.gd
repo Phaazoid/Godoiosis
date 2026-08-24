@@ -77,16 +77,14 @@ const RISE_DIRECTIONS: Dictionary[RampRise, Vector2i] = {
 	RampRise.WEST: Vector2i.LEFT
 }
 
-# The step direction that climbs this ramp. ZERO for NONE, which is what makes is_on_rise_axis
-# below refuse every direction on a flat cell without a special case.
+# The step direction that climbs this ramp. ZERO for NONE.
 static func rise_direction(rise: RampRise) -> Vector2i:
 	return RISE_DIRECTIONS[rise]
 
-# Does a step run along this ramp's slope (either up it or down it)? The "no sideways entry" rule,
-# in one place — a ramp may only be entered or left along the axis it rises on.
-static func is_on_rise_axis(rise: RampRise, step: Vector2i) -> bool:
-	var dir := rise_direction(rise)
-	return dir != Vector2i.ZERO and (step == dir or step == -dir)
+# is_on_rise_axis went with #427 slice 3 — DELETED, not relaxed. It was the "no sideways entry" rule
+# and its only callers were can_step's two guards; comparing the shared EDGE answers every case it
+# answered, plus the one the dev then ruled on (two adjacent slopes that genuinely meet DO connect).
+# A rule that falls out of the geometry does not need a clause standing beside it.
 
 # --- Corner heights (#427) ---------------------------------------------------------------------
 # Ground geometry is FOUR CORNER HEIGHTS per cell, stored in BoardHeights; RampRise above is the
