@@ -664,18 +664,28 @@ per-stack idiom. `OverlayManager.show_attack_reach(union, blocked)` is the one d
 > greys with the direction on a tile that stands up, for the same reason. The amount deliberately
 > survives *Reset to flat*: it is a steepness preference, not a piece of the shape.
 
-> **THE 3D SELECTOR READS A LEVEL DEEP, AND THAT IS ITS OWN SETTING (dev, 2026-08-23).** *"when I
-> hover a block currently, my voxel selector hovers a half height too high. I'd like it to cover 2 of
-> our current half step levels, with a button to switch it instead to only highlighting a single of
-> our current levels."* The re-metric above did it: a ground block mesh became ONE ROW, and
-> `show_brush_ghost` draws one of them at the column's top row, so the preview covered the upper half
-> of the level-deep slab a paint makes. A **Selector Depth** picker (Level / Half) and **V** now say
-> how far down it reaches; both settings sit their top face on the surface the click authors, so the
-> knob deepens the selector and never moves it. Its own control rather than a passenger on Rise
-> Amount (dev call): riding the climb would leave no way to get a one-unit selector while painting
-> flat ground, which is most of the time it matters. A ramp ignores it — a wedge already draws the
-> volume it authors. It survives *Reset to flat* more plainly than the steepness does: it is not part
-> of the shape at all, only of how the preview draws one.
+> **THE RE-METRIC BROKE EVERY BOX THAT DRAWS A CELL VOLUME (dev, 2026-08-23, with screenshots).**
+> *"when I hover a block currently, my voxel selector hovers a half height too high ... hovering above
+> a block, and not going to the floor."* **The hover selector** (`BoardOverlays`, `Kind.BRACKET`) is
+> the one he reported. Its mesh was a **cube** — `half = 0.5 * CELL_SIZE * bracket_scale` on all three
+> axes — centred on `cell_center`, which said the right thing only while a mirror cell *was* a cube.
+> A level-tall box centred on a half-level row hangs a **quarter of a level** high at both ends. Now:
+> X and Z span a cell, **Y spans however many ROWS the selector is set to**, and the box's **top face
+> sits on the cell's surface** with its depth reaching down from there.
+>
+> A **Selector depth** picker (Level / Half) on the Game tab plus **V** say how far down. It is a
+> `GameKnobs` row rather than a Tile Brush one because the selector is up in **ordinary play**, and V
+> is a top-level dev key for the same reason — needing an armed brush would leave the thing visible
+> and the key that moves it dead. Turning the knob **rebuilds what is already standing**: the hover
+> layer only repaints when the pointer *cell* changes, so a still mouse would otherwise see nothing.
+>
+> **The brush GHOST had the same disease** — one block mesh is one row, so it previewed the top half
+> of the slab a paint makes. Fixed the same way and deliberately **without** a knob: how deep a
+> preview draws is the slab the paint makes, and a WYSIWYG preview with a setting is one that can be
+> wrong on purpose. One question, one knob, and it belongs to the selector.
+>
+> Both boxes are **scaled/sized, never stacked**: each wears a flat translucent material, so two
+> boxes meeting would show their shared faces as a bright band across the middle.
 
 > **A DEV PAGE OWNS ITS OWN INPUT (dev, 2026-08-23).** *"I should only be able to spawn units while
 > the unit spawning window is up, yet when I press space in the brush mode, it spawns a unit."*
@@ -810,8 +820,8 @@ feedback and one binding. Four rulings, all the dev's:
   level the click would produce; the **wedge at `level + 1`** when a rise is set, mirroring
   `_write_column`'s own rule. Raising a cell keeps its texture, so the preview resolves its mesh
   off the real grid via the same `item_for_cell` call the board uses. *Since #427 slice 2 a "block"
-  is one ROW, so the flat preview spans the brush's **Selector Depth** in rows — a LEVEL by default,
-  because that is the slab a paint makes — reaching DOWN from the surface the click authors. It is
+  is one ROW, so the flat preview spans a LEVEL — the slab a paint makes — reaching DOWN from the
+  surface the click authors. Not a setting; the hover selector owns the only depth knob. It is
   SCALED rather than stacked: the ghost wears a flat translucent `material_override`, so two boxes
   meeting would show their shared faces as a bright band across the middle of the selector.*
 - **A groundless cell shows NO ghost** — *until #340 reversed it.* The elevation brush could not

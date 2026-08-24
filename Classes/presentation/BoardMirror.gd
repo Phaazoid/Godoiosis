@@ -636,16 +636,18 @@ func _ensure_item_index() -> void:
 # which is the same function sync() runs against the real grid — so the preview physically
 # cannot disagree with the paint that follows it; only the material differs.
 #
-# The flat preview spans the ghost's own DEPTH in rows, reaching DOWN from the surface the click
-# authors (#427 slice 2 follow-up, dev: "my voxel selector hovers a half height too high"). One block
-# mesh is one ROW since that slice made a row a height UNIT, so drawing a single one covered the top
-# half of the level-deep slab a paint actually makes — the top face was right and the bottom was half
-# a level up, which is exactly what that reads as.
+# The flat preview spans a LEVEL, reaching DOWN from the surface the click authors (#427 slice 2
+# follow-up). One block mesh is one ROW since that slice made a row a height UNIT, so drawing a
+# single one covered the top half of the level-deep slab a paint actually makes — the top face right,
+# the bottom half a level up. Not a setting: how deep a PREVIEW draws is the slab the paint makes,
+# and a WYSIWYG preview with a knob is a preview that can be wrong on purpose. The knob the dev asked
+# for answers for the hover SELECTOR instead (BoardOverlays.selector_depth), which is the object he
+# actually reported and which is up in normal play.
 #
 # SCALED rather than stacked, deliberately. Stacking the column's real rows is the WYSIWYG-honest
 # move everywhere else in this file, but the ghost wears a flat translucent material_override: two
-# boxes meeting would show their shared faces as a bright band across the middle of the selector.
-# One box is what a selector should look like, and the override erases the texture so the stretch has
+# boxes meeting would show their shared faces as a bright band across the middle of the block.
+# One box is what a preview should look like, and the override erases the texture so the stretch has
 # nothing to distort. It does assume a ground block is exactly one row tall -- the generator's own
 # default, pinned by test rather than left to trust.
 func show_brush_ghost(ghost: BrushGhost) -> void:
@@ -670,11 +672,12 @@ func show_brush_ghost(ghost: BrushGhost) -> void:
 		basis = board.get_basis_with_orthogonal_index(_ramp_orientation(ghost.rise)) * basis
 	var at := BoardSpace.of_cell(ghost.cell, row)
 	var origin := BoardSpace.cell_center(at) + item_xform.origin
-	# A wedge keeps its own extent; only the flat block reads the depth. Both ends of the knob share
-	# the TOP face, so the row above is what stays put and the box grows downward from it.
-	if not ramping and ghost.depth > 1:
-		basis.y *= float(ghost.depth)
-		origin.y -= float(ghost.depth - 1) * BoardSpace.ROW_HEIGHT * 0.5
+	# A wedge keeps its own extent -- it already draws exactly the volume it authors, so stretching it
+	# would preview a slope that is not the one being painted. The flat block grows DOWNWARD from its
+	# top face, which is the surface the click authors and the one thing that must not move.
+	if not ramping:
+		basis.y *= float(Terrain.UNITS_PER_LEVEL)
+		origin.y -= float(Terrain.UNITS_PER_LEVEL - 1) * BoardSpace.ROW_HEIGHT * 0.5
 	_brush_ghost.transform = Transform3D(basis, origin)
 	_brush_ghost.visible = true
 

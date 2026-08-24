@@ -74,6 +74,12 @@ func _class_knob(key: String, value: Variant) -> Dictionary:
 
 # A different, legal value for whatever kind this knob holds.
 func _nudged(knob: Dictionary, value: Variant) -> Variant:
+	# An `options` knob is an enum INDEX and carries no min/max to walk, so it has to be answered
+	# before the numeric fall-through reaches for them -- the same branch DevWidgets.add_knob_row
+	# takes first, and for the same reason.
+	if knob.has("options"):
+		var options: Array = knob["options"]
+		return (int(value) + 1) % options.size()
 	match typeof(value):
 		TYPE_BOOL:
 			return not value
@@ -116,6 +122,51 @@ func _read_file(path: String) -> String:
 
 func test_battle3d_hands_the_game_tab_its_host() -> void:
 	assert_bool(_game.has_host()).is_true()
+
+
+# --- V cycles the hover selector's depth (#427 slice 2 follow-up) --------------------
+#
+# Here rather than in test_height_brush.gd because the key needs the REAL 3D scene: it resolves the
+# overlays through GameKnobs.SELECTOR_DEPTH, the same entry the panel row edits, so a case driving a
+# bare brush would prove nothing about the thing it moves.
+
+func _key(code: Key) -> InputEventKey:
+	var event := InputEventKey.new()
+	event.physical_keycode = code
+	event.pressed = true
+	return event
+
+
+func _overlays_3d() -> BoardOverlays:
+	return _scene.get_node("BoardOverlays") as BoardOverlays
+
+
+func test_v_cycles_the_selector_depth_with_dev_mode_OFF() -> void:
+	# The gate that makes it a play key. The selector is up in ordinary play, so a key requiring an
+	# armed terrain brush -- or dev mode at all -- would leave the thing visible and the key dead.
+	var game: Node2D = _scene.get_node("Main/GameContainer/GameView/Game")
+	var dev_on: bool = game.dev_mode_enabled
+	assert_bool(dev_on).override_failure_message(
+			"the case is not testing what it claims: dev mode is already on").is_false()
+	var before: BoardOverlays.SelectorDepth = _overlays_3d().selector_depth
+
+	game.dev_controller.handle_dev_key(_key(KEY_V))
+
+	assert_int(_overlays_3d().selector_depth).override_failure_message(
+			"V did not reach the selector outside dev mode").is_not_equal(before)
+
+
+func test_v_reaches_the_selector_from_the_dev_tools_window_too() -> void:
+	# The two-windows rule, which has bitten five times: a key reaches only the FOCUSED OS window, so
+	# a binding handled in the game subtree alone is dead exactly where authoring leaves you. This
+	# drives the overlay's own arm, so the FORWARD is asserted rather than assumed.
+	var dev_overlay := _scene.get_node("Main/DevOverlay") as DevOverlay
+	var before: BoardOverlays.SelectorDepth = _overlays_3d().selector_depth
+
+	dev_overlay._input(_key(KEY_V))
+
+	assert_int(_overlays_3d().selector_depth).override_failure_message(
+			"V pressed in the dev-tools window never reached the selector").is_not_equal(before)
 
 
 func test_every_knob_resolves_against_the_real_scene() -> void:

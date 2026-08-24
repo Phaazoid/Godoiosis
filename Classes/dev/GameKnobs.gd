@@ -29,8 +29,17 @@ class_name GameKnobs
 # authored and READ. Anything the game writes back per frame gives a slider that moves and silently
 # reverts. tests/dev/test_game_knobs.gd pins that by writing, waiting two frames and reading back.
 
+# Named because it has a SECOND reader: the V key (DevController._handle_selector_key) toggles the
+# same property, and resolving it through this one entry is what stops the key and the panel row
+# holding two spellings of where the selector's depth lives. Everything else in the table below is
+# addressed only by the panel, so only this one needs a name.
+const SELECTOR_DEPTH := {"group": "Board markup", "node": "BoardOverlays", "prop": "selector_depth",
+	"label": "Selector depth", "options": ["Level (whole block)", "Half (one unit)"],
+	"tip": "How much of a column the hover selector encloses. Level is one whole block, which is what it marked before a GridMap row became a half-level height unit; Half is one unit, for reading a half step apart from the level it sits in. Its top face sits on the cell's surface either way, so this only changes how far DOWN it reaches. V cycles it in play."}
+
 # node = path relative to the host ("." = the host); prop = colon-joined property path.
 # A float knob carries min/max/step; bool and Color infer their widget from the live value.
+# A knob carrying `options` renders as a picker over an enum property instead (LookKnobs' tonemap).
 const KNOBS: Array[Dictionary] = [
 	# --- Board markup ---
 	# fill_lift and lift_step raise every ground marker together, arrows included. A lift the
@@ -45,6 +54,7 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How chunky the hover bracket's arms are. Thin reads precise, thick reads legible at a distance."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "bracket_scale", "label": "Bracket scale", "min": 0.9, "max": 1.3, "step": 0.005,
 		"tip": "Size of the whole hover bracket relative to one cell. Just above 1 makes it sit proud of the tile edge so it is not swallowed by the tile art."},
+	SELECTOR_DEPTH,
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "invalid_bracket_color", "label": "Invalid bracket tint",
 		"tip": "What the hover bracket turns over a cell the 2D game calls invalid -- unwalkable, occupied, or a paint the tile brush would refuse. It mirrors the 2D cursor's own verdict rather than deciding for itself."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_lift", "label": "Icon height", "min": 0.0, "max": 3.0, "step": 0.01,

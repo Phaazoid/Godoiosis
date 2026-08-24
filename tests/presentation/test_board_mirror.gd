@@ -2114,18 +2114,19 @@ func test_a_rise_previews_the_wedge_one_row_above_its_own() -> void:
 			BoardSpace.surface_y(BoardSpace.top_row_of(2)), 0.01)
 
 
-# ---- how DEEP the selector reads (#427 slice 2 follow-up) ----
+# ---- the ghost draws the BLOCK a paint makes (#427 slice 2 follow-up) ----
 #
-# The dev, hovering a block after slice 2: "my voxel selector hovers a half height too high. I'd like
-# it to cover 2 of our current half step levels, with a button to switch it instead to only
-# highlighting a single of our current levels." A ground block mesh became ONE ROW that slice -- half
-# a level -- and the ghost draws one of them at the column's TOP row, so it covered the upper half of
-# the level-deep slab a paint makes. The top face was right the whole time; the bottom was half a
-# level up, which is what that reads as.
+# A ground block mesh became ONE ROW in slice 2 -- half a level -- and the ghost draws one of them at
+# the column's TOP row, so it previewed the upper half of the level-deep slab a paint actually makes.
+# The top face was right the whole time; the bottom was half a level up.
+#
+# Deliberately NOT a setting: how deep a PREVIEW draws is the slab the paint makes, and a WYSIWYG
+# preview with a knob is one that can be wrong on purpose. The knob the dev asked for belongs to the
+# hover SELECTOR (tests/presentation/test_board_overlays.gd), which is the object he reported.
 #
 # Measured in ROWS, never in world Y, so a re-metric moves the code and not the expectation.
 
-func test_the_selector_covers_the_whole_block_a_paint_makes() -> void:
+func test_the_ghost_covers_the_whole_block_a_paint_makes() -> void:
 	_scene.load_mission(PROLOG)
 	await _settle()
 	var mirror := _scene._board_mirror as BoardMirror
@@ -2134,72 +2135,48 @@ func test_the_selector_covers_the_whole_block_a_paint_makes() -> void:
 	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
 
 	assert_float(_ghost_extent().size.y).override_failure_message(
-			"the selector spans %s, not the LEVEL a paint makes -- one block mesh is one ROW since "
+			"the ghost spans %s, not the LEVEL a paint makes -- one block mesh is one ROW since "
 			% _ghost_extent().size.y + "slice 2, so drawing a single one covers half the slab"
 			).is_equal_approx(Terrain.UNITS_PER_LEVEL * BoardSpace.ROW_HEIGHT, 0.01)
 
 
-func test_the_selector_narrows_to_one_unit_when_the_knob_says_so() -> void:
-	# The other half of the ask: the amount a wheel notch moves, for authoring half steps. This is
-	# also exactly what shipped before the fix -- the bug was that it was the only setting there was.
+func test_the_ghost_sits_on_the_surface_the_click_authors() -> void:
+	# Size is half the claim: a box of the right height in the wrong place previews a paint that
+	# lands somewhere else. The top face is the surface about to be authored, and it is what must
+	# not move -- the block grows DOWNWARD from it.
 	_scene.load_mission(PROLOG)
 	await _settle()
 	var mirror := _scene._board_mirror as BoardMirror
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-
-	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.NONE,
-			Terrain.UNITS_PER_LEVEL, 1))
-
-	assert_float(_ghost_extent().size.y).override_failure_message(
-			"the knob did not narrow the selector to one unit").is_equal_approx(
-			BoardSpace.ROW_HEIGHT, 0.01)
-
-
-func test_both_selector_depths_sit_on_the_surface_the_click_authors() -> void:
-	# THE case the bug owns. The depth is a display preference, so it may only change how far DOWN
-	# the selector reaches -- both settings put their top face on the surface about to be authored.
-	# A box that grew UPWARD would pass both extent cases above and still hover a half height too
-	# high, which is the report this fix answers.
-	_scene.load_mission(PROLOG)
-	await _settle()
-	var mirror := _scene._board_mirror as BoardMirror
-	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var want := BoardSpace.surface_y(BoardSpace.top_row_of(2))
 
 	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid))
-	var deep := _ghost_extent().end.y
-	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.NONE,
-			Terrain.UNITS_PER_LEVEL, 1))
-	var shallow := _ghost_extent().end.y
 
-	assert_float(deep).override_failure_message(
-			"the level-deep selector's top face is at %s, not on the surface the click authors (%s)"
-			% [deep, want]).is_equal_approx(want, 0.01)
-	assert_float(shallow).override_failure_message(
-			"the two selector depths do not share a top face, so the knob MOVES the selector rather "
-			+ "than only deepening it").is_equal_approx(want, 0.01)
+	var want := BoardSpace.surface_y(BoardSpace.top_row_of(2))
+	assert_float(_ghost_extent().end.y).override_failure_message(
+			"the ghost's top face is at %s, not on the surface the click authors (%s)"
+			% [_ghost_extent().end.y, want]).is_equal_approx(want, 0.01)
 
 
-func test_a_rise_ignores_the_selector_depth() -> void:
-	# A wedge already draws exactly the volume it authors, so its extent is geometry rather than a
-	# matter of taste. Asserted rather than left implicit: the flat branch reads the knob and the two
-	# sit in one function, so a widened condition would silently stretch every ramp preview.
+func test_a_rise_previews_its_own_volume_not_a_deepened_block() -> void:
+	# A wedge already draws exactly the volume it authors, so stretching it would preview a slope
+	# that is not the one being painted. Asserted rather than left implicit: the flat branch does the
+	# deepening and the two sit in one function, so a widened condition would silently stretch every
+	# ramp preview -- and its own climb is the only thing that may set its height.
 	_scene.load_mission(PROLOG)
 	await _settle()
 	var mirror := _scene._board_mirror as BoardMirror
+	var board := _scene.get_node("Board") as GridMap
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
 
-	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST,
-			Terrain.UNITS_PER_LEVEL, 1))
-	var shallow := _ghost_extent()
-	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST,
-			Terrain.UNITS_PER_LEVEL, Terrain.UNITS_PER_LEVEL))
-	var deep := _ghost_extent()
+	mirror.show_brush_ghost(BrushGhost.make(cell, 2, _game.grid, Terrain.RampRise.EAST, 1))
+	var gentle := _ghost_extent()
+	var want: AABB = board.mesh_library.get_item_mesh(
+			mirror.ramp_item_for_cell(_game.grid, cell, 1)).get_aabb()
 
-	assert_float(deep.size.y).override_failure_message(
-			"the selector depth stretched the ramp preview").is_equal_approx(shallow.size.y, 0.01)
-	assert_float(deep.position.y).override_failure_message(
-			"the selector depth moved the ramp preview").is_equal_approx(shallow.position.y, 0.01)
+	assert_float(gentle.size.y).override_failure_message(
+			"the gentle wedge was drawn %s tall, not the height its own mesh is -- something other "
+			% gentle.size.y + "than its climb is setting a ramp preview's height"
+			).is_equal_approx(want.size.y, 0.01)
 
 
 func test_the_ghost_wedge_points_the_way_its_rise_names() -> void:

@@ -56,31 +56,17 @@ var _state_values: Array[Terrain.TileState] = []
 var _elevation := 0
 var _rise := Terrain.RampRise.NONE
 var _climb := Terrain.UNITS_PER_LEVEL
-var _depth := Terrain.UNITS_PER_LEVEL
 var _elevation_row: HBoxContainer
 var _elevation_spin: SpinBox
 var _rise_row: HBoxContainer
 var _rise_option: OptionButton
 var _climb_row: HBoxContainer
 var _climb_option: OptionButton
-var _depth_row: HBoxContainer
-var _depth_option: OptionButton
 
 # How far a ramp climbs, steepest first so the historical default sits at index 0. The list is both
 # the picker's row order and the X key's cycle order, RISE_CYCLE's rule one field along.
 const CLIMB_CYCLE: Array[int] = [Terrain.UNITS_PER_LEVEL, 1]
 const CLIMB_LABELS := ["Full (45°)", "Half (26.6°)"]   # index == CLIMB_CYCLE index
-
-# How deep the 3D selector reads, in the store's own units — the same list shape one field along, so
-# the dropdown and the V key cannot disagree about what comes next. A LEVEL first: that is the slab a
-# paint makes, and it is the default for the same reason.
-#
-# Deliberately NOT a passenger on CLIMB_CYCLE despite reading the same two numbers (dev call,
-# 2026-08-23). How deep the selector reads and how steep a ramp climbs are different questions, and
-# folding them would leave no way to get a one-unit selector while painting flat ground — which is
-# most of the time it matters.
-const DEPTH_CYCLE: Array[int] = [Terrain.UNITS_PER_LEVEL, 1]
-const DEPTH_LABELS := ["Level (whole block)", "Half (one unit)"]   # index == DEPTH_CYCLE index
 
 # COMPASS order, not enum order, and it is both the picker's row order and the Z/C cycle order —
 # one list, so the dropdown and the keys cannot disagree about what comes next. Turning has to read
@@ -430,24 +416,6 @@ func _build_extra_controls() -> void:
 		+ "Half is the gentle slope, one unit over one cell, so two of them stacked climb a level "
 		+ "across two cells. Greyed out with the direction, for the same reason."))
 
-	_depth_row = HBoxContainer.new()
-	var depth_label := Label.new()
-	depth_label.text = "Selector Depth"
-	_depth_row.add_child(depth_label)
-	_depth_option = OptionButton.new()
-	for label in DEPTH_LABELS:
-		_depth_option.add_item(label)
-	_depth_option.select(DEPTH_CYCLE.find(_depth))
-	_depth_option.item_selected.connect(func(idx: int): set_depth(DEPTH_CYCLE[idx]))
-	_depth_row.add_child(_depth_option)
-	add_child(_depth_row)
-	DevWidgets.apply_tooltip(_depth_row, DevWidgets.wrap_tooltip(
-		"How deep the 3D selector reads — V cycles it. Level covers the whole block a paint makes "
-		+ "(%d units); Half covers one unit, the amount a wheel notch moves. It changes only what the "
-		% Terrain.UNITS_PER_LEVEL
-		+ "preview COVERS, never what the click paints, and both settings sit their top face on the "
-		+ "surface you are about to author. A ramp ignores it — a wedge already shows its own volume."))
-
 	_set_paint_mode(PaintMode.TERRAIN)
 
 func selected_elevation() -> int:
@@ -468,11 +436,6 @@ func selected_rise() -> Terrain.RampRise:
 # spellings of one refusal.
 func selected_climb() -> int:
 	return _climb
-
-# How deep the 3D selector draws. Ungated for the same reason selected_climb is: it describes the
-# PREVIEW rather than the paint, so there is no tile it could be wrong for.
-func selected_depth() -> int:
-	return _depth
 
 # Whether the PICKED tile is ground rather than something standing on it. GridUtils.stands_up_of is
 # the one answer (derived from prop_shape); an unresolvable pick reads flat, the same permissive
@@ -529,24 +492,10 @@ func cycle_climb() -> void:
 		index = 0
 	set_climb(CLIMB_CYCLE[posmod(index + 1, CLIMB_CYCLE.size())])
 
-# The same for how deep the selector reads — the dropdown and the V key.
-func set_depth(depth: int) -> void:
-	_depth = depth
-	if _depth_option != null:
-		_depth_option.select(DEPTH_CYCLE.find(depth))
-
-# And the same wrap again: V alternates the two selector depths.
-func cycle_depth() -> void:
-	var index := DEPTH_CYCLE.find(_depth)
-	if index == -1:
-		index = 0
-	set_depth(DEPTH_CYCLE[posmod(index + 1, DEPTH_CYCLE.size())])
-
 # Back to plain flat ground, which is height AND direction: a reset that left the rise armed would
 # still paint ramps, and "flat" is what the button is for. The CLIMB deliberately survives — it is a
 # steepness preference rather than a piece of the shape, and re-picking it every reset is the
-# friction the separate control exists to avoid. So does the selector DEPTH, more plainly still: it
-# is not part of the shape at all, only of how the preview draws one.
+# friction the separate control exists to avoid.
 func reset_elevation() -> void:
 	set_elevation(0)
 	set_rise(Terrain.RampRise.NONE)

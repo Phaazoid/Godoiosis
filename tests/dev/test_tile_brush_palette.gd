@@ -265,25 +265,22 @@ func test_the_ghost_previews_the_brushs_level_not_the_cells() -> void:
 			).is_same(game.dev_controller._brush_ghost)
 
 
-func test_the_ghost_carries_the_brushs_steepness_AND_selector_depth() -> void:
-	# THE WIRE. brush_ghost() is the one route from the brush's settings to any renderer, and the two
-	# fields it copies that nothing else could recover were both unasserted: `climb` since slice 2,
-	# `depth` as of this change. Forget either at this call and every other case still passes -- the
-	# brush holds the right value, the renderer draws whatever it is handed, and the knob does
-	# nothing in play. A field with no listener is legal GDScript (#103).
+func test_the_ghost_carries_the_brushs_steepness() -> void:
+	# THE WIRE. brush_ghost() is the one route from the brush's settings to any renderer, and `climb`
+	# is the field it copies that nothing else could recover -- unasserted since slice 2 shipped it.
+	# Forget it at this call and every other case still passes: the brush holds the right value, the
+	# renderer draws whatever it is handed, and the picker does nothing in play. A field with no
+	# listener is legal GDScript (#103).
 	_arm_brush()
 	var cell: Vector2i = game.dev_controller._mouse_cell()
 	game.grid.set_cell(cell, _brush.selected_source, _brush.selected_tile)
 	_brush.set_climb(1)
-	_brush.set_depth(1)
 
 	var ghost: BrushGhost = game.dev_controller.brush_ghost()
 
 	assert_object(ghost).is_not_null()
 	assert_int(ghost.climb).override_failure_message(
 			"the ghost carried %d, not the brush's Rise Amount" % ghost.climb).is_equal(1)
-	assert_int(ghost.depth).override_failure_message(
-			"the ghost carried %d, not the brush's Selector Depth" % ghost.depth).is_equal(1)
 
 
 func test_a_groundless_cell_still_owes_a_ghost() -> void:

@@ -23,30 +23,24 @@ class_name BrushGhost
 # `rise` is set only when the click would author a ramp, and `climb` is how far that ramp rises --
 # a renderer draws the wedge directly above the surface, mirroring BoardMirror's own column rule.
 #
-# `depth` is the ONE display preference this answer carries, and it lives here rather than being read
-# off the brush because a 3D host reaching past brush_ghost() into game.dev_overlay.tile_brush is the
-# "ask the question, not the field it happens to live in" trap this class exists to close. It is how
-# many ROWS -- one height unit each -- the flat preview reaches DOWN from the surface the click
-# authors, a LEVEL by default because that is the slab a paint actually makes. A ramp ignores it: a
-# wedge already draws the volume it authors, and its extent is geometry rather than a matter of taste.
+# There is deliberately NO depth field: how deep the flat preview draws is not a preference, it is
+# the slab a paint makes, so the renderer states it. The knob that DOES exist answers for the hover
+# SELECTOR (BoardOverlays.selector_depth) -- a different object, in normal play, and one question.
 
 var cell: Vector2i
 var height: int
 var source: TileMapLayer
 var rise: Terrain.RampRise
 var climb: int
-var depth: int
 
 
 static func make(cell_: Vector2i, height_: int, source_: TileMapLayer,
 		rise_: Terrain.RampRise = Terrain.RampRise.NONE,
-		climb_ := Terrain.UNITS_PER_LEVEL,
-		depth_ := Terrain.UNITS_PER_LEVEL) -> BrushGhost:
+		climb_ := Terrain.UNITS_PER_LEVEL) -> BrushGhost:
 	var ghost := BrushGhost.new()
 	ghost.cell = cell_
 	ghost.height = height_
 	ghost.source = source_
 	ghost.rise = rise_
 	ghost.climb = climb_
-	ghost.depth = depth_
 	return ghost

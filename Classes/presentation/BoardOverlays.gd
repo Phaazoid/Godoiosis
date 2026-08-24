@@ -120,10 +120,23 @@ const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
 # The 2D art's metric: a 16px texture covers exactly one board cell.
 const ART_PIXELS_PER_CELL := 16.0
 
+# How much of a column the hover selector encloses (#427 slice 2 follow-up). An ENUM rather than a
+# row count because the vocabulary is fixed and because a knob carrying `options` renders as a
+# picker (DevWidgets.add_knob_row) -- LookKnobs' tonemap_mode is the same shape.
+#
+# LEVEL is one whole block, which is what the selector marked before slice 2 re-metricked a GridMap
+# row to a HEIGHT UNIT. HALF is one unit, for reading a half-step apart from the level it sits in.
+enum SelectorDepth { LEVEL, HALF }
+
 # Eye-knobs (the tuning rule); read when markers build/place.
 @export var bracket_arm := 0.22
 @export var bracket_thickness := 0.04
 @export var bracket_scale := 1.02
+# NOT a plain field: the HOVER layer only repaints when the pointer CELL changes (battle3d's
+# _update_pointer early-outs on an unchanged one), so turning this with the mouse still would move
+# nothing until you nudged it -- a knob that appears to do nothing is the one failure that makes a
+# knob worthless (#324's rule, where every flame value rebuilds what is already standing).
+@export var selector_depth: SelectorDepth = SelectorDepth.LEVEL: set = _set_selector_depth
 @export var fill_lift := 0.02          # quad height above the top face — the z-fight gap
 @export var lift_step := 0.004         # per-sort spacing so stacked layers never coincide
 @export var billboard_lift := 0.85     # icon height above the cell's top face
@@ -295,13 +308,25 @@ func _pool_for(layer: Layer) -> Array:
 	return _markers[layer]
 
 
-# A BRACKET marks a cell VOLUME, so it keeps the centre and stays axis-aligned; a FILL is ground
-# markup and rides the surface, tilt included (#281). The clearance itself is VERTICAL and not
-# along the surface's own normal (#432) -- see _lift_of, where the direction turns out to be the
-# whole question on a slope.
+# A BRACKET marks a cell VOLUME and stays axis-aligned; a FILL is ground markup and rides the
+# surface, tilt included (#281). The clearance itself is VERTICAL and not along the surface's own
+# normal (#432) -- see _lift_of, where the direction turns out to be the whole question on a slope.
+#
+# The bracket's TOP FACE sits on the cell's surface and its depth reaches DOWN from there (#427
+# slice 2 follow-up). It used to be cell_center, which was the same statement while a mirror cell
+# was a CUBE -- slice 2 made a row half a level, left the bracket a level tall, and so hung it a
+# QUARTER of a level high at both ends: proud of the block on top, short of the floor underneath.
+# Dev, with screenshots: "it hovers a half height too high ... hovering above a block, and not going
+# to the floor." The same law the brush ghost states, deliberately worded the same way, because the
+# two are the only things in the stack that draw a volume rather than lie on one.
+#
+# No `heights` needed: cell.y is already the picked column's TOP row (battle3d's _tops), so the
+# surface is right there.
 func _marker_transform(spec: Dictionary, cell: Vector3i, heights: BoardHeights) -> Transform3D:
 	if spec["kind"] == Kind.BRACKET:
-		return Transform3D(Basis.IDENTITY, BoardSpace.cell_center(cell))
+		var centre := BoardSpace.cell_center(cell)
+		centre.y = BoardSpace.surface_y(cell.y) - selector_half_height()
+		return Transform3D(Basis.IDENTITY, centre)
 	var flat_cell := BoardSpace.flat(cell)
 	var rise := Terrain.RampRise.NONE if heights == null else heights.ramp_rise_at(flat_cell)
 	var climb := 0 if heights == null else heights.ramp_climb_at(flat_cell)
@@ -480,12 +505,55 @@ func _make_bracket(color: Color) -> MeshInstance3D:
 	return instance
 
 
-# Three short arms per cube corner, eight corners: the voxel's corners, nothing else.
+# How many ROWS of column the selector encloses -- the enum in the units the geometry works in.
+func selector_depth_rows() -> int:
+	return 1 if selector_depth == SelectorDepth.HALF else Terrain.UNITS_PER_LEVEL
+
+
+# Half the COLUMN the selector marks -- the volume ITSELF, before bracket_scale swells the drawn box
+# around it. The scale belongs to the mesh and not to the placement, exactly as on X and Z where the
+# cell's own half is 0.5 * CELL_SIZE and only the mesh multiplies it: fold it in here and the box
+# grows downward only, so it sits (scale - 1) * half a row low. Caught by
+# test_the_selector_encloses_the_whole_block, which measures the CENTRE for this reason.
+func selector_half_height() -> float:
+	return 0.5 * float(selector_depth_rows()) * BoardSpace.ROW_HEIGHT
+
+
+# Turning the knob has to move what is ALREADY on screen -- see the export's own note. Both halves
+# are needed and neither implies the other: the box is a different HEIGHT (a new mesh) and it hangs
+# from a different POINT (a new transform), and a pool that never repaints would show whichever half
+# was forgotten.
+func _set_selector_depth(value: SelectorDepth) -> void:
+	selector_depth = value
+	if _markers.is_empty():
+		return   # nothing standing yet -- the mesh builds at the new height on demand
+	_bracket_mesh = null
+	for layer: Layer in _markers:
+		if LAYERS[layer]["kind"] != Kind.BRACKET:
+			continue
+		if _bracket_mesh == null:
+			_bracket_mesh = _build_bracket_mesh()
+		var cells: Array = _cells.get(layer, [])
+		var pool: Array = _markers[layer]
+		for i in pool.size():
+			var bracket := pool[i] as MeshInstance3D
+			if bracket == null:
+				continue
+			bracket.mesh = _bracket_mesh
+			if i < cells.size():
+				var cell: Vector3i = cells[i]
+				bracket.transform = _marker_transform(LAYERS[layer], cell, null)
+
+
+# Three short arms per corner, eight corners: the voxel's corners, nothing else. NOT a cube since
+# #427 slice 2 -- X and Z span a CELL, Y spans however many ROWS the selector is set to, because a
+# mirror row is half a level and a cube would enclose the wrong volume.
 func _build_bracket_mesh() -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
-	var half := 0.5 * BoardSpace.CELL_SIZE * bracket_scale
+	var half := Vector3(0.5 * BoardSpace.CELL_SIZE, selector_half_height(),
+			0.5 * BoardSpace.CELL_SIZE) * bracket_scale
 	for sx in [-1.0, 1.0]:
 		for sy in [-1.0, 1.0]:
 			for sz in [-1.0, 1.0]:
