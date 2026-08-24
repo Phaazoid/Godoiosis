@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #491 (2026-08-23).**
+**Canon checked through #492 (2026-08-23).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -73,6 +73,34 @@ below follows from taking that literally.
 > unit crossing a corner cell floats or sinks by up to a quarter of the climb.
 > `tests/law/test_cap_mesh_matches_the_surface.gd` samples each drawn triangle at its own centroid,
 > which is where a wrong diagonal shows.
+>
+> **`height_at_uv` IS THE ONE SURFACE, and slice 3 shipped a second answer beside it anyway** —
+> corrected after slice 4, found in play. `BoardSpace.lie_on` described a cell with a single
+> `Transform3D`, i.e. a PLANE, taking its height from the corners' MEAN
+> (`Terrain.centre_height_of_corners`). On a planar form the mean IS the surface at the centre; on a
+> corner form the two differ by a quarter of the climb, so `surface_point` (where a unit, a flame or
+> a prop stands) and `surface_height_at` — which already read `height_at_uv` — disagreed about the
+> same cell. The mean is deleted; `lie_on` reads the surface.
+>
+> **And no transform can describe a corner cell at all**, which is the other half of the same
+> mistake. Four non-coplanar points, and an affine transform maps a plane to a plane: the best-fit
+> plane CROSSES the ground by a quarter of the climb at every corner, alternating sign — an eighth of
+> a cell on the gentle slope against a `fill_lift` of 0.02, which is why it read as z-fighting on the
+> tile's flat half and as arrows cutting through it. So **`lie_on` returns an identity basis on a
+> non-planar form** rather than a tilt it cannot honour, `Terrain.is_planar_form` is the question, and
+> **the FOLD lives in the marker's MESH** (`BoardOverlays._surface_mesh`): four vertices at their true
+> heights, split on the diagonal `height_at_uv` splits on, cached by the cell's shape. Planar cells —
+> flat ground and every cardinal ramp, i.e. nearly every cell on every board — keep the one shared
+> `PlaneMesh` and are bit-identical to before.
+>
+> Two things that had to be threaded and are worth knowing. A SPRITE marker's surface comes from
+> `OverlayMirror`, not from a heights lookup, so the cell's shape travels in the marker entry
+> **alongside** its basis — not instead of, because the knockback drop pointer supplies an
+> orientation of its own and lies on nothing, so "how this is oriented" and "the ground it lies flat
+> against" are two questions and an absent shape means airborne. And the generalisable one: the
+> renderer's END of that key was pinned while its SOURCE was not, so a mutant deleting it passed the
+> whole mirror suite — [#103](https://github.com/Phaazoid/Godoiosis/issues/103)'s shape, caught only
+> by falsifying.
 >
 > Corner cells were authorable only by hand-built fixture for one slice — a declared gap, closed by
 > the tool below. The 2D view's sprite forms stay with
