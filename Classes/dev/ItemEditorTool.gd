@@ -498,16 +498,24 @@ func _refuse_uncarryable(item: Resource) -> bool:
 		status_label.text = findings[0]["text"]
 	return false
 
-# What the reflective editor must NOT draw here. Three, and each for its own reason: the name has
-# its own LineEdit above the form; is_prototype is forced true (a Prototype mode offering to untick
-# it is a door to nowhere); extra_attacks belongs to the Attack Editor's Weapon Families mode, and
-# build_resource_editor cannot draw an Array anyway. Everything else -- including the three fields
-# with bespoke UI below -- reaches a control and owes text (tests/dev/test_property_tips.gd).
+# What the reflective editor must NOT draw here, for two different reasons. THREE are not drawn at
+# all: display_name has its own LineEdit above the form, is_prototype is forced true (a Prototype
+# mode offering to untick it is a door to nowhere), and extra_attacks belongs to the Attack Editor's
+# Weapon Families mode. The other THREE are drawn BESPOKE below and skipped here only so they are
+# not drawn twice.
+#
+# So this list is deliberately LONGER than the coverage law's in tests/dev/test_property_tips.gd,
+# which skips only the first three -- the mod editor's split exactly. A field with bespoke UI still
+# reaches a control, so it still owes text; being undrawable reflectively is not an excuse.
 const PROTOTYPE_SKIP := ["display_name", "is_prototype", "extra_attacks", "weapon_type", "main_attack", "mod_spaces"]
 
 # The SpinBox bound on a space's capacity. A widget affordance, not a rule: mods are size 1-3, so
 # anything past a few is off-doctrine rather than illegal, and nothing in the model refuses it.
 const MAX_SPACE_CAPACITY := 9
+
+# The main-attack picker's "no main" row. A template with none is a legitimate intermediate state
+# (the lint DEGRADES it rather than refusing), so the picker has to be able to express it.
+const NO_MAIN_KEY := "(none)"
 
 func _populate_prototype_editor(template: WeaponData) -> void:
 	DevWidgets.add_label(editor_container, "Editing a TEMPLATE, not a carried weapon -- every weapon built on it reads this live.")
@@ -570,8 +578,6 @@ func _populate_prototype_main(template: WeaponData) -> void:
 			populate()
 	)
 	_tip_from(first, DevWidgets.property_tip(template, "main_attack"))
-
-const NO_MAIN_KEY := "(none)"
 
 # #486's authorable half: both the COUNT and each capacity are the author's. Nothing here caps the
 # count -- proficiency decides what a wielder reaches, and a template is free to author more spaces
