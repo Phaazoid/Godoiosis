@@ -102,15 +102,29 @@ below follows from taking that literally.
 > reaches exactly the cell's surface, which is the same plane: two upward-facing, identically
 > textured faces, coplanar to the float.
 >
-> **A cap draws only what rises ABOVE the block it caps** — the rule the mesh already followed, since
-> the side walls of a flat edge have always been skipped for exactly this reason. The flat top
-> triangle was the one piece that did not, and the block beneath was already drawing that half, in
-> the same art, at the same plane. It is now declined.
+> **A CAP DRAWS NOTHING IN ITS OWN FLOOR PLANE**, and getting to that wording took two passes. The
+> first said *"only what rises ABOVE the block it caps"* and removed the flat top triangle — correct,
+> insufficient. That plane holds THREE cap faces, and removing one just handed the area to the next:
+> the **bottom quad**. Being back-facing it rasterises to no pixels at all, so where it took the depth
+> test you saw **straight through the board** — the shimmer became holes, photographed and measured at
+> exactly the background colour. The symptom changing is what said the rule was about the PLANE and
+> not about any one face in it.
+>
+> All three are now declined: the side wall of an edge whose corners are both low (always skipped —
+> the oldest of the three, and the one the others were derived from), the flat top triangle, and the
+> bottom quad. The cap is an open shell whose opening is exactly the footprint the block's top face
+> covers, which is why no angle can see inside; and meshlib items carry no collision shape and no
+> navmesh, so nothing but the rasteriser ever reads this geometry.
 >
 > Which form suffers is the whole tell, and it matches the report exactly: a WEDGE's low side is an
 > EDGE with no area, so wedges never fought; an INNER corner's flat triangle is at its HIGH plane,
 > where nothing else is drawn, so it must survive (a guard widened to "skip every horizontal
 > triangle" punches a hole through three quarters of every inner corner). Outer corners only.
+>
+> **The law needed a correction of its own: it must skip DEGENERATE triangles.** Every cap has one — a
+> wall whose first corner is at the floor gets `floor_here` equal to `top[i]`, so the quad's first
+> triangle has two identical vertices, zero area, all three heights at the floor. The first draft
+> counted those and reported six offenders on geometry that was already right.
 >
 > An epsilon lift on the flat half was rejected: it would make the drawn cap disagree with
 > `height_at_uv`, which is the one law slice 3 rests on, and the flame already taught this project
