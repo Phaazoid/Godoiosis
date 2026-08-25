@@ -122,25 +122,57 @@ func test_a_cap_reaches_exactly_the_corner_heights_it_names() -> void:
 					FLOOR + float(climb) * BoardSpace.ROW_HEIGHT, 0.001)
 
 
-func test_no_cap_draws_ground_on_its_own_floor() -> void:
-	# The z-fight, as a law. A cap sits on a column whose top BLOCK reaches exactly the cell's
-	# surface, so the cap's floor plane already has an upward-facing, grass-textured face on it. An
-	# OUTER corner is the one form whose surface has a whole triangle down there -- three corners at
-	# the low height -- and drawing it made two coplanar textures fight for every such cell. He
-	# reported it as z-fighting "on the ground half of half corner tiles", which is exactly that
-	# triangle.
+# EVERY triangle of a cap, across every surface -- not just the ground one. The law below has to see
+# the side surface too, because the face that punched holes through the board lived there.
+func _all_triangles(mesh: Mesh) -> Array:
+	var triangles := []
+	for s in mesh.get_surface_count():
+		var arrays := mesh.surface_get_arrays(s)
+		var verts: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+		var index_slot: Variant = arrays[Mesh.ARRAY_INDEX]
+		var indices := PackedInt32Array() if index_slot == null else index_slot as PackedInt32Array
+		if indices.is_empty():
+			for i in range(0, verts.size(), 3):
+				triangles.append([verts[i], verts[i + 1], verts[i + 2]])
+			continue
+		for i in range(0, indices.size(), 3):
+			triangles.append([verts[indices[i]], verts[indices[i + 1]], verts[indices[i + 2]]])
+	return triangles
+
+
+func test_no_cap_draws_anything_in_its_own_floor_plane() -> void:
+	# THE law this whole arc is about. A cap sits on a column whose top BLOCK reaches exactly the
+	# cell's surface, so the cap's floor plane already has a face on it -- and any face the cap adds
+	# there is a coplanar duplicate that fights.
+	#
+	# Which way that face points decides only what the artefact LOOKS like, which is why this counts
+	# UP and DOWN alike and reads every surface rather than the ground one. An outer corner's flat
+	# top triangle fought as a shimmer; the bottom quad, being back-facing, rasterises to no pixels at
+	# all, so where it won the depth test the dev saw straight through the board. Removing the first
+	# alone just handed the second the whole area -- the shimmer became holes, which is what said the
+	# rule had to be about the PLANE and not about any one face in it.
 	#
 	# Read off the SHIPPED library, so a generator fixed without regenerating still reds.
 	for climb in [1, Terrain.UNITS_PER_LEVEL]:
 		for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER, Terrain.Form.INNER]:
-			for triangle in _surface_triangles(_generic_cap(climb, form)):
-				var lowest: float = minf(minf(triangle[0].y, triangle[1].y), triangle[2].y)
-				var highest: float = maxf(maxf(triangle[0].y, triangle[1].y), triangle[2].y)
+			for triangle in _all_triangles(_generic_cap(climb, form)):
+				var a: Vector3 = triangle[0]
+				var b: Vector3 = triangle[1]
+				var c: Vector3 = triangle[2]
+				# DEGENERATE triangles do not count, and every cap has one: a wall whose first
+				# corner is at the floor gets `floor_here` equal to `top[i]`, so the quad's first
+				# triangle has two identical vertices. Zero area rasterises nothing, so it cannot
+				# fight -- and a law that counted it would red on correct geometry, which is what
+				# the first draft of this case did.
+				if (b - a).cross(c - a).length() < 0.000001:
+					continue
+				var lowest: float = minf(minf(a.y, b.y), c.y)
+				var highest: float = maxf(maxf(a.y, b.y), c.y)
 				assert_bool(is_equal_approx(lowest, FLOOR) and is_equal_approx(highest, FLOOR)) \
 					.override_failure_message(
-						"%s at climb %d draws a ground triangle flat on its own floor, coplanar "
+						"%s at climb %d draws a face flat in its own floor plane, coplanar with "
 						% [BoardMirror.form_suffix(form), climb]
-						+ "with the top face of the block underneath it").is_false()
+						+ "the top face of the block underneath it").is_false()
 
 
 func test_an_inner_corner_keeps_the_flat_triangle_it_carries_up_top() -> void:
