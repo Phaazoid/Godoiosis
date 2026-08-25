@@ -32,7 +32,6 @@ func _spring_template() -> WeaponData:
 	t.main_attack = _attack(1, true, false)
 	t.extra_attacks = [_attack(9, false, true)]
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
 # Mace-shaped (#84): a main that always fires, plus an extra that is UNFIREABLE until charged.
@@ -46,7 +45,6 @@ func _mace_template() -> WeaponData:
 	blowback.consumes_readiness = true
 	t.extra_attacks = [blowback]
 	t.weapon_type = WeaponData.WeaponType.KINETIC_MACE
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
 # Bare unit, no squad — for the pure unit-level selection/gate helpers below (mirrors

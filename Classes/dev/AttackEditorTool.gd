@@ -37,7 +37,7 @@ enum Mode { TRANSMUTATION, WEAPON_ATTACK, FAMILY }
 # coverage law in tests/dev/test_property_tips.gd have to agree about which fields are skipped --
 # a field skipped in one and not the other is a field that either loses its tooltip or fails a law
 # it was never drawn by.
-const POOL_SKIP := ["display_name"]                                # name has its own LineEdit above
+const POOL_SKIP := ["display_name", "scaling_blend"]                # name and blend have bespoke UI above
 const CARVING_SKIP := ["display_name", "sigils", "flourishes"]     # the latter two get bespoke UI
 
 var _mode := Mode.TRANSMUTATION
@@ -218,14 +218,27 @@ func _update_family_confirmed(family_path: String, main_path: String) -> void:
 # form, deliberately: a SpinBox change does not rebuild these rows, so a readout drawn here would
 # still say the old reach while you were typing the value that broke it -- stale in exactly the
 # moment it was needed. "" findings = nothing wrong.
+# Refuses on BLOCKS only, since #485 gave the lint a second tier. A DEGRADES finding still SAYS so
+# -- a blend that does not total 100 is worth seeing -- but it must not stop the save: it describes
+# a file that already exists on disk in that state, so refusing would leave the only tool that can
+# repair it unable to write. BoardLint's two tiers, honoured at the consumer rather than only at
+# the rule (the "justify it at every surface" law).
 func _refuse_unfireable(attack: AttackData) -> bool:
 	var findings := AttackLint.check(attack)
 	if findings.is_empty():
 		return false
-	var msg: String = findings[0]["text"]
-	push_warning(msg)
-	status_label.text = msg
-	return true
+	for finding in findings:
+		if finding["severity"] == AttackLint.Severity.BLOCKS:
+			var msg: String = finding["text"]
+			push_warning(msg)
+			status_label.text = msg
+			return true
+	status_label.text = findings[0]["text"]
+	return false
+
+# The one-line form of a finding, for a list row that has no space for the full sentence.
+func _mark_for(finding: Dictionary) -> String:
+	return "reaches no cells" if finding["severity"] == AttackLint.Severity.BLOCKS else "blend does not total %d%%" % Stats.BLEND_TOTAL
 
 func _on_delete_pressed():
 	if _mode == Mode.FAMILY:
@@ -285,6 +298,7 @@ func populate():
 			DevWidgets.build_resource_editor(editor_container, current, populate, CARVING_SKIP)
 		Mode.WEAPON_ATTACK:
 			DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+			_populate_blend()
 			_populate_carriers()
 
 # The family form: its main (edited live, in place) AND its extras. Extras render whether or not
@@ -302,7 +316,20 @@ func _populate_family() -> void:
 		DevWidgets.add_lineedit(editor_container, "Display name", edited.display_name, func(s: String): edited.display_name = s)
 		DevWidgets.add_label(editor_container, "Editing the MAIN attack for %s — changes every weapon of this family." % family_label)
 		DevWidgets.build_resource_editor(editor_container, current, populate, POOL_SKIP)
+		_populate_blend()
 	_populate_extras(family_label)
+
+# The scaling sliders (#485). Drawn in both attack modes and NOT for a carving, which scales off
+# the wielder's aura and has no blend to edit -- the cast is what says so rather than a mode check.
+# This is the family-scaling surface the ticket asked for: a family's blend IS its main attack's,
+# so editing it in FAMILY mode is editing the family, with no separate template field to keep.
+func _populate_blend() -> void:
+	var weapon_attack := current as WeaponAttackData
+	if weapon_attack == null:
+		return
+	DevWidgets.add_label(editor_container, "Damage scaling — the four always total %d%%:" % Stats.BLEND_TOTAL)
+	DevWidgets.add_blend_sliders(editor_container, weapon_attack.scaling_blend, func(): pass,
+		DevWidgets.property_tip(weapon_attack, "scaling_blend"))
 
 # The family's extra_attacks, in the rune editor's inscribe-list idiom. Entries are DIRECT REFS,
 # never copies: Springspear.tres and Kinetic_Mace.tres already store theirs as ext_resource, so a
@@ -322,8 +349,12 @@ func _populate_extras(family_label: String) -> void:
 		var label_text := "(missing file)"
 		if extra != null:
 			label_text = extra.display_name if extra.display_name != "" else "(unnamed)"
-			if not AttackLint.check(extra).is_empty():
-				label_text += "  — reaches no cells"
+			# The mark names the FINDING, not a fixed phrase: since #485 the lint answers two
+			# different faults, and "reaches no cells" beside a blend that does not total 100
+			# would be a label describing the wrong problem.
+			var findings := AttackLint.check(extra)
+			if not findings.is_empty():
+				label_text += "  — %s" % _mark_for(findings[0])
 		label.text = label_text
 		label.custom_minimum_size = Vector2(220, 0)
 		row.add_child(label)

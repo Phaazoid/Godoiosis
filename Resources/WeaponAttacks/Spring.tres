@@ -15,4 +15,8 @@ attack_pattern = SubResource("Resource_main")
 hits_allies = true
 requires_readiness = true
 consumes_readiness = true
+scaling_blend = Dictionary[int, int]({
+1: 70,
+4: 30
+})
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

@@ -54,6 +54,39 @@ static func modifier_text(mods: Dictionary[Stat, int]) -> String:
 		parts.append("%s %+d" % [Stat.keys()[stat], mods[stat]])
 	return ", ".join(parts)
 
+# The stats a weapon attack's damage may scale off (#485). weapons.md has said "across
+# STR/DEX/PER/CON" since the blend was written and no code declared it, so the Attack Editor drew
+# all eight -- MHP, LDR, WIL and COH included, none of which means anything in a damage blend.
+# One list, read by the editor's sliders and by AttackLint.
+const SCALING_STATS: Array[Stat] = [Stat.STR, Stat.DEX, Stat.PER, Stat.CON]
+
+# A blend's weights always total this once the editor has touched it. Not enforced by the math --
+# scaling_contribution normalises whatever it is given -- but a percentage on screen is only true
+# when the weights already sum to it, so the editor pins it and AttackLint refuses anything else.
+const BLEND_TOTAL := 100
+
+# Human-readable scaling blend ("STR 60%, DEX 40%") for a weights dict (#485). Sibling of
+# modifier_text and separate for the same reason payload_text and targets_text are: a DELTA and a
+# SHARE are different questions, and only one of them wants a sign.
+#
+# NORMALISES, and that is the whole point rather than a nicety. The weights are read as a weighted
+# average, so {STR: 100, DEX: 30} really is 77/23 -- printing the raw numbers would put "100%" and
+# "30%" on screen for a weapon that is neither. Zero-weight stats are omitted; an empty or
+# all-zero blend answers "no stat scaling", which is a real authored state a reader must not
+# mistake for a missing one.
+static func blend_text(blend: Dictionary[Stat, int]) -> String:
+	var total := 0
+	for stat in blend:
+		total += blend[stat]
+	if total <= 0:
+		return "no stat scaling"
+	var parts: Array[String] = []
+	for stat in blend:
+		if blend[stat] <= 0:
+			continue
+		parts.append("%s %d%%" % [Stat.keys()[stat], int(round(blend[stat] * 100.0 / total))])
+	return ", ".join(parts)
+
 static func dex_mov_band(dex: int) -> int:
 	if dex <= BAND_LOW_MAX:
 		return -1

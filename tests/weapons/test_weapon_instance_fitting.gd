@@ -12,7 +12,7 @@ func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.
 	t.main_attack = WeaponAttackData.new()
 	t.main_attack.power = power
 	t.main_attack.elemental_damage_type = elemental
-	t.scaling_blend = blend
+	t.main_attack.scaling_blend = blend
 	t.weight = weight
 	t.is_prototype = is_prototype
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD

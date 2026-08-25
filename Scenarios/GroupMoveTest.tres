@@ -121,11 +121,11 @@ power = 5
 attack_pattern = SubResource("Resource_h10id")
 hits_allies = true
 elemental_damage_type = 1
+scaling_blend = Dictionary[int, int]({3: 100})
 [sub_resource type="Resource" id="Resource_6osgg"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_6osgg")
 weapon_type = 6
-scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"
@@ -170,11 +170,11 @@ power = 5
 attack_pattern = SubResource("Resource_tfpe3")
 hits_allies = true
 elemental_damage_type = 1
+scaling_blend = Dictionary[int, int]({3: 100})
 [sub_resource type="Resource" id="Resource_b7r45"]
 script = ExtResource("3_ss267")
 main_attack = SubResource("AtkData_migrated_Resource_b7r45")
 weapon_type = 6
-scaling_blend = Dictionary[int, int]({3: 100})
 icon = ExtResource("10_0ro2l")
 description = "burn baby burn"
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

@@ -31,7 +31,6 @@ func _carbine() -> WeaponInstance:
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CARBINE
 	t.main_attack = shot
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	return WeaponInstance.make(t)
 
 

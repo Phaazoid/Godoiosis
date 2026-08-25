@@ -37,7 +37,30 @@ static func check(attack: AttackData) -> Array[Dictionary]:
 	if attack == null:
 		return found
 	_check_reaches_anything(attack, found)
+	_check_blend_totals(attack, found)
 	return found
+
+
+# The weights are read as a WEIGHTED AVERAGE, so any total works arithmetically and only a total of
+# BLEND_TOTAL makes the numbers mean what they say: {STR: 100, DEX: 30} is really 77/23, and a
+# reader who trusts the file is wrong by 23 points. The editor's sliders cannot author anything
+# else, so this catches the two doors it does not own -- a hand-edited .tres, and content that
+# predates the sliders.
+#
+# DEGRADES rather than BLOCKS: the attack still fires and still scales, it just is not the mix its
+# own numbers claim. A carving has no blend and is skipped rather than passed vacuously.
+static func _check_blend_totals(attack: AttackData, found: Array[Dictionary]) -> void:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return
+	var total := 0
+	for stat: Stats.Stat in weapon_attack.scaling_blend:
+		total += weapon_attack.scaling_blend[stat]
+	if total == Stats.BLEND_TOTAL:
+		return
+	var name := attack.display_name if attack.display_name != "" else "This attack"
+	_add(found, Severity.DEGRADES, "%s's scaling blend totals %d, not %d, so what it really scales off is %s -- not what the numbers say." % [
+		name, total, Stats.BLEND_TOTAL, Stats.blend_text(weapon_attack.scaling_blend)])
 
 
 # Reach's own union-over-facings query, so a directional spread is judged by the same call the red

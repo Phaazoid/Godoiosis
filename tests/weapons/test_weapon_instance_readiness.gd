@@ -31,14 +31,12 @@ func _spring_template(stab_requires: bool) -> WeaponData:
 	t.weapon_type = WeaponData.WeaponType.SPRINGSPEAR
 	t.main_attack = _attack("Stab", stab_requires, false)
 	t.extra_attacks = [_attack("Spring", true, true)]
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
 func _plain_template() -> WeaponData:
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	t.main_attack = _attack("Slash")
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	return t
 
 # --- base WeaponInstance: every pass-through family is unaffected ---
