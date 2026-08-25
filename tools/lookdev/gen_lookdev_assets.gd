@@ -805,12 +805,19 @@ func _form_mesh(corners: Vector4i, top_mat: Material, side_mat: Material,
 	# CALL: the diagonal is asked of the function the rules and the sprite placement read, so the
 	# drawn cap and the queried height cannot disagree. They differ only in the cell's interior, and
 	# only by up to a quarter of the climb, which is exactly the amount that would float a unit.
+	#
+	# A CAP DRAWS ONLY WHAT RISES ABOVE THE BLOCK IT CAPS, which is why _surface_tri may decline: a
+	# triangle whose three corners all sit ON the floor is the block's own top face, at exactly the
+	# same plane and wearing exactly the same tile art. Drawn as well, the two fight -- and an OUTER
+	# corner is the one form that has such a triangle (three corners low), which is why the z-fighting
+	# he reported was on corner tiles and never on a wedge, whose low side is an EDGE with no area.
+	# The wall loop below has always followed this rule; the top face was the piece that did not.
 	if corners.y == corners.w:
-		_surface_tri(st, top, uv, [0, 1, 3], top_uv)   # NW, NE, SW
-		_surface_tri(st, top, uv, [1, 2, 3], top_uv)   # NE, SE, SW
+		_surface_tri(st, top, uv, [0, 1, 3], top_uv, height)   # NW, NE, SW
+		_surface_tri(st, top, uv, [1, 2, 3], top_uv, height)   # NE, SE, SW
 	else:
-		_surface_tri(st, top, uv, [0, 1, 2], top_uv)   # NW, NE, SE
-		_surface_tri(st, top, uv, [0, 2, 3], top_uv)   # NW, SE, SW
+		_surface_tri(st, top, uv, [0, 1, 2], top_uv, height)   # NW, NE, SE
+		_surface_tri(st, top, uv, [0, 2, 3], top_uv, height)   # NW, SE, SW
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
@@ -836,8 +843,15 @@ func _form_mesh(corners: Vector4i, top_mat: Material, side_mat: Material,
 
 # One triangle of a cell's top surface: positions and UVs both indexed off the clockwise corner
 # order, so the art lands on the ground the same way whichever diagonal the cell is split on.
+#
+# DECLINES a triangle lying entirely on the floor: that is the block underneath's own top face, at
+# the same plane and in the same art, and drawing it twice is a z-fight rather than a surface. The
+# side walls have always been skipped on the same test one loop down -- one rule, two places it
+# applies. `heights` is the cap's four corner heights in the caller's clockwise order.
 func _surface_tri(st: SurfaceTool, top: Array[Vector3], uv: Array, order: Array,
-		uv_rect: Rect2) -> void:
+		uv_rect: Rect2, heights: Array) -> void:
+	if heights[order[0]] == 0 and heights[order[1]] == 0 and heights[order[2]] == 0:
+		return
 	var a: Vector3 = top[order[0]]
 	var b: Vector3 = top[order[1]]
 	var c: Vector3 = top[order[2]]

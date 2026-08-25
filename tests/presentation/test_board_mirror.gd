@@ -1494,6 +1494,32 @@ func test_a_wedge_occupies_a_row_per_unit_it_climbs() -> void:
 			.is_equal(GridMap.INVALID_CELL_ITEM)
 
 
+func test_a_cap_always_has_a_solid_block_directly_under_it() -> void:
+	# The assumption the cap MESHES lean on, and until this case it held only by construction. A cap
+	# draws nothing on its own floor plane -- that half of an outer corner's surface IS the top face
+	# of the block below, which is why drawing both fought. Stop writing that block and the flat half
+	# of every outer corner becomes a hole, with the meshes correct and nothing else red.
+	#
+	# Swept over the corner forms rather than checked on a ramp, because they are the ones that have
+	# a flat half at all.
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var board := _scene.get_node("Board") as GridMap
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for form: Terrain.Form in [Terrain.Form.OUTER, Terrain.Form.INNER]:
+			var mask: int = Terrain.CANONICAL_MASKS[form]
+			_game.board_heights.set_corners(cell, Terrain.corners_of_form(2, mask, climb))
+			await _settle()
+			var under := BoardSpace.of_cell(cell, BoardSpace.top_row_of(2))
+			assert_int(board.get_cell_item(under)).override_failure_message(
+					"%s at climb %d: the row under its cap is empty, so the cap's floor plane has "
+					% [BoardMirror.form_suffix(form), climb]
+					+ "no ground drawing it").is_not_equal(GridMap.INVALID_CELL_ITEM)
+
+
 # The first flat tile the generator actually emitted a ramp variant for. Asked of the LIBRARY rather
 # than assumed: the generator skips multi-cell art, and a case that happened to pick a skipped tile
 # would be asserting the FALLBACK while claiming to assert the variant.

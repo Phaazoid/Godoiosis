@@ -90,9 +90,15 @@ func test_every_generic_cap_is_the_surface_the_rules_query() -> void:
 						+ "triangles and Terrain.height_at_uv says %s -- the mesh and the query are "
 						% want + "split on different diagonals, so a unit crossing this cell floats"
 						).is_equal_approx(want, 0.001)
+			# TWO triangles for a wedge and an inner corner, ONE for an outer. A cap draws only what
+			# rises ABOVE the block it caps, and an outer corner is the single form with a triangle
+			# lying entirely on the floor -- that half of its surface is the block's own top face,
+			# and drawing it as well is the z-fight this count exists to keep fixed.
+			var drawn := 1 if form == Terrain.Form.OUTER else 2
 			assert_int(sampled).override_failure_message(
-					"%s at climb %d has no upward-facing triangles at all, so this case checked "
-					% [BoardMirror.form_suffix(form), climb] + "nothing").is_equal(2)
+					"%s at climb %d drew %d surface triangles, not %d, so this case sampled the "
+					% [BoardMirror.form_suffix(form), climb, sampled, drawn]
+					+ "wrong amount of the cap").is_equal(drawn)
 
 
 func test_a_cap_reaches_exactly_the_corner_heights_it_names() -> void:
@@ -114,6 +120,44 @@ func test_a_cap_reaches_exactly_the_corner_heights_it_names() -> void:
 					"%s at climb %d tops out at %s, not the %d units it climbs"
 					% [BoardMirror.form_suffix(form), climb, highest, climb]).is_equal_approx(
 					FLOOR + float(climb) * BoardSpace.ROW_HEIGHT, 0.001)
+
+
+func test_no_cap_draws_ground_on_its_own_floor() -> void:
+	# The z-fight, as a law. A cap sits on a column whose top BLOCK reaches exactly the cell's
+	# surface, so the cap's floor plane already has an upward-facing, grass-textured face on it. An
+	# OUTER corner is the one form whose surface has a whole triangle down there -- three corners at
+	# the low height -- and drawing it made two coplanar textures fight for every such cell. He
+	# reported it as z-fighting "on the ground half of half corner tiles", which is exactly that
+	# triangle.
+	#
+	# Read off the SHIPPED library, so a generator fixed without regenerating still reds.
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER, Terrain.Form.INNER]:
+			for triangle in _surface_triangles(_generic_cap(climb, form)):
+				var lowest: float = minf(minf(triangle[0].y, triangle[1].y), triangle[2].y)
+				var highest: float = maxf(maxf(triangle[0].y, triangle[1].y), triangle[2].y)
+				assert_bool(is_equal_approx(lowest, FLOOR) and is_equal_approx(highest, FLOOR)) \
+					.override_failure_message(
+						"%s at climb %d draws a ground triangle flat on its own floor, coplanar "
+						% [BoardMirror.form_suffix(form), climb]
+						+ "with the top face of the block underneath it").is_false()
+
+
+func test_an_inner_corner_keeps_the_flat_triangle_it_carries_up_top() -> void:
+	# The other side of the rule above, and the reason it is written as "on its own FLOOR" rather
+	# than "flat": an inner corner's flat half is at its HIGH plane, where nothing else is drawn, so
+	# it must survive. A guard widened to skip every horizontal triangle would punch a hole through
+	# three quarters of every inner corner and pass the case above.
+	for climb in [1, Terrain.UNITS_PER_LEVEL]:
+		var top := FLOOR + float(climb) * BoardSpace.ROW_HEIGHT
+		var flat := 0
+		for triangle in _surface_triangles(_generic_cap(climb, Terrain.Form.INNER)):
+			if is_equal_approx(triangle[0].y, top) and is_equal_approx(triangle[1].y, top) \
+					and is_equal_approx(triangle[2].y, top):
+				flat += 1
+		assert_int(flat).override_failure_message(
+				"the inner corner at climb %d lost the flat triangle at its high side, so its "
+				% climb + "raised quarter is now a hole").is_equal(1)
 
 
 func test_the_two_corner_families_are_complements_at_the_same_orientation() -> void:

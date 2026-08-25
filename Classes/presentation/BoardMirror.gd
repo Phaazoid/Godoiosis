@@ -481,6 +481,11 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 		floor_row: int) -> void:
 	var corners := heights.corners_at(cell)
 	var top_row := BoardSpace.top_row_of(Terrain.low_of_corners(corners))   # units -> drawn row
+	# The block at top_row is LOAD-BEARING under a cap, not just filler: its top face sits exactly at
+	# the cell's surface, and the cap deliberately draws nothing down there -- neither the walls of
+	# its flat side (always) nor, since the corner-cap fix, a ground triangle lying on its own floor.
+	# That is what stopped an outer corner's flat half being drawn twice into one plane. Stop writing
+	# this block and that half becomes a hole; draw it AND the cap's floor triangle and they fight.
 	for y in range(floor_row, top_row + 1):
 		var at := Vector3i(cell.x, y, cell.y)
 		if board.get_cell_item(at) != item:
