@@ -58,5 +58,7 @@ State (the last-seen message ID) lives beside the credentials, in
 ## If this ever needs to scale
 
 Same note as the Worker's README: the next step up is the Worker also opening an issue in a private
-intake repo via the GitHub API, landing reports in the `agent/claude` triage workflow instead of in
-chat. Still not needed at current tester volume.
+intake repo via the GitHub API, landing reports in the `/agent-queue` triage workflow instead of in
+chat. Still not needed at current tester volume. *(Reworded 2026-08-25: this used to name the
+`agent/claude` label, retired that day — a filed report is picked up because nobody has replied to it
+yet, which the queue derives from the thread.)*

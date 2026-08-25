@@ -90,6 +90,8 @@ The relay is the smallest useful version. The two upgrades it was shaped to acce
 - **Archive:** add an R2 binding and write each request body to a bucket before forwarding, giving a
   queryable history. Enabling R2 requires a payment method on file even at the free tier.
 - **Structured intake:** have the Worker also open an issue in a private intake repo via the GitHub
-  API, so reports land in the `agent/claude` triage workflow instead of in chat. This was considered
+  API, so reports land in the `/agent-queue` triage workflow instead of in chat. This was considered
   and deferred on 2026-08-05 — worth revisiting at the point where reading the channel by hand stops
-  being practical.
+  being practical. *(Reworded 2026-08-25: this used to name the `agent/claude` label, retired that
+  day — an auto-filed report would be picked up because nobody has replied to it yet, which the queue
+  now derives from the thread rather than from a label.)*
