@@ -49,9 +49,9 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
 @export var weapon_type: WeaponType = WeaponType.NONE
 @export var is_prototype := false
 
-# Percentage weights across STR/DEX/PER/CON; missing key = 0%, should sum to 100 (not
-# hard-enforced). The family's identity — instances never carry their own copy.
-@export var scaling_blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}
+# scaling_blend lived here until #485 (2026-08-25) and is now on WeaponAttackData — per ATTACK,
+# not per family. No fallback survives on the template: a family's blend IS its main attack's, so
+# a second copy here would be a second answer to what an attack scales off (Law #4).
 
 func space_capacities() -> Array[int]:
 	if is_prototype:

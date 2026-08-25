@@ -11,10 +11,6 @@ script = ExtResource("3_5mube")
 main_attack = ExtResource("4_main")
 extra_attacks = Array[ExtResource("1_r4sgd")]([ExtResource("5_spring")])
 weapon_type = 3
-scaling_blend = Dictionary[int, int]({
-1: 70,
-4: 30
-})
 display_name = "Springspear"
 icon = ExtResource("2_x53eu")
 description = "I think that enemy got... the point"

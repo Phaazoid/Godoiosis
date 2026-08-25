@@ -7,6 +7,10 @@
 script = ExtResource("1_pat")
 max_range = 2
 min_range = 2
+scaling_blend = Dictionary[int, int]({
+4: 40,
+5: 60
+})
 metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
@@ -16,4 +20,8 @@ consumes_readiness = true
 display_name = "Shot"
 power = 4
 attack_pattern = SubResource("Resource_main")
+scaling_blend = Dictionary[int, int]({
+4: 40,
+5: 60
+})
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"
