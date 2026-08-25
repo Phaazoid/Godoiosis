@@ -401,8 +401,14 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 
 	for i in range(others.size()):
 		blend[others[i]] = shares[i]
+	# ZERO MEANS ABSENT, add_stat_dict's rule one widget along: a stat contributing nothing is not
+	# an entry worth storing, and writing it grows every saved attack four keys wide with stats
+	# nobody set. The math cannot tell the difference (a 0 weight adds 0 to the total either way),
+	# so only the FILE shows it -- which is how this shipped and was caught by reading a save diff.
 	for stat: Stats.Stat in Stats.SCALING_STATS:
 		var held: int = blend.get(stat, 0)
+		if held == 0:
+			blend.erase(stat)
 		sliders[stat].set_value_no_signal(held)
 		labels[stat].text = "%d%%" % held
 

@@ -145,3 +145,20 @@ func test_a_stat_holding_everything_cannot_be_lowered() -> void:
 	assert_int(blend.get(Stats.Stat.DEX, 0)).is_equal(60)
 	assert_int(blend.get(Stats.Stat.STR, 0)).is_equal(40)
 	assert_int(_total(blend)).is_equal(Stats.BLEND_TOTAL)
+
+func test_a_weight_driven_to_zero_is_erased_rather_than_stored() -> void:
+	# Same rule as add_stat_dict above, and it shipped broken here: the sliders wrote every stat
+	# including the untouched ones, so a saved attack grew four keys wide with stats nobody set.
+	# The math cannot see the difference -- a 0 weight adds 0 to the total -- so only the .tres
+	# shows it, which is exactly how it survived a green suite and was caught in a save diff.
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	add_child(box)
+	var blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}
+	DevWidgets.add_blend_sliders(box, blend, func(): pass)
+
+	var sliders := _sliders(box)
+	sliders[Stats.SCALING_STATS.find(Stats.Stat.PER)].value = 100   # takes everything from STR
+	assert_bool(blend.has(Stats.Stat.STR)).is_false()
+	assert_bool(blend.has(Stats.Stat.DEX)).is_false()   # never touched, never stored
+	assert_int(blend.get(Stats.Stat.PER, 0)).is_equal(Stats.BLEND_TOTAL)
+	assert_int(blend.size()).is_equal(1)
