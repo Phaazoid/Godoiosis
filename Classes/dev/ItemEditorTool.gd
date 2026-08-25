@@ -299,7 +299,7 @@ func _on_limb_kind_picked(weapon: WeaponInstance, kind_name: String) -> void:
 	populate()
 
 func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -> void:
-	var capacity: int = weapon.template.space_capacities()[index]
+	var capacity: int = weapon.template.mod_spaces[index]
 	DevWidgets.add_label(editor_container, "Space %d: %d / %d used" % [index + 1, weapon.used_capacity(index), capacity])
 
 	var fitted := weapon.space(index)

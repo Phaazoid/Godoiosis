@@ -535,10 +535,13 @@ func _on_prosthetic_picked(slot: UnitInstance.LimbSlot, opt_index: int, candidat
 	else:
 		current.starting_prosthetics.erase(slot)
 
-# Absent key = DEFAULT_PROFICIENCY (3, every mod space active) -- only a deliberate reduction is
-# worth authoring, so a value set back to 3 is erased rather than written.
+# Absent key = no reduction (every mod space active) -- only a deliberate reduction is worth
+# authoring, so a value set back to the top of the range is erased rather than written. The top
+# is the WIDEST template on disk since #486: with spaces authored, the range cannot be a const,
+# and a fixed 3 would have made a 5-space prototype's last two spaces unauthorable.
 func _add_proficiency_section() -> void:
-	DevWidgets.add_label(editor_container, "Proficiency (0-3; 3 = default)")
+	var widest := WeaponCatalog.max_mod_spaces()
+	DevWidgets.add_label(editor_container, "Proficiency (0-%d; %d = default, no reduction)" % [widest, widest])
 	var grid := GridContainer.new()
 	grid.columns = 4
 	grid.add_theme_constant_override("h_separation", 12)
@@ -552,13 +555,13 @@ func _add_proficiency_section() -> void:
 		grid.add_child(label)
 		var spin := SpinBox.new()
 		spin.min_value = 0
-		spin.max_value = 3
-		spin.value = current.starting_proficiency.get(family, UnitInstance.DEFAULT_PROFICIENCY)
+		spin.max_value = widest
+		spin.value = current.starting_proficiency.get(family, widest)
 		spin.value_changed.connect(func(v): _on_proficiency_changed(family, int(v)))
 		grid.add_child(spin)
 
 func _on_proficiency_changed(family: WeaponData.WeaponType, value: int) -> void:
-	if value == UnitInstance.DEFAULT_PROFICIENCY:
+	if value >= WeaponCatalog.max_mod_spaces():
 		current.starting_proficiency.erase(family)
 	else:
 		current.starting_proficiency[family] = value

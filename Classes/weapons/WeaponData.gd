@@ -32,9 +32,16 @@ enum LimbKind { ARM, LEG }
 # same family need independent arm/leg identity, so a shared template field can't be
 # the source of truth for it. This enum stays here as the shared vocabulary.
 
-# Three mod spaces, capacities 1/2/3; a prototype trades them for a single size-1 space
-# (weapons.md "the archetype clause made content").
-const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
+# A plain family's frame: three spaces of capacity 1/2/3 (weapons.md). Playtest-tunable.
+const SPACE_CAPACITIES: Array[int] = [1, 2, 3]
+
+@export var mod_spaces: Array[int] = SPACE_CAPACITIES.duplicate()
+# One entry per mod space, holding that space's capacity. AUTHORED per template since #486 —
+# a prototype used to be FORCED to a single size-1 space, so "weaker, but roomier" could not be
+# expressed at all. No count cap: proficiency decides what a wielder reaches, not this array.
+#
+# .duplicate() is load-bearing. A const Array is one shared object, so assigning it directly
+# would hand every un-overridden template the SAME array — editing one would edit all.
 
 @export var main_attack: WeaponAttackData
 # The family's standard attack — the one REQUIRED attack, what counters and default aim
@@ -47,16 +54,15 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
 
 @export var two_handed := false   # verb lock: a missing arm can't wield this (will-and-death.md)
 @export var weapon_type: WeaponType = WeaponType.NONE
+
 @export var is_prototype := false
+# Identity, and which folder this template is authored into — NOT a rule. It gated the mod-space
+# fork until #486 made spaces authored, and has no mechanical reader left; deliberately kept,
+# because "is this a named prototype or a family base" is still a real question about a file.
 
 # scaling_blend lived here until #485 (2026-08-25) and is now on WeaponAttackData — per ATTACK,
 # not per family. No fallback survives on the template: a family's blend IS its main attack's, so
 # a second copy here would be a second answer to what an attack scales off (Law #4).
-
-func space_capacities() -> Array[int]:
-	if is_prototype:
-		return [1]
-	return SPACE_CAPACITIES
 
 # Every stock attack, main first — the canonical order for menus and default picks.
 func attacks() -> Array[WeaponAttackData]:

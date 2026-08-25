@@ -286,7 +286,7 @@ func test_weapon_proficiency_round_trips() -> void:
 
 	assert_int(b.unit_instance.get_proficiency(WeaponData.WeaponType.CHAINSWORD)).is_equal(1)
 	# an unsaved family still reads the default
-	assert_int(b.unit_instance.get_proficiency(WeaponData.WeaponType.DRILL)).is_equal(UnitInstance.DEFAULT_PROFICIENCY)
+	assert_int(b.unit_instance.get_proficiency(WeaponData.WeaponType.DRILL)).is_equal(UnitInstance.UNREDUCED)
 
 func test_aura_round_trips() -> void:
 	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
