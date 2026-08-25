@@ -562,7 +562,7 @@ static func refuse_existing_file(path: String, noun: String, status_label: Label
 # the uid already in the file's header, which ResourceSaver.save() drops at runtime (#481).
 static func save_over(resource: Resource, path: String, status_label: Label = null) -> bool:
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
-	var prior_uid := uid_in_file(path)   # a committed file's uid must survive an overwrite (#481)
+	var prior_uids := uid_map_in_file(path)   # a committed file's uids must survive an overwrite (#481)
 	resource.take_over_path(path)
 	var err := ResourceSaver.save(resource, path)
 	if err != OK:
@@ -571,76 +571,116 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 		if status_label != null:
 			status_label.text = msg
 		return false
-	if not restore_uid(path, prior_uid):
+	if not restore_uids(path, prior_uids):
 		if status_label != null:
-			status_label.text = "Failed to preserve the UID on %s" % path
+			status_label.text = "Failed to preserve the UIDs on %s" % path
 		return false
 	if status_label != null:
 		status_label.text = ""   # clears a stale refusal now that a save actually landed
 	return true
 
 
-# The `uid://...` a .tres header declares, or "" when it has none. Read from the FILE rather than
-# asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a uid
-# has already emptied for this path. Lifted from tools/lookdev/gen_lookdev_assets.gd so the single
-# dev-tool writer and the generator share ONE answer to "what uid does this file have" (Law #4).
-static func uid_in_file(path: String) -> String:
+# The uid= attributes a .tres carries, keyed by the reference id -- its own header under "_header",
+# plus every ext_resource line's uid under its id=. ResourceSaver.save() drops ALL of them at runtime,
+# so an overwrite must capture them here and put them back (restore_uids). Read from the FILE rather
+# than asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a
+# uid has already emptied for this path. Lifted from tools/lookdev/gen_lookdev_assets.gd and widened
+# to the ext_resource references (#481), so the generator and the single dev-tool writer share ONE
+# answer (Law #4).
+static func uid_map_in_file(path: String) -> Dictionary:
+	var map := {}
 	var text := FileAccess.get_file_as_string(path)
 	if text.is_empty():
-		return ""
-	return _uid_in_header(text.substr(0, maxi(text.find("\n"), 0)))
+		return map
+	for line: String in text.split("\n"):
+		if line.begins_with("[gd_resource"):
+			var uid := _quoted_attr(line, "uid")
+			if uid != "":
+				map["_header"] = uid
+		elif line.begins_with("[ext_resource"):
+			var uid := _quoted_attr(line, "uid")
+			var id := _quoted_attr(line, "id")
+			if uid != "" and id != "":
+				map[id] = uid
+	return map
 
 
-static func _uid_in_header(header: String) -> String:
-	var mark := header.find('uid="')
+# `key="value"` on a .tres header line, keyed with a LEADING space so `id="` never matches the `id`
+# inside `uid="...` (the one attribute pair with that overlap).
+static func _quoted_attr(line: String, attr: String) -> String:
+	var mark := line.find(' %s="' % attr)
 	if mark < 0:
 		return ""
-	var start := mark + 5
-	var end := header.find('"', start)
-	return header.substr(start, end - start) if end > start else ""
+	var start := mark + attr.length() + 3
+	var end := line.find('"', start)
+	return line.substr(start, end - start) if end > start else ""
 
 
-# Put the resource's UID back into the file just saved. ResourceSaver.save() DROPS it at runtime --
-# the running game's ResourceUID holds no registration for the path, so the saver writes no uid=
-# line (or mints a new one for a fresh resource). That is exactly how the Carbine main attack lost
-# its uid on an ordinary Update (#481); take_over_path does not preserve it either.
+# The line with its uid= set to `uid`, in the position the editor writes it: last on a gd_resource
+# header, right after the type= on an ext_resource line. A present-but-different uid is replaced.
+static func _set_uid(line: String, uid: String) -> String:
+	var have := _quoted_attr(line, "uid")
+	if have == uid:
+		return line
+	if have != "":
+		line = line.replace(' uid="%s"' % have, "")
+	if line.begins_with("[gd_resource"):
+		return line.replace("]", ' uid="%s"]' % uid)
+	var type_close := line.find('"', line.find('type=') + 6)
+	return line.insert(type_close + 1, ' uid="%s"' % uid)
+
+
+# Put the resource's uid= attributes back into the file just saved. ResourceSaver.save() DROPS them
+# at runtime -- the running game's ResourceUID holds no registration for the path, so the saver writes
+# no uid= on the header OR on the ext_resource lines (or mints a new one for a fresh resource). That
+# is how the Carbine main attack lost its uid on an ordinary Update, and how the family template's
+# script references lost theirs (#481); take_over_path preserves none of it either.
 #
-# Text surgery on the header, because there is no save flag for this. Unlike the generator this was
-# lifted from, the restore compares the uid VALUE, not just "is a uid= present" -- a saver that
-# mints a DIFFERENT uid (the fresh-resource case) is corrected, not trusted. Returns false only when
-# the file it just wrote cannot be read back or reopened.
-static func restore_uid(path: String, uid: String) -> bool:
-	if uid.is_empty():
-		return true   # never had one; nothing to preserve
+# Text surgery on the header, because there is no save flag for this. The restore compares the uid
+# VALUE, not just "is a uid= present", so a saver that mints a DIFFERENT uid (the fresh-resource
+# case) is corrected rather than trusted. Returns false only when the file it just wrote cannot be
+# read back or reopened.
+static func restore_uids(path: String, prior: Dictionary) -> bool:
+	if prior.is_empty():
+		return true   # nothing authored a uid; nothing to preserve
 	var text := FileAccess.get_file_as_string(path)
 	if text.is_empty():
-		push_error("Cannot re-read %s to restore its UID" % path)
+		push_error("Cannot re-read %s to restore its uids" % path)
 		return false
-	var newline := text.find("\n")
-	var header := text.substr(0, newline)
-	var saved_uid := _uid_in_header(header)
-	if saved_uid == uid:
-		return true   # the saver kept it after all -- leave the file alone
-	var patched: String
-	if saved_uid.is_empty():
-		patched = header.replace("]", ' uid="%s"]' % uid)
-	else:
-		patched = header.replace('uid="%s"' % saved_uid, 'uid="%s"' % uid)
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	if f == null:
-		push_error("Cannot reopen %s to restore its UID" % path)
-		return false
-	f.store_string(patched + text.substr(newline))
-	f.close()
+	var lines := text.split("\n")
+	var changed := false
+	for i in range(lines.size()):
+		var line := lines[i]
+		var want: String
+		if line.begins_with("[gd_resource"):
+			want = prior.get("_header", "")
+		elif line.begins_with("[ext_resource"):
+			want = prior.get(_quoted_attr(line, "id"), "")
+		else:
+			continue
+		if want == "" or _quoted_attr(line, "uid") == want:
+			continue
+		lines[i] = _set_uid(line, want)
+		changed = true
+	if changed:
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		if f == null:
+			push_error("Cannot reopen %s to restore its uids" % path)
+			return false
+		f.store_string("\n".join(lines))
+		f.close()
 	# Tell the ENGINE too, not just the file. ResourceUID is populated from .godot/uid_cache.bin at
 	# import, so a header patched afterwards is invisible until someone re-imports -- and
 	# tests/law/test_resource_uid_references.gd asks ResourceUID, so it reds against a file that is
-	# already correct. Registering here leaves the project consistent by itself.
-	var id := ResourceUID.text_to_id(uid)
-	if ResourceUID.has_id(id):
-		ResourceUID.set_id(id, path)
-	else:
-		ResourceUID.add_id(id, path)
+	# already correct. Only the file's OWN uid is registered here; the ext_resource uids belong to
+	# their targets and are already registered.
+	var header_uid: String = prior.get("_header", "")
+	if header_uid != "":
+		var id := ResourceUID.text_to_id(header_uid)
+		if ResourceUID.has_id(id):
+			ResourceUID.set_id(id, path)
+		else:
+			ResourceUID.add_id(id, path)
 	return true
 
 

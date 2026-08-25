@@ -316,7 +316,7 @@ func _gen_meshlib() -> int:
 	# rewrites the scene, which is exactly what #427 slice 2 did to Battle3D.tscn. take_over_path is
 	# NOT enough on its own: #481 measured DevWidgets.save_over dropping UIDs while doing precisely
 	# that. Absent file = first run, and a fresh library is then correct.
-	var previous_uid := DevWidgets.uid_in_file(MESHLIB_PATH)
+	var previous_uids := DevWidgets.uid_map_in_file(MESHLIB_PATH)
 	var ml: MeshLibrary = ResourceLoader.load(MESHLIB_PATH, "MeshLibrary", ResourceLoader.CACHE_MODE_REPLACE)
 	if ml == null:
 		ml = MeshLibrary.new()
@@ -365,13 +365,13 @@ func _gen_meshlib() -> int:
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
 		return 1
-	if not DevWidgets.restore_uid(MESHLIB_PATH, previous_uid):
+	if not DevWidgets.restore_uids(MESHLIB_PATH, previous_uids):
 		return 1
 	print("MeshLibrary written to %s" % MESHLIB_PATH)
 	return 0
 
 
-# UID preservation lives in DevWidgets.uid_in_file / DevWidgets.restore_uid now (#481) -- the
+# UID preservation lives in DevWidgets.uid_map_in_file / DevWidgets.restore_uids now (#481) -- the
 # generator and the single dev-tool writer share it, so there is ONE answer to "what uid does this
 # file have" rather than a private copy here drifting out of step.
 
