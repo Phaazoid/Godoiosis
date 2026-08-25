@@ -2,9 +2,9 @@
 
 **Status: BRAINSTORM (2026-07-06, same session as the parts-system grill).** The divergent bank for [weapons.md](weapons.md)'s parts system — sibling of [job-ideas.md](job-ideas.md). **Nothing locked**; every number a sketch. All effects deterministic + previewed (Laws #1/#2).
 
-**Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
+**Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; a standard frame's spaces cap 1/2/3 (the default since [#486](https://github.com/Phaazoid/Godoiosis/issues/486) — a template authors its own), proficiency unlocks spaces in order.
 
-**Canon checked through #482 (2026-08-23).**
+**Canon checked through #486 (2026-08-25).**
 
 ---
 
@@ -48,9 +48,11 @@
 30. **Rune Socket** [∀] — the weapon carries a size-1 rune; attacks channel it if the wielder has the aura. ⚠ **Fence-crosser:** bridges into alchemy's monopoly — grill before authoring (it's the mechanist-alchemist bridge as an item, which is exactly why it's tempting *and* dangerous).
 31. **Duplex Breech** [CB] — double-barrel conversion: shots **alternate barrels deterministically** (odd/even shot counter — Law #1 clean), and each barrel carries its own effect — either each takes its own size-1 infusion/mod ("modified separately": two effect channels in one weapon) or two authored effects that simply cycle. Law #2: the queue previews *which barrel* every planned shot fires. Prototype cousin: a named double-barreled gun with two pre-authored alternating effects. *(Scratchpad capture 2026-07-14; keystone placement is a sketch.)*
 
-## Prototypes (named prebuilts — unique effect, one size-1 space)
+## Prototypes (named prebuilts — unique effect, an authored space trade)
 
 *The wiki `Weapon List` is the source bank — the dev's pre-authored designs. Sketches:*
+
+> **The trade is authored per prototype as of [#486](https://github.com/Phaazoid/Godoiosis/issues/486)** (2026-08-25). The classic shape is still one size-1 space, but `WeaponData.mod_spaces` is now a field rather than a hardcoded fork, so a prototype may go the other way — weaker than a stock frame in exchange for *more* room. Entries below written against the old forced `[1]` are sketches, not constraints.
 
 - **The Broadburner** [SP] — cone-spray pattern no standard Spitter can mod into.
 - **The Salve** [SP] — heals allies instead of harming (the support variant as a whole weapon).

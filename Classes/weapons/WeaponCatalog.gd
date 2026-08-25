@@ -26,6 +26,16 @@ static func get_prototypes() -> Dictionary:
 static func get_saved() -> Dictionary:
 	return ResourceCatalog.by_name(SAVED_DIR, WeaponInstance)
 
+# The widest frame any template authors, floored at the standard three. Since #486 made mod
+# spaces authored, this is the top of the proficiency range — the number that used to be the
+# const 3. SCANNED rather than stored: a prototype saved with five spaces has to widen the range
+# the moment it lands, and nothing would refresh a cached copy.
+static func max_mod_spaces() -> int:
+	var widest := WeaponData.SPACE_CAPACITIES.size()
+	for template: WeaponData in get_templates().values():
+		widest = maxi(widest, template.mod_spaces.size())
+	return widest
+
 # All templates a new weapon can start from — for the fitting tool.
 static func get_templates() -> Dictionary:
 	var templates := get_family_bases()

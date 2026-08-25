@@ -111,6 +111,23 @@ func test_every_field_the_mod_editor_draws_carries_text() -> void:
 	assert_array(missing).is_empty()
 
 
+# The Item Editor's prototype mode (#486). Its skip list is short for the same reason the mod's is:
+# the three fields with bespoke UI (weapon_type, main_attack, mod_spaces) are handed property_tip
+# explicitly, so being undrawable by build_resource_editor does not excuse them from owing text.
+# The three genuinely skipped fields are named there, each with its own reason.
+func test_every_field_the_prototype_editor_draws_carries_text() -> void:
+	var missing: Array[String] = []
+	_untipped(WeaponData.new(), ["display_name", "is_prototype", "extra_attacks"], missing)
+	assert_array(missing).is_empty()
+
+
+# WeaponData reaches Item's table through its own merge -- the same hand-written step below, one
+# content root over, and the one this mode's inherited fields (weight, icon, description) ride.
+func test_a_template_reaches_the_base_item_tips() -> void:
+	assert_str(DevWidgets.property_tip(WeaponData.new(), "mod_spaces")).is_not_empty()   # its own
+	assert_str(DevWidgets.property_tip(WeaponData.new(), "weight")).is_not_empty()       # Item's
+
+
 func test_a_subclass_keeps_its_parents_entries_as_well_as_its_own() -> void:
 	# The merge is hand-written per class, so forgetting it is the live footgun. Both halves in one
 	# case, because the failure mode is exactly "one of these two answers went missing".

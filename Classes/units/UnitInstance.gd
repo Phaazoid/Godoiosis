@@ -41,8 +41,11 @@ var current_will: int = 0
 const JOBLESS_MOV_BASE := 4       # playtest-tunable; prompt 9 swaps in the main job's base
 
 # --- Weapon proficiency (docs/design/weapons.md, #59) ---
-const DEFAULT_PROFICIENCY := 3   # == WeaponData.SPACE_CAPACITIES.size() — all spaces active by
-								  # default, so existing scenarios/weapons behave unchanged
+# An absent key means NO REDUCTION: every mod space active, whatever the template's count. That
+# is what the default has always meant; it was spelled as the number 3 until #486 made spaces
+# authored, at which point a fixed number could no longer stand for "all of them" — a 5-space
+# prototype would have had two spaces nobody could ever reach.
+const UNREDUCED := -1
 var weapon_proficiency: Dictionary[WeaponData.WeaponType, int] = {}
 
 # --- Limb slots (will-and-death.md, the limb-slot model — #56) ---
@@ -120,10 +123,17 @@ func get_live_abilities() -> Array[AbilityData]:
 	return live
 
 func get_proficiency(family: WeaponData.WeaponType) -> int:
-	return weapon_proficiency.get(family, DEFAULT_PROFICIENCY)
+	return weapon_proficiency.get(family, UNREDUCED)
 
+# A negative value ERASES rather than storing, so "back to no reduction" stays expressible —
+# the sparse dictionary is what carries the default, and only a deliberate reduction is worth
+# recording. There is no upper clamp any more: active_space_count already floors proficiency
+# against the template's own count, so a value above what any weapon has is simply unreduced.
 func set_proficiency(family: WeaponData.WeaponType, value: int) -> void:
-	weapon_proficiency[family] = clampi(value, 0, 3)
+	if value < 0:
+		weapon_proficiency.erase(family)
+	else:
+		weapon_proficiency[family] = value
 
 func get_base_stat(stat_name: Stats.Stat) -> int:
 	if stats.has(stat_name):
