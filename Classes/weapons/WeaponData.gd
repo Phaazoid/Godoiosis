@@ -40,8 +40,12 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]
 # a prototype used to be FORCED to a single size-1 space, so "weaker, but roomier" could not be
 # expressed at all. No count cap: proficiency decides what a wielder reaches, not this array.
 #
-# .duplicate() is load-bearing. A const Array is one shared object, so assigning it directly
-# would hand every un-overridden template the SAME array — editing one would edit all.
+# .duplicate() is load-bearing, and not for the reason it looks like. A const Array is READ-ONLY
+# in Godot 4 and that flag travels with the assignment, so `= SPACE_CAPACITIES` would hand every
+# un-overridden template an array nothing can edit IN PLACE — the Prototype editor's Add space and
+# its capacity spinners both write in place, so they would raise a runtime error and silently do
+# nothing on a panel that looks like it works. Measured 2026-08-25; the engine refuses the write
+# rather than letting one template's edit reach another.
 
 @export var main_attack: WeaponAttackData
 # The family's standard attack — the one REQUIRED attack, what counters and default aim

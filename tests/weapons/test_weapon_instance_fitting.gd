@@ -63,21 +63,30 @@ func test_a_space_past_the_third_holds_mods_and_enforces_its_capacity() -> void:
 # straight through it, so a copy would leave every Remove silently doing nothing.
 func test_space_hands_back_the_live_array_so_removing_through_it_writes() -> void:
 	var w := WeaponInstance.make(_template())
-	w.fit(1, _mod(1))
+	# The PRECONDITION is asserted, and it is what gives this case teeth. A space() that returned a
+	# copy would break fit() too, leaving the space empty -- so the two assertions below would read
+	# exactly the same as a successful removal and pass against the very bug they exist to catch.
+	assert_bool(w.fit(1, _mod(1))).is_true()
+	assert_int(w.used_capacity(1)).is_equal(1)
 	var fitted := w.space(1)
 	fitted.remove_at(0)
 	assert_int(w.used_capacity(1)).is_equal(0)
 	assert_int(w.space(1).size()).is_equal(0)
 
-# The const is one shared object, so a template whose mod_spaces was assigned it directly would
-# share that array with every other un-overridden template — editing one prototype's spaces would
-# silently edit every family's.
-func test_two_fresh_templates_do_not_share_the_default_space_array() -> void:
-	var a := WeaponData.new()
-	var b := WeaponData.new()
-	a.mod_spaces.append(9)
-	assert_array(b.mod_spaces).is_equal(WeaponData.SPACE_CAPACITIES)
-	assert_array(WeaponData.SPACE_CAPACITIES).is_equal([1, 2, 3])
+# A const Array is READ-ONLY in Godot 4, and that flag travels with an assignment -- so a default
+# of `= SPACE_CAPACITIES` gives every un-overridden template an array nothing can edit in place.
+# The Prototype editor's Add space button and every capacity spinner write in place, so they would
+# raise a runtime error and silently do nothing, on a panel that looks like it works. Measured
+# 2026-08-25 rather than assumed: the guess was cross-template bleed, and the engine refuses the
+# write instead of propagating it.
+func test_a_fresh_templates_spaces_are_writable_rather_than_the_read_only_const() -> void:
+	var t := WeaponData.new()
+	assert_bool(t.mod_spaces.is_read_only()).is_false()
+	t.mod_spaces.append(9)                            # what Add space does
+	t.mod_spaces[0] = 2                               # what a capacity spinner does
+	assert_array(t.mod_spaces).is_equal([2, 2, 3, 9])
+	# ...and none of it reached the const or the next template built from it.
+	assert_array(WeaponData.new().mod_spaces).is_equal([1, 2, 3])
 
 func test_can_fit_true_within_capacity_false_over() -> void:
 	var w := WeaponInstance.make(_template())
