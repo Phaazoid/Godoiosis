@@ -6,7 +6,15 @@
 
 ## Next up — meaty sessions
 
-*(empty — the ratification gate cleared 2026-07-14; the [v2 build spine](../session-prompts/README.md) is the active lane. One ten-second call outstanding: the bonus-stop decision on story canon conflicts — book parked item 10 as its own session, or drop it.)*
+17. **Hidden information and the perception layer** *(booked 2026-08-25, from the idea-mining sweep; source: wiki `Scratchpad` → *Hidden Information*, [philosophy.md](philosophy.md) Axiom 4.)* — **How much may the player NOT know, and what buys the knowledge back?** The dev worked most of this out already and it has never been a session:
+
+    - **The tension, in his words:** *"the argument against hidden information is the battle preview. The more we lean into hidden information as a mechanic, the less information the battle preview provides."* And the floor he set: *"at the very least, it should never actively give the player false information."* That floor is now Law #2, so the session is really about the ceiling.
+    - **His own proposed shape — limit the hidden ACTIONS, not the hidden facts.** An enemy readying an overwatch is *shown to be doing that no matter what*; what is hidden is **which direction they are aiming**, unless a high-**PER** unit is nearby. That is a genuinely different answer from fog-of-war, and it is the one that survives Law #2 intact: the preview never lies, it is simply *incomplete about intent*.
+    - **PER is the currency.** The candidate reveals he lists: specific stats, weapon abilities and proficiencies, transmutations on hand, and even **queued actions**. Today PER buys nothing of the sort — [#69](https://github.com/Phaazoid/Godoiosis/issues/69) is a permanently-open always-reveal placeholder, which means the stat's headline use is a stub.
+    - **Why now:** three tickets are converging on this with no shared ruling — [#327](https://github.com/Phaazoid/Godoiosis/issues/327) (fog of war), [#413](https://github.com/Phaazoid/Godoiosis/issues/413) (Overwatch — the exact mechanic his example is about, and it is on the Demo milestone), and [#69](https://github.com/Phaazoid/Godoiosis/issues/69). Overwatch shipping without this decided means the direction question gets answered by whoever builds it.
+    - **The one he already doubted:** letting defensive units conceal *who they will block for* — *"the usefulness here seems much more limited, to the point that it might be pointless."* Worth confirming as a no, now that Guard is built ([standing-reactions.md](standing-reactions.md)), rather than leaving it hanging.
+
+*(Also outstanding: a ten-second call on the bonus-stop for story canon conflicts — book parked item 10 as its own session, or drop it. The ratification gate cleared 2026-07-14; the [v2 build spine](../session-prompts/README.md) is the active lane.)*
 
 ## Quick hits — single-decision scale
 
