@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #492 (2026-08-23).**
+**Canon checked through #495 (2026-08-24).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -93,6 +93,31 @@ below follows from taking that literally.
 > flat ground and every cardinal ramp, i.e. nearly every cell on every board — keep the one shared
 > `PlaneMesh` and are bit-identical to before.
 >
+> **THE Z-FIGHT HE ACTUALLY REPORTED WAS A DIFFERENT BUG, and this one is worth separating from the
+> paragraph above.** Corner-cell markup was genuinely wrong and is genuinely fixed — but it was not
+> what he was looking at, and the report came back unchanged on a build that carried the fix. The
+> cause was in the CAP MESH: `_form_mesh` puts each top-face corner at `lo + height * ROW_HEIGHT`,
+> so an **outer** corner — three corners at the low height — has a whole top triangle lying on `lo`,
+> the mesh's own floor. `BoardMirror._write_column` then places that cap on a column whose top block
+> reaches exactly the cell's surface, which is the same plane: two upward-facing, identically
+> textured faces, coplanar to the float.
+>
+> **A cap draws only what rises ABOVE the block it caps** — the rule the mesh already followed, since
+> the side walls of a flat edge have always been skipped for exactly this reason. The flat top
+> triangle was the one piece that did not, and the block beneath was already drawing that half, in
+> the same art, at the same plane. It is now declined.
+>
+> Which form suffers is the whole tell, and it matches the report exactly: a WEDGE's low side is an
+> EDGE with no area, so wedges never fought; an INNER corner's flat triangle is at its HIGH plane,
+> where nothing else is drawn, so it must survive (a guard widened to "skip every horizontal
+> triangle" punches a hole through three quarters of every inner corner). Outer corners only.
+>
+> An epsilon lift on the flat half was rejected: it would make the drawn cap disagree with
+> `height_at_uv`, which is the one law slice 3 rests on, and the flame already taught this project
+> twice ([#243](https://github.com/Phaazoid/Godoiosis/issues/243) /
+> [#298](https://github.com/Phaazoid/Godoiosis/issues/298)) that coplanarity is fixed by geometry and
+> never by a number.
+
 > Two things that had to be threaded and are worth knowing. A SPRITE marker's surface comes from
 > `OverlayMirror`, not from a heights lookup, so the cell's shape travels in the marker entry
 > **alongside** its basis — not instead of, because the knockback drop pointer supplies an
