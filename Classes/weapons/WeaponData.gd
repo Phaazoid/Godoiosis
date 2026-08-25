@@ -64,6 +64,21 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]
 # not per family. No fallback survives on the template: a family's blend IS its main attack's, so
 # a second copy here would be a second answer to what an attack scales off (Law #4).
 
+# Field text for the reflective editor, merged into Item's (#473's shape). Every field the
+# Prototype mode draws owes an entry, bespoke UI included — tests/dev/test_property_tips.gd.
+static func property_tips() -> Dictionary:
+	var tips := Item.property_tips()
+	tips.merge({
+		"built_in_stat": "PROSTHETIC only: the STR/DEX this limb contributes when installed. Separate from damage math -- it is what the limb itself is worth, not what the weapon hits for.",
+		"mod_spaces": "One entry per mod space, holding that space's capacity. A plain family is 1/2/3; a prototype authors its own trade. Proficiency decides how many a wielder actually reaches.",
+		"main_attack": "The one REQUIRED attack -- what counters and default aim use, and whose scaling_blend IS this weapon's. Shared: editing it changes every weapon built on this template.",
+		"two_handed": "Verb lock: a unit missing an arm cannot wield this.",
+		"weapon_type": "Which family this template belongs to. Decides the WeaponInstance subclass it builds, and therefore its signature mechanic.",
+		"is_prototype": "Identity and save folder, not a rule -- it stopped gating mod spaces in #486.",
+		"extra_attacks": "Additional stock attacks every weapon of this template carries. Edited in the Attack Editor's Weapon Families mode, not here.",
+	})
+	return tips
+
 # Every stock attack, main first — the canonical order for menus and default picks.
 func attacks() -> Array[WeaponAttackData]:
 	var result: Array[WeaponAttackData] = []
