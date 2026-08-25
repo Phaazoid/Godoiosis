@@ -399,3 +399,25 @@ Deliberately untouched: content **laws** that iterate whatever exists and name n
 subject (`test_kinetic_mace_charge` says so in its own comment). Still open as a separate pass: the
 rules-layer suites that load a real weapon or carving as a *convenience fixture*, which #4 already
 says to build ad hoc.
+
+## Dev-tool saves preserve a resource's uid — #481
+
+- **`DevWidgets.save_over` silently dropped a committed resource's uid= attributes — fixed 2026-08-24 (#481).**
+  Every dev-tool save routes through `save_over` (`take_over_path` + `ResourceSaver.save`), and
+  `ResourceSaver.save()` at runtime writes no `uid=` at all — the running game's `ResourceUID` holds
+  no registration for the path — or mints a *new* one for a fresh resource. `take_over_path` repairs
+  the resource cache but preserves none of it. That drops BOTH the file's own header uid AND the
+  `uid=` on its `ext_resource` reference lines (script/texture/other-resource refs). The Carbine main
+  attack lost `uid://dbboy21d8bwwo` on an ordinary Update while `MainVarieties/Carbine.tres` still
+  named it by uid, and the same Update stripped `uid=` from the family template's script references:
+  Godot degrades to the `path=` fallback and warns, but the reference breaks outright the moment the
+  target is moved or renamed. The same drop had already been measured and worked around by the lookdev
+  generator (`gen_lookdev_assets.gd`'s private `_uid_in_file`/`_restore_uid`) — #481 lifted that into
+  `DevWidgets.uid_map_in_file`/`restore_uids` (public statics, widened from the header to the
+  ext_resource lines after a playtest caught the second half) and wired `save_over` to capture the
+  uids *before* saving and restore them *after*, so all six production callers inherit the fix and the
+  generator deletes its private copy (Law #4). The restore compares the uid **value**, not just "is a
+  `uid=` present", so a saver that mints a DIFFERENT uid (the fresh-resource case) is corrected rather
+  than trusted. Tests: `tests/dev/test_dev_tool_save_uid.gd` drives the real save path and asserts the
+  header uid (file text + `ResourceUID`) AND an ext_resource uid survive, falsified red against the
+  removed restore; `tests/law/test_resource_uid_references.gd` stays the repo-law guard.
