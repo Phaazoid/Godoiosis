@@ -558,9 +558,11 @@ static func refuse_existing_file(path: String, noun: String, status_label: Label
 	return true
 
 # load() serves the resource cache: without claiming the path first, a re-save leaves every later
-# load() returning the stale object. No-op when the resource already owns the path.
+# load() returning the stale object. No-op when the resource already owns the path. It also preserves
+# the uid already in the file's header, which ResourceSaver.save() drops at runtime (#481).
 static func save_over(resource: Resource, path: String, status_label: Label = null) -> bool:
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var prior_uid := uid_in_file(path)   # a committed file's uid must survive an overwrite (#481)
 	resource.take_over_path(path)
 	var err := ResourceSaver.save(resource, path)
 	if err != OK:
@@ -569,9 +571,78 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 		if status_label != null:
 			status_label.text = msg
 		return false
+	if not restore_uid(path, prior_uid):
+		if status_label != null:
+			status_label.text = "Failed to preserve the UID on %s" % path
+		return false
 	if status_label != null:
 		status_label.text = ""   # clears a stale refusal now that a save actually landed
 	return true
+
+
+# The `uid://...` a .tres header declares, or "" when it has none. Read from the FILE rather than
+# asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a uid
+# has already emptied for this path. Lifted from tools/lookdev/gen_lookdev_assets.gd so the single
+# dev-tool writer and the generator share ONE answer to "what uid does this file have" (Law #4).
+static func uid_in_file(path: String) -> String:
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		return ""
+	return _uid_in_header(text.substr(0, maxi(text.find("\n"), 0)))
+
+
+static func _uid_in_header(header: String) -> String:
+	var mark := header.find('uid="')
+	if mark < 0:
+		return ""
+	var start := mark + 5
+	var end := header.find('"', start)
+	return header.substr(start, end - start) if end > start else ""
+
+
+# Put the resource's UID back into the file just saved. ResourceSaver.save() DROPS it at runtime --
+# the running game's ResourceUID holds no registration for the path, so the saver writes no uid=
+# line (or mints a new one for a fresh resource). That is exactly how the Carbine main attack lost
+# its uid on an ordinary Update (#481); take_over_path does not preserve it either.
+#
+# Text surgery on the header, because there is no save flag for this. Unlike the generator this was
+# lifted from, the restore compares the uid VALUE, not just "is a uid= present" -- a saver that
+# mints a DIFFERENT uid (the fresh-resource case) is corrected, not trusted. Returns false only when
+# the file it just wrote cannot be read back or reopened.
+static func restore_uid(path: String, uid: String) -> bool:
+	if uid.is_empty():
+		return true   # never had one; nothing to preserve
+	var text := FileAccess.get_file_as_string(path)
+	if text.is_empty():
+		push_error("Cannot re-read %s to restore its UID" % path)
+		return false
+	var newline := text.find("\n")
+	var header := text.substr(0, newline)
+	var saved_uid := _uid_in_header(header)
+	if saved_uid == uid:
+		return true   # the saver kept it after all -- leave the file alone
+	var patched: String
+	if saved_uid.is_empty():
+		patched = header.replace("]", ' uid="%s"]' % uid)
+	else:
+		patched = header.replace('uid="%s"' % saved_uid, 'uid="%s"' % uid)
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		push_error("Cannot reopen %s to restore its UID" % path)
+		return false
+	f.store_string(patched + text.substr(newline))
+	f.close()
+	# Tell the ENGINE too, not just the file. ResourceUID is populated from .godot/uid_cache.bin at
+	# import, so a header patched afterwards is invisible until someone re-imports -- and
+	# tests/law/test_resource_uid_references.gd asks ResourceUID, so it reds against a file that is
+	# already correct. Registering here leaves the project consistent by itself.
+	var id := ResourceUID.text_to_id(uid)
+	if ResourceUID.has_id(id):
+		ResourceUID.set_id(id, path)
+	else:
+		ResourceUID.add_id(id, path)
+	return true
+
 
 # Removes a saved entry from disk. The catalogs that list these entries (WeaponCatalog,
 # RuneCatalog, TransmutationCatalog, WeaponAttackCatalog, ScenarioManager) all re-scan disk per

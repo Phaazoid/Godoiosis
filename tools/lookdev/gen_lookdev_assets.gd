@@ -316,7 +316,7 @@ func _gen_meshlib() -> int:
 	# rewrites the scene, which is exactly what #427 slice 2 did to Battle3D.tscn. take_over_path is
 	# NOT enough on its own: #481 measured DevWidgets.save_over dropping UIDs while doing precisely
 	# that. Absent file = first run, and a fresh library is then correct.
-	var previous_uid := _uid_in_file(MESHLIB_PATH)
+	var previous_uid := DevWidgets.uid_in_file(MESHLIB_PATH)
 	var ml: MeshLibrary = ResourceLoader.load(MESHLIB_PATH, "MeshLibrary", ResourceLoader.CACHE_MODE_REPLACE)
 	if ml == null:
 		ml = MeshLibrary.new()
@@ -365,63 +365,15 @@ func _gen_meshlib() -> int:
 	if err != OK:
 		push_error("Failed to save %s (error %d)" % [MESHLIB_PATH, err])
 		return 1
-	if not _restore_uid(MESHLIB_PATH, previous_uid):
+	if not DevWidgets.restore_uid(MESHLIB_PATH, previous_uid):
 		return 1
 	print("MeshLibrary written to %s" % MESHLIB_PATH)
 	return 0
 
 
-# The `uid://...` a .tres header declares, or "" when it has none. Read from the FILE rather than
-# asked of ResourceLoader.get_resource_uid: that consults the uid CACHE, which a save without a uid
-# has already emptied for this path -- measured, it returned INVALID and the restore below silently
-# did nothing.
-func _uid_in_file(path: String) -> String:
-	var text := FileAccess.get_file_as_string(path)
-	if text.is_empty():
-		return ""
-	var header := text.substr(0, maxi(text.find("\n"), 0))
-	var mark := header.find('uid="')
-	if mark < 0:
-		return ""
-	var start := mark + 5
-	var end := header.find('"', start)
-	return header.substr(start, end - start) if end > start else ""
-
-
-# Put the resource's UID back into the file just saved. ResourceSaver DROPS it -- measured here
-# twice: a fresh MeshLibrary was minted a NEW uid, and reusing the loaded one lost the uid outright.
-# Either way every .tscn naming the old uid points at nothing, Godot degrades to the `path=`
-# attribute and REWRITES the scene on open, which is how #427 slice 2 produced a phantom diff in
-# Battle3D.tscn.
-#
-# Text surgery on the header, because there is no save flag for this and take_over_path does not do
-# it (#481 measured the same drop through DevWidgets.save_over, which take_over_paths). Returns
-# false only when the file it just wrote cannot be read back.
-func _restore_uid(path: String, uid: String) -> bool:
-	if uid.is_empty():
-		return true   # never had one; nothing to preserve
-	var text := FileAccess.get_file_as_string(path)
-	if text.is_empty():
-		push_error("Cannot re-read %s to restore its UID" % path)
-		return false
-	var newline := text.find("\n")
-	var header := text.substr(0, newline)
-	if header.contains("uid="):
-		return true   # the saver kept it after all -- leave the file alone
-	var f := FileAccess.open(path, FileAccess.WRITE)
-	f.store_string(header.replace("]", ' uid="%s"]' % uid) + text.substr(newline))
-	f.close()
-	# Tell the ENGINE too, not just the file. ResourceUID is populated from .godot/uid_cache.bin at
-	# import, so a header patched afterwards is invisible until someone re-imports -- and
-	# tests/law/test_resource_uid_references.gd asks ResourceUID, so it reds against a file that is
-	# already correct. Registering here means the generator leaves the project consistent by itself.
-	var id := ResourceUID.text_to_id(uid)
-	if ResourceUID.has_id(id):
-		ResourceUID.set_id(id, path)
-	else:
-		ResourceUID.add_id(id, path)
-	print("Restored %s on %s" % [uid, path])
-	return true
+# UID preservation lives in DevWidgets.uid_in_file / DevWidgets.restore_uid now (#481) -- the
+# generator and the single dev-tool writer share it, so there is ONE answer to "what uid does this
+# file have" rather than a private copy here drifting out of step.
 
 
 # One block per real tileset tile, top face wearing that tile's own art -- except a tile that
