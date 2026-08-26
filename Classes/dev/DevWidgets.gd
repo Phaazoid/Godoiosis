@@ -336,11 +336,16 @@ static func add_blend_sliders(container: Node, blend: Dictionary, on_change: Cal
 		var slider := HSlider.new()
 		slider.min_value = 0
 		slider.max_value = Stats.BLEND_TOTAL
-		slider.step = 1
+		slider.step = Stats.BLEND_STEP
 		slider.custom_minimum_size = Vector2(180, 0)
 		slider.value = blend.get(key, 0)
 		var pct := Label.new()
-		pct.text = "%d%%" % int(slider.value)
+		# The READOUT comes off the dictionary, never off the slider. Godot snaps a Range to its
+		# step on assignment (measured: 33 with step 5 reads back 35), so a hand-edited .tres
+		# holding an off-grain weight would otherwise be reported as a value its file does not
+		# hold -- the "only the FILE shows it" divergence, one widget along. The handle sits at
+		# the nearest legal notch; the number tells the truth until the first drag reconciles them.
+		pct.text = "%d%%" % int(blend.get(key, 0))
 		pct.custom_minimum_size = Vector2(44, 0)
 		row.add_child(name_label)
 		row.add_child(slider)
@@ -380,17 +385,21 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 		return
 
 	blend[moved] = value
+	# Split in STEPS rather than points, so every share lands on a notch a slider can actually
+	# show. BLEND_STEP divides BLEND_TOTAL and Godot snaps `value` to the step before this is
+	# called, so the remainder is a whole number of steps by construction.
+	var steps := remainder / Stats.BLEND_STEP
 	var shares: Array[int] = []
 	var fractions: Array[float] = []
 	var handed := 0
 	for stat: Stats.Stat in others:
-		var exact := 0.0 if others_total == 0 else float(blend.get(stat, 0)) * remainder / others_total
+		var exact := 0.0 if others_total == 0 else float(blend.get(stat, 0)) * steps / others_total
 		var whole := int(floor(exact))
 		shares.append(whole)
 		fractions.append(exact - whole)
 		handed += whole
 	# Hand the rounding leftover to the largest fractional parts, biggest first.
-	while handed < remainder:
+	while handed < steps:
 		var best := 0
 		for i in range(1, fractions.size()):
 			if fractions[i] > fractions[best]:
@@ -400,7 +409,7 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 		handed += 1
 
 	for i in range(others.size()):
-		blend[others[i]] = shares[i]
+		blend[others[i]] = shares[i] * Stats.BLEND_STEP
 	# ZERO MEANS ABSENT, add_stat_dict's rule one widget along: a stat contributing nothing is not
 	# an entry worth storing, and writing it grows every saved attack four keys wide with stats
 	# nobody set. The math cannot tell the difference (a 0 weight adds 0 to the total either way),
