@@ -140,13 +140,7 @@ func test_the_move_phase_takes_the_camera_to_whoever_is_walking() -> void:
 	assert_object(_cam().follow_unit).override_failure_message(
 			"an empty pass panned the camera somewhere").is_null()
 
-	var moverange = _game.compute_move_range(mover)
-	var destinations: Array[Vector2i] = _game.get_move_range(moverange, mover)
-	var path := RulesService.reconstruct_path(moverange.came_from, mover.movement.cell, destinations[0])
-	var move := MoveAction.new()
-	move.init(mover, path, null)
-	assert_bool(_game.squad_manager.queue_action(mover.squad, move)).override_failure_message(
-			"fixture: the move was refused, so the pass would concede instead of playing").is_true()
+	_queue_a_move(mover)
 
 	await _game.order_executor.execute_orders(mover)
 	await _settle()
@@ -191,6 +185,76 @@ func _any_unit_besides(other: Unit) -> Unit:
 		if unit != null and unit != other:
 			return unit
 	return null
+
+
+# The camera comes BACK (dev, 2026-08-26: "the camera should return home after a pass, and after
+# the enemy turn"). Playback borrows the rig -- squaring the yaw to a detent and resetting the zoom
+# on the way in, then driving the aim for the whole pass -- and hands all three back on the way out.
+#
+# NOT the rig's _home_* triple, which is the OPENING SHOT and what R restores; this is where the
+# PLAYER was standing. Both live on the rig, named apart.
+#
+# A REAL MOVE is queued rather than running an empty pass, and that is not incidental: the edges
+# live in _mirror_camera, i.e. in _process. An empty pass claims and releases inside one call with
+# no frame between, so the poll never sees the flag change and neither edge ever fires.
+func test_a_pass_gives_the_player_their_view_back() -> void:
+	var mover := _mobile_player_unit()
+	assert_object(mover).override_failure_message(
+			"fixture: no player unit on this board can move").is_not_null()
+	# Deliberately OFF a detent and away from playback_distance, so the claim has something to
+	# change and the restore something to undo. Set directly: "the player panned here" has no
+	# production door but WASD.
+	_rig._target_yaw_degrees = 37.0
+	_rig.set_zoom(_rig.playback_distance - 3.0)
+	await _settle()
+	var aim: Vector3 = _rig.position
+	var yaw: float = _rig._target_yaw_degrees
+	var distance: float = _rig._target_distance
+
+	_queue_a_move(mover)
+	await _game.order_executor.execute_orders(mover)
+	await _settle()
+
+	assert_vector(_rig.position).override_failure_message(
+			"the pass kept the aim it borrowed").is_equal_approx(aim, Vector3.ONE * 0.01)
+	assert_float(_rig._target_yaw_degrees).override_failure_message(
+			"the yaw stayed squared to the detent playback snapped it to").is_equal_approx(yaw, 0.01)
+	assert_float(_rig._target_distance).override_failure_message(
+			"the zoom stayed at the playback distance").is_equal_approx(distance, 0.01)
+
+
+# ...and a BOARD SWAP drops what was borrowed, rather than flying back to a pose from a board that
+# no longer exists. ScenarioManager.clear_board releases the playback lock, so without this the
+# release fires the restore on the dead board. Invalidation is structural -- frame() and pose() both
+# drop it, because anything that redefines the opening shot is a new board.
+func test_a_board_swap_drops_the_view_playback_borrowed() -> void:
+	_rig.set_zoom(_rig.playback_distance - 3.0)
+	await _settle()
+
+	_cam().set_playback_locked(true)   # claim -> stash
+	await _settle()
+	_scene.fit_camera()                # the board swap's own re-frame
+	await _settle()
+	var framed: Vector3 = _rig.position
+
+	_cam().set_playback_locked(false)  # release -> would restore, if anything were still borrowed
+	await _settle()
+
+	assert_vector(_rig.position).override_failure_message(
+			"the release flew the camera back to a pose from before the board was reframed") \
+		.is_equal_approx(framed, Vector3.ONE * 0.01)
+
+
+# The production door game._click_choosing_move uses, minus the click: reconstruct the path through
+# the range the unit really has, and queue it through the real gate.
+func _queue_a_move(unit: Unit) -> void:
+	var moverange = _game.compute_move_range(unit)
+	var destinations: Array[Vector2i] = _game.get_move_range(moverange, unit)
+	var path := RulesService.reconstruct_path(moverange.came_from, unit.movement.cell, destinations[0])
+	var move := MoveAction.new()
+	move.init(unit, path, null)
+	assert_bool(_game.squad_manager.queue_action(unit.squad, move)).override_failure_message(
+			"fixture: the move was refused, so the pass would concede instead of playing").is_true()
 
 
 # A player unit that actually has somewhere to go -- a unit stranded on a terrace with no ramp off
@@ -550,8 +614,13 @@ func test_an_ai_turn_squares_the_camera_up() -> void:
 	assert_float(_rig._target_yaw_degrees).override_failure_message(
 			"the realign re-fires every frame, not on entry").is_equal_approx(200.0, 0.001)
 
-	# And on the NEXT turn it takes the nearest detent, not zero.
+	# And on the NEXT turn it takes the nearest detent, not zero. The yaw is re-driven AFTER the
+	# release, deliberately: since the view return landed (#534) a release puts back whatever the
+	# player was looking at before playback borrowed the camera, so a yaw poked in mid-turn does not
+	# survive it. Between turns the player really does own the orbit, so this is the honest setup.
 	_cam().set_playback_locked(false)
+	await _settle()
+	_rig._target_yaw_degrees = 200.0
 	await _settle()
 	_cam().set_playback_locked(true)
 	await _settle()

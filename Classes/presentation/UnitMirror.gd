@@ -206,6 +206,11 @@ var hovered_unit_source: Callable
 # absent rather than wrong.
 var plan_source: Callable
 
+# Who the end-of-turn effect pass is about, injected the same way beside it (#534). A ResolvedPlan
+# cannot answer this -- the burn phase has no plan -- so it is its own source rather than a faked
+# one. Unset reads as "no pass running", the same graceful absence plan_source has.
+var effect_subjects_source: Callable
+
 var units_root: Node2D
 
 # The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
@@ -263,6 +268,9 @@ func reconcile() -> void:
 	# would re-derive every other unit's projected cell for each unit on the board.
 	var hovered := _hovered_unit()
 	var plan := _plan()   # board-wide for the same reason, and a dictionary read per unit after
+	# ...and who the end-of-turn effect pass is about, asked once for the same reason (#534). Empty
+	# whenever no pass is running, which is nearly always.
+	var marked: Dictionary[int, bool] = _effect_subjects()
 	# The player's standing preference (#350), asked once for the same reason: it cannot change
 	# mid-frame, and a static read per unit would be N reads answering one question.
 	var always_on := PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH)
@@ -289,7 +297,7 @@ func reconcile() -> void:
 			# dying. Nothing else here needs a wire; this cannot be answered without one.
 			unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, always_on)
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), always_on)
 		_settle_health_change(unit, id, _bars[id])
 	for id: int in _mirrored.keys():
 		if not live.has(id):
@@ -448,6 +456,15 @@ func _plan() -> ResolvedPlan:
 	return plan_source.call() as ResolvedPlan
 
 
+# The instance ids the running effect pass is about, empty when none is (#534). Typed local rather
+# than a cast, because a typed Dictionary is not a cast target.
+func _effect_subjects() -> Dictionary[int, bool]:
+	if not effect_subjects_source.is_valid():
+		return {}
+	var subjects: Dictionary[int, bool] = effect_subjects_source.call()
+	return subjects
+
+
 # What the plan leaves this unit at, ALREADY CLAMPED for display — the raw threaded number goes
 # negative on a fatal hit, and LethalityRules.displayed_hp is the one answer to what a preview shows
 # for it, shared with the queue panel's own "before -> after" (#313). Drawn ONLY; the clamp flattens
@@ -459,7 +476,7 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
-		plan: ResolvedPlan, always_on: bool) -> void:
+		plan: ResolvedPlan, marked: bool, always_on: bool) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -468,9 +485,15 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# differs from current", which made membership a function of LIVE HP — so every bar switched
 	# itself off at the instant its own hit landed, mid-pass, one at a time.
 	var foretold := plan != null and PlanResolver.plan_changes(unit, plan.hypo)
-	# THE gate: three reasons, ONE expression (#350). #357's state-icon row rides it structurally —
+	# THE gate: FOUR reasons now, ONE expression (#350). #357's state-icon row rides it structurally —
 	# the icons hang off the bar — so a second visibility rule anywhere in this file is the bug.
-	var shown := hovered or foretold or always_on
+	#
+	# `marked` is the second reason again, from the other direction (#534): the end-of-turn effect
+	# pass is also a thing about to happen to a unit, but it has no plan to be read out of. Without
+	# it the pass panned to a unit, damaged it, and showed nothing at all for anyone who had not
+	# turned "always show health bars" on — _settle_health_change skips a hidden bar, so even the
+	# cubes stayed put.
+	var shown := hovered or foretold or marked or always_on
 	bar.set_shown(shown)
 	if not shown:
 		return

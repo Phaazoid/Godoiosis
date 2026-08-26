@@ -161,6 +161,7 @@ func _ready() -> void:
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
+	_unit_mirror.effect_subjects_source = _effect_pass_subjects
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -556,11 +557,18 @@ func _mirror_camera() -> void:
 	if cam.playback_locked != _playback_owned_camera:
 		_playback_owned_camera = cam.playback_locked
 		if _playback_owned_camera:
+			# BEFORE the two resets below, or it stashes the reset rather than the player's own
+			# framing. One edge serves every case the dev named (dev, 2026-08-26): a pass claims and
+			# releases inside execute_orders, an AI turn holds it across the whole turn, and the
+			# post-turn pass (#534) claims it again after that.
+			_rig.stash_view()
 			_rig.align_to_detent()
 			# ...and frame from a known distance (#520). The EDGE is the whole design: reset once
 			# as playback takes the camera, then leave the wheel alone, so the player may zoom
 			# freely for the rest of it. Re-applying per frame would be a leash instead.
 			_rig.set_zoom(_rig.playback_distance)
+		else:
+			_rig.restore_view()
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
@@ -962,6 +970,13 @@ func _previewed_plan() -> ResolvedPlan:
 		return executing
 	var squads: SquadManager = game.squad_manager
 	return squads.resolved_plan_for(squads.active_squad)
+
+
+# ...and who its end-of-turn effect pass is about (#534). A separate question from the plan because
+# that phase has none -- see OrderExecutor.effect_pass_subjects.
+func _effect_pass_subjects() -> Dictionary[int, bool]:
+	var subjects: Dictionary[int, bool] = game.order_executor.effect_pass_subjects
+	return subjects
 
 
 func _cancel() -> void:

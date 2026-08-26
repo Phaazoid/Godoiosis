@@ -379,3 +379,43 @@ func test_a_crisis_at_the_revive_hp_still_wears_a_readout() -> void:
 
 	assert_bool(_unit_mirror.bar_for(victim).visible).override_failure_message(
 			"a unit this plan drives into Crisis wears no readout at all — #354").is_true()
+
+
+# ------------------------------------------------------------------------------
+#  ...and so does the end-of-turn effect pass (#534)
+# ------------------------------------------------------------------------------
+
+# The same gate, reached from the other direction. The burn phase has no ResolvedPlan to be read
+# out of, so it publishes its own subjects and the readout's ONE expression gains them as a fourth
+# reason -- not a second visibility rule, which this file's subject says is the bug.
+#
+# The whole point is the setting being OFF, which reset_for_test leaves it at (default false): with
+# it on, every bar is up anyway and this proves nothing. The empty precondition IS that proof.
+# Before this the pass panned to a unit, burned it and showed NOTHING -- _settle_health_change skips
+# a hidden bar, so not even the cubes moved.
+#
+# Written through the real wire -- executor property, battle3d's callable, the mirror's per-frame
+# poll -- with only the phase itself stubbed, because a phase run headless finishes inside one call
+# and there is no frame in the middle of it to look at.
+func test_the_effect_pass_raises_a_readout_over_the_units_it_is_about_to_hit() -> void:
+	var burning := _spawn(PLAYER, Vector2i(2, 2))
+	var bystander := _spawn(PLAYER, Vector2i(5, 5))
+	await _settle()
+	assert_array(_shown_bars()).override_failure_message(
+			"precondition: with the setting off and nothing queued, nobody should wear a bar") \
+		.is_empty()
+
+	game.order_executor.effect_pass_subjects[burning.get_instance_id()] = true
+	await _settle()
+	assert_array(_shown_bars()).override_failure_message(
+			"the effect pass raised no readout -- or raised one over a unit it is not about") \
+		.contains_exactly_in_any_order([burning])
+	assert_bool(_unit_mirror.bar_for(bystander).visible).override_failure_message(
+			"a unit the pass is not about was handed a readout as well") \
+		.is_false()
+
+	# ...and the pass ending puts it away again, or it would outlive the phase that raised it.
+	game.order_executor.effect_pass_subjects.clear()
+	await _settle()
+	assert_array(_shown_bars()).override_failure_message(
+			"the readout stayed up after the effect pass ended").is_empty()

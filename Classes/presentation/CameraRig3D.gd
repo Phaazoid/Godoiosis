@@ -104,6 +104,15 @@ var _target_distance := 14.0
 var _home_position := Vector3.ZERO
 var _home_yaw_degrees := 0.0
 var _home_distance := 14.0
+
+# The view playback BORROWED, put back when it gives the camera up (dev, 2026-08-26: "the camera
+# should return home after a pass, and after the enemy turn"). NOT _home_* above, which is the
+# OPENING SHOT and what R restores -- two different questions: home is where the BOARD starts,
+# this is where the PLAYER was standing. Declared side by side per Law #4.
+var _borrowed_position := Vector3.ZERO
+var _borrowed_yaw_degrees := 0.0
+var _borrowed_distance := 0.0
+var _view_borrowed := false
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
@@ -247,6 +256,7 @@ func frame(volume: AABB, bounds := AABB()) -> void:
 	# from the fit; yaw is a scene fact and stays whatever the scene authored.
 	_home_position = position
 	_home_distance = _target_distance
+	drop_stashed_view()
 
 
 # The AUTHORED twin of frame()'s SHOT half (#234): a pose someone flew to, rather than a volume
@@ -287,6 +297,7 @@ func pose(aim: Vector3, yaw_degrees: float, distance: float, bounds: AABB) -> vo
 	_home_position = position
 	_home_yaw_degrees = _target_yaw_degrees
 	_home_distance = _target_distance
+	drop_stashed_view()
 
 
 # The half of frame() that is about the BOARD rather than the shot: how far out you may
@@ -344,6 +355,40 @@ func _fit_distance(box: AABB) -> float:
 # its caller: an enemy phase reads square-on however the player left the camera.
 func align_to_detent() -> void:
 	_target_yaw_degrees = roundf(_target_yaw_degrees / yaw_step) * yaw_step
+
+
+# --- the view playback borrows (#520 follow-up) ------------------------------------------------
+#
+# Called on the EDGE into playback, BEFORE the detent/zoom reset -- after it would stash the reset
+# rather than the player's own framing.
+func stash_view() -> void:
+	_borrowed_position = position
+	_borrowed_yaw_degrees = _target_yaw_degrees
+	_borrowed_distance = _target_distance
+	_view_borrowed = true
+
+
+# ...and on the edge back out. A no-op unless something is actually borrowed, so a release with no
+# claim behind it (a board clear, a fixture poking the flag) moves nothing.
+#
+# Restores exactly the way R does: position ASSIGNED, because the mirror writes it directly every
+# frame and there is no target to ease toward; yaw and distance set as TARGETS so _process eases
+# them. Distance goes through set_zoom rather than a raw assign so it lands in the same clamp every
+# other writer uses -- the board may have been repainted while playback held the camera.
+func restore_view() -> void:
+	if not _view_borrowed:
+		return
+	_view_borrowed = false
+	position = _borrowed_position
+	_target_yaw_degrees = _borrowed_yaw_degrees
+	set_zoom(_borrowed_distance)
+
+
+# Anything that redefines the OPENING SHOT is a new board, and a view borrowed from the old one
+# must never be flown back to -- ScenarioManager.clear_board releases the playback lock, which
+# would otherwise fire the restore above on a board that no longer exists.
+func drop_stashed_view() -> void:
+	_view_borrowed = false
 
 
 func _process(delta: float):
