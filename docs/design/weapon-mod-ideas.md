@@ -4,7 +4,7 @@
 
 **Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; a standard frame's spaces cap 1/2/3 (the default since [#486](https://github.com/Phaazoid/Godoiosis/issues/486) — a template authors its own), proficiency unlocks spaces in order.
 
-**Canon checked through #486 (2026-08-25).**
+**Canon checked through #531 (2026-08-25).**
 
 ---
 
@@ -12,12 +12,12 @@
 
 1. **Galvanized Cogs** [∀] — standard attack gains the SHOCK tag. *The element-infusion line:* **Cinder Coils** (FIRE) · **Frosted Manifold** (ICE/WATER) · **Grit Hopper** (EARTH) · **Bellows Vent** (AIR) — one small mod per element; the bread-and-butter combinatrix enabler.
 2. **Honed Tooth Rail** [CS] — +1 power on the standard attack.
-3. **Counterweighted Haft** [∀ melee] — scaling blend shifts ~10% toward DEX (the canon scaling-nudge, itemized). Sibling: **Leaded Pommel** (toward STR).
+3. **Counterweighted Haft** ~~[∀ melee]~~ **[per melee family]** — scaling blend shifts ~10% toward DEX (the canon scaling-nudge, itemized). Sibling: **Leaded Pommel** (toward STR). ⚠ **Both became PER-FAMILY content in [#74](https://github.com/Phaazoid/Godoiosis/issues/74) (2026-08-25)**, and they are the casualties the dev's own ruling named: a `scaling_change` is stored as a shift from *one* family's main attack blend, so a mod defined by a scaling shift cannot be universal. One Haft per melee family rather than one Haft — a bank edit, not a blocker.
 4. **Rifled Choke** [CB] — +1 max range.
 5. **Bayonet Lug** [CB] — the gun gains the 1-tile melee standard attack.
 6. **Sprung Lanyard** [∀] — weapon cannot be Stripped/disarmed (the anti-Filcher fitting; legibility: visible cord).
 7. **Recoil Lugs** [BL] — Pummel shoves +1 tile.
-8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash. **BUILDABLE NOW — the plumbing is done, only the content is missing.** [#89](https://github.com/Phaazoid/Godoiosis/issues/89) built elemental immunity; [#90](https://github.com/Phaazoid/Godoiosis/issues/90) (2026-07-29) then made it an ordinary granted **ability** (`Abilities.Id.INSULATED_SHOCK`) rather than an armor field, and taught `Unit.get_live_abilities()` to union worn gear in — so an equippable granting immunity is now a solved, tested shape. **The gate is now OPEN for weapons ([#74](https://github.com/Phaazoid/Godoiosis/issues/74), 2026-08-23):** `WeaponModData.granted_abilities` copies `ArmorData`'s field and its #89 rule, and `Unit.get_live_abilities` unions in every mod on a contributing weapon. Which slots contribute was the decision #90 left open, and the dev's answer is **the equipped weapon plus every installed prosthetic** — a prosthetic is a limb, so what is bolted into it rides the body whether or not it is the thing being swung. Grants are proficiency-gated exactly as power is. **A RUNE is still not a source**, so that third of the question stays open. No resolver plumbing either way, then or now.
+8. **Insulated Grips** [∀] — wielder is immune to their own weapon's element/self-splash. **BUILDABLE NOW — the plumbing is done, only the content is missing.** [#89](https://github.com/Phaazoid/Godoiosis/issues/89) built elemental immunity; [#90](https://github.com/Phaazoid/Godoiosis/issues/90) (2026-07-29) then made it an ordinary granted **ability** (`Abilities.Id.INSULATED_SHOCK`) rather than an armor field, and taught `Unit.get_live_abilities()` to union worn gear in — so an equippable granting immunity is now a solved, tested shape. **The gate is now OPEN for weapons ([#74](https://github.com/Phaazoid/Godoiosis/issues/74), 2026-08-23):** `WeaponModData.granted_abilities` copies `ArmorData`'s field and its #89 rule, and `Unit.get_live_abilities` unions in every mod on a contributing weapon. Which slots contribute was the decision #90 left open, and the dev's answer is **the equipped weapon plus every installed prosthetic** — a prosthetic is a limb, so what is bolted into it rides the body whether or not it is the thing being swung. Grants are proficiency-gated exactly as power is. **A RUNE is still not a source** — that third is now [#531](https://github.com/Phaazoid/Godoiosis/issues/531), spun out when #74 closed (2026-08-25). No resolver plumbing either way, then or now.
 9. **Tuning Weights** [SS] — sweet-spot cell damage +1 (rides the #25 per-cell damage-band thread).
 10. **Oiled Action** [∀] — this weapon's attack resolves before same-initiative? — ⚠ no initiative system exists; park. Replace: equip/unequip this weapon costs no action (if inventory actions ever cost).
 
