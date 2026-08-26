@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #390 (2026-08-19).**
+**Canon checked through #101 (2026-08-26).**
 
 ## What a mission is
 
@@ -63,6 +63,58 @@ An objective ticked with no matching zone painted can never be met — the missi
 
 At runtime the unpainted objective reads **PENDING, not NONE** — deliberately. The map really is unwinnable, and silently dropping the objective would quietly convert a broken map into a *different, playable* one, which is a far worse failure than a loud one.
 
+## Losing on purpose: the lose-condition list and the turn clock ([#101](https://github.com/Phaazoid/Godoiosis/issues/101), 2026-08-26)
+
+#96 gave the game exactly one way to lose: the player has no active unit left. That is the floor, not the design — every interesting mission fails in a way that is *not* "everyone died". **The asymmetry is the point: win conditions are things the player DOES, lose conditions are things they fail to PREVENT**, and they are what make a map exert pressure. A capture point with no clock is a puzzle you solve at leisure.
+
+**Fork A was called their own list** (dev, 2026-08-26), not negated objectives:
+
+```gdscript
+@export var lose_conditions: Array[MissionRules.LoseCondition] = []   # empty = only the floor
+@export var round_limit := 0                                          # 0 = no limit
+```
+
+*"Protect unit X"* and *"unit X must survive"* really are the same statement, so the reason is not expressiveness — it is that the two are asked at **different moments** (an objective is checked for completion, a lose condition continuously) and that **a failure has to name a reason** for the banner, which an objective never does.
+
+- **`SQUAD_LOST`** — the #96 floor. Always on, never authored.
+- **`ROUND_LIMIT`** — the objectives were not met within `round_limit` rounds.
+- **`NONE`** is a sentinel meaning *nothing fired*, not a condition.
+
+**Lose conditions compose by ANY**, stated rather than inherited from a loop's shape: the first one that fires ends the mission. Losses are rarely conjunctive.
+
+**`MissionRules.AUTHORABLE` is what the Scenario tab offers**, and it is a const rather than "every enum value" — so the sentinel and the always-on floor are excluded by a *decision* that a reader can see, the same way `CAPTURE` sits explicitly in `AIArchetype.MAIN_ACTION_NEVER`.
+
+### The order two conditions are asked in
+
+`evaluate` takes `failure` exactly as it already takes `progress` — `MissionController` computes it, the rule stays pure — and the order is load-bearing at both ends:
+
+1. **The squad wipe is asked FIRST**, so mutual destruction is still a DEFEAT (unchanged doctrine) and a squad lost on the round the clock expires reports **SQUAD_LOST**, the more concrete thing that happened.
+2. **Every VICTORY path is asked BEFORE an authored failure.** Finishing on the last allowed round is finishing *in time*; a clock must not steal a win the player earned.
+
+`MissionController.failure_for` names the reason and `evaluate` decides the outcome. Both read the one `faction_has_active_units` predicate — `evaluate` keeps its own wipe branch because callers that pass no failure (the headless Play API) still need it.
+
+### Where the clock lives — fork B
+
+**The count is battle-scoped, the limit is authored**, the same split objectives already have: `MissionController._rounds_elapsed` (cleared by `reset()`, saved with the #87 snapshot) against `ScenarioData.round_limit`. A **round**, not a turn: the cycle is N-faction and rebuilt from the board each hand-off, so a round is the only stable unit.
+
+**There is ONE increment point**, `game._on_round_completed`, beside the terrain tick. `TurnManager` emits `round_completed` before `turn_started`, so the very next `check()` — turn start, after the downed clocks tick — is the one that sees it. **No new evaluation seam was added**; fork E's three points still are the three points.
+
+`round_limit = 0` means **no limit**, and that sentinel *is* the field's own default, so a board that never authored a clock cannot read as one that authored a zero-round one. A declared `ROUND_LIMIT` with no limit is the **unpainted-geometry guard's twin**: `MissionController.lose_conditions_missing_setup` is the one rule, read live by the Scenario tab, shouted once by `set_lose_conditions`, and reported as BLOCKS by `BoardLint`. It reads as broken and says so — it does not fire, and it is not silently dropped.
+
+### What the player sees — forks C and D
+
+Fork D's prerequisite was already built: [#134](https://github.com/Phaazoid/Godoiosis/issues/134)'s `MissionStatusPanel`. The clock is a row on it under its own **FAIL IF** header — a countdown listed among the objectives reads as something to achieve — and it is built off the declared list, so the next condition needs no panel edit.
+
+**One bug this surfaced, worth knowing because it is the shape a HUD gate always has:** `game.refresh_mission_status` hid the whole panel on `objectives.is_empty()`. A mission authoring a clock and *no* objectives therefore rendered no countdown at all — precisely the unplayable state fork C exists to prevent. The gate asks about lose conditions too now.
+
+**Fork C was called: colour the clock as it runs out, no modal** (dev, 2026-08-26). The threshold is a feel value, so it ships as a knob rather than a guess — `MissionStatusPanel.URGENT_ROUNDS` / `URGENT_COLOR`, two `GameKnobs.CLASS_KNOBS` rows under a **Mission** sub-tab. They are class rows and not property rows for a structural reason worth recording: `KNOBS` resolves node paths against the **Battle3D host**, and the status panel is 2D UI under the game's own `ui_layer`, so the node table structurally cannot reach it. Both rows re-apply through `game.refresh_mission_status` when written, or the slider would move nothing until the next turn — which is exactly when it is being dragged (#324's rule).
+
+The **banner names the reason**: `MissionRules.defeat_reason` is the one place the wording lives, so the card holds no second copy of *"Your squad has fallen."*
+
+### Still open on #101
+
+**Defend a point** (an enemy taking a friendly zone — the first non-player-faction objective, and what the AI-and-CAPTURE section below is waiting on), **protect a unit**, and **authorable OR-composition** (fork F: grouped OR-lists inside an AND, arriving when a real mission design wants it). Previewing *"this move loses"* in the queue is still fork B's question, now that the clock it was parked against exists.
+
 ## `MissionRules.Progress` vs `MissionRules.Objective`
 
 Two enums that are easy to confuse, so: **`Objective`** is *what is required* (ROUT/CAPTURE/EXTRACT), **`Progress`** is *how far along the mission's requirements are as a whole* (NONE/PENDING/MET). `Progress` was called `Objective` in slice 1 and was renamed when real objectives arrived.
@@ -121,13 +173,13 @@ Turn-boundary-only evaluation would have been simpler and dishonest: **a friendl
 
 Law #2 says the queue never lies — it does not say the queue must surface every consequence. The lethal skull already tells you the last enemy dies; declining to *also* tag it "this wins" withholds nothing and asserts nothing false.
 
-Capture turned out to be the cheap case to preview (a cell test against the resolved destination) and it still wasn't built — the question is now better asked alongside [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s clock, because *"this move loses"* is the version that actually matters for fairness.
+Capture turned out to be the cheap case to preview (a cell test against the resolved destination) and it still wasn't built — the question is better asked alongside [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s clock, because *"this move loses"* is the version that actually matters for fairness. **That clock now exists (2026-08-26) and the question is still open**: fork C shipped the countdown plus a colour cue as the whole warning, deliberately short of previewing a losing move.
 
 ## Mission start resets battle state (the #87 seam, finally executed)
 
 The persistence seam has always said battle-scoped state resets each mission — but **nothing had ever fired a mission-start event**, so that rule had never run. `MissionController.reset()` is the first thing to do it, called from `ScenarioManager.clear_board()`.
 
-**Resolved by [#87](https://github.com/Phaazoid/Godoiosis/issues/87) (2026-07-30), and the answer was NOT a flag on the load.** A scenario file *is* its board, so a load restores whatever the file recorded, and an authored mission simply recorded nothing — `reset()` runs first (via `clear_board()`), then `MissionController.restore_progress()` writes a mid-battle snapshot's captured zones and `contested` latch back over the blank slate. `outcome` is deliberately not saved: it is derived from those two plus the board, so the next `check()` re-reaches it.
+**Resolved by [#87](https://github.com/Phaazoid/Godoiosis/issues/87) (2026-07-30), and the answer was NOT a flag on the load.** A scenario file *is* its board, so a load restores whatever the file recorded, and an authored mission simply recorded nothing — `reset()` runs first (via `clear_board()`), then `MissionController.restore_progress()` writes a mid-battle snapshot's captured zones, `contested` latch and round count (#101) back over the blank slate. `outcome` is deliberately not saved: it is derived from those plus the board, so the next `check()` re-reaches it.
 
 The reset side stays real for the path that does not exist yet — the future roster → board flow, where units arrive off a persistent roster carrying no battle state *by construction*, because every battle-scoped field lives on the transient `Unit` or on a non-`@export` `WeaponInstance` var. *(Its character-file half is real since [#177](https://github.com/Phaazoid/Godoiosis/issues/177): the cast lives in `Resources/Units/` and an authored mission re-reads those files on every load. What is still future is results carrying **between** missions — and the mission-boundary concept that needs is [#70](https://github.com/Phaazoid/Godoiosis/issues/70)'s debt, not a roster feature.)*
 
@@ -164,19 +216,19 @@ to *win* by capturing, because enemy objectives are out of #96's scope — the p
 
 ## Known gaps
 
-- **The Play API cannot see authored objectives.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it always passes `Progress.NONE` — so headless runs evaluate every board as a rout map, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat.
+- **The Play API cannot see authored objectives, and now cannot see lose conditions either.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it passes `Progress.NONE` and no `failure` — so headless runs evaluate every board as a rout map with no clock, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat. The clock is precisely the kind of rule headless play is good at pressure-testing, so this is worth closing before the conditions with geometry land.
 - **The end-of-mission banner's three choices are untested.** `_end_mission` awaits `MissionEndBanner.show_banner`, and a button press cannot be given headlessly, so RETRY (reload + re-begin the turn), MISSION_SELECT (back to the front door) and STAY (unlock the board, mission stays over) are verified only in play. Coverage stops at the board reaching `MISSION_OVER` with input locked. *(The rest of `MissionController` IS covered as of 2026-07-29 — `tests/flow/test_mission_controller.gd`, 31 cases on a real game scene, pinning both latches, AND-composition, whole-zone capture, extraction counting the downed, declared-but-unpainted reading PENDING, and DEFEAT beating a met objective in the same pass; falsified against seven mutations, each caught by its own test. The "game scene segfaults in the runner" belief that had blocked this was false — see [#114](https://github.com/Phaazoid/Godoiosis/issues/114).)*
 - ~~**No mission-status UI.**~~ BUILT [#134](https://github.com/Phaazoid/Godoiosis/issues/134) (2026-08-11) — `MissionStatusPanel` shows every declared objective and its live progress. The prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D named is now in place.
 - **`CaptureAction`'s icon is a placeholder** (the board target marker).
 
 ## Not in scope for #96
 
-Campaign layer (mission ordering, unlocks, roster carried between missions, between-battle recovery) · objectives for non-player factions · story/briefing framing, rewards, acquisition · **lose conditions beyond the last unit falling → [#101](https://github.com/Phaazoid/Godoiosis/issues/101)**.
+Campaign layer (mission ordering, unlocks, roster carried between missions, between-battle recovery) · objectives for non-player factions · story/briefing framing, rewards, acquisition · ~~**lose conditions beyond the last unit falling**~~ — the SEAM and the turn clock landed as [#101](https://github.com/Phaazoid/Godoiosis/issues/101) (2026-08-26, see *Losing on purpose* above); defend-a-point and protect-a-unit are their own issues.
 
 ## What this unblocks
 
 - [#70](https://github.com/Phaazoid/Godoiosis/issues/70) — between-missions-only job swap, blocked purely because no mission-boundary concept existed (`set_main_job`/`set_sub_job` carry a `TODO(campaign layer)`).
-- [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above. **BUILT 2026-07-30**; `restore_progress()` is the restore half, and `ScenarioData` now carries the captured zones + `contested` latch.
-- [#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions, which reuse `check()`, the objectives list, and `ZoneManager.Kind` wholesale.
+- [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above. **BUILT 2026-07-30**; `restore_progress()` is the restore half, and `ScenarioData` now carries the captured zones, the `contested` latch and the round count (#101).
+- [#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions. **The seam and the turn clock are BUILT (2026-08-26, see *Losing on purpose* above)**, and they did reuse `check()` and the objectives list wholesale, exactly as predicted. What remains on that number is the conditions with geometry — defend-a-point and protect-a-unit — plus authorable OR-composition.
 
 Cross-refs: [level-concepts.md](level-concepts.md) (the set-piece pool missions will draw from), [will-and-death.md](will-and-death.md) (why all-downed is terminal, and why extraction counts the downed), [ai-tactics.md](ai-tactics.md), [resolution-pipeline.md](resolution-pipeline.md) (the persistence seam).
