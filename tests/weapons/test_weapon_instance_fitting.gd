@@ -132,9 +132,13 @@ func test_a_mod_locked_to_this_family_fits_and_an_unlocked_one_fits_anything() -
 func test_can_fit_agrees_with_the_reason_on_every_refusal() -> void:
 	var w := WeaponInstance.make(_template())
 	w.fit(0, _mod(1))   # space 0 has capacity 1, so it is now full
+	# The wrong-family case must sit in a space with ROOM (index 1, capacity 2, empty). Asked at
+	# space 0 it proves nothing: that space is full, so a can_fit that had stopped consulting the
+	# reason would refuse on capacity and the two would agree by coincidence -- measured, the
+	# divergence mutant passed against exactly that fixture.
 	var cases: Array[Array] = [
 		[0, _mod(1)],                                          # full
-		[0, _family_mod(WeaponData.WeaponType.CARBINE)],       # wrong family
+		[1, _family_mod(WeaponData.WeaponType.CARBINE)],       # wrong family, room to spare
 		[9, _mod(1)],                                          # no such space
 		[1, _mod(1)],                                          # allowed
 	]
