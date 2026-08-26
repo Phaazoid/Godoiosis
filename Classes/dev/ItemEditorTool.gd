@@ -411,15 +411,107 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 # Array or a Dictionary and silently draws nothing for either.
 #
 # scaling_change is in that second group and PREDATES #74 -- it has been undrawn since the field was
-# written, so this is the first build in which every field of a mod is actually editable. It is
-# still the raw DELTA spinboxes here; the absolute sliders that make it readable are this ticket's
-# next slice, and `family` gets its picker there too.
-const MOD_SKIP := ["display_name", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
+# written, so this is the first build in which every field of a mod is actually editable. `family`
+# joins it as bespoke UI: the two are one control surface, since a scaling change is meaningless
+# until a family says what it is measured against.
+const MOD_SKIP := ["display_name", "family", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
 
 func _populate_mod_editor(mod: WeaponModData) -> void:
 	DevWidgets.build_resource_editor(editor_container, mod, populate, MOD_SKIP)
-	DevWidgets.add_stat_dict(editor_container, "Scaling change (blend %)", mod.scaling_change,
+	_populate_mod_family(mod)
+	_populate_scaling_change(mod)
+	_populate_mod_grants(mod)
+
+# The family picker. Changing it re-measures the scaling against the NEW family's main, which is
+# why it rebuilds -- the sliders' whole meaning is relative to that reference.
+func _populate_mod_family(mod: WeaponModData) -> void:
+	var first := editor_container.get_child_count()
+	DevWidgets.add_option(editor_container, "Fits family", WeaponData.WeaponType.keys(),
+		WeaponData.WeaponType.keys()[mod.family],
+		func(s: String):
+			mod.family = WeaponData.WeaponType[s]
+			populate()
+	)
+	_tip_from(first, DevWidgets.property_tip(mod, "family"))
+
+# ABSOLUTE in, DELTA at rest (#74, dev ruling). You author the percentages you want the weapon to
+# scale off; what is stored is the difference from the family main attack's own blend, so every
+# attack that weapon fires moves by the same amount and keeps its own character.
+#
+# NO FAMILY, NO SLIDERS. A change is measured against one family's main and means nothing without
+# it, so the door simply is not there yet -- which makes the derived rule visible rather than
+# letting you author a number with nothing behind it.
+func _populate_scaling_change(mod: WeaponModData) -> void:
+	if mod.family == WeaponData.WeaponType.NONE:
+		DevWidgets.add_label(editor_container,
+			"Damage scaling: pick a family first — a change is measured against that family's main attack.")
+		return
+	var family_name: String = WeaponData.WeaponType.keys()[mod.family].capitalize()
+	var reference := _reference_blend(mod.family)
+	if reference.is_empty():
+		DevWidgets.add_label(editor_container,
+			"Damage scaling: %s has no main attack blend to measure against." % family_name)
+		return
+
+	var absolute := _absolute_blend(reference, mod.scaling_change)
+	DevWidgets.add_label(editor_container, "%s main scales %s — drag to what THIS weapon should scale off:"
+		% [family_name, Stats.blend_text(reference)])
+
+	# Built now, parented AFTER the sliders so it reads below them, and refreshed from the callback
+	# rather than by rebuilding: populate() on every drag tick would tear the slider out from under
+	# the mouse. It carries the STORED shift, which is the half the sliders cannot show.
+	var stored := Label.new()
+	var refresh := func() -> void:
+		stored.text = "   stored shift: %s" % _shift_text(mod.scaling_change)
+	DevWidgets.add_blend_sliders(editor_container, absolute,
+		func():
+			_store_scaling_change(mod, reference, absolute)
+			refresh.call(),
 		DevWidgets.property_tip(mod, "scaling_change"))
+	refresh.call()
+	editor_container.add_child(stored)
+
+func _reference_blend(family: WeaponData.WeaponType) -> Dictionary:
+	var blend: Dictionary[Stats.Stat, int] = {}
+	var main := WeaponCatalog.family_main(family)
+	if main == null:
+		return blend
+	for stat: Stats.Stat in main.scaling_blend:
+		blend[stat] = main.scaling_blend[stat]
+	return blend
+
+# What the sliders start on. Clamped at zero exactly as WeaponInstance.effective_blend clamps it,
+# so the panel shows what the weapon would really scale off -- including the DRIFT case, where a
+# family main retuned since this mod was authored makes the absolutes move (dev ruling: keep the
+# drift, make it visible). A drifted total will not be 100; the first drag re-pins it.
+func _absolute_blend(reference: Dictionary, change: Dictionary) -> Dictionary:
+	var absolute: Dictionary[Stats.Stat, int] = {}
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var value: int = maxi(0, int(reference.get(stat, 0)) + int(change.get(stat, 0)))
+		if value != 0:
+			absolute[stat] = value   # zero means absent, the same rule the sliders themselves keep
+	return absolute
+
+# The inverse, run on every slider change. Zero means absent here too: a stat the mod does not move
+# is not an entry worth storing, and writing it would grow every saved mod four keys wide.
+func _store_scaling_change(mod: WeaponModData, reference: Dictionary, absolute: Dictionary) -> void:
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var shift: int = int(absolute.get(stat, 0)) - int(reference.get(stat, 0))
+		if shift == 0:
+			mod.scaling_change.erase(stat)
+		else:
+			mod.scaling_change[stat] = shift
+
+func _shift_text(change: Dictionary) -> String:
+	if change.is_empty():
+		return "none — this mod leaves the family's scaling alone"
+	var parts: Array[String] = []
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		if change.has(stat):
+			parts.append("%s %+d" % [Stats.Stat.keys()[stat], change[stat]])
+	return ", ".join(parts)
+
+func _populate_mod_grants(mod: WeaponModData) -> void:
 	DevWidgets.add_stat_dict(editor_container, "Wielder stat modifiers", mod.stat_modifiers,
 		DevWidgets.property_tip(mod, "stat_modifiers"))
 	_populate_grant_list("Granted attacks:", mod.granted_attacks, WeaponAttackCatalog.get_library(),
@@ -569,19 +661,11 @@ func _on_prototype_family_picked(template: WeaponData, family_name: String) -> v
 		return
 	template.weapon_type = picked
 	if template.main_attack == null or _is_a_family_main(template.main_attack):
-		template.main_attack = _family_main_for(picked)
+		template.main_attack = WeaponCatalog.family_main(picked)
 	populate()
 
 func _is_a_family_main(attack: WeaponAttackData) -> bool:
 	return WeaponAttackCatalog.get_mains().values().has(attack)
-
-# The family BASE's main, never another prototype's: a prototype is a variant of its FAMILY, not
-# of whichever prototype happens to share its weapon_type.
-func _family_main_for(type: WeaponData.WeaponType) -> WeaponAttackData:
-	for base: WeaponData in WeaponCatalog.get_family_bases().values():
-		if base.weapon_type == type:
-			return base.main_attack
-	return null
 
 # A PICKER, never an authoring surface. Everything it lists is a file the Attack Editor wrote, and
 # the pick is a direct ref -- so a prototype that never swaps follows its family's retunes, and one

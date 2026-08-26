@@ -119,7 +119,7 @@ func test_picking_a_family_fills_in_that_familys_main_as_a_shared_ref() -> void:
 	assert_int(family).is_not_equal(WeaponData.WeaponType.NONE)   # no family base has a main: proves nothing
 
 	tool_ref._on_prototype_family_picked(made, WeaponData.WeaponType.keys()[family])
-	assert_object(made.main_attack).is_same(tool_ref._family_main_for(family))
+	assert_object(made.main_attack).is_same(WeaponCatalog.family_main(family))
 
 # A deliberate library pick is an authoring decision, so changing the family must not silently
 # discard it -- only an auto-filled main follows.

@@ -36,6 +36,21 @@ static func max_mod_spaces() -> int:
 		widest = maxi(widest, template.mod_spaces.size())
 	return widest
 
+# A family's own main attack — the BASE's, never a prototype's, since a prototype is a variant of
+# its family rather than the other way round. Null when nothing on disk claims that family.
+#
+# It lives here rather than in whichever panel asked first because two now do (#74): the Item
+# Editor's Prototype mode fills a new prototype's main from it, and its mod mode measures a scaling
+# change against it. Two copies of this walk would be two answers to "what does this family swing"
+# and would drift the moment one gained a rule about prototypes (Law #4).
+static func family_main(weapon_type: WeaponData.WeaponType) -> WeaponAttackData:
+	if weapon_type == WeaponData.WeaponType.NONE:
+		return null
+	for base: WeaponData in get_family_bases().values():
+		if base.weapon_type == weapon_type:
+			return base.main_attack
+	return null
+
 # All templates a new weapon can start from — for the fitting tool.
 static func get_templates() -> Dictionary:
 	var templates := get_family_bases()
