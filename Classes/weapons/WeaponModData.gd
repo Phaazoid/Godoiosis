@@ -6,9 +6,10 @@ class_name WeaponModData
 # additive. Exotic effects (alt-fire modes, blocking, overwatch) are LATER content; see
 # weapon-mod-ideas.md for the authored bank this pulls fixtures from.
 #
-# The three GRANT fields below (#74) are the second job the ratified model always gave mods:
-# changing what a weapon can do, not just how hard it hits. They are additive only — a mod
-# ADDS an attack to the repertoire, never replaces or rewrites one. That half stays with #74.
+# The GRANT fields below (#74) are the second job the ratified model always gave mods: changing
+# what a weapon can do, not just how hard it hits. Since #529/#530 a mod may also REPLACE the
+# weapon's main attack outright and EDIT what the attacks applies_to names do -- so "additive
+# only", which this header claimed until then, is no longer the whole model.
 
 
 @export var id: String = ""
@@ -72,6 +73,18 @@ func save_block_reason() -> String:
 # Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
 # WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's
 # comment for why this one field is per-weapon while the two below are per-unit.
+@export var replaces_main: WeaponAttackData = null
+# Swaps out the weapon's MAIN attack (#529) -- "the standard attack BECOMES this", which is how
+# half the mod bank is written. Composed in WeaponInstance.effective_main, proficiency-gated like
+# every other effect; null = the template's own main, which is every mod today.
+#
+# The MAIN only, deliberately. AttackData carries no id, so naming an arbitrary extra would need
+# an identity model that does not exist -- while main_attack is a real addressable slot. Two mods
+# replacing it is refused at the FIT (fit_block_reason), where the dev can still act on it.
+#
+# Anything that changes how an attack is AIMED belongs here rather than in an override: Reach
+# reads a pattern with no wielder in hand, so a swapped pattern has to arrive as a whole attack.
+
 @export var granted_attacks: Array[WeaponAttackData] = []
 
 # Abilities this mod grants while its weapon contributes (#74, copying ArmorData's field and its
@@ -98,7 +111,8 @@ static func property_tips() -> Dictionary:
 		"family": "Which weapon family this mod fits. Required once it changes scaling -- the shift is measured against that family's main attack and means nothing on another. Leave it unset for a mod that fits anything.",
 		"added_element": "An element this mod adds ON TOP of whatever the attack already carries, on whichever attacks Applies To names. NONE = adds nothing.",
 		"weight": "Mass this mod adds to the weapon. Counts whether or not the space is proficiency-active -- mass is physical, not a capability.",
-		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. Additive only: nothing here replaces or edits an existing attack. Pick from attacks authored in the Attack Editor.",
+		"replaces_main": "Swaps out the weapon's MAIN attack -- the standard swing BECOMES this one. Counters, default aim and the weapon menu all follow it. Leave unset for a mod that does not change what the weapon swings.",
+		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. To CHANGE the standard attack rather than add beside it, use Replaces Main. Pick from attacks authored in the Attack Editor.",
 		"granted_abilities": "Abilities the WIELDER has while this weapon contributes -- the equipped weapon, or an installed prosthetic. Granted live: unequip the weapon and the ability leaves with it.",
 		"stat_modifiers": "Stat changes to the WIELDER while this weapon contributes, not to the weapon. Negative is the classic tax. These never open a wear gate -- gates read the body, never gear.",
 	}
