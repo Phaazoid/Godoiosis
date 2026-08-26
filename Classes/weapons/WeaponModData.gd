@@ -10,13 +10,54 @@ class_name WeaponModData
 # changing what a weapon can do, not just how hard it hits. They are additive only — a mod
 # ADDS an attack to the repertoire, never replaces or rewrites one. That half stays with #74.
 
+
 @export var id: String = ""
 @export var display_name: String = ""
 @export var size: int = 1   # 1-3, capacity cost within whichever space it's fitted to
 @export var power_delta: int = 0
-@export var scaling_nudge: Dictionary[Stats.Stat, int] = {}   # percentage-point shifts within the wielded weapon's blend, +/-
 @export var added_element: Elemental.Element = Elemental.Element.NONE
 @export var weight: int = 0
+
+@export var scaling_change: Dictionary[Stats.Stat, int] = {}
+# Percentage-POINT shifts against the blend of the family main attack this was authored against,
+# +/-, stacked additively across every fitted mod. Was `scaling_nudge` until #74 — the storage is
+# unchanged, but the editor now authors ABSOLUTE percentages and stores the difference, so "nudge"
+# stopped describing what the dev types.
+#
+# A DELTA rather than an absolute is load-bearing since #485 put the blend on the ATTACK: an
+# absolute would force every attack the weapon fires onto identical numbers, flattening exactly the
+# per-attack variety that ticket exists to create. A shift moves them all and leaves the
+# differences intact.
+
+@export var family: WeaponData.WeaponType = WeaponData.WeaponType.NONE
+# Which family this mod fits; NONE fits anything. REQUIRED once scaling_change is non-empty — a
+# stored delta is measured against ONE family's main attack blend and means nothing anywhere else.
+# The restriction is DERIVED (requires_family below), never a second field to set wrong, per the
+# dev's ruling: "only mods with stat bumps are forced to be weapon specific". Set voluntarily it is
+# still a lock, which is what the mod bank's own [CS]/[CB] tags have always meant.
+#
+
+# May this mod go on that family? NONE fits anything; anything else is a lock — including on a mod
+# that changes no scaling, because setting the field is already a statement, and it is what the
+# bank's own [CS]/[CB] tags have always meant. WeaponInstance.fit_block_reason is the one reader.
+func fits_family(weapon_type: WeaponData.WeaponType) -> bool:
+	return family == WeaponData.WeaponType.NONE or family == weapon_type
+
+
+# The derived restriction (#74, dev ruling: "only mods with stat bumps are forced to be weapon
+# specific"). A stored shift is measured against ONE family's main attack, so it means nothing
+# anywhere else — no second field to author, and nothing to keep in sync.
+func requires_family() -> bool:
+	return not scaling_change.is_empty()
+
+
+# "" = savable. The REASON lives here rather than in the panel that refuses, so a second surface
+# cannot invent different words for the same rule — WeaponInstance.fit_block_reason's shape, and
+# #166's before it. The Item Editor's save gate is its one reader today.
+func save_block_reason() -> String:
+	if requires_family() and family == WeaponData.WeaponType.NONE:
+		return "This mod changes scaling, so it needs a family — the change is measured against that family's main attack, and means nothing without one."
+	return ""
 
 # Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
 # WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's
@@ -42,7 +83,8 @@ static func property_tips() -> Dictionary:
 		"display_name": "What the fitting picker and the weapon's space list call this mod.",
 		"size": "Capacity this mod costs in whichever space it is fitted to. Spaces hold 1 / 2 / 3, so a size-3 keystone only ever fits the big space.",
 		"power_delta": "Flat shift to the damage of every attack this weapon fires, before scaling. Negative is a real option -- a heavy mod that trades power for reach.",
-		"scaling_nudge": "Percentage-POINT shifts inside the weapon family's stat blend, not a replacement for it. +30 DEX on a 100 STR blend makes it 100/30, so the weapon still reads mostly STR.",
+		"scaling_change": "How this mod re-mixes damage scaling. You author the absolute percentages you want; what is STORED is the shift from the family main attack's own blend, so every attack the weapon fires moves by the same amount and keeps its own character.",
+		"family": "Which weapon family this mod fits. Required once it changes scaling -- the shift is measured against that family's main attack and means nothing on another. Leave it unset for a mod that fits anything.",
 		"added_element": "An element this mod adds to every hit, ON TOP of whatever the attack already carries. NONE = adds nothing.",
 		"weight": "Mass this mod adds to the weapon. Counts whether or not the space is proficiency-active -- mass is physical, not a capability.",
 		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. Additive only: nothing here replaces or edits an existing attack. Pick from attacks authored in the Attack Editor.",

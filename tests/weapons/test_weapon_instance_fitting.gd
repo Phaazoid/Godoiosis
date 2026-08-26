@@ -2,7 +2,7 @@
 # (#59 weapon parts core — the one gap the item-6 pass didn't touch). Covers: space
 # capacities/fit validation, active-space gating by proficiency, the mass-is-physical
 # rule (get_effective_weight counts every fitted mod, active or not), and the
-# scaling_blend + per-mod scaling_nudge weighted-average math feeding base_damage.
+# scaling_blend + per-mod scaling_change weighted-average math feeding base_damage.
 #
 # Since #486 it also covers AUTHORED spaces: how many a template has, that one past the third is
 # real, that space() writes through, and that "unreduced" means every space rather than three.
@@ -21,12 +21,12 @@ func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	return t
 
-func _mod(size: int = 1, power_delta: int = 0, weight: int = 0, scaling_nudge: Dictionary[Stats.Stat, int] = {}, added_element: Elemental.Element = Elemental.Element.NONE) -> WeaponModData:
+func _mod(size: int = 1, power_delta: int = 0, weight: int = 0, scaling_change: Dictionary[Stats.Stat, int] = {}, added_element: Elemental.Element = Elemental.Element.NONE) -> WeaponModData:
 	var m := WeaponModData.new()
 	m.size = size
 	m.power_delta = power_delta
 	m.weight = weight
-	m.scaling_nudge = scaling_nudge
+	m.scaling_change = scaling_change
 	m.added_element = added_element
 	return m
 
@@ -107,6 +107,64 @@ func test_can_fit_false_with_no_template() -> void:
 	var w := WeaponInstance.new()
 	assert_bool(w.can_fit(0, _mod(1))).is_false()
 	assert_int(w.space_count()).is_equal(0)
+
+# --- The family lock and its reason (#74) ---
+
+func _family_mod(family: WeaponData.WeaponType, size: int = 1) -> WeaponModData:
+	var m := _mod(size)
+	m.family = family
+	return m
+
+# _template() builds a CHAINSWORD, so a Carbine-locked mod is the off-family case.
+func test_a_mod_locked_to_another_family_is_refused() -> void:
+	var w := WeaponInstance.make(_template())
+	assert_bool(w.can_fit(0, _family_mod(WeaponData.WeaponType.CARBINE))).is_false()
+	assert_bool(w.fit(0, _family_mod(WeaponData.WeaponType.CARBINE))).is_false()
+	assert_int(w.used_capacity(0)).is_equal(0)
+
+func test_a_mod_locked_to_this_family_fits_and_an_unlocked_one_fits_anything() -> void:
+	var w := WeaponInstance.make(_template())
+	assert_bool(w.can_fit(1, _family_mod(WeaponData.WeaponType.CHAINSWORD))).is_true()
+	assert_bool(w.can_fit(2, _mod(1))).is_true()   # family NONE
+
+# can_fit is DERIVED from the reason, so the two cannot disagree about anything -- which is the
+# whole point of the channel. Asserted over every refusal this weapon can produce, not one of them.
+func test_can_fit_agrees_with_the_reason_on_every_refusal() -> void:
+	var w := WeaponInstance.make(_template())
+	w.fit(0, _mod(1))   # space 0 has capacity 1, so it is now full
+	# The wrong-family case must sit in a space with ROOM (index 1, capacity 2, empty). Asked at
+	# space 0 it proves nothing: that space is full, so a can_fit that had stopped consulting the
+	# reason would refuse on capacity and the two would agree by coincidence -- measured, the
+	# divergence mutant passed against exactly that fixture.
+	var cases: Array[Array] = [
+		[0, _mod(1)],                                          # full
+		[1, _family_mod(WeaponData.WeaponType.CARBINE)],       # wrong family, room to spare
+		[9, _mod(1)],                                          # no such space
+		[1, _mod(1)],                                          # allowed
+	]
+	for case in cases:
+		var index: int = case[0]
+		var mod: WeaponModData = case[1]
+		assert_bool(w.can_fit(index, mod)).is_equal(w.fit_block_reason(index, mod) == "")
+
+# A refusal that cannot say WHY is what the channel exists to prevent, and the two refusals must
+# not wear each other's words -- a full space reading "fits Carbine only" is the bug this replaces.
+func test_each_refusal_explains_itself_in_its_own_terms() -> void:
+	var w := WeaponInstance.make(_template())
+	assert_str(w.fit_block_reason(0, _family_mod(WeaponData.WeaponType.CARBINE))).contains("Carbine")
+
+	w.fit(0, _mod(1))   # capacity 1, now full
+	var full := w.fit_block_reason(0, _mod(1))
+	assert_str(full).is_not_empty()
+	assert_str(full).not_contains("Carbine")
+	assert_str(w.fit_block_reason(1, _mod(1))).is_empty()   # an allowed fit says nothing
+
+# FAMILY is asked first: a wrong-family mod that would ALSO overflow reports the permanent
+# refusal, not the one you could fix by emptying the space.
+func test_the_family_refusal_outranks_the_capacity_one() -> void:
+	var w := WeaponInstance.make(_template())
+	w.fit(0, _mod(1))   # space 0 full as well
+	assert_str(w.fit_block_reason(0, _family_mod(WeaponData.WeaponType.CARBINE, 3))).contains("Carbine")
 
 # --- Proficiency-gated activation ---
 
@@ -192,7 +250,7 @@ func test_base_damage_ignores_inactive_space_power_delta() -> void:
 	_set_proficiency(wielder, 1)
 	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(17)   # 10 + 2 (active mod) + 5 (STR) — the +100 never applies
 
-func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
+func test_scaling_change_from_active_mod_shifts_blend() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
 	w.fit(0, _mod(1, 0, 0, {Stats.Stat.DEX: 50}))   # active mod adds a DEX slice to the blend
 	var wielder := _wielder({Stats.Stat.STR: 8, Stats.Stat.DEX: 2})
@@ -200,7 +258,7 @@ func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
 	# blend becomes {STR:100, DEX:50}; weighted = (8*100 + 2*50) / 150 = 900/150 = 6
 	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(6)
 
-func test_inactive_mod_scaling_nudge_is_ignored() -> void:
+func test_inactive_mod_scaling_change_is_ignored() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
 	w.fit(2, _mod(1, 0, 0, {Stats.Stat.DEX: 100}))   # sits in a space that never activates here
 	var wielder := _wielder({Stats.Stat.STR: 7, Stats.Stat.DEX: 20})

@@ -65,6 +65,13 @@ const SCALING_STATS: Array[Stat] = [Stat.STR, Stat.DEX, Stat.PER, Stat.CON]
 # when the weights already sum to it, so the editor pins it and AttackLint refuses anything else.
 const BLEND_TOTAL := 100
 
+# The grain a blend is authored on (dev, 2026-08-25): the sliders notch to multiples of this
+# rather than to single points. It divides BLEND_TOTAL exactly, which is what makes it work at
+# all -- 20 whole steps to spread across four stats, so any move can be balanced without a
+# remainder no slider can express. A blend already on disk that is NOT a multiple of this is
+# still legal arithmetic; the sliders simply cannot re-author it off-grain.
+const BLEND_STEP := 5
+
 # Human-readable scaling blend ("STR 60%, DEX 40%") for a weights dict (#485). Sibling of
 # modifier_text and separate for the same reason payload_text and targets_text are: a DELTA and a
 # SHARE are different questions, and only one of them wants a sign.

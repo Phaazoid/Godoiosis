@@ -179,7 +179,7 @@ func _on_update_pressed():
 	if reason != "":
 		status_label.text = reason
 		return
-	if _refuse_uncarryable(current_item):
+	if _refuse_unusable(current_item):
 		return
 	# Overwrite the file the entry actually came from. The dropdown key is the item's NAME, and a
 	# path rebuilt from it would miss any file whose basename differs.
@@ -225,7 +225,7 @@ func _on_save_as_pressed():
 		return
 	if DevWidgets.refuse_illegal_name(entered_name, "item", status_label):
 		return
-	if _refuse_uncarryable(current_item):
+	if _refuse_unusable(current_item):
 		return
 	var dir := _save_dir_for(current_item)
 	var path := dir + entered_name + ".tres"
@@ -365,19 +365,43 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 	if mods.is_empty():
 		DevWidgets.add_label(editor_container, "(no mods in Resources/WeaponMods/)")
 		return
+
+	# The picker lists what this WEAPON could ever take, not what fits right now (#74). A family
+	# refusal is permanent, so showing those entries is offering a door that never opens; a full
+	# space is live state you fix by removing something, so those stay listed and are refused WITH
+	# THE REASON. That split is #166's policy call — grey (or here, refuse) only what you can
+	# explain, hide what would never be true.
+	var offerable := {}
+	for k in mods:
+		var mod: WeaponModData = mods[k]
+		if mod.fits_family(weapon.template.weapon_type):
+			offerable[k] = mod
+	if offerable.is_empty():
+		# The FAMILY, not the template's own name — a prototype called The Jaw takes Chainsword
+		# mods, so naming the template here would say the wrong thing. Deliberately not the
+		# "Family:" line above, which answers what this weapon IS rather than what gates its mods.
+		var family_name: String = WeaponData.WeaponType.keys()[weapon.template.weapon_type].capitalize()
+		DevWidgets.add_label(editor_container, "(no mods fit %s)" % family_name)
+		return
+
 	var add_row := HBoxContainer.new()
 	var picker := OptionButton.new()
-	for k in mods:
+	for k in offerable:
 		picker.add_item(k)
 	add_row.add_child(picker)
 	var add_btn := Button.new()
 	add_btn.text = "Fit"
 	add_btn.pressed.connect(func():
-		var key = mods.keys()[picker.selected]
-		if weapon.fit(index, mods[key]):   # a direct ref, not a duplicate — WeaponModCatalog's header comment already documents mods as live-shared, same model as templates
-			populate()
-		else:
-			push_warning("Not enough capacity in space %d to fit %s" % [index + 1, key])
+		var key = offerable.keys()[picker.selected]
+		# a direct ref, not a duplicate — WeaponModCatalog's header already documents mods as
+		# live-shared, the same model as templates
+		var reason := weapon.fit_block_reason(index, offerable[key])
+		if reason != "":
+			push_warning(reason)
+			status_label.text = reason
+			return
+		weapon.fit(index, offerable[key])
+		populate()
 	)
 	add_row.add_child(add_btn)
 	editor_container.add_child(add_row)
@@ -386,14 +410,112 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 # scalars; the other four get bespoke UI here, because build_resource_editor has no arm for an
 # Array or a Dictionary and silently draws nothing for either.
 #
-# scaling_nudge is in that second group and PREDATES #74 -- it has been undrawn since the field was
-# written, so this is the first build in which every field of a mod is actually editable.
-const MOD_SKIP := ["display_name", "scaling_nudge", "stat_modifiers", "granted_attacks", "granted_abilities"]
+# scaling_change is in that second group and PREDATES #74 -- it has been undrawn since the field was
+# written, so this is the first build in which every field of a mod is actually editable. `family`
+# joins it as bespoke UI: the two are one control surface, since a scaling change is meaningless
+# until a family says what it is measured against.
+const MOD_SKIP := ["display_name", "family", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
 
 func _populate_mod_editor(mod: WeaponModData) -> void:
 	DevWidgets.build_resource_editor(editor_container, mod, populate, MOD_SKIP)
-	DevWidgets.add_stat_dict(editor_container, "Scaling nudge (blend %)", mod.scaling_nudge,
-		DevWidgets.property_tip(mod, "scaling_nudge"))
+	_populate_mod_family(mod)
+	_populate_scaling_change(mod)
+	_populate_mod_grants(mod)
+
+# The family picker. Changing it re-measures the scaling against the NEW family's main, which is
+# why it rebuilds -- the sliders' whole meaning is relative to that reference.
+func _populate_mod_family(mod: WeaponModData) -> void:
+	var first := editor_container.get_child_count()
+	DevWidgets.add_option(editor_container, "Fits family", WeaponData.WeaponType.keys(),
+		WeaponData.WeaponType.keys()[mod.family],
+		func(s: String):
+			mod.family = WeaponData.WeaponType[s]
+			populate()
+	)
+	_tip_from(first, DevWidgets.property_tip(mod, "family"))
+
+# ABSOLUTE in, DELTA at rest (#74, dev ruling). You author the percentages you want the weapon to
+# scale off; what is stored is the difference from the family main attack's own blend, so every
+# attack that weapon fires moves by the same amount and keeps its own character.
+#
+# NO FAMILY, NO SLIDERS. A change is measured against one family's main and means nothing without
+# it, so the door simply is not there yet -- which makes the derived rule visible rather than
+# letting you author a number with nothing behind it.
+func _populate_scaling_change(mod: WeaponModData) -> void:
+	if mod.family == WeaponData.WeaponType.NONE:
+		DevWidgets.add_label(editor_container,
+			"Damage scaling: pick a family first — a change is measured against that family's main attack.")
+		return
+	var family_name: String = WeaponData.WeaponType.keys()[mod.family].capitalize()
+	var reference := _reference_blend(mod.family)
+	if reference.is_empty():
+		DevWidgets.add_label(editor_container,
+			"Damage scaling: %s has no main attack blend to measure against." % family_name)
+		return
+
+	var absolute := _absolute_blend(reference, mod.scaling_change)
+	# Names the MAIN, deliberately. "what this weapon scales off" would say a weapon has one blend,
+	# which is the assumption #485 abolished -- the main is the REFERENCE the number is measured
+	# against, not the only thing the shift reaches (see the stored line below).
+	DevWidgets.add_label(editor_container, "%s main scales %s — drag to where its MAIN should land:"
+		% [family_name, Stats.blend_text(reference)])
+
+	# Built now, parented AFTER the sliders so it reads below them, and refreshed from the callback
+	# rather than by rebuilding: populate() on every drag tick would tear the slider out from under
+	# the mouse. It carries the STORED shift, which is the half the sliders cannot show.
+	var stored := Label.new()
+	var refresh := func() -> void:
+		stored.text = "   stored shift: %s%s" % [_shift_text(mod.scaling_change),
+			"" if mod.scaling_change.is_empty() else " — applied to EVERY attack this weapon fires"]
+	DevWidgets.add_blend_sliders(editor_container, absolute,
+		func():
+			_store_scaling_change(mod, reference, absolute)
+			refresh.call(),
+		DevWidgets.property_tip(mod, "scaling_change"))
+	refresh.call()
+	editor_container.add_child(stored)
+
+func _reference_blend(family: WeaponData.WeaponType) -> Dictionary:
+	var blend: Dictionary[Stats.Stat, int] = {}
+	var main := WeaponCatalog.family_main(family)
+	if main == null:
+		return blend
+	for stat: Stats.Stat in main.scaling_blend:
+		blend[stat] = main.scaling_blend[stat]
+	return blend
+
+# What the sliders start on. Clamped at zero exactly as WeaponInstance.effective_blend clamps it,
+# so the panel shows what the weapon would really scale off -- including the DRIFT case, where a
+# family main retuned since this mod was authored makes the absolutes move (dev ruling: keep the
+# drift, make it visible). A drifted total will not be 100; the first drag re-pins it.
+func _absolute_blend(reference: Dictionary, change: Dictionary) -> Dictionary:
+	var absolute: Dictionary[Stats.Stat, int] = {}
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var value: int = maxi(0, int(reference.get(stat, 0)) + int(change.get(stat, 0)))
+		if value != 0:
+			absolute[stat] = value   # zero means absent, the same rule the sliders themselves keep
+	return absolute
+
+# The inverse, run on every slider change. Zero means absent here too: a stat the mod does not move
+# is not an entry worth storing, and writing it would grow every saved mod four keys wide.
+func _store_scaling_change(mod: WeaponModData, reference: Dictionary, absolute: Dictionary) -> void:
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var shift: int = int(absolute.get(stat, 0)) - int(reference.get(stat, 0))
+		if shift == 0:
+			mod.scaling_change.erase(stat)
+		else:
+			mod.scaling_change[stat] = shift
+
+func _shift_text(change: Dictionary) -> String:
+	if change.is_empty():
+		return "none — this mod leaves the family's scaling alone"
+	var parts: Array[String] = []
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		if change.has(stat):
+			parts.append("%s %+d" % [Stats.Stat.keys()[stat], change[stat]])
+	return ", ".join(parts)
+
+func _populate_mod_grants(mod: WeaponModData) -> void:
 	DevWidgets.add_stat_dict(editor_container, "Wielder stat modifiers", mod.stat_modifiers,
 		DevWidgets.property_tip(mod, "stat_modifiers"))
 	_populate_grant_list("Granted attacks:", mod.granted_attacks, WeaponAttackCatalog.get_library(),
@@ -479,24 +601,37 @@ func _save_dir_for(item: Resource) -> String:
 
 # --- Prototype mode (#486) ---
 
-# Refuse to WRITE a template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's
-# reasoning: a DEGRADES finding describes a file that may already be on disk in that state, so
-# refusing would leave the only tool that can repair it unable to write. Non-templates pass
-# straight through -- this asks a question only a WeaponData has.
-func _refuse_uncarryable(item: Resource) -> bool:
+# Refuse to WRITE content nothing could use. ONE door for every kind this tab authors, because
+# "may this be saved" is one question -- a second gate beside it is exactly the duplicate seam this
+# tool would grow first. Both Update and Save As call it; each kind answers in its own terms and
+# everything else passes straight through.
+func _refuse_unusable(item: Resource) -> bool:
 	var template := item as WeaponData
-	if template == null:
-		return false
+	if template != null:
+		return _refuse_template(template)
+	var mod := item as WeaponModData
+	if mod != null:
+		return _refuse_with(mod.save_block_reason())
+	return false
+
+# A template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's reasoning: a
+# DEGRADES finding describes a file that may already be on disk in that state, so refusing would
+# leave the only tool that can repair it unable to write.
+func _refuse_template(template: WeaponData) -> bool:
 	var findings := WeaponTemplateLint.check(template)
 	for finding in findings:
 		if finding["severity"] == WeaponTemplateLint.Severity.BLOCKS:
-			var msg: String = finding["text"]
-			push_warning(msg)
-			status_label.text = msg
-			return true
+			return _refuse_with(finding["text"])
 	if not findings.is_empty():
-		status_label.text = findings[0]["text"]
+		status_label.text = findings[0]["text"]   # said, not refused
 	return false
+
+func _refuse_with(reason: String) -> bool:
+	if reason == "":
+		return false
+	push_warning(reason)
+	status_label.text = reason
+	return true
 
 # What the reflective editor must NOT draw here, for two different reasons. THREE are not drawn at
 # all: display_name has its own LineEdit above the form, is_prototype is forced true (a Prototype
@@ -543,19 +678,11 @@ func _on_prototype_family_picked(template: WeaponData, family_name: String) -> v
 		return
 	template.weapon_type = picked
 	if template.main_attack == null or _is_a_family_main(template.main_attack):
-		template.main_attack = _family_main_for(picked)
+		template.main_attack = WeaponCatalog.family_main(picked)
 	populate()
 
 func _is_a_family_main(attack: WeaponAttackData) -> bool:
 	return WeaponAttackCatalog.get_mains().values().has(attack)
-
-# The family BASE's main, never another prototype's: a prototype is a variant of its FAMILY, not
-# of whichever prototype happens to share its weapon_type.
-func _family_main_for(type: WeaponData.WeaponType) -> WeaponAttackData:
-	for base: WeaponData in WeaponCatalog.get_family_bases().values():
-		if base.weapon_type == type:
-			return base.main_attack
-	return null
 
 # A PICKER, never an authoring surface. Everything it lists is a file the Attack Editor wrote, and
 # the pick is a direct ref -- so a prototype that never swaps follows its family's retunes, and one

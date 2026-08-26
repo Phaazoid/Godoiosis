@@ -4,7 +4,4 @@
 
 [resource]
 script = ExtResource("1_vm3rl")
-scaling_nudge = Dictionary[int, int]({
-4: 30
-})
 metadata/_custom_type_script = "uid://df2c8ssuh18ff"

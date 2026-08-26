@@ -10,9 +10,10 @@ script = ExtResource("4_grumn")
 id = "42"
 display_name = "Super Scope"
 power_delta = 2
-scaling_nudge = Dictionary[int, int]({
-4: 50,
-5: 50
+family = 4
+scaling_change = Dictionary[int, int]({
+4: 5,
+5: -5
 })
 weight = 3
 granted_attacks = Array[ExtResource("2_e7g6e")]([ExtResource("3_s7gn7")])

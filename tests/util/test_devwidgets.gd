@@ -162,3 +162,55 @@ func test_a_weight_driven_to_zero_is_erased_rather_than_stored() -> void:
 	assert_bool(blend.has(Stats.Stat.DEX)).is_false()   # never touched, never stored
 	assert_int(blend.get(Stats.Stat.PER, 0)).is_equal(Stats.BLEND_TOTAL)
 	assert_int(blend.size()).is_equal(1)
+
+
+# --- the grain (dev, 2026-08-25) ---
+#
+# The sliders notch to Stats.BLEND_STEP rather than to single points. The claim worth pinning is
+# about what gets STORED, not what the handle does: the remainder is split in STEPS, so the three
+# stats a drag did NOT touch also land on the grain. Split in single points they would sit where
+# no slider can show them, and the panel would report a number the handle cannot reach.
+
+func _label_texts(node: Node, found: Array[String]) -> Array[String]:
+	for child in node.get_children():
+		var label := child as Label
+		if label != null:
+			found.append(label.text)
+		_label_texts(child, found)
+	return found
+
+func test_the_grain_divides_the_total() -> void:
+	# 20 whole steps to spread across four stats. If it did not divide, the steal-to-balance loop
+	# could not land on BLEND_TOTAL at all and the readout would stop being literal.
+	assert_int(Stats.BLEND_TOTAL % Stats.BLEND_STEP).is_equal(0)
+
+func test_every_weight_a_drag_authors_lands_on_the_grain() -> void:
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	add_child(box)
+	# THESE NUMBERS ARE CHOSEN, not arbitrary. Splitting the remainder in POINTS (the bug this
+	# guards) sends 65/35 to STR 46 -- off the grain -- while 34/33/33 would land on 25/25/25 and
+	# pass against the very bug it was written for. A drag whose leftovers happen to divide by
+	# five proves nothing; the discriminating power is in the fixture, not the assertion.
+	var blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 65, Stats.Stat.DEX: 35}
+	DevWidgets.add_blend_sliders(box, blend, func(): pass)
+
+	var sliders := _sliders(box)
+	sliders[Stats.SCALING_STATS.find(Stats.Stat.PER)].value = 28   # not on the grain
+	assert_int(blend.get(Stats.Stat.PER, 0)).is_equal(30)          # the Range snapped the handle
+
+	# ...and so did the two it stole from, which is the half a step on the HANDLE alone misses.
+	for stat: Stats.Stat in blend:
+		assert_int(blend[stat] % Stats.BLEND_STEP).is_equal(0)
+	assert_int(_total(blend)).is_equal(Stats.BLEND_TOTAL)
+
+func test_the_readout_reports_the_stored_weight_not_the_snapped_handle() -> void:
+	# Godot snaps a Range to its step on ASSIGNMENT (measured: 33 with step 5 reads back 35), so a
+	# readout taken off the slider would report a weight the file does not hold -- the "only the
+	# .tres shows it" divergence that the zero-erasure case above was caught by.
+	var box: VBoxContainer = auto_free(VBoxContainer.new())
+	add_child(box)
+	var blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 33, Stats.Stat.DEX: 67}
+	DevWidgets.add_blend_sliders(box, blend, func(): pass)
+
+	var texts: Array[String] = []
+	assert_array(_label_texts(box, texts)).contains(["33%", "67%"])

@@ -129,10 +129,34 @@ func used_capacity(index: int) -> int:
 		total += mod.size
 	return total
 
+# "" = it fits. can_fit is DERIVED from this (#74), so a refusal and its explanation are one
+# answer rather than a boolean here and a hand-written sentence in whichever panel refused — the
+# shape EquippableData.attack_block_reason already uses one domain over (#166: a surface can only
+# grey what it can explain).
+#
+# FAMILY is asked before capacity because the two refusals are different in kind: a wrong family
+# can never be fixed on this weapon, while a full space is a live state you fix by removing
+# something. That ordering is also what the fitting picker leans on — it HIDES what the family
+# refuses and merely refuses what capacity does.
+#
+# A mod that changes scaling while naming NO family is broken content rather than a bad fit, and
+# it is refused at the authoring save instead; here it simply fits, since there is nothing to
+# disagree with.
+func fit_block_reason(index: int, mod: WeaponModData) -> String:
+	if template == null:
+		return "This weapon has no template, so it has no spaces."
+	if index < 0 or index >= space_count():
+		return "Space %d does not exist on this weapon." % (index + 1)
+	if not mod.fits_family(template.weapon_type):
+		return "Fits %s only — a scaling change is measured against that family's main attack." % \
+			WeaponData.WeaponType.keys()[mod.family].capitalize()
+	var capacity: int = template.mod_spaces[index]
+	if used_capacity(index) + mod.size > capacity:
+		return "Space %d holds %d of %d — this needs %d more." % [index + 1, used_capacity(index), capacity, mod.size]
+	return ""
+
 func can_fit(index: int, mod: WeaponModData) -> bool:
-	if template == null or index < 0 or index >= space_count():
-		return false
-	return used_capacity(index) + mod.size <= template.mod_spaces[index]
+	return fit_block_reason(index, mod) == ""
 
 func fit(index: int, mod: WeaponModData) -> bool:
 	if not can_fit(index, mod):
@@ -264,8 +288,8 @@ func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Di
 		for stat: Stats.Stat in attack.scaling_blend:
 			blend[stat] = attack.scaling_blend[stat]
 	for mod in mods:
-		for stat: Stats.Stat in mod.scaling_nudge:
-			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_nudge[stat])
+		for stat: Stats.Stat in mod.scaling_change:
+			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_change[stat])
 	return blend
 
 func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
