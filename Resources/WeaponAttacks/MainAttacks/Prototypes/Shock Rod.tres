@@ -7,7 +7,4 @@ script = ExtResource("1_o52ed")
 elemental_damage_type = 3
 display_name = "Jolt"
 power = 4
-scaling_blend = Dictionary[int, int]({
-1: 100
-})
 vertical_rule = 1

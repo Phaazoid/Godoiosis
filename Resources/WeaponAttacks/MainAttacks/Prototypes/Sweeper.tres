@@ -8,10 +8,10 @@ script = ExtResource("1_qgxbu")
 
 [resource]
 script = ExtResource("2_ij5xu")
-display_name = "Cleave"
-power = 3
-attack_pattern = SubResource("Resource_5w2v2")
 scaling_blend = Dictionary[int, int]({
 1: 60,
 4: 40
 })
+display_name = "Cleave"
+power = 3
+attack_pattern = SubResource("Resource_5w2v2")
