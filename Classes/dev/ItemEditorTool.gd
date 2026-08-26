@@ -42,8 +42,9 @@ func _ready():
 	_rebase_on_type(0)
 
 # Weapon TYPES + a blank rune per size + a blank mod + a blank prototype — the things "New"/the
-# type dropdown can start from. A mod has no varieties to enumerate (no family field yet, #74
-# keeps that half), so it contributes exactly one entry; a prototype picks its family in the form.
+# type dropdown can start from. A mod contributes exactly one entry: its family is a FIELD in the
+# form rather than a variety to enumerate (it landed in #74, which this comment claimed was still
+# open). A prototype picks its family in the form the same way.
 const NEW_MOD_KEY := "Weapon Mod (blank)"
 const NEW_PROTOTYPE_KEY := "Weapon Prototype (new)"
 
