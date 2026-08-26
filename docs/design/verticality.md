@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #495 (2026-08-24).**
+**Canon checked through #498 (2026-08-25).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -989,17 +989,45 @@ Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two
 > (`Terrain.gradient_of_corners`) rather than a twelve-entry table, so the mesh and the rules cannot
 > drift about which way a cell climbs.
 
-- **Only FLAT tiles get a variant, and only flat tiles may slope.** The dev: *"only tiles that are
-  flat, not things like rocks, lanterns, etc. grass, mud, etc."* A rock has no top face to tilt. The
-  gate is `GridUtils.stands_up_of` — the existing `prop_shape` derivation, not a new predicate — and
-  it lives in `TileBrushTool.selected_rise()` so the GHOST reads it too; gated at the paint site
+- **Only flat tiles may SLOPE — but every tile gets a variant (amended by
+  [#342](https://github.com/Phaazoid/Godoiosis/issues/342), 2026-08-25).** The dev's rule is about
+  authoring: *"only tiles that are flat, not things like rocks, lanterns, etc. grass, mud, etc."*
+  The gate is `GridUtils.stands_up_of` — the existing `prop_shape` derivation, not a new predicate —
+  and it lives in `TileBrushTool.selected_rise()` so the GHOST reads it too; gated at the paint site
   instead, the preview would show a sloping rock the click then refuses.
-- **`dirt_ramp` stays as the fallback, not as dead scaffolding.** The cases `item_for_tile` already
-  documents (empty cell, rotated alternative, multi-cell art) reach it, and so does a standing prop
-  painted onto a cell that already slopes. Without it those cells render as a hole.
-- **TUFT is excluded, deliberately and provisionally.** `stands_up_of` reads a flowery grass tuft as
-  standing, so it refuses a rise despite being walkable ground. Its plants would need planting on a
-  tilted face via #281's `BoardSpace.surface_transform` — real work, not an oversight.
+
+  **The meshlib generator used to share that gate, and that was the bug.** What a cap draws is not
+  the tile's ART, it is the GROUND the tile stands on — which the generator's atlas pass has already
+  composed for every tile: its own art if flat, the bare kind base for a prop, a generated speckle
+  for a tuft. Gating cap emission on `stands_up` was therefore a **second answer to a question that
+  pass already answers**, and it degraded exactly where the brush's rule does not reach: the corner
+  tool gates on GROUND, not on `stands_up`, so any cell can be given corners, and a prop can be
+  painted onto a cell that already slopes. Every such slope wore the generic `dirt_ramp*`, whose top
+  face is the generated `grass_top` — measured off the dev's own screenshot at `rgb(129,185,108)`
+  beside `rgb(62,226,169)` on the flat ground next to it, and **no tile in the sheet is that olive**.
+  So the rule is now: *a 1x1 tile with a block has a cap for every climb and every shape, wearing the
+  same face its block wears* (2089 → 2173 items). `tests/law/test_every_tile_can_wear_a_slope.gd`.
+- **`dirt_ramp` stays as the fallback, not as dead scaffolding.** Three of the cases `item_for_tile`
+  documents still reach it — an empty cell, a rotated alternative, and **multi-cell art**, whose
+  tiles the generator skips outright and which therefore have no block either. A standing prop no
+  longer does. Without the fallback those cells render as a hole.
+- **A TUFT slopes, and its plants are planted per PLANT (#342).** `stands_up_of` reads a flowery
+  grass tuft as standing, so the tile brush still refuses it a rise — but a tuft is walkable ground,
+  and the corner tool slopes one whenever a neighbouring vertex is dragged, so the question this
+  entry used to defer (*"should a tuft slope at all?"*) was answered by #427 slice 4 shipping. A tuft
+  is the one prop whose parts are SPREAD ACROSS the square, so one surface point for the whole
+  assembly is only right while the square is level; each cluster now reads
+  `BoardSpace.surface_height_at` at **its own** point. It stays upright rather than tilting with the
+  ground — these are Y-billboards, and a plant grows up whatever the hill does, which is why
+  `surface_transform` (the answer this entry predicted) is the wrong seam for it. Widening the
+  brush's own gate to admit TUFT is still open on #342.
+- **A prop follows its ground.** `BoardMirror._reconcile_prop` early-outs on identity, and until #342
+  that identity was the TILE alone — so moving the ground under any prop left it sown at the old
+  height. That is #471's law (*a poll compares every input its answer depends on*) one store along:
+  every prop stands at `surface_point`, and a tuft's plants read the corners directly. It compares
+  the cell's corners too now, and REBUILDS rather than re-placing, because a tuft has no single
+  position to move. Reachable before the corner tool as well, by repainting the same tile at a new
+  height; the tile brush writing tile and height together is what hid it.
 
 ### Painting it in 3D [BUILT as #285]
 

@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #495 (2026-08-24).**
+**Canon checked through #498 (2026-08-25).**
 
 ---
 
@@ -452,7 +452,15 @@ Two consequences worth knowing:
 - **Only clusters above `BoardMirror.TUFT_MIN_CLUSTER_PIXELS` stand up**, and the threshold is measured rather than picked: the shipped sheet's clusters are 2-px specks or 23-px-plus objects with nothing in between. A speck loses nothing by staying flat, because the tile keeps its full bake — it is still drawn, just not duplicated. Standing every speck up as well is [#311](https://github.com/Phaazoid/Godoiosis/issues/311), and needs one mesh per cell plus a per-quad billboard to stay affordable, because a whole-mesh billboard would swing the plants around the cell centre as the camera orbits.
 - **`grass_clover` is not a tuft**, and that is the art's own answer rather than a design call: its content is five 2-pixel dots. It is grass speckle, not clover.
 
-`BoardMirror.tuft_scale` is the Objects-tab knob (#272; it was a Look knob until then) — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile changes.
+#### A tuft is planted PER PLANT, because a corner cell has no one surface ([#342](https://github.com/Phaazoid/Godoiosis/issues/342), 2026-08-25)
+
+Every other prop is one object standing at `BoardSpace.surface_point` — the cell's surface at its centre, which is all a one-body prop can be asked about. **A tuft is the exception, and it is exactly the exception #427's corner tool made visible:** its plants are spread across the square, and a square with four independent corner heights is not level under them. Planted against the centre, the plants toward the high side are buried in their own ground and the ones toward the low side hang over it.
+
+Each cluster therefore reads **`BoardSpace.surface_height_at` at its own point** — the same answer a sliding sprite reads, so the plant and the tumble agree about where the ground is. It stays **upright** rather than tilting with the face: these are `BILLBOARD_FIXED_Y` sprites and a plant grows up whatever the hill does, which is why `surface_transform` — the seam #342 was filed predicting — is the wrong one. Exactly zero lift on a level cell, so nothing on a flat board moves.
+
+Its twin is a rule about every prop, not about tufts: **a prop follows its ground.** `_reconcile_prop` early-outs on identity, and that identity was the TILE alone until #342 — so moving the ground under a rock, a tree or a flowerbed left it where it was sown. #471's law one store along; the identity carries the cell's corners now, and a corner change REBUILDS rather than re-places, because a tuft has no single position to move.
+
+`BoardMirror.tuft_scale` is the Objects-tab knob (#272; it was a Look knob until then) — a real one, because a tuft is a runtime `Sprite3D` unlike the baked block props. It scales through **`pixel_size`, never node scale** (a Y-billboard rebuilds its basis from the camera, and `pixel_size` scales the base offset with it, so a plant shrinks *toward* the tile), it never moves a plant's place in the cell — where a flower grows is not a matter of taste — and its setter re-sizes tufts already standing, since props reconcile only when their tile or their ground changes.
 
 **Tufts are the one prop form that casts no shadow**, and that is a count rather than a look call: `Prolog` paints over a thousand tuft cells against a dozen lamps and trees.
 
