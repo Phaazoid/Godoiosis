@@ -1,9 +1,8 @@
 extends Object
 class_name Pacing
 
-# How long turn playback PAUSES so a human can read it (#118). A tuning table in the shape of
-# UiLayers -- five numbers, one reader each, named beside each other so they can be tuned as a set
-# instead of hunted across four files. Not a system: nothing here decides anything.
+# How long turn playback PAUSES so a human can read it (#118, widened into a beat table by #519).
+# Named beside each other so they can be tuned as a set instead of hunted across four files.
 #
 # Execution is pure playback of an already-resolved plan (R3), so a beat changes only WHEN frames
 # land -- never what the queue claimed or what the resolver computed (Law #2).
@@ -12,12 +11,88 @@ class_name Pacing
 # safety property, not a convenience: OrderExecutor.execute_orders is awaited directly by the
 # suite, so a literal timer at an await site would put real wall clock on every case that resolves
 # a plan.
+#
+# STATIC VAR, NOT CONST, since #519: every value here is tuned from the Game tab's Playback group,
+# and a const is a slider that moves nothing. Same move ATTACK_MODULATE made for #212.
 
-const AI_SQUAD_PAN := 0.7     # camera glide from squad to squad -- CameraController.pan_to
-const AI_PLAN_READ := 0.6     # AI squad's plan is drawn; hold before it resolves -- AIController
-const AI_ACTION := 0.45       # between sequential actions in an AI pass -- OrderExecutor
-const PLAYER_ACTION := 0.0    # the same gap on the player's own Execute -- deliberately none (dev, 2026-08-10)
-const TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
+enum Profile { BOARD, CINEMATIC }
+
+# --- the pass beats (#118) -------------------------------------------------------------------
+
+static var AI_SQUAD_PAN := 0.7     # camera glide from squad to squad -- CameraController.pan_to
+static var AI_PLAN_READ := 0.6     # AI squad's plan is drawn; hold before it resolves -- AIController
+static var AI_ACTION := 0.45       # BOARD base beat on an AI pass -- an unread plan
+static var PLAYER_ACTION := 0.3    # BOARD base beat on the player's own Execute (#519)
+static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
+
+# PLAYER_ACTION was 0.0 from #118 until #519 -- "deliberately none" (dev, 2026-08-10), reversed on
+# 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health
+# readouts flash in and out (#475, subsumed) and battles read "way too fast".
+
+# --- the beat shape (#519, umbrella #410) ----------------------------------------------------
+
+# CINEMATIC does not fork on whose plan it is: #410 rules the zoom fires for all combats, AI-vs-AI
+# included, because an enemy assault deserves the drama too.
+static var CINEMATIC_ACTION := 0.4
+
+# What a beat earns for what it WAS. These do not stack -- the loudest single hold wins -- so the
+# drama ranking is whatever these NUMBERS say rather than an order written into code. Tune
+# HOLD_KNOCKBACK above HOLD_DOWN and a shove outranks a death, deliberately.
+static var HOLD_DOWN := 0.6        # a unit goes down, is killed, maimed, or removed from the board
+static var HOLD_CRISIS := 0.9      # someone stands up surged instead of falling
+static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
+static var HOLD_KNOCKBACK := 0.2   # the hit shoved its target
+static var HOLD_TURNOVER := 0.5    # the act break: the defending line raises weapons
+
+# How much of a hold actually applies, per profile. BOARD ships at 0.0 -- flat, "small pauses
+# everywhere" (dev, 2026-08-26) -- so the shape exists but is dialled out rather than absent. That
+# is the whole reason the holds are separate from the base: wanting shape on the plain board later
+# is one number, not a restructure.
+static var BOARD_DRAMA := 0.0
+static var CINEMATIC_DRAMA := 1.0
+
+
+# Which profile playback is running under. ONE answer, so a caller never re-reads the setting.
+static func active_profile() -> Profile:
+	return Profile.CINEMATIC if PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM) else Profile.BOARD
+
+
+# How long to hold before this beat. The one collapse from a beat's FACTS to a length -- BeatSheet
+# deliberately carries neither a duration nor a severity ranking, because both are this table's.
+static func duration_for(beat: BeatSheet.Beat, profile: Profile, is_ai: bool) -> float:
+	if beat == null:
+		return 0.0
+	return base_for(profile, is_ai) + drama_of(profile) * hold_for(beat)
+
+
+static func base_for(profile: Profile, is_ai: bool) -> float:
+	if profile == Profile.CINEMATIC:
+		return CINEMATIC_ACTION
+	return AI_ACTION if is_ai else PLAYER_ACTION
+
+
+static func drama_of(profile: Profile) -> float:
+	return CINEMATIC_DRAMA if profile == Profile.CINEMATIC else BOARD_DRAMA
+
+
+# The loudest hold this beat earns, by VALUE rather than by rung order (see the holds above).
+static func hold_for(beat: BeatSheet.Beat) -> float:
+	if beat.kind == BeatSheet.Kind.TURNOVER:
+		return HOLD_TURNOVER
+	var hold := 0.0
+	if beat.has_removal \
+			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+		hold = maxf(hold, HOLD_DOWN)
+	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
+		hold = maxf(hold, HOLD_CRISIS)
+	if beat.iron_will_held:
+		hold = maxf(hold, HOLD_IRON_WILL)
+	if beat.has_knockback:
+		hold = maxf(hold, HOLD_KNOCKBACK)
+	return hold
+
 
 static func beat(host: Node, seconds: float) -> void:
 	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
