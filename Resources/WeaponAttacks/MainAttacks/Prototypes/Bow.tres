@@ -11,10 +11,10 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_4i624")
-display_name = "Loose"
-power = 3
-attack_pattern = SubResource("Resource_juf0b")
 scaling_blend = Dictionary[int, int]({
 4: 50,
 5: 50
 })
+display_name = "Loose"
+power = 3
+attack_pattern = SubResource("Resource_juf0b")

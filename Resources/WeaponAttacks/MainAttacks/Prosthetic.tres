@@ -9,12 +9,12 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_wad")
-display_name = "Strike"
-power = 2
-attack_pattern = SubResource("Resource_main")
-vertical_rule = 1
 scaling_blend = Dictionary[int, int]({
 1: 50,
 4: 50
 })
+display_name = "Strike"
+power = 2
+attack_pattern = SubResource("Resource_main")
+vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

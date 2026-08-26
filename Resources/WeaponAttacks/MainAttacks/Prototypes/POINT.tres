@@ -10,11 +10,11 @@ metadata/_custom_type_script = "uid://bbbfksnb0tted"
 
 [resource]
 script = ExtResource("2_c5p18")
-display_name = "Lance"
-power = 5
-attack_pattern = SubResource("Resource_mrekx")
-hits_allies = true
 scaling_blend = Dictionary[int, int]({
 1: 70,
 4: 30
 })
+display_name = "Lance"
+power = 5
+attack_pattern = SubResource("Resource_mrekx")
+hits_allies = true

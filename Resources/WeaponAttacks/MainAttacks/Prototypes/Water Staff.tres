@@ -7,7 +7,4 @@ script = ExtResource("1_bvk4r")
 elemental_damage_type = 2
 display_name = "Soak"
 power = 4
-scaling_blend = Dictionary[int, int]({
-1: 100
-})
 vertical_rule = 1
