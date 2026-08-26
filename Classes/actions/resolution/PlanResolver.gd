@@ -345,9 +345,11 @@ static func _source_hits_map(action: AttackAction) -> bool:
 	return action.fired_attack != null and action.fired_attack.hits_map()
 
 static func _source_knockback(action: AttackAction) -> int:
-	if action.fired_attack != null:
-		return action.fired_attack.knockback   # on the shared AttackData base — no cast needed
-	return 0   # counters fire main (no stamped attack) — no shove
+	if action.fired_attack == null:
+		return 0   # counters fire main (no stamped attack) -- no shove
+	# Asked of the ACTOR, not of the attack: a fitted mod may add tiles to the shove (#529), so
+	# the authored number on the shared AttackData base is only the starting point.
+	return action.actor.get_attack_knockback(action.fired_attack)
 
 # One shove's full result (#259): where it ends, every cell it crosses, and what the landing does.
 class _Landing:

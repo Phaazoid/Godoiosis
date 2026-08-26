@@ -393,5 +393,30 @@ func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.El
 			result.append(mod.added_element)
 	return result
 
+# The two overrides a fitted mod may make (#529), composed the same way power and elements are and
+# gated by the same applies_to selector -- one answer to what a mod reaches, not one per field.
+func effective_knockback(wielder: Unit, attack: AttackData) -> int:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return super(wielder, attack)
+	var total := weapon_attack.knockback
+	for mod in _mods_for(wielder, weapon_attack):
+		total += mod.knockback_delta
+	return maxi(0, total)   # a shove below zero is no shove, not a pull
+
+# OFF short-circuits, which is what makes the rule order-independent: an OFF anywhere wins, so
+# fitting the same mods into different spaces cannot give different answers.
+func effective_hits_allies(wielder: Unit, attack: AttackData) -> bool:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return super(wielder, attack)
+	var answer := weapon_attack.hits_allies
+	for mod in _mods_for(wielder, weapon_attack):
+		if mod.hits_allies_override == WeaponModData.Override.OFF:
+			return false
+		if mod.hits_allies_override == WeaponModData.Override.ON:
+			answer = true
+	return answer
+
 # hits_map() is gone from here: with the null->main fallback removed it did nothing but forward to
 # AttackData.hits_map(), which both attack kinds already answer. PlanResolver calls that directly.

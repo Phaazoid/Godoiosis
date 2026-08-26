@@ -227,7 +227,13 @@ static func is_attack_victim(attacker: Unit, unit: Unit, attack: AttackData, all
 		return attack != null and attack.hits_self
 	if allies_only and can_target(attacker, unit):
 		return false
-	return can_target(attacker, unit) or (attack != null and attack.hits_allies)
+	if can_target(attacker, unit):
+		return true
+	if attack == null:
+		return false
+	# Asked of the ATTACKER, not of the attack: a fitted mod may turn a volley's ally splash off
+	# (#529), so whether allies are victims depends on what is fitted to the weapon firing.
+	return attacker.attack_hits_allies(attack) if attacker != null else attack.hits_allies
 
 # Hostility gate: never yourself, and only a faction you're at war with. Was
 # CombatComponent.can_attack, which took the attacker as a parameter despite being an instance
