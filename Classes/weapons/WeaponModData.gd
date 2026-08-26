@@ -36,8 +36,12 @@ class_name WeaponModData
 # dev's ruling: "only mods with stat bumps are forced to be weapon specific". Set voluntarily it is
 # still a lock, which is what the mod bank's own [CS]/[CB] tags have always meant.
 #
-# Readers arrive with WeaponInstance's refusal in this ticket's next slice; the field lands here
-# because the .tres migration that renames scaling_change has to author both at once.
+
+# May this mod go on that family? NONE fits anything; anything else is a lock — including on a mod
+# that changes no scaling, because setting the field is already a statement, and it is what the
+# bank's own [CS]/[CB] tags have always meant. WeaponInstance.fit_block_reason is the one reader.
+func fits_family(weapon_type: WeaponData.WeaponType) -> bool:
+	return family == WeaponData.WeaponType.NONE or family == weapon_type
 
 # Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
 # WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's

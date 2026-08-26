@@ -365,19 +365,43 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 	if mods.is_empty():
 		DevWidgets.add_label(editor_container, "(no mods in Resources/WeaponMods/)")
 		return
+
+	# The picker lists what this WEAPON could ever take, not what fits right now (#74). A family
+	# refusal is permanent, so showing those entries is offering a door that never opens; a full
+	# space is live state you fix by removing something, so those stay listed and are refused WITH
+	# THE REASON. That split is #166's policy call — grey (or here, refuse) only what you can
+	# explain, hide what would never be true.
+	var offerable := {}
+	for k in mods:
+		var mod: WeaponModData = mods[k]
+		if mod.fits_family(weapon.template.weapon_type):
+			offerable[k] = mod
+	if offerable.is_empty():
+		# The FAMILY, not the template's own name — a prototype called The Jaw takes Chainsword
+		# mods, so naming the template here would say the wrong thing. Deliberately not the
+		# "Family:" line above, which answers what this weapon IS rather than what gates its mods.
+		var family_name: String = WeaponData.WeaponType.keys()[weapon.template.weapon_type].capitalize()
+		DevWidgets.add_label(editor_container, "(no mods fit %s)" % family_name)
+		return
+
 	var add_row := HBoxContainer.new()
 	var picker := OptionButton.new()
-	for k in mods:
+	for k in offerable:
 		picker.add_item(k)
 	add_row.add_child(picker)
 	var add_btn := Button.new()
 	add_btn.text = "Fit"
 	add_btn.pressed.connect(func():
-		var key = mods.keys()[picker.selected]
-		if weapon.fit(index, mods[key]):   # a direct ref, not a duplicate — WeaponModCatalog's header comment already documents mods as live-shared, same model as templates
-			populate()
-		else:
-			push_warning("Not enough capacity in space %d to fit %s" % [index + 1, key])
+		var key = offerable.keys()[picker.selected]
+		# a direct ref, not a duplicate — WeaponModCatalog's header already documents mods as
+		# live-shared, the same model as templates
+		var reason := weapon.fit_block_reason(index, offerable[key])
+		if reason != "":
+			push_warning(reason)
+			status_label.text = reason
+			return
+		weapon.fit(index, offerable[key])
+		populate()
 	)
 	add_row.add_child(add_btn)
 	editor_container.add_child(add_row)
