@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #534 (2026-08-26).**
+**Canon checked through #558 (2026-08-26).**
 
 ## Principles
 
@@ -1087,7 +1087,48 @@ from a back-out, and hanging the return there would return the camera on a dismi
 by a case that dismisses and asserts the camera did not move; a mutant that moves the call into the
 cancel handler reds exactly that one and nothing else.
 
-## Captured from the scratchpad (swept 2026-08-20) — all *captured, not locked*
+## A move's markup ends with the MOVE ([#558](https://github.com/Phaazoid/Godoiosis/issues/558), FIXED 2026-08-26)
+
+Reported in play, on the branch that had just put the camera on the action: *"during AI turns, the
+AI ghost unit stays around for a bit after the unit already reaches its move destination, rather
+than disappearing on unit arrival."*
+
+**Nothing pulled a ghost until `_end_squad_turn`.** `execute_orders` opens a pass by calling
+`set_projected(false)` on every actor — the real sprite comes back so it can walk — but never
+cleared the ghost that had been standing in for it. From arrival onward that ghost was a translucent
+copy of a unit standing on the same cell, and it stayed through every other member's walk, every
+attack and every side-channel hold. Only the camera work made it visible; the lifetime predates it.
+
+**The arrow was a DIFFERENT bug, and the dev ruled on it rather than inheriting the assumption**
+(2026-08-26: *"let's have the arrow match the ghost's lifecycle"*). `MoveAction.execute` freed its
+own preview sprites at the FIRST STEP, so the trail vanished exactly when it was most useful. That
+clear was also only durable by luck: `redraw_planned_paths` rebuilds every arrow from
+`planned_move_by_unit`, which still named the walking unit, so any redraw during a pass put it back
+— and #520's choreography is one such redraw away.
+
+**One lifetime, two doors in.** `OverlayManager.clear_move_markup(unit)` is the single call, reached
+from `game._on_unit_action_cancelled` (the move was CANCELLED) and from `OrderExecutor` as each unit
+arrives (it was CARRIED OUT). Leaving `planned_move_by_unit` is the durable half — both `redraw_*`
+rebuild from it, so a clear that only frees sprites is undone by the next redraw, and one that only
+erases the store leaks a trail nothing can free again.
+
+**Per unit, not per phase.** The move phase ends with the SLOWEST walker, so a phase-level clear
+would leave a short hop standing under its own ghost while a long one finished.
+`_execute_action_phase_parallel` already polled `execution_complete` every frame; it now visits every
+action instead of breaking on the first unfinished one, and fires an optional per-action hook. The
+phase runner still does not know what a move is — the hook is generic and the executor supplies the
+meaning.
+
+**The test lesson, which generalizes past this ticket.** The first version of the walking-arrow case
+waited for the other unit to arrive, and PASSED against the mutant that restores the first-step
+clear: `clear_move_markup`'s own `redraw_planned_paths` rebuilds every OTHER unit's arrow from the
+store, so the arrival republished the very sprites the mutant had freed. **A publisher standing
+between the bug and the assertion hides the bug** — the case now asserts with no frame awaited, the
+one moment in the pass with nothing in between. Its sibling: asserting `planned_move_by_unit`
+directly in the arrival case made the redraw case *unfalsifiable*, since every store-shaped mutant
+reddened earlier and truncated the file. The store claim moved to the redraw case, where a mutant
+can reach it.
+
 
 Six inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in
 every case something does.
