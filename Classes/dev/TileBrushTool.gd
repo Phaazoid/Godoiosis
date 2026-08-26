@@ -14,7 +14,8 @@ class_name TileBrushTool
 # reason #260 gave — a per-tile elevation would need one grass tile per level — but "how high" was
 # never a different QUESTION from "which tile", only a different store, and a mode per store made
 # authoring a raised cell two gestures. Raising a cell is now repainting it at a new level.
-# The rise is refused for a tile that stands up (see selected_rise): a rock has no face to tilt.
+# The rise is refused for a tile that is not GROUND (see selected_rise): a rock has no face to tilt,
+# while a tuft is ground with plants growing out of it and slopes like any other (#342).
 # CORNER mode (#427 slice 4) is the second tool the reframe asked for and does NOT replace any of
 # that ("keep the version of the tool we have now, but also have a corner mode" — dev, 2026-08-23):
 # it drags the POINT four cells share to the level picker's height, welding them, where the cell
@@ -234,11 +235,11 @@ func _on_tile_dropdown_item_selected(index: int):
 # Grey the rise picker for a tile that cannot slope, so selected_rise's refusal is VISIBLE rather
 # than a setting that silently does nothing.
 func _sync_rise_availability() -> void:
-	var flat := selected_tile_is_flat()
+	var ground := selected_tile_is_ground()
 	if _rise_option != null:
-		_rise_option.disabled = not flat
+		_rise_option.disabled = not ground
 	if _climb_option != null:
-		_climb_option.disabled = not flat
+		_climb_option.disabled = not ground
 
 func deactivate():
 	$Panel/TileBrushRow/TileBoxCheck.button_pressed = false
@@ -425,15 +426,15 @@ func _build_extra_controls() -> void:
 func selected_elevation() -> int:
 	return _elevation
 
-# What the next click would actually SLOPE — not simply the picker's value (#340). A standing tile
-# has no top face to tilt, so a rock or a lantern paints flat however the picker is set.
+# What the next click would actually SLOPE — not simply the picker's value (#340). A tile that is
+# not ground has no top face to tilt, so a rock or a lantern paints flat however the picker is set.
 #
 # The gate lives HERE rather than at the paint site because the GHOST reads this too: gated one level
 # down, the preview would show a sloping rock that the paint then refuses, which is #285's rule that
 # a preview must answer "what would this click PRODUCE". `_rise` itself is untouched, so picking a
 # prop and coming back to grass restores the direction you had.
 func selected_rise() -> Terrain.RampRise:
-	return _rise if selected_tile_is_flat() else Terrain.RampRise.NONE
+	return _rise if selected_tile_is_ground() else Terrain.RampRise.NONE
 
 # How far that slope climbs. NOT gated on the flat tile the way selected_rise is: a refused rise is
 # already NONE, and corners_of_ramp ignores the climb entirely then — gating both would be two
@@ -441,16 +442,21 @@ func selected_rise() -> Terrain.RampRise:
 func selected_climb() -> int:
 	return _climb
 
-# Whether the PICKED tile is ground rather than something standing on it. GridUtils.stands_up_of is
-# the one answer (derived from prop_shape); an unresolvable pick reads flat, the same permissive
+# Whether the PICKED tile is ground rather than something standing on it. GridUtils.is_ground_shape
+# is the one answer (derived from prop_shape); an unresolvable pick reads ground, the same permissive
 # default an unauthored tile gets there.
-func selected_tile_is_flat() -> bool:
+#
+# It asked stands_up_of until #342, which is a DIFFERENT question -- "does this stand ON the ground"
+# -- and the two agreed only until TUFT, which is both. A flowery-grass tuft is walkable ground with
+# plants growing out of it, so it belongs on the sloping side of the dev's own rule (*"only tiles
+# that are flat, not things like rocks, lanterns, etc. grass, mud, etc."*); rocks and fences stay out.
+func selected_tile_is_ground() -> bool:
 	if game == null or game.grid == null or game.grid.tile_set == null:
 		return true
 	var source := game.grid.tile_set.get_source(selected_source) as TileSetAtlasSource
 	if source == null or not source.has_tile(selected_tile):
 		return true
-	return not GridUtils.stands_up_of(source.get_tile_data(selected_tile, 0))
+	return GridUtils.is_ground_shape(source.get_tile_data(selected_tile, 0))
 
 # The ONE writer of the brush level: the wheel, the SpinBox and Reset all land here, so the widget
 # and the value the brush paints with cannot drift. set_value_no_signal, or the SpinBox's own
