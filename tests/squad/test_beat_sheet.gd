@@ -333,7 +333,156 @@ func _armor_granting(id: Abilities.Id) -> ArmorData:
 	return armor
 
 
+# --- the move phase (#520 follow-up) ----------------------------------------------------------
+
+# The MOVES beat is what the camera frames before anybody walks, and it opens on the LEADER when
+# the leader is walking -- a squad's move is read from the unit the rest are following. The mate's
+# move is queued FIRST here on purpose, so queue order alone would name the wrong unit.
+func test_the_move_beat_opens_on_the_leader_when_the_leader_walks() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(mate, leader.squad)
+
+	leader.squad._queue_action(_walk(mate, Vector2i(1, 1)))
+	leader.squad._queue_action(_walk(leader, Vector2i(0, 1)))
+
+	var sheet := BeatSheet.read(leader.squad, ResolvedPlan.new())
+	var beat := sheet.moves()
+	assert_object(beat).override_failure_message("two real moves produced no MOVES beat").is_not_null()
+	assert_int(beat.actions.size()).is_equal(2)
+	assert_object(beat.subject()) \
+		.override_failure_message("the walk framed queue order instead of the leader") \
+		.is_same(leader)
+
+
+# A hold-position filler is inserted by a game.gd signal handler for every member that is NOT
+# moving, so almost every real squad move carries some. They are not moves: nobody ordered one and
+# nothing travels, so framing one parks the camera on a unit standing still.
+func test_a_hold_position_filler_is_not_a_mover() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(mate, leader.squad)
+
+	leader.squad._queue_action(_hold(leader))
+	leader.squad._queue_action(_walk(mate, Vector2i(1, 1)))
+
+	var beat := BeatSheet.read(leader.squad, ResolvedPlan.new()).moves()
+	assert_object(beat).is_not_null()
+	assert_int(beat.actions.size()).override_failure_message(
+			"the leader's hold-position filler was counted as a move").is_equal(1)
+	assert_object(beat.subject()).is_same(mate)
+
+
+# ... and a queue of NOTHING but fillers is a phase in which the board does not change, so it earns
+# no beat at all -- which is what keeps the camera still instead of panning to a stationary unit.
+func test_a_queue_of_nothing_but_holds_has_no_move_beat() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	leader.squad._queue_action(_hold(leader))
+
+	assert_object(BeatSheet.read(leader.squad, ResolvedPlan.new()).moves()) \
+		.override_failure_message("a hold-only queue produced a MOVES beat -- the camera would pan to nothing") \
+		.is_null()
+
+
+# --- the heal, as a fact (#519's table reads it) -----------------------------------------------
+
+# A heal is something that HAPPENED, and the sheet has to say so or #519's table cannot hold on it.
+# Read off the resolver's own heal_amount, never a re-read of fired_attack.heals -- same discipline
+# as every other fact here.
+func test_a_heal_is_a_beat_fact_and_a_damaging_hit_is_not() -> void:
+	assert_bool(_beat_of_a_hit_on_an_ally(true).has_heal) \
+		.override_failure_message("a heal landed and the beat did not know it").is_true()
+	assert_bool(_beat_of_a_hit_on_an_ally(false).has_heal) \
+		.override_failure_message("a damaging hit reads as a heal").is_false()
+
+
+# --- the side-channel tail --------------------------------------------------------------------
+
+# execute_orders plays the tail ONE ORDER AT A TIME, each awaiting its own completion, so two
+# rescues are two moments. A beat per TYPE (which is what #524 shipped) would leave the second
+# rescuer acting off-camera and unheld, since the schedule keys on each beat's first action.
+func test_two_rescues_are_two_coda_beats() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var mate := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(mate, leader.squad)
+	var body_a := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {Stats.Stat.LDR: 3})
+	var body_b := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 1), {Stats.Stat.LDR: 3})
+
+	leader.squad._queue_action(_rescue(leader, body_a))
+	leader.squad._queue_action(_rescue(mate, body_b))
+
+	var codas := BeatSheet.read(leader.squad, ResolvedPlan.new()).codas(BaseAction.ActionType.RESCUE)
+	assert_int(codas.size()).override_failure_message(
+			"two rescues collapsed into one beat -- the second plays off-camera").is_equal(2)
+	assert_object(codas[0].subject()).is_same(body_a)
+	assert_object(codas[1].subject()).is_same(body_b)
+
+
+# What a coda frames is what the verb is done TO, which is the same rule a volley follows -- and it
+# is the ORDER that answers, because only the order knows. A rescue has a body; a rally has nobody
+# but the unit doing it, and falls back to the actor.
+#
+# TWO actors, because rescue and rally are both MAIN actions: queued on one unit the second
+# displaces the first, which is the queue's own rule working rather than a fixture detail.
+func test_a_coda_frames_what_its_verb_is_done_to() -> void:
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var rallier := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(rallier, rescuer.squad)
+	var body := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 1), {Stats.Stat.LDR: 3})
+	rescuer.squad._queue_action(_rescue(rescuer, body))
+
+	var rally := RallyAction.new()
+	rally.init(rallier)
+	rescuer.squad._queue_action(rally)
+
+	var sheet := BeatSheet.read(rescuer.squad, ResolvedPlan.new())
+	assert_object(sheet.codas(BaseAction.ActionType.RESCUE)[0].subject()) \
+		.override_failure_message("a rescue framed the rescuer, not the body coming up").is_same(body)
+	assert_object(sheet.codas(BaseAction.ActionType.RALLY)[0].subject()) \
+		.override_failure_message("a rally has no target -- it must fall back to the unit rallying").is_same(rallier)
+
+
 # --- helpers ---------------------------------------------------------------------------------
+
+func _walk(unit: Unit, to: Vector2i) -> MoveAction:
+	var move := MoveAction.new()
+	var path: Array[Vector2i] = [to]
+	move.init(unit, path, null)
+	return move
+
+
+func _hold(unit: Unit) -> MoveAction:
+	var move := MoveAction.new()
+	move.init_hold_position(unit, null)
+	return move
+
+
+func _rescue(rescuer: Unit, body: Unit) -> RescueAction:
+	var action := RescueAction.new()
+	action.init(rescuer, body)
+	return action
+
+
+# One real resolve of a hit aimed at a SQUADMATE, healing or damaging, and the beat it produces.
+# The ally is the victim either way, so the only thing that differs is what the resolver did to it.
+func _beat_of_a_hit_on_an_ally(healing: bool) -> BeatSheet.Beat:
+	var actor := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.join_squad(ally, actor.squad)
+	var weapon := H.make_weapon(4)
+	weapon.template.main_attack.hits_allies = true
+	weapon.template.main_attack.heals = healing
+	actor.equipped_weapon = weapon
+	_sm.active_squad = actor.squad
+	actor.squad._queue_action(H.stamped_attack(actor, ally))
+
+	var plan := _sm.resolve_plan(actor.squad, _board_with([actor, ally]))
+	var beat: BeatSheet.Beat = BeatSheet.read(actor.squad, plan).volleys(false)[0]
+	assert_array(beat.victims).override_failure_message(
+			"fixture drifted: the aim at the ally found nobody").is_not_empty()
+	_break_volleys(plan)
+	return beat
+
 
 func _board_with(units_in: Array) -> BoardContext:
 	var units: Array[Unit] = []

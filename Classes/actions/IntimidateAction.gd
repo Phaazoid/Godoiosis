@@ -17,6 +17,9 @@ func init(intimidator: Unit, victim: Unit) -> void:
 	target = victim
 	action_type = BaseAction.ActionType.INTIMIDATE
 
+func aimed_at() -> Unit:
+	return target   # the one losing Will
+
 func execute() -> void:
 	begin_execution()
 	if target != null and is_instance_valid(target):

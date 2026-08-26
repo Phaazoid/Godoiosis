@@ -10,6 +10,9 @@ class_name BeatSheet
 # The beat order MIRRORS OrderExecutor.execute_orders and its phase order rather than restating
 # it: moves, attack volleys in queue order, cell effects, the counter turnover, counter volleys,
 # then the side-channel tail in SIDE_CHANNEL_ORDER. A phase with nothing in it produces no beat.
+# Mirroring is literal about GRANULARITY too, not just order: a volley is one beat because one
+# blast is one moment, and a side-channel verb is one beat EACH because execute_orders awaits them
+# one at a time. Where the two disagree, this is wrong and execution is right.
 #
 # Volley grouping is the RESOLVER's rule, not a second one: is_secondary_hit marks the non-lead
 # members (create_volley / create_counter_volley stamp it) and PlanResolver.resolve_counters
@@ -29,8 +32,10 @@ class Beat:
 	var kind: int = Kind.VOLLEY
 	var is_counter := false
 
-	# The volley's members in strike order. Empty on a punctuation beat.
-	var actions: Array[AttackAction] = []
+	# The orders this beat PLAYS, in execution order -- a volley's members in strike order, a MOVES
+	# beat's real moves, a CODA's single side-channel verb. Typed to the base so one field answers
+	# for every kind; empty only on punctuation (CELL_EFFECTS, TURNOVER).
+	var actions: Array[BaseAction] = []
 	var actor: Unit = null
 
 	# Aligned by index, and BOTH MAY BE EMPTY on a real beat: #47 lets a legal aim at cells with
@@ -43,6 +48,7 @@ class Beat:
 	var has_fall := false
 	var has_removal := false
 	var iron_will_held := false
+	var has_heal := false
 
 	# CODA only: which side-channel order this is (RESCUE, RALLY, GUARD, ...).
 	var coda_type: BaseAction.ActionType = BaseAction.ActionType.ATTACK
@@ -50,22 +56,30 @@ class Beat:
 	func has_lethality(rung: ResolvedOutcome.Lethality) -> bool:
 		return lethalities.has(rung)
 
-	# Who the camera goes to for this beat (#520). The first VICTIM, because what the player needs
-	# to read is what is being done to whom -- and the attacker is usually already in frame, since
-	# reach is short. Falls back to the actor for a beat with no victim at all, which #47's swing at
-	# open ground really is. Null on a punctuation beat: the turnover holds where it already looks.
+	# Who the camera goes to for this beat (#520). The ORDERS answer it -- BaseAction.aimed_at() --
+	# because what the player needs to read is what is being done to whom, and only the order knows
+	# who that is: a volley's victim, a rescue's body, a mover itself. The attacker is usually
+	# already in frame, since reach is short. Falls back to the beat's actor, which is what covers
+	# #47's swing at open ground. Null on a punctuation beat: the turnover holds where it looks.
+	#
+	# NOT read off `victims`: that list is aligned with `lethalities` for #519's table, and a beat
+	# with no victims (MOVES, CODA) still has a subject.
 	func subject() -> Unit:
-		for victim in victims:
-			if victim != null and is_instance_valid(victim):
-				return victim
+		for action in actions:
+			var who := action.aimed_at()
+			if who != null and is_instance_valid(who):
+				return who
 		return actor if actor != null and is_instance_valid(actor) else null
 
 	# Drop this volley's no-op members and read the surviving facts off their outcomes. R7 skips a
 	# counter-er, not a volley, so this runs AFTER grouping -- dropping a skipped LEAD any earlier
 	# would orphan its own secondaries into a beat of their own.
 	func _absorb() -> void:
-		var played: Array[AttackAction] = []
-		for attack in actions:
+		var played: Array[BaseAction] = []
+		for action in actions:
+			var attack := action as AttackAction
+			if attack == null:
+				continue
 			var out := attack.resolved
 			if out != null and out.skipped:
 				continue
@@ -79,6 +93,9 @@ class Beat:
 			has_fall = has_fall or out.fall_levels > 0
 			has_removal = has_removal or out.removed
 			iron_will_held = iron_will_held or out.iron_will_held
+			# The RESOLVER's own answer, like every other fact here -- never a re-read of
+			# fired_attack.heals. A heal that fired reads true even if the cap ate it.
+			has_heal = has_heal or out.heal_amount > 0
 		actions = played
 
 
@@ -113,26 +130,57 @@ func turnover() -> Beat:
 	return null
 
 
+# The walk that opens the pass, or null when nothing travels (an all-holds queue, or none at all).
+func moves() -> Beat:
+	for beat in beats:
+		if beat.kind == Kind.MOVES:
+			return beat
+	return null
+
+
+# One phase of the side-channel tail, in execution order -- one beat per ORDER, so a batch of
+# three rescues is three. execute_orders reads these the same way it reads volleys().
+func codas(type: BaseAction.ActionType) -> Array[Beat]:
+	var found: Array[Beat] = []
+	for beat in beats:
+		if beat.kind == Kind.CODA and beat.coda_type == type:
+			found.append(beat)
+	return found
+
+
 static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
 	var sheet := BeatSheet.new()
 	if squad == null or plan == null:
 		return sheet
 
-	var movers: Array[Unit] = []
-	var codas: Dictionary = {}
+	var walks: Array[BaseAction] = []
+	var coda_orders: Dictionary[BaseAction.ActionType, Array] = {}
 	for action in squad.action_queue:
 		if action.action_type == BaseAction.ActionType.MOVE:
-			if action.actor != null:
-				movers.append(action.actor)
+			var move := action as MoveAction
+			# A hold-position filler is NOT a move -- nobody ordered it and nothing travels. So a
+			# queue of nothing but fillers has no MOVES beat, which is the honest reading of a
+			# phase in which the board does not change.
+			if move != null and not move.is_hold_position and move.actor != null:
+				walks.append(move)
 		elif BaseAction.SIDE_CHANNEL_ORDER.has(action.action_type):
-			if not codas.has(action.action_type):
-				codas[action.action_type] = []
-			codas[action.action_type].append(action)
+			if not coda_orders.has(action.action_type):
+				coda_orders[action.action_type] = []
+			coda_orders[action.action_type].append(action)
 
-	if not movers.is_empty():
+	if not walks.is_empty():
 		var moves := Beat.new()
 		moves.kind = Kind.MOVES
-		moves.victims.assign(movers)   # a MOVES beat strikes nobody; these are the movers
+		# The LEADER opens it when it is walking: a squad's move is read from the unit the rest are
+		# following, and subject() takes the first order's aim. Otherwise queue order stands.
+		for i in walks.size():
+			if walks[i].actor == squad.leader:
+				var lead: BaseAction = walks[i]
+				walks.remove_at(i)
+				walks.insert(0, lead)
+				break
+		moves.actions.assign(walks)
+		moves.actor = walks[0].actor
 		sheet.beats.append(moves)
 
 	sheet.beats.append_array(_group(plan.attacks, false))
@@ -153,15 +201,23 @@ static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
 		sheet.beats.append(turnover)
 		sheet.beats.append_array(counter_beats)
 
+	# ONE BEAT PER ORDER, not per type: execute_orders plays the side-channel tail one verb at a
+	# time, each awaiting its own completion, so three rescues are three moments and not one. A
+	# beat per type would leave rescuers two and three acting off-camera and unheld (#520).
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
-		if not codas.has(type):
+		if not coda_orders.has(type):
 			continue
-		var coda := Beat.new()
-		coda.kind = Kind.CODA
-		coda.coda_type = type
-		var batch: Array = codas[type]
-		coda.actor = batch[0].actor
-		sheet.beats.append(coda)
+		var batch: Array = coda_orders[type]
+		for entry in batch:
+			var order := entry as BaseAction
+			if order == null:
+				continue
+			var coda := Beat.new()
+			coda.kind = Kind.CODA
+			coda.coda_type = type
+			coda.actor = order.actor
+			coda.actions.append(order)
+			sheet.beats.append(coda)
 
 	sheet._gather_cast(squad, plan)
 	sheet._gather_cells(plan)

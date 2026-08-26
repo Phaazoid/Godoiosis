@@ -10,6 +10,9 @@ func init(rescuer: Unit, downed_ally: Unit) -> void:
 	target = downed_ally
 	action_type = BaseAction.ActionType.RESCUE
 
+func aimed_at() -> Unit:
+	return target   # the body, not the rescuer -- a pickup is read on who comes up
+
 func execute() -> void:
 	begin_execution()
 	if target != null and is_instance_valid(target) and target.is_downed():

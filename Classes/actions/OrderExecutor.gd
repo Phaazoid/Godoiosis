@@ -93,6 +93,14 @@ func execute_orders(unit):
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
 
+	# The camera goes to the walk and the walk WAITS for it (#520, dev 2026-08-26). Moves are
+	# parallel, so one subject is framed -- the leader when the leader is walking -- and pan_to's
+	# closing follow() carries the camera along beside it for free. No hold here: the pan IS the
+	# beat, and a pause would be dead air between pressing Execute and anything happening.
+	var walk := sheet.moves()
+	var walker: Unit = walk.subject() if walk != null else null
+	if walker != null:
+		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions)
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)))
@@ -102,9 +110,13 @@ func execute_orders(unit):
 	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
 	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
 			_beat_subjects(sheet.volleys(true)))
+	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
+	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
+	# flat beat and one camera position.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
-		await _execute_action_sequence(batch, beat)
+		var codas := sheet.codas(type)
+		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai), _beat_subjects(codas))
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
 	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
@@ -214,6 +226,7 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 # Keyed by the beat's first SURVIVING member, so a volley whose lead was skipped (R7 downs the
 # counter-er) still pauses before the member that actually swings. Every action is executed either
 # way -- a skipped one is already a no-op inside AttackAction.execute; this decides only WHEN.
+# Serves the side-channel tail unchanged, where a beat holds exactly one order.
 func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: bool) -> Dictionary:
 	var holds: Dictionary = {}
 	for beat in beats:

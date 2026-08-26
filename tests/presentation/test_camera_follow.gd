@@ -114,6 +114,61 @@ func test_a_menu_takes_the_zoom_wheel_back() -> void:
 	_game.game_state = _game.GameState.IDLE
 
 
+# The move phase gets a camera too (dev, 2026-08-26: "when I moved on my turn, the camera just
+# kinda stared off into space"). #520 diff 1 wired only the volley beats, and it had ALSO taken the
+# player's own scroll away for the length of a pass -- so the move phase went from unframed-but-
+# scrollable to unframed-and-frozen.
+#
+# Asserted on follow_unit rather than a position: pan_to ends by handing over to follow(), and a
+# position would depend on the 2D camera's clamp against the board's own extent, i.e. on authored
+# content. Run inside a claimed camera (what an AI turn does) because the restore at the end of a
+# PLAYER pass clears follow_unit -- here the claim is put back, so the last pan survives to be read.
+#
+# LIMIT, stated rather than implied: pan_to snaps headless, so this pins the WIRE, not the ordering.
+# That the pan precedes the walk is structural -- the await sits above the phase.
+func test_the_move_phase_takes_the_camera_to_whoever_is_walking() -> void:
+	var mover := _mobile_player_unit()
+	assert_object(mover).override_failure_message(
+			"fixture: no player unit on this board can move").is_not_null()
+
+	_cam().set_playback_locked(true)
+
+	# Control first: the same pass with nothing queued must move the camera nowhere, or the case
+	# below would pass on any pan at all rather than on the move's.
+	await _game.order_executor.execute_orders(mover)
+	await _settle()
+	assert_object(_cam().follow_unit).override_failure_message(
+			"an empty pass panned the camera somewhere").is_null()
+
+	var moverange = _game.compute_move_range(mover)
+	var destinations: Array[Vector2i] = _game.get_move_range(moverange, mover)
+	var path := RulesService.reconstruct_path(moverange.came_from, mover.movement.cell, destinations[0])
+	var move := MoveAction.new()
+	move.init(mover, path, null)
+	assert_bool(_game.squad_manager.queue_action(mover.squad, move)).override_failure_message(
+			"fixture: the move was refused, so the pass would concede instead of playing").is_true()
+
+	await _game.order_executor.execute_orders(mover)
+	await _settle()
+
+	assert_object(_cam().follow_unit).override_failure_message(
+			"the move phase played with the camera pointed wherever it was left").is_same(mover)
+	_cam().set_playback_locked(false)
+
+
+# A player unit that actually has somewhere to go -- a unit stranded on a terrace with no ramp off
+# it is a legal board and produces no move at all (the content razor's second hazard).
+func _mobile_player_unit() -> Unit:
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null or unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var reachable: Array[Vector2i] = _game.get_move_range(_game.compute_move_range(unit), unit)
+		if not reachable.is_empty():
+			return unit
+	return null
+
+
 func _cam() -> CameraController:
 	return _game.camera_controller
 
