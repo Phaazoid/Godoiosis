@@ -98,7 +98,9 @@ func test_the_generated_ground_atlas_imports_as_a_faithful_passthrough() -> void
 		assert_bool(FileAccess.file_exists(import_path)).override_failure_message(
 			"%s has no committed .import, so Godot will author one with detect_3d on" % name
 		).is_true()
-		var text := FileAccess.get_file_as_string(import_path)
+		# \r stripped so a checkout under core.autocrlf cannot red every param at once, which is
+		# what a CRLF rewrite of this file did while falsifying the case.
+		var text := FileAccess.get_file_as_string(import_path).replace("\r", "")
 		for key: String in REQUIRED_IMPORT_PARAMS:
 			var want: String = REQUIRED_IMPORT_PARAMS[key]
 			assert_str(text).override_failure_message(
