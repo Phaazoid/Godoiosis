@@ -438,6 +438,9 @@ func get_live_abilities() -> Array[AbilityData]:
 	for weapon in _mod_sources():
 		for mod in weapon.active_modules(self):
 			AbilityData.add_live(live, mod.granted_abilities)
+	# A RUNE grants nothing, and that is RULED rather than pending (#531, dev 2026-08-26): a rune's
+	# payload is its carvings. equipped_weapon is typed EquippableData, so a RuneData sitting there
+	# falls out of _mod_sources' cast on purpose -- do not "fix" that, and do not add a fourth arm.
 	return live
 
 func has_live_ability(id: Abilities.Id) -> bool:
