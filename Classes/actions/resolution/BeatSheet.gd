@@ -50,6 +50,16 @@ class Beat:
 	func has_lethality(rung: ResolvedOutcome.Lethality) -> bool:
 		return lethalities.has(rung)
 
+	# Who the camera goes to for this beat (#520). The first VICTIM, because what the player needs
+	# to read is what is being done to whom -- and the attacker is usually already in frame, since
+	# reach is short. Falls back to the actor for a beat with no victim at all, which #47's swing at
+	# open ground really is. Null on a punctuation beat: the turnover holds where it already looks.
+	func subject() -> Unit:
+		for victim in victims:
+			if victim != null and is_instance_valid(victim):
+				return victim
+		return actor if actor != null and is_instance_valid(actor) else null
+
 	# Drop this volley's no-op members and read the surviving facts off their outcomes. R7 skips a
 	# counter-er, not a volley, so this runs AFTER grouping -- dropping a skipped LEAD any earlier
 	# would orphan its own secondaries into a beat of their own.

@@ -1,10 +1,10 @@
 # The 2D board camera: WASD-scrolled with grid snapping, clamped to the board,
-# with AI-turn locks (set_ai_locked/follow) and the fixed-duration pan_to beat.
+# with playback locks (set_playback_locked/follow) and the fixed-duration pan_to beat.
 # center_on_position glides via the _process lerp; snap_to_position is the instant
 # form (the 3D input bridge maps clicks through the live transform, #220).
 #
 # Manual scrolling has THREE locks now: lock_manual_input (a glide owns the camera),
-# ai_locked (the AI does), and game.board_input_delegated (a 3D host does -- #176
+# playback_locked (an AI turn or a resolution pass does), and game.board_input_delegated (a 3D host does -- #176
 # stage 4d, where WASD would otherwise pan this camera AND the 3D rig off one press).
 # Only the keyboard branch is gated: pan_to/follow/snap_to_position must keep working,
 # and follow needs this _process to track its unit.
@@ -26,7 +26,13 @@ var keyboard_direction := Vector2.ZERO
 var lock_manual_input := false
 var last_move_dir := Vector2.ZERO
 var was_moving := false
-var ai_locked := false        # true for the whole duration of an AI-controlled turn
+# True while something other than the player owns where the camera looks: an AI faction's whole
+# turn, OR one squad's resolution pass (#520). Named for the FACT rather than its first caller --
+# it was ai_locked until #520, and the player's own Execute needs the identical treatment.
+#
+# It governs WHERE the camera looks, never how far out it sits: the player keeps the zoom wheel
+# throughout (dev, 2026-08-26), which is why battle3d gates zoom on the menu half alone.
+var playback_locked := false
 var follow_unit: Unit = null  # while set, target_position tracks this unit every frame
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
@@ -97,7 +103,7 @@ func _process(delta: float):
 	
 	#Always scroll at least one cell, and never snap back.  
 	keyboard_direction = Vector2.ZERO
-	if not lock_manual_input and not ai_locked and not _input_delegated():
+	if not lock_manual_input and not playback_locked and not _input_delegated():
 		if Input.is_action_pressed("cam_right"):
 			keyboard_direction.x += 1
 		if Input.is_action_pressed("cam_left"):
@@ -150,8 +156,8 @@ func _input_delegated() -> bool:
 	var delegated: bool = game.board_input_delegated
 	return delegated
 
-func set_ai_locked(locked: bool) -> void:
-	ai_locked = locked
+func set_playback_locked(locked: bool) -> void:
+	playback_locked = locked
 	if not locked:
 		follow_unit = null
 

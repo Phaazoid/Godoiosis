@@ -84,6 +84,18 @@ class_name CameraRig3D
 # tracking in _process have to keep running under it.
 @export var manual_input_enabled := true: set = _set_manual_input_enabled
 
+# The zoom wheel is gated SEPARATELY from everything else the player can do to the camera (#520,
+# dev 2026-08-26). While a pass or an AI turn plays, playback owns WHERE the camera looks and the
+# player keeps how far out it sits -- so manual_input_enabled goes false and this stays true. A
+# menu takes both, because the surface on screen wants the wheel for itself.
+@export var zoom_input_enabled := true
+
+# Where playback frames from: the distance the rig resets to whenever something other than the
+# player takes the camera. Without it you watch a whole enemy turn at whatever zoom you happened
+# to leave the last one at, which is the awkwardness this closes -- the reset is a STARTING point,
+# not a leash, and the wheel is live again immediately after.
+@export var playback_distance := 11.0
+
 @onready var _camera: Camera3D = $Pitch/Camera
 @onready var _attributes: CameraAttributesPractical = _camera.attributes as CameraAttributesPractical
 
@@ -108,6 +120,18 @@ func _ready() -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# ABOVE the manual gate, deliberately: zoom is the one thing the player keeps while playback
+	# owns the camera (#520). Its own switch is zoom_input_enabled; wheel_zoom_enabled stays the
+	# separate question of whether the WHEEL is this rig's to read at all (#285 hands it away).
+	var notch := event as InputEventMouseButton
+	if notch != null and notch.pressed and zoom_input_enabled and wheel_zoom_enabled:
+		if notch.button_index == MOUSE_BUTTON_WHEEL_UP:
+			zoom_by(-1)
+			return
+		elif notch.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+			zoom_by(1)
+			return
+
 	if not manual_input_enabled:
 		return
 
@@ -136,12 +160,6 @@ func _unhandled_input(event: InputEvent) -> void:
 				position = _home_position
 				_target_yaw_degrees = _home_yaw_degrees
 				_target_distance = _home_distance
-	var wheel := event as InputEventMouseButton
-	if wheel != null and wheel.pressed and wheel_zoom_enabled:
-		if wheel.button_index == MOUSE_BUTTON_WHEEL_UP:
-			zoom_by(-1)
-		elif wheel.button_index == MOUSE_BUTTON_WHEEL_DOWN:
-			zoom_by(1)
 
 
 # One notch of zoom. Public so a host that has taken the wheel away can still hand a MODIFIED
