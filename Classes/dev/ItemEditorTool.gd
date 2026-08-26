@@ -414,11 +414,12 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 # written, so this is the first build in which every field of a mod is actually editable. `family`
 # joins it as bespoke UI: the two are one control surface, since a scaling change is meaningless
 # until a family says what it is measured against.
-const MOD_SKIP := ["display_name", "family", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
+const MOD_SKIP := ["display_name", "family", "replaces_main", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
 
 func _populate_mod_editor(mod: WeaponModData) -> void:
 	DevWidgets.build_resource_editor(editor_container, mod, populate, MOD_SKIP)
 	_populate_mod_family(mod)
+	_populate_mod_replacement(mod)
 	_populate_scaling_change(mod)
 	_populate_mod_grants(mod)
 
@@ -434,6 +435,21 @@ func _populate_mod_family(mod: WeaponModData) -> void:
 	)
 	_tip_from(first, DevWidgets.property_tip(mod, "family"))
 
+# The main-replacement picker (#529). A lone object @export WOULD auto-render, through
+# build_resource_editor's resource swapper -- which then nests a LIVE editor for the attack it
+# points at, making the mod panel a back door into content the Attack Editor owns. Same reason
+# a prototype's own main gets a picker rather than the auto arm.
+func _populate_mod_replacement(mod: WeaponModData) -> void:
+	var first := editor_container.get_child_count()
+	var choices := _main_choices(NO_REPLACEMENT_KEY)
+	var current_key := _key_for(choices, mod.replaces_main, NO_REPLACEMENT_KEY)
+	DevWidgets.add_option(editor_container, "Replaces main", choices.keys(), current_key,
+		func(s: String):
+			mod.replaces_main = choices[s]
+			populate()
+	)
+	_tip_from(first, DevWidgets.property_tip(mod, "replaces_main"))
+
 # ABSOLUTE in, DELTA at rest (#74, dev ruling). You author the percentages you want the weapon to
 # scale off; what is stored is the difference from the family main attack's own blend, so every
 # attack that weapon fires moves by the same amount and keeps its own character.
@@ -441,6 +457,7 @@ func _populate_mod_family(mod: WeaponModData) -> void:
 # NO FAMILY, NO SLIDERS. A change is measured against one family's main and means nothing without
 # it, so the door simply is not there yet -- which makes the derived rule visible rather than
 # letting you author a number with nothing behind it.
+
 func _populate_scaling_change(mod: WeaponModData) -> void:
 	if mod.family == WeaponData.WeaponType.NONE:
 		DevWidgets.add_label(editor_container,
@@ -651,6 +668,24 @@ const MAX_SPACE_CAPACITY := 9
 # The main-attack picker's "no main" row. A template with none is a legitimate intermediate state
 # (the lint DEGRADES it rather than refusing), so the picker has to be able to express it.
 const NO_MAIN_KEY := "(none)"
+const NO_REPLACEMENT_KEY := "(the weapon's own)"
+
+# Every attack that can stand as a main, catalog mains first. TWO pickers ask it -- a prototype's
+# own main and a mod's replacement (#529) -- so it is one answer rather than two loops that could
+# drift about which catalogs count.
+func _main_choices(none_key: String) -> Dictionary:
+	var choices := {none_key: null}
+	for source: Dictionary in [WeaponAttackCatalog.get_mains(), WeaponAttackCatalog.get_library()]:
+		for k in source:
+			if not choices.has(k):    # a library attack sharing a main's name loses; one name, one entry
+				choices[k] = source[k]
+	return choices
+
+func _key_for(choices: Dictionary, value: Variant, fallback: String) -> String:
+	for k in choices:
+		if choices[k] == value:
+			return k
+	return fallback
 
 func _populate_prototype_editor(template: WeaponData) -> void:
 	DevWidgets.add_label(editor_container, "Editing a TEMPLATE, not a carried weapon -- every weapon built on it reads this live.")
@@ -689,16 +724,8 @@ func _is_a_family_main(attack: WeaponAttackData) -> bool:
 # that does is pointed at content that already exists. This mode writes no attack file at all.
 func _populate_prototype_main(template: WeaponData) -> void:
 	var first := editor_container.get_child_count()
-	var choices := {NO_MAIN_KEY: null}
-	for source: Dictionary in [WeaponAttackCatalog.get_mains(), WeaponAttackCatalog.get_library()]:
-		for k in source:
-			if not choices.has(k):   # a library attack sharing a main's name loses; one name, one entry
-				choices[k] = source[k]
-	var current_key := NO_MAIN_KEY
-	for k in choices:
-		if choices[k] == template.main_attack:
-			current_key = k
-			break
+	var choices := _main_choices(NO_MAIN_KEY)
+	var current_key := _key_for(choices, template.main_attack, NO_MAIN_KEY)
 	DevWidgets.add_option(editor_container, "Main attack", choices.keys(), current_key,
 		func(s: String):
 			template.main_attack = choices[s]
