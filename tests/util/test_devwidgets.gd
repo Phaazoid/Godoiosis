@@ -187,15 +187,18 @@ func test_the_grain_divides_the_total() -> void:
 func test_every_weight_a_drag_authors_lands_on_the_grain() -> void:
 	var box: VBoxContainer = auto_free(VBoxContainer.new())
 	add_child(box)
-	# Deliberately off-grain to start with, which is what a hand-edited .tres looks like.
-	var blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 34, Stats.Stat.DEX: 33, Stats.Stat.PER: 33}
+	# THESE NUMBERS ARE CHOSEN, not arbitrary. Splitting the remainder in POINTS (the bug this
+	# guards) sends 65/35 to STR 46 -- off the grain -- while 34/33/33 would land on 25/25/25 and
+	# pass against the very bug it was written for. A drag whose leftovers happen to divide by
+	# five proves nothing; the discriminating power is in the fixture, not the assertion.
+	var blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 65, Stats.Stat.DEX: 35}
 	DevWidgets.add_blend_sliders(box, blend, func(): pass)
 
 	var sliders := _sliders(box)
-	sliders[Stats.SCALING_STATS.find(Stats.Stat.CON)].value = 23   # not on the grain either
-	assert_int(blend.get(Stats.Stat.CON, 0)).is_equal(25)          # the Range snapped it
+	sliders[Stats.SCALING_STATS.find(Stats.Stat.PER)].value = 28   # not on the grain
+	assert_int(blend.get(Stats.Stat.PER, 0)).is_equal(30)          # the Range snapped the handle
 
-	# ...and so did the three it stole from, which is the half a step-on-the-handle alone misses.
+	# ...and so did the two it stole from, which is the half a step on the HANDLE alone misses.
 	for stat: Stats.Stat in blend:
 		assert_int(blend[stat] % Stats.BLEND_STEP).is_equal(0)
 	assert_int(_total(blend)).is_equal(Stats.BLEND_TOTAL)
