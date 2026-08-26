@@ -39,6 +39,13 @@ dof_blur_near_distance = 9.0
 dof_blur_near_transition = 4.0
 dof_blur_amount = 0.08
 
+[sub_resource type="StyleBoxFlat" id="help_plate"]
+bg_color = Color(0, 0, 0, 0.45)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+
 [node name="Battle3D" type="Node3D" unique_id=222815813]
 script = ExtResource("1")
 
@@ -81,6 +88,10 @@ current = true
 fov = 30.0
 
 [node name="UI" type="CanvasLayer" parent="." unique_id=1085063773]
+
+[node name="Plate" type="Panel" parent="UI" unique_id=242989360]
+visible = false
+theme_override_styles/panel = SubResource("help_plate")
 
 [node name="Help" type="Label" parent="UI" unique_id=242989368]
 modulate = Color(1, 1, 1, 0.85)
