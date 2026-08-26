@@ -489,9 +489,17 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 					_block_mesh(atlas_mat, side, top_uv, side_uv))
 			next_id += 1
 
-			# The same surface on a SLOPE (#340). FLAT tiles only: a rock or a fence has no top face
-			# to tilt, and the brush refuses them a rise for the same reason. Without this every ramp
-			# wore the one generated dirt wedge, so a stone ramp read as dirt.
+			# The same surface on a SLOPE (#340). EVERY 1x1 tile gets one, wearing exactly what the
+			# block above wears on its top face -- same top_uv, same side, same materials.
+			#
+			# It was FLAT tiles only until #342, on the reading that a rock has no top face to tilt.
+			# That confused a tile's ART with a tile's GROUND: what a cap draws is the ground the prop
+			# STANDS ON, which the atlas pass above has already composed for every tile -- own art for
+			# flat, the bare kind base for a prop, a generated speckle for a tuft. The gate was a
+			# SECOND answer to a question that pass already answers, and it degraded twice over: a
+			# TUFT is walkable ground the corner tool slopes freely, and any prop can be painted onto
+			# a cell that already slopes. Both wore the generic grass wedge, so a flowery-grass slope
+			# read olive beside its own mint neighbours.
 			#
 			# ONE PER AUTHORABLE CLIMB since #427 slice 2 — the tile's art on a 45 degree wedge and on
 			# the gentle one are different geometry, and the item NAME carries the climb so the mirror
@@ -500,16 +508,15 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# ONE PER SHAPE as well since #427 slice 3: a cell can be a cardinal wedge, an outer
 			# corner or an inner one, and those are different geometry off one tile's art. Three
 			# shapes and not twelve masks -- the GridMap's yaw supplies each shape's four rotations,
-			# which is what keeps the artifact at ~2100 items instead of ~4000.
-			if not stands_up:
-				for climb: int in BoardMirror.RAMP_ITEM_NAMES:
-					for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER,
-							Terrain.Form.INNER]:
-						_add_item(ml, next_id,
-								BoardMirror.ramp_item_name(source_id, coords, climb, form),
-								_form_mesh(_canonical_corners(form, climb), atlas_mat, side,
-										top_uv, side_uv))
-						next_id += 1
+			# which is what keeps the artifact at ~2200 items instead of ~4000.
+			for climb: int in BoardMirror.RAMP_ITEM_NAMES:
+				for form: Terrain.Form in [Terrain.Form.WEDGE, Terrain.Form.OUTER,
+						Terrain.Form.INNER]:
+					_add_item(ml, next_id,
+							BoardMirror.ramp_item_name(source_id, coords, climb, form),
+							_form_mesh(_canonical_corners(form, climb), atlas_mat, side,
+									top_uv, side_uv))
+					next_id += 1
 
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
 			# that tile's own dominant colours. A billboard prop gets none -- BoardMirror builds its

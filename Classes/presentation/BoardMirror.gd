@@ -257,7 +257,15 @@ var _cover_markers: Dictionary[Vector2i, Node3D] = {}
 # REPLACED rather than merely added or removed: painting a rock over a tree leaves the cell in
 # both the old and new wanted-set, and a keyed-by-cell-only reconcile would leave the tree
 # standing forever.
+#
+# It carries the cell's CORNERS too (#342), and that is the same rule one input along: what gets
+# built depends on the ground as well as the tile — every prop stands at surface_point, and a tuft
+# plants each plant at its own point on the tilted face — so an early-out reading only the tile is
+# a poll blind to half its own inputs. Move a vertex under a flowerbed and the plants stayed at the
+# height they were sown at, buried by their own cell. Two stamps rather than one compound, because
+# they are two facts (WHICH tile, what SHAPE) and only the comparison has to know about both.
 const PROP_TILE_META := "prop_tile"
+const PROP_CORNERS_META := "prop_corners"
 var _props: Dictionary[Vector2i, Node3D] = {}
 
 # Marks a prop sprite as a TUFT, so the tuft_scale setter can find the standing ones. A mark on the
@@ -991,30 +999,41 @@ func prop_at(cell: Vector2i) -> Node3D:
 
 
 # Build the prop this cell wants, or leave the standing one alone when it is already the right
-# tile. The tile comparison is what makes REPLACEMENT work: painting a rock onto a tree keeps the
-# cell in the wanted-set, so a cell-only check would leave the tree standing.
+# tile ON the same ground. The tile comparison is what makes REPLACEMENT work: painting a rock onto
+# a tree keeps the cell in the wanted-set, so a cell-only check would leave the tree standing. The
+# corners are the other half — see PROP_CORNERS_META.
+#
+# It REBUILDS on a corner change rather than re-placing the way _reconcile_state does, because a
+# tuft's plants each sit at their own point on the tilted face: there is no one position to move.
+# Identity survives everything that is not an authoring edit, which is what the reconcile pin asks.
 func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) -> void:
 	var coords: Vector2i = grid.get_cell_atlas_coords(cell)
 	var tile := Vector3i(grid.get_cell_source_id(cell), coords.x, coords.y)
+	var corners := Vector4i.ZERO if heights == null else heights.corners_at(cell)
 	var standing: Node3D = _props.get(cell)
 	if standing != null:
-		if standing.get_meta(PROP_TILE_META) == tile:
+		if standing.get_meta(PROP_TILE_META) == tile \
+				and standing.get_meta(PROP_CORNERS_META) == corners:
 			return
 		standing.queue_free()
 		_props.erase(cell)
-	var built := _make_prop(grid, cell, surface_point(cell, heights))
+	var built := _make_prop(grid, cell, surface_point(cell, heights), heights)
 	if built == null:
 		return
 	built.set_meta(PROP_TILE_META, tile)
+	built.set_meta(PROP_CORNERS_META, corners)
 	_props[cell] = built
 
 
 # Forget every standing prop, so the next reconcile rebuilds them (#272 slice 2). The dev tool's
-# door after editing a per-TYPE field, and it has to exist because _reconcile_prop's diff key is the
-# TILE: a prop whose tile is unchanged is left alone, which is right for painting and blind to a
-# field the tile itself just gained. Exactly the #308 shape — a poll that draws through a store its
-# own diff key cannot see — and the fix is the same, invalidate at the source rather than widen the
-# key into a copy of everything the build reads.
+# door after editing a per-TYPE field, and it has to exist because _reconcile_prop's diff key names
+# only what the reconcile is HANDED — the cell's tile and its corners: a prop whose tile is unchanged
+# is left alone, which is right for painting and blind to a field the tile itself just gained.
+# Exactly the #308 shape, a poll that draws through a store its own diff key cannot see. The fix is
+# the same and it is NOT to widen the key: a per-TYPE edit changes every cell of that type while no
+# cell changes, so there is no per-cell fact to compare and invalidating at the source is the only
+# honest answer. (#342 widened the key to the corners, which is the opposite case — a per-CELL input
+# the reconcile already holds, read off the same store the build reads, so it cannot go stale.)
 func drop_props() -> void:
 	for cell: Vector2i in _props.keys():
 		_props[cell].queue_free()
@@ -1041,11 +1060,14 @@ func _free_prop_at(cell: Vector2i) -> void:
 # shadow, whether it carries a light — is one answer for every prop.
 #
 # A TUFT is the one prop that is SEVERAL objects rather than one, so it owns its whole assembly
-# below (the shape _make_fire already has) instead of being forced through a one-body path.
-func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
+# below (the shape _make_fire already has) instead of being forced through a one-body path. It is
+# also the only form that needs the HEIGHTS as well as the point: a one-body prop stands at `at` and
+# nothing else about the ground reaches it, while a tuft's plants are spread across the cell and a
+# corner cell's surface is not level under them.
+func _make_prop(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardHeights) -> Node3D:
 	var shape := GridUtils.prop_shape_at_cell(grid, cell)
 	if shape == GridUtils.PropShape.TUFT:
-		return _make_tuft(grid, cell, at)
+		return _make_tuft(grid, cell, at, heights)
 	var body: GeometryInstance3D = null
 	if GridUtils.SOLID_SHAPES.has(shape):
 		body = _make_prop_block(grid, cell)
@@ -1194,7 +1216,13 @@ var _tuft_tiles: Dictionary[Vector3i, Dictionary] = {}
 # No light and no shadow, unlike every other prop. LIT_PROPS is keyed on a whole prop's name and a
 # tuft is not one object; shadows are a count, not a look call — a thousand tuft cells is thousands
 # of shadow-map draws for plants a few pixels tall.
-func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
+#
+# Each plant is PLANTED AT ITS OWN POINT on the cell's surface (#342), through the same
+# BoardSpace.surface_height_at a sliding sprite reads — the tuft is the one prop whose parts are
+# spread across the square, so a single surface_point for the whole assembly is only right while the
+# square is level. It stays upright rather than tilting with the ground: these are Y-billboards, and
+# a plant grows up whatever the hill does.
+func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3, heights: BoardHeights) -> Node3D:
 	var tiles := grid.tile_set
 	if tiles == null:
 		return null
@@ -1219,6 +1247,12 @@ func _make_tuft(grid: TileMapLayer, cell: Vector2i, at: Vector3) -> Node3D:
 		var sprite := _make_cluster_sprite(sheet, rect, _tuft_pixel_size(authored),
 				float(GridUtils.TILE_SIZE))
 		sprite.set_meta(TUFT_META, true)
+		# Its own foot, not the root's: the sprite is already placed across the cell, so the lift is
+		# the surface under THAT point minus the surface under the centre, which `at.y` is. Exactly
+		# zero on a LEVEL cell — i.e. on almost every cell on any board — so this moves a plant only
+		# where the ground it grows on is not flat.
+		sprite.position.y = BoardSpace.surface_height_at(cell,
+				at.x + sprite.position.x, at.z + sprite.position.z, heights) - at.y
 		root.add_child(sprite)
 	return root
 

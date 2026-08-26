@@ -681,6 +681,36 @@ func _tiles_with_shape(shape: GridUtils.PropShape) -> Array[Dictionary]:
 	return out
 
 
+# Every tile in the sheet, in atlas order, each entry carrying its atlas SIZE — the shape-blind walk
+# the three filters above are specialisations of. It exists because #342 gave every 1x1 tile a cap,
+# so "which tiles does this rule cover?" stopped being answerable by whether a tile stands up.
+func _all_tiles() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var tiles: TileSet = _game.grid.tile_set
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var source := tiles.get_source(source_id) as TileSetAtlasSource
+		if source == null:
+			continue
+		for i in source.get_tiles_count():
+			var coords := source.get_tile_id(i)
+			out.append({"source": source_id, "coords": coords,
+					"size": source.get_tile_size_in_atlas(coords)})
+	return out
+
+
+# Tiles whose ART spans more than one atlas cell — the class the meshlib generator skips outright,
+# and so the one that genuinely reaches BoardMirror's cap fallback (#342). Asked of the SIZE and not
+# of `prop_shape`: a standing tile has had a cap of its own since #342, so a shape-based pick here
+# would be asserting the ordinary path while claiming to assert the fallback.
+func _tiles_bigger_than_one_cell() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for tile in _all_tiles():
+		if tile.size != Vector2i.ONE:
+			out.append(tile)
+	return out
+
+
 func _tile_named(name: String) -> Dictionary:
 	var tiles: TileSet = _game.grid.tile_set
 	for s in tiles.get_source_count():
@@ -1561,19 +1591,22 @@ func test_a_ramp_wears_the_tile_painted_on_it_rather_than_the_generic_wedge() ->
 
 
 func test_a_tile_with_no_ramp_variant_falls_back_to_the_generic_wedge() -> void:
-	# Only FLAT tiles get a variant, so a standing one reaches the fallback — which must be the dirt
-	# wedge rather than INVALID_CELL_ITEM, or the cell renders as a hole. The brush refuses to give a
-	# prop a rise, but a prop can still be painted onto a cell that already slopes.
+	# The fallback must be the dirt wedge rather than INVALID_CELL_ITEM, or the cell renders as a
+	# hole. It is asked of a MULTI-CELL tile since #342, which is the case that genuinely has no cap:
+	# art taller than a cell cannot go onto a 1x1 face un-squashed, so the generator skips those tiles
+	# entirely and they get no block either. This case used to pick a STANDING tile, on the old rule
+	# that only FLAT tiles were given a variant — that gate is gone, so a rock now wears its own
+	# ground on a slope and asking it here would assert nothing.
 	_scene.load_mission(PROLOG)
 	await _settle()
 	_game.game_state = _game.GameState.DEV_MODE
 	var mirror: BoardMirror = _scene._board_mirror
 	var cell: Vector2i = _game.grid.get_used_cells()[0]
-	var standing := _tiles_that_stand(true)
-	assert_bool(standing.is_empty()).override_failure_message(
-			"the tileset declares no standing tile; the case is vacuous").is_false()
+	var oversized := _tiles_bigger_than_one_cell()
+	assert_bool(oversized.is_empty()).override_failure_message(
+			"the tileset declares no multi-cell tile; the case is vacuous").is_false()
 
-	_game.grid.paint(cell, standing[0].source, standing[0].coords)
+	_game.grid.paint(cell, oversized[0].source, oversized[0].coords)
 	await _settle()
 
 	assert_int(mirror.ramp_item_for_cell(_game.grid, cell, Terrain.UNITS_PER_LEVEL)).override_failure_message(
@@ -1600,6 +1633,10 @@ func test_a_ramp_variant_wears_the_same_atlas_REGIONS_its_block_does() -> void:
 	# A LAW over every emitted variant rather than a water case: both meshes are handed the same
 	# pair by the same loop, so any divergence is the bug, and a tile that grows an atlas-backed
 	# side later is covered without anyone remembering to add a case.
+	#
+	# It walked FLAT tiles only until #342, which is why it did not cover the variants that ticket
+	# added — #342's own issue text had claimed it would cover them "for free". The block guard below
+	# is what keeps the widened walk honest: a tile with no block is skipped rather than asserted.
 	_scene.load_mission(PROLOG)
 	await _settle()
 	var lib: MeshLibrary = (_scene.get_node("Board") as GridMap).mesh_library
@@ -1610,7 +1647,7 @@ func test_a_ramp_variant_wears_the_same_atlas_REGIONS_its_block_does() -> void:
 	# EVERY authorable climb, since #427 slice 2 emits one variant each: the gentle wedge is built by
 	# the same call with the same pair, so a divergence there is the same bug one argument along.
 	var checked := 0
-	for tile in _tiles_that_stand(false):
+	for tile in _all_tiles():
 		var block: String = BoardMirror.tile_item_name(tile.source, tile.coords)
 		if not by_name.has(block):
 			continue
@@ -1887,7 +1924,6 @@ func test_every_plant_in_a_tuft_stands_on_the_tile_and_faces_the_camera() -> voi
 	var root := mirror.prop_at(cell)
 	assert_object(root).override_failure_message(
 			"a TUFT tile stood nothing up — its flowers are still lying flat in the ground").is_not_null()
-	var surface: float = mirror.surface_point(cell, _game.board_heights).y
 	var feet: Array[Vector2] = []
 	for child in root.get_children():
 		var sprite := child as Sprite3D
@@ -1897,6 +1933,12 @@ func test_every_plant_in_a_tuft_stands_on_the_tile_and_faces_the_camera() -> voi
 		assert_int(sprite.billboard).override_failure_message(
 				"a tuft that does not billboard shows its edge as the camera orbits").is_equal(
 				BaseMaterial3D.BILLBOARD_FIXED_Y)
+		# The surface under THIS plant, not under the cell centre (#342). Identical on a level cell,
+		# which is every cell this case paints — stated the general way so it cannot come to depend
+		# on the fixture's first cell happening to be flat.
+		var surface: float = BoardSpace.surface_height_at(cell,
+				root.position.x + sprite.position.x, root.position.z + sprite.position.z,
+				_game.board_heights)
 		assert_float(root.position.y + sprite.position.y + sprite.get_aabb().position.y) \
 				.override_failure_message("a plant on this tuft has its bottom edge at %s instead of the " \
 				% [root.position.y + sprite.position.y + sprite.get_aabb().position.y] \
@@ -1945,6 +1987,109 @@ func test_a_tuft_stands_up_one_plant_per_cluster_the_art_draws() -> void:
 		checked += 1
 	assert_int(checked).override_failure_message(
 			"no TUFT tiles authored; the case is vacuous").is_greater(0)
+
+
+# --- #342: a tuft on sloping ground -------------------------------------------------------------
+
+# A tuft is the one prop whose parts are SPREAD ACROSS the square, so one surface point for the whole
+# assembly is only right while the square is level — and since the corner tool went in, a tuft cell
+# slopes whenever a neighbouring vertex is dragged. Planted flat, the plants toward the high side are
+# buried in their own ground and the ones toward the low side hang over it.
+#
+# Two shapes, because they fail differently: a cardinal ramp tilts the WHOLE cell, while an outer
+# corner has a flat half and a sloped half, so a plant may legitimately not move at all. The rule is
+# stated per plant against BoardSpace.surface_height_at — the same answer a sliding sprite reads —
+# and the "something actually lifted" assertion at the end is what stops the whole case passing
+# against plants still sown at the cell centre.
+func test_every_plant_in_a_tuft_stands_on_the_TILTED_face_of_its_own_cell() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var richest := _richest_tuft_tile()
+	assert_bool(not richest.is_empty()).override_failure_message(
+			"no TUFT tile draws more than one plant; one plant cannot show a tilt").is_true()
+
+	var shapes: Dictionary[String, Vector4i] = {
+		"a 45 degree ramp climbing north": Terrain.corners_of_ramp(0, Terrain.RampRise.NORTH,
+				Terrain.UNITS_PER_LEVEL),
+		"an outer corner raised at NW": Vector4i(Terrain.UNITS_PER_LEVEL, 0, 0, 0),
+	}
+	var cells: Array[Vector2i] = _game.grid.get_used_cells()
+	var lifted := 0
+	var index := 0
+	for what: String in shapes:
+		var cell: Vector2i = cells[index]
+		index += 1
+		_game.grid.paint(cell, richest.source, richest.coords)
+		_game.board_heights.set_corners(cell, shapes[what])
+		await _settle()
+
+		var root := mirror.prop_at(cell)
+		assert_object(root).override_failure_message(
+				"%s: the tuft stood nothing up at all" % what).is_not_null()
+		for child in root.get_children():
+			var sprite := child as Sprite3D
+			if sprite == null:
+				continue
+			var foot := Vector3(root.position.x + sprite.position.x,
+					root.position.y + sprite.position.y + sprite.get_aabb().position.y,
+					root.position.z + sprite.position.z)
+			assert_float(foot.y).override_failure_message(
+					"%s: a plant's base sits at %s while the ground under it is at %s — it is " \
+					% [what, foot.y, BoardSpace.surface_height_at(cell, foot.x, foot.z,
+					_game.board_heights)] + "planted against the cell's centre, not against the " \
+					+ "face it grows on").is_equal_approx(BoardSpace.surface_height_at(
+					cell, foot.x, foot.z, _game.board_heights), 0.001)
+			if absf(sprite.position.y) > 0.001:
+				lifted += 1
+	assert_int(lifted).override_failure_message(
+			"every plant sat exactly at the cell centre's height on BOTH a full ramp and a corner, " \
+			+ "so this case would pass against plants that never leave the flat").is_greater(0)
+
+
+# The other half, and it is not tuft-shaped: EVERY prop stands at surface_point, so the ground moving
+# under one has to re-place it. _reconcile_prop early-outs on identity, and until #342 that identity
+# was the TILE alone — which is exactly #471's law, a poll comparing fewer inputs than its answer
+# depends on. Unreachable-looking, because the tile brush writes tile and height together; reachable
+# in two ways all the same, by repainting the SAME tile at a new height, and since #427 slice 4 by
+# the corner tool, which moves ground without touching a tile at all.
+#
+# Asserted on a BILLBOARD rather than a tuft, deliberately: the fix has to live in the reconcile, and
+# a tuft would also pass if the plants alone had been taught to re-derive.
+func test_a_standing_prop_follows_its_ground_when_only_the_HEIGHT_changes() -> void:
+	_scene.load_mission(PROLOG)
+	await _settle()
+	_game.game_state = _game.GameState.DEV_MODE
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var standing := _tiles_with_shape(GridUtils.PropShape.BILLBOARD)
+	assert_bool(standing.is_empty()).override_failure_message(
+			"the tileset authors no BILLBOARD tile; the case is vacuous").is_false()
+
+	var cell: Vector2i = _game.grid.get_used_cells()[0]
+	_game.grid.paint(cell, standing[0].source, standing[0].coords)
+	_game.board_heights.set_corners(cell, Vector4i.ZERO)
+	await _settle()
+	var before := mirror.prop_at(cell)
+	assert_object(before).override_failure_message(
+			"a BILLBOARD tile stood nothing up; there is nothing to move").is_not_null()
+	var sown: float = before.position.y
+
+	# The HEIGHT alone. No repaint, so the tile the old diff key compared is untouched.
+	_game.board_heights.set_corners(cell, Vector4i(Terrain.UNITS_PER_LEVEL,
+			Terrain.UNITS_PER_LEVEL, Terrain.UNITS_PER_LEVEL, Terrain.UNITS_PER_LEVEL))
+	await _settle()
+
+	var after := mirror.prop_at(cell)
+	assert_object(after).override_failure_message(
+			"raising the ground left the cell with no prop at all").is_not_null()
+	var surface: float = mirror.surface_point(cell, _game.board_heights).y
+	assert_float(after.position.y).override_failure_message(
+			"the ground rose to %s and the prop stayed at %s — it is buried in the cell it stands on" \
+			% [surface, after.position.y]).is_equal_approx(surface, 0.001)
+	# The control: without it this passes against a board whose surface never moved.
+	assert_bool(absf(surface - sown) > 0.001).override_failure_message(
+			"raising the cell did not move its surface, so the case asserts nothing").is_true()
 
 
 # The TUFT tile whose art draws the most separate plants, or {} if none draws more than one.
