@@ -539,27 +539,28 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 					# A plane is sized by PLANE_HEIGHT/THICKNESS rather than by opaque bounds: it is
 					# thin BY DEFINITION in the axis it does not run along, and the bounds of a
 					# foreshortened north-south piece measure a run, not a wall (#263).
+					var own_edges := GridUtils.plane_own_art_edges(data)
 					var own_uv := Rect2()
 					var face_uv := Rect2()
-					if edges & EW_EDGES != 0:
+					if edges & own_edges != 0:
 						var own_slot: Rect2i = slots[next_slot]
 						next_slot += 1
 						# blit, not blend: an UNBASED copy, so the gaps between the logs stay
 						# transparent and the prop material scissors them out.
 						ground.blit_rect(source_image, region, own_slot.position)
 						own_uv = _uv_rect(own_slot, atlas_size)
-					if edges & NS_EDGES != 0:
+					if edges & ~own_edges != 0:
 						var face_slot: Rect2i = slots[next_slot]
 						next_slot += 1
-						ground.blit_rect(_prop_side(rng, shape, palette, face_slot.size, 1),
+						ground.blit_rect(_prop_side(rng, shape, palette, face_slot.size, 1, kind),
 								Rect2i(Vector2i.ZERO, face_slot.size), face_slot.position)
 						face_uv = _uv_rect(face_slot, atlas_size)
-					mesh = _plane_mesh(prop_mat, edges, own_uv, face_uv)
+					mesh = _plane_mesh(prop_mat, edges, own_edges, own_uv, face_uv)
 				else:
 					var side_slot: Rect2i = slots[next_slot]
 					var top_slot: Rect2i = slots[next_slot + 1]
 					next_slot += 2
-					ground.blit_rect(_prop_side(rng, shape, palette, side_slot.size, _facets_of(shape)),
+					ground.blit_rect(_prop_side(rng, shape, palette, side_slot.size, _facets_of(shape), kind),
 							Rect2i(Vector2i.ZERO, side_slot.size), side_slot.position)
 					ground.blit_rect(_prop_top(rng, shape, palette, top_slot.size),
 							Rect2i(Vector2i.ZERO, top_slot.size), top_slot.position)
@@ -751,14 +752,16 @@ func _block_mesh(top_mat: Material, side_mat: Material,
 # ones -- an L. One rule, no corner special case, and it falls out that each half wears the MATCHING
 # half of its tile's art, so a straight run reassembles the whole sprite un-squashed.
 #
-# An east/west slab wears the tile's own sprite (the sheet draws those walls face-on, so #250 holds);
-# a north/south one wears the generated face, because its art is a top-down foreshortening rather than
-# a picture of that wall. Its own builder rather than a widened _block_mesh, which centres on the
-# origin and takes one UV for all five non-top faces -- a half-slab needs neither.
+# Which slabs wear the tile's OWN sprite is `own_edges`, a mask, and every other slab wears the
+# generated face. It was the AXIS until #554 (east-west own, north-south generated), which is a fact
+# about how this sheet draws a PALISADE rather than a fact about walls -- see
+# GridUtils.plane_own_art_edges. Its own builder rather than a widened _block_mesh, which centres on
+# the origin and takes one UV for all five non-top faces -- a half-slab needs neither.
 #
 # Every face of a slab takes the same rect: the narrow ends and the top are a PLANE_THICKNESS sliver,
 # and reserving atlas patches to dress 3 pixels would cost more than it could show.
-func _plane_mesh(mat: Material, edges: int, own_uv: Rect2, generated_uv: Rect2) -> ArrayMesh:
+func _plane_mesh(mat: Material, edges: int, own_edges: int, own_uv: Rect2,
+		generated_uv: Rect2) -> ArrayMesh:
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -771,15 +774,16 @@ func _plane_mesh(mat: Material, edges: int, own_uv: Rect2, generated_uv: Rect2) 
 		var step: Vector3 = WALL_EDGE_STEPS[edge]
 		var lo: Vector3
 		var hi: Vector3
-		var uv: Rect2
 		if absf(step.z) > 0.5:
 			lo = Vector3(-half, 0.0, minf(step.z * 0.5, 0.0))
 			hi = Vector3(half, PLANE_HEIGHT, maxf(step.z * 0.5, 0.0))
-			uv = generated_uv
 		else:
 			lo = Vector3(minf(step.x * 0.5, 0.0), 0.0, -half)
 			hi = Vector3(maxf(step.x * 0.5, 0.0), PLANE_HEIGHT, half)
-			uv = _uv_half(own_uv, step.x > 0.0)
+		# Own art is split so a straight run reassembles the sprite un-squashed; a generated face is
+		# one patch per tile, so both its slabs take it whole. _uv_half is EAST/WEST-shaped because
+		# own_edges is EW-or-nothing today -- a north-south own art would need a z twin.
+		var uv: Rect2 = _uv_half(own_uv, step.x > 0.0) if (edge & own_edges) != 0 else generated_uv
 		_box(st, lo, hi, uv)
 		built += 1
 	if built == 0:
@@ -980,11 +984,6 @@ const WALL_EDGE_STEPS: Dictionary[GridUtils.WallEdge, Vector3] = {
 	GridUtils.WallEdge.WEST: Vector3(-1, 0, 0),
 }
 
-# Which edges run which way is GridUtils.NS_EDGES / EW_EDGES — a property of the vocabulary, not of
-# this generator, so it is read rather than restated here.
-const NS_EDGES := GridUtils.NS_EDGES
-const EW_EDGES := GridUtils.EW_EDGES
-
 
 # A prism's silhouette, as rings of (height fraction, radius fraction) bottom to top.
 #
@@ -1050,23 +1049,25 @@ const FACETED_HEIGHT_OF_WIDTH := 0.64
 #
 # A prism's side run is one patch PER FACET, and that is a resolution requirement rather than a
 # convenience: slicing a single 16px patch into a barrel's ten facets would leave 1.6 texels each.
-func _patch_widths_for(shape: GridUtils.PropShape, edges: int) -> Array[int]:
+func _patch_widths_for(data: TileData) -> Array[int]:
+	var shape := GridUtils.prop_shape_of(data)
 	if not GridUtils.SOLID_SHAPES.has(shape):
 		return []
 	if shape == GridUtils.PropShape.PLANE:
-		# Up to two, and which ones depends on how this piece runs. An east-west wall is drawn FACE-ON
-		# in the sheet, so its slab wears the tile's own sprite and #250 holds -- but it needs a patch
-		# anyway, because the ground square under a standing tile holds only its BASE (the sprite is
-		# deliberately not baked there, or the fence would render twice) and an UNBASED copy is the
-		# only place the gaps between the logs survive. A north-south wall is drawn edge-on -- a
-		# top-down foreshortening whose posts stack DOWN-screen, which on a plane facing east renders
-		# as a tower of logs rather than a row (measured, #263) -- so its face is generated instead.
+		# Up to two, and which ones depends on which of this piece's edges are drawn face-on in the
+		# sheet (GridUtils.plane_own_art_edges). Own art needs a patch even though it is already in
+		# the atlas, because the ground square under a standing tile holds only its BASE (the sprite
+		# is deliberately not baked there, or the fence would render twice) and an UNBASED copy is
+		# the only place the gaps between the logs survive. Every OTHER edge shares ONE generated
+		# patch -- masonry has no face-on art at all and takes exactly this branch.
 		# No top patch either way: a slab's top is a PLANE_THICKNESS sliver.
+		var edges := GridUtils.wall_edges_of(data)
+		var own_edges := GridUtils.plane_own_art_edges(data)
 		var widths: Array[int] = []
-		if (edges & EW_EDGES) != 0:
+		if (edges & own_edges) != 0:
 			widths.append(1)   # the tile's own sprite, copied unbased
-		if (edges & NS_EDGES) != 0:
-			widths.append(1)   # the generated north-south face
+		if (edges & ~own_edges) != 0:
+			widths.append(1)   # the generated face
 		return widths
 	return [_facets_of(shape), 1]   # side run, then top
 
@@ -1078,9 +1079,7 @@ func _solid_patch_widths(atlas: TileSetAtlasSource) -> Array[int]:
 	for coords in _sorted_tile_coords(atlas):
 		if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		var data := atlas.get_tile_data(coords, 0)
-		widths.append_array(_patch_widths_for(GridUtils.prop_shape_of(data),
-				GridUtils.wall_edges_of(data)))
+		widths.append_array(_patch_widths_for(atlas.get_tile_data(coords, 0)))
 	return widths
 
 
@@ -1228,16 +1227,23 @@ func _prop_top(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: 
 #   CUBE     one cell, four congruent sides — vertical planks between end rails
 #   ROUND    a continuous band, one stave per facet, so it wraps the pot exactly once
 #   FACETED  one INDEPENDENT cell per facet, each a different stone tone, so the lump reads faceted
-#   PLANE    a palisade — upright logs with a gap between them, capped by a rail (#263)
+#   PLANE    a palisade — upright logs with a gap between them, capped by a rail (#263) — or, for a
+#            ROCK wall, a running-bond MASONRY course (#554)
 # ROUND and FACETED are the same UV rule; only the texture differs, which is the point. PLANE keeps
 # its own arm rather than borrowing ROUND's staves, which it happens to resemble: the pattern IS the
 # object's identity here, and welding a fence to a barrel would make either one untunable alone.
+#
+# PLANE is the one shape that forks on KIND, and only because a wall is the one form the sheet draws
+# in more than one material. Kind is already what this generator asks for what a tile is MADE of
+# (a ROCK block wears stone down its sides), so it answers here too rather than growing a column.
 func _prop_side(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette: Array[Color],
-		size: Vector2i, facets: int) -> Image:
+		size: Vector2i, facets: int, kind: Terrain.Kind) -> Image:
 	var img := Image.create_empty(size.x, size.y, false, Image.FORMAT_RGBA8)
 	var cell := maxi(1, size.x / maxi(1, facets))
 	var stave := maxi(2, cell / 2)
 	var rail := maxi(1, size.y / 6)
+	var course := maxi(2, size.y / 4)      # rows per masonry course
+	var brick := maxi(3, size.x / 2)       # a brick's length along the wall
 	for x in size.x:
 		# Which facet this column belongs to, and how far along that facet it sits — FACETED reads
 		# the first (a whole cell is one tone), ROUND and CUBE read the second.
@@ -1259,6 +1265,17 @@ func _prop_side(rng: RandomNumberGenerator, shape: GridUtils.PropShape, palette:
 						shade = 1
 					else:
 						shade = 3 if (x / stave) % 2 == 0 else 2
+				GridUtils.PropShape.PLANE when kind == Terrain.Kind.ROCK:
+					# A running bond: mortar between courses, and vertical joints offset half a
+					# brick every other course so nothing lines up into a column.
+					var row := y / course
+					var offset: int = 0 if row % 2 == 0 else brick / 2
+					if y % course == 0:
+						shade = 0                      # the mortar line
+					elif (x + offset) % brick == 0:
+						shade = 0                      # the vertical joint
+					else:
+						shade = 3 if (row + (x + offset) / brick) % 2 == 0 else 2
 				GridUtils.PropShape.PLANE:
 					# A gap between logs, not a seam: the darkest shade, so the wall reads as
 					# see-through even though the face itself is opaque.

@@ -20,7 +20,10 @@ const TERRAIN_ICONS: Dictionary[Terrain.Kind, Texture2D] = {
 	Terrain.Kind.ROCK: preload("res://Art/Icons/TerrainIcons/Rock.png"),
 	Terrain.Kind.MUD: preload("res://Art/Icons/TerrainIcons/Mud.png"),
 	Terrain.Kind.TREE: preload("res://Art/Icons/TerrainIcons/Tree.png"),
-	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/Water.png")
+	Terrain.Kind.WATER: preload("res://Art/Icons/TerrainIcons/Water.png"),
+	# DIRT is the first WALKABLE kind to get one (#554): an unmapped kind falls back to ERROR_ICON,
+	# which VOID could get away with because nothing ever ends a move on a hole.
+	Terrain.Kind.DIRT: preload("res://Art/Icons/TerrainIcons/Dirt.png")
 }
 
 const ERROR_ICON: Texture2D = preload("res://Art/Icons/ArrowIcons/ERROR.png")
@@ -200,6 +203,25 @@ static func wall_edges_of(data: TileData) -> int:
 
 static func wall_edges_at_cell(grid: TileMapLayer, cell: Vector2i) -> int:
 	return wall_edges_of(grid.get_cell_tile_data(cell))
+
+
+# Which of a PLANE's authored edges wear the TILE'S OWN SPRITE on their slab, rather than a face
+# generated in the tile's colours (#554). The rest are generated.
+#
+# It exists because #263's answer was the AXIS -- east-west wore the sprite, north-south did not --
+# and that is not a fact about walls, it is a fact about how this sheet draws a PALISADE: face-on
+# across, foreshortened along. Masonry is drawn as a PLAN of its footprint in both axes, so its
+# sprite is a picture of no wall at all: `stone_wall_hor_top` is opaque in 5 of its 16 rows, and
+# stood up it renders as a ribbon floating over an invisible slab.
+#
+# Keyed on KIND because kind is already what the generator asks when it wants to know what a tile is
+# MADE OF (a ROCK block wears stone down its sides, everything else wears dirt). Read by the meshlib
+# generator ONLY -- both the pass that sizes the atlas and the pass that fills it, which is the whole
+# reason it is one function: they must not disagree about how many patches a tile needs.
+static func plane_own_art_edges(data: TileData) -> int:
+	if terrain_kind_of(data) == Terrain.Kind.ROCK:
+		return 0
+	return EW_EDGES
 
 
 # --- Per-OBJECT presentation fields (#272 slice 2) --------------------------------------------
