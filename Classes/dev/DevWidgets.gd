@@ -741,6 +741,18 @@ static func _set_uid(line: String, uid: String) -> String:
 	return line.insert(type_close + 1, ' uid="%s"' % uid)
 
 
+# What Godot's own registry says a path's uid is, or "" if nothing claims it. The prior FILE cannot
+# answer for a reference this save is the FIRST to write -- #540's atlas is one, and the editor would
+# have stamped it on its next save, which is the churn that ticket exists to stop. Registry rather
+# than the target's own header: tests/law/test_resource_uid_references.gd asks ResourceUID, so this
+# is the same answer the law will grade the line against.
+static func _registered_uid(target_path: String) -> String:
+	if target_path == "":
+		return ""
+	var id := ResourceLoader.get_resource_uid(target_path)
+	return "" if id == ResourceUID.INVALID_ID else ResourceUID.id_to_text(id)
+
+
 # Put the resource's uid= attributes back into the file just saved. ResourceSaver.save() DROPS them
 # at runtime -- the running game's ResourceUID holds no registration for the path, so the saver writes
 # no uid= on the header OR on the ext_resource lines (or mints a new one for a fresh resource). That
@@ -767,6 +779,8 @@ static func restore_uids(path: String, prior: Dictionary) -> bool:
 			want = prior.get("_header", "")
 		elif line.begins_with("[ext_resource"):
 			want = prior.get(_quoted_attr(line, "id"), "")
+			if want == "":
+				want = _registered_uid(_quoted_attr(line, "path"))
 		else:
 			continue
 		if want == "" or _quoted_attr(line, "uid") == want:
