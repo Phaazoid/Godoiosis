@@ -145,21 +145,29 @@ func test_a_units_markup_comes_down_when_it_arrives_not_when_the_pass_ends() -> 
 	await _finish_pass()
 
 
-# ...and the other half of the same moment: a unit still WALKING keeps both. This is the dev's arrow
-# ruling, and it is a real change -- MoveAction.execute used to free the arrow at the first step.
+# ...and the other half: a unit that is WALKING keeps both. This is the dev's arrow ruling and it is
+# a real change -- MoveAction.execute used to free the arrow at the first step.
+#
+# ASSERTED WITH NO FRAME AWAITED, and that is the whole case rather than an optimisation. A first
+# draft waited for the quick walker to arrive and PASSED against the mutant that restores the old
+# first-step clear: clear_move_markup's own redraw_planned_paths rebuilds every OTHER unit's arrow
+# from planned_move_by_unit, so the arrival republishes the very sprites the mutant had freed. The
+# moves start synchronously (execute() runs to the poll's first process_frame await), so this is the
+# one moment in the pass with no publisher standing between the bug and the assertion.
 func test_a_unit_still_walking_keeps_its_arrow_and_its_ghost() -> void:
 	var board := await _two_walkers()
 	var quick: Unit = board["quick"]
 	var slow: Unit = board["slow"]
 
 	game.order_executor.execute_orders(quick)
-	await _walk_out(quick)
 
+	assert_bool(slow.movement.moving).override_failure_message(
+			"fixture: no walk had started, so there is nothing mid-walk to assert about").is_true()
 	var walking := _markup(slow, board["slow_move"])
 	assert_bool(walking["ghost"]).override_failure_message(
 			"a unit that has not arrived lost its destination ghost").is_true()
 	assert_int(walking["arrows"]).override_failure_message(
-			"the walking unit's path arrow was pulled before it got there").is_greater(0)
+			"the walking unit's path arrow was pulled the moment it set off").is_greater(0)
 
 	await _finish_pass()
 
