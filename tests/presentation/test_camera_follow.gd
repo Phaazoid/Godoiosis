@@ -72,6 +72,38 @@ func test_the_player_keeps_the_zoom_wheel_while_playback_owns_the_camera() -> vo
 	_game.game_state = _game.GameState.IDLE
 
 
+# A pass CLAIMS the camera and hands it back to whoever held it -- it does not simply unlock.
+# An AI turn owns the camera for its whole length and runs a pass inside it, so a blind release
+# would unlock the camera mid-turn and let the player drag the view out from under the enemy phase.
+func test_a_pass_inside_an_ai_turn_leaves_the_camera_still_owned() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+
+	await _game.order_executor.execute_orders(unit)   # empty queue: walks every phase, does nothing
+	await _settle()
+
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"the pass released the camera it borrowed -- an AI turn is unlocked mid-turn").is_true()
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# ...and the mirror image: a pass on the PLAYER's own turn gives the camera back when it ends, or
+# the board would stay locked to clicks forever after one Execute.
+func test_a_pass_on_the_players_own_turn_gives_the_camera_back() -> void:
+	var unit := _player_unit()
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"precondition: nothing should own the camera before the pass").is_false()
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"the pass kept the camera -- the board never unlocks after an Execute").is_false()
+
+
 # ...and a MENU takes it, because the surface on screen wants the wheel for itself. This is the
 # other half: a gate that never shuts is not a gate.
 func test_a_menu_takes_the_zoom_wheel_back() -> void:
