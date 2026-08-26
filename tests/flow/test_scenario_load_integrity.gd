@@ -187,3 +187,39 @@ func test_job_ids_resolve() -> void:
 				if not known.has(id):
 					problems.append("%s: unknown job id '%s'" % [_entry_label(path, i, entry), id])
 	assert_array(problems).is_empty()
+
+
+func test_no_scenario_embeds_a_forked_weapon_template() -> void:
+	# #111: four pre-#59 scenarios EMBEDDED their weapon templates instead of referencing the
+	# shared ones -- 35 of them, each a private copy of a family carrying its own private main
+	# attack. That is precisely the sync break the template/instance split (#59) exists to
+	# prevent: a family retuned in MainVarieties/ simply never reached them. The tell was small
+	# and easy to misread -- every one of those mains drew a BLANK menu row, because a fork made
+	# off a family that had no attack content yet copied the missing name along with everything
+	# else.
+	#
+	# Asked of the resource PATH, and that is the whole subtlety: Godot hands an EMBEDDED
+	# sub-resource "<file>.tres::<id>", not the empty string, so "is the path empty" is a
+	# different question that answers no for every fork. The migration's own first pass asked it
+	# that way and de-forked nothing at all while reporting success.
+	#
+	# A weapon that genuinely is its own thing is not the fault here -- it belongs in
+	# Weapons/Prototypes/ beside The Jaw, which is where this ticket put the six real ones.
+	var problems: Array[String] = []
+	var scenarios := _loaded_scenarios()
+	for path in scenarios:
+		var scenario: ScenarioData = scenarios[path]
+		for i in scenario.unit_entries.size():
+			var entry: ScenarioUnitEntry = scenario.unit_entries[i]
+			if entry == null:
+				continue
+			for j in entry.inventory.size():
+				var weapon := entry.inventory[j] as WeaponInstance
+				if weapon == null or weapon.template == null:
+					continue  # reported by test_inventory_weapons_resolve_main_attack
+				var home: String = weapon.template.resource_path
+				if home != "" and not home.contains("::"):
+					continue
+				problems.append("%s: '%s' embeds its own copy of template '%s' rather than referencing a shared file" % [
+					_entry_label(path, i, entry), weapon.shown_name(), weapon.template.display_name])
+	assert_array(problems).is_empty()

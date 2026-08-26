@@ -93,14 +93,37 @@ func test_hits_map_is_answered_by_the_attack_itself() -> void:
 # --- catalog partition: curated mains vs the general pool ---
 
 func test_mains_catalog_contains_every_family_and_prototype() -> void:
-	var mains := WeaponAttackCatalog.get_mains()
-	# Authored mains key by their real display_name; the still-placeholder families fall back to the
-	# filename. Springspear (Stab, #73), Kinetic Mace (Smash) and Carbine (Shot) are authored — the
-	# key moving off the family name is the signal that a family got real attack content.
-	for key in ["ChainSword", "Stab", "Drill", "Shot", "Smash", "Chemical_Spitter", "Prosthetic", "TheJaw"]:
-		assert_bool(mains.has(key)).is_true()
+	# By IDENTITY, never by key (#111). This used to list the filename-fallback keys -- "ChainSword",
+	# "Drill", "Prosthetic", "TheJaw" -- because an unnamed main falls back to its filename, and that
+	# fallback doubled as the "family not authored yet" tell. Naming the last placeholder mains
+	# retired every one of those keys, and re-pinning the new names would only move the trap: what
+	# this case is actually for is the PARTITION, which no name is evidence of.
+	var mains: Array = WeaponAttackCatalog.get_mains().values()
+	var templates := WeaponCatalog.get_templates()
+	assert_bool(templates.is_empty()).override_failure_message(
+		"no weapon families scanned -- the scan is broken, not the content").is_false()
+	for key in templates:
+		var family: WeaponData = templates[key]
+		if family.main_attack == null:
+			continue
+		assert_bool(mains.has(family.main_attack)).override_failure_message(
+			"family '%s' carries a main the mains catalog does not list" % key).is_true()
+	# The prototype subfolder merges in on top -- asked by folder, so a new prototype needs no edit.
+	var prototypes := ResourceCatalog.by_name(WeaponAttackCatalog.PROTOTYPE_MAIN_DIR, WeaponAttackData)
+	assert_bool(prototypes.is_empty()).override_failure_message(
+		"no prototype mains on disk -- the scan is broken, not the content").is_false()
+	for key in prototypes:
+		assert_bool(mains.has(prototypes[key])).override_failure_message(
+			"prototype '%s' is not merged into the mains catalog" % key).is_true()
 
 func test_library_scan_ignores_the_mains_subfolder() -> void:
-	var lib := WeaponAttackCatalog.get_library()
-	assert_bool(lib.has("ChainSword")).is_false()
-	assert_bool(lib.has("TheJaw")).is_false()
+	# Also by identity, and for the same reason: this asked whether the library had a key named
+	# "ChainSword", which the moment that main got a real name would have passed vacuously -- the key
+	# no longer exists anywhere to be found. The fault worth catching is one RESOURCE in both scans.
+	var lib: Array = WeaponAttackCatalog.get_library().values()
+	var mains := WeaponAttackCatalog.get_mains()
+	assert_bool(lib.is_empty()).override_failure_message(
+		"no library attacks scanned -- the scan is broken, not the content").is_false()
+	for key in mains:
+		assert_bool(lib.has(mains[key])).override_failure_message(
+			"main '%s' also turned up in the general library -- the folder partition leaked" % key).is_false()

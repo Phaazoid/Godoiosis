@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_x1n6e"]
+[ext_resource type="Texture2D" uid="uid://dxgiu24ohfcpr" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="2_nnsar"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Prototypes/Bow.tres" id="3_awciv"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="4_8usy4"]
+
+[resource]
+script = ExtResource("4_8usy4")
+mod_spaces = Array[int]([1, 2, 3])
+main_attack = ExtResource("3_awciv")
+weapon_type = 1
+is_prototype = true
+display_name = "Bow"
+icon = ExtResource("2_nnsar")
+description = "Vroom Vroom"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"

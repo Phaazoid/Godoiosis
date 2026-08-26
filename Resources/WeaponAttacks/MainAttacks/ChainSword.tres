@@ -9,6 +9,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_wad")
+display_name = "Slash"
 scaling_blend = Dictionary[int, int]({
 1: 60,
 4: 40

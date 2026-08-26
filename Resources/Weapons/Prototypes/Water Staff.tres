@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_jlni1"]
+[ext_resource type="Texture2D" uid="uid://bhak4vdv2k32b" path="res://Art/Icons/WeaponIcons/Club.png" id="2_6k510"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Prototypes/Water Staff.tres" id="3_x17ab"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="4_30iaj"]
+
+[resource]
+script = ExtResource("4_30iaj")
+mod_spaces = Array[int]([1, 2, 3])
+main_attack = ExtResource("3_x17ab")
+weapon_type = 5
+is_prototype = true
+display_name = "Water Staff"
+icon = ExtResource("2_6k510")
