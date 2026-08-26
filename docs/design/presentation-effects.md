@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #552 (2026-08-26).**
+**Canon checked through #555 (2026-08-26).**
 
 ---
 
@@ -478,6 +478,16 @@ Two things were **measured** on the way, and both reversed an assumption the iss
 - **Not every piece's art can be a wall face.** In this sheet the east-west pieces are drawn face-on (15×13, top-aligned) and are worn directly, keeping the #250 rule that the 3D shows the game's tiles. The north-south pieces are drawn edge-on — 7×16, successive posts stacked *down-screen* — which is a top-down foreshortening, not a picture of a wall; on a plane facing east it renders as a tower of logs. Those faces are **generated in the tile's own measured palette**, the same reconciliation #274 already made for solid props.
 
 A plane is also the one prop form NOT sized by its art's opaque bounds: it is thin by definition in the axis it does not run along, so its thickness and height are generator constants. Being baked, they get no live knob at all — the same call `PRISM_PROFILE` records.
+
+##### WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis (#554, 2026-08-26)
+
+The bullet above reads as a rule about walls and is a rule about **palisades**: face-on across, foreshortened along. The stone wall the sheet also ships is drawn as a **plan of its footprint in both axes**, so its sprite is a picture of no wall at all — `stone_wall_hor_top` is opaque in 5 of its 16 rows, and worn on a slab it renders as a grey ribbon floating over an invisible one.
+
+So the axis test became **`GridUtils.plane_own_art_edges`**, a mask of the edges whose slab wears the sprite: `EW_EDGES` for a palisade, `0` for masonry, and every other slab takes the generated face. It is keyed on **`Terrain.Kind`**, which is already what this generator asks for *what a tile is made of* — a `ROCK` block wears stone down its sides — so the material question gets one answer rather than a column of its own. The generated face forks the same way: `_prop_side`'s `PLANE` arm draws a running-bond masonry course for `ROCK` and the palisade for everything else, and it is the only shape that forks on kind, because a wall is the only form this sheet draws in more than one material.
+
+**A corner is one patch now, not two.** With no face-on axis, both of a stone corner's slabs share the single generated face — so `_patch_widths_for` had to ask the same question the walk asks, which is why it takes the `TileData` rather than a shape and a mask.
+
+Pinned from both ends, because either alone is blind: `tests/presentation/test_board_mirror.gd` asserts the rule per material (nothing in a running game reads it, so a wrong answer reddens nothing), and **`tests/law/test_a_wall_face_covers_its_slab.gd`** asserts the baked artifact — every slab's art must be opaque over **more than half** its rows, measured off the committed meshlib and the atlas that mesh itself names. Half is a definition of *mostly*, deliberately **not** `PLANE_HEIGHT`, which is a feel value the palisade art happens to match to the row (13/16).
 
 ### Block props are GENERATED, not commissioned (#264 + #274, 2026-08-15)
 
