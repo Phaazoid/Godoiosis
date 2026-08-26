@@ -161,6 +161,7 @@ func _ready() -> void:
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
+	_unit_mirror.effect_subjects_source = _effect_pass_subjects
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -969,6 +970,13 @@ func _previewed_plan() -> ResolvedPlan:
 		return executing
 	var squads: SquadManager = game.squad_manager
 	return squads.resolved_plan_for(squads.active_squad)
+
+
+# ...and who its end-of-turn effect pass is about (#534). A separate question from the plan because
+# that phase has none -- see OrderExecutor.effect_pass_subjects.
+func _effect_pass_subjects() -> Dictionary[int, bool]:
+	var subjects: Dictionary[int, bool] = game.order_executor.effect_pass_subjects
+	return subjects
 
 
 func _cancel() -> void:

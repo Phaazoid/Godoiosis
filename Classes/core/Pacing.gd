@@ -31,11 +31,15 @@ static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.st
 # hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
 static var PLAYBACK_PAN := 0.35
 
-# How much of a normal beat the POST-TURN phase takes (#534, dev 2026-08-26: "a double speed camera
-# zoom to an unit, unit takes fire damage, next"). One scale over both the pan and the beat, so
-# "quicker than a blast" is a RELATIONSHIP to the values above rather than a second set of numbers
-# to keep in step. This phase is bookkeeping made legible, not drama.
-static var POST_TURN_SCALE := 0.5
+# The END-OF-TURN EFFECT PASS -- today, units standing in fire (#534). TWO numbers of its own
+# rather than one scale over the beats above (dev, 2026-08-26: "I don't see controls for the camera
+# speed/linger for this post phase"): the fork is who may disagree about a value, and this phase is
+# one he tunes AGAINST the others rather than with them.
+#
+# Neither forks on profile or on whose turn is ending. The BOARD acts here, not a faction, so an
+# enemy's fire and yours are the same event and the battle zoom has no drama to add to bookkeeping.
+static var ENVIRONMENT_PAN := 0.25    # camera travel to each affected unit
+static var ENVIRONMENT_HOLD := 0.45   # the look AFTER the damage lands -- the whole point of the phase
 
 # PLAYER_ACTION was 0.0 from #118 until #519 -- "deliberately none" (dev, 2026-08-10), reversed on
 # 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health

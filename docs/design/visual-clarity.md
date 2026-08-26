@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #476 (2026-08-22).**
+**Canon checked through #534 (2026-08-26).**
 
 ## Principles
 
@@ -349,13 +349,20 @@ can tell the two apart.**
 
 ## Every bar, if the player says so ([#350](https://github.com/Phaazoid/Godoiosis/issues/350), BUILT 2026-08-19)
 
-The third and final reason a readout is up, and the only one that is a **preference** rather than a
+The third reason a readout is up, and the only one that is a **preference** rather than a
 derivation: the player asked for all of them. #229 was hover, #313 was the plan; this is *show me
 the board at a glance*, and the dev asked for it at #313's merge.
 
-The model half is one more disjunct in the same expression — `hovered or foretold or always_on` —
-with no new per-unit state and nothing computed. **What made it a ticket is that the toggle had
-nowhere to live**, which is the part worth keeping.
+The model half is one more disjunct in the same expression — today `hovered or foretold or marked or
+always_on` — with no new per-unit state and nothing computed. **What made it a ticket is that the
+toggle had nowhere to live**, which is the part worth keeping.
+
+`marked` is the fourth, added by [#534](https://github.com/Phaazoid/Godoiosis/issues/534): the
+end-of-turn effect pass raises a readout over everyone it is about to burn. It is the *same* reason
+as `foretold` — something is about to happen to this unit — reached from the other direction, since
+that phase has no `ResolvedPlan` to be read out of and must not fake one. It matters because it is
+the phase's whole point: `_settle_health_change` skips a hidden bar, so with the preference off the
+pass panned to a unit, damaged it, and showed **nothing at all** — not even the cubes.
 
 The rulings, all dev calls, all made before building:
 
@@ -1088,8 +1095,8 @@ every case something does.
 **A third health-bar state: *damaged only*.** Show every unit's bar except full-health ones (the
 hovered unit keeps its bar and its digits either way). Structurally this is a **third value for a
 choice that already exists** — `PlayerSettings.ALWAYS_SHOW_HEALTH` (#350 above) is today hovered-only
-vs always-on, and the gate is deliberately **one named expression** (`hovered or foretold or
-always_on`), so this is a third disjunct there and **not** a second visibility rule. The real cost is
+vs always-on, and the gate is deliberately **one named expression** (`hovered or foretold or marked
+or always_on`), so this is one more disjunct there and **not** a second visibility rule. The real cost is
 UI, not model: `SettingsScreen` is a pure projection of `PlayerSettings.DEFS` and `DEFS` describes
 **booleans** — a three-way setting is the first non-checkbox row the table has ever had, so it either
 grows a widget kind or the question is re-cut as two independent bools. Worth noting *why* it was

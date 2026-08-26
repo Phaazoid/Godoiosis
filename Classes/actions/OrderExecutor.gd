@@ -32,6 +32,13 @@ var _downed_pending: Array[Unit] = []
 # local -- so this is a published fact, not a second source of truth.
 var executing_plan: ResolvedPlan = null
 
+# Who the END-OF-TURN EFFECT PASS is about, non-empty only while one is running (#534). Published
+# for the same reason executing_plan is, and read by the same poll: a health readout is up because
+# something is ABOUT to happen to that unit (#350), and this phase is exactly that -- but it has no
+# ResolvedPlan to be read out of and must not fake one. Instance ids, since the reader asks per unit
+# per frame. apply_burning_tile_damage owns both ends; nothing here consumes it.
+var effect_pass_subjects: Dictionary[int, bool] = {}
+
 # ==============================================================================
 #  Resolving a plan
 # ==============================================================================
@@ -282,12 +289,20 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
-	var pace := Pacing.base_for(Pacing.active_profile(),
-			game.ai_controller.is_ai_faction(faction)) * Pacing.POST_TURN_SCALE
+	# The SAME list the loop walks, published so the health readouts are up for it. Raised for the
+	# WHOLE phase rather than one unit at a time, matching how a plan raises a bar over everyone it
+	# will touch -- so the units still to come are already readable when the camera reaches them.
 	for unit in burned:
-		await game.camera_controller.pan_to(unit, Pacing.PLAYBACK_PAN * Pacing.POST_TURN_SCALE)
-		await Pacing.beat(self, pace)
+		effect_pass_subjects[unit.get_instance_id()] = true
+	for unit in burned:
+		await game.camera_controller.pan_to(unit, Pacing.ENVIRONMENT_PAN)
+		# The hit lands BEFORE the hold (dev, 2026-08-26: "the point of the linger is to show that
+		# something happened"). The other way round, the pause watched a unit at full health and the
+		# camera left as the cubes burst. It is also what keeps the mission banner off a kill that is
+		# not on screen yet -- game.end_turn calls mission_controller.check the moment this returns.
 		unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
+		await Pacing.beat(self, Pacing.ENVIRONMENT_HOLD)
+	effect_pass_subjects.clear()
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()
 

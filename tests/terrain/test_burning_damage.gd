@@ -153,3 +153,50 @@ func test_a_turn_end_with_nothing_burning_never_claims_the_camera() -> void:
 	assert_object(game.camera_controller.follow_unit) \
 		.override_failure_message("an empty post-turn phase claimed the camera and dropped what it was watching") \
 		.is_same(bystander)
+
+
+# --- who the phase says it is about (#534) ------------------------------------------------------
+
+# The phase publishes its WHOLE affected set before it reaches any of it, because a health readout
+# goes up over a unit for the same reason a plan raises one -- something is about to happen to it --
+# and that is as true of the last unit in the list as the first.
+#
+# Probed from INSIDE the running phase, through the one event that fires mid-pass: a downed body in
+# fire dies. The fixture deposits the doomed cell FIRST on purpose (burning_cells walks the state
+# store in insertion order), so at that death the second unit is one the camera has genuinely not
+# reached yet -- which is what a per-unit implementation would fail to have named.
+func test_the_pass_names_every_unit_it_will_hit_before_it_reaches_any_of_them() -> void:
+	var doomed := _spawn(CELL, Team.Faction.PLAYER)
+	doomed.force_down()
+	_deposit(CELL, Terrain.TileState.BURNING)
+	var later := _spawn(Vector2i(3, 0), Team.Faction.PLAYER)
+	_deposit(Vector2i(3, 0), Terrain.TileState.BURNING)
+	var later_id := later.get_instance_id()
+	# An ARRAY, not a bool: a GDScript lambda captures locals by VALUE, so a flag assigned in here
+	# never reaches the assertion. Appending also makes the probe's own firing assertable, which is
+	# what stops this case passing vacuously if the doomed unit stops dying inside the phase.
+	var probe: Array[bool] = []
+	doomed.unit_died.connect(func(_u: Unit) -> void:
+		probe.append(game.order_executor.effect_pass_subjects.has(later_id)))
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_array(probe).override_failure_message(
+			"the probe never fired -- the doomed unit did not die inside the phase") \
+		.has_size(1)
+	assert_bool(probe[0]) \
+		.override_failure_message("a unit the phase had not reached yet was left wearing no readout") \
+		.is_true()
+
+
+# ...and it takes them all down again on the way out, or every readout it raised would stay up for
+# the rest of the battle.
+func test_the_pass_stops_naming_anyone_once_it_ends() -> void:
+	_spawn(CELL, Team.Faction.PLAYER)
+	_deposit(CELL, Terrain.TileState.BURNING)
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_int(game.order_executor.effect_pass_subjects.size()) \
+		.override_failure_message("the phase left its readouts up after it had finished") \
+		.is_equal(0)

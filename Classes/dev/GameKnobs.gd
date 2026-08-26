@@ -351,9 +351,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
-	{"group": "Playback", "label": "Post-turn pass speed", "static": "POST_TURN_SCALE",
-		"script": PACING_SCRIPT, "min": 0.1, "max": 2.0, "step": 0.05,
-		"tip": "How much of a normal beat the end-of-turn effect pass takes -- the one that shows each unit standing in fire. 0.5 is double speed. Scales BOTH its camera travel and its pause, so the whole phase speeds up together."},
+	{"group": "Playback", "label": "Camera travel to a burning unit", "static": "ENVIRONMENT_PAN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the camera takes to reach each unit in the end-of-turn effect pass -- today, everyone standing in fire. Its own number rather than a share of the blast travel above, because this phase is bookkeeping and paced against the others, not with them. Zero snaps."},
+	{"group": "Playback", "label": "Hold: a unit burns", "static": "ENVIRONMENT_HOLD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long the camera stays on a burning unit AFTER its damage lands, in seconds. This is the pause that shows the health drop, so it is the dial for how legible the pass is. Does not fork on the battle zoom -- the board acts here, not a faction."},
 	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
@@ -550,7 +553,8 @@ static func read_static(name: String) -> Variant:
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
-		"POST_TURN_SCALE": return Pacing.POST_TURN_SCALE
+		"ENVIRONMENT_PAN": return Pacing.ENVIRONMENT_PAN
+		"ENVIRONMENT_HOLD": return Pacing.ENVIRONMENT_HOLD
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
@@ -620,8 +624,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
 			return
-		"POST_TURN_SCALE":
-			Pacing.POST_TURN_SCALE = value
+		"ENVIRONMENT_PAN":
+			Pacing.ENVIRONMENT_PAN = value
+			return
+		"ENVIRONMENT_HOLD":
+			Pacing.ENVIRONMENT_HOLD = value
 			return
 		"PLAYER_ACTION":
 			Pacing.PLAYER_ACTION = value
