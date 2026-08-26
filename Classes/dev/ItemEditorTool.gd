@@ -454,7 +454,10 @@ func _populate_scaling_change(mod: WeaponModData) -> void:
 		return
 
 	var absolute := _absolute_blend(reference, mod.scaling_change)
-	DevWidgets.add_label(editor_container, "%s main scales %s — drag to what THIS weapon should scale off:"
+	# Names the MAIN, deliberately. "what this weapon scales off" would say a weapon has one blend,
+	# which is the assumption #485 abolished -- the main is the REFERENCE the number is measured
+	# against, not the only thing the shift reaches (see the stored line below).
+	DevWidgets.add_label(editor_container, "%s main scales %s — drag to where its MAIN should land:"
 		% [family_name, Stats.blend_text(reference)])
 
 	# Built now, parented AFTER the sliders so it reads below them, and refreshed from the callback
@@ -462,7 +465,8 @@ func _populate_scaling_change(mod: WeaponModData) -> void:
 	# the mouse. It carries the STORED shift, which is the half the sliders cannot show.
 	var stored := Label.new()
 	var refresh := func() -> void:
-		stored.text = "   stored shift: %s" % _shift_text(mod.scaling_change)
+		stored.text = "   stored shift: %s%s" % [_shift_text(mod.scaling_change),
+			"" if mod.scaling_change.is_empty() else " — applied to EVERY attack this weapon fires"]
 	DevWidgets.add_blend_sliders(editor_container, absolute,
 		func():
 			_store_scaling_change(mod, reference, absolute)
