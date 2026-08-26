@@ -1,62 +1,39 @@
 [gd_resource type="Resource" script_class="ScenarioData" format=4]
 
-[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_58p3y"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_p28ji"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="3_ayafk"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="3_mrekx"]
-[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Chainsword.png" id="4_ghe54"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="4_l5o8g"]
-[ext_resource type="Texture2D" path="res://Art/Icons/WeaponIcons/Springspear.png" id="4_q8cs3"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponData.gd" id="5_5q7c0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="8_1v4i7"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Sage_Moving.png" id="8_l5o8g"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/General.png" id="9_sclll"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Sage.png" id="10_05mom"]
-[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="10_jydfm"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="11_p8p7o"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="12_4n2k3"]
-[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="12_28v45"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="13_juf0b"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="15_l6fmy"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="16_bd7ju"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/General_Downed.png" id="17_jydfm"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/General_Moving.png" id="19_28v45"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Downed.png" id="20_rblmy"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Moving.png" id="22_owa6k"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="atkdata_script_migrated"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="wi_springspear"]
-
-[sub_resource type="Resource" id="Resource_mrekx"]
-script = ExtResource("3_mrekx")
-length = 6
-metadata/_custom_type_script = "uid://bbbfksnb0tted"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_q8cs3"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Lance"
-power = 5
-attack_pattern = SubResource("Resource_mrekx")
-hits_allies = true
-
-[sub_resource type="Resource" id="Resource_q8cs3"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_q8cs3")
-weapon_type = 3
-display_name = "POINT"
-icon = ExtResource("4_q8cs3")
-description = "I think that enemy got... the point"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_28v45"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="1_58p3y"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_p28ji"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_rblmy"]
+[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="6_5bmpp"]
+[ext_resource type="Texture2D" uid="uid://dxn02ap1cedsy" path="res://Art/Units/MapSprites/Sage_Downed.png" id="6_k5dlx"]
+[ext_resource type="Resource" path="res://Resources/Weapons/Prototypes/POINT.tres" id="7_l6fmy"]
+[ext_resource type="Texture2D" uid="uid://5j5clrlw0olr" path="res://Art/Units/Portraits/faceless_one.png" id="7_qfk2f"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="8_1v4i7"]
+[ext_resource type="Texture2D" uid="uid://m5wt0n84c1v1" path="res://Art/Units/MapSprites/Sage_Moving.png" id="8_l5o8g"]
+[ext_resource type="Texture2D" uid="uid://dt0jmba48go5e" path="res://Art/Units/MapSprites/General.png" id="9_sclll"]
+[ext_resource type="Texture2D" uid="uid://tefyc25l3jam" path="res://Art/Units/MapSprites/Sage.png" id="10_05mom"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="10_jydfm"]
+[ext_resource type="Texture2D" uid="uid://blok5uhqdbsn8" path="res://Art/Units/MapSprites/Mage.png" id="11_p8p7o"]
+[ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="12_4n2k3"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="12_28v45"]
+[ext_resource type="Texture2D" uid="uid://dnujumhyrhxk1" path="res://Art/Units/MapSprites/Archer_Downed.png" id="13_juf0b"]
+[ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="15_l6fmy"]
+[ext_resource type="Resource" path="res://Resources/Weapons/Prototypes/Bow.tres" id="16_bd7ju"]
+[ext_resource type="Texture2D" uid="uid://cqhbqniqkt705" path="res://Art/Units/MapSprites/General_Downed.png" id="17_jydfm"]
+[ext_resource type="Texture2D" uid="uid://53nxs13y5ebh" path="res://Art/Units/MapSprites/General_Moving.png" id="19_28v45"]
+[ext_resource type="Resource" path="res://Resources/Weapons/Prototypes/Sweeper.tres" id="20_jydfm"]
+[ext_resource type="Texture2D" uid="uid://bo1qvlq27vqqs" path="res://Art/Units/MapSprites/Mage_Downed.png" id="20_rblmy"]
+[ext_resource type="Texture2D" uid="uid://g2uho841m3aw" path="res://Art/Units/MapSprites/Mage_Moving.png" id="22_owa6k"]
+[ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="23_facq7"]
+[ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="25_gscw2"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="27_28v45"]
+[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="90_equipdata"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="wi_chainsword"]
+[ext_resource type="Script" uid="uid://dro6dvoog6jyi" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="wi_springspear"]
 
 [sub_resource type="Resource" id="Resource_jydfm"]
 script = ExtResource("wi_springspear")
-template = SubResource("Resource_q8cs3")
+template = ExtResource("7_l6fmy")
 
 [sub_resource type="Resource" id="Resource_owa6k"]
 script = ExtResource("8_1v4i7")
@@ -110,30 +87,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_juf0b"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_l6fmy"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_juf0b")
-
-[sub_resource type="Resource" id="Resource_l6fmy"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_l6fmy")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_8jbv5"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_l6fmy")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_8ihxj"]
 script = ExtResource("8_1v4i7")
@@ -185,30 +141,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_28v45"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_rblmy"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_28v45")
-
-[sub_resource type="Resource" id="Resource_rblmy"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_rblmy")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_dfmft"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_rblmy")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_e57e2"]
 script = ExtResource("8_1v4i7")
@@ -260,30 +195,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_gscw2"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_4ji6m"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_gscw2")
-
-[sub_resource type="Resource" id="Resource_4ji6m"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_4ji6m")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_gcqw6"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_4ji6m")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_n1xpj"]
 script = ExtResource("8_1v4i7")
@@ -335,27 +249,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_5w2v2"]
-script = ExtResource("16_bd7ju")
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_3peij"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Cleave"
-power = 3
-attack_pattern = SubResource("Resource_5w2v2")
-
-[sub_resource type="Resource" id="Resource_3peij"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_3peij")
-weapon_type = 1
-display_name = "ForwardWide3"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_hl70j"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_3peij")
+template = ExtResource("20_jydfm")
 
 [sub_resource type="Resource" id="Resource_a1ncn"]
 script = ExtResource("8_1v4i7")
@@ -407,30 +303,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_o6nlq"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_md83g"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_o6nlq")
-
-[sub_resource type="Resource" id="Resource_md83g"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_md83g")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_qrxbn"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_md83g")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_tnex3"]
 script = ExtResource("8_1v4i7")
@@ -481,30 +356,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_3su2r"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_7as0p"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_3su2r")
-
-[sub_resource type="Resource" id="Resource_7as0p"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_7as0p")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_pxvdd"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_7as0p")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_jfiwm"]
 script = ExtResource("8_1v4i7")
@@ -555,28 +409,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_osbp3"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_klalk"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_osbp3")
-
-[sub_resource type="Resource" id="Resource_klalk"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_klalk")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_5nxcx"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_klalk")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_o21ix"]
 script = ExtResource("8_1v4i7")
@@ -627,28 +463,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_rvwfj"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_f5dmr"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_rvwfj")
-
-[sub_resource type="Resource" id="Resource_f5dmr"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_f5dmr")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_li2yd"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_f5dmr")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_yt1ub"]
 script = ExtResource("8_1v4i7")
@@ -701,28 +519,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_dkftm"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_3jx8a"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_dkftm")
-
-[sub_resource type="Resource" id="Resource_3jx8a"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_3jx8a")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_wfdeq"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_3jx8a")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_3kvyv"]
 script = ExtResource("8_1v4i7")
@@ -773,28 +573,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_0lehi"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_ej0nd"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_0lehi")
-
-[sub_resource type="Resource" id="Resource_ej0nd"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_ej0nd")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_4fepy"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_ej0nd")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_2wcgg"]
 script = ExtResource("8_1v4i7")
@@ -847,28 +629,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_kty5u"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_ik5qu"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_kty5u")
-
-[sub_resource type="Resource" id="Resource_ik5qu"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_ik5qu")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_rsc80"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_ik5qu")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_3efpw"]
 script = ExtResource("8_1v4i7")
@@ -919,28 +683,10 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_sj1h7"]
-script = ExtResource("3_ayafk")
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_g0pgd"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Slash"
-power = 3
-attack_pattern = SubResource("Resource_sj1h7")
-
-[sub_resource type="Resource" id="Resource_g0pgd"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_g0pgd")
-weapon_type = 1
-display_name = "Stabby"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_il7i7"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_g0pgd")
+template = ExtResource("27_28v45")
+display_name = "Stabby"
 
 [sub_resource type="Resource" id="Resource_bntab"]
 script = ExtResource("8_1v4i7")
@@ -991,30 +737,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_wh38c"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_obq4n"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_wh38c")
-
-[sub_resource type="Resource" id="Resource_obq4n"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_obq4n")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_2loeh"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_obq4n")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_6dwxk"]
 script = ExtResource("8_1v4i7")
@@ -1065,30 +790,9 @@ weapon_battle_states = Dictionary[int, Dictionary]({
 }
 })
 
-[sub_resource type="Resource" id="Resource_0v1ws"]
-script = ExtResource("3_ayafk")
-max_range = 3
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
-
-[sub_resource type="Resource" id="AtkData_migrated_Resource_4rrsq"]
-script = ExtResource("atkdata_script_migrated")
-display_name = "Shot"
-power = 3
-attack_pattern = SubResource("Resource_0v1ws")
-
-[sub_resource type="Resource" id="Resource_4rrsq"]
-script = ExtResource("5_5q7c0")
-main_attack = SubResource("AtkData_migrated_Resource_4rrsq")
-weapon_type = 1
-display_name = "Bow"
-icon = ExtResource("4_ghe54")
-description = "Vroom Vroom"
-metadata/_custom_type_script = "uid://cfeu07eqvatyn"
-
 [sub_resource type="Resource" id="Resource_fj43f"]
 script = ExtResource("wi_chainsword")
-template = SubResource("Resource_4rrsq")
+template = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="Resource_b8bhe"]
 script = ExtResource("8_1v4i7")

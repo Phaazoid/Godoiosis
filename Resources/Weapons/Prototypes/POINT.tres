@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponData" format=3]
+
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="1_3p3kb"]
+[ext_resource type="Texture2D" uid="uid://bfi8smh8x2b3x" path="res://Art/Icons/WeaponIcons/Springspear.png" id="2_pd2uw"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/MainAttacks/Prototypes/POINT.tres" id="3_fjnwl"]
+[ext_resource type="Script" uid="uid://cfeu07eqvatyn" path="res://Classes/weapons/WeaponData.gd" id="4_24bbp"]
+
+[resource]
+script = ExtResource("4_24bbp")
+mod_spaces = Array[int]([1, 2, 3])
+main_attack = ExtResource("3_fjnwl")
+weapon_type = 3
+is_prototype = true
+display_name = "POINT"
+icon = ExtResource("2_pd2uw")
+description = "I think that enemy got... the point"
+metadata/_custom_type_script = "uid://cfeu07eqvatyn"
