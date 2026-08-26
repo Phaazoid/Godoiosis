@@ -120,7 +120,12 @@ func _process(delta: float):
 	
 	clamp_target_position()
 	
-	global_position = global_position.lerp(target_position, move_speed * delta)
+	# Headless, land now (Pacing.beat / pan_to's escape; third member 2026-08-26): the asymptotic
+	# lerp never settles, so a headless test sampling anything camera-derived reads frame timing.
+	if DisplayServer.get_name() == "headless":
+		global_position = target_position
+	else:
+		global_position = global_position.lerp(target_position, move_speed * delta)
 	
 	if keyboard_direction == Vector2.ZERO:
 		if global_position.distance_to(target_position) < 2:
