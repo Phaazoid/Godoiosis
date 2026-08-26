@@ -436,7 +436,18 @@ func test_the_scene_overrides_no_game_knob_property() -> void:
 
 
 # The lines belonging to one [node ...] block, up to the next one.
+#
+# "." is the ROOT, matching LookKnobs.target_of -- a knob's `node` has two readers and they have to
+# spell the same vocabulary, or a legal value silently reads as "no such node" here and the law
+# reports a missing node instead of the override it exists to find (#498, the first row to use it).
+# The root has no name this can search for, but a .tscn always writes it as the FIRST [node block.
 func _node_section(scene: String, node_name: String) -> String:
+	if node_name == ".":
+		var root := scene.find("[node name=\"")
+		if root < 0:
+			return ""
+		var after_root := scene.find("\n[", root + 1)
+		return scene.substr(root, -1 if after_root < 0 else after_root - root)
 	var start := scene.find("[node name=\"%s\"" % node_name)
 	if start < 0:
 		return ""

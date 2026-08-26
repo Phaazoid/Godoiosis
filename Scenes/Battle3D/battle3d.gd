@@ -50,6 +50,18 @@ enum View {
 # The corner debug view's knobs (aesthetics get a knob, not a guess):
 @export var pip_scale := 0.35
 @export var pip_margin := Vector2(12.0, 12.0)
+# How opaque the plate behind the top-left readouts is (#498). A KNOB rather than a constant
+# because "difficult to read" is a contrast complaint and the answer is taste -- but only the
+# ALPHA is one: the colour is black because the text is light, and the padding is not a value
+# anyone will argue about. Its setter re-applies immediately, or it is a slider that moves
+# nothing until the help line happens to be rebuilt (#264's born-dead knob).
+#
+# PLAIN `@export`, never `@export_range`: KnobSource.DECLARATION_LINE matches `^@export<space>var`,
+# so an annotated form has no declaration line to write back and Save would silently find nothing.
+# The row's own min/max/step is what builds the panel's slider anyway.
+@export var help_plate_alpha := 0.45: set = _set_help_plate_alpha
+# Breathing room around the widest line, in pixels. Constant: see above.
+const HELP_PLATE_PAD := Vector2(7.0, 5.0)
 
 @onready var _main: Node = $Main
 @onready var _board_mirror: BoardMirror = $BoardMirror
@@ -83,6 +95,10 @@ var _help_can_spawn := false
 @onready var _help: Label = $UI/Help
 @onready var _checkout: Label = $UI/Checkout
 @onready var _dev_badge: Label = $UI/DevMode
+# ONE plate behind all three, not one each (#498). They are read together and sit in one corner,
+# so three plates would give three ragged edges; and the CanvasLayer draws its children in tree
+# order, which is the whole reason this is the FIRST child rather than a z_index.
+@onready var _plate: Panel = $UI/Plate
 
 var game: Node2D
 var _game_container: SubViewportContainer
@@ -125,12 +141,14 @@ func _ready() -> void:
 	# subtree keeps no path to this scene, and a flat Main.tscn launch simply never gets a host.
 	if dev_overlay is DevOverlay:
 		(dev_overlay as DevOverlay).attach_3d_host(self)
+	_set_help_plate_alpha(help_plate_alpha)
 	_show_checkout()
 	game.dev_mode_changed.connect(_show_dev_badge)
 	_show_dev_badge(game.dev_mode_enabled)
 	if demo_mode:
 		_game_container.visible = false
 		_help.text = "Battle3D mirror (demo mode, read-only)  |  Q/E orbit  |  wheel zoom  |  WASD pan  |  R reset"
+		_fit_help_plate()
 	else:
 		# _apply_hosting also assigns input ownership: the 3D pick becomes the pointer
 		# source HoverPresenter reads (so hover reaches every cell, not just the ones
@@ -745,6 +763,7 @@ func _update_help() -> void:
 	var space := "SPACE spawn" if game.dev_controller.spawn_armed() else "SPACE centre"
 	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
 	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
+	_fit_help_plate()
 
 
 # WHICH CHECKOUT is on screen (#295) — several agents move the dev's working tree, so the build he
@@ -760,6 +779,7 @@ func _show_checkout() -> void:
 	var stamp := Checkout.describe()
 	_checkout.visible = stamp != ""
 	_checkout.text = stamp
+	_fit_help_plate()
 
 
 # IS DEV MODE ON — the badge is PRESENT or it is not, so there is no off-state to misread. Reads
@@ -772,6 +792,47 @@ func _show_checkout() -> void:
 # problem this is fixing rather than a shape to copy.
 func _show_dev_badge(active: bool) -> void:
 	_dev_badge.visible = active
+	_fit_help_plate()
+
+
+# The plate is fitted to the TEXT, not to the labels (#498). Each label is authored 900px wide so a
+# rebuilt help line never reflows, which means their rects say nothing about where the words end --
+# a plate sized to them would be a bar across most of the screen. So the width comes from the font
+# measuring each live string, and the height from the authored rows, which is what keeps their
+# spacing. Hidden when nothing is showing, since an empty plate is a smudge in the corner.
+#
+# Called from all three writers rather than polled: every one of them can change what is on screen
+# (the help line rebuilds as the brush arms, the checkout hides outside a dev build, the badge
+# toggles with dev mode), and a plate sized on a stale set is the artifact this is fixing.
+func _fit_help_plate() -> void:
+	var bounds := Rect2()
+	var found := false
+	for label: Label in [_help, _checkout, _dev_badge]:
+		if not label.visible or label.text.is_empty():
+			continue
+		var font := label.get_theme_font(&"font")
+		var width: float = font.get_string_size(label.text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+				label.get_theme_font_size(&"font_size")).x
+		var line := Rect2(label.position, Vector2(width, label.size.y))
+		bounds = line if not found else bounds.merge(line)
+		found = true
+	_plate.visible = found
+	if not found:
+		return
+	_plate.position = bounds.position - HELP_PLATE_PAD
+	_plate.size = bounds.size + HELP_PLATE_PAD * 2.0
+
+
+# Writes THROUGH to the stylebox rather than storing and hoping: a knob whose value is only read
+# where the plate is built moves nothing until the next rebuild. Guarded because an @export setter
+# runs at instantiation, before @onready assigns the node -- _ready re-applies it for that case.
+func _set_help_plate_alpha(value: float) -> void:
+	help_plate_alpha = value
+	if _plate == null:
+		return
+	var box := _plate.get_theme_stylebox(&"panel") as StyleBoxFlat
+	if box != null:
+		box.bg_color.a = value
 
 
 # SPACE means two things, and dev mode wins — exactly how game.gd's own SPACE arm resolves

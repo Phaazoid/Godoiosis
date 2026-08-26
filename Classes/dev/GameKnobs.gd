@@ -67,6 +67,10 @@ const KNOBS: Array[Dictionary] = [
 	# tab a player never sees.
 	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_ghost_alpha", "label": "Brush ghost alpha", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "Opacity of the dev tile brush's preview block -- the ghost showing what you are about to paint. Dev-only; players never see it."},
+	# "." is the HOST itself (LookKnobs.target_of) — the first row to use it, because the plate is a
+	# child of Battle3D's own UI layer and there is no sub-node that owns it.
+	{"group": "Dev chrome", "node": ".", "prop": "help_plate_alpha", "label": "Top bar plate", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "Opacity of the dark plate behind the help line, the checkout stamp and the DEV MODE badge (#498). Zero removes it and the text goes back to washing out over pale terrain; past about 0.7 the plate stops reading as chrome and starts covering the board. The plate is fitted to the text, so this changes how hard it reads, never how much screen it takes. Dev-only."},
 	{"group": "Dev chrome", "node": "BoardMirror", "prop": "brush_vertex_ghost_size", "label": "Corner marker size", "min": 0.05, "max": 0.6, "step": 0.01,
 		"tip": "Edge of the corner tool's marker cube, as a fraction of a cell. It marks the POINT a drag has hold of, so it wants to be grabbable by eye without growing large enough to read as a tile -- past about a third of a cell it starts covering the corner it is pointing at. Dev-only."},
 
