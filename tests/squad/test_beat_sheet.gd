@@ -231,6 +231,37 @@ func _held_damage(attacker_stats: Dictionary, wears_iron_will: bool) -> bool:
 	return held
 
 
+# --- who the camera frames (#520) -------------------------------------------------------------
+
+# The VICTIM, not the attacker: what the player needs to read is what is being done to whom, and
+# reach is short enough that the attacker is usually in frame anyway.
+func test_a_beat_frames_its_victim() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, foe]))
+	var sheet := BeatSheet.read(attacker.squad, plan)
+	assert_object(sheet.volleys(false)[0].subject()).is_same(foe)
+	_break_volleys(plan)
+
+
+# #47's swing at open ground has NO victim, and the camera still has to go somewhere -- the actor.
+# Without the fallback a cell attack would play off-screen, which is the whole thing #520 fixes.
+func test_a_swing_at_open_ground_frames_the_actor_instead() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker]))
+	var beat: BeatSheet.Beat = BeatSheet.read(attacker.squad, plan).volleys(false)[0]
+	assert_array(beat.victims).override_failure_message(
+			"fixture drifted: this case needs the no-victim cell attack").is_empty()
+	assert_object(beat.subject()).is_same(attacker)
+	_break_volleys(plan)
+
+
 # --- the wire into the beat table (#519) ------------------------------------------------------
 
 # The sheet's whole point downstream is that a beat KNOWS what it was before anything plays. Both

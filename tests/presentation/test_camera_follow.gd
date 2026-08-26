@@ -41,6 +41,47 @@ func after_test() -> void:
 	_scene.free()
 
 
+# --- who owns the camera, and what the player keeps (#520) ------------------------------------
+
+# The #484 exclusion as a LAW over the flag rather than a scenario: whenever the mirror's gate is
+# open, _update_pointer's WRITE gate is shut. They read each other's target (the mirror READS the 2D
+# camera, the pointer WRITES it), so a frame running both marches the view to the pan limit. #520
+# widened the flag to cover a player's own pass, which is exactly when this could have broken.
+func test_the_mirror_gate_and_the_pointer_gate_are_never_open_together() -> void:
+	for locked in [false, true]:
+		_cam().set_playback_locked(locked)
+		await _settle()
+		assert_bool(_cam().playback_locked and not _game._board_locked_for_player()) \
+			.override_failure_message(
+				"the mirror may read the 2D camera while the pointer may still write it (#484)") \
+			.is_false()
+	_cam().set_playback_locked(false)
+
+
+# The dev's 2026-08-26 ruling: playback owns WHERE the camera looks, the player keeps HOW FAR OUT it
+# sits. Before #520 one flag killed orbit and wheel together for a whole AI turn.
+func test_the_player_keeps_the_zoom_wheel_while_playback_owns_the_camera() -> void:
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+	await _settle()
+	assert_bool(_game._board_locked_for_player()).override_failure_message(
+			"precondition: playback should own the board here").is_true()
+	assert_bool(_rig.zoom_input_enabled).override_failure_message(
+			"the zoom wheel died with the rest of the rig -- the split did not take").is_true()
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# ...and a MENU takes it, because the surface on screen wants the wheel for itself. This is the
+# other half: a gate that never shuts is not a gate.
+func test_a_menu_takes_the_zoom_wheel_back() -> void:
+	_game.game_state = _game.GameState.MENU
+	await _settle()
+	assert_bool(_rig.zoom_input_enabled).override_failure_message(
+			"a menu is up and the wheel still zooms the board behind it").is_false()
+	_game.game_state = _game.GameState.IDLE
+
+
 func _cam() -> CameraController:
 	return _game.camera_controller
 
