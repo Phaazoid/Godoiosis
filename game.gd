@@ -1072,7 +1072,7 @@ func _on_unit_action_cancelled(squad: Squad, unit: Unit, actiontype: BaseAction.
 	# Only a MOVE cancel may clear the unit's move visuals. Cancelling a main action
 	# (attack/rescue) must leave a still-queued move — arrow and projected ghost — untouched.
 	if actiontype == BaseAction.ActionType.MOVE:
-		overlay_manager.clear_planned_path(unit)
+		overlay_manager.clear_move_markup(unit)
 		unit.visuals.set_projected(false)
 
 	if squad_manager.active_squad == squad:

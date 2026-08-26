@@ -571,6 +571,18 @@ func clear_planned_path(unit: Unit):
 	planned_move_by_unit.erase(unit)
 	redraw_planned_paths()
 
+# A move's markup -- its path ARROW and its destination GHOST -- ends at one moment, and this is it
+# (#558). Two doors reach that moment: the move was CANCELLED (game._on_unit_action_cancelled) or it
+# was CARRIED OUT (OrderExecutor, as each unit arrives). One lifetime with two routes in, rather than
+# two markers whose clears drift apart -- which is what left a ghost sitting on top of its own unit
+# for the rest of the squad's pass while the arrow went at the first step.
+#
+# planned_move_by_unit is the DURABLE half: both redraw_* rebuild from it, so freeing the sprites
+# alone is undone by the next redraw.
+func clear_move_markup(unit: Unit) -> void:
+	clear_planned_path(unit)
+	clear_projected_unit(unit)
+
 func clear_all_planned_paths():
 	clear_hover_move_path()
 	
