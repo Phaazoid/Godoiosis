@@ -386,14 +386,16 @@ func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -
 # scalars; the other four get bespoke UI here, because build_resource_editor has no arm for an
 # Array or a Dictionary and silently draws nothing for either.
 #
-# scaling_nudge is in that second group and PREDATES #74 -- it has been undrawn since the field was
-# written, so this is the first build in which every field of a mod is actually editable.
-const MOD_SKIP := ["display_name", "scaling_nudge", "stat_modifiers", "granted_attacks", "granted_abilities"]
+# scaling_change is in that second group and PREDATES #74 -- it has been undrawn since the field was
+# written, so this is the first build in which every field of a mod is actually editable. It is
+# still the raw DELTA spinboxes here; the absolute sliders that make it readable are this ticket's
+# next slice, and `family` gets its picker there too.
+const MOD_SKIP := ["display_name", "scaling_change", "stat_modifiers", "granted_attacks", "granted_abilities"]
 
 func _populate_mod_editor(mod: WeaponModData) -> void:
 	DevWidgets.build_resource_editor(editor_container, mod, populate, MOD_SKIP)
-	DevWidgets.add_stat_dict(editor_container, "Scaling nudge (blend %)", mod.scaling_nudge,
-		DevWidgets.property_tip(mod, "scaling_nudge"))
+	DevWidgets.add_stat_dict(editor_container, "Scaling change (blend %)", mod.scaling_change,
+		DevWidgets.property_tip(mod, "scaling_change"))
 	DevWidgets.add_stat_dict(editor_container, "Wielder stat modifiers", mod.stat_modifiers,
 		DevWidgets.property_tip(mod, "stat_modifiers"))
 	_populate_grant_list("Granted attacks:", mod.granted_attacks, WeaponAttackCatalog.get_library(),

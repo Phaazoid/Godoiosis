@@ -1,5 +1,5 @@
 # What a fitted WeaponModData GRANTS (#74): an attack to its weapon, and abilities + wielder stats
-# to the unit carrying it. The numeric effects (power_delta, scaling_nudge, weight) predate this
+# to the unit carrying it. The numeric effects (power_delta, scaling_change, weight) predate this
 # and live in test_weapon_instance_fitting.gd; this suite is only the three grant fields.
 #
 # Two rulings are pinned here rather than described anywhere else:

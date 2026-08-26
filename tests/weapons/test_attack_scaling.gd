@@ -26,7 +26,7 @@ func _wielder() -> Unit:
 
 func _mod(nudge: Dictionary[Stats.Stat, int]) -> WeaponModData:
 	var m := WeaponModData.new()
-	m.scaling_nudge = nudge
+	m.scaling_change = nudge
 	return m
 
 # --- The headline: one weapon, two attacks, two answers ---

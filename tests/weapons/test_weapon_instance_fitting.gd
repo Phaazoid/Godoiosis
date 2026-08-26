@@ -2,7 +2,7 @@
 # (#59 weapon parts core — the one gap the item-6 pass didn't touch). Covers: space
 # capacities/fit validation, active-space gating by proficiency, the mass-is-physical
 # rule (get_effective_weight counts every fitted mod, active or not), and the
-# scaling_blend + per-mod scaling_nudge weighted-average math feeding base_damage.
+# scaling_blend + per-mod scaling_change weighted-average math feeding base_damage.
 #
 # Since #486 it also covers AUTHORED spaces: how many a template has, that one past the third is
 # real, that space() writes through, and that "unreduced" means every space rather than three.
@@ -21,12 +21,12 @@ func _template(power: int = 0, blend: Dictionary[Stats.Stat, int] = {Stats.Stat.
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	return t
 
-func _mod(size: int = 1, power_delta: int = 0, weight: int = 0, scaling_nudge: Dictionary[Stats.Stat, int] = {}, added_element: Elemental.Element = Elemental.Element.NONE) -> WeaponModData:
+func _mod(size: int = 1, power_delta: int = 0, weight: int = 0, scaling_change: Dictionary[Stats.Stat, int] = {}, added_element: Elemental.Element = Elemental.Element.NONE) -> WeaponModData:
 	var m := WeaponModData.new()
 	m.size = size
 	m.power_delta = power_delta
 	m.weight = weight
-	m.scaling_nudge = scaling_nudge
+	m.scaling_change = scaling_change
 	m.added_element = added_element
 	return m
 
@@ -192,7 +192,7 @@ func test_base_damage_ignores_inactive_space_power_delta() -> void:
 	_set_proficiency(wielder, 1)
 	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(17)   # 10 + 2 (active mod) + 5 (STR) — the +100 never applies
 
-func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
+func test_scaling_change_from_active_mod_shifts_blend() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
 	w.fit(0, _mod(1, 0, 0, {Stats.Stat.DEX: 50}))   # active mod adds a DEX slice to the blend
 	var wielder := _wielder({Stats.Stat.STR: 8, Stats.Stat.DEX: 2})
@@ -200,7 +200,7 @@ func test_scaling_nudge_from_active_mod_shifts_blend() -> void:
 	# blend becomes {STR:100, DEX:50}; weighted = (8*100 + 2*50) / 150 = 900/150 = 6
 	assert_int(w.base_damage(wielder, w.template.main_attack)).is_equal(6)
 
-func test_inactive_mod_scaling_nudge_is_ignored() -> void:
+func test_inactive_mod_scaling_change_is_ignored() -> void:
 	var w := WeaponInstance.make(_template(0, {Stats.Stat.STR: 100}))
 	w.fit(2, _mod(1, 0, 0, {Stats.Stat.DEX: 100}))   # sits in a space that never activates here
 	var wielder := _wielder({Stats.Stat.STR: 7, Stats.Stat.DEX: 20})

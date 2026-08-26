@@ -421,7 +421,7 @@ static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
 #
 # It exists because build_resource_editor draws no dictionary at all -- its match has arms for
 # int/float/bool/string/object and nothing else -- so every Dictionary field in the project has
-# been silently undrawn (WeaponModData.scaling_nudge, ArmorData.stat_modifiers).
+# been silently undrawn (WeaponModData.scaling_change, ArmorData.stat_modifiers).
 static func add_stat_dict(container: Node, label_text: String, values: Dictionary, tooltip := "") -> void:
 	var first := container.get_child_count()
 	add_label(container, label_text)

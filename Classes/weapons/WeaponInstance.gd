@@ -264,8 +264,8 @@ func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Di
 		for stat: Stats.Stat in attack.scaling_blend:
 			blend[stat] = attack.scaling_blend[stat]
 	for mod in mods:
-		for stat: Stats.Stat in mod.scaling_nudge:
-			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_nudge[stat])
+		for stat: Stats.Stat in mod.scaling_change:
+			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_change[stat])
 	return blend
 
 func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
