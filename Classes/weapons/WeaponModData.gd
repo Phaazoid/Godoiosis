@@ -91,9 +91,18 @@ func save_block_reason() -> String:
 # half the mod bank is written. Composed in WeaponInstance.effective_main, proficiency-gated like
 # every other effect; null = the template's own main, which is every mod today.
 #
-# The MAIN only, deliberately. AttackData carries no id, so naming an arbitrary extra would need
-# an identity model that does not exist -- while main_attack is a real addressable slot. Two mods
-# replacing it is refused at the FIT (fit_block_reason), where the dev can still act on it.
+# The MAIN only -- a SLOT, not a named attack, and that is the whole of the choice. A mod CAN
+# already name a specific attack by resource reference (granted_attacks does exactly that, and
+# Super Scope ships one), so identity was never the obstacle; #529's own fork list said it was,
+# and this comment repeated it until the dev asked.
+#
+# The real argument is that the two readings differ where it matters. A slot means "whatever this
+# weapon's main is", which survives a prototype authoring its own main and is how every entry in
+# the bank is phrased. A named attack means "swap it if you find it" -- and a MISS is SILENT, so a
+# mod authored against a family main does nothing at all on a prototype that replaced it. What the
+# named form buys is reaching an EXTRA (swapping Springspear's Spring); nothing wants that yet.
+#
+# Two mods replacing the main is refused at the FIT (fit_block_reason), where the dev can act on it.
 #
 # Anything that changes how an attack is AIMED belongs here rather than in an override: Reach
 # reads a pattern with no wielder in hand, so a swapped pattern has to arrive as a whole attack.
