@@ -31,6 +31,12 @@ static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.st
 # hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
 static var PLAYBACK_PAN := 0.35
 
+# How much of a normal beat the POST-TURN phase takes (#534, dev 2026-08-26: "a double speed camera
+# zoom to an unit, unit takes fire damage, next"). One scale over both the pan and the beat, so
+# "quicker than a blast" is a RELATIONSHIP to the values above rather than a second set of numbers
+# to keep in step. This phase is bookkeeping made legible, not drama.
+static var POST_TURN_SCALE := 0.5
+
 # PLAYER_ACTION was 0.0 from #118 until #519 -- "deliberately none" (dev, 2026-08-10), reversed on
 # 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health
 # readouts flash in and out (#475, subsumed) and battles read "way too fast".

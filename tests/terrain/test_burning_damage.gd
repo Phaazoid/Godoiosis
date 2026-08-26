@@ -49,7 +49,7 @@ func test_burning_damages_the_occupant_when_its_faction_turn_ends() -> void:
 	_deposit(CELL, Terrain.TileState.BURNING)
 	var hp_before: int = unit.get_current_hp()
 
-	game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
@@ -58,7 +58,7 @@ func test_blaze_burns_exactly_like_burning() -> void:
 	_deposit(CELL, Terrain.TileState.BLAZE)
 	var hp_before: int = unit.get_current_hp()
 
-	game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
@@ -68,7 +68,7 @@ func test_a_cell_holding_both_fire_states_burns_once() -> void:
 	_deposit(CELL, Terrain.TileState.BURNING)   # a fireball over an authored blaze
 	var hp_before: int = unit.get_current_hp()
 
-	game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before - Terrain.BURNING_TILE_DAMAGE)
 
@@ -77,7 +77,7 @@ func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 	_deposit(CELL, Terrain.TileState.BLAZE)
 	var hp_before: int = unit.get_current_hp()
 
-	game.order_executor.apply_burning_tile_damage(Team.Faction.ENEMY)
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.ENEMY)
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before)
 
@@ -89,8 +89,67 @@ func test_burning_finishes_a_downed_unit_standing_on_the_fire() -> void:
 	unit.force_down()
 	_deposit(CELL, Terrain.TileState.BURNING)
 
-	game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
 
 	assert_bool(unit.is_dead()) \
 		.override_failure_message("a downed unit standing in fire survived its faction's turn end") \
 		.is_true()
+
+
+# --- the phase is SHOWN, not settled between frames (#534) --------------------------------------
+
+# The camera visits EACH burning unit, not the phase once. Before this the whole thing resolved in
+# one frame: a unit could burn, go down and be ejected from its squad with nothing on screen between
+# any of it. Asserted on the 2D camera's follow target -- what pan_to hands over to, and what the 3D
+# rig mirrors -- so this is #520's seam at a shorter duration rather than a second one.
+#
+# Run inside a CLAIMED camera, and that is not incidental: releasing the lock clears follow_unit,
+# so on the player's own turn the evidence is gone by the time the phase returns. The claim also
+# has to survive, which is the second assertion -- an AI turn owns the camera for its whole length
+# and calls end_turn INSIDE it, so a blind release would unlock the board mid-turn.
+func test_the_post_turn_pass_takes_the_camera_to_each_burning_unit() -> void:
+	var first := _spawn(CELL, Team.Faction.PLAYER)
+	var second := _spawn(Vector2i(3, 0), Team.Faction.PLAYER)
+	_deposit(CELL, Terrain.TileState.BURNING)
+	_deposit(Vector2i(3, 0), Terrain.TileState.BURNING)
+	game.camera_controller.set_playback_locked(true)
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_object(game.camera_controller.follow_unit) \
+		.override_failure_message("the phase panned once, or not at all -- the camera did not reach the LAST burning unit") \
+		.is_same(second)
+	assert_bool(game.camera_controller.playback_locked) \
+		.override_failure_message("the phase released a camera an AI turn still owns").is_true()
+	assert_int(first.get_current_hp()).is_equal(first.get_max_hp() - Terrain.BURNING_TILE_DAMAGE)
+	assert_int(second.get_current_hp()).is_equal(second.get_max_hp() - Terrain.BURNING_TILE_DAMAGE)
+	game.camera_controller.set_playback_locked(false)
+
+
+# ...and the mirror image: on the player's own turn the phase hands the camera back, which is what
+# fires the view return (#520 follow-up).
+func test_a_post_turn_pass_on_the_players_own_turn_gives_the_camera_back() -> void:
+	_spawn(CELL, Team.Faction.PLAYER)
+	_deposit(CELL, Terrain.TileState.BURNING)
+	assert_bool(game.camera_controller.playback_locked) \
+		.override_failure_message("precondition: nothing should own the camera here").is_false()
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_bool(game.camera_controller.playback_locked) \
+		.override_failure_message("the phase kept the camera it borrowed").is_false()
+
+
+# A phase with NOTHING to show claims nothing at all. Load-bearing rather than an optimisation:
+# releasing the camera is what hands the player their view back, so a claim-and-release here would
+# fire that return at the end of every single turn, burning or not. The camera is parked on a unit
+# first, because a claim would CLEAR that on its way out -- without it the assertion is vacuous.
+func test_a_turn_end_with_nothing_burning_never_claims_the_camera() -> void:
+	var bystander := _spawn(CELL, Team.Faction.PLAYER)
+	game.camera_controller.follow(bystander)
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_object(game.camera_controller.follow_unit) \
+		.override_failure_message("an empty post-turn phase claimed the camera and dropped what it was watching") \
+		.is_same(bystander)

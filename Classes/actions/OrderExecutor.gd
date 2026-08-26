@@ -261,12 +261,45 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # uses. No is_active() filter (#191): LethalityRules.predict already rules DOWNED-plus-any-damage
 # as KILLED (Fork 3, #33) -- burn is a damage source like any other and take_damage no-ops safely
 # on an already-DEAD unit, so nothing upstream needs to ask the question again.
+#
+# SHOWN rather than settled in one frame (#534, dev 2026-08-26: "a quick post turn effect zoom to
+# show all post turn effects... double speed camera zoom to an unit, unit takes fire damage, next").
+# Until then this whole phase resolved between frames, so a unit could burn, go down and be ejected
+# from its squad with nothing on screen between any of it.
+#
+# ONE list, walked once, so there is structurally no second answer to "who is about to be hit" --
+# and deliberately NOT a BeatSheet: that reads a Squad and a ResolvedPlan, and this phase has
+# neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
+# duration rather than growing one of its own.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
+	var burned := _units_standing_in_fire(faction)
+	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
+	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
+	# turn, burning or not.
+	if burned.is_empty():
+		_process_downed_pending()
+		return
+
+	var camera_was_locked: bool = game.camera_controller.playback_locked
+	game.camera_controller.set_playback_locked(true)
+	var pace := Pacing.base_for(Pacing.active_profile(),
+			game.ai_controller.is_ai_faction(faction)) * Pacing.POST_TURN_SCALE
+	for unit in burned:
+		await game.camera_controller.pan_to(unit, Pacing.PLAYBACK_PAN * Pacing.POST_TURN_SCALE)
+		await Pacing.beat(self, pace)
+		unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
+	game.camera_controller.set_playback_locked(camera_was_locked)
+	_process_downed_pending()
+
+# Who this phase is about, answered ONCE before any of it plays -- the whole set is knowable up
+# front, being a pure query over the burning cells and the acting faction.
+func _units_standing_in_fire(faction: Team.Faction) -> Array[Unit]:
+	var burned: Array[Unit] = []
 	for cell in game.terrain_states.burning_cells():
 		var unit: Unit = game.get_unit_at_cell(cell)
 		if unit != null and unit.get_faction() == faction:
-			unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
-	_process_downed_pending()
+			burned.append(unit)
+	return burned
 
 # ==============================================================================
 #  Downed units

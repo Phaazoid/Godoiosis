@@ -556,11 +556,18 @@ func _mirror_camera() -> void:
 	if cam.playback_locked != _playback_owned_camera:
 		_playback_owned_camera = cam.playback_locked
 		if _playback_owned_camera:
+			# BEFORE the two resets below, or it stashes the reset rather than the player's own
+			# framing. One edge serves every case the dev named (dev, 2026-08-26): a pass claims and
+			# releases inside execute_orders, an AI turn holds it across the whole turn, and the
+			# post-turn pass (#534) claims it again after that.
+			_rig.stash_view()
 			_rig.align_to_detent()
 			# ...and frame from a known distance (#520). The EDGE is the whole design: reset once
 			# as playback takes the camera, then leave the wheel alone, so the player may zoom
 			# freely for the rest of it. Re-applying per frame would be a leash instead.
 			_rig.set_zoom(_rig.playback_distance)
+		else:
+			_rig.restore_view()
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep

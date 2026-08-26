@@ -341,6 +341,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
+	{"group": "Playback", "label": "Post-turn pass speed", "static": "POST_TURN_SCALE",
+		"script": PACING_SCRIPT, "min": 0.1, "max": 2.0, "step": 0.05,
+		"tip": "How much of a normal beat the end-of-turn effect pass takes -- the one that shows each unit standing in fire. 0.5 is double speed. Scales BOTH its camera travel and its pause, so the whole phase speeds up together."},
 	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
@@ -535,6 +538,7 @@ static func read_static(name: String) -> Variant:
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
+		"POST_TURN_SCALE": return Pacing.POST_TURN_SCALE
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
@@ -599,6 +603,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
+			return
+		"POST_TURN_SCALE":
+			Pacing.POST_TURN_SCALE = value
 			return
 		"PLAYER_ACTION":
 			Pacing.PLAYER_ACTION = value

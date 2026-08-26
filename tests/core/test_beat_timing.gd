@@ -22,7 +22,7 @@ func before_test() -> void:
 		"player": Pacing.PLAYER_ACTION, "ai": Pacing.AI_ACTION, "cine": Pacing.CINEMATIC_ACTION,
 		"bd": Pacing.BOARD_DRAMA, "cd": Pacing.CINEMATIC_DRAMA,
 		"down": Pacing.HOLD_DOWN, "crisis": Pacing.HOLD_CRISIS, "iron": Pacing.HOLD_IRON_WILL,
-		"knock": Pacing.HOLD_KNOCKBACK, "turn": Pacing.HOLD_TURNOVER, "heal": Pacing.HOLD_HEAL,
+		"knock": Pacing.HOLD_KNOCKBACK, "turn": Pacing.HOLD_TURNOVER, "heal": Pacing.HOLD_HEAL, "post": Pacing.POST_TURN_SCALE,
 		"rescue": Pacing.HOLD_RESCUE, "rally": Pacing.HOLD_RALLY, "intim": Pacing.HOLD_INTIMIDATE,
 		"reload": Pacing.HOLD_RELOAD, "rev": Pacing.HOLD_REV, "burrow": Pacing.HOLD_BURROW,
 		"capture": Pacing.HOLD_CAPTURE, "guard": Pacing.HOLD_GUARD,
@@ -40,6 +40,7 @@ func after_test() -> void:
 	Pacing.HOLD_IRON_WILL = _saved["iron"]
 	Pacing.HOLD_KNOCKBACK = _saved["knock"]
 	Pacing.HOLD_TURNOVER = _saved["turn"]
+	Pacing.POST_TURN_SCALE = _saved["post"]
 	Pacing.HOLD_HEAL = _saved["heal"]
 	Pacing.HOLD_RESCUE = _saved["rescue"]
 	Pacing.HOLD_RALLY = _saved["rally"]
@@ -173,6 +174,25 @@ func test_an_undeclared_verb_never_shortens_the_beat() -> void:
 	assert_float(Pacing.hold_for(stray)).is_equal_approx(0.0, 0.0001)
 	assert_float(Pacing.duration_for(stray, CINEMATIC, false)) \
 		.is_equal_approx(Pacing.base_for(CINEMATIC, false), 0.0001)
+
+
+# --- the post-turn pass (#534) ------------------------------------------------------------------
+
+# The end-of-turn effect pass runs QUICKER than a blast -- the dev's "double speed" -- and it says
+# so as a RELATIONSHIP to the beats he tunes rather than as a second set of numbers. Both halves
+# scale together (the camera travel and the pause), which is the whole reason it is one knob.
+func test_the_post_turn_pass_runs_quicker_than_a_blast() -> void:
+	Pacing.POST_TURN_SCALE = 0.5
+	assert_float(Pacing.PLAYBACK_PAN * Pacing.POST_TURN_SCALE) \
+		.override_failure_message("the post-turn camera travel is no quicker than a blast's") \
+		.is_less(Pacing.PLAYBACK_PAN)
+	assert_float(Pacing.base_for(CINEMATIC, false) * Pacing.POST_TURN_SCALE) \
+		.override_failure_message("the post-turn pause is no shorter than a blast's") \
+		.is_less(Pacing.base_for(CINEMATIC, false))
+
+	# ...and the knob really is the dial: above 1 the phase is the slower one.
+	Pacing.POST_TURN_SCALE = 2.0
+	assert_float(Pacing.PLAYBACK_PAN * Pacing.POST_TURN_SCALE).is_greater(Pacing.PLAYBACK_PAN)
 
 
 # --- which profile is live --------------------------------------------------------------------
