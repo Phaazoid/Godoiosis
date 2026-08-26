@@ -18,6 +18,12 @@ const PENDING_COLOR := Color(0.92, 0.92, 0.92)
 const UNWINNABLE_COLOR := Color(1, 0.45, 0.35)   # the Scenario tab's warning colour
 const INSTRUCTION_COLOR := Color(1, 0.87, 0.5)   # guidance, not a win condition -- its own colour lane
 
+# The clock's urgency cue (#101, dev fork C: colour it, don't interrupt with a modal). `static var`
+# rather than `const` because these are GameKnobs.CLASS_KNOBS rows -- a feel value gets a knob, and
+# this panel is 2D UI so the node-property table cannot reach it.
+static var URGENT_ROUNDS := 2               # rounds left at or below which the clock goes urgent
+static var URGENT_COLOR := Color(1, 0.55, 0.3)
+
 @onready var _panel: PanelContainer = $ObjectivePanel
 @onready var _rows: VBoxContainer = $ObjectivePanel/Rows
 @onready var _version_label: Label = $VersionLabel
@@ -39,13 +45,15 @@ func show_status(controller: MissionController, board: BoardContext, instruction
 		_rows.remove_child(child)
 		child.free()
 	if not controller.objectives.is_empty():   # a lesson-only board has no OBJECTIVES header to earn
-		var header := Label.new()
-		header.text = "OBJECTIVES"
-		header.add_theme_font_size_override("font_size", 11)
-		header.modulate = Color(1, 1, 1, 0.65)
-		_rows.add_child(header)
+		_rows.add_child(_build_header("OBJECTIVES"))
 	for objective in controller.objectives:
 		_rows.add_child(_build_row(objective, controller, board))
+	# What LOSES it (#101), under its own header: a countdown listed among the objectives reads as
+	# something to achieve. Driven off the declared list, so the next condition needs no edit here.
+	if not controller.lose_conditions.is_empty():
+		_rows.add_child(_build_header("FAIL IF"))
+	for condition in controller.lose_conditions:
+		_rows.add_child(_build_lose_row(condition, controller))
 	# The tutorial's instruction row (#182): what to do NOW. Drawn last, below the win conditions,
 	# and only handed to us -- ScenarioDirector owns the text, game.refresh_mission_status() the read.
 	if instruction != "":
@@ -63,6 +71,36 @@ func show_status(controller: MissionController, board: BoardContext, instruction
 	# hidden, so the HUD never reflows when it appears.
 	_panel.offset_top -= BUTTON_CLEARANCE
 	_panel.offset_bottom -= BUTTON_CLEARANCE
+
+func _build_header(text: String) -> Label:
+	var header := Label.new()
+	header.text = text
+	header.add_theme_font_size_override("font_size", 11)
+	header.modulate = Color(1, 1, 1, 0.65)
+	return header
+
+# One declared lose condition. Rules and counts come off the controller, never re-derived here.
+func _build_lose_row(condition: MissionRules.LoseCondition, controller: MissionController) -> Label:
+	var label := Label.new()
+	label.add_theme_font_size_override("font_size", 13)
+	# Declared with nothing to fire on -- the objectives' unpainted-geometry row, same doctrine: the
+	# mission is broken and the row must say so rather than vanish.
+	if controller.lose_conditions_missing_setup().has(condition):
+		label.text = "%s — not set" % _lose_title(condition)
+		label.modulate = UNWINNABLE_COLOR
+		return label
+	match condition:
+		MissionRules.LoseCondition.ROUND_LIMIT:
+			var left: int = controller.rounds_remaining()
+			label.text = "Time — %d %s" % [left, "round left" if left == 1 else "rounds left"]
+			label.modulate = URGENT_COLOR if left <= URGENT_ROUNDS else PENDING_COLOR
+			return label
+	label.text = _lose_title(condition)
+	label.modulate = PENDING_COLOR
+	return label
+
+func _lose_title(condition: MissionRules.LoseCondition) -> String:
+	return String(MissionRules.LoseCondition.keys()[condition]).capitalize()
 
 func _build_row(objective: MissionRules.Objective, controller: MissionController, board: BoardContext) -> Label:
 	var label := Label.new()

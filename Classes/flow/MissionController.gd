@@ -5,9 +5,10 @@ class_name MissionController
 # latches that keep it from firing twice (#96 slice 1). Built in game._build_collaborators with a
 # back-ref -- the DevController/OrderExecutor pattern.
 #
-# The rule itself is NOT here; it is MissionRules, pure and static. This node holds only the two
-# facts a pure predicate structurally cannot: whether the mission has already ended, and whether
-# both sides were ever up at once.
+# The rule itself is NOT here; it is MissionRules, pure and static. This node holds what a pure
+# predicate structurally cannot: whether the mission has already ended, whether both sides were
+# ever up at once, this battle's progress (captured zones, the round clock), and -- since #101 --
+# WHY it was lost, which the banner has to name.
 #
 # check() is called from every point board state can change AND settle -- the end of a resolution
 # pass, the end-of-turn burn, and turn start after the downed clocks tick. Pass-end rather than
@@ -26,6 +27,15 @@ var _captured_zones: Array[String] = []
 # What THIS mission requires. Authored content that arrives with the scenario, so it is cleared by
 # reset() and refilled on load -- one list for every objective kind, rather than a field per kind.
 var objectives: Array[MissionRules.Objective] = []
+# What LOSES it, and the clock's limit (#101). Authored, so both clear with the objectives above.
+var lose_conditions: Array[MissionRules.LoseCondition] = []
+var round_limit := 0
+# Rounds the clock has counted. Battle-scoped like _captured_zones, for the same reason: the limit
+# is authored content, how far through it this battle is is progress. Advanced from ONE place.
+var _rounds_elapsed := 0
+# Why the mission was lost, for the banner. Set beside `outcome`, so it can never name a reason for
+# an ending that did not happen.
+var _failed_by: MissionRules.LoseCondition = MissionRules.LoseCondition.NONE
 
 
 func is_over() -> bool:
@@ -39,10 +49,14 @@ func check() -> void:
 	var board: BoardContext = game._board()
 	if not _contested:
 		_contested = MissionRules.is_contested(board)
-	var result: MissionRules.Outcome = MissionRules.evaluate(board, _contested, objective_progress(board))
+	var failure: MissionRules.LoseCondition = failure_for(board)
+	var result: MissionRules.Outcome = MissionRules.evaluate(board, _contested,
+			objective_progress(board), failure)
 	if result == MissionRules.Outcome.ONGOING:
 		return
 	outcome = result
+	if result == MissionRules.Outcome.DEFEAT:
+		_failed_by = failure   # set beside the outcome, so the banner cannot name a stale reason
 	_end_mission()   # deliberately un-awaited: outcome is already set, so is_over() is true for
 					 # every caller the moment we return, while the banner blocks only itself
 
@@ -53,6 +67,10 @@ func reset() -> void:
 	_ending = false
 	_captured_zones.clear()
 	objectives.clear()
+	lose_conditions.clear()
+	round_limit = 0
+	_rounds_elapsed = 0
+	_failed_by = MissionRules.LoseCondition.NONE
 	game.refresh_mission_status()
 
 # --- Mid-battle snapshot (#87) ---
@@ -63,10 +81,14 @@ func captured_zone_names() -> Array[String]:
 func is_contested() -> bool:
 	return _contested
 
+func rounds_elapsed() -> int:
+	return _rounds_elapsed
+
 # Runs after zones are refilled, since the redraw needs them painted.
-func restore_progress(zones: Array[String], contested: bool) -> void:
+func restore_progress(zones: Array[String], contested: bool, rounds := 0) -> void:
 	_captured_zones.assign(zones)
 	_contested = contested
+	_rounds_elapsed = rounds
 	game.overlay_manager.redraw_zones(game.zone_manager, _captured_zones)
 	game.refresh_mission_status()
 
@@ -297,6 +319,59 @@ func _in_any_zone(zone_names: Array[String], cell: Vector2i) -> bool:
 			return true
 	return false
 
+# ==============================================================================
+#  Lose conditions (#101)
+# ==============================================================================
+
+func set_lose_conditions(list: Array[MissionRules.LoseCondition], limit: int) -> void:
+	lose_conditions.assign(list)
+	round_limit = limit
+	for condition in lose_conditions_missing_setup():
+		push_error("Lose condition %s is declared but has nothing to fire on — this mission would be lost immediately." % MissionRules.LoseCondition.keys()[condition])
+	game.refresh_mission_status()
+
+# Declared lose conditions with no usable parameter -- objectives_missing_geometry's twin, and the
+# same doctrine: the mission really is broken, so say so loudly rather than dropping the clause.
+func lose_conditions_missing_setup() -> Array[MissionRules.LoseCondition]:
+	var missing: Array[MissionRules.LoseCondition] = []
+	if lose_conditions.has(MissionRules.LoseCondition.ROUND_LIMIT) and round_limit <= 0:
+		missing.append(MissionRules.LoseCondition.ROUND_LIMIT)
+	return missing
+
+# The ONE increment point, called from game._on_round_completed. TurnManager emits round_completed
+# before turn_started, so the very next check() -- turn start, after the downed clocks tick -- is
+# the one that sees it. No new evaluation seam.
+func advance_round() -> void:
+	_rounds_elapsed += 1
+	game.refresh_mission_status()
+
+# Rounds left on the clock, for the HUD. 0 when no clock is authored.
+func rounds_remaining() -> int:
+	return MissionRules.rounds_remaining(_rounds_elapsed, round_limit)
+
+# WHY this mission is lost, NONE while it is not. The reason only; whether the mission ends is
+# MissionRules.evaluate's answer, which is handed this and keeps its own wipe branch for the
+# callers that pass nothing (the headless Play API). Both read the one faction predicate below.
+#
+# The wipe outranks an authored condition, matching evaluate's own order: a squad lost on the round
+# the clock expires reports the squad, which is the more concrete thing that happened.
+func failure_for(board: BoardContext) -> MissionRules.LoseCondition:
+	if not board.faction_has_active_units(Team.Faction.PLAYER):
+		return MissionRules.LoseCondition.SQUAD_LOST
+	for condition in lose_conditions:
+		if _condition_fired(condition):
+			return condition   # ANY, not all -- the first one that fires ends it
+	return MissionRules.LoseCondition.NONE
+
+func _condition_fired(condition: MissionRules.LoseCondition) -> bool:
+	match condition:
+		MissionRules.LoseCondition.ROUND_LIMIT:
+			return MissionRules.round_limit_reached(_rounds_elapsed, round_limit)
+		MissionRules.LoseCondition.NONE, MissionRules.LoseCondition.SQUAD_LOST:
+			return false   # never authored; the wipe is answered above, not from the list
+	push_error("MissionController: no rule for lose condition %s" % MissionRules.LoseCondition.keys()[condition])
+	return false
+
 func _end_mission() -> void:
 	_ending = true
 	game.clear_selection()                            # rests game_state ...
@@ -305,7 +380,8 @@ func _end_mission() -> void:
 	game.game_state = game.GameState.MISSION_OVER     # ... so lock the board AFTER it
 
 	var victory: bool = outcome == MissionRules.Outcome.VICTORY
-	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart())
+	var reason: String = MissionRules.defeat_reason(_failed_by)   # "" on a victory; the banner falls back
+	var choice: MissionEndBanner.Choice = await MissionEndBanner.show_banner(game, victory, can_restart(), reason)
 
 	_ending = false
 	game.game_state = game._base_state()   # unlock; dev mode survives a mission end (2026-08-11)

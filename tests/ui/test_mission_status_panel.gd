@@ -14,6 +14,10 @@ var _main: Node
 var game: Node2D
 var mc: MissionController
 var panel: MissionStatusPanel
+# The urgency threshold is a GameKnobs row, i.e. a value the dev may move at any time. The clock
+# cases DRIVE it rather than assert its shipped number, so tuning it can never redden this suite --
+# but it is a static and outlives a case, hence the save/restore.
+var _urgent_rounds: int
 
 
 func before_test() -> void:
@@ -26,10 +30,12 @@ func before_test() -> void:
 	game.game_state = game.GameState.IDLE
 	mc = game.mission_controller
 	panel = game.mission_status_panel
+	_urgent_rounds = MissionStatusPanel.URGENT_ROUNDS
 	await await_idle_frame()
 
 
 func after_test() -> void:
+	MissionStatusPanel.URGENT_ROUNDS = _urgent_rounds
 	get_tree().root.remove_child(_main)
 	_main.free()
 
@@ -57,6 +63,21 @@ func _row_texts() -> Array[String]:
 		var label: Label = child as Label
 		texts.append(label.text)
 	return texts
+
+
+func _row_color(text: String) -> Color:
+	for child in panel._rows.get_children():
+		var label: Label = child as Label
+		if label.text == text:
+			return label.modulate
+	fail("No row reading '%s' -- rows are %s" % [text, _row_texts()])
+	return Color.BLACK
+
+
+# A clock with `remaining` rounds still on it, drawn through the real refresh path.
+func _clock(remaining: int) -> void:
+	var typed: Array[MissionRules.LoseCondition] = [MissionRules.LoseCondition.ROUND_LIMIT]
+	mc.set_lose_conditions(typed, remaining)
 
 
 # ==============================================================================
@@ -257,3 +278,69 @@ func test_joining_through_the_real_door_advances_at_the_authored_size() -> void:
 	assert_array(_row_texts()).contains_exactly(["> Bring everyone."])
 	game.squad_manager.join_squad(third, squad)    # 3 of 3: the emitter fires and the lesson ends
 	assert_bool(panel._panel.visible).is_false()
+
+
+# ==============================================================================
+#  The mission clock (#101)
+# ==============================================================================
+
+# THE case this feature would have shipped broken without. refresh_mission_status hid the panel on
+# `objectives.is_empty()`, so a mission authored with a clock and no objectives -- survive-the-round
+# shapes, and every board mid-authoring -- rendered nothing at all, which is precisely the
+# unplayable state fork C ruled against.
+func test_a_clock_with_no_objectives_still_shows_the_panel() -> void:
+	_clock(4)
+	assert_bool(panel._panel.visible) \
+		.override_failure_message("a board declaring only a clock hid its own countdown") \
+		.is_true()
+	assert_array(_row_texts()).contains(["Time — 4 rounds left"])
+
+
+# Under its OWN header: a countdown listed among the objectives reads as something to achieve.
+func test_the_clock_renders_below_the_objectives_under_its_own_header() -> void:
+	_spawn(Team.Faction.ENEMY, Vector2i(4, 4))
+	_objectives([MissionRules.Objective.ROUT])
+	_clock(4)
+
+	var rows := _row_texts()
+	assert_array(rows).contains_exactly(
+		["OBJECTIVES", "Rout — 1 foe remains", "FAIL IF", "Time — 4 rounds left"])
+
+
+func test_the_last_round_reads_in_the_singular() -> void:
+	_clock(1)
+	assert_array(_row_texts()).contains(["Time — 1 round left"])
+
+
+# The FORK, not either side of it: at the threshold the clock is tinted, one round above it is not.
+# The threshold itself is driven here rather than asserted, so re-tuning the knob moves both sides
+# together and this case keeps its meaning.
+func test_the_clock_changes_colour_once_it_is_inside_the_threshold() -> void:
+	MissionStatusPanel.URGENT_ROUNDS = 2
+
+	_clock(3)   # one clear of the threshold
+	var calm := _row_color("Time — 3 rounds left")
+
+	_clock(2)   # exactly at it
+	var urgent := _row_color("Time — 2 rounds left")
+
+	assert_bool(calm.is_equal_approx(urgent)) \
+		.override_failure_message("the clock reads the same inside the threshold as outside it -- the only warning a player gets") \
+		.is_false()
+	assert_bool(urgent.is_equal_approx(MissionStatusPanel.URGENT_COLOR)).is_true()
+	assert_bool(calm.is_equal_approx(MissionStatusPanel.PENDING_COLOR)).is_true()
+
+
+# (The knob's own re-apply is pinned in tests/dev/test_game_knobs.gd, which is where the Battle3D
+# host that GameKnobs writes through actually exists -- this fixture is the flat 2D scene.)
+
+
+# The objectives' unpainted-geometry row, one list over: declared with nothing to fire on is a
+# BROKEN board and the row must say so rather than vanish.
+func test_a_clock_with_no_limit_says_so_rather_than_disappearing() -> void:
+	mc.lose_conditions.assign([MissionRules.LoseCondition.ROUND_LIMIT] as Array[MissionRules.LoseCondition])
+	mc.round_limit = 0   # direct, the way the dev checkbox writes it before a limit is typed
+	game.refresh_mission_status()
+
+	assert_array(_row_texts()).contains(["Round Limit — not set"])
+	assert_bool(_row_color("Round Limit — not set").is_equal_approx(MissionStatusPanel.UNWINNABLE_COLOR)).is_true()

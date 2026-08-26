@@ -34,7 +34,7 @@ func before_test() -> void:
 	_static_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE,
 		OverlayManager.SQUAD_RING_ALPHA, OverlayManager.KNOCKBACK_MODULATE,
 		OverlayManager.MOVE_ARROW_MODULATE, OverlayManager.INVALID_ARROW_MODULATE,
-		OverlayManager.TRAILING_ARROW_MODULATE]
+		OverlayManager.TRAILING_ARROW_MODULATE, MissionStatusPanel.URGENT_ROUNDS]
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property or a class value
@@ -52,6 +52,7 @@ func after_test() -> void:
 	OverlayManager.MOVE_ARROW_MODULATE = _static_snapshot[4]
 	OverlayManager.INVALID_ARROW_MODULATE = _static_snapshot[5]
 	OverlayManager.TRAILING_ARROW_MODULATE = _static_snapshot[6]
+	MissionStatusPanel.URGENT_ROUNDS = _static_snapshot[7]
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -313,6 +314,37 @@ func test_dragging_the_ring_alpha_slider_moves_the_static() -> void:
 	var slider := row.get_child(1) as HSlider
 	slider.value = 0.42
 	assert_float(OverlayManager.SQUAD_RING_ALPHA).is_equal_approx(0.42, 0.0001)
+
+
+# The mission clock's threshold (#101) needs a RE-APPLY, unlike most statics here: the status panel
+# is push-refreshed from MissionController's write points, so with nothing happening on the board --
+# which is exactly when this slider is being dragged -- the row would keep its old tint. #324's
+# rule, and the failure mode is a slider that moves a value nobody can see move.
+func test_moving_the_clock_threshold_repaints_a_countdown_already_on_screen() -> void:
+	var game_2d: Node2D = _scene.game
+	var mission: MissionController = game_2d.mission_controller
+	mission.lose_conditions.assign(
+		[MissionRules.LoseCondition.ROUND_LIMIT] as Array[MissionRules.LoseCondition])
+	mission.round_limit = 3
+	MissionStatusPanel.URGENT_ROUNDS = 0   # three rounds left is calm at this threshold
+	game_2d.refresh_mission_status()
+	var calm := _clock_row_color(game_2d)
+
+	GameKnobs.write_static(_scene, "URGENT_ROUNDS", 3)   # ...and urgent at this one
+
+	assert_bool(_clock_row_color(game_2d).is_equal_approx(calm)) \
+		.override_failure_message("the static moved but the row did not repaint -- the slider does nothing until the next turn") \
+		.is_false()
+
+
+func _clock_row_color(game_2d: Node2D) -> Color:
+	var panel: MissionStatusPanel = game_2d.mission_status_panel
+	for child in panel._rows.get_children():
+		var label: Label = child as Label
+		if label.text.begins_with("Time"):
+			return label.modulate
+	fail("no clock row on the mission-status panel -- the fixture never rendered one")
+	return Color.BLACK
 
 
 # --- The panel laws ------------------------------------------------------------------------
