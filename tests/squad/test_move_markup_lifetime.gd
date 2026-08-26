@@ -96,7 +96,6 @@ func _two_walkers() -> Dictionary:
 func _markup(unit: Unit, move: MoveAction) -> Dictionary:
 	var om: OverlayManager = game.overlay_manager
 	return {
-		"stored": om.planned_move_by_unit.has(unit),
 		"arrows": move.preview.size(),
 		"ghost": om.projected_unit_sprites.has(unit),
 	}
@@ -138,9 +137,6 @@ func test_a_units_markup_comes_down_when_it_arrives_not_when_the_pass_ends() -> 
 			"the arrived unit is still standing under its own ghost").is_false()
 	assert_int(arrived["arrows"]).override_failure_message(
 			"the arrived unit's path arrow is still drawn").is_equal(0)
-	assert_bool(arrived["stored"]).override_failure_message(
-			"the arrived unit's move is still in planned_move_by_unit, so any redraw brings it back") \
-		.is_false()
 
 	await _finish_pass()
 
@@ -172,9 +168,14 @@ func test_a_unit_still_walking_keeps_its_arrow_and_its_ghost() -> void:
 	await _finish_pass()
 
 
-# The durable half. planned_move_by_unit is what BOTH redraw_* rebuild from, so a clear that only
-# frees sprites is undone by the next redraw -- and a redraw during a pass is not hypothetical, it
-# is one line of #520 choreography away.
+# The DURABLE half, and the one that owns the store claim. planned_move_by_unit is what both
+# redraw_* rebuild from, so a clear that frees sprites and leaves the store is undone by the next
+# redraw -- and a redraw during a pass is not hypothetical, it is one line of #520 choreography away.
+#
+# Asserted through a redraw rather than by reading the store, deliberately: the case above used to
+# check planned_move_by_unit directly, which made THIS case unfalsifiable -- every store-shaped
+# mutant reddened there first and truncated the file before reaching it. Two cases, two mutants, two
+# messages: leaked SPRITES red above, a leaked STORE reds here.
 func test_a_redraw_during_the_pass_cannot_bring_a_retired_markup_back() -> void:
 	var board := await _two_walkers()
 	var quick: Unit = board["quick"]
