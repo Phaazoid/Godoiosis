@@ -58,6 +58,20 @@ func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
 func choice_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
 
+# What an attack's SHOVE and ALLY-SPLASH actually are once the firing source has had its say
+# (#529). Two fields a fitted mod may edit, and the pair is deliberately small: an override may
+# only touch what is read AFTER the attack is chosen. Anything that changes how an attack is
+# AIMED -- its pattern, its reach -- arrives as a whole replacement attack instead, because Reach
+# answers those with no wielder in hand.
+#
+# The default is the attack's own authored value, so a rune carving and a bare fist need neither
+# override and armor needs no opinion at all.
+func effective_knockback(_wielder: Unit, attack: AttackData) -> int:
+	return attack.knockback if attack != null else 0
+
+func effective_hits_allies(_wielder: Unit, attack: AttackData) -> bool:
+	return attack != null and attack.hits_allies
+
 # --- Explaining an attack (#166) ---
 # Why a menu row is greyed, and what the row does — both asked of the SOURCE, because only it knows
 # its own economy (a weapon's readiness, a rune's aura). Keeping them here is what lets the menu

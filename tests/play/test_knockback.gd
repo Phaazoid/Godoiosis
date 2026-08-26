@@ -154,3 +154,49 @@ func test_a_shove_into_the_void_removes_the_unit() -> void:
 		if String(line).contains("void"):
 			told = true
 	assert_bool(told).is_true()
+
+
+# A chainsword whose main carries NO authored shove, fitted with a mod adding `delta` tiles.
+# Deliberately not the mace: the point is that the shove comes from the mod, and a family whose
+# attack already knocks back could not show that.
+func _modded_board(delta: int) -> Dictionary:
+	var b := BoardBuilder.build(self, "ModShoveRoot")
+	auto_free(b.root)
+	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 10, 10))
+	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
+	var foe: Unit = BoardBuilder.spawn(b, _data("Foe", ENEMY), Vector2i(1, 0))
+
+	var swing := WeaponAttackData.new()
+	swing.display_name = "Swing"   # null pattern = adjacent reach, as above
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = swing
+	hero.add_item(WeaponInstance.make(template))
+
+	var mod := WeaponModData.new()
+	mod.knockback_delta = delta
+	(hero.get_equipped_weapon() as WeaponInstance).fit(0, mod)
+	hero.active_attack = swing
+
+	var sess = PlaySession.new(b)
+	return {"sess": sess, "hero": hero, "foe": foe}
+
+
+# The shove a MOD adds reaches the resolver (#529). PlanResolver read AttackData.knockback straight
+# until then, so a mod could carry a knockback_delta and nothing would ever move -- both ends
+# correct with no wire between them, which is #103's shape. The zero case below is what stops this
+# one passing on a foe that was never going to move.
+func test_a_mods_knockback_delta_shoves_on_a_real_resolve() -> void:
+	var s := _modded_board(1)
+	var foe: Unit = s.foe
+	s.sess.queue_attack(s.sess.handle_for(s.hero), Vector2i(1, 0))
+	s.sess.execute()
+	assert_int(foe.movement.cell.x).is_equal(2)
+
+
+func test_the_same_attack_with_no_delta_leaves_the_foe_standing() -> void:
+	var s := _modded_board(0)
+	var foe: Unit = s.foe
+	s.sess.queue_attack(s.sess.handle_for(s.hero), Vector2i(1, 0))
+	s.sess.execute()
+	assert_int(foe.movement.cell.x).is_equal(1)

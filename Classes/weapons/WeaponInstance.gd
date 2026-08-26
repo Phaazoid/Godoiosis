@@ -142,6 +142,9 @@ func used_capacity(index: int) -> int:
 # A mod that changes scaling while naming NO family is broken content rather than a bad fit, and
 # it is refused at the authoring save instead; here it simply fits, since there is nothing to
 # disagree with.
+#
+# The main-replacement clause sits BETWEEN them for the same reason, one step milder: a second
+# replacer is fixable, but not by freeing capacity, so saying so first is the more useful answer.
 func fit_block_reason(index: int, mod: WeaponModData) -> String:
 	if template == null:
 		return "This weapon has no template, so it has no spaces."
@@ -150,6 +153,11 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 	if not mod.fits_family(template.weapon_type):
 		return "Fits %s only — a scaling change is measured against that family's main attack." % \
 			WeaponData.WeaponType.keys()[mod.family].capitalize()
+	if mod.replaces_main != null:
+		var already := _main_replacer()
+		if already != null:
+			var whose: String = already.display_name if already.display_name != "" else "Another fitted mod"
+			return "%s already replaces this weapon's main attack — a weapon has one main." % whose
 	var capacity: int = template.mod_spaces[index]
 	if used_capacity(index) + mod.size > capacity:
 		return "Space %d holds %d of %d — this needs %d more." % [index + 1, used_capacity(index), capacity, mod.size]
@@ -157,6 +165,16 @@ func fit_block_reason(index: int, mod: WeaponModData) -> String:
 
 func can_fit(index: int, mod: WeaponModData) -> bool:
 	return fit_block_reason(index, mod) == ""
+
+# The fitted mod replacing this weapon's main, if any. Scans EVERY space rather than the active
+# ones: fitting has no wielder, so there is no proficiency to ask about, and a mod parked in a
+# space this unit cannot reach still occupies the one main a weapon has.
+func _main_replacer() -> WeaponModData:
+	for i in range(space_count()):
+		for mod: WeaponModData in space(i):
+			if mod.replaces_main != null:
+				return mod
+	return null
 
 func fit(index: int, mod: WeaponModData) -> bool:
 	if not can_fit(index, mod):
@@ -181,6 +199,20 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 		result.append_array(space(i))
 	return result
 
+# The mods whose EFFECTS reach this attack — the ONE place applies_to is interpreted (#530).
+# Every effect answers to it: power, element, and the scaling shift its callers weigh.
+#
+# GRANTS deliberately do not come through here — available_attacks reads active_modules straight,
+# because "which attacks does this mod change" and "which attacks does it add" are different
+# questions. A MAIN_ATTACK mod still hands over whatever it grants; it just doesn't buff it.
+func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
+	var result: Array[WeaponModData] = []
+	var main := effective_main(wielder)
+	for mod in active_modules(wielder):
+		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or attack == main:
+			result.append(mod)
+	return result
+
 # --- Attack-source surface (EquippableData) ---
 
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
@@ -189,39 +221,68 @@ func selectable_attacks(wielder: Unit) -> Array[AttackData]:
 		result.append(a)
 	return result
 
-func default_attack(_wielder: Unit) -> AttackData:
-	return template.main_attack if template != null else null
+# What this weapon's main attack ACTUALLY is: the template's, unless a proficiency-active mod
+# replaces it (#529). FOUR surfaces read it -- default aim, counters, the secondary filter and
+# the repertoire below -- and they have to agree, which is why it is a seam rather than a clause
+# each of them repeats. #529 named only the counter; secondary_attacks is the sharper one,
+# because filtering by the OLD main lists the replacement in the submenu as well as firing it
+# from Attack, so the same swing shows up twice.
+#
+# FIRST replacer in space order wins. fit_block_reason refuses a second, so a weapon fitted
+# through the normal door can only carry one -- this is the answer for a hand-edited .tres, and
+# it is first rather than last so fitting into a LATER space cannot silently move the main.
+func effective_main(wielder: Unit) -> WeaponAttackData:
+	if template == null:
+		return null
+	for mod in active_modules(wielder):
+		if mod.replaces_main != null:
+			return mod.replaces_main
+	return template.main_attack
+
+func default_attack(wielder: Unit) -> AttackData:
+	return effective_main(wielder)
 
 # ALWAYS main, ignoring any live active_attack pick (#72 ruling; overwatch-style alt-attack
 # countering is out of scope, #73). This is the divergence from RuneData.counter_attack.
-func counter_attack(_wielder: Unit) -> AttackData:
-	return template.main_attack if template != null else null
+func counter_attack(wielder: Unit) -> AttackData:
+	return effective_main(wielder)
 
 # available_attacks minus main — what the Weapon Action submenu lists.
 func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	if template == null:
 		return result
-	var main := template.main_attack
+	var main := effective_main(wielder)
 	for a in available_attacks(wielder):
 		if a != main:
 			result.append(a)
 	return result
 
-# Every attack this wielder can choose from: the family's stock list, then whatever THIS weapon's
-# proficiency-active mods add (#74). Main stays first, so the canonical order survives.
+# Every attack this wielder can choose from: its main (whatever a mod has made that, #529), the
+# family's other stock attacks, then whatever THIS weapon's proficiency-active mods add (#74).
+# Main stays first, so the canonical order survives.
+#
+# Deliberately NOT template.attacks() any more: that answers what the TEMPLATE carries, which is
+# right for the Attack Editor and AttackLint and wrong here, where the main is a fact about this
+# INSTANCE. One question each, rather than one function bent to serve both.
 #
 # Reads its OWN fitted mods, deliberately NOT Unit._mod_sources() -- an attack belongs to the
 # weapon that fires it, so a prosthetic leg's mod must not add a swing to the carbine in your
 # hands. That is the asymmetry against granted_abilities/stat_modifiers, which describe the
 # WIELDER and therefore union across every contributing weapon.
 #
-# Additive only: nothing here replaces or edits a stock attack (#74 keeps that half). Deduped by
-# identity, so two mods granting the same authored resource list it once.
+# Deduped by identity, so two mods granting one authored resource list it once -- and so a
+# replacement that is also a stock extra does not appear twice.
 func available_attacks(wielder: Unit) -> Array[WeaponAttackData]:
 	if template == null:
 		return []
-	var result := template.attacks()
+	var result: Array[WeaponAttackData] = []
+	var main := effective_main(wielder)
+	if main != null:
+		result.append(main)
+	for attack in template.extra_attacks:
+		if attack != null and not result.has(attack):
+			result.append(attack)
 	for mod in active_modules(wielder):
 		for attack in mod.granted_attacks:
 			if attack != null and not result.has(attack):
@@ -252,7 +313,7 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	var headline := "%s %s" % [weapon_attack.payload_text(damage), weapon_attack.targets_text()]
 	if weapon_attack.deals_no_damage:
 		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
-	var mods := active_modules(wielder)
+	var mods := _mods_for(wielder, weapon_attack)
 	var eff_power := weapon_attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
@@ -313,7 +374,7 @@ func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 		return 0
 	if attack.deals_no_damage:
 		return 0   # utility attack (#126): the stat blend never sneaks damage into a damageless effect
-	var mods := active_modules(wielder)
+	var mods := _mods_for(wielder, attack)
 	var eff_power := attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
@@ -327,10 +388,35 @@ func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.El
 		return result
 	if attack.elemental_damage_type != Elemental.Element.NONE:
 		result.append(attack.elemental_damage_type)
-	for mod in active_modules(wielder):
+	for mod in _mods_for(wielder, attack):
 		if mod.added_element != Elemental.Element.NONE and not result.has(mod.added_element):
 			result.append(mod.added_element)
 	return result
+
+# The two overrides a fitted mod may make (#529), composed the same way power and elements are and
+# gated by the same applies_to selector -- one answer to what a mod reaches, not one per field.
+func effective_knockback(wielder: Unit, attack: AttackData) -> int:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return super(wielder, attack)
+	var total := weapon_attack.knockback
+	for mod in _mods_for(wielder, weapon_attack):
+		total += mod.knockback_delta
+	return maxi(0, total)   # a shove below zero is no shove, not a pull
+
+# OFF short-circuits, which is what makes the rule order-independent: an OFF anywhere wins, so
+# fitting the same mods into different spaces cannot give different answers.
+func effective_hits_allies(wielder: Unit, attack: AttackData) -> bool:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return super(wielder, attack)
+	var answer := weapon_attack.hits_allies
+	for mod in _mods_for(wielder, weapon_attack):
+		if mod.hits_allies_override == WeaponModData.Override.OFF:
+			return false
+		if mod.hits_allies_override == WeaponModData.Override.ON:
+			answer = true
+	return answer
 
 # hits_map() is gone from here: with the null->main fallback removed it did nothing but forward to
 # AttackData.hits_map(), which both attack kinds already answer. PlanResolver calls that directly.

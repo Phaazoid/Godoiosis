@@ -917,6 +917,20 @@ func get_counter_attack() -> AttackData:
 		return null
 	return equipped_weapon.counter_attack(self)
 
+# This attack's shove and ally-splash as the EQUIPPED SOURCE reports them (#529) -- a fitted mod
+# may edit either. Thin delegators, the get_counter_attack shape: they live here because the two
+# readers (PlanResolver's shove, RulesService's victim gather) hold a Unit and no weapon, and
+# re-deriving the equipped source at each would be two answers to one question.
+func get_attack_knockback(attack: AttackData) -> int:
+	if equipped_weapon == null:
+		return attack.knockback if attack != null else 0
+	return equipped_weapon.effective_knockback(self, attack)
+
+func attack_hits_allies(attack: AttackData) -> bool:
+	if equipped_weapon == null:
+		return attack != null and attack.hits_allies
+	return equipped_weapon.effective_hits_allies(self, attack)
+
 # Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
 # never the live selection — see that method's header for why. Since #84 the counter attack must
 # also be FIREABLE: an empty Carbine magazine (and, latently since #73, a sprung Springspear whose
