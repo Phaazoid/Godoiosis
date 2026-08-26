@@ -21,6 +21,21 @@ const CELL_SIZE := 1.0
 # ramp still rises CELL_SIZE over CELL_SIZE of run, it now just spans UNITS_PER_LEVEL rows to do it.
 const ROW_HEIGHT := CELL_SIZE / Terrain.UNITS_PER_LEVEL
 
+# How far below a cell's surface a SIDE face starts (#559). A block's side quads used to reach the
+# top plane itself, so at every cell border four surfaces met along one line — the two neighbouring
+# top faces and both blocks' buried sides — and a pixel centre landing on it could be won by the
+# side. At an axis-aligned yaw a whole row of those borders lands on one scanline, which is how a
+# hairline of dirt drew itself across the board. Dropping the side by this much takes it out of the
+# plane it was tying in; the RIM the generator puts in the gap wears the TOP material, so the
+# surface still meeting the neighbour there is the ground rather than the dirt under it.
+#
+# A correctness epsilon, not a look value: big enough to clear depth-buffer resolution at board
+# distances by orders of magnitude, small enough to stay under one texel (tiles are 32 px to a
+# cell, so a texel is 0.031) and never read as a band. Nothing tunes it by eye — the laws that
+# guard it measure the PROPERTY (a side never reaches the surface, the shell stays closed) so the
+# value is free to move without rewriting them.
+const SIDE_RIM := 0.004
+
 # "No cell" sentinel — far outside any real board (GridUtils.NO_CELL's 3D twin).
 const NO_CELL := Vector3i(-999, -999, -999)
 
