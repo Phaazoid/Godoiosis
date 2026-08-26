@@ -156,6 +156,43 @@ func test_the_move_phase_takes_the_camera_to_whoever_is_walking() -> void:
 	_cam().set_playback_locked(false)
 
 
+# ...and so does the side-channel tail. ADDED BY FALSIFICATION, not by reasoning: deleting the
+# subjects argument from execute_orders' side-channel call left 587 cases green across presentation
+# and squad, because everything about codas was pinned at its two ENDS (the sheet builds them, the
+# schedule reads them) and nothing drove the wire between. #103's shape exactly.
+#
+# The camera is parked on ANOTHER unit first, so "it ended up on the rallier" cannot pass by the
+# camera simply never having moved. A rally is the cheapest coda to stage: no target, no terrain,
+# and _queue_action is the raw door the beat sheet suite already uses.
+func test_a_side_channel_verb_takes_the_camera_too() -> void:
+	var unit := _player_unit()
+	var elsewhere := _any_unit_besides(unit)
+	assert_object(elsewhere).override_failure_message(
+			"fixture: this board has only one unit").is_not_null()
+
+	var rally := RallyAction.new()
+	rally.init(unit)
+	unit.squad._queue_action(rally)
+
+	_cam().set_playback_locked(true)
+	_cam().follow(elsewhere)
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_object(_cam().follow_unit).override_failure_message(
+			"the tail played with the camera still pointed at whatever it was watching before") \
+		.is_same(unit)
+	_cam().set_playback_locked(false)
+
+
+func _any_unit_besides(other: Unit) -> Unit:
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit != other:
+			return unit
+	return null
+
+
 # A player unit that actually has somewhere to go -- a unit stranded on a terrace with no ramp off
 # it is a legal board and produces no move at all (the content razor's second hazard).
 func _mobile_player_unit() -> Unit:
