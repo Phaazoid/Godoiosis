@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #546 (2026-08-26).**
+**Canon checked through #559 (2026-08-26).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -115,6 +115,17 @@ below follows from taking that literally.
 > bottom quad. The cap is an open shell whose opening is exactly the footprint the block's top face
 > covers, which is why no angle can see inside; and meshlib items carry no collision shape and no
 > navmesh, so nothing but the rasteriser ever reads this geometry.
+>
+> **That last argument became LOAD-BEARING in #559, when `_mat()` stopped drawing back faces.** It was
+> written while every generated material was `CULL_DISABLED`, so an opening that *was* exposed would
+> merely have shown the cap's own inside surface — opaque, odd, harmless. Under `CULL_BACK` the same
+> exposure shows the sky through the board. Nothing about the geometry changed; what changed is that
+> "no angle can see inside" went from comfortable to the only thing standing between a cap and a hole,
+> so it is now a law rather than a comment — `tests/law/test_a_cap_opening_lies_on_the_block_top.gd`
+> requires every boundary edge to lie in the block-top plane and inside the cell, and requires the
+> shell to still be OPEN, since a case that passes vacuously the moment the bottom quad returns would
+> guard nothing. The block beneath a cap stays load-bearing, and #559 kept a ground block's TOP face
+> at its full extent for exactly this reason.
 >
 > Which form suffers is the whole tell, and it matches the report exactly: a WEDGE's low side is an
 > EDGE with no area, so wedges never fought; an INNER corner's flat triangle is at its HIGH plane,

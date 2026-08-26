@@ -698,7 +698,16 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 	mat.texture_filter = BaseMaterial3D.TEXTURE_FILTER_NEAREST
 	mat.roughness = 1.0
 	mat.metallic_specular = 0.2
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	# BACK, i.e. Godot's own default, since #559. It was DISABLED from the Stage 0 bootstrap (#203)
+	# — set before the thin PLANE slabs and the open-shell cap existed, so it was never chosen for
+	# them. A solid board is mostly interior, and drawing both sides meant shading every buried face
+	# and putting two of them, not one, into the depth tie at each cell border.
+	#
+	# What it costs is that an OPEN shell now reads as a hole rather than as its own inside surface.
+	# _form_mesh ships one on purpose (no bottom quad), so the claim that keeps it safe — its opening
+	# is exactly the footprint the block below covers — is load-bearing now instead of merely true,
+	# and test_a_cap_opening_lies_on_the_block_top pins it.
+	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	return mat
 
 
@@ -716,30 +725,62 @@ func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:
 # height UNITS now, so a full-cell block would overlap the row above it and a column would be drawn
 # twice as tall. A prop (#264) passes its measured size and lifts the box so its BASE sits at
 # y = 0, because BoardMirror plants it on the cell's top face rather than inside the cell.
+#
+# THE SIDES STOP SHORT OF THE TOP PLANE, and the gap is closed by a RIM wearing the TOP material
+# (#559). A side quad used to run from `up`, so at every cell border four surfaces met along one
+# line — this block's top face, the neighbour's, and both blocks' buried sides — and a pixel centre
+# landing on it could be won by the side. At an axis-aligned yaw a whole row of those borders lands
+# on one scanline, which is how a hairline of dirt drew itself across the board.
+#
+# The rim is not decoration and not an epsilon nudge: dropping the sides ALONE would leave a
+# BoardSpace.SIDE_RIM-tall band of nothing at every real cliff crest, and with back faces culled a
+# ray entering there passes through the block and out — a hole. The rim closes the shell, and
+# because it wears the top art the surface still meeting the neighbour at the border is the GROUND
+# rather than the dirt under it, so a residual tie there is invisible rather than brown.
+#
+# `rim` is 0 for a PROP: it stands alone on a cell instead of tiling with neighbours, so it has no
+# border to tie at, and a zero-height rim would only add degenerate triangles.
+#
+# The top face keeps its FULL extent either way. Two things lean on that: BoardSpace.CELL_SIZE has
+# to keep agreeing with the authored GridMap cell_size, and _form_mesh's open shell is safe only
+# while the block below covers the whole footprint its opening sits in.
 func _block_mesh(top_mat: Material, side_mat: Material,
 		top_uv := Rect2(0, 0, 1, 1), side_uv := Rect2(0, 0, 1, 1),
-		size := Vector3(1.0, BoardSpace.ROW_HEIGHT, 1.0), center_y := 0.0) -> ArrayMesh:
+		size := Vector3(1.0, BoardSpace.ROW_HEIGHT, 1.0), center_y := 0.0,
+		rim := BoardSpace.SIDE_RIM) -> ArrayMesh:
 	var h := size * 0.5
 	var up := center_y + h.y
 	var down := center_y - h.y
+	var brim := up - rim   # where the side material starts, and the rim leaves off
 	var mesh := ArrayMesh.new()
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(top_mat)
 	_quad(st, Vector3(-h.x, up, -h.z), Vector3(h.x, up, -h.z),
 			Vector3(h.x, up, h.z), Vector3(-h.x, up, h.z), Vector3.UP, top_uv)
+	# The rim: the same four walls the side surface draws, in miniature and in the ground's own art.
+	# Same winding and outward normals, so it lights as the wall it caps rather than as a lip.
+	if rim > 0.0:
+		_quad(st, Vector3(-h.x, up, h.z), Vector3(h.x, up, h.z),
+				Vector3(h.x, brim, h.z), Vector3(-h.x, brim, h.z), Vector3.BACK, top_uv)      # south
+		_quad(st, Vector3(h.x, up, -h.z), Vector3(-h.x, up, -h.z),
+				Vector3(-h.x, brim, -h.z), Vector3(h.x, brim, -h.z), Vector3.FORWARD, top_uv) # north
+		_quad(st, Vector3(h.x, up, h.z), Vector3(h.x, up, -h.z),
+				Vector3(h.x, brim, -h.z), Vector3(h.x, brim, h.z), Vector3.RIGHT, top_uv)     # east
+		_quad(st, Vector3(-h.x, up, -h.z), Vector3(-h.x, up, h.z),
+				Vector3(-h.x, brim, h.z), Vector3(-h.x, brim, -h.z), Vector3.LEFT, top_uv)    # west
 	st.commit(mesh)
 
 	st = SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
 	st.set_material(side_mat)
-	_quad(st, Vector3(-h.x, up, h.z), Vector3(h.x, up, h.z),
+	_quad(st, Vector3(-h.x, brim, h.z), Vector3(h.x, brim, h.z),
 			Vector3(h.x, down, h.z), Vector3(-h.x, down, h.z), Vector3.BACK, side_uv)      # south
-	_quad(st, Vector3(h.x, up, -h.z), Vector3(-h.x, up, -h.z),
+	_quad(st, Vector3(h.x, brim, -h.z), Vector3(-h.x, brim, -h.z),
 			Vector3(-h.x, down, -h.z), Vector3(h.x, down, -h.z), Vector3.FORWARD, side_uv) # north
-	_quad(st, Vector3(h.x, up, h.z), Vector3(h.x, up, -h.z),
+	_quad(st, Vector3(h.x, brim, h.z), Vector3(h.x, brim, -h.z),
 			Vector3(h.x, down, -h.z), Vector3(h.x, down, h.z), Vector3.RIGHT, side_uv)     # east
-	_quad(st, Vector3(-h.x, up, -h.z), Vector3(-h.x, up, h.z),
+	_quad(st, Vector3(-h.x, brim, -h.z), Vector3(-h.x, brim, h.z),
 			Vector3(-h.x, down, h.z), Vector3(-h.x, down, -h.z), Vector3.LEFT, side_uv)    # west
 	_quad(st, Vector3(-h.x, down, h.z), Vector3(h.x, down, h.z),
 			Vector3(h.x, down, -h.z), Vector3(-h.x, down, -h.z), Vector3.DOWN, side_uv)    # bottom
@@ -1322,7 +1363,7 @@ func _prop_mesh(shape: GridUtils.PropShape, mat: Material, top_uv: Rect2, side_p
 	var size := Vector3(w, h, w)
 	match shape:
 		GridUtils.PropShape.CUBE:
-			return _block_mesh(mat, mat, top_uv, _uv_rect(side_px, atlas_size), size, h * 0.5)
+			return _block_mesh(mat, mat, top_uv, _uv_rect(side_px, atlas_size), size, h * 0.5, 0.0)
 		GridUtils.PropShape.FACETED:
 			# The one solid whose height is NOT the art's vertical extent -- see
 			# FACETED_HEIGHT_OF_WIDTH. The footprint is still measured.
