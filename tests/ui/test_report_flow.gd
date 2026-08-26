@@ -301,7 +301,7 @@ func test_the_camera_does_not_move_while_a_card_is_up() -> void:
 	# Isolate the pause as the only thing that could stop the poll -- the camera has two other
 	# locks of its own (a scripted pan, and an AI turn) and neither is what this test is about.
 	camera.lock_manual_input = false
-	camera.ai_locked = false
+	camera.playback_locked = false
 
 	game.game_state = game.GameState.IDLE
 	game.open_report_card(BugReporter.Kind.BUG)

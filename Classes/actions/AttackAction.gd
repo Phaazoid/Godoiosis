@@ -175,6 +175,11 @@ func clear_preview_sprites():
 
 	preview_sprites.clear()
 
+# The victim. Null for a #47 cell attack, and the base's actor fallback is what covers that:
+# a swing at open ground is framed on the swinger.
+func aimed_at() -> Unit:
+	return target
+
 func get_target_name() -> String:
 	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():
 		return target.get_unit_name()

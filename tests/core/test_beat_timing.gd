@@ -22,7 +22,10 @@ func before_test() -> void:
 		"player": Pacing.PLAYER_ACTION, "ai": Pacing.AI_ACTION, "cine": Pacing.CINEMATIC_ACTION,
 		"bd": Pacing.BOARD_DRAMA, "cd": Pacing.CINEMATIC_DRAMA,
 		"down": Pacing.HOLD_DOWN, "crisis": Pacing.HOLD_CRISIS, "iron": Pacing.HOLD_IRON_WILL,
-		"knock": Pacing.HOLD_KNOCKBACK, "turn": Pacing.HOLD_TURNOVER,
+		"knock": Pacing.HOLD_KNOCKBACK, "turn": Pacing.HOLD_TURNOVER, "heal": Pacing.HOLD_HEAL,
+		"rescue": Pacing.HOLD_RESCUE, "rally": Pacing.HOLD_RALLY, "intim": Pacing.HOLD_INTIMIDATE,
+		"reload": Pacing.HOLD_RELOAD, "rev": Pacing.HOLD_REV, "burrow": Pacing.HOLD_BURROW,
+		"capture": Pacing.HOLD_CAPTURE, "guard": Pacing.HOLD_GUARD,
 	}
 
 
@@ -37,6 +40,15 @@ func after_test() -> void:
 	Pacing.HOLD_IRON_WILL = _saved["iron"]
 	Pacing.HOLD_KNOCKBACK = _saved["knock"]
 	Pacing.HOLD_TURNOVER = _saved["turn"]
+	Pacing.HOLD_HEAL = _saved["heal"]
+	Pacing.HOLD_RESCUE = _saved["rescue"]
+	Pacing.HOLD_RALLY = _saved["rally"]
+	Pacing.HOLD_INTIMIDATE = _saved["intim"]
+	Pacing.HOLD_RELOAD = _saved["reload"]
+	Pacing.HOLD_REV = _saved["rev"]
+	Pacing.HOLD_BURROW = _saved["burrow"]
+	Pacing.HOLD_CAPTURE = _saved["capture"]
+	Pacing.HOLD_GUARD = _saved["guard"]
 	PlayerSettings.reset_for_test()
 
 
@@ -110,6 +122,59 @@ func test_an_iron_will_save_outlasts_a_plain_scratch() -> void:
 		.is_greater(Pacing.duration_for(_chip(), CINEMATIC, false))
 
 
+# A heal is a thing that HAPPENED -- HP came back -- and until 2026-08-26 the table had no clause
+# for it, so it earned the bare base beat: the flattest moment a pass could contain, in the profile
+# that exists to make moments land. The dev found it in play ("the heal in the counter attack felt
+# left out of focus"); the camera was already going there, the beat was not.
+func test_a_heal_outlasts_a_plain_scratch() -> void:
+	var mended := _chip()
+	mended.has_heal = true
+	assert_float(Pacing.duration_for(mended, CINEMATIC, false)) \
+		.is_greater(Pacing.duration_for(_chip(), CINEMATIC, false))
+
+
+# ... and it takes part in the same by-VALUE ranking as everything else, rather than sitting
+# outside it: a heal that also killed somebody holds for whichever knob is larger.
+func test_a_heal_that_also_killed_takes_the_louder_knob() -> void:
+	Pacing.HOLD_HEAL = 0.2
+	Pacing.HOLD_DOWN = 0.8
+	var both := _kill()
+	both.has_heal = true
+	assert_float(Pacing.hold_for(both)).is_equal_approx(0.8, 0.0001)
+
+	Pacing.HOLD_HEAL = 1.5
+	assert_float(Pacing.hold_for(both)).is_equal_approx(1.5, 0.0001)
+
+
+# --- the side-channel tail --------------------------------------------------------------------
+
+# Each verb holds for its OWN knob, not one shared coda number -- a rescue and a reload are not the
+# same moment. Pinned as the relationship rather than the values, and driven from the knobs so a
+# hardcoded ranking would fail the second half.
+func test_each_side_channel_verb_holds_for_its_own_knob() -> void:
+	Pacing.HOLD_RESCUE = 0.9
+	Pacing.HOLD_RELOAD = 0.1
+	assert_float(Pacing.hold_for(_coda(BaseAction.ActionType.RESCUE))) \
+		.is_greater(Pacing.hold_for(_coda(BaseAction.ActionType.RELOAD)))
+
+	# Swap which one is loud. Nothing else changes.
+	Pacing.HOLD_RESCUE = 0.1
+	Pacing.HOLD_RELOAD = 0.9
+	assert_float(Pacing.hold_for(_coda(BaseAction.ActionType.RELOAD))) \
+		.is_greater(Pacing.hold_for(_coda(BaseAction.ActionType.RESCUE)))
+
+
+# hold_for FLOORS coda_hold's -1.0 sentinel, so an undeclared verb degrades to no hold in play
+# instead of subtracting from the base beat. The law suite is what refuses the omission; this pins
+# that the floor exists, since a negative reaching duration_for would shorten a real pause.
+func test_an_undeclared_verb_never_shortens_the_beat() -> void:
+	var stray := _coda(BaseAction.ActionType.ATTACK)   # never a side-channel verb
+	assert_float(Pacing.coda_hold(BaseAction.ActionType.ATTACK)).is_less(0.0)
+	assert_float(Pacing.hold_for(stray)).is_equal_approx(0.0, 0.0001)
+	assert_float(Pacing.duration_for(stray, CINEMATIC, false)) \
+		.is_equal_approx(Pacing.base_for(CINEMATIC, false), 0.0001)
+
+
 # --- which profile is live --------------------------------------------------------------------
 
 func test_the_profile_follows_the_battle_zoom_setting() -> void:
@@ -162,4 +227,11 @@ func _turnover() -> BeatSheet.Beat:
 	var beat := BeatSheet.Beat.new()
 	beat.kind = BeatSheet.Kind.TURNOVER
 	beat.is_counter = true
+	return beat
+
+
+func _coda(type: BaseAction.ActionType) -> BeatSheet.Beat:
+	var beat := BeatSheet.Beat.new()
+	beat.kind = BeatSheet.Kind.CODA
+	beat.coda_type = type
 	return beat

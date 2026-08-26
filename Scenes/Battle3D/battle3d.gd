@@ -122,8 +122,8 @@ var _pointer_vertex := Vector2i.ZERO
 # container SIZE to it (GameView keeps full resolution under stretch) and shrinks
 # only the display via scale.
 var _pip_native: Vector2 = Vector2(1280.0, 720.0)
-# Last frame's ai_locked, so the square-on realign fires once per AI turn, not per frame.
-var _ai_owned_camera := false
+# Last frame's playback_locked, so the square-on realign fires once per AI turn, not per frame.
+var _playback_owned_camera := false
 
 
 func _ready() -> void:
@@ -521,6 +521,9 @@ func _process(_delta: float) -> void:
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.
 	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
+	# The ZOOM half is gated on the menu alone (#520, dev 2026-08-26): while playback owns where
+	# the camera looks, the player still owns how far out it sits. A menu takes both.
+	_rig.zoom_input_enabled = demo_mode or not game.menu_is_up()
 	_poll_pointer()
 	_sync_brush_bindings()
 	_sync_brush_ghost()
@@ -533,11 +536,11 @@ func _process(_delta: float) -> void:
 # second follow seam, and because the 2D camera owns the tween the 3D inherits
 # Pacing.AI_SQUAD_PAN exactly — one number, one reader.
 #
-# ai_locked is the gate, NARROWER than _board_locked_for_player(): the latter also covers
+# playback_locked is the gate, NARROWER than _board_locked_for_player(): the latter also covers
 # MENU, and Mission Select opts out of the modal lock, so mirroring there would yank the rig
-# to a stale 2D position the moment a menu opened. ai_locked IS the fact "the AI owns
+# to a stale 2D position the moment a menu opened. playback_locked IS the fact "the AI owns
 # the 2D camera" — set in the same block as AI_TURN, cleared the moment it returns.
-# Re-read every frame, never latched: a turn handoff can re-enter set_ai_locked inside
+# Re-read every frame, never latched: a turn handoff can re-enter set_playback_locked inside
 # the previous turn's stack, so the flag can legitimately flicker for a frame.
 #
 # Narrower, and since #484 strictly so: the board lock READS this flag, so whenever this gate
@@ -550,11 +553,15 @@ func _mirror_camera() -> void:
 	# Square-on for the enemy phase (dev call 2026-08-14), on the EDGE into the turn rather
 	# than every frame: idempotent either way today, but the moment orbit is allowed to stay
 	# live under an AI turn a per-frame snap would fight the player's own drag.
-	if cam.ai_locked != _ai_owned_camera:
-		_ai_owned_camera = cam.ai_locked
-		if _ai_owned_camera:
+	if cam.playback_locked != _playback_owned_camera:
+		_playback_owned_camera = cam.playback_locked
+		if _playback_owned_camera:
 			_rig.align_to_detent()
-	if not cam.ai_locked:
+			# ...and frame from a known distance (#520). The EDGE is the whole design: reset once
+			# as playback takes the camera, then leave the wheel alone, so the player may zoom
+			# freely for the rest of it. Re-applying per frame would be a leash instead.
+			_rig.set_zoom(_rig.playback_distance)
+	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
 	# _rig.position.y, i.e. whatever the opening shot had left there — see _aim_over. Continuous

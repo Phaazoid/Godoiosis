@@ -171,6 +171,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
+		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
 		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
 
@@ -336,6 +338,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# The beat table (#519, umbrella #410). Playback pacing had never had a door -- these are the
 	# five #118 constants plus the battle-beat shape, all read at each pass, so a change applies
 	# from the next Execute with nothing standing to re-apply it to.
+	{"group": "Playback", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
 	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
@@ -366,6 +371,37 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Hold: counter turnover", "static": "HOLD_TURNOVER",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "The act break between the attacker's last swing and the defending line's answer. Held once per pass, not per counter."},
+	{"group": "Playback", "label": "Hold: a heal", "static": "HOLD_HEAL",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when HP came back -- a player-aimed heal or a reactive one. The table had no row for this until 2026-08-26, so a heal was the flattest thing a pass could contain."},
+
+	# One hold per side-channel verb (dev, 2026-08-26). Per VERB rather than one shared number
+	# because a rescue and a reload are not the same moment. Every SIDE_CHANNEL_ORDER member must
+	# have one -- tests/law/test_action_registry.gd refuses an undeclared verb.
+	{"group": "Playback", "label": "Hold: a rescue", "static": "HOLD_RESCUE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a body is picked up off the floor. Ships long: it is the loudest thing in the tail."},
+	{"group": "Playback", "label": "Hold: a capture", "static": "HOLD_CAPTURE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a zone is taken. Ships beside the rescue hold -- it is the moment a mission moves."},
+	{"group": "Playback", "label": "Hold: a rally", "static": "HOLD_RALLY",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when Will comes back."},
+	{"group": "Playback", "label": "Hold: an intimidate", "static": "HOLD_INTIMIDATE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when Will is drained out of someone."},
+	{"group": "Playback", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
+	{"group": "Playback", "label": "Hold: a burrow", "static": "HOLD_BURROW",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit digs itself cover."},
+	{"group": "Playback", "label": "Hold: a reload", "static": "HOLD_RELOAD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time for working the action. Ships short -- housekeeping, not drama."},
+	{"group": "Playback", "label": "Hold: a rev", "static": "HOLD_REV",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time for spinning a chainsword up. Ships short, beside the reload."},
 
 	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
 	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
@@ -498,6 +534,7 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
@@ -508,6 +545,15 @@ static func read_static(name: String) -> Variant:
 		"HOLD_IRON_WILL": return Pacing.HOLD_IRON_WILL
 		"HOLD_KNOCKBACK": return Pacing.HOLD_KNOCKBACK
 		"HOLD_TURNOVER": return Pacing.HOLD_TURNOVER
+		"HOLD_HEAL": return Pacing.HOLD_HEAL
+		"HOLD_RESCUE": return Pacing.HOLD_RESCUE
+		"HOLD_RALLY": return Pacing.HOLD_RALLY
+		"HOLD_INTIMIDATE": return Pacing.HOLD_INTIMIDATE
+		"HOLD_RELOAD": return Pacing.HOLD_RELOAD
+		"HOLD_REV": return Pacing.HOLD_REV
+		"HOLD_BURROW": return Pacing.HOLD_BURROW
+		"HOLD_CAPTURE": return Pacing.HOLD_CAPTURE
+		"HOLD_GUARD": return Pacing.HOLD_GUARD
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -551,6 +597,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
 		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
+		"PLAYBACK_PAN":
+			Pacing.PLAYBACK_PAN = value
+			return
 		"PLAYER_ACTION":
 			Pacing.PLAYER_ACTION = value
 			return
@@ -580,6 +629,33 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOLD_TURNOVER":
 			Pacing.HOLD_TURNOVER = value
+			return
+		"HOLD_HEAL":
+			Pacing.HOLD_HEAL = value
+			return
+		"HOLD_RESCUE":
+			Pacing.HOLD_RESCUE = value
+			return
+		"HOLD_RALLY":
+			Pacing.HOLD_RALLY = value
+			return
+		"HOLD_INTIMIDATE":
+			Pacing.HOLD_INTIMIDATE = value
+			return
+		"HOLD_RELOAD":
+			Pacing.HOLD_RELOAD = value
+			return
+		"HOLD_REV":
+			Pacing.HOLD_REV = value
+			return
+		"HOLD_BURROW":
+			Pacing.HOLD_BURROW = value
+			return
+		"HOLD_CAPTURE":
+			Pacing.HOLD_CAPTURE = value
+			return
+		"HOLD_GUARD":
+			Pacing.HOLD_GUARD = value
 			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value

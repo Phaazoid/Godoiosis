@@ -30,6 +30,9 @@ func init(guarding_unit: Unit, warded_unit: Unit) -> void:
 	guard_range = guarding_unit.get_guard_range()
 	action_type = BaseAction.ActionType.GUARD
 
+func aimed_at() -> Unit:
+	return target   # the ward -- what a Guard is about is who it covers
+
 func execute() -> void:
 	begin_execution()
 	if target != null and is_instance_valid(target) and not target.is_queued_for_deletion():

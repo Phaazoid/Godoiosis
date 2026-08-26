@@ -6,7 +6,7 @@
 # in 3D was ~1.3s of dead air per squad in front of a motionless frame.
 #
 # The follow is a MIRROR of the 2D camera (which already knows where the action is),
-# gated on ai_locked. Two cases below decide that gate, and both are written to fail
+# gated on playback_locked. Two cases below decide that gate, and both are written to fail
 # loudly if the gate is widened to _board_locked_for_player(): that predicate also
 # covers MENU, where Mission Select opts out of the modal lock.
 extends GdUnitTestSuite
@@ -39,6 +39,171 @@ func after_test() -> void:
 	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_scene)
 	_scene.free()
+
+
+# --- who owns the camera, and what the player keeps (#520) ------------------------------------
+
+# The #484 exclusion as a LAW over the flag rather than a scenario: whenever the mirror's gate is
+# open, _update_pointer's WRITE gate is shut. They read each other's target (the mirror READS the 2D
+# camera, the pointer WRITES it), so a frame running both marches the view to the pan limit. #520
+# widened the flag to cover a player's own pass, which is exactly when this could have broken.
+func test_the_mirror_gate_and_the_pointer_gate_are_never_open_together() -> void:
+	for locked in [false, true]:
+		_cam().set_playback_locked(locked)
+		await _settle()
+		assert_bool(_cam().playback_locked and not _game._board_locked_for_player()) \
+			.override_failure_message(
+				"the mirror may read the 2D camera while the pointer may still write it (#484)") \
+			.is_false()
+	_cam().set_playback_locked(false)
+
+
+# The dev's 2026-08-26 ruling: playback owns WHERE the camera looks, the player keeps HOW FAR OUT it
+# sits. Before #520 one flag killed orbit and wheel together for a whole AI turn.
+func test_the_player_keeps_the_zoom_wheel_while_playback_owns_the_camera() -> void:
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+	await _settle()
+	assert_bool(_game._board_locked_for_player()).override_failure_message(
+			"precondition: playback should own the board here").is_true()
+	assert_bool(_rig.zoom_input_enabled).override_failure_message(
+			"the zoom wheel died with the rest of the rig -- the split did not take").is_true()
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# A pass CLAIMS the camera and hands it back to whoever held it -- it does not simply unlock.
+# An AI turn owns the camera for its whole length and runs a pass inside it, so a blind release
+# would unlock the camera mid-turn and let the player drag the view out from under the enemy phase.
+func test_a_pass_inside_an_ai_turn_leaves_the_camera_still_owned() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_game.game_state = _game.GameState.AI_TURN
+	_cam().set_playback_locked(true)
+
+	await _game.order_executor.execute_orders(unit)   # empty queue: walks every phase, does nothing
+	await _settle()
+
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"the pass released the camera it borrowed -- an AI turn is unlocked mid-turn").is_true()
+	_cam().set_playback_locked(false)
+	_game.game_state = _game.GameState.IDLE
+
+
+# ...and the mirror image: a pass on the PLAYER's own turn gives the camera back when it ends, or
+# the board would stay locked to clicks forever after one Execute.
+func test_a_pass_on_the_players_own_turn_gives_the_camera_back() -> void:
+	var unit := _player_unit()
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"precondition: nothing should own the camera before the pass").is_false()
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_bool(_cam().playback_locked).override_failure_message(
+			"the pass kept the camera -- the board never unlocks after an Execute").is_false()
+
+
+# ...and a MENU takes it, because the surface on screen wants the wheel for itself. This is the
+# other half: a gate that never shuts is not a gate.
+func test_a_menu_takes_the_zoom_wheel_back() -> void:
+	_game.game_state = _game.GameState.MENU
+	await _settle()
+	assert_bool(_rig.zoom_input_enabled).override_failure_message(
+			"a menu is up and the wheel still zooms the board behind it").is_false()
+	_game.game_state = _game.GameState.IDLE
+
+
+# The move phase gets a camera too (dev, 2026-08-26: "when I moved on my turn, the camera just
+# kinda stared off into space"). #520 diff 1 wired only the volley beats, and it had ALSO taken the
+# player's own scroll away for the length of a pass -- so the move phase went from unframed-but-
+# scrollable to unframed-and-frozen.
+#
+# Asserted on follow_unit rather than a position: pan_to ends by handing over to follow(), and a
+# position would depend on the 2D camera's clamp against the board's own extent, i.e. on authored
+# content. Run inside a claimed camera (what an AI turn does) because the restore at the end of a
+# PLAYER pass clears follow_unit -- here the claim is put back, so the last pan survives to be read.
+#
+# LIMIT, stated rather than implied: pan_to snaps headless, so this pins the WIRE, not the ordering.
+# That the pan precedes the walk is structural -- the await sits above the phase.
+func test_the_move_phase_takes_the_camera_to_whoever_is_walking() -> void:
+	var mover := _mobile_player_unit()
+	assert_object(mover).override_failure_message(
+			"fixture: no player unit on this board can move").is_not_null()
+
+	_cam().set_playback_locked(true)
+
+	# Control first: the same pass with nothing queued must move the camera nowhere, or the case
+	# below would pass on any pan at all rather than on the move's.
+	await _game.order_executor.execute_orders(mover)
+	await _settle()
+	assert_object(_cam().follow_unit).override_failure_message(
+			"an empty pass panned the camera somewhere").is_null()
+
+	var moverange = _game.compute_move_range(mover)
+	var destinations: Array[Vector2i] = _game.get_move_range(moverange, mover)
+	var path := RulesService.reconstruct_path(moverange.came_from, mover.movement.cell, destinations[0])
+	var move := MoveAction.new()
+	move.init(mover, path, null)
+	assert_bool(_game.squad_manager.queue_action(mover.squad, move)).override_failure_message(
+			"fixture: the move was refused, so the pass would concede instead of playing").is_true()
+
+	await _game.order_executor.execute_orders(mover)
+	await _settle()
+
+	assert_object(_cam().follow_unit).override_failure_message(
+			"the move phase played with the camera pointed wherever it was left").is_same(mover)
+	_cam().set_playback_locked(false)
+
+
+# ...and so does the side-channel tail. ADDED BY FALSIFICATION, not by reasoning: deleting the
+# subjects argument from execute_orders' side-channel call left 587 cases green across presentation
+# and squad, because everything about codas was pinned at its two ENDS (the sheet builds them, the
+# schedule reads them) and nothing drove the wire between. #103's shape exactly.
+#
+# The camera is parked on ANOTHER unit first, so "it ended up on the rallier" cannot pass by the
+# camera simply never having moved. A rally is the cheapest coda to stage: no target, no terrain,
+# and _queue_action is the raw door the beat sheet suite already uses.
+func test_a_side_channel_verb_takes_the_camera_too() -> void:
+	var unit := _player_unit()
+	var elsewhere := _any_unit_besides(unit)
+	assert_object(elsewhere).override_failure_message(
+			"fixture: this board has only one unit").is_not_null()
+
+	var rally := RallyAction.new()
+	rally.init(unit)
+	unit.squad._queue_action(rally)
+
+	_cam().set_playback_locked(true)
+	_cam().follow(elsewhere)
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_object(_cam().follow_unit).override_failure_message(
+			"the tail played with the camera still pointed at whatever it was watching before") \
+		.is_same(unit)
+	_cam().set_playback_locked(false)
+
+
+func _any_unit_besides(other: Unit) -> Unit:
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit != other:
+			return unit
+	return null
+
+
+# A player unit that actually has somewhere to go -- a unit stranded on a terrace with no ramp off
+# it is a legal board and produces no move at all (the content razor's second hazard).
+func _mobile_player_unit() -> Unit:
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null or unit.get_faction() != Team.Faction.PLAYER:
+			continue
+		var reachable: Array[Vector2i] = _game.get_move_range(_game.compute_move_range(unit), unit)
+		if not reachable.is_empty():
+			return unit
+	return null
 
 
 func _cam() -> CameraController:
@@ -98,16 +263,16 @@ func _picked(cell: Vector2i) -> Vector3i:
 func test_the_3d_camera_follows_the_ai_camera() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
-	# `ai_locked and not _board_locked_for_player()` is the pair that must never exist -- the poll
+	# `playback_locked and not _board_locked_for_player()` is the pair that must never exist -- the poll
 	# re-derives on CAMERA movement since #471, so a fixture holding it lets the hover snap drag the
 	# 2D camera the mirror below is reading, and the two march the view to the pan limit.
 	#
 	# This comment used to say the pair was unreachable BECAUSE start_faction_turn writes AI_TURN and
 	# the flag together. That was false: game_state is transient, and set_dev_mode rested it on
-	# _base_state() mid-enemy-phase, which is #484. The predicate now READS ai_locked, so the line
+	# _base_state() mid-enemy-phase, which is #484. The predicate now READS playback_locked, so the line
 	# below is what makes the pair impossible rather than a claim about who writes what.
 	_game.game_state = _game.GameState.AI_TURN
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _cam().pan_to(unit)   # headless: lands on the destination and hands to follow
 	await _settle()
 	# Where the 2D camera went, in the 3D metric. The 2D answers WHERE; the BOARD answers how high
@@ -125,7 +290,7 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 
 	assert_that(_rig.position).override_failure_message(
 			"the 3D camera never followed the AI's pan").is_equal(expected)
-	_cam().set_ai_locked(false)
+	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
 
 
@@ -148,7 +313,7 @@ func test_hovering_does_not_drag_the_3d_camera() -> void:
 	assert_that(_scene._pointer_cell).is_equal(_picked(cell))
 	# ...and the 3D did not.
 	assert_that(_rig.position).override_failure_message(
-			"a hover dragged the 3D camera — the mirror is not gated on ai_locked").is_equal(before)
+			"a hover dragged the 3D camera — the mirror is not gated on playback_locked").is_equal(before)
 
 
 func test_opening_a_menu_does_not_yank_the_3d_camera() -> void:
@@ -158,7 +323,7 @@ func test_opening_a_menu_does_not_yank_the_3d_camera() -> void:
 	var before := _rig.position
 	_game.game_state = _game.GameState.MENU
 	assert_bool(_game._board_locked_for_player()).is_true()
-	assert_bool(_cam().ai_locked).is_false()
+	assert_bool(_cam().playback_locked).is_false()
 	_cam().snap_to_position(Vector2(-4000.0, -4000.0))
 	await _settle()
 
@@ -168,7 +333,7 @@ func test_opening_a_menu_does_not_yank_the_3d_camera() -> void:
 
 # #484, reported in play: the mouse became welded to the camera and ran the view to its limit in
 # whatever direction it moved. Toggling dev mode mid-enemy-phase rested game_state on _base_state(),
-# which unlocked the board while ai_locked stayed true -- opening _update_pointer's gate (it writes
+# which unlocked the board while playback_locked stayed true -- opening _update_pointer's gate (it writes
 # the hidden 2D camera) at the same time as _mirror_camera's (it reads it).
 #
 # Drives the REAL door: set_dev_mode, not a game_state poke. The rig assertion is the point -- the
@@ -176,7 +341,7 @@ func test_opening_a_menu_does_not_yank_the_3d_camera() -> void:
 # that only read the predicate would pass against a mirror wired straight to game_state.
 func test_toggling_dev_mode_during_an_ai_turn_leaves_the_board_locked() -> void:
 	_game.game_state = _game.GameState.AI_TURN
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _settle()
 	var before := _rig.position
 
@@ -202,22 +367,22 @@ func test_toggling_dev_mode_during_an_ai_turn_leaves_the_board_locked() -> void:
 			"the mouse dragged the 3D camera -- the pointer and the mirror both ran in one frame"
 			).is_equal(before)
 	_game.set_dev_mode(false)
-	_cam().set_ai_locked(false)
+	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
 
 
 # The second door onto the same pair (#484): clear_board rests game_state through exit_current_mode,
-# so a reload mid-enemy-phase reaches it too. Now that the lock READS ai_locked, an interrupted AI
+# so a reload mid-enemy-phase reaches it too. Now that the lock READS playback_locked, an interrupted AI
 # turn leaving the flag standing would lock the FRESH board for good -- so clear_board drops it,
 # beside the ai_factions reset it already does for the same "a new board inherits nothing" reason.
 func test_clearing_the_board_during_an_ai_turn_drops_the_ai_camera_lock() -> void:
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _settle()
 
 	_game.scenario_manager.clear_board()
 	await _settle()
 
-	assert_bool(_cam().ai_locked).override_failure_message(
+	assert_bool(_cam().playback_locked).override_failure_message(
 			"a cleared board kept the last turn's camera lock -- the new board is locked for good"
 			).is_false()
 	assert_bool(_game._board_locked_for_player()).override_failure_message(
@@ -372,7 +537,7 @@ func test_an_ai_turn_squares_the_camera_up() -> void:
 	# Dev call 2026-08-14: whatever angle the player left the camera at, the enemy phase
 	# plays out on an axis-aligned board.
 	_rig._target_yaw_degrees = 37.0
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _settle()
 	assert_float(_rig._target_yaw_degrees).override_failure_message(
 			"the AI turn did not square the camera up").is_equal_approx(0.0, 0.001)
@@ -386,13 +551,13 @@ func test_an_ai_turn_squares_the_camera_up() -> void:
 			"the realign re-fires every frame, not on entry").is_equal_approx(200.0, 0.001)
 
 	# And on the NEXT turn it takes the nearest detent, not zero.
-	_cam().set_ai_locked(false)
+	_cam().set_playback_locked(false)
 	await _settle()
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _settle()
 	assert_float(_rig._target_yaw_degrees).override_failure_message(
 			"it squared up to zero rather than to the nearest detent").is_equal_approx(180.0, 0.001)
-	_cam().set_ai_locked(false)
+	_cam().set_playback_locked(false)
 
 
 func test_space_recentres_the_diorama_on_the_pointer() -> void:
@@ -498,7 +663,7 @@ func test_the_ai_pan_aims_at_the_surface_too() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
 	_game.game_state = _game.GameState.AI_TURN
-	_cam().set_ai_locked(true)
+	_cam().set_playback_locked(true)
 	await _cam().pan_to(unit)
 	_rig.position = Vector3(_rig.position.x, 12.0, _rig.position.z)
 	await _settle()
@@ -508,5 +673,5 @@ func test_the_ai_pan_aims_at_the_surface_too() -> void:
 			"the parked height IS the surface here; the case proves nothing").is_true()
 	assert_float(_rig.position.y).override_failure_message(
 			"the AI pan kept the rig's inherited aim height").is_equal_approx(wanted.y, 0.01)
-	_cam().set_ai_locked(false)
+	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
