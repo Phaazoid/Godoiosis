@@ -93,11 +93,23 @@ The gambit as it stands — still **no death-save but a gambit for power**, acce
 > What IS new is the haul. `Unit.revive()` moves nobody, so a rescue on the old rule would have left
 > the unit standing at 1 HP in a lake it could never have walked into — *"we need the rescue function
 > to be what actually gets new lifecycle when rescuing from deep water, we need a valid tile next to
-> the rescuer to bring the drowning unit onto"* (dev, same day). So `RulesService.rescue_landing`
-> answers WHERE, keyed on *can this body stand here* rather than on water, and a body with no legal
-> bank is **not a rescue candidate at all** — the menu may not offer what execution cannot finish.
-> The landing is published by `SquadManager.resolve_plan` and drawn on the board before Execute, so
-> the pickup previews where it lands (Law #2); `RescueAction._haul_out` only replays it.
+> the rescuer to bring the drowning unit onto"* (dev, same day). So `RulesService.rescue_landings`
+> lists WHERE it may go, keyed on *can this body stand there* rather than on water, and a body with
+> no legal bank is **not a rescue candidate at all** — the menu may not offer what execution cannot
+> finish.
+>
+> **The PLAYER chooses which, and a rescue is a TWO-STEP order because of it** (dev, same day:
+> *"once rescue is chosen, I would like all of the valid tiles to flash, and the user to select the
+> tile to rescue to, and only once chosen does the rescue action queue"*). Picking the body commits
+> nothing; the banks flash, and the click on one queues the order carrying that cell as a STAMP
+> (`RescueAction.haul_to`, CaptureAction's frozen-snapshot precedent). A re-planned move that strands
+> the stamp REDS the row rather than relocating it — for a cell the player chose deliberately, moving
+> it quietly would be worse than refusing. A body on ordinary ground has one landing, its own cell,
+> and still queues in a single step: the second step exists for the haul, not for every rescue.
+>
+> `SquadManager.resolve_plan` publishes that stamp so the board draws the body on the chosen bank
+> before Execute (Law #2), and `RescueAction._haul_out` replays it. The stamp is the truth; the
+> projection is only its drawing, which is what leaves nothing to keep in sync.
 >
 > The gameplay consequence worth knowing: a body nobody can reach is a body nobody can save, and the
 > clock simply runs out. That is the deliberate other half of the shove CATCHING at the water's edge

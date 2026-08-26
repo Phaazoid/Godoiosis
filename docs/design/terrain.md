@@ -91,10 +91,17 @@ then takes the remainder — a lake is not a blow, and capping it would mean a u
 above `Abilities.IRON_WILL_DAMAGE_CAP` simply could not drown.
 
 **A rescue HAULS the body out** (dev, same day: *"we need a valid tile next to the rescuer to bring
-the drowning unit onto"*). `RulesService.rescue_landing` is the rule, keyed on *can the body stand
-here* rather than on WATER, so it covers whatever else ever makes a cell unstandable. A body with no
-legal bank is not a rescue candidate at all — the menu may not offer what execution cannot finish.
-See [will-and-death.md](will-and-death.md) → *Rescue*.
+the drowning unit onto"*). `RulesService.rescue_landings` lists every legal destination, keyed on *can the body stand there*
+rather than on WATER, so it covers whatever else ever makes a cell unstandable. A body with no legal
+bank is not a rescue candidate at all — the menu may not offer what execution cannot finish.
+
+**And the PLAYER chooses which** (dev, same day: *"once rescue is chosen, I would like all of the
+valid tiles to flash, and the user to select the tile to rescue to, and only once chosen does the
+rescue action queue"*). So the rule is a candidate LIST and picking the body commits nothing: the
+banks flash, the click on one queues the order, and the chosen cell is STAMPED on it at queue time
+(CaptureAction's precedent) so a re-planned move reds the row rather than silently relocating a cell
+the player picked. A body on ordinary ground has one landing — its own — and still queues in one
+step. See [will-and-death.md](will-and-death.md) → *Rescue*.
 
 **Two consequences worth knowing before tuning any of it.** A body in deep water is the first thing
 in the codebase that legally occupies a cell nothing may stand on, so `game.spawn_unit` takes an

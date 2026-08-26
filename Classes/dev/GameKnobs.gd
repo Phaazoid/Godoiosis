@@ -508,6 +508,8 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
+		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
@@ -559,6 +561,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
+		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
+		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
+		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
+		"PICK_FLASH_PERIOD": OverlayManager.PICK_FLASH_PERIOD = value
 		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
 		"PLAYER_ACTION":

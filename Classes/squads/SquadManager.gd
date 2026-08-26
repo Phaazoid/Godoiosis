@@ -590,7 +590,7 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
 	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue
 	# haul (#116) rides along, and clearing it is load-bearing rather than tidy: RulesService's
-	# rescue_landing reads the body's PROJECTED cell, so a haul left standing would be read back as
+	# rescue_landings reads the body's PROJECTED cell, so a haul left standing would be read back as
 	# where the body already is and freeze the answer at last pass's bank.
 	for unit in board.units:
 		unit.clear_projected_knockback()

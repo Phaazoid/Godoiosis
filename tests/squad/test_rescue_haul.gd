@@ -8,10 +8,12 @@
 # rescuer to bring the drowning unit onto." A unit revived standing in the lake is not a rescue.
 #
 # Three seams, and the cases below drive each at its own layer rather than through one end-to-end
-# path: RulesService.rescue_landing is the RULE, SquadManager.resolve_plan PUBLISHES it so the board
-# draws the body on the bank before Execute, and RescueAction._haul_out replays that published cell.
+# path: RulesService.rescue_landings is the RULE (a candidate LIST since the player picks, #116),
+# RescueAction.haul_to is the player's CHOICE stamped at queue time, SquadManager.resolve_plan
+# PUBLISHES that stamp so the board draws the chosen bank before Execute, and _haul_out replays it.
 # The publication case is the one that matters most -- both ends can be correct while nothing joins
-# them, which is #103's shape.
+# them, which is #103's shape. The MENU sequence is tests/ui/test_rescue_tile_pick.gd; every case
+# here would stay green against a build where picking the body still queued immediately.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
