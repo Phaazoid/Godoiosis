@@ -159,6 +159,10 @@ func test_executing_the_rescue_drags_the_body_onto_the_bank_and_revives_it() -> 
 
 	rescue.execute()
 
+	# This one is SELF-REFERENTIAL and cannot carry the case alone -- both sides read the published
+	# cell, so with nothing published they agree on the water and it passes (measured, against the
+	# no-publication mutant). It is here for what it says about DIVERGENCE; the walkability assertion
+	# below is the one with teeth, and it is what actually reddened.
 	assert_bool(ally.movement.cell == bank) \
 		.override_failure_message("execution landed the body somewhere the preview never drew") \
 		.is_true()

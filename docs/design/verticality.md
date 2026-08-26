@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #498 (2026-08-25).**
+**Canon checked through #539 (2026-08-26).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -583,11 +583,18 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
 
 - **The flight** travels the knockback distance at the unit's STARTING elevation. A cell higher
   than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
-  cell is flown over**; walls, water, bodies and off-board stop it exactly as before — water's
-  shoreline stop is deliberately untouched, since what a shove INTO water does is #116's still-open
-  fork.
+  cell is flown over**; walls, bodies and off-board stop it exactly as before. **WATER CATCHES it**
+  ([#116](https://github.com/Phaazoid/Godoiosis/issues/116), 2026-08-26): the flight ENTERS the
+  first cell the unit cannot stand on and stops *in* it, where it used to stop dry on the bank —
+  deliberately not the void's fly-over, because a hole cannot catch you and a lake can, and stopping
+  at the water's edge is what keeps the body inside a rescuer's reach. The stop question is
+  per-unit now (`RulesService.drowns_in` / `can_traverse`), which is why a Waterwalker is shoved
+  *onto* the water and stands there rather than being braced by ground it walks on every turn.
 - **The landing** resolves wherever the horizontal travel ends — distance spent *or* blocked early.
-  Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending lower =
+  Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending in **deep
+  water** = the water takes whatever the blow and the fall left, so the unit goes DOWN on the
+  ordinary clock and a rescue can haul it out (`terrain.md` → *Water — shallow vs deep*). Ending
+  lower =
   **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
   (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap
   so the cap stays absolute) and carries the #120 weight term (inert until gear has mass). Ending
@@ -735,11 +742,14 @@ the lethality rung is named (fall damage can change it), so `_resolve_knockback`
 with the *final* `predict` feeding the Will-spend stage; and the trail gained
 `knockback_path`, since a landing tumble can bend a shove once.
 
-The existing declared placeholder at that call site — a shove asks the CELL-level `is_walkable`, never
-the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — **stays declared and stays
-correct**. Being thrown is not walking. #259 resolved the cliff (fall damage) and the void
-(removal) at that stop; **water remains the open fork**, pinned by
-`test_water_still_stops_the_shove_at_the_shoreline`.
+The declared placeholder that used to live at that call site — a shove asks the CELL-level
+`is_walkable`, never the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — is
+**REPEALED as of [#116](https://github.com/Phaazoid/Godoiosis/issues/116) (2026-08-26)**. It was
+correct while water STOPPED a shove: bracing a Waterwalker against water braced everyone. Water
+SWALLOWS now, and the cell-level question would drown a unit that walks on water — so the shove asks
+`RulesService.drowns_in` and `can_traverse`, both per-unit, and a Waterwalker is shoved *onto* the
+water and stands there. #259 resolved the cliff (fall damage) and the void (removal) at that stop;
+#116 resolved the water, and `tests/law/test_falls.gd` pins all three.
 
 ---
 
@@ -808,7 +818,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
    The interlock closed as far as it can before content: the fall-damage **weight term is wired**
    (`FallRules`) and inert at weight 0; #120's distance bands + the weight-authoring pass stay on
-   #120, and #116 stays open for its water fork alone.
+   #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
+   the interlock is complete.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
 only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then
