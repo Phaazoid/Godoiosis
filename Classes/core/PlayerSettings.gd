@@ -23,6 +23,7 @@ enum Setting {
 	ALWAYS_SHOW_SQUAD_RINGS,
 	SHOW_DIALOG,
 	PHOTOSENSITIVITY,
+	BATTLE_ZOOM,
 }
 
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
@@ -49,6 +50,11 @@ const DEFS := {
 		"title": "Photosensitivity toggle",
 		"desc": "Hold flickering and strobing effects (like fire) at a steady brightness instead of animating them. For players sensitive to flashing lights.",
 		"default": false,
+	},
+	Setting.BATTLE_ZOOM: {
+		"title": "Battle zoom",
+		"desc": "Play out each clash with dramatic timing -- a killing blow, a Crisis or a last-gasp survival get held on. Turn off for a plainer, quicker pass.",
+		"default": true,
 	},
 }
 

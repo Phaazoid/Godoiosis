@@ -85,6 +85,24 @@ var cast: Array[Unit] = []
 var cells: Array[Vector2i] = []
 
 
+# The VOLLEY beats of one phase, in order. OrderExecutor's pause schedule reads these; the
+# punctuation beats around them are not things it executes.
+func volleys(counter: bool) -> Array[Beat]:
+	var found: Array[Beat] = []
+	for beat in beats:
+		if beat.kind == Kind.VOLLEY and beat.is_counter == counter:
+			found.append(beat)
+	return found
+
+
+# The act break before the counters, or null when the defending line never answers.
+func turnover() -> Beat:
+	for beat in beats:
+		if beat.kind == Kind.TURNOVER:
+			return beat
+	return null
+
+
 static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
 	var sheet := BeatSheet.new()
 	if squad == null or plan == null:

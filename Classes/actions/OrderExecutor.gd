@@ -77,15 +77,23 @@ func execute_orders(unit):
 				side_channel[action.action_type] = []
 			side_channel[action.action_type].append(action)
 
-	# One beat for the whole pass (#118). Keyed on the SAME is_ai_faction read the concede above
-	# makes, so a hotseat faction with AI off is a human and paces like one: an AI plan is being
-	# read for the first time, a player's was authored by the person watching it.
-	var beat: float = Pacing.AI_ACTION if game.ai_controller.is_ai_faction(squad.leader.get_faction()) else Pacing.PLAYER_ACTION
+	# The pass's own reading of itself (#524), consulted for PAUSES ONLY -- every action below still
+	# executes in this function's phase order, so nothing here can reorder playback (Law #2).
+	var sheet := BeatSheet.read(squad, plan)
+	var profile := Pacing.active_profile()
+	# Keyed on the SAME is_ai_faction read the concede above makes, so a hotseat faction with AI off
+	# is a human and paces like one: an AI plan is being read for the first time, a player's was
+	# authored by the person watching it. CINEMATIC ignores the fork (#410); BOARD keeps it.
+	var is_ai: bool = game.ai_controller.is_ai_faction(squad.leader.get_faction())
+	var beat: float = Pacing.base_for(profile, is_ai)
 
 	await _execute_action_phase_parallel(move_actions)
-	await _execute_action_sequence(plan.attacks, beat)
+	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai))
 	_apply_cell_effects(plan.cell_effects)
-	await _execute_action_sequence(plan.counters, beat)
+	# The act break, held once between the two montages rather than folded into the first counter --
+	# a turnover the counters then pace on top of, not instead of.
+	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
+	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai))
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
 		await _execute_action_sequence(batch, beat)
@@ -171,17 +179,32 @@ func _execute_action_phase_parallel(actions: Array):
 # (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
 # leaves no trailing pause before the squad's turn ends. An empty batch returns above, so a phase
 # with nothing in it costs nothing.
-func _execute_action_sequence(actions: Array, beat: float = 0.0):
+func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}):
 	if actions.is_empty():
 		return
 
 	for action in actions:
-		await Pacing.beat(self, beat)
+		# With a hold schedule, only the action that OPENS a beat pauses -- one blast is one moment
+		# however many it hits (#410), so a three-victim volley holds once instead of three times.
+		# Without one (the side-channel tail) every action takes the flat base beat, as before.
+		var hold: float = float(holds.get(action, 0.0)) if not holds.is_empty() else beat
+		await Pacing.beat(self, hold)
 		action.begin_execution()
 		action.execute()
 
 		while not action.execution_complete:
 			await get_tree().process_frame
+
+# Pause schedule for one phase: the action that OPENS each beat -> how long to hold before it.
+# Keyed by the beat's first SURVIVING member, so a volley whose lead was skipped (R7 downs the
+# counter-er) still pauses before the member that actually swings. Every action is executed either
+# way -- a skipped one is already a no-op inside AttackAction.execute; this decides only WHEN.
+func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: bool) -> Dictionary:
+	var holds: Dictionary = {}
+	for beat in beats:
+		if not beat.actions.is_empty():
+			holds[beat.actions[0]] = Pacing.duration_for(beat, profile, is_ai)
+	return holds
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them.

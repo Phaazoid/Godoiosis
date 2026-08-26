@@ -260,6 +260,7 @@ const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
 const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
 const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
+const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -327,6 +328,40 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
 		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
+
+	# The beat table (#519, umbrella #410). Playback pacing had never had a door -- these are the
+	# five #118 constants plus the battle-beat shape, all read at each pass, so a change applies
+	# from the next Execute with nothing standing to re-apply it to.
+	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
+	{"group": "Playback", "label": "Beat: an AI pass", "static": "AI_ACTION",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "The same base pause on an AI faction's pass, zoom off. Longer than yours on purpose: their plan is being read for the first time, yours was authored by the person watching it."},
+	{"group": "Playback", "label": "Beat: battle zoom on", "static": "CINEMATIC_ACTION",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Base pause before each blast with the battle zoom ON. Does not fork on whose pass it is -- the zoom fires for every combat, enemy assaults included."},
+	{"group": "Playback", "label": "Drama: zoom off", "static": "BOARD_DRAMA",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How much of the holds below apply with the zoom off. Ships at 0 -- flat, small pauses everywhere. Raise it to let a death land harder than a scratch on the plain board too."},
+	{"group": "Playback", "label": "Drama: zoom on", "static": "CINEMATIC_DRAMA",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The same multiplier with the zoom on. At 0 the zoom paces flat; above 1 every big moment stretches together, so this is the one dial for 'more dramatic' overall."},
+	{"group": "Playback", "label": "Hold: a unit goes down", "static": "HOLD_DOWN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time a blast earns for downing, killing, maiming or removing someone. Holds do NOT stack -- the largest single one wins -- so these numbers ARE the drama ranking. Set this under the shove hold and a shove outranks a death."},
+	{"group": "Playback", "label": "Hold: Crisis", "static": "HOLD_CRISIS",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when someone stands up surged instead of falling. The loudest thing that can happen to a unit, so it ships as the longest hold."},
+	{"group": "Playback", "label": "Hold: Iron Will save", "static": "HOLD_IRON_WILL",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when the Iron Will cap actually BIT -- that should have killed them and did not. The held breath, as against the blow that lands."},
+	{"group": "Playback", "label": "Hold: a shove", "static": "HOLD_KNOCKBACK",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when the hit knocked its target back. Pre-set small: a shove is worth a moment, not the moment a death gets."},
+	{"group": "Playback", "label": "Hold: counter turnover", "static": "HOLD_TURNOVER",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The act break between the attacker's last swing and the defending line's answer. Held once per pass, not per counter."},
 
 	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
 	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
@@ -459,6 +494,16 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
+		"AI_ACTION": return Pacing.AI_ACTION
+		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
+		"BOARD_DRAMA": return Pacing.BOARD_DRAMA
+		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
+		"HOLD_DOWN": return Pacing.HOLD_DOWN
+		"HOLD_CRISIS": return Pacing.HOLD_CRISIS
+		"HOLD_IRON_WILL": return Pacing.HOLD_IRON_WILL
+		"HOLD_KNOCKBACK": return Pacing.HOLD_KNOCKBACK
+		"HOLD_TURNOVER": return Pacing.HOLD_TURNOVER
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -500,6 +545,38 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
+		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
+		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
+		"PLAYER_ACTION":
+			Pacing.PLAYER_ACTION = value
+			return
+		"AI_ACTION":
+			Pacing.AI_ACTION = value
+			return
+		"CINEMATIC_ACTION":
+			Pacing.CINEMATIC_ACTION = value
+			return
+		"BOARD_DRAMA":
+			Pacing.BOARD_DRAMA = value
+			return
+		"CINEMATIC_DRAMA":
+			Pacing.CINEMATIC_DRAMA = value
+			return
+		"HOLD_DOWN":
+			Pacing.HOLD_DOWN = value
+			return
+		"HOLD_CRISIS":
+			Pacing.HOLD_CRISIS = value
+			return
+		"HOLD_IRON_WILL":
+			Pacing.HOLD_IRON_WILL = value
+			return
+		"HOLD_KNOCKBACK":
+			Pacing.HOLD_KNOCKBACK = value
+			return
+		"HOLD_TURNOVER":
+			Pacing.HOLD_TURNOVER = value
+			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
 			return   # read at each shove -- nothing standing to re-apply
