@@ -1712,8 +1712,37 @@ func _plane_entries() -> Array[Dictionary]:
 				continue
 			out.append({"source": source_id, "coords": coords,
 					"edges": GridUtils.wall_edges_of(data),
+					"data": data,
 					"name": GridUtils.authored_tile_display_name(data)})
 	return out
+
+
+# WHICH of a wall's slabs wear the tile's OWN sprite is a fact about how this SHEET draws that
+# material, and the meshlib generator is its only reader — so a wrong answer reddens nothing in a
+# running game, it just bakes a wall you can see over (#554, and the artifact half is
+# tests/law/test_a_wall_face_covers_its_slab.gd). Pinned per MATERIAL rather than per tile: a
+# palisade is drawn face-on across and foreshortened along, masonry is drawn as a PLAN of its
+# footprint in both axes, so its sprite is a picture of no wall at all.
+func test_a_wooden_wall_wears_its_own_art_across_and_a_stone_one_wears_none() -> void:
+	var wooden := 0
+	var stone := 0
+	for entry in _plane_entries():
+		var data: TileData = entry["data"]
+		var own := GridUtils.plane_own_art_edges(data)
+		if GridUtils.terrain_kind_of(data) == Terrain.Kind.ROCK:
+			stone += 1
+			assert_int(own).override_failure_message(
+					"'%s' is masonry — its art is a PLAN of the wall, so wearing it on a slab " \
+					% entry["name"] + "bakes a floating ribbon").is_equal(0)
+		else:
+			wooden += 1
+			assert_int(own).override_failure_message(
+					"'%s' is a palisade, drawn face-on across — its east/west slabs must wear the " \
+					% entry["name"] + "sprite, or a straight run stops reassembling un-squashed") \
+					.is_equal(GridUtils.EW_EDGES)
+	assert_bool(wooden > 0 and stone > 0).override_failure_message(
+			"the sheet has no wall in both materials (%d wooden, %d stone); the case is vacuous" \
+			% [wooden, stone]).is_true()
 
 
 # A PLANE is real geometry, not the billboard #255 shipped and the dev rejected: *"the fences don't
