@@ -269,3 +269,47 @@ func test_a_carried_weapons_battle_state_reloads_through_the_real_loader() -> vo
 
 	var loaded := _unit_at(Vector2i(1, 1))
 	assert_int((loaded.inventory[0] as KineticMaceWeaponInstance).charge).is_equal(2)
+
+
+# ==============================================================================
+#  A body in deep water (#116)
+# ==============================================================================
+
+# A drowning unit is the FIRST thing in the codebase that legally occupies a cell nothing may stand
+# on. spawn_unit refuses such a cell and apply_scenario only push_warnings when a spawn is refused,
+# so without the `is_body` exception a mid-battle save taken while someone is under would come back
+# one unit short -- and #144 gives players save slots, while every bug report snapshots the board,
+# so the report filed ABOUT a drowning would arrive missing the unit it was about.
+func test_a_body_in_deep_water_survives_a_round_trip() -> void:
+	var drowning := _spawn(Team.Faction.PLAYER, Vector2i(1, 1))
+	var witness := _spawn(Team.Faction.PLAYER, Vector2i(3, 3))
+	# Put it under the way a shove does: onto the water, then down. Painted through the BoardGrid
+	# door so the 3D mirror hears it, exactly as the brush would.
+	game.grid.paint(Vector2i(2, 2), 0, Vector2i(5, 6))   # the authored deep-water tile
+	drowning.movement.set_cell(Vector2i(2, 2))
+	drowning.force_down()
+
+	_round_trip()
+
+	# The witness is what tells a DROPPED unit from a board that failed to load at all.
+	assert_object(_unit_at(Vector2i(3, 3))) \
+		.override_failure_message("the board itself did not come back -- this case is vacuous") \
+		.is_not_null()
+	var loaded := _unit_at(Vector2i(2, 2))
+	assert_object(loaded) \
+		.override_failure_message("the drowning unit was DROPPED on load: spawn refused the water "
+			+ "cell, and apply_scenario only warns") \
+		.is_not_null()
+	assert_bool(loaded.is_downed()) \
+		.override_failure_message("it came back standing in a lake it could never have walked into") \
+		.is_true()
+
+
+func test_an_ACTIVE_unit_is_still_refused_a_cell_nothing_may_stand_on() -> void:
+	# The exception is for BODIES, not a hole in the placement rule: a standing unit on unwalkable
+	# ground is still the authoring fault BoardLint reports, and spawn still refuses it.
+	game.grid.paint(Vector2i(2, 2), 0, Vector2i(5, 6))
+	assert_object(game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(2, 2))).is_null()
+	assert_object(game.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(2, 2), true)) \
+		.override_failure_message("a body must still be placeable there -- that is the whole exception") \
+		.is_not_null()
