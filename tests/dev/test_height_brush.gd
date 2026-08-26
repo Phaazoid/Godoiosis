@@ -324,29 +324,44 @@ func test_shrinking_the_map_prunes_stranded_elevation() -> void:
 	assert_int(game.board_heights.elevation_at(inside)).is_equal(2)   # still has ground
 
 
-# ---- only flat ground can slope (#340) ----
+# ---- only GROUND can slope (#340, widened by #342) ----
 
-# Which tile stands up is ASKED of the tileset, never named by coords: authored content is not
+# Which tile is ground is ASKED of the tileset, never named by coords: authored content is not
 # pinnable (the content razor), and prop_shape is the same fact the gate itself reads.
-func _find_tile(standing: bool) -> Vector2i:
+#
+# It asked stands_up_of until #342 -- a DIFFERENT question, and a TUFT answers yes to both. Left
+# alone, this helper would have started handing the "standing" case a tile the gate now ALLOWS, so
+# whether the case below reddened would have come down to tileset ordering.
+func _first_tile_where(matches: Callable) -> Vector2i:
 	var source := game.grid.tile_set.get_source(_brush.selected_source) as TileSetAtlasSource
 	for i in source.get_tiles_count():
 		var coords := source.get_tile_id(i)
 		if source.get_tile_size_in_atlas(coords) != Vector2i.ONE:
 			continue
-		if GridUtils.stands_up_of(source.get_tile_data(coords, 0)) == standing:
+		var hit: bool = matches.call(source.get_tile_data(coords, 0))   # .call() erases to Variant
+		if hit:
 			return coords
 	return Vector2i(-1, -1)
 
 
+func _find_tile(ground: bool) -> Vector2i:
+	return _first_tile_where(func(data: TileData) -> bool:
+			return GridUtils.is_ground_shape(data) == ground)
+
+
+func _find_shape(shape: GridUtils.PropShape) -> Vector2i:
+	return _first_tile_where(func(data: TileData) -> bool:
+			return GridUtils.prop_shape_of(data) == shape)
+
+
 func test_a_tile_that_stands_up_paints_flat_however_the_rise_is_set() -> void:
 	# The dev's rule: "only tiles that are flat, not things like rocks, lanterns". A rock has no top
-	# face to tilt. The FLAT half is the control -- without it this case also passes against a gate
+	# face to tilt. The GROUND half is the control -- without it this case also passes against a gate
 	# that simply refused every rise.
-	var prop := _find_tile(true)
-	var ground := _find_tile(false)
+	var prop := _find_tile(false)
+	var ground := _find_tile(true)
 	assert_bool(prop != Vector2i(-1, -1) and ground != Vector2i(-1, -1)).override_failure_message(
-			"fixture: this source needs both a standing and a flat tile to tell the two apart"
+			"fixture: this source needs both a standing prop and a ground tile to tell them apart"
 			).is_true()
 	var cell := _hover_cell()
 	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(NORTH))
@@ -360,6 +375,31 @@ func test_a_tile_that_stands_up_paints_flat_however_the_rise_is_set() -> void:
 	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
 	assert_int(game.board_heights.ramp_rise_at(cell)).override_failure_message(
 			"the gate refused a rise to flat ground too, so it is not a gate").is_equal(NORTH)
+
+
+func test_a_TUFT_takes_a_rise_even_though_its_plants_stand_up() -> void:
+	# #342. A flowery-grass tuft is walkable GROUND with plants growing out of it, and the corner
+	# tool had been sloping one freely all along -- only the brush refused.
+	var tuft := _find_shape(GridUtils.PropShape.TUFT)
+	assert_bool(tuft != Vector2i(-1, -1)).override_failure_message(
+			"fixture: this source has no TUFT tile, so this case checks nothing"
+			).is_true()
+
+	# The two questions really do disagree about this tile, which is what makes the case a test of
+	# the WIDENING rather than of a tile that was already FLAT and would have passed before #342.
+	var source := game.grid.tile_set.get_source(_brush.selected_source) as TileSetAtlasSource
+	var data := source.get_tile_data(tuft, 0)
+	assert_bool(GridUtils.stands_up_of(data)).override_failure_message(
+			"fixture: a TUFT must read as STANDING, or this case is testing a flat tile"
+			).is_true()
+
+	var cell := _hover_cell()
+	_brush._rise_option.item_selected.emit(TileBrushTool.RISE_CYCLE.find(NORTH))
+	_brush.selected_tile = tuft
+	_dc.handle_tile_brush(_press(MOUSE_BUTTON_LEFT, true))
+	assert_int(game.board_heights.ramp_rise_at(cell)).override_failure_message(
+			"a tuft was refused a rise, though it is ground with plants standing on it"
+			).is_equal(NORTH)
 
 
 # ---- the readout ----

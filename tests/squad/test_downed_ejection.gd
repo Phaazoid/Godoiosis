@@ -170,7 +170,7 @@ func test_a_same_pass_rescue_revives_ejects_and_spends() -> void:
 		.override_failure_message("fixture failed to queue the friendly-fire attack").is_true()
 	game.refresh_action_queue(leader.squad)   # the real path: resolve -> store the plan the gate reads
 
-	game.queue_rescue(rescuer, victim)
+	game.queue_rescue(rescuer, victim, victim.get_projected_destination())
 	var rescue: RescueAction = null
 	for action in leader.squad.action_queue:
 		if action is RescueAction:

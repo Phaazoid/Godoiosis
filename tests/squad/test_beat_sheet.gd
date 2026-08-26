@@ -459,7 +459,9 @@ func _hold(unit: Unit) -> MoveAction:
 
 func _rescue(rescuer: Unit, body: Unit) -> RescueAction:
 	var action := RescueAction.new()
-	action.init(rescuer, body)
+	# The landing is the body's own cell: these beats are all DRY-GROUND rescues, so #116's haul
+	# never fires and nothing here is about where a body comes out.
+	action.init(rescuer, body, body.movement.cell)
 	return action
 
 

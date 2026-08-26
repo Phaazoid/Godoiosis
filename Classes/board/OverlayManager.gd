@@ -83,6 +83,12 @@ static var HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
 # ATTACK_BLOCKED layer derives its colour as the live reach modulate scaled by this. One factor,
 # never a second colour -- deriving keeps the heal-green fork and any tuned reach colour for free.
 static var BLOCKED_REACH_DIM := 0.45
+
+# The tile pick FLASHES its candidates (#116, dev 2026-08-26: "I would like all of the valid tiles to
+# flash"). Alpha rather than hue, so a pick that borrows the reach layer keeps whatever colour that
+# layer is wearing and only breathes; and a PERIOD rather than a rate, matching Pulse's own unit.
+static var PICK_FLASH_ALPHA := 0.9
+static var PICK_FLASH_PERIOD := 0.45
 # The two authoring-zone tints. Named because the 3D mirrors them (#231) and the parallel
 # stacks' rule is that a mirrored color is COPIED from here, never restated — a literal on
 # each side is two answers to "what colour is a patrol zone".
@@ -215,6 +221,8 @@ var _pulsing_units: Array[Unit] = []
 # may click this". Different channel, different meaning, deliberately not merged.
 var _pulsing_rings: Array[Unit] = []
 var _tile_pulse: Tween = null
+var _pick_flash: Tween = null
+var _pick_flash_base: Color = ATTACK_MODULATE   # replaced by the live value when a flash starts
 # What the reach fill was last painted for, so refresh_attack_reach_color can re-derive it.
 var _reach_attack: AttackData = null
 
@@ -393,6 +401,26 @@ func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
 	elif not pulse_tiles and _tile_pulse != null:
 		Pulse.stop(_tile_pulse, hover_overlay, &"modulate", HOVER_MODULATE)
 		_tile_pulse = null
+
+# Flash the cells a CELL pick is offering (#116). It pulses the pick layer's own modulate rather than
+# adding a channel of its own: the 3D mirror reads that modulate every frame, so one tween moves both
+# stacks -- the same reason set_attack_reach_color needs no 3D twin.
+#
+# The base is CAPTURED at start rather than read off ATTACK_MODULATE, and that is load-bearing: this
+# layer's colour is DERIVED from the aimed attack (set_attack_reach_color forks heal-green), so
+# restoring a constant would repaint the reach the next time targeting opened. Idempotent, because
+# game.exit_current_mode clears every pulse unconditionally and a pick may end without one running.
+func set_pick_flash(on: bool) -> void:
+	if on == (_pick_flash != null):
+		return
+	if on:
+		_pick_flash_base = attack_overlay.modulate
+		var peak := Color(_pick_flash_base.r, _pick_flash_base.g, _pick_flash_base.b, PICK_FLASH_ALPHA)
+		_pick_flash = Pulse.start(self, attack_overlay, &"modulate", _pick_flash_base, peak,
+			PICK_FLASH_PERIOD)
+	else:
+		Pulse.stop(_pick_flash, attack_overlay, &"modulate", _pick_flash_base)
+		_pick_flash = null
 
 # The typed local is load-bearing: a bare [] literal passed to an Array[Unit] parameter fails at
 # RUNTIME, not parse time (CLAUDE.md "Sharp edges").

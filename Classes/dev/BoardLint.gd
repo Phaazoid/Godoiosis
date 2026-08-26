@@ -102,7 +102,11 @@ static func _check_placement(game, board: BoardContext, found: Array[Dictionary]
 		var reason := ""
 		if grid.get_cell_tile_data(cell) == null:
 			reason = "off the map"
-		elif not board.is_walkable(cell):
+		elif not board.is_walkable(cell) and not unit.is_downed():
+			# A BODY is exempt (#116), the same exception spawn_unit takes: is_walkable answers "may
+			# a unit STAND here", and a drowning unit legitimately lies where nothing stands. Asked
+			# through is_downed rather than a saved flag so the button reads the LIVE board, which is
+			# this check's whole reason for existing.
 			reason = "a cell nothing may stand on"
 		if reason == "":
 			continue

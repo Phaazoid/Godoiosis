@@ -211,7 +211,7 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# feeds the Will-spend stage. predict is pure; the second call is the one that counts.
 	var landing: _Landing = null
 	if LethalityRules.predict(target_hypo, outcome.damage) != ResolvedOutcome.Lethality.KILLED:
-		landing = _knockback_landing(action, target_hypo, board)
+		landing = _knockback_landing(action, target, target_hypo, board)
 	if landing != null:
 		# The landing measures in height UNITS; the outcome reports LEVELS, since that is what the
 		# readout and the popup have always meant (#427). A half-level drop reports zero and costs
@@ -232,6 +232,22 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 		# happened to land on the cap (#524).
 		outcome.iron_will_held = outcome.damage > Abilities.IRON_WILL_DAMAGE_CAP
 		outcome.damage = mini(outcome.damage, Abilities.IRON_WILL_DAMAGE_CAP)
+
+	# Drowning (#116; dev, 2026-08-26: "falling into deep water = losing all one's health"). Computed
+	# AFTER the Iron Will clamp on purpose: the cap governs the HIT and stays absolute, and the water
+	# then takes whatever the hit left. A lake is not a blow, and capping it would mean a unit holding
+	# Iron Will above IRON_WILL_DAMAGE_CAP simply could not drown.
+	#
+	# DAMAGE rather than a lifecycle door of its own, which is what makes a drowning an ORDINARY down:
+	# the ladder below names the rung, so the Will cost, the maim when Will cannot pay it, the Crisis
+	# gambit, and finishing a body that is already DOWNED all arrive for free. A hit that alone downs
+	# its target leaves nothing to take (the clamp to 0), so the water can never promote a down into a
+	# kill -- and drowning is deliberately not the void's outright removal: it is a clock a rescuer can
+	# answer (RescueAction hauls the body out), which is what the two are meant to read as.
+	if landing != null and landing.drowned:
+		outcome.drown_damage = maxi(0, target_hypo.hp - outcome.damage)
+		outcome.damage += outcome.drown_damage
+		outcome.popups.append("Drowning!")
 
 	# --- thread the hypothetical forward (R4) ---
 	for s in outcome.states_removed:
@@ -358,6 +374,7 @@ class _Landing:
 	var landing_index := 0           # path index where flight ends -- the drop cell; tumble follows
 	var fall_units := 0              # in height units (#427); the outcome converts to whole levels
 	var removed := false
+	var drowned := false             # ended in water this unit cannot stand on (#116)
 
 
 # The AIRBORNE shove (#259, dev: "the drop occurs where the shove would move the unit to" -- so
@@ -365,7 +382,7 @@ class _Landing:
 # STARTING elevation; the landing resolves wherever the horizontal travel ends, whether the
 # distance ran out or a blocker halted it early. Pure -- reads the hypo position, mutates nothing;
 # _resolve_one applies the result after the rung is named.
-static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: BoardContext) -> _Landing:
+static func _knockback_landing(action: AttackAction, target: Unit, target_hypo: _Hypo, board: BoardContext) -> _Landing:
 	var distance := _source_knockback(action)
 	if distance <= 0 or board == null:
 		return null
@@ -385,14 +402,25 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 			pos = next
 			path.append(pos)
 			continue   # airborne: a hole cannot catch you mid-flight
-		# DECLARED, not an oversight (#115): a shove asks the CELL-level question
-		# (BoardContext.is_walkable), never the per-unit one (RulesService.can_traverse) that
-		# movement and GroupMoveSolver ask. So a Waterwalker is NOT shoved onto water — the
-		# ability lets you walk there under your own power, and being thrown is not walking.
-		# Water therefore still stops a shove at the shoreline: what a shove INTO water should
-		# DO is #116's deliberately open fork (#259 resolved the cliff and the void, not this).
-		if not board.is_walkable(next) or board.unit_at_cell(next) != null:
-			break   # wall / water / off-board / occupied: today's rule, unchanged
+		if board.unit_at_cell(next) != null:
+			break   # a body in the way halts the flight short of it, water or not
+		# WATER CATCHES rather than braces (#116) — the whole of the water half. The flight enters
+		# the first cell this unit cannot stand on and stops IN it, where it used to stop dry on the
+		# bank; "water stops the shove" is still true, one cell later. Deliberately NOT the void's
+		# fly-over: a hole cannot catch you and a lake can, and stopping at the water's EDGE is what
+		# leaves the body inside a rescuer's reach, which is the drown clock's whole point.
+		#
+		# Asked per UNIT (RulesService.drowns_in), which repeals #115's cell-level exception — see
+		# the reasoning there. A Waterwalker is unaffected and simply flies on.
+		if RulesService.drowns_in(next, target, board):
+			pos = next
+			path.append(pos)
+			break
+		if not RulesService.can_traverse(next, target, board):
+			break   # wall / off-board — the same per-unit question drowns_in asks, so a Waterwalker
+					# is shoved ONTO water and stands there rather than being braced by ground it
+					# walks on every turn. That is the rest of #115's repeal: the exception existed
+					# to keep water a wall for everyone, and water is not a wall any more.
 		pos = next
 		path.append(pos)
 	if pos == start:
@@ -419,16 +447,22 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 	if Terrain.edge_of_corners(corners, -dir) == Vector2i(flight_height, flight_height):
 		drop = 0
 	landing.fall_units = drop
+	# It ends in the water (#116). The fall above still counts — shoved off a cliff INTO a lake pays
+	# both, and the drown takes whatever is left. No tumble: a body in water slides nowhere.
+	if RulesService.drowns_in(pos, target, board):
+		landing.drowned = true
+		return landing
 	# "When a unit lands, if they land on a slope, they tumble down that too" (dev, 2026-08-20).
 	if Terrain.climb_of_corners(corners) > 0:
-		_tumble(landing, board, dir)
+		_tumble(landing, target, board, dir)
 	return landing
 
 
 # The tumble (#259): from a slope, slide its downhill -- continuing down slopes that keep descending
 # the same way -- until the first walkable, unoccupied cell level with the current one catches it.
-# A wall, a rise, an occupied cell, water or a hole stops it where it stands: no launch, no fall
-# damage on those. A sheer DROP below the slope's base (the deferred tumble-then-plummet) does NOT
+# A wall, a rise, an occupied cell or a hole stops it where it stands: no launch, no fall damage on
+# those. WATER no longer does (#116) — it is entered and drowns, the flight's own rule. A sheer DROP
+# below the slope's base (the deferred tumble-then-plummet) does NOT
 # stop it any more: the unit falls the remaining height -- fall damage, folded into fall_units --
 # and keeps whatever descent waits below (another slope tumbles again, a flat cell catches it).
 # Terminates by construction -- every continuation strictly descends.
@@ -438,14 +472,22 @@ static func _knockback_landing(action: AttackAction, target_hypo: _Hypo, board: 
 # direction the unit was shoved. We can eyeball it from there." So a cardinal ramp keeps sliding down
 # its OWN slope exactly as before, and a form that has no cardinal downhill carries on the way the
 # shove was already going -- provisional, and the one thing in this slice meant to be judged by eye.
-static func _tumble(landing: _Landing, board: BoardContext, shove_dir: Vector2i) -> void:
+static func _tumble(landing: _Landing, target: Unit, board: BoardContext, shove_dir: Vector2i) -> void:
 	var cell := landing.cell
 	while true:
 		var rise := board.ramp_rise_at(cell)
 		var down := shove_dir if rise == Terrain.RampRise.NONE else -Terrain.rise_direction(rise)
 		var next: Vector2i = cell + down
-		if board.unit_at_cell(next) != null or board.terrain_kind_at(next) == Terrain.Kind.VOID \
-				or not board.is_walkable(next):
+		if board.unit_at_cell(next) != null or board.terrain_kind_at(next) == Terrain.Kind.VOID:
+			break
+		# A slope that bottoms out in a lake puts the body IN the lake (#116) — the flight's own
+		# rule, applied to the slide, so the two cannot disagree about where a shoreline is.
+		if RulesService.drowns_in(next, target, board):
+			landing.drowned = true
+			cell = next
+			landing.path.append(cell)
+			break
+		if not RulesService.can_traverse(next, target, board):
 			break
 		var here_elev := board.elevation_at(cell)
 		var next_elev := board.elevation_at(next)

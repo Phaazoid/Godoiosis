@@ -144,6 +144,12 @@ enum PropShape { FLAT, BILLBOARD, CUBE, FACETED, ROUND, PLANE, TUFT }
 const SOLID_SHAPES: Array[PropShape] = [PropShape.CUBE, PropShape.FACETED, PropShape.ROUND,
 		PropShape.PLANE]
 
+# Which shapes ARE the ground rather than something sitting on it (#342). NOT the inverse of
+# stands_up_of, and that is the whole point: a TUFT stands up AND is ground -- its plants are
+# billboards, so it stands, while the cell itself is walkable ground with things growing out of it
+# (#280). Those are two questions that happened to agree until TUFT existed.
+const GROUND_SHAPES: Array[PropShape] = [PropShape.FLAT, PropShape.TUFT]
+
 # Which cell EDGES a PLANE's wall runs out to (#263). A FLAG SET rather than a yaw, because a corner
 # piece reaches TWO -- fence_tl runs east and south -- and one angle cannot say that. Each authored
 # edge becomes a half-length slab from the cell centre out to it, so a straight run is two collinear
@@ -265,6 +271,13 @@ static func stands_up_of(data: TileData) -> bool:
 
 static func stands_up_at_cell(grid: TileMapLayer, cell: Vector2i) -> bool:
 	return stands_up_of(grid.get_cell_tile_data(cell))
+
+
+# Is this tile's own surface the GROUND? Asked by anything deciding what may be shaped like terrain
+# -- the tile brush's rise gate is the first (#342). An unauthored tile reads FLAT, so it is ground,
+# the same permissive default prop_shape_of gives everywhere else.
+static func is_ground_shape(data: TileData) -> bool:
+	return GROUND_SHAPES.has(prop_shape_of(data))
 
 
 static func get_terrain_icon_at_cell(grid: TileMapLayer, cell: Vector2i) -> Texture2D:

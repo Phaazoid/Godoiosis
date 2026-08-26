@@ -252,7 +252,11 @@ func apply_scenario(scenario: ScenarioData) -> void:
 	for entry in valid_entries(scenario):
 		# Handed WITHOUT the old outer duplicate (#177): UnitFactory copies anyway, and the copy
 		# here was destroying resource_path — the provenance a reference entry exists to keep.
-		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell)
+		# The saved lifecycle is passed, not looked up (#116): a DOWNED entry may lie on ground
+		# nothing may STAND on -- deep water -- and without this the load would silently drop it.
+		# A reference entry (state_saved false) is authored cast, never mid-drown, so ACTIVE is right.
+		var unit: Unit = game.spawn_unit(entry.unit_data, entry.cell,
+			entry.state_saved and entry.lifecycle_state == Unit.LifecycleState.DOWNED)
 		if unit == null:
 			push_warning("Could not spawn unit at %s (blocked or off-map)" % entry.cell)
 			continue

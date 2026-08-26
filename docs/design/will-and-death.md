@@ -4,7 +4,7 @@
 >
 > **Co-dev grilled 2026-07-04 (Fable 5 session):** the open forks are now resolved or deliberately punted — **maim effects designed (the limb-slot model)**, which-limb = fixed-rotation placeholder (prosthetics last), transmutation **strain = affordability-gated cost** (never touches the lifecycle), **AI Crisis = per-archetype stances**. **The limb-slot model + MOV derivation + verb locks are now BUILT (#56, 2026-07-15), and AI Crisis stances + the CRISIS lethality preview are now BUILT too (#57, 2026-07-15)** — see Implementation status below. **Transmutation strain (#60, 2026-07-20):** the channeling math (`forced_points`/`strain_cost`, gating `can_channel`'s leeway budget) is BUILT; the affordability payment/enforcement half (A7) is deliberately deferred — see [#76](https://github.com/Phaazoid/Godoiosis/issues/76) — so the dev can playtest the access rules without the HP-cost consequence yet.
 >
-> **Canon checked through #427 (2026-08-20).**
+> **Canon checked through #539 (2026-08-26).**
 
 Design direction first agreed 2026-06-15; **reframed 2026-06-24**. Builds on the implemented death floor (`Unit.unit_died` fan-out). Supersedes the wiki's random-dismemberment framing (Law #1) **and this doc's own pre-2026-06-24 "Will gates life" ladder** (see below).
 
@@ -81,6 +81,39 @@ The gambit as it stands — still **no death-save but a gambit for power**, acce
 
 - **Rally** — a **third main action** (beside Attack and Rescue; via `BaseAction.is_main_action()`). **As built (2026-06-25, simplified per dev call): a *regular* main action** — Move-then-Rally is allowed (no hunker-in-place), restoring a **flat diminishing amount** (`RALLY_BASE = 6`, then −`RALLY_FALLOFF = 2` per use that battle, dropped once it would give < 1), clamped to max. `rally_count` is battle-scoped (resets each mission, lives on the transient `Unit`). *Fuller vision (deferred):* consume the whole turn in place and restore only toward a **partial cap** (never full) so a safe pocket can't be milked — for now the diminishing amount + the max clamp do that job. Lean on **scenario pressure** to punish pure turtling (level-design). *(Optional later: gate Rally to units near their leader — the old "leader inspiration" idea's home.)*
 - The other in-fight relief valve is simply **rescue** — you recover *units* (drag the body back, fragile at 1 HP and low Will), not *nerve*.
+
+> **Rescue gained a second job with [#116](https://github.com/Phaazoid/Godoiosis/issues/116)
+> (2026-08-26): it puts the body somewhere it can STAND.** A shove into **deep water** takes whatever
+> health the blow and the fall left, so a drowning unit is an *ordinary* downed unit — same rung, same
+> `DOWNED_TURNS` clock, same verb — and the dev's ruling is what made that the whole mechanic:
+> *"Downing means getting set to one life. We don't need a no damage down — falling into deep water =
+> losing all one's health."* No new lifecycle path, and the Will cost, the maim when Will cannot pay,
+> the Crisis gambit and finishing a body that is already DOWNED all apply unchanged.
+>
+> What IS new is the haul. `Unit.revive()` moves nobody, so a rescue on the old rule would have left
+> the unit standing at 1 HP in a lake it could never have walked into — *"we need the rescue function
+> to be what actually gets new lifecycle when rescuing from deep water, we need a valid tile next to
+> the rescuer to bring the drowning unit onto"* (dev, same day). So `RulesService.rescue_landings`
+> lists WHERE it may go, keyed on *can this body stand there* rather than on water, and a body with
+> no legal bank is **not a rescue candidate at all** — the menu may not offer what execution cannot
+> finish.
+>
+> **The PLAYER chooses which, and a rescue is a TWO-STEP order because of it** (dev, same day:
+> *"once rescue is chosen, I would like all of the valid tiles to flash, and the user to select the
+> tile to rescue to, and only once chosen does the rescue action queue"*). Picking the body commits
+> nothing; the banks flash, and the click on one queues the order carrying that cell as a STAMP
+> (`RescueAction.haul_to`, CaptureAction's frozen-snapshot precedent). A re-planned move that strands
+> the stamp REDS the row rather than relocating it — for a cell the player chose deliberately, moving
+> it quietly would be worse than refusing. A body on ordinary ground has one landing, its own cell,
+> and still queues in a single step: the second step exists for the haul, not for every rescue.
+>
+> `SquadManager.resolve_plan` publishes that stamp so the board draws the body on the chosen bank
+> before Execute (Law #2), and `RescueAction._haul_out` replays it. The stamp is the truth; the
+> projection is only its drawing, which is what leaves nothing to keep in sync.
+>
+> The gameplay consequence worth knowing: a body nobody can reach is a body nobody can save, and the
+> clock simply runs out. That is the deliberate other half of the shove CATCHING at the water's edge
+> instead of flying over — most bodies end up one cell from shore, so the window is usually real.
 
 > **Resolved by the #124 build, 2026-08-09 — kept as the record of what blocked it. Filed 2026-07-31 as ([#124](https://github.com/Phaazoid/Godoiosis/issues/124)): you cannot yet plan a rescue for someone who goes down *in the pass you are planning*.** The dev's case: queue an attack you know will draw a fatal counter, and queue an ally to pick the body up in the same plan. **Execution already supports it** — side-channel verbs run after counters and before the deferred ejection sweep, and `RescueAction.execute`'s `is_downed()` guard would be satisfied by then. What refuses it is all plan-time: the menu's candidate list (`RulesService.adjacent_downed_allies`) reads the *live* board, `SquadPlanValidator._revalidate_rescues` fires "no longer down" immediately, and the adjacency check compares against the target's live cell rather than its projected one. The prediction it would read already exists (`ResolvedOutcome.lethality`), so this is a wiring question, not a new predictor. **Ejection still stands either way** — a unit revived mid-pass is still handed to `handle_unit_downed` at pass end, which is the dev's own stated expectation and matches `Unit.revive()`'s "does NOT auto-rejoin the old one" note.
 >

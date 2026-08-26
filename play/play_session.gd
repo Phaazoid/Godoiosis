@@ -195,8 +195,10 @@ func rescue(rescuer_handle: String, target_handle: String) -> Dictionary:
 		return {"ok": false, "error": "no unit '%s'" % target_handle}
 	if not RulesService.adjacent_downed_allies(rescuer, _board()).has(target):
 		return {"ok": false, "error": "%s is not an adjacent downed ally of %s" % [target_handle, rescuer_handle]}
+	# The headless API has no tile pick either, so it takes the first landing like the AI (#116) --
+	# the deterministic answer the rule gave before the player was handed the choice.
 	var action := RescueAction.new()
-	action.init(rescuer, target)
+	action.init(rescuer, target, RulesService.rescue_landings(rescuer, target, _board())[0])
 	if not squad_manager.queue_action(rescuer.squad, action):
 		return {"ok": false, "error": "%s can't rescue now (already has a main action, or another squad is active)" % rescuer_handle}
 	return {"ok": true, "summary": "%s -> rescue %s" % [rescuer_handle, target_handle]}

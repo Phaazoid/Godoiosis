@@ -329,7 +329,11 @@ func _tile_readout_lines(cell: Vector2i) -> Array[String]:
 		lines.append(line)
 	var kind: Terrain.Kind = board.terrain_kind_at(cell)
 	if kind == Terrain.Kind.WATER:
-		lines.append(Glossary.short(Glossary.Term.WATER_TILE))
+		# One Kind, two tiles (#116) — so the card asks the same question the rules ask: water you
+		# cannot stand on is the DEEP kind. Reading walkability rather than a second enum member is
+		# what makes a FROZEN cell read as the shallow line for free, since is_walkable knows state.
+		lines.append(Glossary.short(Glossary.Term.WATER_TILE if not board.is_walkable(cell)
+			else Glossary.Term.SHALLOW_WATER))
 	var data: TileData = game.grid.get_cell_tile_data(cell)
 	if data != null and data.has_custom_data("move_cost"):
 		var cost: int = data.get_custom_data("move_cost")

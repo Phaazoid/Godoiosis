@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #498 (2026-08-25).**
+**Canon checked through #546 (2026-08-26).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -583,11 +583,18 @@ So a shove is **one flight, one landing** (`PlanResolver._knockback_landing`):
 
 - **The flight** travels the knockback distance at the unit's STARTING elevation. A cell higher
   than that **braces** it ("you cannot be pushed uphill" — the flight stops before it); a **VOID
-  cell is flown over**; walls, water, bodies and off-board stop it exactly as before — water's
-  shoreline stop is deliberately untouched, since what a shove INTO water does is #116's still-open
-  fork.
+  cell is flown over**; walls, bodies and off-board stop it exactly as before. **WATER CATCHES it**
+  ([#116](https://github.com/Phaazoid/Godoiosis/issues/116), 2026-08-26): the flight ENTERS the
+  first cell the unit cannot stand on and stops *in* it, where it used to stop dry on the bank —
+  deliberately not the void's fly-over, because a hole cannot catch you and a lake can, and stopping
+  at the water's edge is what keeps the body inside a rescuer's reach. The stop question is
+  per-unit now (`RulesService.drowns_in` / `can_traverse`), which is why a Waterwalker is shoved
+  *onto* the water and stands there rather than being braced by ground it walks on every turn.
 - **The landing** resolves wherever the horizontal travel ends — distance spent *or* blocked early.
-  Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending lower =
+  Ending on a VOID (blown onto it, or halted mid-flight over it) = **removed**. Ending in **deep
+  water** = the water takes whatever the blow and the fall left, so the unit goes DOWN on the
+  ordinary clock and a rescue can haul it out (`terrain.md` → *Water — shallow vs deep*). Ending
+  lower =
   **fall damage** for the full levels dropped — `FallRules.damage_for`, which **bypasses DEF**
   (dev: armor does not stop gravity; it joins the total after mitigation, before the Iron Will cap
   so the cap stays absolute) and carries the #120 weight term (inert until gear has mass). Ending
@@ -735,11 +742,14 @@ the lethality rung is named (fall damage can change it), so `_resolve_knockback`
 with the *final* `predict` feeding the Will-spend stage; and the trail gained
 `knockback_path`, since a landing tumble can bend a shove once.
 
-The existing declared placeholder at that call site — a shove asks the CELL-level `is_walkable`, never
-the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — **stays declared and stays
-correct**. Being thrown is not walking. #259 resolved the cliff (fall damage) and the void
-(removal) at that stop; **water remains the open fork**, pinned by
-`test_water_still_stops_the_shove_at_the_shoreline`.
+The declared placeholder that used to live at that call site — a shove asks the CELL-level
+`is_walkable`, never the per-unit `can_traverse`, so a Waterwalker is not shoved onto water — is
+**REPEALED as of [#116](https://github.com/Phaazoid/Godoiosis/issues/116) (2026-08-26)**. It was
+correct while water STOPPED a shove: bracing a Waterwalker against water braced everyone. Water
+SWALLOWS now, and the cell-level question would drown a unit that walks on water — so the shove asks
+`RulesService.drowns_in` and `can_traverse`, both per-unit, and a Waterwalker is shoved *onto* the
+water and stands there. #259 resolved the cliff (fall damage) and the void (removal) at that stop;
+#116 resolved the water, and `tests/law/test_falls.gd` pins all three.
 
 ---
 
@@ -808,7 +818,8 @@ Split so each is one reviewable diff and one feel-check, per the bite-sized-part
    plus [#431](https://github.com/Phaazoid/Godoiosis/issues/431)'s drop pointer that followed it.
    The interlock closed as far as it can before content: the fall-damage **weight term is wired**
    (`FallRules`) and inert at weight 0; #120's distance bands + the weight-authoring pass stay on
-   #120, and #116 stays open for its water fork alone.
+   #120 — and **#116's water fork CLOSED 2026-08-26** (terrain.md → *Water — shallow vs deep*), so
+   the interlock is complete.
 
 The dev-tools painting ticket (below) **landed out of order, as #260** — slice 1's store shipped with
 only a throwaway readout, so nothing could author a terrace for slices 2 and 3 to be felt on. Then
@@ -989,12 +1000,13 @@ Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two
 > (`Terrain.gradient_of_corners`) rather than a twelve-entry table, so the mesh and the rules cannot
 > drift about which way a cell climbs.
 
-- **Only flat tiles may SLOPE — but every tile gets a variant (amended by
-  [#342](https://github.com/Phaazoid/Godoiosis/issues/342), 2026-08-25).** The dev's rule is about
+- **Only GROUND may SLOPE — but every tile gets a variant (amended by
+  [#342](https://github.com/Phaazoid/Godoiosis/issues/342), 2026-08-25/26).** The dev's rule is about
   authoring: *"only tiles that are flat, not things like rocks, lanterns, etc. grass, mud, etc."*
-  The gate is `GridUtils.stands_up_of` — the existing `prop_shape` derivation, not a new predicate —
-  and it lives in `TileBrushTool.selected_rise()` so the GHOST reads it too; gated at the paint site
-  instead, the preview would show a sloping rock the click then refuses.
+  The gate is `GridUtils.is_ground_shape` — a `prop_shape` derivation, not a stored flag — and it
+  lives in `TileBrushTool.selected_rise()` so the GHOST reads it too; gated at the paint site
+  instead, the preview would show a sloping rock the click then refuses. It read `stands_up_of` until
+  #342 round 2; see *"is this GROUND?" is not the inverse of "does this STAND UP?"* below.
 
   **The meshlib generator used to share that gate, and that was the bug.** What a cap draws is not
   the tile's ART, it is the GROUND the tile stands on — which the generator's atlas pass has already
@@ -1011,16 +1023,24 @@ Measured cost: 293 variants, meshlib 325 → 618 items and 1.35 → 1.85 MB. Two
   documents still reach it — an empty cell, a rotated alternative, and **multi-cell art**, whose
   tiles the generator skips outright and which therefore have no block either. A standing prop no
   longer does. Without the fallback those cells render as a hole.
-- **A TUFT slopes, and its plants are planted per PLANT (#342).** `stands_up_of` reads a flowery
-  grass tuft as standing, so the tile brush still refuses it a rise — but a tuft is walkable ground,
-  and the corner tool slopes one whenever a neighbouring vertex is dragged, so the question this
-  entry used to defer (*"should a tuft slope at all?"*) was answered by #427 slice 4 shipping. A tuft
-  is the one prop whose parts are SPREAD ACROSS the square, so one surface point for the whole
-  assembly is only right while the square is level; each cluster now reads
-  `BoardSpace.surface_height_at` at **its own** point. It stays upright rather than tilting with the
-  ground — these are Y-billboards, and a plant grows up whatever the hill does, which is why
-  `surface_transform` (the answer this entry predicted) is the wrong seam for it. Widening the
-  brush's own gate to admit TUFT is still open on #342.
+- **A TUFT slopes, and its plants are planted per PLANT (#342).** The question this entry used to
+  defer (*"should a tuft slope at all?"*) was answered by #427 slice 4 shipping: the corner tool
+  slopes one whenever a neighbouring vertex is dragged, because it gates on GROUND. A tuft is the one
+  prop whose parts are SPREAD ACROSS the square, so one surface point for the whole assembly is only
+  right while the square is level; each cluster now reads `BoardSpace.surface_height_at` at **its
+  own** point. It stays upright rather than tilting with the ground — these are Y-billboards, and a
+  plant grows up whatever the hill does, which is why `surface_transform` (the answer this entry
+  predicted) is the wrong seam for it.
+- **"Is this GROUND?" is not the inverse of "does this STAND UP?" — #342 round 2 closed the brush's
+  half on that.** `GridUtils.stands_up_of` asks whether a tile stands ON the ground, which is right
+  for rendering: a tuft's plants really are billboards. The tile brush's rise gate borrowed it as a
+  proxy for *may this tile be shaped like terrain*, and the two agreed **only until TUFT existed**,
+  which answers yes to both. So a flowery-grass tile could be sloped by the corner tool and refused
+  by the brush — one board, two answers. `GridUtils.GROUND_SHAPES` / `is_ground_shape` is the second
+  question named once (`FLAT`, `TUFT`), and `TileBrushTool.selected_tile_is_ground` is its one
+  caller; rocks, fences and lanterns still paint flat however the picker is set. The brush stays the
+  CONSERVATIVE tool on purpose — the corner tool gates only on `has_ground`, so it will slope a rock,
+  and *"different tools for different situations"* is the standing ruling that keeps them apart.
 - **A prop follows its ground.** `BoardMirror._reconcile_prop` early-outs on identity, and until #342
   that identity was the TILE alone — so moving the ground under any prop left it sown at the old
   height. That is #471's law (*a poll compares every input its answer depends on*) one store along:

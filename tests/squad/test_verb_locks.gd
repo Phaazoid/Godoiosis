@@ -53,7 +53,7 @@ func test_queue_action_refuses_one_armed_rescue() -> void:
 	downed.lifecycle_state = Unit.LifecycleState.DOWNED
 	_lose_arm(rescuer)
 	var rescue := RescueAction.new()
-	rescue.init(rescuer, downed)
+	rescue.init(rescuer, downed, downed.movement.cell)   # dry ground: the landing IS its own cell (#116)
 	assert_bool(_sm.queue_action(rescuer.squad, rescue)).is_false()
 
 func test_queue_action_refuses_full_will_rally() -> void:

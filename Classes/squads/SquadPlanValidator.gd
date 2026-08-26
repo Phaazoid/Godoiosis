@@ -41,7 +41,7 @@ static func validate(squad: Squad, actions: Array[BaseAction], board: BoardConte
 	# hunted its victim on the cell its own shove had just cleared. No plan = attacks untouched.
 	if plan != null:
 		_revalidate_unit_attacks(actions, plan)
-		_revalidate_rescue_targets(actions, plan)
+		_revalidate_rescue_targets(actions, board, plan)
 
 	for action in actions:
 		if not action.is_valid:
@@ -210,13 +210,27 @@ static func _plan_found_a_target(plan: ResolvedPlan, aim: AttackAction) -> bool:
 # a target may legally not be down YET, provided this pass's own hits put it down before the side
 # channel runs. A cancelled attack un-predicts the down on the next resolve and the rescue falls
 # into red, still queued (one-way validity). No plan = rescues untouched, same as attacks.
-static func _revalidate_rescue_targets(actions: Array[BaseAction], plan: ResolvedPlan) -> void:
+static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardContext, plan: ResolvedPlan) -> void:
 	for action in actions:
 		if not (action is RescueAction):
 			continue
 		var rescue := action as RescueAction
 		if not RulesService.is_rescueable(rescue.target, plan):
 			rescue.add_validation_error("Rescue target won't be down")
+			continue
+		# And the CHOSEN cell must still be one it can be put on (#116). The player picked a bank at
+		# queue time and the order carries that stamp, so a re-plan that walks the rescuer away from
+		# it strands the order -- it goes RED and stays queued (one-way validity) rather than being
+		# silently relocated, which for a cell the player chose deliberately would be worse than
+		# refusing, and rather than fizzling at execute where the BREAK repeal (#155) calls a
+		# divergence a bug. CaptureAction's frozen-stamp ruling, one verb along.
+		#
+		# Out here with the lifecycle clause rather than beside adjacency inside the loop, and for the
+		# same reason: it reads PUBLISHED positions, which come out of the resolve that reads
+		# validity back.
+		if rescue.target != null and is_instance_valid(rescue.target) \
+				and not RulesService.rescue_landings(rescue.actor, rescue.target, board).has(rescue.haul_to):
+			rescue.add_validation_error("Can't pull them out to there any more")
 
 # Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an
 # order the resolver has never seen. Correct because the published knockback is the ALREADY-QUEUED
