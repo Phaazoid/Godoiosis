@@ -588,9 +588,13 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var terrain_reactions := TerrainReactionCatalog.get_all()
 
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
-	# pass's shove projections before recomputing; a unit's own queued move is untouched.
+	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue
+	# haul (#116) rides along, and clearing it is load-bearing rather than tidy: RulesService's
+	# rescue_landing reads the body's PROJECTED cell, so a haul left standing would be read back as
+	# where the body already is and freeze the answer at last pass's bank.
 	for unit in board.units:
 		unit.clear_projected_knockback()
+		unit.clear_projected_rescue()
 
 	# Standing Guards armed in an EARLIER pass (#414) — the enemy-phase case, and the whole point of
 	# the mechanic. Copied, oldest arm first, so "earlier-queued absorbs first" holds across passes
@@ -681,6 +685,26 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+
+	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto
+	# a cell beside its rescuer, and the board must DRAW it there rather than jump it on Execute
+	# (Law #2). Published here and not a line earlier: a reaction is derived from where the pass
+	# leaves its target, and rescues run last in the side channel, so a counter aiming at the
+	# hauled-out cell would be swinging at a body nobody has pulled yet.
+	#
+	# An ordinary rescue publishes NOTHING -- rescue_landing answers the body's own cell for anyone
+	# standing on ground they can hold, so the guard below is what keeps every pre-#116 rescue
+	# bit-for-bit unchanged rather than a special case inside it.
+	if board != null:
+		for action in squad.action_queue:
+			if action.action_type != BaseAction.ActionType.RESCUE:
+				continue
+			var rescue := action as RescueAction
+			if rescue.target == null or not is_instance_valid(rescue.target):
+				continue
+			var haul: Vector2i = RulesService.rescue_landing(action.actor, rescue.target, board)
+			if haul != GridUtils.NO_CELL and haul != rescue.target.get_projected_destination():
+				rescue.target.set_projected_rescue(haul)
 
 	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile on the burrower's
 	# projected cell. Routed through cell_effects so preview + execution consume the same object

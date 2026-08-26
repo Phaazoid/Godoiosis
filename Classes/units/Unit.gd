@@ -49,6 +49,8 @@ var worn_armor: ArmorData = null   # DEF seam (#55), real content since #89. Car
 
 var _projected_knockback_cell: Vector2i
 var _has_projected_knockback := false
+var _projected_rescue_cell: Vector2i
+var _has_projected_rescue := false
 
 # Battle-scoped elemental states (boolean — you have it or you don't). These live on
 # the transient Unit, NOT UnitInstance: they reset each mission, so the per-battle node
@@ -678,6 +680,23 @@ func set_projected_knockback(cell: Vector2i) -> void:
 func clear_projected_knockback() -> void:
 	_has_projected_knockback = false
 
+# The same shape one displacement later (#116): a queued rescue HAULS a body it cannot leave where it
+# lies out onto the bank, so the board draws it there rather than jumping it on Execute. Published by
+# the same SquadManager.resolve_plan pass, cleared beside the shove above — and the clearing is what
+# keeps RulesService.rescue_landing from reading its own last answer as the body's position.
+func set_projected_rescue(cell: Vector2i) -> void:
+	_projected_rescue_cell = cell
+	_has_projected_rescue = true
+
+func clear_projected_rescue() -> void:
+	_has_projected_rescue = false
+
+# What the resolve published as this body's haul-out cell, or NO_CELL. EXECUTION's reader: a rescue
+# replays the cell the plan drew rather than deriving a fresh one (Law #2 — execution never
+# re-enters the resolver), which is also what stops it landing somewhere the player was never shown.
+func projected_rescue() -> Vector2i:
+	return _projected_rescue_cell if _has_projected_rescue else GridUtils.NO_CELL
+
 # --- Projected position: the ONE derivation (#105) ---
 # Every "where will this unit end up?" question resolves through here. Two callers want genuinely
 # different things, and the two axes below are the ONLY legitimate differences between them —
@@ -686,14 +705,21 @@ func clear_projected_knockback() -> void:
 #   require_valid  An invalid move doesn't move anyone. TRUE everywhere EXCEPT plan validation,
 #                  which runs inside the fixed-point loop that COMPUTES is_valid and would
 #                  otherwise read its own half-finished output.
-#   use_knockback  Fall back to a queued shove's landing cell (#84). TRUE everywhere EXCEPT plan
-#                  validation: knockback comes out of a resolve pass that reads validity, so
-#                  letting validity read knockback back would close the loop.
+#   use_published  Fall back to a displacement a resolve pass PUBLISHED onto this unit — a shove's
+#                  landing (#84) or a rescue's haul (#116). TRUE everywhere EXCEPT plan validation:
+#                  both come out of a resolve pass that reads validity, so letting validity read
+#                  them back would close the loop. It was `use_knockback` until #116 gave the
+#                  resolve a second thing to publish; the axis is unchanged, its name was just one
+#                  displacement narrower than its reason.
 #
 # `actions` is passed rather than read off the squad because the hover preview validates a
 # HYPOTHETICAL queue (SquadManager.validate_squad_plan_preview).
-static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid: bool, use_knockback: bool) -> Vector2i:
-	var shoved: bool = use_knockback and unit._has_projected_knockback
+static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid: bool, use_published: bool) -> Vector2i:
+	# A rescue beats everything, because it runs LAST — the side channel, after every move and shove
+	# has played back. Same "later wins" reasoning that makes a real move beat a shove below.
+	if use_published and unit._has_projected_rescue:
+		return unit._projected_rescue_cell
+	var shoved: bool = use_published and unit._has_projected_knockback
 	for action in actions:
 		if action.actor != unit or action.action_type != BaseAction.ActionType.MOVE:
 			continue

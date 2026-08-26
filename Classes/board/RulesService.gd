@@ -30,6 +30,20 @@ static func can_traverse(cell: Vector2i, unit: Unit, board: BoardContext) -> boo
 	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
 		and unit.has_live_ability(Abilities.Id.WATERWALK)
 
+# Does this cell DROWN this unit — water it cannot stand on (#116)? One answer for all three sites a
+# shove asks it: where the flight stops, whether the landing goes under, and where a tumble ends.
+#
+# It REPEALS #115's declared exception ("a shove asks the cell-level is_walkable, never the per-unit
+# can_traverse — being thrown is not walking"), which was harmless while water STOPPED a shove:
+# bracing a Waterwalker against water braced everyone. Water SWALLOWS now, and the cell-level
+# question would drown a unit that walks on water. So the per-unit answer is the right one here, and
+# one comparison settles four cases — deep water takes an ordinary unit, a Waterwalker stands on it,
+# a FROZEN cell catches the shove (can_traverse already reads tile state, #109), and shallow water
+# is walkable, so nothing happens at all.
+static func drowns_in(cell: Vector2i, unit: Unit, board: BoardContext) -> bool:
+	return board.terrain_kind_at(cell) == Terrain.Kind.WATER \
+		and not can_traverse(cell, unit, board)
+
 # May this unit step FROM one cell TO an orthogonally adjacent one (#257)? The EDGE question, and
 # the reason elevation needs one at all: can_traverse above answers "may this unit be on that cell",
 # which cannot express "only via a ramp, and only along the ramp's slope".
@@ -261,8 +275,16 @@ static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: Resolv
 		if cell == origin:
 			continue
 		var other := board.projected_unit_at_cell(cell)
-		if other != null and other != unit and is_rescueable(other, plan) and not Team.is_enemy(unit.get_faction(), other.get_faction()):
-			result.append(other)
+		if other == null or other == unit or not is_rescueable(other, plan):
+			continue
+		if Team.is_enemy(unit.get_faction(), other.get_faction()):
+			continue
+		# Nowhere to drag it to is not a rescue (#116). Ordinary ground always has a landing — the
+		# body's own cell — so this only ever refuses a body on footing it cannot hold, i.e. deep
+		# water with no reachable bank. Offering it would preview a rescue execution cannot finish.
+		if rescue_landing(unit, other, board) == GridUtils.NO_CELL:
+			continue
+		result.append(other)
 	return result
 
 # The LIFECYCLE half of "may this unit be picked up?" -- one seam for the menu's candidate list,
@@ -278,6 +300,39 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 	if plan == null:
 		return target.is_downed()
 	return PlanResolver.projected_lifecycle(target, plan.hypo) == Unit.LifecycleState.DOWNED
+
+# WHERE a rescue puts the body (#116). A rescue puts a body somewhere it can STAND: from ordinary
+# ground that is where it already lies, so nothing moves and every rescue before this one is
+# unchanged. From ground it CANNOT stand on — deep water today, a thawed ice bridge later — the
+# rescuer drags it clear, and this is the cell it lands on. NO_CELL means there is nowhere to drag it
+# to, which is what makes such a body UN-rescueable rather than rescued into a fizzle.
+#
+# Keyed on "can the body stand here", never on WATER: what a rescue asks about is the body's FOOTING,
+# and a kind check would be a second answer that goes stale the first time anything else makes a cell
+# unstandable.
+#
+# BOTH cells are projected (#126's rule for the whole rescue surface): a rescue runs in the side
+# channel after every move and shove has landed, so it meets the body where the pass leaves it, from
+# where the rescuer ends up. The walk is in NEIGHBOURS declaration order — a fixed order rather than
+# a nearest-to-the-body sort, because Law #1 wants one tie-break and a distance answers no second
+# question here.
+#
+# IDEMPOTENT once SquadManager has published the haul: `from` then reads the bank, which the body CAN
+# stand on, so it short-circuits to that same cell. Which is why the publisher clears last pass's
+# projections before recomputing — inside the resolve, `from` is the body's real post-shove cell.
+static func rescue_landing(rescuer: Unit, body: Unit, board: BoardContext) -> Vector2i:
+	var from := body.get_projected_destination()
+	if can_traverse(from, body, board):
+		return from
+	var origin := rescuer.get_projected_destination()
+	for dir in NEIGHBOURS:
+		var cell: Vector2i = origin + dir
+		if not can_traverse(cell, body, board) or not height_step_ok(origin, cell, board):
+			continue
+		var occupant := board.projected_unit_at_cell(cell)
+		if occupant == null or occupant == body:
+			return cell
+	return GridUtils.NO_CELL
 
 # Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
 # adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a

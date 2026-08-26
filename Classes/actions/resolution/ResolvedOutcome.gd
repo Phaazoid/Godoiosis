@@ -37,6 +37,13 @@ var fall_levels: int = 0    # how far the unit actually FELL (#259 follow-up): t
 							# drop pointer deliberately does NOT read it (#431): it measures the
 							# trail's own surfaces, which is the only form that can see the SECOND
 							# drop a plummet adds.
+# Shoved into water this unit cannot stand on (#116) — the water's own component, whatever the hit
+# and the fall left, already folded into `damage` above. Recorded rather than derived because
+# afterwards nothing can tell a drowning from an ordinary down: both land on the DOWNED rung with the
+# target at 0, which is the point (a drowning IS a down, answerable by RescueAction's haul), and a
+# readout that wants to say WHY has no other witness. Never set beside `removed` — a VOID landing
+# returns before the water is asked.
+var drown_damage: int = 0
 # Shoved into a VOID (#259) — gone outright, the #116 kill doctrine. lethality reads KILLED so
 # every reader (AI removal tiers, the KILL icon, lifecycle_for → DEAD) lights up; this flag exists
 # because execution needs its own door — a 0-damage take_damage cannot kill an ACTIVE unit, so

@@ -30,7 +30,7 @@ enum Term {
 	# Elemental
 	ELEMENTS, WET, CHILLED, REACTIONS,
 	# Terrain
-	TERRAIN_KINDS, WATER_TILE, BURNING, BLAZE, FROZEN, COVER,
+	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, BLAZE, FROZEN, COVER,
 	# Will & lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
 	# Controls (the controls card, #182 -- key names are STATIC text: most controls are hardwired
@@ -425,10 +425,21 @@ static func _build_entries() -> Dictionary:
 			+ "movement cost and rules. Attacks can also change tiles: fire leaves grass burning "
 			+ "(bare dirt won't catch), ice freezes water. Hovering a tile that is anything other "
 			+ "than ordinary shows what it does."}
-	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Water",
-		"short": "Impassable to most units. Waterwalkers cross it; frozen, it carries anyone.",
-		"long": "Most units cannot enter water. A unit with Waterwalk crosses it freely, and frozen "
-			+ "water is solid ground for everyone — permanently, unless burned away."}
+	e[Term.WATER_TILE] = {"category": Category.TERRAIN, "title": "Deep water",
+		"short": "Too deep to stand in. Shoved in, a unit goes under — %d turns to be pulled out."
+			% Unit.DOWNED_TURNS,
+		"long": "Nothing walks into deep water, but a unit SHOVED in goes under: the water takes "
+			+ "whatever health the blow left, and the unit is down with the usual %d turns to be "
+			% Unit.DOWNED_TURNS
+			+ "rescued before it drowns. A rescuer beside the water drags the body out onto dry "
+			+ "ground next to them, so a body nobody can reach is a body nobody can save. A unit "
+			+ "with Waterwalk stands on the surface instead, and frozen water is solid ground for "
+			+ "everyone — permanently, unless burned away."}
+	e[Term.SHALLOW_WATER] = {"category": Category.TERRAIN, "title": "Shallow water",
+		"short": "Wadeable, but slow going. Being shoved in costs position and nothing else.",
+		"long": "Shallow water is crossed on foot at a high movement cost. It is ordinary ground "
+			+ "for every rule that matters — a shove lands in it harmlessly, and it is deep water, "
+			+ "not this, that drowns."}
 	e[Term.BURNING] = {"category": Category.TERRAIN, "title": "Burning",
 		"short": "On fire: %d damage to whoever stands here at end of turn. Burns out after %d turns."
 			% [Terrain.BURNING_TILE_DAMAGE, TerrainStateManager.STATE_DURATIONS[Terrain.TileState.BURNING]],

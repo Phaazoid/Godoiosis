@@ -1063,7 +1063,12 @@ func spawn_sandbox() -> void:
 # Returns null when the cell can't take a unit. NB: UnitFactory.create_unit already instantiated
 # the node, so every refusal path has to free it — an un-parented Unit is an orphan nothing else
 # will ever collect.
-func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
+# `is_body` is the DOWNED exception (#116): is_walkable answers "may a unit STAND here", and a body
+# is not standing. Deep water is the first ground anything can legally end up on without standing on
+# it, and without this a mid-battle save taken while someone is drowning DROPS that unit on load --
+# apply_scenario only push_warnings when a spawn refuses. The loader passes the entry's own saved
+# lifecycle; every other caller places a unit on its feet and keeps the default.
+func spawn_unit(data: UnitData, pos: Vector2i, is_body := false) -> Unit:
 	var unit: Unit = UnitFactory.create_unit(data, grid, pos)
 
 	if grid.get_cell_tile_data(pos) == null:
@@ -1075,7 +1080,7 @@ func spawn_unit(data: UnitData, pos: Vector2i) -> Unit:
 	# that movement, pathing and knockback all treat as solid ground. Occupancy stays a SEPARATE
 	# question: is_walkable answers "may a unit stand here", never "is someone already standing here".
 	#TODO later change the walkability half for various unit types, i.e. flyers can spawn on rocks, etc
-	if not _board().is_walkable(pos) or get_unit_at_cell(pos) != null:
+	if (not is_body and not _board().is_walkable(pos)) or get_unit_at_cell(pos) != null:
 		unit.queue_free()
 		return null
 
