@@ -162,6 +162,8 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	capture_board().write_into(scenario)
 	scenario.active_faction = turn_manager.active_faction()
 	scenario.objectives = game.mission_controller.objectives.duplicate()
+	scenario.lose_conditions = game.mission_controller.lose_conditions.duplicate()   # #101: what loses it
+	scenario.round_limit = game.mission_controller.round_limit
 	scenario.ai_factions = game.ai_controller.ai_factions()   # #150: who the computer plays here
 	scenario.look_preset = current_look_preset               # #253 part 2: the look it wears
 	scenario.camera_start = current_camera_start             # #234: where it opens, if authored
@@ -169,6 +171,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	scenario.tutorial_steps = current_tutorial_steps.duplicate()   # the lesson it cannot see on the board
 	scenario.captured_zones = game.mission_controller.captured_zone_names()
 	scenario.contested = game.mission_controller.is_contested()
+	scenario.rounds_elapsed = game.mission_controller.rounds_elapsed()
 
 	var entry_of: Dictionary = {}   # Unit -> its ScenarioUnitEntry, for the guard re-link below
 	for unit: Unit in units_root.get_children():
@@ -230,7 +233,9 @@ func apply_scenario(scenario: ScenarioData) -> void:
 
 	restore_board(BoardSnapshot.from_scenario(scenario))
 	game.mission_controller.set_objectives(scenario.objectives)
-	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested)
+	game.mission_controller.set_lose_conditions(scenario.lose_conditions, scenario.round_limit)   # #101
+	game.mission_controller.restore_progress(scenario.captured_zones, scenario.contested,
+			scenario.rounds_elapsed)
 	# Before any turn starts: MissionController._begin_turn runs after load_scenario returns, and
 	# start_faction_turn is what reads these. The set is REPLACED, not merged (#150).
 	game.ai_controller.set_ai_factions(scenario.ai_factions)

@@ -267,6 +267,7 @@ const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
 const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
+const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -326,6 +327,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Squad markers", "label": "Ring pulse brightness", "static": "SQUAD_RING_PULSE_GAIN",
 		"min": 1.0, "max": 3.0, "step": 0.05,
 		"tip": "How much brighter a squad ring goes at the top of its pulse while Join Squad is picking a squad. A gain on the ring's own hue, so a pulsing ring still reads as its squad's colour. 1.0 is no pulse at all. Takes effect on the next pick."},
+
+	# The mission clock's urgency cue (#101). Statics on MissionStatusPanel, which is 2D UI under the
+	# game's own ui_layer -- KNOBS resolves against the Battle3D host and structurally cannot reach
+	# it, so a class row is the only form available, not a preference.
+	{"group": "Mission HUD", "label": "Clock urgency threshold", "static": "URGENT_ROUNDS",
+		"script": MISSION_STATUS_SCRIPT, "min": 0.0, "max": 10.0, "step": 1.0,
+		"tip": "How many rounds must be left before the mission clock changes colour. This is the whole warning a player gets that they are running out of time -- the dev call was to colour the countdown rather than interrupt with a confirm, so set it high enough that the change lands while there is still something to do about it. Zero never warns."},
+	{"group": "Mission HUD", "label": "Clock urgency tint", "static": "URGENT_COLOR",
+		"script": MISSION_STATUS_SCRIPT,
+		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
 
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
@@ -497,6 +508,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Board markup colours": "Colours",
 	"Squad markers": "Colours",
 	"Unit HUD": "Unit HUD",
+	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
 	"World": "World",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
@@ -597,6 +609,8 @@ static func read_static(name: String) -> Variant:
 		"SLICE_COLOR": return ActionMenuController.SLICE_COLOR
 		"SLICE_SELECTED_COLOR": return ActionMenuController.SLICE_SELECTED_COLOR
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
+		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
+		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -764,6 +778,17 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SLICE_DISABLED_COLOR":
 			ActionMenuController.SLICE_DISABLED_COLOR = value
 			return
+		# The mission clock (#101). These DO need a re-apply: the status panel is push-refreshed from
+		# MissionController's write points, so with nothing happening on the board -- which is exactly
+		# when the dev is dragging this -- the row would not repaint until the next turn. #324's rule.
+		"URGENT_ROUNDS":
+			MissionStatusPanel.URGENT_ROUNDS = int(value)   # a stepped slider hands a float
+			_refresh_mission_status(host)
+			return
+		"URGENT_COLOR":
+			MissionStatusPanel.URGENT_COLOR = value
+			_refresh_mission_status(host)
+			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return
@@ -778,6 +803,17 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
 			manager.redraw_planned_paths()
 		_: manager.refresh_attack_reach_color()
+
+
+# The mission-status HUD's re-apply. Its one door is game.refresh_mission_status (#134), which is
+# where every other write point already goes -- no second repaint path for a knob.
+static func _refresh_mission_status(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	game_2d.refresh_mission_status()
 
 
 static func overlays_of(host: Node3D) -> BoardOverlays:

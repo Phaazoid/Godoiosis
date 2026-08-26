@@ -1,0 +1,30 @@
+[gd_resource type="Resource" script_class="UnitData" format=3]
+
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="1_qm0a0"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="2_5n7y1"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="3_5ri2x"]
+[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="4_wurcy"]
+[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="5_1dwru"]
+[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_u2pba"]
+[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_eugk5"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="8_1belm"]
+
+[resource]
+script = ExtResource("6_u2pba")
+display_name = "Bandit"
+portrait = ExtResource("5_1dwru")
+base_stats = Dictionary[int, int]({
+0: 20,
+1: 7,
+2: 2,
+3: 3,
+4: 3,
+5: 3,
+6: 7,
+7: 3
+})
+faction = 1
+map_sprite = ExtResource("3_5ri2x")
+move_sprite = ExtResource("4_wurcy")
+downed_sprite = ExtResource("1_qm0a0")
+starting_inventory = Array[ExtResource("7_eugk5")]([ExtResource("8_1belm")])

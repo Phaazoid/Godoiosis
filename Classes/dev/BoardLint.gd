@@ -23,8 +23,15 @@ class_name BoardLint
 # cannot be a finding here and is a CI case instead.
 
 # How bad is it? BLOCKS means the mission is not the mission you authored; DEGRADES means it plays
-# but something you set up quietly stops existing. Two tiers rather than a flat list because a
-# report that buries "unwinnable" under "wrong lighting" is a report you skim.
+# -- either something you set up quietly stops existing, or the board is set up a way you may not
+# have meant. Two tiers rather than a flat list because a report that buries "unwinnable" under
+# "wrong lighting" is a report you skim.
+#
+# ONLY BLOCKS REDS CI. test_every_shipped_mission_is_playable collects this tier and nothing else,
+# so putting a rule here declares that no shipped board may ever be in that state. A rule the dev
+# can legitimately WANT to be in belongs at DEGRADES, however loud it deserves to be -- see
+# _check_ai_factions. Nothing outside the report panel reads either tier: BLOCKS refuses no save
+# and gates no play, unlike AttackLint's, so the tier is a VOLUME control plus that CI gate.
 enum Severity { BLOCKS, DEGRADES }
 
 
@@ -35,6 +42,7 @@ static func check(game) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 
 	_check_objectives(game, found)
+	_check_lose_conditions(game, found)
 	_check_ai_factions(game, board, found)
 	_check_placement(game, board, found)
 	_check_cohesion(game, found)
@@ -67,10 +75,29 @@ static func _check_objectives(game, found: Array[Dictionary]) -> void:
 				% MissionRules.Objective.keys()[objective])
 
 
+# _check_objectives' twin one list over (#101): a lose condition declared with no parameter fires
+# the moment the mission starts. BLOCKS for the same reason -- a board lost on round one is not the
+# board that was authored. Same borrowed-rule discipline; MissionController owns it.
+static func _check_lose_conditions(game, found: Array[Dictionary]) -> void:
+	var mission: MissionController = game.mission_controller
+	for condition: MissionRules.LoseCondition in mission.lose_conditions_missing_setup():
+		_add(found, Severity.BLOCKS,
+			"Lose condition %s is declared but nothing is set for it -- this mission would be lost immediately."
+				% MissionRules.LoseCondition.keys()[condition])
+
+
 # #150, and the one rule this file owns. Commanding is gated on faction == active faction, so a
-# board that doesn't hand ENEMY to the computer doesn't stall on the enemy turn -- it hands the
-# player its own enemies. Scoped to ENEMY exactly as the test that used to hold this was: NEUTRAL
-# and ALLY AI stances are still undecided, so there is nothing to be wrong about yet.
+# board that doesn't hand ENEMY to the computer doesn't stall on the enemy turn -- you play both
+# sides. Scoped to ENEMY exactly as the test that used to hold this was: NEUTRAL and ALLY AI
+# stances are still undecided, so there is nothing to be wrong about yet.
+#
+# DEGRADES, NOT BLOCKS -- playing both sides is a THING THE DEV WANTS, not a fault (2026-08-26,
+# after this red-ed main on a freshly authored Level_2): "I want to be able to have levels with no
+# AI. controlling both sides is important to testing. If the tests and lint are redding that out,
+# they should be warnings, not hard stops." So an AI-less board must SHIP. It cannot be BLOCKS and
+# it cannot be silent either: ai_factions defaults to EMPTY, so a board the dev never thought about
+# and a board he chose look identical from here -- there is no flag that says "I meant it", which
+# is exactly why this reports rather than decides. Say it once, in amber, and let him ignore it.
 static func _check_ai_factions(game, board: BoardContext, found: Array[Dictionary]) -> void:
 	var enemies := 0
 	for unit: Unit in board.units:
@@ -81,9 +108,10 @@ static func _check_ai_factions(game, board: BoardContext, found: Array[Dictionar
 	var ai_controller: AIController = game.ai_controller
 	if ai_controller.ai_factions().has(Team.Faction.ENEMY):
 		return
-	_add(found, Severity.BLOCKS,
-		("%d ENEMY unit%s on this board, but ENEMY is not computer-controlled -- the player is "
-			+ "handed its own enemies. Tick it on Scenario > Squads & AI.")
+	_add(found, Severity.DEGRADES,
+		("%d ENEMY unit%s on this board, but ENEMY is not computer-controlled -- you will play "
+			+ "both sides. Deliberate on a hotseat or test board; if it isn't, tick it on "
+			+ "Scenario > Squads & AI.")
 			% [enemies, "" if enemies == 1 else "s"])
 
 

@@ -559,6 +559,7 @@ func _on_end_turn_button_pressed() -> void:
 func _on_round_completed() -> void:
 	terrain_states.tick_states()
 	overlay_manager.redraw_terrain_live(terrain_states)
+	mission_controller.advance_round()   # the mission clock's ONE tick (#101); the turn-start check() sees it
 
 # Per-unit state that decays at the owning faction's turn start (downed clocks, crisis surge,
 # weapon rev, …). One pass; each tick self-guards, so no per-effect pre-filter. Add a new
@@ -933,12 +934,17 @@ func refresh_action_queue(squad: Squad):
 	else:
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.READY)
 
-# The mission-status HUD (#134). Called from MissionController's five write points (check, capture,
-# set_objectives, restore_progress, reset) plus the dev Scenario tab's live objective toggle — the
-# refresh_action_queue pattern, not a signal. No objectives (sandbox, cleared board) hides the panel.
+# The mission-status HUD (#134). Called from MissionController's write points (check, capture,
+# set_objectives, set_lose_conditions, advance_round, restore_progress, reset) plus the dev Scenario
+# tab's live objective toggle — the refresh_action_queue pattern, not a signal. A board that declares
+# nothing (sandbox, cleared) hides the panel.
+#
+# The gate asks about lose conditions too (#101): a mission may author a clock and NO objectives, and
+# hiding its countdown is exactly the unplayable case the clock's own fork ruled against.
 func refresh_mission_status() -> void:
 	var instruction := scenario_director.active_instruction()   # tutorial row (#182) rides the same panel
-	if mission_controller.objectives.is_empty() and instruction == "":
+	if mission_controller.objectives.is_empty() and mission_controller.lose_conditions.is_empty() \
+			and instruction == "":
 		mission_status_panel.clear()
 		return
 	mission_status_panel.show_status(mission_controller, _board(), instruction)

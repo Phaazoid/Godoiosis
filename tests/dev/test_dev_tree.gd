@@ -180,8 +180,18 @@ func test_showing_resolves_the_nested_authoring_pair() -> void:
 # brush mode, it spawns a unit"). Driven through game.gd's real input arm rather than by calling
 # the spawner, because the gate is the thing under test -- and the roster count is what a spawn
 # actually costs, so a case asserting only that no error was raised would pass against the bug.
+#
+# The TARGET cell is authored via pointer_source (the #222 seam the 3D picker feeds), never left
+# to the mouse derivation: headless, the hover cell is f(camera transform, wherever the display
+# server puts the mouse), and the not-armed press below is itself a center_on_position -- so an
+# un-authored target sampled a mid-glide camera and forked by ENVIRONMENT, red on CI while green
+# on every local run (2026-08-26). Injecting the seam still drives the presenter's real update;
+# setting last_hovered_cell directly would be reclaimed by its _process one frame later.
 func test_space_spawns_only_from_the_spawn_page() -> void:
 	game.set_dev_mode(true)
+	var target := _spawnable_cell()
+	game.hover_presenter.pointer_source = func() -> Vector2i: return target
+
 	await _select("Tile Brush")
 	var before: int = game.units_root.get_child_count()
 	game._unhandled_input(_space())
@@ -191,12 +201,29 @@ func test_space_spawns_only_from_the_spawn_page() -> void:
 		"SPACE spawned a unit while the Tile Brush page was up").is_equal(before)
 
 	await _select("Spawn")
+	# Two gates between the press and a unit, asserted separately so a red names its half -- the
+	# old single message blamed the gate while the gate was fine and the CELL was refused.
+	assert_bool(game.dev_controller.spawn_armed()).override_failure_message(
+		"the Spawn page is up but the gate is not armed").is_true()
 	game._unhandled_input(_space())
 	await await_idle_frame()
 	var after_on_spawn: int = game.units_root.get_child_count()
 	assert_int(after_on_spawn).override_failure_message(
-		"SPACE did nothing on the page that owns it -- the gate is refusing everything") \
+		"SPACE was armed and aimed at %s (walkable, empty) and no unit appeared -- the spawn itself failed"
+			% str(target)) \
 		.is_greater(before)
+
+
+# First cell the board's own predicates accept -- the same is_walkable spawn_unit asks -- so this
+# case and the spawn gate cannot disagree about legality, and no authored content is pinned.
+func _spawnable_cell() -> Vector2i:
+	for cell: Vector2i in game.grid.get_used_cells():
+		if game._board().is_walkable(cell) and game.get_unit_at_cell(cell) == null:
+			return cell
+	assert_bool(false).override_failure_message(
+		"precondition: no walkable empty cell on the fixture board -- nothing above proves anything") \
+		.is_true()
+	return GridUtils.NO_CELL
 
 
 func _space() -> InputEventKey:
