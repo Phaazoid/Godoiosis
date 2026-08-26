@@ -86,9 +86,6 @@ func save_block_reason() -> String:
 		return "This mod changes scaling, so it needs a family — the change is measured against that family's main attack, and means nothing without one."
 	return ""
 
-# Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
-# WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's
-# comment for why this one field is per-weapon while the two below are per-unit.
 @export var replaces_main: WeaponAttackData = null
 # Swaps out the weapon's MAIN attack (#529) -- "the standard attack BECOMES this", which is how
 # half the mod bank is written. Composed in WeaponInstance.effective_main, proficiency-gated like
@@ -101,6 +98,9 @@ func save_block_reason() -> String:
 # Anything that changes how an attack is AIMED belongs here rather than in an override: Reach
 # reads a pattern with no wielder in hand, so a swapped pattern has to arrive as a whole attack.
 
+# Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
+# WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's
+# comment for why this one field is per-weapon while the two below are per-unit.
 @export var granted_attacks: Array[WeaponAttackData] = []
 
 # Abilities this mod grants while its weapon contributes (#74, copying ArmorData's field and its
@@ -120,7 +120,7 @@ static func property_tips() -> Dictionary:
 	return {
 		"id": "Stable internal name, for content that has to refer to this mod by something other than its display name.",
 		"display_name": "What the fitting picker and the weapon's space list call this mod.",
-		"size": "Capacity this mod costs in whichever space it is fitted to. Spaces hold 1 / 2 / 3, so a size-3 keystone only ever fits the big space.",
+		"size": "Capacity this mod costs in whichever space it is fitted to. Each space has its own capacity, authored on the template -- a plain family gets 1 / 2 / 3, so a size-3 keystone only ever fits that family's big space.",
 		"applies_to": "Which of the weapon's attacks this mod affects. Every Attack is the classic behaviour -- the mod is part of the weapon. Main Attack aims everything it does at the standard swing alone, so a mod can sharpen one attack without sharpening the rest.",
 		"power_delta": "Flat shift to damage, before scaling, on whichever attacks Applies To names. Negative is a real option -- a heavy mod that trades power for reach.",
 		"scaling_change": "How this mod re-mixes damage scaling. You author the absolute percentages you want; what is STORED is the shift from the family main attack's own blend, so the attacks Applies To names move by the same amount and keep their own character.",
