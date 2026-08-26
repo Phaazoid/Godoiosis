@@ -228,6 +228,9 @@ static func _resolve_one(action: AttackAction, reactions: Array[ElementalReactio
 	# damage cap on the holder. Composes with the floor above as an ordinary clamp — order is
 	# a non-issue since cap >= 0 makes max(0,min(cap,x)) == min(cap,max(0,x)) always.
 	if target.has_live_ability(Abilities.Id.IRON_WILL):
+		# Recorded BEFORE the clamp, because afterwards nothing can tell a capped hit from one that
+		# happened to land on the cap (#524).
+		outcome.iron_will_held = outcome.damage > Abilities.IRON_WILL_DAMAGE_CAP
 		outcome.damage = mini(outcome.damage, Abilities.IRON_WILL_DAMAGE_CAP)
 
 	# --- thread the hypothetical forward (R4) ---
