@@ -31,7 +31,9 @@ func _downed_ally(cell: Vector2i) -> Unit:
 
 func _queue_rescue(rescuer: Unit, ally: Unit) -> RescueAction:
 	var rescue := RescueAction.new()
-	rescue.init(rescuer, ally)
+	# The landing every case here wants is the body's own cell -- these are all DRY-GROUND rescues,
+	# so #116's haul never fires and the stamp is what rescue_landings itself would answer.
+	rescue.init(rescuer, ally, ally.get_projected_destination())
 	rescuer.squad._queue_action(rescue)
 	return rescue
 

@@ -681,21 +681,17 @@ func clear_projected_knockback() -> void:
 	_has_projected_knockback = false
 
 # The same shape one displacement later (#116): a queued rescue HAULS a body it cannot leave where it
-# lies out onto the bank, so the board draws it there rather than jumping it on Execute. Published by
-# the same SquadManager.resolve_plan pass, cleared beside the shove above — and the clearing is what
-# keeps RulesService.rescue_landing from reading its own last answer as the body's position.
+# lies out onto the bank, so the board draws it there rather than jumping it on Execute. What is
+# published is the cell STAMPED on the order — the one the player picked — never a fresh derivation,
+# so the drawing cannot disagree with what executes. Published by the same SquadManager.resolve_plan
+# pass and cleared beside the shove above; the clearing is what keeps RulesService.rescue_landings
+# from reading its own last answer as the body's position.
 func set_projected_rescue(cell: Vector2i) -> void:
 	_projected_rescue_cell = cell
 	_has_projected_rescue = true
 
 func clear_projected_rescue() -> void:
 	_has_projected_rescue = false
-
-# What the resolve published as this body's haul-out cell, or NO_CELL. EXECUTION's reader: a rescue
-# replays the cell the plan drew rather than deriving a fresh one (Law #2 — execution never
-# re-enters the resolver), which is also what stops it landing somewhere the player was never shown.
-func projected_rescue() -> Vector2i:
-	return _projected_rescue_cell if _has_projected_rescue else GridUtils.NO_CELL
 
 # --- Projected position: the ONE derivation (#105) ---
 # Every "where will this unit end up?" question resolves through here. Two callers want genuinely

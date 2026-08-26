@@ -6,16 +6,26 @@ class_name RescueAction
 # LEAVES it rather than where the plan was authored. Whether a body may be picked up at all is
 # RulesService.is_rescueable / adjacent_downed_allies, never here; this order carries it out.
 #
-# Since #116 a rescue also RELOCATES a body that cannot stand where it lies — deep water — onto the
-# cell the resolve published beside the rescuer. See _haul_out.
+# Since #116 a rescue also RELOCATES a body that cannot stand where it lies — deep water — onto a
+# cell beside the rescuer, and the PLAYER chooses which (dev, 2026-08-26). See _haul_out.
 
 const RESCUE_ICON := preload("res://Art/Icons/ActionIcons/Rescue.png")
 
 var target: Unit   # the downed ally being picked up
 
-func init(rescuer: Unit, downed_ally: Unit) -> void:
+# WHERE the body ends up, stamped at QUEUE time — CaptureAction's precedent, and for its reason: the
+# resolver reads a frozen snapshot, so a re-planned move cannot quietly relocate a cell the player
+# chose deliberately. It goes RED instead (SquadPlanValidator). For a body that can stand where it
+# lies this IS its own cell, so an ordinary rescue moves nobody and needs no special case.
+var haul_to: Vector2i = GridUtils.NO_CELL
+
+# REQUIRED, not defaulted: every caller states its own answer rather than inheriting a pick this
+# class made for them — the menu passes what the player clicked, the AI and the Play API pass
+# RulesService.rescue_landings(...)[0], which is the deterministic answer that used to be the rule.
+func init(rescuer: Unit, downed_ally: Unit, landing: Vector2i) -> void:
 	actor = rescuer
 	target = downed_ally
+	haul_to = landing
 	action_type = BaseAction.ActionType.RESCUE
 
 func execute() -> void:
@@ -49,12 +59,13 @@ func execute() -> void:
 func _still_adjacent() -> bool:
 	return GridUtils.manhattan_distance(actor.movement.cell, target.movement.cell) <= 1
 
-# Drag the body clear (#116). It goes to the cell the RESOLVE published, never a freshly derived one:
-# execution replays the plan (Law #2, and the BREAK repeal made that absolute), and the board has
-# been drawing the body on that cell since the order was queued — deriving it again here is how the
-# two would come to disagree. RulesService.rescue_landing is the rule; this is only its playback.
+# Drag the body clear (#116). It goes to the cell STAMPED on this order — the one the player picked —
+# never a freshly derived one: execution replays the plan (Law #2, and the BREAK repeal made that
+# absolute), and deriving it again here is how the two would come to disagree. The resolve PUBLISHES
+# this same cell so the board draws the body there before Execute; the stamp is the truth and the
+# projection is its drawing, which is why there is nothing here to keep in sync.
 #
-# A rescue from ordinary ground publishes NOTHING, so this is a no-op — which is every rescue before
+# From ordinary ground the stamp IS the body's own cell, so this is a no-op — every rescue before
 # #116, unchanged rather than special-cased.
 #
 # It TELEPORTS, and that is a constraint rather than a preference: the headless Play API runs the
@@ -63,10 +74,9 @@ func _still_adjacent() -> bool:
 # queue and ejected its downed. One behaviour in both, no per-type headless mirror. Giving the drag
 # an animation beat of its own is presentation work and its own ticket.
 func _haul_out() -> void:
-	var haul := target.projected_rescue()
-	if haul == GridUtils.NO_CELL or haul == target.movement.cell:
+	if haul_to == GridUtils.NO_CELL or haul_to == target.movement.cell:
 		return
-	target.movement.set_cell(haul)
+	target.movement.set_cell(haul_to)
 
 func actor_can_perform() -> bool:
 	return actor.can_rescue_carry()   # verb lock (will-and-death.md limb model)

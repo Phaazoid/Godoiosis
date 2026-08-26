@@ -50,9 +50,12 @@ func _downed_ally(cell: Vector2i) -> Unit:
 	return ally
 
 
-func _queue_rescue(rescuer: Unit, ally: Unit) -> RescueAction:
+# `landing` is the STAMP the order carries (#116) -- what the player picked, or the body's own cell
+# on dry ground. Required rather than defaulted here for the reason it is required in production:
+# a helper that chose one would hide exactly the fact these cases are about.
+func _queue_rescue(rescuer: Unit, ally: Unit, landing: Vector2i) -> RescueAction:
 	var rescue := RescueAction.new()
-	rescue.init(rescuer, ally)
+	rescue.init(rescuer, ally, landing)
 	rescuer.squad._queue_action(rescue)
 	return rescue
 
@@ -62,30 +65,39 @@ func _queue_rescue(rescuer: Unit, ally: Unit) -> RescueAction:
 func test_a_body_on_dry_ground_is_left_exactly_where_it_lies() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var ally := _downed_ally(Vector2i(1, 0))
-	# Not "some cell near the rescuer" -- the body's OWN cell, which is what keeps every rescue
-	# before #116 bit-for-bit unchanged instead of quietly relocating bodies on dry land.
-	assert_bool(RulesService.rescue_landing(rescuer, ally, _board()) == Vector2i(1, 0)).is_true()
+	# ONE landing, and it is the body's OWN cell -- which is what keeps every rescue before #116
+	# bit-for-bit unchanged instead of quietly relocating bodies on dry land, and what makes
+	# rescue_needs_a_pick false so the menu never opens a second step for them.
+	var expected: Array[Vector2i] = [Vector2i(1, 0)]
+	assert_that(RulesService.rescue_landings(rescuer, ally, _board())).is_equal(expected)
+	assert_bool(RulesService.rescue_needs_a_pick(ally, _board())).is_false()
 
 
 func test_a_body_in_deep_water_is_pulled_to_a_cell_beside_the_rescuer() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	_flood([Vector2i(1, 0)])
 	var ally := _downed_ally(Vector2i(1, 0))
-	var landing := RulesService.rescue_landing(rescuer, ally, _board())
-	assert_bool(landing != GridUtils.NO_CELL) \
-		.override_failure_message("there is dry ground all round the rescuer; something must qualify") \
-		.is_true()
-	assert_int(GridUtils.manhattan_distance(landing, rescuer.movement.cell)).is_equal(1)
-	assert_bool(_board().is_walkable(landing)) \
-		.override_failure_message("hauled onto ground the body still cannot stand on").is_true()
+	var landings := RulesService.rescue_landings(rescuer, ally, _board())
+	# EVERY dry neighbour of the rescuer, not one. The player is choosing now (#116), so a rule that
+	# still answered with a single pick would leave most of the flash unreachable — and the count is
+	# derived from the geometry this case paints, not pinned as a magic number.
+	assert_int(landings.size()) \
+		.override_failure_message("the rescuer has dry ground on three sides and the body on the fourth") \
+		.is_equal(3)
+	for cell: Vector2i in landings:
+		assert_int(GridUtils.manhattan_distance(cell, rescuer.movement.cell)).is_equal(1)
+		assert_bool(_board().is_walkable(cell)) \
+			.override_failure_message("offered ground the body still cannot stand on").is_true()
+	assert_bool(RulesService.rescue_needs_a_pick(ally, _board())) \
+		.override_failure_message("a haul must ASK, even when the answer looks obvious").is_true()
 
 
-func test_a_body_nobody_can_pull_out_answers_NO_CELL() -> void:
+func test_a_body_nobody_can_pull_out_offers_NOTHING() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	# Every cell the rescuer could drag it to is water too, so there is nowhere to put it.
 	_flood([Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)])
 	var ally := _downed_ally(Vector2i(1, 0))
-	assert_bool(RulesService.rescue_landing(rescuer, ally, _board()) == GridUtils.NO_CELL).is_true()
+	assert_bool(RulesService.rescue_landings(rescuer, ally, _board()).is_empty()).is_true()
 
 
 func test_a_body_nobody_can_pull_out_is_not_offered_as_a_target() -> void:
@@ -105,27 +117,34 @@ func test_a_body_in_reachable_water_IS_still_offered() -> void:
 	assert_bool(RulesService.adjacent_downed_allies(rescuer, _board()).has(ally)).is_true()
 
 
-# --- The wire: the resolve publishes it, so the board draws it ---------------------------------
 
-func test_a_queued_rescue_draws_the_body_on_the_bank_before_execute() -> void:
+# --- The wire: the STAMP is published, so the board draws what the PLAYER chose -----------------
+
+# Deliberately NOT first in NEIGHBOURS declaration order — (0,-1) is — so a publication that
+# re-derived instead of reading the order's own stamp would land elsewhere and every case below
+# would notice. That is the whole difference between "the rule picks" and "the player picks" (#116).
+const CHOSEN_BANK := Vector2i(-1, 0)
+
+
+func test_a_queued_rescue_draws_the_body_on_the_CHOSEN_bank_before_execute() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	_flood([Vector2i(1, 0)])
 	var ally := _downed_ally(Vector2i(1, 0))
-	_queue_rescue(rescuer, ally)
+	_queue_rescue(rescuer, ally, CHOSEN_BANK)
 	_sm.resolve_plan(rescuer.squad, _board())
 
-	var bank := ally.get_projected_destination()
-	assert_bool(bank != Vector2i(1, 0)) \
-		.override_failure_message("the resolve published nothing -- the board would jump the body "
-			+ "onto the bank on Execute, which is the divergence Law #2 forbids").is_true()
-	# The whole point of publishing: the cell reads OCCUPIED, so nothing else can be ordered onto it.
-	assert_object(_board().projected_unit_at_cell(bank)).is_same(ally)
+	assert_bool(ally.get_projected_destination() == CHOSEN_BANK) \
+		.override_failure_message("the board is not drawing the cell the player picked — either "
+			+ "nothing was published (the body jumps on Execute, the divergence Law #2 forbids) or "
+			+ "the resolve re-derived a bank of its own").is_true()
+	# The point of publishing at all: the cell reads OCCUPIED, so nothing else is ordered onto it.
+	assert_object(_board().projected_unit_at_cell(CHOSEN_BANK)).is_same(ally)
 
 
 func test_a_dry_land_rescue_publishes_nothing() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var ally := _downed_ally(Vector2i(1, 0))
-	_queue_rescue(rescuer, ally)
+	_queue_rescue(rescuer, ally, ally.get_projected_destination())
 	_sm.resolve_plan(rescuer.squad, _board())
 	assert_bool(ally.get_projected_destination() == Vector2i(1, 0)) \
 		.override_failure_message("an ordinary rescue must move nobody").is_true()
@@ -135,36 +154,54 @@ func test_the_publication_is_cleared_and_recomputed_each_resolve() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	_flood([Vector2i(1, 0)])
 	var ally := _downed_ally(Vector2i(1, 0))
-	_queue_rescue(rescuer, ally)
+	_queue_rescue(rescuer, ally, CHOSEN_BANK)
 	_sm.resolve_plan(rescuer.squad, _board())
-	var first := ally.get_projected_destination()
-	# Resolving again must reach the SAME answer. It only can if the clear ran: rescue_landing reads
-	# the body's PROJECTED cell, so a haul left standing would be read back as where the body already
-	# is and freeze the answer, which is a stale bank the moment the rescuer re-plans.
+	# Resolving again must reach the SAME answer. It only can if the clear ran: rescue_landings reads
+	# the body's PROJECTED cell, so a haul left standing is read back as where the body already is —
+	# which would freeze the legality check at last pass's bank the moment the rescuer re-plans.
 	_sm.resolve_plan(rescuer.squad, _board())
-	assert_bool(ally.get_projected_destination() == first).is_true()
+	assert_bool(ally.get_projected_destination() == CHOSEN_BANK).is_true()
 	assert_bool(ally.movement.cell == Vector2i(1, 0)) \
-		.override_failure_message("publishing must not MOVE the body -- only execution does").is_true()
+		.override_failure_message("publishing must not MOVE the body — only execution does").is_true()
 
 
-# --- Execution replays the published cell ------------------------------------------------------
+# --- A stamp the plan can no longer honour goes RED ---------------------------------------------
 
-func test_executing_the_rescue_drags_the_body_onto_the_bank_and_revives_it() -> void:
+func test_a_stamp_that_is_no_longer_a_legal_bank_reds_the_row() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	_flood([Vector2i(1, 0)])
 	var ally := _downed_ally(Vector2i(1, 0))
-	var rescue := _queue_rescue(rescuer, ally)
+	# A cell nowhere near the rescuer — what a re-planned move leaves behind. NOT relocated silently:
+	# the player chose this bank deliberately, so CaptureAction's frozen-stamp ruling applies and the
+	# order reds while staying queued (one-way validity).
+	var rescue := _queue_rescue(rescuer, ally, Vector2i(5, 5))
+	var plan := _sm.resolve_plan(rescuer.squad, _board())
+	_sm.validate_squad_plan(rescuer.squad, plan)
+
+	assert_bool(rescue.is_valid) \
+		.override_failure_message("a stranded stamp must red the row, not be quietly moved").is_false()
+	assert_bool(ally.get_projected_destination() == Vector2i(1, 0)) \
+		.override_failure_message("an illegal stamp must not be DRAWN either — the board would be "
+			+ "promising a bank the plan cannot reach").is_true()
+
+
+# --- Execution replays the stamp ----------------------------------------------------------------
+
+func test_executing_the_rescue_drags_the_body_onto_the_CHOSEN_bank_and_revives_it() -> void:
+	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
+	_flood([Vector2i(1, 0)])
+	var ally := _downed_ally(Vector2i(1, 0))
+	var rescue := _queue_rescue(rescuer, ally, CHOSEN_BANK)
 	_sm.resolve_plan(rescuer.squad, _board())
-	var bank := ally.get_projected_destination()
 
 	rescue.execute()
 
-	# This one is SELF-REFERENTIAL and cannot carry the case alone -- both sides read the published
-	# cell, so with nothing published they agree on the water and it passes (measured, against the
-	# no-publication mutant). It is here for what it says about DIVERGENCE; the walkability assertion
-	# below is the one with teeth, and it is what actually reddened.
-	assert_bool(ally.movement.cell == bank) \
-		.override_failure_message("execution landed the body somewhere the preview never drew") \
+	# Against the LITERAL the player picked, never against the published cell. The previous form of
+	# this assertion read the same store execution replays, so it agreed with itself whenever nothing
+	# was published (measured, against the no-publication mutant) — a consistency check wearing a
+	# correctness check's name.
+	assert_bool(ally.movement.cell == CHOSEN_BANK) \
+		.override_failure_message("execution landed the body somewhere the player never picked") \
 		.is_true()
 	assert_bool(ally.is_active()).is_true()
 	assert_bool(_board().is_walkable(ally.movement.cell)) \
@@ -174,7 +211,7 @@ func test_executing_the_rescue_drags_the_body_onto_the_bank_and_revives_it() -> 
 func test_executing_a_dry_land_rescue_moves_nobody() -> void:
 	var rescuer := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0))
 	var ally := _downed_ally(Vector2i(1, 0))
-	var rescue := _queue_rescue(rescuer, ally)
+	var rescue := _queue_rescue(rescuer, ally, ally.get_projected_destination())
 	_sm.resolve_plan(rescuer.squad, _board())
 
 	rescue.execute()

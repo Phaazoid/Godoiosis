@@ -305,6 +305,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
 		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
 
+	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
+	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
+	# would be a second answer to what that layer looks like.
+	{"group": "Board markup colours", "label": "Tile-pick flash alpha", "static": "PICK_FLASH_ALPHA",
+		"min": 0.1, "max": 1.0, "step": 0.01,
+		"tip": "How opaque the candidate tiles go at the top of their flash while a rescue is asking which bank to pull a body onto. It breathes between the layer's own alpha and this one, so the hue never changes. Takes effect on the next pick."},
+	{"group": "Board markup colours", "label": "Tile-pick flash period", "static": "PICK_FLASH_PERIOD",
+		"min": 0.05, "max": 2.0, "step": 0.05,
+		"tip": "Seconds for HALF a flash cycle -- the time from the layer's own alpha up to the peak, then the same back down. Smaller is a faster blink. Takes effect on the next pick."},
+
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
 	# like the two reach colours above, and both stacks read it.

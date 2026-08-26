@@ -228,8 +228,12 @@ static func _try_rescue(unit: Unit, board: BoardContext, squad_manager: SquadMan
 			target = ally   # most urgent clock first; ties keep the earliest
 	if target == null:
 		return false
+	# The AI has no tile pick, so it takes the FIRST landing -- which is exactly the answer the rule
+	# gave everyone before the player was handed the choice (#116), NEIGHBOURS declaration order.
+	# Non-empty by construction: adjacent_downed_allies already refuses a body with no landing.
+	var landings := RulesService.rescue_landings(unit, target, board)
 	var rescue := RescueAction.new()
-	rescue.init(unit, target)
+	rescue.init(unit, target, landings[0])
 	return squad_manager.queue_action(unit.squad, rescue)
 
 static func _try_rally(unit: Unit, squad_manager: SquadManager) -> bool:

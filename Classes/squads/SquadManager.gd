@@ -692,9 +692,12 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# leaves its target, and rescues run last in the side channel, so a counter aiming at the
 	# hauled-out cell would be swinging at a body nobody has pulled yet.
 	#
-	# An ordinary rescue publishes NOTHING -- rescue_landing answers the body's own cell for anyone
-	# standing on ground they can hold, so the guard below is what keeps every pre-#116 rescue
-	# bit-for-bit unchanged rather than a special case inside it.
+	# The cell published is the order's OWN STAMP, never a fresh derivation: the player chose it
+	# (dev, 2026-08-26), and re-deriving here would let the board draw a cell execution will not use.
+	# The stamp is the truth; this is only its drawing.
+	#
+	# An ordinary rescue publishes NOTHING -- its stamp IS the body's own cell -- so the guard below
+	# keeps every pre-#116 rescue bit-for-bit unchanged rather than a special case inside it.
 	if board != null:
 		for action in squad.action_queue:
 			if action.action_type != BaseAction.ActionType.RESCUE:
@@ -702,9 +705,15 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			var rescue := action as RescueAction
 			if rescue.target == null or not is_instance_valid(rescue.target):
 				continue
-			var haul: Vector2i = RulesService.rescue_landing(action.actor, rescue.target, board)
-			if haul != GridUtils.NO_CELL and haul != rescue.target.get_projected_destination():
-				rescue.target.set_projected_rescue(haul)
+			if rescue.haul_to == rescue.target.get_projected_destination():
+				continue   # an ordinary rescue: the stamp is where the body already is
+			# Only a LEGAL stamp is drawn, and that is load-bearing rather than defensive. The board
+			# must not promise a bank a re-planned move has put out of reach -- and because
+			# rescue_landings short-circuits once a haul is published (the body then reads as
+			# standing on the bank), publishing a stale one would make it validate itself. Left
+			# undrawn, the validator recomputes from the water and reds the row, which is the answer.
+			if RulesService.rescue_landings(action.actor, rescue.target, board).has(rescue.haul_to):
+				rescue.target.set_projected_rescue(rescue.haul_to)
 
 	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile on the burrower's
 	# projected cell. Routed through cell_effects so preview + execution consume the same object

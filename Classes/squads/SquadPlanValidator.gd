@@ -218,15 +218,19 @@ static func _revalidate_rescue_targets(actions: Array[BaseAction], board: BoardC
 		if not RulesService.is_rescueable(rescue.target, plan):
 			rescue.add_validation_error("Rescue target won't be down")
 			continue
-		# And somewhere to put it (#116). A body in deep water is hauled onto a cell beside its
-		# rescuer, so a re-plan that walks the rescuer away from every legal bank strands the order
-		# -- it goes RED and stays queued (one-way validity), rather than fizzling at execute where
-		# the BREAK repeal (#155) says a divergence is a bug. Out here with the lifecycle clause
-		# rather than beside adjacency inside the loop, and for the same reason: it reads PUBLISHED
-		# positions, which come out of the resolve that reads validity back.
+		# And the CHOSEN cell must still be one it can be put on (#116). The player picked a bank at
+		# queue time and the order carries that stamp, so a re-plan that walks the rescuer away from
+		# it strands the order -- it goes RED and stays queued (one-way validity) rather than being
+		# silently relocated, which for a cell the player chose deliberately would be worse than
+		# refusing, and rather than fizzling at execute where the BREAK repeal (#155) calls a
+		# divergence a bug. CaptureAction's frozen-stamp ruling, one verb along.
+		#
+		# Out here with the lifecycle clause rather than beside adjacency inside the loop, and for the
+		# same reason: it reads PUBLISHED positions, which come out of the resolve that reads
+		# validity back.
 		if rescue.target != null and is_instance_valid(rescue.target) \
-				and RulesService.rescue_landing(rescue.actor, rescue.target, board) == GridUtils.NO_CELL:
-			rescue.add_validation_error("Nowhere to pull them out to")
+				and not RulesService.rescue_landings(rescue.actor, rescue.target, board).has(rescue.haul_to):
+			rescue.add_validation_error("Can't pull them out to there any more")
 
 # Source 2 -- a CANDIDATE only: would this aim connect if queued right now? There is no plan for an
 # order the resolver has never seen. Correct because the published knockback is the ALREADY-QUEUED

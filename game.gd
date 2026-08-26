@@ -77,7 +77,11 @@ var selected_unit: Unit = null
 # EMPTY means "nowhere", not "unset", so there is no recompute-if-empty fallback.
 var group_move_followable: Dictionary = {}
 var target_pick_cells: Array[Vector2i] = []   # candidates while PICKING_TARGET; read by HoverPresenter
-var _target_pick_callback: Callable           # func(picked: Unit) -> void
+var _target_pick_callback: Callable           # func(cell: Vector2i) -> void
+# Bumped by every enter_cell_pick_mode. _click_picking_target snapshots it around the callback so a
+# pick that CHAINS another one (rescue: body -> tile, #116) is not torn down the instant it opens.
+# Deliberately not a game_state compare -- a chained pick leaves the state identical.
+var _pick_generation := 0
 
 # Collaborators built in _build_collaborators (not placed in game.tscn — each needs its
 # back-ref set before anything touches it).
@@ -465,13 +469,16 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 
 func _click_picking_target(cell: Vector2i) -> void:
-	# unit_at_pointer, not get_unit_at_cell (#126): this is a POINTER question, and the board draws one
-	# sprite per unit at its PROJECTED cell. The last click handler that still resolved against the live
-	# board -- which made a rescue aimed at a shoved body's landing cell hit nothing at all.
-	var picked := unit_at_pointer(cell)
-	if target_pick_cells.has(cell) and picked != null:
-		_target_pick_callback.call(picked)
-	exit_current_mode()
+	if not target_pick_cells.has(cell):
+		exit_current_mode()   # a click OFF the highlighted set cancels -- every pick mode's rule
+		return
+	# The callback may open ANOTHER pick (rescue picks a body, then the tile to haul it to -- #116).
+	# Tearing down unconditionally here would kill that one the instant it opened, with both halves
+	# correct in isolation: #103's shape. The generation counter is what sees it.
+	var generation := _pick_generation
+	_target_pick_callback.call(cell)
+	if _pick_generation == generation:
+		exit_current_mode()
 
 # ==============================================================================
 #  Turn flow
@@ -694,11 +701,33 @@ func enter_attack_mode(unit: Unit):
 # pulsing rings). target_pick_cells is filled either way -- _click_picking_target validates against
 # it, so suppressing the draw must never suppress the click.
 func enter_target_pick_mode(candidates: Array[Unit], on_pick: Callable, mark_candidates := true) -> void:
+	# A SPECIALIZATION of the cell pick, not a mode of its own (#116): the click validation was always
+	# cell-shaped underneath, and what makes this the unit flavour is the two lines below -- mapping
+	# the clicked cell back to a unit, and refusing when there is none there. Keeping that rule HERE
+	# is what lets the cell pick accept an EMPTY cell, which a rescue's bank is by definition.
+	#
+	# unit_at_pointer, not get_unit_at_cell (#126): this is a POINTER question, and the board draws one
+	# sprite per unit at its PROJECTED cell. The last click handler that still resolved against the live
+	# board -- which made a rescue aimed at a shoved body's landing cell hit nothing at all.
+	var to_unit := func(cell: Vector2i) -> void:
+		var picked := unit_at_pointer(cell)
+		if picked != null:
+			on_pick.call(picked)
+	enter_cell_pick_mode(_unit_cells(candidates), to_unit, mark_candidates)
+
+# Generic "pick one highlighted CELL" mode (#116's rescue haul is its first caller): overlay the
+# cells, hand the clicked one to on_pick. `flash` pulses them, which is what the dev asked a tile
+# pick to look like -- defaulted OFF so every unit pick above is bit-for-bit unchanged, and stated at
+# the one call site that wants it rather than inferred from which flavour is running.
+func enter_cell_pick_mode(cells: Array[Vector2i], on_pick: Callable, mark := true,
+		flash := false) -> void:
 	game_state = GameState.PICKING_TARGET
-	target_pick_cells = _unit_cells(candidates)
+	_pick_generation += 1
+	target_pick_cells = cells
 	_target_pick_callback = on_pick
-	if mark_candidates:
+	if mark:
 		overlay_manager.show_overlay(OverlayManager.OverlayType.ATTACK, target_pick_cells, OverlayManager.TARGET_ATLAS_COORDS)
+		overlay_manager.set_pick_flash(flash)
 
 func set_dev_mode(active: bool):
 	# Intent first: exit_current_mode's clear_selection rests the board on _base_state.
@@ -711,6 +740,7 @@ func exit_current_mode():
 		_clear_aiming_pick()
 	overlay_manager.clear_target_pulse()
 	overlay_manager.clear_ring_pulse()
+	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
 	overlay_manager.clear_sight_trace()
 	overlay_manager.clear_hover_move_path()
 	last_clicked_cell = GridUtils.NO_CELL
@@ -786,9 +816,12 @@ func queue_capture(unit: Unit):
 	squad_manager.queue_action(unit.squad, capture)
 	clear_selection()
 
-func queue_rescue(rescuer: Unit, target: Unit) -> void:
+# `landing` is where the body ends up — the cell the player picked for a haul (#116), or the body's
+# own cell when it can stand where it lies. Passed rather than derived here: the choice belongs to
+# whoever made it, and the order carries it as a frozen stamp (CaptureAction's precedent).
+func queue_rescue(rescuer: Unit, target: Unit, landing: Vector2i) -> void:
 	var rescue := RescueAction.new()
-	rescue.init(rescuer, target)
+	rescue.init(rescuer, target, landing)
 	squad_manager.queue_action(rescuer.squad, rescue)
 
 func queue_intimidate(intimidator: Unit, target: Unit) -> void:

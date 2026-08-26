@@ -282,7 +282,7 @@ static func adjacent_downed_allies(unit: Unit, board: BoardContext, plan: Resolv
 		# Nowhere to drag it to is not a rescue (#116). Ordinary ground always has a landing — the
 		# body's own cell — so this only ever refuses a body on footing it cannot hold, i.e. deep
 		# water with no reachable bank. Offering it would preview a rescue execution cannot finish.
-		if rescue_landing(unit, other, board) == GridUtils.NO_CELL:
+		if rescue_landings(unit, other, board).is_empty():
 			continue
 		result.append(other)
 	return result
@@ -301,11 +301,18 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 		return target.is_downed()
 	return PlanResolver.projected_lifecycle(target, plan.hypo) == Unit.LifecycleState.DOWNED
 
-# WHERE a rescue puts the body (#116). A rescue puts a body somewhere it can STAND: from ordinary
-# ground that is where it already lies, so nothing moves and every rescue before this one is
-# unchanged. From ground it CANNOT stand on — deep water today, a thawed ice bridge later — the
-# rescuer drags it clear, and this is the cell it lands on. NO_CELL means there is nowhere to drag it
-# to, which is what makes such a body UN-rescueable rather than rescued into a fizzle.
+# EVERY cell a rescue may put this body on (#116). A rescue puts a body somewhere it can STAND: from
+# ordinary ground that is where it already lies, so the list is just that cell and nothing moves —
+# every rescue before this ticket, unchanged. From ground it CANNOT stand on — deep water today, a
+# thawed ice bridge later — the rescuer drags it clear, and these are the cells it may be dragged to.
+# EMPTY means there is nowhere to drag it, which is what makes such a body UN-rescueable rather than
+# rescued into a fizzle.
+#
+# A LIST rather than a pick since the dev's 2026-08-26 ruling: *"I would like all of the valid tiles
+# to flash, and the user to select the tile to rescue to."* So the rule stops choosing and the player
+# chooses — the AI and the Play API take entry [0], which is exactly the answer this returned when it
+# was singular. Order is NEIGHBOURS declaration order, a fixed tie-break rather than a distance sort,
+# because Law #1 wants one answer and nothing here asks a second question of a distance.
 #
 # Keyed on "can the body stand here", never on WATER: what a rescue asks about is the body's FOOTING,
 # and a kind check would be a second answer that goes stale the first time anything else makes a cell
@@ -313,26 +320,34 @@ static func is_rescueable(target: Unit, plan: ResolvedPlan) -> bool:
 #
 # BOTH cells are projected (#126's rule for the whole rescue surface): a rescue runs in the side
 # channel after every move and shove has landed, so it meets the body where the pass leaves it, from
-# where the rescuer ends up. The walk is in NEIGHBOURS declaration order — a fixed order rather than
-# a nearest-to-the-body sort, because Law #1 wants one tie-break and a distance answers no second
-# question here.
+# where the rescuer ends up.
 #
-# IDEMPOTENT once SquadManager has published the haul: `from` then reads the bank, which the body CAN
-# stand on, so it short-circuits to that same cell. Which is why the publisher clears last pass's
-# projections before recomputing — inside the resolve, `from` is the body's real post-shove cell.
-static func rescue_landing(rescuer: Unit, body: Unit, board: BoardContext) -> Vector2i:
+# IDEMPOTENT once SquadManager has published a haul: `from` then reads the bank, which the body CAN
+# stand on, so it short-circuits to that same one-entry list. Which is why the publisher clears last
+# pass's projections first — inside the resolve, `from` is the body's real post-shove cell.
+static func rescue_landings(rescuer: Unit, body: Unit, board: BoardContext) -> Array[Vector2i]:
 	var from := body.get_projected_destination()
 	if can_traverse(from, body, board):
-		return from
+		return [from] as Array[Vector2i]
 	var origin := rescuer.get_projected_destination()
+	var landings: Array[Vector2i] = []
 	for dir in NEIGHBOURS:
 		var cell: Vector2i = origin + dir
 		if not can_traverse(cell, body, board) or not height_step_ok(origin, cell, board):
 			continue
 		var occupant := board.projected_unit_at_cell(cell)
 		if occupant == null or occupant == body:
-			return cell
-	return GridUtils.NO_CELL
+			landings.append(cell)
+	return landings
+
+
+# Does this rescue need the player to CHOOSE (#116)? True exactly when the body cannot stand where it
+# lies, so a dry-land rescue still queues in one step and only a haul opens the tile pick. Asked of
+# the LIST rather than of the water, and deliberately NOT "more than one landing": the dev's call was
+# to ask even when there is a single legal bank (2026-08-26), because a step that appears and
+# disappears reads as a bug, and a one-wide jetty is exactly where it would vanish.
+static func rescue_needs_a_pick(body: Unit, board: BoardContext) -> bool:
+	return not can_traverse(body.get_projected_destination(), body, board)
 
 # Living (active OR downed) enemies adjacent to where `unit` will END UP — same shape as
 # adjacent_downed_allies above, projected on BOTH sides for the same reason (#126): intimidate is a
