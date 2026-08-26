@@ -57,6 +57,12 @@ var lethality: Lethality = Lethality.NONE
 
 var skipped: bool = false                        # counter-er downed/killed earlier in the pass (R7) — no-op: don't play or preview
 
+# The Iron Will cap actually BIT on this hit (#524): incoming damage exceeded the cap and was
+# clamped, so the target is standing because of the ability rather than in spite of the hit. A
+# RECORDED decision like lethality, not a derivation — by the time anything plays back, `damage`
+# is already the clamped number and the fact is unrecoverable. #410's held-breath beat reads it.
+var iron_will_held: bool = false
+
 var hp_before: int = 0   # target's HP going into this hit; recorded by the resolver, not derived
 
 # Target height minus attacker height at resolve time (#258) — the wire a future height-damage rule
