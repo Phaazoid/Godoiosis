@@ -25,6 +25,12 @@ static var AI_ACTION := 0.45       # BOARD base beat on an AI pass -- an unread 
 static var PLAYER_ACTION := 0.3    # BOARD base beat on the player's own Execute (#519)
 static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
 
+# How long the camera takes to reach the next beat's subject, and therefore how long the action
+# WAITS for it (#520). Shorter than AI_SQUAD_PAN because that one crosses the board between squads
+# while this hops between units already near each other. Fixed duration, not fixed speed: a short
+# hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
+static var PLAYBACK_PAN := 0.35
+
 # PLAYER_ACTION was 0.0 from #118 until #519 -- "deliberately none" (dev, 2026-08-10), reversed on
 # 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health
 # readouts flash in and out (#475, subsumed) and battles read "way too fast".

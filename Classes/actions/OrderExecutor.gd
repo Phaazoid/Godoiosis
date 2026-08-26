@@ -87,16 +87,25 @@ func execute_orders(unit):
 	var is_ai: bool = game.ai_controller.is_ai_faction(squad.leader.get_faction())
 	var beat: float = Pacing.base_for(profile, is_ai)
 
+	# Playback owns where the camera looks for the rest of this pass (#520). SAVED and RESTORED, never
+	# cleared: an AI turn claims it for the whole turn and this runs inside one, so a blind release
+	# would unlock the camera mid-turn.
+	var camera_was_locked: bool = game.camera_controller.playback_locked
+	game.camera_controller.set_playback_locked(true)
+
 	await _execute_action_phase_parallel(move_actions)
-	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai))
+	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
+			_beat_subjects(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of.
 	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
-	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai))
+	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
+			_beat_subjects(sheet.volleys(true)))
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
 		await _execute_action_sequence(batch, beat)
+	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
 	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
 	# the squad-validity bail below skips that call entirely.
@@ -179,7 +188,7 @@ func _execute_action_phase_parallel(actions: Array):
 # (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
 # leaves no trailing pause before the squad's turn ends. An empty batch returns above, so a phase
 # with nothing in it costs nothing.
-func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}):
+func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {}):
 	if actions.is_empty():
 		return
 
@@ -188,6 +197,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# however many it hits (#410), so a three-victim volley holds once instead of three times.
 		# Without one (the side-channel tail) every action takes the flat base beat, as before.
 		var hold: float = float(holds.get(action, 0.0)) if not holds.is_empty() else beat
+		# The camera goes FIRST and the action WAITS for it (#520, dev 2026-08-26) -- a blow that
+		# lands off-screen may as well not have happened. Same door AIController has always used, so
+		# the pan is one seam and one duration; headless it lands instantly like every other beat.
+		# Only a beat's OPENING action carries a subject, so a volley pans once and then plays.
+		if subjects.has(action):
+			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
 		await Pacing.beat(self, hold)
 		action.begin_execution()
 		action.execute()
@@ -205,6 +220,17 @@ func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: b
 		if not beat.actions.is_empty():
 			holds[beat.actions[0]] = Pacing.duration_for(beat, profile, is_ai)
 	return holds
+
+# Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
+# that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
+# means "don't move", which is the right answer when there is nothing left to look at.
+func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
+	var subjects: Dictionary = {}
+	for beat in beats:
+		var who := beat.subject()
+		if who != null and not beat.actions.is_empty():
+			subjects[beat.actions[0]] = who
+	return subjects
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them.

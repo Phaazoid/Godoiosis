@@ -167,6 +167,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "Degrees the view swings per pixel of mouse travel while dragging to orbit."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
+		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
 		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
 
@@ -332,6 +334,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# The beat table (#519, umbrella #410). Playback pacing had never had a door -- these are the
 	# five #118 constants plus the battle-beat shape, all read at each pass, so a change applies
 	# from the next Execute with nothing standing to re-apply it to.
+	{"group": "Playback", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
 	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
 		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
@@ -494,6 +499,7 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
@@ -547,6 +553,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
 		# The beat table (#519). Every one of these is read at the START of a pass, so there is never
 		# a standing pause to re-apply one to -- SHOVE_SLIDE_SPEED's early return, same reason.
+		"PLAYBACK_PAN":
+			Pacing.PLAYBACK_PAN = value
+			return
 		"PLAYER_ACTION":
 			Pacing.PLAYER_ACTION = value
 			return
