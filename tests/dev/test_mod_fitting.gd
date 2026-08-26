@@ -43,6 +43,20 @@ func _weapon() -> WeaponInstance:
 			return WeaponInstance.make(base)
 	return null
 
+# A weapon of a family that at least one authored mod is locked AWAY from, so the filter has real
+# work to do. Null means the content cannot support the claim at all, which the caller says out loud
+# rather than passing quietly.
+func _weapon_the_catalog_can_refuse_something_for() -> WeaponInstance:
+	var mods := WeaponModCatalog.get_mods()
+	for base: WeaponData in WeaponCatalog.get_family_bases().values():
+		if base.weapon_type == WeaponData.WeaponType.NONE or base.mod_spaces.is_empty():
+			continue
+		for name in mods:
+			var mod: WeaponModData = mods[name]
+			if not mod.fits_family(base.weapon_type):
+				return WeaponInstance.make(base)
+	return null
+
 func _show(weapon: WeaponInstance) -> ItemEditorTool:
 	var tool_ref := _tool()
 	tool_ref.current_item = weapon
@@ -68,9 +82,14 @@ func _picker_entries(tool_ref: ItemEditorTool) -> Array[String]:
 #  The picker offers only what the family allows
 # ==============================================================================
 
+# The weapon is chosen so the catalog HAS something to refuse it. That is not fussiness: the first
+# draft asked this of whatever family sorted first (the Carbine), and the only family-locked mod on
+# disk is a Carbine one -- so nothing was refusable, `wrong` was empty by construction, and a
+# mutant deleting the filter outright passed. The discriminating power is in which weapon we ask
+# about (the #264 shape), so the pick derives it instead of assuming it.
 func test_the_picker_offers_nothing_the_family_refuses() -> void:
-	var weapon := _weapon()
-	assert_object(weapon).is_not_null()   # no family base with spaces on disk: this proves nothing
+	var weapon := _weapon_the_catalog_can_refuse_something_for()
+	assert_object(weapon).is_not_null()   # no mod is family-locked away from any family: proves nothing
 	var offered := _picker_entries(_show(weapon))
 
 	var wrong: Array[String] = []
