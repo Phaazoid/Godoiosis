@@ -15,3 +15,7 @@ display_name = "Super Gun"
 power = 9
 attack_pattern = SubResource("Resource_iwbj5")
 hits_allies = true
+scaling_blend = Dictionary[int, int]({
+4: 40,
+5: 60
+})

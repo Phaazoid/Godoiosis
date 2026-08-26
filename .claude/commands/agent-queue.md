@@ -1,14 +1,28 @@
 ---
-description: Work the Iosis GitHub issue queue — scan issues labeled agent/claude and take the next step on each until human input is needed
+description: Work the Iosis GitHub issue queue — advance every open issue whose last word was the dev's, until human input is needed
 ---
 
-You are working the **Iosis issue queue**. Issues labeled `agent/claude` are in your court; `agent/human` are waiting on a person. Your job is to advance the `agent/claude` issues one step each, then hand back. Repo: `Phaazoid/Godoiosis` (gh is authed). Work from `C:\Iosis\Godoiosis`.
+You are working the **Iosis issue queue**. Your job is to advance each issue that is **your turn** one step, then hand back. Repo: `Phaazoid/Godoiosis` (gh is authed). Work from `C:\Iosis\Godoiosis`.
 
-## 1. Pull the queue
+## 1. Pull the queue — whose turn is DERIVED, never labelled
+
+**The last thing said on an issue tells you whose turn it is.** Every comment Claude posts leads with `🤖 Claude says:` (see `CLAUDE.md`), so:
+
+- Newest comment starts with `🤖 Claude says:` → **Claude spoke last** → waiting on the dev → **skip**.
+- Newest comment is the dev's → **your turn**.
+- **No comments at all** → apply the same test to the issue **body** (a ticket Claude filed is waiting on the dev; one the dev wrote is yours).
 
 ```
-gh issue list --repo Phaazoid/Godoiosis --label agent/claude --state open --json number,title,labels,milestone
+gh issue list --repo Phaazoid/Godoiosis --state open --limit 400 \
+  --json number,title,body,comments,labels,milestone --jq '
+  .[] | (if (.comments|length) > 0 then (.comments|last|.body) else .body end) as $last
+  | select((($last // "") | startswith("🤖 Claude says:")) | not)
+  | "\(.number)\t\([.labels[].name]|map(select(startswith("priority/")))|join(","))\t\(.title)"'
 ```
+
+**Work `priority/P1-soon` first** — that is the demo backlog, and it is the one tier the dev has said he intends to finish.
+
+> **Why derived and not a label (2026-08-25).** This used to select on an `agent/claude` / `agent/human` label pair, retired that day. Those labels were invented for the pre-2026-08-05 contract, where *"Claude owns the next step"* meant *"Claude drafts a walkthrough the dev types in"* — a distinction that stopped existing when Claude began writing the code. By the end they carried almost no information (80 `agent/human` to 5 `agent/claude`) and, worse, **they were wrong 24 times out of 85**: five issues Claude had already answered still read as its turn, and **nineteen the dev had replied to were still marked as waiting on him, so this command could not see them at all.** The comment thread already held the answer; the label was a hand-maintained copy that drifted (Law #4 — one question, one answer). The prefix convention is therefore **load-bearing, not decoration**: drop `🤖 Claude says:` from a comment and this command will hand that issue back to you forever.
 
 If `$ARGUMENTS` names specific issue numbers, work only those. Otherwise work the whole queue, highest priority first: `priority/P0-blocking` → `priority/P1-soon` → `priority/P2-someday`.
 
@@ -26,7 +40,7 @@ You write the code now (contract changed 2026-08-05 — CLAUDE.md's collaboratio
   - **Riskiest assumption** — what would make this plan wrong.
   - **Provenance** — what surfaced it / what you read to confirm.
 - **Small bugfix that touches neither, or `tests/` / `docs/` / `CLAUDE.md` work**: just do it. Post a comment with what changed, why, and how you verified it — including what you did *not* check.
-- **Blocked on a human decision / design fork**: post a comment stating exactly the decision needed and the options, then leave it for the human (it becomes `agent/human`).
+- **Blocked on a human decision / design fork**: post a comment stating exactly the decision needed and the options. Posting it *is* the hand-back — no label to set.
 
 Keep each issue to **one reviewable diff**, and don't leave the tree holding several issues' worth of unreviewed edits.
 
@@ -46,14 +60,10 @@ NEVER pass non-ASCII via an inline `-b "..."` / PowerShell here-string — PS 5.
 
 ## 4. Flip the label
 
-After acting on an issue:
+After acting on an issue: **nothing.** The comment you just posted is the hand-back — the selector in step 1 will skip that issue on the next run because your comment is now the newest one. When the dev replies (including "this needs rework"), it becomes yours again automatically.
 
-```
-gh issue edit N --repo Phaazoid/Godoiosis --remove-label agent/claude --add-label agent/human
-```
-
-(When a human later replies that a fix needs rework, they flip it back to `agent/claude` and you revise on the next run.)
+The one thing you must not do is post a comment **without** the `🤖 Claude says:` lead — that would leave the issue looking like the dev spoke last, and you would pick it straight back up next run.
 
 ## 5. Stop and report
 
-When every `agent/claude` issue has been advanced — or the rest genuinely need human input — stop and summarize per issue: what you did and what it's now waiting on. Do **not** close issues yourself unless explicitly asked. Verify any non-ASCII you posted via `gh api` (capturing gh stdout on the PS console re-mojibakes the display), not by eyeballing the terminal.
+When every issue that was your turn has been advanced — or the rest genuinely need human input — stop and summarize per issue: what you did and what it's now waiting on. Do **not** close issues yourself unless explicitly asked. Verify any non-ASCII you posted via `gh api` (capturing gh stdout on the PS console re-mojibakes the display), not by eyeballing the terminal.

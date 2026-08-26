@@ -9,11 +9,20 @@ class_name ItemEditorTool
 @onready var delete_button: Button = %DeleteItemButton
 @onready var status_label: Label = %ItemStatusLabel
 
-# Authors a WeaponInstance, a RuneData, or a WeaponModData. The first two fill the equip slot;
-# the third is a COMPONENT fitted into one of a weapon's spaces, and it lives here (#74) because
-# this is already where a mod gets fitted -- authoring one anywhere else would mean two tabs to
-# make one weapon. The type dropdown lists weapon bases + prototypes + rune sizes + the blank mod;
-# the field area renders a bespoke editor per kind. Carvings are authored in the Attack Editor tab.
+# Authors a WeaponInstance, a RuneData, a WeaponModData, or a prototype WeaponData. The first two
+# fill the equip slot; the third is a COMPONENT fitted into one of a weapon's spaces, and it lives
+# here (#74) because this is already where a mod gets fitted -- authoring one anywhere else would
+# mean two tabs to make one weapon. The type dropdown lists weapon bases + prototypes + rune sizes
+# + the blank mod + the blank prototype; the field area renders a bespoke editor per kind.
+# Carvings are authored in the Attack Editor tab.
+#
+# The PROTOTYPE mode (#486) is the one that edits a TEMPLATE rather than a carried item, which is
+# why the read-only rule below does not cover it: that rule forbids editing a shared family
+# THROUGH ONE ITEM'S FORM, and a prototype here is edited as itself. Its scope is deliberately
+# split against the Attack Editor's Weapon Families mode, which already writes WeaponData files:
+# this mode owns what a template IS (family, physique, mod spaces) and only PICKS its main attack;
+# that mode owns what it SWINGS (tuning the main, and extra_attacks). Both edit the catalog object
+# LIVE, so the two panels cannot hold divergent copies of one file.
 #
 # current_item is a Resource rather than an EquippableData because a mod is deliberately NOT one --
 # WeaponModData is its own content root off Resource, beside Item/AttackData/JobData (CLAUDE.md),
@@ -32,10 +41,11 @@ func _ready():
 	type_dropdown.select(0)
 	_rebase_on_type(0)
 
-# Weapon TYPES + a blank rune per size + a blank mod — the things "New"/the type dropdown can
-# start from. A mod has no varieties to enumerate (no family field yet, #74 keeps that half), so
-# it contributes exactly one entry.
+# Weapon TYPES + a blank rune per size + a blank mod + a blank prototype — the things "New"/the
+# type dropdown can start from. A mod has no varieties to enumerate (no family field yet, #74
+# keeps that half), so it contributes exactly one entry; a prototype picks its family in the form.
 const NEW_MOD_KEY := "Weapon Mod (blank)"
+const NEW_PROTOTYPE_KEY := "Weapon Prototype (new)"
 
 func _base_catalog() -> Dictionary:
 	var bases := {}
@@ -46,7 +56,13 @@ func _base_catalog() -> Dictionary:
 	for k in runes:
 		bases[k] = runes[k]
 	bases[NEW_MOD_KEY] = WeaponModData.new()
+	bases[NEW_PROTOTYPE_KEY] = _blank_prototype()
 	return bases
+
+func _blank_prototype() -> WeaponData:
+	var template := WeaponData.new()
+	template.is_prototype = true
+	return template
 
 func _refresh_variant_list(select_name := ""):
 	load_dropdown.clear()
@@ -54,6 +70,12 @@ func _refresh_variant_list(select_name := ""):
 	var weapons := WeaponCatalog.get_saved()
 	for v in weapons:
 		_variants[v] = weapons[v]
+	# Prototypes are loadable here since #486 -- they are the one TEMPLATE this tool authors, so
+	# the file has to be re-openable. They also appear in the TYPE dropdown, meaning something
+	# else there: pick one there to BUILD a weapon on it, pick one here to EDIT the template.
+	var prototypes := WeaponCatalog.get_prototypes()
+	for v in prototypes:
+		_variants[v] = prototypes[v]
 	var runes := RuneCatalog.get_variants()
 	for v in runes:
 		_variants[v] = runes[v]
@@ -86,7 +108,12 @@ func _rebase_on_type(index: int):
 	var bases := _base_catalog()
 	var key = bases.keys()[index]
 	var base = bases[key]
-	current_item = WeaponInstance.make(base) if base is WeaponData else base.duplicate(true)
+	# The blank prototype IS a WeaponData, so the "build an instance on it" arm below would eat
+	# it -- the KEY is what says which of the two this entry means, exactly as it does for a mod.
+	if key == NEW_PROTOTYPE_KEY:
+		current_item = base.duplicate(true)
+	else:
+		current_item = WeaponInstance.make(base) if base is WeaponData else base.duplicate(true)
 	_loaded_name = ""
 	load_dropdown.select(-1)
 	_refresh_update_button()
@@ -114,7 +141,14 @@ func _on_load_pressed():
 # Load hands out a COPY so editing is not editing the catalog's live object. An equippable says how
 # to copy itself (WeaponInstance's keeps its template shared); a mod is plain data with no such
 # rule, so it deep-copies.
+#
+# A TEMPLATE is the exception and is handed out LIVE (#486). Copying one would fork it off every
+# weapon built on it -- the whole point of the template model -- and it would also let this panel
+# and the Attack Editor's Weapon Families mode hold divergent copies of one file, so whichever
+# saved last would silently discard the other's edits. Live on both sides, no divergence.
 func _editable_copy(entry: Resource) -> Resource:
+	if entry is WeaponData:
+		return entry
 	var equippable := entry as EquippableData
 	return equippable.copy_equippable() if equippable != null else entry.duplicate(true)
 
@@ -144,6 +178,8 @@ func _on_update_pressed():
 	var reason := _update_block_reason()
 	if reason != "":
 		status_label.text = reason
+		return
+	if _refuse_uncarryable(current_item):
 		return
 	# Overwrite the file the entry actually came from. The dropdown key is the item's NAME, and a
 	# path rebuilt from it would miss any file whose basename differs.
@@ -189,6 +225,8 @@ func _on_save_as_pressed():
 		return
 	if DevWidgets.refuse_illegal_name(entered_name, "item", status_label):
 		return
+	if _refuse_uncarryable(current_item):
+		return
 	var dir := _save_dir_for(current_item)
 	var path := dir + entered_name + ".tres"
 	if DevWidgets.refuse_existing_file(path, "item", status_label):
@@ -212,6 +250,8 @@ func populate():
 		_populate_weapon_editor(current_item)
 	elif current_item is WeaponModData:
 		_populate_mod_editor(current_item)
+	elif current_item is WeaponData:
+		_populate_prototype_editor(current_item)
 	else:
 		DevWidgets.build_resource_editor(editor_container, current_item, populate, ["weapon_type", "display_name"])
 
@@ -299,12 +339,14 @@ func _on_limb_kind_picked(weapon: WeaponInstance, kind_name: String) -> void:
 	populate()
 
 func _populate_mod_space(weapon: WeaponInstance, index: int, mods: Dictionary) -> void:
-	var capacity: int = weapon.template.space_capacities()[index]
+	var capacity: int = weapon.template.mod_spaces[index]
 	DevWidgets.add_label(editor_container, "Space %d: %d / %d used" % [index + 1, weapon.used_capacity(index), capacity])
 
+	# space() hands back the LIVE array, which is what Remove below mutates through. It is untyped
+	# (Godot has no nested typed arrays), so the element needs its type named.
 	var fitted := weapon.space(index)
 	for i in range(fitted.size()):
-		var mod := fitted[i]
+		var mod: WeaponModData = fitted[i]
 		var idx := i
 		var row := HBoxContainer.new()
 		var label := Label.new()
@@ -431,4 +473,145 @@ func _save_dir_for(item: Resource) -> String:
 		return RuneCatalog.VARIANT_DIR
 	if item is WeaponModData:
 		return WeaponModCatalog.MOD_DIR
+	if item is WeaponData:
+		return WeaponCatalog.PROTOTYPE_DIR
 	return WeaponCatalog.SAVED_DIR
+
+# --- Prototype mode (#486) ---
+
+# Refuse to WRITE a template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's
+# reasoning: a DEGRADES finding describes a file that may already be on disk in that state, so
+# refusing would leave the only tool that can repair it unable to write. Non-templates pass
+# straight through -- this asks a question only a WeaponData has.
+func _refuse_uncarryable(item: Resource) -> bool:
+	var template := item as WeaponData
+	if template == null:
+		return false
+	var findings := WeaponTemplateLint.check(template)
+	for finding in findings:
+		if finding["severity"] == WeaponTemplateLint.Severity.BLOCKS:
+			var msg: String = finding["text"]
+			push_warning(msg)
+			status_label.text = msg
+			return true
+	if not findings.is_empty():
+		status_label.text = findings[0]["text"]
+	return false
+
+# What the reflective editor must NOT draw here, for two different reasons. THREE are not drawn at
+# all: display_name has its own LineEdit above the form, is_prototype is forced true (a Prototype
+# mode offering to untick it is a door to nowhere), and extra_attacks belongs to the Attack Editor's
+# Weapon Families mode. The other THREE are drawn BESPOKE below and skipped here only so they are
+# not drawn twice.
+#
+# So this list is deliberately LONGER than the coverage law's in tests/dev/test_property_tips.gd,
+# which skips only the first three -- the mod editor's split exactly. A field with bespoke UI still
+# reaches a control, so it still owes text; being undrawable reflectively is not an excuse.
+const PROTOTYPE_SKIP := ["display_name", "is_prototype", "extra_attacks", "weapon_type", "main_attack", "mod_spaces"]
+
+# The SpinBox bound on a space's capacity. A widget affordance, not a rule: mods are size 1-3, so
+# anything past a few is off-doctrine rather than illegal, and nothing in the model refuses it.
+const MAX_SPACE_CAPACITY := 9
+
+# The main-attack picker's "no main" row. A template with none is a legitimate intermediate state
+# (the lint DEGRADES it rather than refusing), so the picker has to be able to express it.
+const NO_MAIN_KEY := "(none)"
+
+func _populate_prototype_editor(template: WeaponData) -> void:
+	DevWidgets.add_label(editor_container, "Editing a TEMPLATE, not a carried weapon -- every weapon built on it reads this live.")
+	_populate_prototype_family(template)
+	_populate_prototype_main(template)
+	_populate_mod_spaces(template)
+	DevWidgets.build_resource_editor(editor_container, template, populate, PROTOTYPE_SKIP)
+	for finding in WeaponTemplateLint.check(template):
+		DevWidgets.add_label(editor_container, "%s: %s" % [WeaponTemplateLint.severity_word(finding), finding["text"]])
+
+func _populate_prototype_family(template: WeaponData) -> void:
+	var first := editor_container.get_child_count()
+	DevWidgets.add_option(editor_container, "Family", WeaponData.WeaponType.keys(),
+		WeaponData.WeaponType.keys()[template.weapon_type],
+		func(s: String): _on_prototype_family_picked(template, s))
+	_tip_from(first, DevWidgets.property_tip(template, "weapon_type"))
+
+# Picking the family AUTO-FILLS its main attack, as the ask asked -- but only over a main that was
+# itself auto-filled. A deliberate library pick survives a family change, because refilling over it
+# would silently discard an authoring decision; re-picking the same family is then how you get the
+# stock main back.
+func _on_prototype_family_picked(template: WeaponData, family_name: String) -> void:
+	var picked: WeaponData.WeaponType = WeaponData.WeaponType[family_name]
+	if picked == template.weapon_type:
+		return
+	template.weapon_type = picked
+	if template.main_attack == null or _is_a_family_main(template.main_attack):
+		template.main_attack = _family_main_for(picked)
+	populate()
+
+func _is_a_family_main(attack: WeaponAttackData) -> bool:
+	return WeaponAttackCatalog.get_mains().values().has(attack)
+
+# The family BASE's main, never another prototype's: a prototype is a variant of its FAMILY, not
+# of whichever prototype happens to share its weapon_type.
+func _family_main_for(type: WeaponData.WeaponType) -> WeaponAttackData:
+	for base: WeaponData in WeaponCatalog.get_family_bases().values():
+		if base.weapon_type == type:
+			return base.main_attack
+	return null
+
+# A PICKER, never an authoring surface. Everything it lists is a file the Attack Editor wrote, and
+# the pick is a direct ref -- so a prototype that never swaps follows its family's retunes, and one
+# that does is pointed at content that already exists. This mode writes no attack file at all.
+func _populate_prototype_main(template: WeaponData) -> void:
+	var first := editor_container.get_child_count()
+	var choices := {NO_MAIN_KEY: null}
+	for source: Dictionary in [WeaponAttackCatalog.get_mains(), WeaponAttackCatalog.get_library()]:
+		for k in source:
+			if not choices.has(k):   # a library attack sharing a main's name loses; one name, one entry
+				choices[k] = source[k]
+	var current_key := NO_MAIN_KEY
+	for k in choices:
+		if choices[k] == template.main_attack:
+			current_key = k
+			break
+	DevWidgets.add_option(editor_container, "Main attack", choices.keys(), current_key,
+		func(s: String):
+			template.main_attack = choices[s]
+			populate()
+	)
+	_tip_from(first, DevWidgets.property_tip(template, "main_attack"))
+
+# #486's authorable half: both the COUNT and each capacity are the author's. Nothing here caps the
+# count -- proficiency decides what a wielder reaches, and a template is free to author more spaces
+# than any unit can currently use.
+func _populate_mod_spaces(template: WeaponData) -> void:
+	var first := editor_container.get_child_count()
+	DevWidgets.add_label(editor_container, "Mod spaces (%d):" % template.mod_spaces.size())
+	for i in range(template.mod_spaces.size()):
+		var idx := i
+		var row := HBoxContainer.new()
+		var label := Label.new()
+		label.text = "Space %d capacity" % (idx + 1)
+		label.custom_minimum_size = Vector2(160, 0)
+		row.add_child(label)
+		var spin := SpinBox.new()
+		spin.min_value = 1     # a zero-capacity space is one nothing can ever fit; the lint owns the .tres door
+		spin.max_value = MAX_SPACE_CAPACITY
+		spin.value = template.mod_spaces[idx]
+		spin.value_changed.connect(func(v: float): template.mod_spaces[idx] = int(v))
+		row.add_child(spin)
+		var remove := Button.new()
+		remove.text = "Remove"
+		remove.pressed.connect(func():
+			template.mod_spaces.remove_at(idx)
+			populate()
+		)
+		row.add_child(remove)
+		editor_container.add_child(row)
+
+	var add := Button.new()
+	add.text = "Add space"
+	add.pressed.connect(func():
+		template.mod_spaces.append(1)
+		populate()
+	)
+	editor_container.add_child(add)
+	_tip_from(first, DevWidgets.property_tip(template, "mod_spaces"))

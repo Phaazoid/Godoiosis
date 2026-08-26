@@ -17,3 +17,13 @@ class_name Item
 # its fitted modules). Everything else is just itself.
 func get_effective_weight() -> int:
 	return weight
+
+# Field text for the dev tools' reflective editor (#473). Declared here so every item subclass
+# inherits the four base fields rather than restating them -- a subclass merges this into its own.
+static func property_tips() -> Dictionary:
+	return {
+		"display_name": "What this item is called wherever the game names it.",
+		"icon": "The picture shown in menus and the inventory. Optional -- an item with none simply draws nothing.",
+		"description": "Flavour text. Presentation only; no rule reads it.",
+		"weight": "Authored mass. Tracked but nearly inert -- fall damage is its one wired reader (#120 owns the rest).",
+	}

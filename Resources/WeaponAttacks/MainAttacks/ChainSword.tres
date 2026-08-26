@@ -9,6 +9,10 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_wad")
+scaling_blend = Dictionary[int, int]({
+1: 60,
+4: 40
+})
 power = 3
 attack_pattern = SubResource("Resource_main")
 vertical_rule = 1

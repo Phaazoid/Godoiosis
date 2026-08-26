@@ -12,9 +12,12 @@ extends EquippableData
 # PROSTHETIC only: which limb THIS instance installs into (moved off WeaponData
 # 2026-07-19) — two instances built on the same shared template need independent
 # arm/leg identity, so the template can't be the source of truth for it.
-@export var space_1: Array[WeaponModData] = []
-@export var space_2: Array[WeaponModData] = []
-@export var space_3: Array[WeaponModData] = []
+@export var spaces: Array[Array] = []
+# One inner array of fitted mods per mod space, sized by the TEMPLATE's mod_spaces. Was three
+# named fields (space_1/2/3) until #486, which capped every weapon at three spaces no matter
+# what a template authored. The OUTER array is untyped because Godot has no nested typed arrays;
+# each inner one is built as Array[WeaponModData] by space(), which is the only door that grows
+# this — and it hands back the LIVE array, since the fitting UI removes through it.
 
 # Fallback wording for a readiness refusal, used only when the family has no status_text of its
 # own. Lives here rather than in the menu (#166): the menu renders reasons, it doesn't know them.
@@ -85,44 +88,51 @@ func capture_battle_state() -> Dictionary:
 func apply_battle_state(_state: Dictionary) -> void:
 	pass
 
-# Copy for grants/saves: template stays SHARED (the point of the model); spaces copy
-# shallowly — fitted mods are authored content refs, so sharing them is correct and keeps
-# them as ExtResource refs in saved files.
+# Copy for grants/saves: template stays SHARED (the point of the model); each space's LIST is
+# copied while its mods are not — fitted mods are authored content refs, so sharing them is
+# correct and keeps them as ExtResource refs in saved files.
 func copy_equippable() -> EquippableData:
 	var w := make(template)
 	w.display_name = display_name
 	w.icon = icon
 	w.description = description
 	w.limb_kind = limb_kind
-	w.space_1 = space_1.duplicate()
-	w.space_2 = space_2.duplicate()
-	w.space_3 = space_3.duplicate()
+	w.spaces = []
+	for fitted: Array in spaces:
+		var copied: Array[WeaponModData] = []
+		copied.assign(fitted)
+		w.spaces.append(copied)
 	return w
 func shown_name() -> String:
 	if display_name != "":
 		return display_name
 	return template.display_name if template != null else ""
 
-func space(index: int) -> Array[WeaponModData]:
-	match index:
-		0: return space_1
-		1: return space_2
-		2: return space_3
-		_: return []
+# The LIVE array for a space, grown on demand. Growing here rather than at construction is what
+# lets a template gain a space without every instance built on it needing a migration -- and an
+# instance saved before this field existed simply arrives empty. A space the template does not
+# have answers with a throwaway, never by growing.
+func space(index: int) -> Array:
+	if template == null or index < 0 or index >= space_count():
+		return []
+	while spaces.size() <= index:
+		var fresh: Array[WeaponModData] = []
+		spaces.append(fresh)
+	return spaces[index]
 
 func space_count() -> int:
-	return template.space_capacities().size() if template != null else 0
+	return template.mod_spaces.size() if template != null else 0
 
 func used_capacity(index: int) -> int:
 	var total := 0
-	for mod in space(index):
+	for mod: WeaponModData in space(index):
 		total += mod.size
 	return total
 
 func can_fit(index: int, mod: WeaponModData) -> bool:
 	if template == null or index < 0 or index >= space_count():
 		return false
-	return used_capacity(index) + mod.size <= template.space_capacities()[index]
+	return used_capacity(index) + mod.size <= template.mod_spaces[index]
 
 func fit(index: int, mod: WeaponModData) -> bool:
 	if not can_fit(index, mod):
@@ -131,10 +141,15 @@ func fit(index: int, mod: WeaponModData) -> bool:
 	return true
 
 # Proficiency N activates spaces 1..N — reduced capability, never locked out (weapons.md).
+# UNREDUCED means every space, whatever the count: since #486 a template authors how many it has,
+# so no fixed number can stand for "all of them" the way 3 used to.
 func active_space_count(wielder: Unit) -> int:
 	if template == null:
 		return 0
-	return mini(wielder.get_weapon_proficiency(template.weapon_type), space_count())
+	var proficiency := wielder.get_weapon_proficiency(template.weapon_type)
+	if proficiency == UnitInstance.UNREDUCED:
+		return space_count()
+	return mini(proficiency, space_count())
 
 func active_modules(wielder: Unit) -> Array[WeaponModData]:
 	var result: Array[WeaponModData] = []
@@ -201,12 +216,25 @@ func attack_block_reason(_wielder: Unit, attack: AttackData) -> String:
 	var status := status_text()
 	return status if status != "" else NOT_READY_TEXT
 
+# Two lines: what the attack does, then WHERE the number came from (#485, dev call 2026-08-25).
+# The second itemises the way ArmorData.mechanical_text itemises DEF -- for THIS wielder, since
+# both halves depend on them. It reads the same effective_blend base_damage weighs, so a fitted
+# mod's shift is visible on hover rather than something you infer from a damage number moving.
 func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	var weapon_attack := attack as WeaponAttackData
 	if weapon_attack == null:
 		return ""
-	return "%s %s" % [weapon_attack.payload_text(base_damage(wielder, weapon_attack)),
-		weapon_attack.targets_text()]
+	var damage := base_damage(wielder, weapon_attack)
+	var headline := "%s %s" % [weapon_attack.payload_text(damage), weapon_attack.targets_text()]
+	if weapon_attack.deals_no_damage:
+		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
+	var mods := active_modules(wielder)
+	var eff_power := weapon_attack.power
+	for mod in mods:
+		eff_power += mod.power_delta
+	var from_stats := scaling_contribution(wielder, weapon_attack, mods)
+	var blend := Stats.blend_text(effective_blend(weapon_attack, mods))
+	return "%s\n%d power + %d from %s" % [headline, eff_power, from_stats, blend]
 
 # ALL fitted modules count, active or not -- mass is physical, not capability-gated. The
 # instance's own weight rides on top of the family's, so a one-off heavier copy is authorable.
@@ -219,14 +247,32 @@ func get_effective_weight() -> int:
 			total += mod.weight
 	return total
 
-func scaling_contribution(wielder: Unit, mods: Array[WeaponModData]) -> int:
-	var blend := template.scaling_blend.duplicate()
+# What this attack ACTUALLY scales off on this weapon: its own authored blend, shifted by every
+# fitted mod's nudge. THE one answer (#485) -- scaling_contribution weighs it and attack_detail
+# prints it, so the number a player is shown and the number they take can never disagree.
+#
+# Raw weights, not percentages: the caller below divides by the total, and normalising here would
+# round twice. Stats.blend_text does the normalising for display.
+#
+# A nudge can drive a weight NEGATIVE -- a mod authored against a family that uses STR, fitted to
+# one that does not -- and a negative weight subtracts the wielder's stat from their own damage.
+# Clamped at 0 rather than propagated: the mod simply contributes nothing to a stat the attack
+# never used. #74's family gate is the real fix; this is the floor under it.
+func effective_blend(attack: WeaponAttackData, mods: Array[WeaponModData]) -> Dictionary:
+	var blend: Dictionary[Stats.Stat, int] = {}
+	if attack != null:
+		for stat: Stats.Stat in attack.scaling_blend:
+			blend[stat] = attack.scaling_blend[stat]
 	for mod in mods:
-		for stat in mod.scaling_nudge:
-			blend[stat] = blend.get(stat, 0) + mod.scaling_nudge[stat]
+		for stat: Stats.Stat in mod.scaling_nudge:
+			blend[stat] = maxi(0, blend.get(stat, 0) + mod.scaling_nudge[stat])
+	return blend
+
+func scaling_contribution(wielder: Unit, attack: WeaponAttackData, mods: Array[WeaponModData]) -> int:
+	var blend := effective_blend(attack, mods)
 	var total_weight := 0
 	var weighted_sum := 0
-	for stat in blend:
+	for stat: Stats.Stat in blend:
 		total_weight += blend[stat]
 		weighted_sum += wielder.get_effective_stat(stat) * blend[stat]
 	if total_weight == 0:
@@ -247,7 +293,7 @@ func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 	var eff_power := attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
-	return eff_power + scaling_contribution(wielder, mods)
+	return eff_power + scaling_contribution(wielder, attack, mods)
 
 # No attack means bare fists: not even fitted mods contribute, because the weapon isn't what's
 # landing. (A stamped attack still collects mod-added elements on top of its own.)

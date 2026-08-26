@@ -9,10 +9,6 @@
 script = ExtResource("1_iwmi1")
 main_attack = ExtResource("2_main")
 weapon_type = 4
-scaling_blend = Dictionary[int, int]({
-4: 40,
-5: 60
-})
 display_name = "Carbine"
 icon = ExtResource("3_icon")
 description = "Gun"

@@ -311,6 +311,108 @@ static func add_enum_option(container: Node, label_text: String, hint_string: St
 	row.add_child(option)
 	container.add_child(row)
 
+# A scaling blend as four STEAL-TO-BALANCE sliders (#485, dev call 2026-08-25). Drag one up and the
+# others give up the difference in proportion; the total is ALWAYS Stats.BLEND_TOTAL, so an invalid
+# blend is unrepresentable rather than refused after the fact. That is what makes the dev's rule
+# literal -- "STR is at 55? That means STR scaling is 55%" -- instead of a claim the panel has to
+# police.
+#
+# LOWERING a stat that holds everything is REFUSED (the slider snaps back), because the points have
+# nowhere to go: the other three are at zero and handing them an even split would author a mix
+# nobody asked for. The gesture is always "drag the stat you WANT up", which is also what removes
+# the deadlock a total-is-100 guard would otherwise create -- every weapon starts at exactly 100, so
+# a rule that refuses to add while the total is full refuses the very first edit.
+static func add_blend_sliders(container: Node, blend: Dictionary, on_change: Callable, tooltip := "") -> void:
+	var first := container.get_child_count()
+	var sliders: Dictionary[Stats.Stat, HSlider] = {}
+	var labels: Dictionary[Stats.Stat, Label] = {}
+	var guard := [false]   # array so the lambdas share one cell; a bare bool captures by value
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var key := stat
+		var row := HBoxContainer.new()
+		var name_label := Label.new()
+		name_label.text = Stats.Stat.keys()[key]
+		name_label.custom_minimum_size = Vector2(48, 0)
+		var slider := HSlider.new()
+		slider.min_value = 0
+		slider.max_value = Stats.BLEND_TOTAL
+		slider.step = 1
+		slider.custom_minimum_size = Vector2(180, 0)
+		slider.value = blend.get(key, 0)
+		var pct := Label.new()
+		pct.text = "%d%%" % int(slider.value)
+		pct.custom_minimum_size = Vector2(44, 0)
+		row.add_child(name_label)
+		row.add_child(slider)
+		row.add_child(pct)
+		container.add_child(row)
+		sliders[key] = slider
+		labels[key] = pct
+		slider.value_changed.connect(func(v: float):
+			if guard[0]:
+				return
+			guard[0] = true
+			_rebalance_blend(blend, key, int(v), sliders, labels)
+			guard[0] = false
+			on_change.call()
+		)
+	_tip_rows_from(container, first, tooltip)
+
+
+# Give `moved` the value it was dragged to and spread the remainder across the other three in
+# proportion to what they already hold, so the total lands exactly on BLEND_TOTAL. Integer split
+# with the leftover handed to the largest fractional parts -- a plain floor loses up to three
+# points, which would show as a total of 97 on screen.
+static func _rebalance_blend(blend: Dictionary, moved: Stats.Stat, value: int,
+		sliders: Dictionary[Stats.Stat, HSlider], labels: Dictionary[Stats.Stat, Label]) -> void:
+	var others: Array[Stats.Stat] = []
+	var others_total := 0
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		if stat == moved:
+			continue
+		others.append(stat)
+		others_total += blend.get(stat, 0)
+
+	var remainder := Stats.BLEND_TOTAL - value
+	if others_total == 0 and remainder > 0:
+		# Nowhere to put the points -- refuse, and put the slider back where it was.
+		sliders[moved].set_value_no_signal(blend.get(moved, 0))
+		return
+
+	blend[moved] = value
+	var shares: Array[int] = []
+	var fractions: Array[float] = []
+	var handed := 0
+	for stat: Stats.Stat in others:
+		var exact := 0.0 if others_total == 0 else float(blend.get(stat, 0)) * remainder / others_total
+		var whole := int(floor(exact))
+		shares.append(whole)
+		fractions.append(exact - whole)
+		handed += whole
+	# Hand the rounding leftover to the largest fractional parts, biggest first.
+	while handed < remainder:
+		var best := 0
+		for i in range(1, fractions.size()):
+			if fractions[i] > fractions[best]:
+				best = i
+		shares[best] += 1
+		fractions[best] = -1.0
+		handed += 1
+
+	for i in range(others.size()):
+		blend[others[i]] = shares[i]
+	# ZERO MEANS ABSENT, add_stat_dict's rule one widget along: a stat contributing nothing is not
+	# an entry worth storing, and writing it grows every saved attack four keys wide with stats
+	# nobody set. The math cannot tell the difference (a 0 weight adds 0 to the total either way),
+	# so only the FILE shows it -- which is how this shipped and was caught by reading a save diff.
+	for stat: Stats.Stat in Stats.SCALING_STATS:
+		var held: int = blend.get(stat, 0)
+		if held == 0:
+			blend.erase(stat)
+		sliders[stat].set_value_no_signal(held)
+		labels[stat].text = "%d%%" % held
+
+
 # A SPARSE Dictionary[Stats.Stat, int] -- one spinbox per stat, and ZERO MEANS ABSENT: the key is
 # erased rather than stored as 0. That is what makes it different from the dense base-stat grids
 # the character and unit editors draw; those author what a stat IS, so every key belongs in the

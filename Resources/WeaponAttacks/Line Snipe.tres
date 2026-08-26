@@ -8,3 +8,7 @@ elemental_damage_type = 3
 display_name = "Line Snipe"
 power = 5
 hits_allies = true
+scaling_blend = Dictionary[int, int]({
+4: 40,
+5: 60
+})

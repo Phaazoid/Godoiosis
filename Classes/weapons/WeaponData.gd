@@ -32,9 +32,20 @@ enum LimbKind { ARM, LEG }
 # same family need independent arm/leg identity, so a shared template field can't be
 # the source of truth for it. This enum stays here as the shared vocabulary.
 
-# Three mod spaces, capacities 1/2/3; a prototype trades them for a single size-1 space
-# (weapons.md "the archetype clause made content").
-const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
+# A plain family's frame: three spaces of capacity 1/2/3 (weapons.md). Playtest-tunable.
+const SPACE_CAPACITIES: Array[int] = [1, 2, 3]
+
+@export var mod_spaces: Array[int] = SPACE_CAPACITIES.duplicate()
+# One entry per mod space, holding that space's capacity. AUTHORED per template since #486 —
+# a prototype used to be FORCED to a single size-1 space, so "weaker, but roomier" could not be
+# expressed at all. No count cap: proficiency decides what a wielder reaches, not this array.
+#
+# .duplicate() is load-bearing, and not for the reason it looks like. A const Array is READ-ONLY
+# in Godot 4 and that flag travels with the assignment, so `= SPACE_CAPACITIES` would hand every
+# un-overridden template an array nothing can edit IN PLACE — the Prototype editor's Add space and
+# its capacity spinners both write in place, so they would raise a runtime error and silently do
+# nothing on a panel that looks like it works. Measured 2026-08-25; the engine refuses the write
+# rather than letting one template's edit reach another.
 
 @export var main_attack: WeaponAttackData
 # The family's standard attack — the one REQUIRED attack, what counters and default aim
@@ -47,16 +58,30 @@ const SPACE_CAPACITIES: Array[int] = [1, 2, 3]   # playtest-tunable
 
 @export var two_handed := false   # verb lock: a missing arm can't wield this (will-and-death.md)
 @export var weapon_type: WeaponType = WeaponType.NONE
+
 @export var is_prototype := false
+# Identity, and which folder this template is authored into — NOT a rule. It gated the mod-space
+# fork until #486 made spaces authored, and has no mechanical reader left; deliberately kept,
+# because "is this a named prototype or a family base" is still a real question about a file.
 
-# Percentage weights across STR/DEX/PER/CON; missing key = 0%, should sum to 100 (not
-# hard-enforced). The family's identity — instances never carry their own copy.
-@export var scaling_blend: Dictionary[Stats.Stat, int] = {Stats.Stat.STR: 100}
+# scaling_blend lived here until #485 (2026-08-25) and is now on WeaponAttackData — per ATTACK,
+# not per family. No fallback survives on the template: a family's blend IS its main attack's, so
+# a second copy here would be a second answer to what an attack scales off (Law #4).
 
-func space_capacities() -> Array[int]:
-	if is_prototype:
-		return [1]
-	return SPACE_CAPACITIES
+# Field text for the reflective editor, merged into Item's (#473's shape). Every field the
+# Prototype mode draws owes an entry, bespoke UI included — tests/dev/test_property_tips.gd.
+static func property_tips() -> Dictionary:
+	var tips := Item.property_tips()
+	tips.merge({
+		"built_in_stat": "PROSTHETIC only: the STR/DEX this limb contributes when installed. Separate from damage math -- it is what the limb itself is worth, not what the weapon hits for.",
+		"mod_spaces": "One entry per mod space, holding that space's capacity. A plain family is 1/2/3; a prototype authors its own trade. Proficiency decides how many a wielder actually reaches.",
+		"main_attack": "The one REQUIRED attack -- what counters and default aim use, and whose scaling_blend IS this weapon's. Shared: editing it changes every weapon built on this template.",
+		"two_handed": "Verb lock: a unit missing an arm cannot wield this.",
+		"weapon_type": "Which family this template belongs to. Decides the WeaponInstance subclass it builds, and therefore its signature mechanic.",
+		"is_prototype": "Identity and save folder, not a rule -- it stopped gating mod spaces in #486.",
+		"extra_attacks": "Additional stock attacks every weapon of this template carries. Edited in the Attack Editor's Weapon Families mode, not here.",
+	})
+	return tips
 
 # Every stock attack, main first — the canonical order for menus and default picks.
 func attacks() -> Array[WeaponAttackData]:

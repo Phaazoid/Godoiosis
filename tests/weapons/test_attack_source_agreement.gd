@@ -49,7 +49,6 @@ func _atk(power: int, pattern: AttackPattern, can_counter: bool = true, hits_all
 func _template(main: WeaponAttackData, extra: WeaponAttackData) -> WeaponData:
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	t.main_attack = main
 	t.extra_attacks = [extra]
 	return t
@@ -158,7 +157,6 @@ func test_can_fire_default_attack_is_false_without_a_main_attack() -> void:
 	# the #80 data-rot shape, and it used to open the Attack entry onto nothing.
 	var t := WeaponData.new()
 	t.weapon_type = WeaponData.WeaponType.CHAINSWORD
-	t.scaling_blend = {Stats.Stat.STR: 100}
 	var unit := H.spawn_unit(self, PLAYER, Vector2i(0, 0), {}, false)
 	unit.equipped_weapon = WeaponInstance.make(t)
 

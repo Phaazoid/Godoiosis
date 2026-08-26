@@ -11,7 +11,6 @@ script = ExtResource("1_plvjd")
 main_attack = ExtResource("2_main")
 extra_attacks = Array[ExtResource("4_wad")]([ExtResource("5_blow")])
 weapon_type = 5
-scaling_blend = Dictionary[int, int]({})
 display_name = "Kinetic Mace"
 icon = ExtResource("3_icon")
 metadata/_custom_type_script = "uid://cfeu07eqvatyn"

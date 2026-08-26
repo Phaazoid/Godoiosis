@@ -77,7 +77,6 @@ func test_a_no_damage_weapon_attack_ignores_the_stat_blend() -> void:
 	var attacker: Unit = H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 6})
 	var foe: Unit = H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0))
 	var weapon := attacker.get_equipped_weapon() as WeaponInstance
-	weapon.template.scaling_blend = {Stats.Stat.STR: 100}
 	weapon.template.main_attack.power = 0
 	var no_reactions: Array[ElementalReaction] = []
 

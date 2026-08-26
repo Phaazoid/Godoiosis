@@ -14,4 +14,8 @@ power = 3
 attack_pattern = SubResource("Resource_main")
 requires_readiness = true
 vertical_rule = 1
+scaling_blend = Dictionary[int, int]({
+1: 70,
+4: 30
+})
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

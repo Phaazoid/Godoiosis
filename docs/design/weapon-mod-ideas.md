@@ -2,9 +2,9 @@
 
 **Status: BRAINSTORM (2026-07-06, same session as the parts-system grill).** The divergent bank for [weapons.md](weapons.md)'s parts system — sibling of [job-ideas.md](job-ideas.md). **Nothing locked**; every number a sketch. All effects deterministic + previewed (Laws #1/#2).
 
-**Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; spaces cap 1/2/3, proficiency unlocks spaces in order.
+**Family tags:** [CS] Chainsword · [DR] Drill · [SS] Springspear · [CB] Carbine · [BL] Bludgeon · [SP] Chem Spitter · [PR] Prosthetic · [∀] any. Module **size 1–3**; a standard frame's spaces cap 1/2/3 (the default since [#486](https://github.com/Phaazoid/Godoiosis/issues/486) — a template authors its own), proficiency unlocks spaces in order.
 
-**Canon checked through #482 (2026-08-23).**
+**Canon checked through #486 (2026-08-25).**
 
 ---
 
@@ -38,7 +38,7 @@
 
 21. **Supercharged Steam Generator** [∀] — unlocks the family's authored **alt-fire mode** (e.g. a stronger AoE burst, then a main-action rewind before it fires again — the wind-up economy Springspear's own Stab/Spring/Spring Load now exercises for real, [#73](https://github.com/Phaazoid/Godoiosis/issues/73); `WeaponAttackData.requires_readiness`/`consumes_readiness`/`builds_readiness` already exist, so a mod-granted alt-fire would reuse the same three flags, not invent new plumbing).
 22. **Trench Auger Kit** [DR] — **Burrow**: erect cover/obstruction terrain (the signature mechanic, itemized; consumes the shaped-terrain variety in [terrain.md](terrain.md)). ⚠ **Base Burrow SHIPPED 2026-07-24 (#84)** — the defensive Cover half is now stock on every Drill, so this mod needs a new job: the **obstruction** half (impassable mounds, deliberately unbuilt), or a *shaped/upgraded* Cover (bigger DEF, an adjacent cell instead of your own, a second flavor from terrain.md's variety axis).
-23. **Grindlock Governor** [CS] — sustained rev chews destructible terrain/Cover over a turn (the captured idea, itemized). **Newly unblocked 2026-07-24:** destructible Cover exists now (Burrow deposits it, removal rides `states_removed`), so this needs only the grind mechanic, not new terrain.
+23. ~~**Grindlock Governor** [CS]~~ — sustained rev chews destructible terrain/Cover over a turn. **SUPERSEDED 2026-08-25** (dev ruling: the game as built is canon). Rev's answer to Cover shipped as **DEF-pierce** — it goes *through* Cover rather than destroying it ([weapons.md](weapons.md)) — so a grind mod would be a second answer to a settled question. A destructible-terrain mod could still exist on some other verb; it would not be a rev governor.
 24. **Twinned Mechanism** [∀] — **double-attack**: the standard attack hits twice, DEX-gated (the captured "double-attack as weapon property, gated by stats" — finally placed). ⚠ power watch.
 25. **Seismic Crown** [BL] — Pummel becomes a small AoE shove (crowd control keystone). *Concrete mechanism (2026-07-23): strike an **empty** adjacent cell → shove every enemy around it outward (displace multiple at once).*
 26. **Watchman's Sear** [CB] — **overwatch**: end the turn aiming down a facing line (telegraphed-but-undirected, Axiom-4-legal); the first enemy entering the line takes the shot. The weapon-side overwatch the jobs boundary reserved. ⚠ **The SYSTEM shipped past this entry ([standing-reactions.md](standing-reactions.md), [#413](https://github.com/Phaazoid/Godoiosis/issues/413), 2026-08-20) — and this entry's fires-once rule became its canon.** Capability is an `AttackData`-base flag; whether base carbines carry it stock or this mod grants it is a content call at #413 build time. If stock, this mod's remaining job is UPGRADE content: stopping power (the named authored axis) or a longer/wider watch pattern.
@@ -48,9 +48,11 @@
 30. **Rune Socket** [∀] — the weapon carries a size-1 rune; attacks channel it if the wielder has the aura. ⚠ **Fence-crosser:** bridges into alchemy's monopoly — grill before authoring (it's the mechanist-alchemist bridge as an item, which is exactly why it's tempting *and* dangerous).
 31. **Duplex Breech** [CB] — double-barrel conversion: shots **alternate barrels deterministically** (odd/even shot counter — Law #1 clean), and each barrel carries its own effect — either each takes its own size-1 infusion/mod ("modified separately": two effect channels in one weapon) or two authored effects that simply cycle. Law #2: the queue previews *which barrel* every planned shot fires. Prototype cousin: a named double-barreled gun with two pre-authored alternating effects. *(Scratchpad capture 2026-07-14; keystone placement is a sketch.)*
 
-## Prototypes (named prebuilts — unique effect, one size-1 space)
+## Prototypes (named prebuilts — unique effect, an authored space trade)
 
 *The wiki `Weapon List` is the source bank — the dev's pre-authored designs. Sketches:*
+
+> **The trade is authored per prototype as of [#486](https://github.com/Phaazoid/Godoiosis/issues/486)** (2026-08-25). The classic shape is still one size-1 space, but `WeaponData.mod_spaces` is now a field rather than a hardcoded fork, so a prototype may go the other way — weaker than a stock frame in exchange for *more* room. Entries below written against the old forced `[1]` are sketches, not constraints.
 
 - **The Broadburner** [SP] — cone-spray pattern no standard Spitter can mod into.
 - **The Salve** [SP] — heals allies instead of harming (the support variant as a whole weapon).
