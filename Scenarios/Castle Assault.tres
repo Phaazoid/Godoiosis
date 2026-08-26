@@ -40,6 +40,7 @@ metadata/_custom_type_script = "uid://bbbfksnb0tted"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_q8cs3"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Lance"
 power = 5
 attack_pattern = SubResource("Resource_mrekx")
 hits_allies = true
@@ -117,6 +118,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_l6fmy"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_juf0b")
 
@@ -191,6 +193,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_rblmy"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_28v45")
 
@@ -265,6 +268,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_4ji6m"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_gscw2")
 
@@ -336,6 +340,7 @@ script = ExtResource("16_bd7ju")
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_3peij"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Cleave"
 power = 3
 attack_pattern = SubResource("Resource_5w2v2")
 
@@ -410,6 +415,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_md83g"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_o6nlq")
 
@@ -483,6 +489,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_7as0p"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_3su2r")
 
@@ -554,6 +561,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_klalk"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_osbp3")
 
@@ -625,6 +633,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_f5dmr"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_rvwfj")
 
@@ -698,6 +707,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_3jx8a"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_dkftm")
 
@@ -769,6 +779,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_ej0nd"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_0lehi")
 
@@ -842,6 +853,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_ik5qu"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_kty5u")
 
@@ -913,6 +925,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_g0pgd"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_sj1h7")
 
@@ -986,6 +999,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_obq4n"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_wh38c")
 
@@ -1059,6 +1073,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_4rrsq"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Shot"
 power = 3
 attack_pattern = SubResource("Resource_0v1ws")
 

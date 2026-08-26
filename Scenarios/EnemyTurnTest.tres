@@ -42,6 +42,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_yo78a"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_hky0n")
 [sub_resource type="Resource" id="Resource_yo78a"]

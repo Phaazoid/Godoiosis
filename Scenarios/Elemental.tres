@@ -30,6 +30,7 @@
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_3ci5y"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Jolt"
 power = 4
 elemental_damage_type = 3
 [sub_resource type="Resource" id="Resource_3ci5y"]
@@ -70,6 +71,7 @@ squad_id = 0
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_u6n6d"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Jolt"
 power = 4
 elemental_damage_type = 3
 [sub_resource type="Resource" id="Resource_u6n6d"]
@@ -114,6 +116,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_xys8w"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Spray"
 power = 5
 attack_pattern = SubResource("Resource_d2h5t")
 hits_allies = true
@@ -163,6 +166,7 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_4osyr"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Spray"
 power = 5
 attack_pattern = SubResource("Resource_a1kvu")
 hits_allies = true
@@ -208,6 +212,7 @@ squad_id = 3
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_ix2xb"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Soak"
 power = 4
 elemental_damage_type = 2
 [sub_resource type="Resource" id="Resource_ix2xb"]
@@ -249,6 +254,7 @@ is_leader = true
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_w25rl"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Soak"
 power = 4
 elemental_damage_type = 2
 [sub_resource type="Resource" id="Resource_w25rl"]
@@ -293,6 +299,7 @@ script = ExtResource("15_a1kvu")
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_y8fi4"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Cleave"
 power = 3
 attack_pattern = SubResource("Resource_crm60")
 [sub_resource type="Resource" id="Resource_y8fi4"]
@@ -340,6 +347,7 @@ script = ExtResource("15_a1kvu")
 
 [sub_resource type="Resource" id="AtkData_migrated_Resource_vollj"]
 script = ExtResource("atkdata_script_migrated")
+display_name = "Cleave"
 power = 3
 attack_pattern = SubResource("Resource_ckg3f")
 [sub_resource type="Resource" id="Resource_vollj"]
