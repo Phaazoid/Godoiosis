@@ -105,18 +105,24 @@ func test_an_objective_with_no_zone_painted_blocks_play() -> void:
 	_assert_silent(BoardLint.Severity.BLOCKS, "CAPTURE")
 
 
-func test_enemies_the_computer_is_not_playing_block_play() -> void:
+func test_enemies_the_computer_is_not_playing_warn_without_blocking() -> void:
 	# #150's rule, which moved here from the load-integrity suite. The consequence is not a stall
-	# on the enemy turn — it is the PLAYER being handed its own enemies.
+	# on the enemy turn — you play both sides, which is a board the dev deliberately authors
+	# (2026-08-26: "controlling both sides is important to testing"). So the finding is a WARNING.
 	_spawn(Team.Faction.PLAYER, 0)
 	_spawn(Team.Faction.ENEMY, 1)
 	var none: Array[Team.Faction] = []   # typed, not a bare [] — `game` is untyped, so a literal is not coerced
 	game.ai_controller.set_ai_factions(none)
-	_assert_reports(BoardLint.Severity.BLOCKS, "ENEMY")
+	_assert_reports(BoardLint.Severity.DEGRADES, "ENEMY")
+	# The half that is actually load-bearing, and the reason this case is worth its runtime: BLOCKS
+	# is the tier test_every_shipped_mission_is_playable reds the build on, so promoting this rule
+	# back into it would refuse to ship an AI-less board. Pinning the FORK, not one side of it —
+	# asserting only the DEGRADES line above would keep passing if the finding were filed at BOTH.
+	_assert_silent(BoardLint.Severity.BLOCKS, "ENEMY")
 
 	var declared: Array[Team.Faction] = [Team.Faction.ENEMY]
 	game.ai_controller.set_ai_factions(declared)
-	_assert_silent(BoardLint.Severity.BLOCKS, "ENEMY")
+	_assert_silent(BoardLint.Severity.DEGRADES, "ENEMY")
 
 
 func test_a_unit_painted_over_stands_where_spawn_would_refuse_it() -> void:
@@ -271,7 +277,13 @@ func test_scan_finds_shipped_missions() -> void:
 
 func test_every_shipped_mission_is_playable() -> void:
 	# What replaces the ai_factions case that left the load-integrity suite, and four checks wider.
-	# BLOCKS only: a look preset falling back is a real finding but not a reason to red the build.
+	#
+	# BLOCKS only, and that tier choice is the whole gate: a look preset falling back is a real
+	# finding but not a reason to red the build, and neither is a board that hands the dev both
+	# sides — he authors those on purpose (2026-08-26, after this case red-ed main on a fresh
+	# Level_2). So this asks "is any shipped board BROKEN", never "is any shipped board unusual".
+	# Anything that reds here must be a thing no mission may ever be, because the only way to
+	# clear it is to edit CONTENT.
 	var problems: Array[String] = []
 	for path: String in game.scenario_manager.get_missions():
 		game.scenario_manager.load_scenario(path)
