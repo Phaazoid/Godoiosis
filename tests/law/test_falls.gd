@@ -15,8 +15,32 @@ const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
 const HOLE_TILE := Vector2i(18, 2)   # the authored VOID tile ("hole") in TestTiles
+# #116's two water tiles. ONE Terrain.Kind between them -- deep is the one that declares no
+# `walkable` flag, which is exactly what "too deep to stand in" means, so every rule below asks
+# RulesService.drowns_in rather than a second enum member.
+const DEEP_WATER := Vector2i(5, 6)
+const SHALLOW_WATER := Vector2i(6, 6)
+
+const F := preload("res://tests/support/job_fixtures.gd")
 
 var _no_reactions: Array[ElementalReaction] = []
+var _scout: JobData
+var _scout_snap: Dictionary
+
+
+# Waterwalk has to come from somewhere and the fixtures carry no kit, so Scout's pool is forced to
+# just WATERWALK for the duration -- test_movement_cost.gd's arrangement, for its reason: this stays
+# correct whatever Scout's real authored kit becomes.
+func before_test() -> void:
+	_scout = JobCatalog.get_job("scout")
+	_scout_snap = F.snapshot(_scout)
+	var ability := AbilityData.new()
+	ability.id = Abilities.Id.WATERWALK
+	_scout.ability_pool = [ability]
+
+
+func after_test() -> void:
+	F.restore(_scout, _scout_snap)
 
 
 # Shover at `a_cell` with a knockback-N main; victim at `d_cell`. The board's heights arrive
@@ -291,11 +315,148 @@ func test_the_tumble_stops_at_an_occupied_cell() -> void:
 
 # --- The two rules #259 deliberately does NOT change -----------------------------------------
 
-# Water keeps its shoreline stop verbatim -- what a shove INTO water does is #116's open fork.
-func test_water_still_stops_the_shove_at_the_shoreline() -> void:
-	var s := _setup(BoardHeights.new(), 2, Vector2i(1, 0), Vector2i(2, 0))
-	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, Vector2i(5, 6))   # water_basic
-	assert_bool(_resolve(s).knockback_applied).is_false()
+# --- Water (#116) -----------------------------------------------------------------------------
+#
+# The shoreline stop is GONE, and its replacement is the ticket: water CATCHES a shove instead of
+# bracing it. "Water stops the shove" is still true -- one cell later, in the drink.
+#
+# What the drown COSTS is asserted as a property, never as a number: the water takes whatever the
+# blow left, so the fixture's own HP is the expectation and nothing here pins a tuning value. The
+# rung is read through lifecycle_for so a fixture whose Will cannot pay (a MAIM) still passes -- a
+# maim IS a down, and what this ticket rules on is that the unit goes DOWN rather than which flavour.
+
+func _lifecycle(outcome: ResolvedOutcome) -> Unit.LifecycleState:
+	return LethalityRules.lifecycle_for(outcome.lethality)
+
+
+func test_a_shove_into_deep_water_takes_everything_the_blow_left() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
+		.override_failure_message("the shove should end IN the water, not dry on the bank").is_true()
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DOWNED)
+	# "Losing all one's health", stated as the arithmetic rather than as a number: total damage IS
+	# what the unit had, so no tuning value is pinned here.
+	assert_int(outcome.damage).is_equal(outcome.hp_before)
+	assert_int(outcome.target_hp_after).is_equal(0)
+	assert_int(outcome.drown_damage).is_greater(0)
+
+
+func test_the_flight_stops_in_the_FIRST_water_cell() -> void:
+	var s := _setup(BoardHeights.new(), 3, Vector2i(1, 0), Vector2i(2, 0))
+	for x in [3, 4, 5]:
+		(s.grid as TileMapLayer).set_cell(Vector2i(x, 0), 0, DEEP_WATER)
+	var outcome := _resolve(s)
+	# NOT the void's fly-over: a hole cannot catch you and a lake can, and stopping at the water's
+	# EDGE is what keeps the body inside a rescuer's reach.
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
+	var expected: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0)]
+	assert_that(_path_of(outcome)).is_equal(expected)
+
+
+func test_a_shove_into_shallow_water_is_only_a_shove() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, SHALLOW_WATER)
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
+	assert_int(outcome.drown_damage).is_equal(0)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
+
+
+func test_a_waterwalker_is_shoved_onto_the_water_and_stands() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.d as Unit).unit_instance.add_job("scout")
+	(s.grid as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
+		.override_failure_message("water it can stand on must not brace the shove").is_true()
+	assert_int(outcome.drown_damage).is_equal(0)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
+
+
+func test_frozen_water_catches_the_shove_without_drowning_anyone() -> void:
+	var s := _setup(BoardHeights.new(), 1, Vector2i(1, 0), Vector2i(2, 0))
+	var grid := s.grid as TileMapLayer
+	grid.set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	# The shared fixture board carries no state store, so this case supplies one -- the ONLY thing
+	# it changes about the board, so the ice is genuinely what the assertions below are reading.
+	var sm: SquadManager = s.sm
+	var states: TerrainStateManager = auto_free(TerrainStateManager.new())
+	var freeze := ResolvedCellEffect.new()
+	freeze.cell = Vector2i(3, 0)
+	freeze.states_added.append(Terrain.TileState.FROZEN)
+	states.apply(freeze)
+	sm.board_source = func() -> BoardContext:
+		return BoardContext.new(grid, sm._all_units(), sm, states, null, BoardHeights.new())
+	var outcome := _resolve(s)
+	# The ice is solid ground (#109's whole point), and drowns_in asks can_traverse, which reads tile
+	# STATE -- so this comes out right with no ice clause anywhere in the shove.
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)).is_true()
+	assert_int(outcome.drown_damage).is_equal(0)
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.ACTIVE)
+
+
+func test_a_body_already_down_is_finished_by_the_water() -> void:
+	# A 0-damage shove, because that is the only kind a downed body ever takes: a damaging hit
+	# finishes it where it lies (#126), and the resolver's provisional rung then leaves nothing to
+	# shove. So this is the REPOSITION case, and the water is what turns it lethal.
+	var sm := H.make_manager(self)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0))
+	var main := (a.get_equipped_weapon() as WeaponInstance).template.main_attack
+	main.knockback = 1
+	# `deals_no_damage`, not power 0: power is only one term, and the family's stat blend puts the
+	# wielder's own numbers on top -- a 0-power swing still lands damage, which would finish the body
+	# where it lies and leave nothing to shove.
+	main.deals_no_damage = true
+	(sm.get_node("../Grid") as TileMapLayer).set_cell(Vector2i(3, 0), 0, DEEP_WATER)
+	d.force_down()
+	var outcome := _resolve({"sm": sm, "a": a, "d": d})
+	assert_bool(outcome.knockback_to == Vector2i(3, 0)) \
+		.override_failure_message("the body should be pushed into the water, not left on the bank") \
+		.is_true()
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DEAD)
+
+
+func test_a_tumble_that_bottoms_out_in_a_lake_ends_in_the_lake() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), 2)
+	heights.set_cell(Vector2i(2, 0), 2)
+	heights.set_cell(Vector2i(3, 0), 0, Terrain.RampRise.WEST)   # a ramp down toward the water
+	var s := _setup(heights, 1, Vector2i(1, 0), Vector2i(2, 0))
+	(s.grid as TileMapLayer).set_cell(Vector2i(4, 0), 0, DEEP_WATER)
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_to == Vector2i(4, 0)) \
+		.override_failure_message("the slide should carry on into the water, not stop dry above it") \
+		.is_true()
+	assert_that(_lifecycle(outcome)).is_equal(Unit.LifecycleState.DOWNED)
+	assert_int(outcome.target_hp_after).is_equal(0)
+
+
+func test_a_fall_into_water_pays_the_fall_and_the_water_takes_the_rest() -> void:
+	# ONE level, off the constant rather than a number. The victim is given HEADROOM rather than the
+	# drop being tuned down: the baseline fixture unit is felled by the swing plus a single level, so
+	# without it there is nothing left for the water and the case tests only the fall.
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(1, 0), Terrain.UNITS_PER_LEVEL)
+	heights.set_cell(Vector2i(2, 0), Terrain.UNITS_PER_LEVEL)
+	var sm := H.make_manager(self, heights)
+	var a := H.spawn_solo(self, sm, PLAYER, Vector2i(1, 0))
+	var d := H.spawn_solo(self, sm, ENEMY, Vector2i(2, 0), {Stats.Stat.MHP: 200})
+	(a.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	var grid := sm.get_node("../Grid") as TileMapLayer
+	grid.set_cell(Vector2i(3, 0), 0, DEEP_WATER)   # at the board floor
+	var outcome := _resolve({"sm": sm, "a": a, "d": d, "grid": grid})
+	assert_int(outcome.fall_damage) \
+		.override_failure_message("a drop into water is still a drop").is_greater(0)
+	assert_int(outcome.drown_damage) \
+		.override_failure_message("fixture assumption broke: the fall alone finished the unit, so "
+			+ "there was nothing left for the water to take -- lower the drop").is_greater(0)
+	# THE property, and it is tuning-proof: however the blow and the fall are priced, the water takes
+	# the remainder, so the total is exactly what the unit had.
+	assert_int(outcome.damage).is_equal(outcome.hp_before)
+	assert_int(outcome.target_hp_after).is_equal(0)
 
 
 # A hit that alone kills leaves nothing to shove (the pre-#259 rule, judged provisionally).

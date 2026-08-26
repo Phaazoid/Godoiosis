@@ -588,9 +588,13 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	var terrain_reactions := TerrainReactionCatalog.get_all()
 
 	# Knockback uses projected positions as its single source of truth (#84, approach B). Clear last
-	# pass's shove projections before recomputing; a unit's own queued move is untouched.
+	# pass's shove projections before recomputing; a unit's own queued move is untouched. The rescue
+	# haul (#116) rides along, and clearing it is load-bearing rather than tidy: RulesService's
+	# rescue_landings reads the body's PROJECTED cell, so a haul left standing would be read back as
+	# where the body already is and freeze the answer at last pass's bank.
 	for unit in board.units:
 		unit.clear_projected_knockback()
+		unit.clear_projected_rescue()
 
 	# Standing Guards armed in an EARLIER pass (#414) — the enemy-phase case, and the whole point of
 	# the mechanic. Copied, oldest arm first, so "earlier-queued absorbs first" holds across passes
@@ -681,6 +685,35 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 			plan.counters.append(ctr)
 	# Phase 2: counters, now built from post-shove positions.
 	PlanResolver.resolve_counters(plan, hypo, reactions, board, terrain_reactions)
+
+	# Rescue hauls (#116): a body that cannot stand where it lies -- in deep water -- is dragged onto
+	# a cell beside its rescuer, and the board must DRAW it there rather than jump it on Execute
+	# (Law #2). Published here and not a line earlier: a reaction is derived from where the pass
+	# leaves its target, and rescues run last in the side channel, so a counter aiming at the
+	# hauled-out cell would be swinging at a body nobody has pulled yet.
+	#
+	# The cell published is the order's OWN STAMP, never a fresh derivation: the player chose it
+	# (dev, 2026-08-26), and re-deriving here would let the board draw a cell execution will not use.
+	# The stamp is the truth; this is only its drawing.
+	#
+	# An ordinary rescue publishes NOTHING -- its stamp IS the body's own cell -- so the guard below
+	# keeps every pre-#116 rescue bit-for-bit unchanged rather than a special case inside it.
+	if board != null:
+		for action in squad.action_queue:
+			if action.action_type != BaseAction.ActionType.RESCUE:
+				continue
+			var rescue := action as RescueAction
+			if rescue.target == null or not is_instance_valid(rescue.target):
+				continue
+			if rescue.haul_to == rescue.target.get_projected_destination():
+				continue   # an ordinary rescue: the stamp is where the body already is
+			# Only a LEGAL stamp is drawn, and that is load-bearing rather than defensive. The board
+			# must not promise a bank a re-planned move has put out of reach -- and because
+			# rescue_landings short-circuits once a haul is published (the body then reads as
+			# standing on the bank), publishing a stale one would make it validate itself. Left
+			# undrawn, the validator recomputes from the water and reds the row, which is the answer.
+			if RulesService.rescue_landings(action.actor, rescue.target, board).has(rescue.haul_to):
+				rescue.target.set_projected_rescue(rescue.haul_to)
 
 	# Burrow (#84): each queued Burrow order deposits a permanent COVER tile on the burrower's
 	# projected cell. Routed through cell_effects so preview + execution consume the same object

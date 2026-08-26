@@ -32,7 +32,7 @@ func test_side_channel_sections_follow_registry_order() -> void:
 	rally.init(mate)
 	assert_bool(manager.queue_action(hero.squad, rally)).is_true()
 	var rescue := RescueAction.new()
-	rescue.init(hero, ally)
+	rescue.init(hero, ally, ally.movement.cell)   # dry ground: the landing IS its own cell (#116)
 	assert_bool(manager.queue_action(hero.squad, rescue)).is_true()
 
 	var context := BoardContext.new(board.grid, [hero, mate, ally], manager)

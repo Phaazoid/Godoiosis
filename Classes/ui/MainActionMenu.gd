@@ -477,8 +477,11 @@ func _dispatch(action_id: int, unit: Unit) -> void:
 			game.unit_info_panel.set_unit(unit, game.can_control(unit), game._board())
 		RESCUE:
 			# Same query as the populate gate above, plan included -- a predicted-down squadmate
-			# (#124) must be pickable exactly where the row said it would be.
-			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)), func(target: Unit): game.queue_rescue(unit, target))
+			# (#124) must be pickable exactly where the row said it would be. Picking the BODY no longer
+			# queues anything -- step two chooses where it comes out (#116).
+			var on_body := func(body: Unit) -> void:
+				_pick_rescue_landing(unit, body)
+			game.enter_target_pick_mode(RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)), on_body)
 		GUARD:
 			# Same query as the populate gate above — the pick layer must agree with the rule layer
 			# (the #126 lesson pinned by tests/ui/test_target_pick_projection.gd).
@@ -505,6 +508,26 @@ func ability_action_entries(unit: Unit) -> Array[Dictionary]:
 	if unit.has_live_ability(Abilities.Id.INTIMIDATION) and not RulesService.adjacent_enemies(unit, game._board()).is_empty():
 		entries.append({"name": "Intimidate", "type": BaseAction.ActionType.INTIMIDATE})
 	return entries
+
+
+# STEP TWO of a rescue (#116, dev 2026-08-26): *"once rescue is chosen, I would like all of the valid
+# tiles to flash, and the user to select the tile to rescue to, and only once chosen does the rescue
+# action queue."* So picking the BODY queues nothing -- this opens the tile pick, and the click on a
+# bank is what commits the order.
+#
+# A body on ordinary ground skips it and queues straight away: its only landing is its own cell, so
+# there is nothing to choose. The fork is rescue_needs_a_pick, NOT "more than one landing" -- the dev
+# chose to ask even with a single bank, because a step that appears and disappears reads as a bug and
+# a one-wide jetty is exactly where it would vanish.
+func _pick_rescue_landing(rescuer: Unit, body: Unit) -> void:
+	var board: BoardContext = game._board()
+	if not RulesService.rescue_needs_a_pick(body, board):
+		game.queue_rescue(rescuer, body, body.get_projected_destination())
+		return
+	var on_cell := func(cell: Vector2i) -> void:
+		game.queue_rescue(rescuer, body, cell)
+	# flash = true is the whole of what he asked to SEE; the mark is the same overlay every pick uses.
+	game.enter_cell_pick_mode(RulesService.rescue_landings(rescuer, body, board), on_cell, true, true)
 
 # Per-type dispatch, not one uniform queue call: an ability action can need a TARGET pick where a
 # weapon self-ability never does. Same reasoning that keeps queue_intimidate separate from

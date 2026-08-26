@@ -48,7 +48,7 @@ func test_move_is_refused_after_a_rescue_is_queued() -> void:
 	var ally := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0))
 
 	var rescue := RescueAction.new()
-	rescue.init(a, ally)
+	rescue.init(a, ally, ally.movement.cell)   # dry ground: the landing IS its own cell (#116)
 	a.squad._queue_action(rescue)
 	assert_bool(a.has_main_action_queued()).is_true()
 
