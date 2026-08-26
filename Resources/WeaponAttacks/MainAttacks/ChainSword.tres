@@ -13,6 +13,7 @@ scaling_blend = Dictionary[int, int]({
 1: 60,
 4: 40
 })
+display_name = "Slash"
 power = 3
 attack_pattern = SubResource("Resource_main")
 vertical_rule = 1

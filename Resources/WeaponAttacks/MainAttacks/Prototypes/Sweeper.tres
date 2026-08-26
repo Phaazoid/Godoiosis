@@ -1,0 +1,17 @@
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+
+[ext_resource type="Script" uid="uid://cuvfasmongryk" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="1_qgxbu"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_ij5xu"]
+
+[sub_resource type="Resource" id="Resource_5w2v2"]
+script = ExtResource("1_qgxbu")
+
+[resource]
+script = ExtResource("2_ij5xu")
+scaling_blend = Dictionary[int, int]({
+1: 60,
+4: 40
+})
+display_name = "Cleave"
+power = 3
+attack_pattern = SubResource("Resource_5w2v2")

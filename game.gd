@@ -43,7 +43,7 @@ enum GameState {
 	DEV_MODE,
 	PICKING_TARGET,
 	# Never read this member to ask "is the board locked?" -- ask _board_locked_for_player(), which
-	# also reads camera_controller.ai_locked. game_state is transient and gets rested on _base_state()
+	# also reads camera_controller.playback_locked. game_state is transient and gets rested on _base_state()
 	# mid-AI-turn (set_dev_mode, clear_board); the flag is what actually spans the turn (#484).
 	AI_TURN,
 	MISSION_OVER,
@@ -519,9 +519,9 @@ func start_faction_turn(faction: Team.Faction):
 
 	if ai_controller.is_ai_faction(faction):
 		game_state = GameState.AI_TURN
-		camera_controller.set_ai_locked(true)
+		camera_controller.set_playback_locked(true)
 		await ai_controller.take_faction_turn(faction, _board())
-		camera_controller.set_ai_locked(false)
+		camera_controller.set_playback_locked(false)
 		return
 
 	#TODO This should probably be it's own game state - IN_MENU or something.
@@ -576,19 +576,29 @@ func _run_turn_start_ticks(faction: Team.Faction) -> void:
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
 # end-of-mission card is up, and while Mission Select is up.
 #
-# ai_locked is the AUTHORITY on the first of those, never game_state (#484). The two are written in
+# playback_locked is the AUTHORITY on the first of those, never game_state (#484). The two are written in
 # one block by start_faction_turn, but game_state is TRANSIENT -- set_dev_mode and clear_board both
 # rest it on _base_state() from anywhere, AI turn or not -- so reading the state alone let a dev-mode
 # toggle mid-enemy-phase report the board unlocked while the camera was still AI-owned. That pair is
 # the one combination battle3d's two camera gates may never see at once: _update_pointer writes the
-# hidden 2D camera when this is false and _mirror_camera reads it when ai_locked is true, so they
+# hidden 2D camera when this is false and _mirror_camera reads it when playback_locked is true, so they
 # chased each other to the pan limit on every mouse move. Asking the flag makes the pair
 # unrepresentable rather than merely unreached, whatever writes game_state next.
 func _board_locked_for_player() -> bool:
-	return (camera_controller.ai_locked
-		or game_state == GameState.AI_TURN
-		or game_state == GameState.MISSION_OVER
-		or game_state == GameState.MENU)
+	return playback_owns_board() or menu_is_up()
+
+# The two halves, named because since #520 they have DIFFERENT readers. Playback owning the board
+# is compatible with the player still zooming (dev, 2026-08-26: "let the player zoom in and out
+# freely during AI turns and battle"); a menu being up is not, since the surface on screen wants
+# the wheel for itself. battle3d gates the rig's zoom on menu_is_up() alone for exactly that.
+#
+# Split rather than duplicated: _board_locked_for_player is COMPOSED of these, so there is no
+# second answer to the whole question -- only names for its parts.
+func playback_owns_board() -> bool:
+	return camera_controller.playback_locked or game_state == GameState.AI_TURN
+
+func menu_is_up() -> bool:
+	return game_state == GameState.MISSION_OVER or game_state == GameState.MENU
 
 func can_control(unit: Unit) -> bool:
 	if unit == null:

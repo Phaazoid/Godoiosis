@@ -1,0 +1,20 @@
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_35l5w"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_c5p18"]
+
+[sub_resource type="Resource" id="Resource_mrekx"]
+script = ExtResource("1_35l5w")
+length = 6
+metadata/_custom_type_script = "uid://bbbfksnb0tted"
+
+[resource]
+script = ExtResource("2_c5p18")
+scaling_blend = Dictionary[int, int]({
+1: 70,
+4: 30
+})
+display_name = "Lance"
+power = 5
+attack_pattern = SubResource("Resource_mrekx")
+hits_allies = true

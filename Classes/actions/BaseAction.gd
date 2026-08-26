@@ -76,6 +76,17 @@ func is_main_action() -> bool:
 func actor_can_perform() -> bool:
 	return true
 
+# Who this order is AIMED AT -- the unit it is done TO, rather than the one doing it. The default
+# is the actor, which is the honest answer for a verb that acts on itself (move, rally, reload);
+# Attack/Rescue/Intimidate/Guard override it with the `target` they each already store.
+#
+# Declared per Law #4: those four have held a private `var target: Unit` each, with no shared door,
+# since they were written -- this is the door, not a fifth copy. It exists because BeatSheet has to
+# ask the question of an order whose class it does not know (#520): a beat frames what is being
+# done to whom, and only the order can say who that is.
+func aimed_at() -> Unit:
+	return actor
+
 func get_actor_texture() -> Texture2D:
 	if actor == null or not is_instance_valid(actor):
 		return null

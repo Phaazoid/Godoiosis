@@ -4,5 +4,6 @@
 
 [resource]
 script = ExtResource("1_wad")
+display_name = "Spray"
 vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

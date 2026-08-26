@@ -39,6 +39,13 @@ func before_test() -> void:
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
 	game.scenario_manager.clear_board()
 	game.game_state = game.GameState.IDLE
+	# The readout gate is `hovered or foretold or always_on` (#350/#354) and every case in this file
+	# is about the FORETOLD leg. Hover was silently absent before #520 only because nothing moved the
+	# camera during a player's own pass -- now the camera goes to the action, so where a stationary
+	# cursor points afterwards is a different cell, and one of them can hold a unit. Cutting the leg
+	# is what the file already says it wants ("the pointer is nowhere"); leaving it live made these
+	# cases pass or fail on whatever the PREVIOUS suite left the mouse doing.
+	_unit_mirror.hovered_unit_source = Callable()
 	await await_idle_frame()
 
 

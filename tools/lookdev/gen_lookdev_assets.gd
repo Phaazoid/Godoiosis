@@ -6,6 +6,12 @@
 # Textures land in Art/LookDev/ (32 px/tile, flat-lit, deterministic seed);
 # the MeshLibrary in Scenes/LookDev/.
 #
+# The --meshlib phase WRITES one more texture than --textures does: the composed ground atlas
+# (#540, see _write_atlas), which the library then references rather than embedding. So a run that
+# CHANGES the atlas -- new tileset art, a new prop shape -- refuses, because the imported copy it
+# would name is still the previous one; repeat --import and --meshlib and the second pass lands.
+# An unchanged atlas needs neither, which is every run that is not editing the tileset.
+#
 # The meshlib has TWO tenants since #250, and the split is the whole point:
 #   ids 0-8   the hand-picked Kind blocks, both fallback ramps and the wedge filler. The LookDev
 #             diorama paints these by id (board_painter.gd's GRASS/STONE/RAMP), and BoardMirror
@@ -30,6 +36,10 @@ const ART_DIR := "res://Art/LookDev"
 const MESHLIB_PATH := "res://Scenes/LookDev/lookdev_meshlib.tres"
 const TILESET_PATH := "res://Resources/TestTiles.tres"
 const TILE := 32
+
+# The composed ground atlas, one PNG per tileset source (#540) -- a generated artifact like every
+# other file in ART_DIR, committed alongside an authored .import.
+const ATLAS_NAME := "ground_atlas_%d.png"
 
 # Where the per-tileset-tile items start. Everything below is the Stage-0 set, plus #427 slice 2's
 # gentle fallback wedge and the wedge filler, plus slice 3's four generic corner caps (outer and
@@ -571,11 +581,19 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			if not stands_up and clear >= HOLE_FRACTION:
 				translucent.append("%d/%d:%d (%d%%)" % [source_id, coords.x, coords.y, roundi(clear * 100.0)])
 
-		# Embedded in the meshlib rather than written as a PNG: a generated atlas saved to disk
-		# would be imported with detect_3d on and silently re-imported to VRAM compression with
-		# MIPMAPS the first time it rendered -- and mipmaps on an atlas bleed neighbouring tiles
-		# into each other at distance, which is the one thing the half-texel UV inset cannot fix.
-		var composited := ImageTexture.create_from_image(ground)
+		# Written to disk and REFERENCED, never embedded (#540). An embedded atlas is an Image
+		# sub-resource behind an ImageTexture, and ImageTexture.set_image() keeps no reference to
+		# the Image it is handed -- get_image() rebuilds an anonymous one off the RenderingServer --
+		# so the parsed sub-resource id dies on every load and the next save mints a fresh one.
+		# Only an ext_resource survives a save, and only a Texture2D with a resource_path is one.
+		#
+		# Its .import is AUTHORED and committed: the default detect_3d/compress_to would re-import
+		# to VRAM compression WITH MIPMAPS the first time it rendered, and mipmaps on an atlas bleed
+		# neighbouring tiles into each other at distance -- the one thing the half-texel UV inset
+		# cannot fix. Art/LookDev/grass_top.png.import is what that looks like when it is not pinned.
+		var composited := _write_atlas(ground, source_id)
+		if composited == null:
+			return -1
 		atlas_mat.albedo_texture = composited
 		prop_mat.albedo_texture = composited
 
@@ -624,6 +642,31 @@ func _rgba(tex: Texture2D) -> Image:
 	if img.get_format() != Image.FORMAT_RGBA8:
 		img.convert(Image.FORMAT_RGBA8)
 	return img
+
+
+# The composed atlas as something ResourceSaver will write as an ext_resource -- which means a
+# Texture2D carrying a resource_path, which means the PNG on disk. Writes it, hands back the
+# IMPORTED texture.
+#
+# REFUSES rather than returning a stale one: load() serves whatever the last import pass produced,
+# so an atlas whose pixels have just changed would pair THIS run's UVs with the PREVIOUS run's art
+# -- every UV in the library correct about a texture nobody can see. Comparing the two is one
+# memcmp, and it is the only thing here that can catch it.
+func _write_atlas(ground: Image, source_id: int) -> Texture2D:
+	var path := "%s/%s" % [ART_DIR, ATLAS_NAME % source_id]
+	var err := ground.save_png(path)
+	if err != OK:
+		push_error("Failed to write %s (error %d)" % [path, err])
+		return null
+	var tex := load(path) as Texture2D
+	if tex == null:
+		push_error("%s is not imported yet -- run --import, then rerun --meshlib." % path)
+		return null
+	var imported := _rgba(tex)
+	if imported == null or imported.get_data() != ground.get_data():
+		push_error("%s no longer matches its import -- run --import, then rerun --meshlib." % path)
+		return null
+	return tex
 
 
 # What share of the tile's pixels are not fully opaque. A FRACTION rather than a yes/no,

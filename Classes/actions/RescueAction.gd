@@ -28,6 +28,9 @@ func init(rescuer: Unit, downed_ally: Unit, landing: Vector2i) -> void:
 	haul_to = landing
 	action_type = BaseAction.ActionType.RESCUE
 
+func aimed_at() -> Unit:
+	return target   # the body, not the rescuer -- a pickup is read on who comes up
+
 func execute() -> void:
 	begin_execution()
 	if target != null and is_instance_valid(target) and target.is_downed():

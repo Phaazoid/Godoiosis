@@ -25,6 +25,12 @@ static var AI_ACTION := 0.45       # BOARD base beat on an AI pass -- an unread 
 static var PLAYER_ACTION := 0.3    # BOARD base beat on the player's own Execute (#519)
 static var TURN_HANDOFF := 1.0     # hold at every faction turn start -- game.start_faction_turn
 
+# How long the camera takes to reach the next beat's subject, and therefore how long the action
+# WAITS for it (#520). Shorter than AI_SQUAD_PAN because that one crosses the board between squads
+# while this hops between units already near each other. Fixed duration, not fixed speed: a short
+# hop and a long one read at the same pace, which is what makes it a beat rather than a lurch.
+static var PLAYBACK_PAN := 0.35
+
 # PLAYER_ACTION was 0.0 from #118 until #519 -- "deliberately none" (dev, 2026-08-10), reversed on
 # 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health
 # readouts flash in and out (#475, subsumed) and battles read "way too fast".
@@ -43,6 +49,19 @@ static var HOLD_CRISIS := 0.9      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
 static var HOLD_KNOCKBACK := 0.2   # the hit shoved its target
 static var HOLD_TURNOVER := 0.5    # the act break: the defending line raises weapons
+static var HOLD_HEAL := 0.35       # HP came back -- the quiet beat this table had no row for
+
+# The side-channel tail (dev, 2026-08-26: "the side channel actions are going to need emphasis as
+# well"). PER VERB rather than one shared number, because a rescue and a reload are not the same
+# moment. coda_hold() below is the one lookup.
+static var HOLD_RESCUE := 0.5
+static var HOLD_RALLY := 0.4
+static var HOLD_INTIMIDATE := 0.4
+static var HOLD_RELOAD := 0.15
+static var HOLD_REV := 0.15
+static var HOLD_BURROW := 0.25
+static var HOLD_CAPTURE := 0.5
+static var HOLD_GUARD := 0.3
 
 # How much of a hold actually applies, per profile. BOARD ships at 0.0 -- flat, "small pauses
 # everywhere" (dev, 2026-08-26) -- so the shape exists but is dialled out rather than absent. That
@@ -79,6 +98,10 @@ static func drama_of(profile: Profile) -> float:
 static func hold_for(beat: BeatSheet.Beat) -> float:
 	if beat.kind == BeatSheet.Kind.TURNOVER:
 		return HOLD_TURNOVER
+	if beat.kind == BeatSheet.Kind.CODA:
+		# Floored, so an undeclared verb degrades to no hold rather than a negative beat. The law
+		# test is what actually refuses one -- a silent 0 in play is not a signal anybody sees.
+		return maxf(0.0, coda_hold(beat.coda_type))
 	var hold := 0.0
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
@@ -91,7 +114,25 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 		hold = maxf(hold, HOLD_IRON_WILL)
 	if beat.has_knockback:
 		hold = maxf(hold, HOLD_KNOCKBACK)
+	if beat.has_heal:
+		hold = maxf(hold, HOLD_HEAL)
 	return hold
+
+
+# How long one side-channel verb holds. -1.0 for a verb nobody has declared one for, which is what
+# makes the omission VISIBLE: an undeclared verb is indistinguishable from a deliberate 0 otherwise,
+# and tests/law/test_action_registry.gd refuses the negative.
+static func coda_hold(type: BaseAction.ActionType) -> float:
+	match type:
+		BaseAction.ActionType.RESCUE: return HOLD_RESCUE
+		BaseAction.ActionType.RALLY: return HOLD_RALLY
+		BaseAction.ActionType.INTIMIDATE: return HOLD_INTIMIDATE
+		BaseAction.ActionType.RELOAD: return HOLD_RELOAD
+		BaseAction.ActionType.REV: return HOLD_REV
+		BaseAction.ActionType.BURROW: return HOLD_BURROW
+		BaseAction.ActionType.CAPTURE: return HOLD_CAPTURE
+		BaseAction.ActionType.GUARD: return HOLD_GUARD
+	return -1.0
 
 
 static func beat(host: Node, seconds: float) -> void:
