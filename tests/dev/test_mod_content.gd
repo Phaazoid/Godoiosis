@@ -6,17 +6,6 @@
 extends GdUnitTestSuite
 
 
-# scaling_nudge became scaling_change in #74, and a renamed .tres key is dropped SILENTLY on load:
-# the file keeps its text, the values just stop arriving. Two shipped mods carried one, so this is
-# the guard for a migration that has no other way to fail loudly.
-func test_no_mod_still_writes_the_retired_scaling_nudge_key() -> void:
-	var stale: Array[String] = []
-	for path in _mod_files():
-		if FileAccess.get_file_as_string(path).contains("scaling_nudge"):
-			stale.append(path.get_file())
-	assert_array(stale).is_empty()
-
-
 # The other direction, and the one that catches a rename that half-landed: a file that WRITES a
 # scaling change must load with one. Reading the file's own text rather than pinning any mod's
 # numbers is what keeps this blind to what the dev authors.
@@ -72,3 +61,46 @@ func test_no_shipped_mod_changes_scaling_without_naming_a_family() -> void:
 			broken.append("%s: %s" % [name, reason])
 	assert_array(broken).is_empty()
 	assert_int(mods.size()).is_greater(0)   # nothing scanned: this sweep proves nothing
+
+
+# Every key a shipped mod file writes must still be a property of WeaponModData. A renamed or
+# retired key is dropped SILENTLY on load -- the file keeps its text, the value just stops
+# arriving -- and that is not a failure any other test can see.
+#
+# ABSORBS #74's scaling_nudge check, which asked the same question about one key: that name is
+# simply one this class no longer has. Written generally because the fields keep coming --
+# applies_to and replaces_main (#529/#530) arrive with no content of their own, so a per-field
+# guard for either would assert nothing at all today and rot quietly until it did.
+func test_no_mod_file_writes_a_key_the_class_no_longer_has() -> void:
+	var live := {}
+	for prop: Dictionary in WeaponModData.new().get_property_list():
+		live[prop.get("name", "")] = true
+	var stale: Array[String] = []
+	var scanned := 0
+	for path in _mod_files():
+		for key in _resource_keys(FileAccess.get_file_as_string(path)):
+			scanned += 1
+			if not live.has(key):
+				stale.append("%s: %s" % [path.get_file(), key])
+	assert_array(stale).is_empty()
+	assert_int(scanned).is_greater(0)	# nothing parsed: this sweep proves nothing
+
+
+# Keys from the [resource] block alone. The ext_resource/sub_resource headers above it speak the
+# file FORMAT's vocabulary (type/path/uid/id), which is nothing to do with this class.
+func _resource_keys(text: String) -> Array[String]:
+	var keys: Array[String] = []
+	var in_resource := false
+	for line: String in text.split("\n"):
+		var trimmed := line.strip_edges()
+		if trimmed.begins_with("["):
+			in_resource = trimmed.begins_with("[resource]")
+			continue
+		if not in_resource:
+			continue
+		if trimmed.begins_with("metadata/"):
+			continue   # Godot's own editor metadata, not a property of this class
+		var eq := trimmed.find(" = ")
+		if eq > 0:
+			keys.append(trimmed.substr(0, eq))
+	return keys

@@ -181,6 +181,20 @@ func active_modules(wielder: Unit) -> Array[WeaponModData]:
 		result.append_array(space(i))
 	return result
 
+# The mods whose EFFECTS reach this attack — the ONE place applies_to is interpreted (#530).
+# Every effect answers to it: power, element, and the scaling shift its callers weigh.
+#
+# GRANTS deliberately do not come through here — available_attacks reads active_modules straight,
+# because "which attacks does this mod change" and "which attacks does it add" are different
+# questions. A MAIN_ATTACK mod still hands over whatever it grants; it just doesn't buff it.
+func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
+	var result: Array[WeaponModData] = []
+	var main := template.main_attack if template != null else null
+	for mod in active_modules(wielder):
+		if mod.applies_to == WeaponModData.AppliesTo.EVERY_ATTACK or attack == main:
+			result.append(mod)
+	return result
+
 # --- Attack-source surface (EquippableData) ---
 
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
@@ -252,7 +266,7 @@ func attack_detail(wielder: Unit, attack: AttackData) -> String:
 	var headline := "%s %s" % [weapon_attack.payload_text(damage), weapon_attack.targets_text()]
 	if weapon_attack.deals_no_damage:
 		return headline   # scaling is suppressed entirely (#126) -- printing a blend would be a lie
-	var mods := active_modules(wielder)
+	var mods := _mods_for(wielder, weapon_attack)
 	var eff_power := weapon_attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
@@ -313,7 +327,7 @@ func base_damage(wielder: Unit, attack: WeaponAttackData) -> int:
 		return 0
 	if attack.deals_no_damage:
 		return 0   # utility attack (#126): the stat blend never sneaks damage into a damageless effect
-	var mods := active_modules(wielder)
+	var mods := _mods_for(wielder, attack)
 	var eff_power := attack.power
 	for mod in mods:
 		eff_power += mod.power_delta
@@ -327,7 +341,7 @@ func get_elements(wielder: Unit, attack: WeaponAttackData) -> Array[Elemental.El
 		return result
 	if attack.elemental_damage_type != Elemental.Element.NONE:
 		result.append(attack.elemental_damage_type)
-	for mod in active_modules(wielder):
+	for mod in _mods_for(wielder, attack):
 		if mod.added_element != Elemental.Element.NONE and not result.has(mod.added_element):
 			result.append(mod.added_element)
 	return result

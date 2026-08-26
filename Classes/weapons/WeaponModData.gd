@@ -14,6 +14,16 @@ class_name WeaponModData
 @export var id: String = ""
 @export var display_name: String = ""
 @export var size: int = 1   # 1-3, capacity cost within whichever space it's fitted to
+
+enum AppliesTo { EVERY_ATTACK, MAIN_ATTACK }
+@export var applies_to: AppliesTo = AppliesTo.EVERY_ATTACK
+# Which of this weapon's attacks the mod's effects reach (#530). ONE answer for every effect it
+# carries — power, element, scaling shift, and the overrides — rather than a target per field:
+# "what does this mod reach" is one question (design law #4), and a mod meant to sharpen one swing
+# has no reason to sharpen it in only some of those ways.
+#
+# EVERY_ATTACK is the storage's own zero AND what every mod did before this field existed, so no
+# authored .tres changes meaning by gaining it. WeaponInstance._mods_for is the only reader.
 @export var power_delta: int = 0
 @export var added_element: Elemental.Element = Elemental.Element.NONE
 @export var weight: int = 0
@@ -82,10 +92,11 @@ static func property_tips() -> Dictionary:
 		"id": "Stable internal name, for content that has to refer to this mod by something other than its display name.",
 		"display_name": "What the fitting picker and the weapon's space list call this mod.",
 		"size": "Capacity this mod costs in whichever space it is fitted to. Spaces hold 1 / 2 / 3, so a size-3 keystone only ever fits the big space.",
-		"power_delta": "Flat shift to the damage of every attack this weapon fires, before scaling. Negative is a real option -- a heavy mod that trades power for reach.",
-		"scaling_change": "How this mod re-mixes damage scaling. You author the absolute percentages you want; what is STORED is the shift from the family main attack's own blend, so every attack the weapon fires moves by the same amount and keeps its own character.",
+		"applies_to": "Which of the weapon's attacks this mod affects. Every Attack is the classic behaviour -- the mod is part of the weapon. Main Attack aims everything it does at the standard swing alone, so a mod can sharpen one attack without sharpening the rest.",
+		"power_delta": "Flat shift to damage, before scaling, on whichever attacks Applies To names. Negative is a real option -- a heavy mod that trades power for reach.",
+		"scaling_change": "How this mod re-mixes damage scaling. You author the absolute percentages you want; what is STORED is the shift from the family main attack's own blend, so the attacks Applies To names move by the same amount and keep their own character.",
 		"family": "Which weapon family this mod fits. Required once it changes scaling -- the shift is measured against that family's main attack and means nothing on another. Leave it unset for a mod that fits anything.",
-		"added_element": "An element this mod adds to every hit, ON TOP of whatever the attack already carries. NONE = adds nothing.",
+		"added_element": "An element this mod adds ON TOP of whatever the attack already carries, on whichever attacks Applies To names. NONE = adds nothing.",
 		"weight": "Mass this mod adds to the weapon. Counts whether or not the space is proficiency-active -- mass is physical, not a capability.",
 		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. Additive only: nothing here replaces or edits an existing attack. Pick from attacks authored in the Attack Editor.",
 		"granted_abilities": "Abilities the WIELDER has while this weapon contributes -- the equipped weapon, or an installed prosthetic. Granted live: unequip the weapon and the ability leaves with it.",
