@@ -43,6 +43,22 @@ class_name WeaponModData
 func fits_family(weapon_type: WeaponData.WeaponType) -> bool:
 	return family == WeaponData.WeaponType.NONE or family == weapon_type
 
+
+# The derived restriction (#74, dev ruling: "only mods with stat bumps are forced to be weapon
+# specific"). A stored shift is measured against ONE family's main attack, so it means nothing
+# anywhere else — no second field to author, and nothing to keep in sync.
+func requires_family() -> bool:
+	return not scaling_change.is_empty()
+
+
+# "" = savable. The REASON lives here rather than in the panel that refuses, so a second surface
+# cannot invent different words for the same rule — WeaponInstance.fit_block_reason's shape, and
+# #166's before it. The Item Editor's save gate is its one reader today.
+func save_block_reason() -> String:
+	if requires_family() and family == WeaponData.WeaponType.NONE:
+		return "This mod changes scaling, so it needs a family — the change is measured against that family's main attack, and means nothing without one."
+	return ""
+
 # Attacks this mod ADDS to the repertoire of the weapon it is fitted to. Composed in
 # WeaponInstance.available_attacks, which reads only its OWN fitted mods — see that method's
 # comment for why this one field is per-weapon while the two below are per-unit.

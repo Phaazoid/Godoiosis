@@ -176,3 +176,26 @@ func test_dragging_a_slider_writes_the_shift_onto_the_mod() -> void:
 		var stat: Stats.Stat = Stats.SCALING_STATS[i]
 		var shown := int(sliders[i].value)
 		assert_int(mod.scaling_change.get(stat, 0)).is_equal(shown - int(reference.get(stat, 0)))
+
+# ==============================================================================
+#  The save gate
+# ==============================================================================
+
+# The derived restriction, enforced where it can actually be caught. A shift with no family is
+# measured against nothing -- the file would load, list, and fit anywhere, quietly meaning nothing.
+func test_saving_a_mod_that_changes_scaling_with_no_family_is_refused() -> void:
+	var mod := _mod(WeaponData.WeaponType.NONE, {Stats.Stat.DEX: 5})
+	assert_bool(_tool()._refuse_unusable(mod)).is_true()
+
+# Both legal shapes: a shift WITH its family, and a mod that changes no scaling at all -- which is
+# the majority of the bank, and is exactly why the restriction is derived rather than blanket.
+func test_a_mod_with_a_family_or_with_no_scaling_saves_fine() -> void:
+	var tool_ref := _tool()
+	assert_bool(tool_ref._refuse_unusable(_mod(WeaponData.WeaponType.CARBINE, {Stats.Stat.DEX: 5}))).is_false()
+	assert_bool(tool_ref._refuse_unusable(_mod(WeaponData.WeaponType.NONE))).is_false()
+
+# One door for every kind this tab authors, so widening it for mods must not have narrowed it for
+# anything else -- the template arm is the one that was already there.
+func test_the_gate_still_refuses_a_template_with_no_family() -> void:
+	var template := WeaponData.new()          # weapon_type NONE: make() could never build it
+	assert_bool(_tool()._refuse_unusable(template)).is_true()

@@ -155,7 +155,7 @@ func test_a_new_prototype_starts_on_the_standard_frame_and_can_grow() -> void:
 # file would load and list everywhere while producing nothing anyone can carry.
 func test_saving_a_template_with_no_family_is_refused() -> void:
 	var made := _new_prototype()
-	assert_bool(_tool()._refuse_uncarryable(made)).is_true()
+	assert_bool(_tool()._refuse_unusable(made)).is_true()
 
 # DEGRADES does not. A main-less template is what the Attack Editor's Weapon Families mode already
 # saves happily, and refusing here would give one rule two answers.
@@ -163,12 +163,12 @@ func test_saving_a_template_with_no_main_attack_is_allowed() -> void:
 	var made := _new_prototype()
 	made.weapon_type = WeaponData.WeaponType.CHAINSWORD
 	made.main_attack = null
-	assert_bool(_tool()._refuse_uncarryable(made)).is_false()
+	assert_bool(_tool()._refuse_unusable(made)).is_false()
 
 # The gate asks a question only a template has -- every other kind this tab authors passes through.
 func test_the_refusal_ignores_the_other_kinds_this_tab_authors() -> void:
-	assert_bool(_tool()._refuse_uncarryable(WeaponModData.new())).is_false()
-	assert_bool(_tool()._refuse_uncarryable(RuneData.new())).is_false()
+	assert_bool(_tool()._refuse_unusable(WeaponModData.new())).is_false()
+	assert_bool(_tool()._refuse_unusable(RuneData.new())).is_false()
 
 # A prototype is its own template, so it saves beside the other prototypes rather than into the
 # saved-instances folder every other kind here writes to.

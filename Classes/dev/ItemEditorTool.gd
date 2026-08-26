@@ -179,7 +179,7 @@ func _on_update_pressed():
 	if reason != "":
 		status_label.text = reason
 		return
-	if _refuse_uncarryable(current_item):
+	if _refuse_unusable(current_item):
 		return
 	# Overwrite the file the entry actually came from. The dropdown key is the item's NAME, and a
 	# path rebuilt from it would miss any file whose basename differs.
@@ -225,7 +225,7 @@ func _on_save_as_pressed():
 		return
 	if DevWidgets.refuse_illegal_name(entered_name, "item", status_label):
 		return
-	if _refuse_uncarryable(current_item):
+	if _refuse_unusable(current_item):
 		return
 	var dir := _save_dir_for(current_item)
 	var path := dir + entered_name + ".tres"
@@ -597,24 +597,37 @@ func _save_dir_for(item: Resource) -> String:
 
 # --- Prototype mode (#486) ---
 
-# Refuse to WRITE a template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's
-# reasoning: a DEGRADES finding describes a file that may already be on disk in that state, so
-# refusing would leave the only tool that can repair it unable to write. Non-templates pass
-# straight through -- this asks a question only a WeaponData has.
-func _refuse_uncarryable(item: Resource) -> bool:
+# Refuse to WRITE content nothing could use. ONE door for every kind this tab authors, because
+# "may this be saved" is one question -- a second gate beside it is exactly the duplicate seam this
+# tool would grow first. Both Update and Save As call it; each kind answers in its own terms and
+# everything else passes straight through.
+func _refuse_unusable(item: Resource) -> bool:
 	var template := item as WeaponData
-	if template == null:
-		return false
+	if template != null:
+		return _refuse_template(template)
+	var mod := item as WeaponModData
+	if mod != null:
+		return _refuse_with(mod.save_block_reason())
+	return false
+
+# A template nobody could carry. Only BLOCKS stops the save, on AttackEditorTool's reasoning: a
+# DEGRADES finding describes a file that may already be on disk in that state, so refusing would
+# leave the only tool that can repair it unable to write.
+func _refuse_template(template: WeaponData) -> bool:
 	var findings := WeaponTemplateLint.check(template)
 	for finding in findings:
 		if finding["severity"] == WeaponTemplateLint.Severity.BLOCKS:
-			var msg: String = finding["text"]
-			push_warning(msg)
-			status_label.text = msg
-			return true
+			return _refuse_with(finding["text"])
 	if not findings.is_empty():
-		status_label.text = findings[0]["text"]
+		status_label.text = findings[0]["text"]   # said, not refused
 	return false
+
+func _refuse_with(reason: String) -> bool:
+	if reason == "":
+		return false
+	push_warning(reason)
+	status_label.text = reason
+	return true
 
 # What the reflective editor must NOT draw here, for two different reasons. THREE are not drawn at
 # all: display_name has its own LineEdit above the form, is_prototype is forced true (a Prototype

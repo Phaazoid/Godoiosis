@@ -57,3 +57,18 @@ func _mod_files() -> Array[String]:
 	for file in ResourceDir.files_with_extension(WeaponModCatalog.MOD_DIR, ".tres"):
 		paths.append(WeaponModCatalog.MOD_DIR + file)
 	return paths
+
+
+# The derived restriction swept over shipped content (#74): a mod that changes scaling names the
+# family its shift is measured against. Nothing could enforce this before the field existed, and
+# two shipped mods carried a change with no family at all.
+func test_no_shipped_mod_changes_scaling_without_naming_a_family() -> void:
+	var broken: Array[String] = []
+	var mods := WeaponModCatalog.get_mods()
+	for name in mods:
+		var mod: WeaponModData = mods[name]
+		var reason := mod.save_block_reason()
+		if reason != "":
+			broken.append("%s: %s" % [name, reason])
+	assert_array(broken).is_empty()
+	assert_int(mods.size()).is_greater(0)   # nothing scanned: this sweep proves nothing
