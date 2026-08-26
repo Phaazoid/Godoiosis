@@ -44,7 +44,10 @@ func actor_can_perform() -> bool:
 
 func execute():
 	begin_execution()
-	clear_preview_sprites()
+	# NOT clear_preview_sprites() here (#558, dev 2026-08-26: "have the arrow match the ghost's
+	# lifecycle"). The arrow stays up while the unit walks it and goes on ARRIVAL, with the ghost.
+	# The old clear was also only durable by luck: redraw_planned_paths rebuilds every arrow from
+	# planned_move_by_unit, which still named this unit, so any redraw during a pass put it back.
 	actor.movement.move_along_path(path)
 	
 	if actor.movement.moving:

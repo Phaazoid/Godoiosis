@@ -108,7 +108,7 @@ func execute_orders(unit):
 	var walker: Unit = walk.subject() if walk != null else null
 	if walker != null:
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
-	await _execute_action_phase_parallel(move_actions)
+	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
@@ -164,7 +164,7 @@ func _end_squad_turn(squad: Squad) -> void:
 	game.squad_manager.set_has_acted(squad, true)
 	game.refresh_end_turn_button()
 	for member in squad.members:
-		game.overlay_manager.clear_planned_path(member)
+		game.overlay_manager.clear_move_markup(member)
 	# LAST, not beside the ejection sweeps above: the clear at the top of this method would wipe an
 	# earlier restore. Standing rings deliberately stand down for the WHOLE pass -- a marker sits on
 	# its unit's projected destination, which during a pass is the cell the unit has not reached
@@ -181,7 +181,12 @@ func _invalid_plan_summary(squad: Squad) -> String:
 			lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
 	return " | ".join(lines)
 
-func _execute_action_phase_parallel(actions: Array):
+# on_settled, when given, fires ONCE per action at the first poll after its execution_complete
+# flips -- the PER-UNIT arrival moment (#558). It is why the poll below now visits every action
+# instead of breaking on the first unfinished one: this phase ends with the SLOWEST walker, so a
+# phase-level hook would leave a short hop standing under its own ghost while a long one finished.
+# Generic on purpose -- the phase runner still does not know what a move is.
+func _execute_action_phase_parallel(actions: Array, on_settled := Callable()):
 	if actions.is_empty():
 		return
 
@@ -191,17 +196,28 @@ func _execute_action_phase_parallel(actions: Array):
 	for action in actions:
 		action.execute()
 
+	var settled: Dictionary[BaseAction, bool] = {}
 	while true:
 		var all_complete := true
 
-		for action in actions:
+		for action: BaseAction in actions:
 			if not action.execution_complete:
 				all_complete = false
-				break
+				continue
+			if on_settled.is_valid() and not settled.has(action):
+				settled[action] = true
+				on_settled.call(action)
 		if all_complete:
 			return
 
 		await get_tree().process_frame
+
+# A move's markup goes when ITS OWN unit arrives, not when the squad's pass ends (#558, dev
+# 2026-08-26: "the AI ghost unit stays around for a bit after the unit already reaches its move
+# destination"). Until this, nothing pulled a ghost until _end_squad_turn -- so a unit spent the rest
+# of the pass standing underneath a translucent copy of itself.
+func _retire_move_markup(action: BaseAction) -> void:
+	game.overlay_manager.clear_move_markup(action.actor)
 
 # The beat lands BEFORE each action, never after: that also spaces this phase off the previous one
 # (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
