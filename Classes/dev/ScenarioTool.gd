@@ -1,8 +1,8 @@
 extends VBoxContainer
 class_name ScenarioTool
 
-# The Properties page (#382): what this mission DECLARES -- objectives (#96), the look preset it
-# wears (#253), and where its camera opens (#234). The file operations that used to head this tab
+# The Properties page (#382): what this mission DECLARES -- objectives (#96), what loses it (#101),
+# the look preset it wears (#253), and where its camera opens (#234). The file ops that headed this tab
 # live on ScenarioHeader now (the persistent header over the whole window), and the board's
 # occupants (AI toggles, squad rows) live on SquadsAiTool -- what a mission requires versus who is
 # standing on it, split at the seam.
@@ -19,6 +19,9 @@ var game
 var _header: ScenarioHeader
 var _objective_boxes := {}   # MissionRules.Objective -> CheckBox
 var _objective_warning: Label
+var _lose_boxes := {}        # MissionRules.LoseCondition -> CheckBox
+var _lose_warning: Label
+var _round_limit_spin: SpinBox
 var _look_row: HBoxContainer
 var _camera_row: HBoxContainer
 var _report_box: VBoxContainer
@@ -39,6 +42,7 @@ func init(p_scenario_manager: ScenarioManager, p_game, header: ScenarioHeader) -
 	game = p_game
 	_header = header
 	_build_objectives()
+	_build_lose_conditions()
 	_build_check_section()
 	refresh_look_row()
 	refresh_camera_row()   # last, so it lands above the look row and stays there on every rebuild
@@ -162,6 +166,7 @@ func _status() -> Label:
 # F2 reset, changes the board without going through this page.
 func refresh_on_show() -> void:
 	refresh_objectives()
+	refresh_lose_conditions()   # ...and what loses it (#101)
 	refresh_look_row()   # a board load changes which preset this board wears
 	refresh_camera_row()   # ...and where it opens (#234)
 
@@ -212,6 +217,69 @@ func _refresh_objective_warning() -> void:
 	for objective in missing:
 		names.append(MissionRules.Objective.keys()[objective])
 	_objective_warning.text = "⚠ No zone painted for: %s — this mission cannot be won." % ", ".join(names)
+
+
+# --- Lose conditions (#101) ----------------------------------------------------------------------
+
+# One checkbox per AUTHORABLE condition, plus the clock's limit. Driven off that const rather than
+# the whole enum: NONE is a sentinel and SQUAD_LOST is the always-on floor, neither authorable.
+func _build_lose_conditions() -> void:
+	DevWidgets.add_label(objective_list, "Lose conditions")
+	for condition in MissionRules.AUTHORABLE:
+		var box := CheckBox.new()
+		box.text = String(MissionRules.LoseCondition.keys()[condition]).capitalize()
+		box.button_pressed = game.mission_controller.lose_conditions.has(condition)
+		box.toggled.connect(func(pressed: bool): _on_lose_condition_toggled(condition, pressed))
+		objective_list.add_child(box)
+		_lose_boxes[condition] = box
+
+	_round_limit_spin = DevWidgets.add_spinbox(objective_list, "Round limit",
+			game.mission_controller.round_limit, _on_round_limit_changed)
+	_round_limit_spin.min_value = 0   # 0 IS "no limit"; a negative one would mean nothing
+
+	_lose_warning = Label.new()
+	_lose_warning.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_lose_warning.modulate = BLOCKS_COLOR
+	objective_list.add_child(_lose_warning)
+	_refresh_lose_warning()
+
+
+func refresh_lose_conditions() -> void:
+	for condition in _lose_boxes:
+		_lose_boxes[condition].set_pressed_no_signal(game.mission_controller.lose_conditions.has(condition))
+	_round_limit_spin.set_value_no_signal(game.mission_controller.round_limit)
+	_refresh_lose_warning()
+
+
+func _on_lose_condition_toggled(condition: MissionRules.LoseCondition, pressed: bool) -> void:
+	if pressed:
+		if not game.mission_controller.lose_conditions.has(condition):
+			game.mission_controller.lose_conditions.append(condition)
+	else:
+		game.mission_controller.lose_conditions.erase(condition)
+	_mark()
+	_refresh_lose_warning()
+	game.refresh_mission_status()   # bypasses set_lose_conditions, so refresh here (_on_objective_toggled's shape)
+
+
+func _on_round_limit_changed(value: float) -> void:
+	game.mission_controller.round_limit = int(value)
+	_mark()
+	_refresh_lose_warning()
+	game.refresh_mission_status()
+
+
+# The objective warning's twin: a condition ticked with nothing to fire on. Same colour, because it
+# is the same kind of thing -- a declaration that makes the mission not the mission you authored.
+func _refresh_lose_warning() -> void:
+	var missing: Array = game.mission_controller.lose_conditions_missing_setup()
+	if missing.is_empty():
+		_lose_warning.text = ""
+		return
+	var names := []
+	for condition in missing:
+		names.append(MissionRules.LoseCondition.keys()[condition])
+	_lose_warning.text = "⚠ Nothing set for: %s — this mission would be lost immediately." % ", ".join(names)
 
 
 # --- Check board (#390) --------------------------------------------------------------------------

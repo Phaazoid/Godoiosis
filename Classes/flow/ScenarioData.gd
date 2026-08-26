@@ -32,6 +32,14 @@ class_name ScenarioData
 									 # reads an unpainted declared objective as PENDING, never NONE).
 @export var objectives: Array[MissionRules.Objective] = []   # empty = plain rout map
 
+# What LOSES this mission, beyond the #96 floor of the last unit falling (#101). Its own list
+# rather than negated objectives: the two are checked at different moments, and a failure has to
+# name a reason for the banner. Empty = only the floor. Composes by ANY.
+@export var lose_conditions: Array[MissionRules.LoseCondition] = []
+# How many rounds ROUND_LIMIT allows. 0 = no limit, and that sentinel IS this field's own default,
+# so a board that never authored a clock cannot read as one that authored a zero-round one.
+@export var round_limit := 0
+
 # Which LookPreset this board wears (#253 part 2). A NAME, never a LookPreset reference, for two
 # load-bearing reasons: a dangling ext_resource can fail the WHOLE scenario load rather than
 # degrade, so "the preset was deleted -> fall back to the default" is only implementable soft; and
@@ -66,6 +74,7 @@ class_name ScenarioData
 @export var tutorial_steps: Array[TutorialStep] = []  # the sequential lesson (#182); same director runs it
 @export var captured_zones: Array[String] = []   # CAPTURE zones already claimed
 @export var contested := false   # "both sides were ever up at once" latch
+@export var rounds_elapsed := 0  # rounds the clock has counted (#101); the LIMIT above is authored
 
 
 # Was this board saved before #427's corner heights? The one reader is BoardSnapshot.from_scenario,

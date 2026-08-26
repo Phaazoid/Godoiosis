@@ -35,6 +35,7 @@ static func check(game) -> Array[Dictionary]:
 	var found: Array[Dictionary] = []
 
 	_check_objectives(game, found)
+	_check_lose_conditions(game, found)
 	_check_ai_factions(game, board, found)
 	_check_placement(game, board, found)
 	_check_cohesion(game, found)
@@ -65,6 +66,17 @@ static func _check_objectives(game, found: Array[Dictionary]) -> void:
 		_add(found, Severity.BLOCKS,
 			"Objective %s is declared but no matching zone is painted -- this mission cannot be won."
 				% MissionRules.Objective.keys()[objective])
+
+
+# _check_objectives' twin one list over (#101): a lose condition declared with no parameter fires
+# the moment the mission starts. BLOCKS for the same reason -- a board lost on round one is not the
+# board that was authored. Same borrowed-rule discipline; MissionController owns it.
+static func _check_lose_conditions(game, found: Array[Dictionary]) -> void:
+	var mission: MissionController = game.mission_controller
+	for condition: MissionRules.LoseCondition in mission.lose_conditions_missing_setup():
+		_add(found, Severity.BLOCKS,
+			"Lose condition %s is declared but nothing is set for it -- this mission would be lost immediately."
+				% MissionRules.LoseCondition.keys()[condition])
 
 
 # #150, and the one rule this file owns. Commanding is gated on faction == active faction, so a

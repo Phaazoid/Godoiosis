@@ -4,7 +4,10 @@ class_name MissionEndBanner
 # The end-of-mission card (#96 slice 1) -- the moment the game finally has an ENDING to show.
 # Built on ModalCard, the base shared with every other full-screen surface.
 #
-# Usage:  var choice: Choice = await MissionEndBanner.show_banner(game_node, victory, can_retry)
+# Usage:  var choice: Choice = await MissionEndBanner.show_banner(game_node, victory, can_retry, reason)
+#
+# `reason` is what LOST it (#101), worded by MissionRules.defeat_reason -- the vocabulary belongs to
+# the rule, not to the card. Empty falls back to the squad-wipe line every pre-#101 defeat showed.
 
 # STAY leaves the finished board standing so it can be inspected with the dev tools; the mission
 # is still over either way (MissionController's latch never unwinds).
@@ -19,20 +22,23 @@ func _init() -> void:
 	button_size = Vector2(160, 48)
 
 # Takes the Game node rather than a parent, for the reason PauseMenu.show_menu does.
-static func show_banner(game_node: Node, victory: bool, can_retry: bool) -> Choice:
+static func show_banner(game_node: Node, victory: bool, can_retry: bool, reason := "") -> Choice:
 	var banner := MissionEndBanner.new()
 	game_node.ui_layer.add_child(banner)
-	banner._build(victory, can_retry, game_node)
+	banner._build(victory, can_retry, game_node, reason)
 	var choice: Choice = await banner.chosen
 	banner.queue_free()
 	return choice
 
-func _build(victory: bool, can_retry: bool, game_node: Node) -> void:
+func _build(victory: bool, can_retry: bool, game_node: Node, reason := "") -> void:
 	title_color = Color(1, 0.85, 0.3) if victory else Color(0.85, 0.2, 0.2)
 
 	var content := _build_chrome(game_node)
 	_build_title(content, "VICTORY" if victory else "DEFEAT")
-	_build_body(content, "The field is yours." if victory else "Your squad has fallen.")
+	var body := "The field is yours."
+	if not victory:
+		body = reason if reason != "" else MissionRules.defeat_reason(MissionRules.LoseCondition.SQUAD_LOST)
+	_build_body(content, body)
 
 	var row := _build_button_row(content, false, BUTTON_ROW_SEPARATION)
 

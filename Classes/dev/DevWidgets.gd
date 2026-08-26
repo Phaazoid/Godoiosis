@@ -91,7 +91,9 @@ static func add_label(container: Node, text: String) -> void:
 	label.text = text
 	container.add_child(label)
 
-static func add_spinbox(container: Node, label_text: String, initial_value: float, on_change: Callable) -> void:
+# Returns the SpinBox (add_slider/add_option/add_lineedit's convention), so a caller can narrow its
+# range or write a value back into the widget on a refresh.
+static func add_spinbox(container: Node, label_text: String, initial_value: float, on_change: Callable) -> SpinBox:
 	var row := HBoxContainer.new()
 	var label := Label.new()
 	label.text = label_text
@@ -103,6 +105,7 @@ static func add_spinbox(container: Node, label_text: String, initial_value: floa
 	row.add_child(label)
 	row.add_child(spinbox)
 	container.add_child(row)
+	return spinbox
 
 # Feel work is DRAG work: a value you sweep while watching the board, with the number beside it
 # so a landed setting can be read off. add_spinbox is the typing form; this is the hunting form.
