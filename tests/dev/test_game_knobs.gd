@@ -227,7 +227,7 @@ func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
 	var inert: Array[String] = []
 	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
 		if not knob.has("layer"):
-			continue   # the statics are asserted separately: the 2D owns them
+			continue   # the static half is asserted by the case below
 		var before: Color = GameKnobs.read_class(_scene, knob)
 		GameKnobs.write_class(_scene, knob,
 			Color(before.r, before.g, before.b, fposmod(before.a + 0.3, 1.0)))
@@ -247,6 +247,35 @@ func test_a_tuned_layer_colour_survives_the_mirror_poll() -> void:
 			reverted.append(knob["label"])
 	assert_array(reverted).override_failure_message(
 		"Layers the mirror writes back (a knob here would lie): %s" % ", ".join(reverted)).is_empty()
+
+
+# ...and the STATIC half, which nothing asserted until #534 -- the comment above claimed it was
+# covered and it was not. A CLASS_KNOBS row needs a hand-written arm in BOTH read_static and
+# write_static; with only the read arm the row resolves, the panel draws it, the slider MOVES, and
+# nothing happens. test_every_class_knob_resolves sees the read half only, and the reset case below
+# writes them all but passes on one knob taking, so a single dead arm hides in it.
+#
+# Found by a surviving mutant while adding #534's two Playback rows: deleting write_static's
+# ENVIRONMENT_HOLD arm left the whole suite green.
+func test_every_static_knob_takes_the_write_its_slider_makes() -> void:
+	var inert: Array[String] = []
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if not knob.has("static"):
+			continue   # the layer half is the case above, which also has the mirror to survive
+		var before: Variant = GameKnobs.read_class(_scene, knob)
+		if typeof(before) == TYPE_NIL:
+			continue   # a missing READ arm is test_every_class_knob_resolves' finding, not this one
+		GameKnobs.write_class(_scene, knob, _nudged(knob, before))
+		if LookKnobs.same_value(GameKnobs.read_class(_scene, knob), before):
+			inert.append(knob["label"])
+	# Through the panel's own Reset, the way test_reset_puts_every_knob_and_colour_back does it:
+	# after_test snapshots seven OverlayManager statics and nothing else, so a tuned Pacing value
+	# left behind here would ride into every suite after it in the run.
+	_game._on_reset_pressed()
+	await await_idle_frame()
+	assert_array(inert).override_failure_message(
+		"Static knobs whose slider moves nothing (no write_static arm): %s" % ", ".join(inert)) \
+		.is_empty()
 
 
 # ATTACK has no 3D-only value: the mirror pushes the 2D's modulate into the 3D every poll, so the
