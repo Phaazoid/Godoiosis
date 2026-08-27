@@ -255,6 +255,48 @@ func test_at_zero_strength_the_same_pass_leaves_the_camera_square_on() -> void:
 	_cam().set_playback_locked(false)
 
 
+# ADDED BY FALSIFICATION: measuring the turn from the LIVE yaw instead of from the detent the pass
+# squared up to passed all 27 cases. At strength 0 and 1 the two are identical -- 0 moves nothing
+# either way, 1 lands on the full angle either way -- so only a PARTIAL turn can tell them apart,
+# and no case had one.
+#
+# What breaks is idempotence, which matters because the mirror re-solves this EVERY FRAME: measured
+# from the live yaw, each frame closes half the remaining gap again, so a half-strength turn creeps
+# to the full angle over a few frames and the knob quietly stops meaning anything. Asserted as the
+# property (three calls, one answer) rather than as a frame count, so it does not depend on how
+# many frames an attack happens to take.
+func test_a_partial_turn_is_measured_from_where_the_pass_started() -> void:
+	var was := [Pacing.BOARD_DIRECTION, Pacing.CINEMATIC_DIRECTION]
+	Pacing.BOARD_DIRECTION = 0.5
+	Pacing.CINEMATIC_DIRECTION = 0.5
+
+	_cam().set_playback_locked(true)   # claiming is what captures the baseline
+	await _settle()
+	var detent: float = _rig._target_yaw_degrees
+	var line := [Vector2i(0, 0), Vector2i(3, 3)] as Array[Vector2i]
+
+	_rig.aim_along(line)
+	var once: float = _rig._target_yaw_degrees
+	# Non-vacuity: a partial turn that landed ON the detent, or all the way at the full angle, would
+	# satisfy the idempotence assertion for free.
+	var full := BoardSpace.side_on_yaw(line[0], line[1], detent)
+	assert_float(_yaw_gap(once, detent)).override_failure_message(
+			"the half turn did not leave the detent, so this case cannot fail").is_greater(5.0)
+	assert_float(_yaw_gap(once, full)).override_failure_message(
+			"the half turn went all the way, so this case cannot fail").is_greater(5.0)
+
+	_rig.aim_along(line)
+	_rig.aim_along(line)
+
+	assert_float(_rig._target_yaw_degrees).override_failure_message(
+			"the angle crept: one poll gave %.1f, three gave %.1f" % [once, _rig._target_yaw_degrees]) \
+		.is_equal_approx(once, 0.01)
+
+	Pacing.BOARD_DIRECTION = was[0]
+	Pacing.CINEMATIC_DIRECTION = was[1]
+	_cam().set_playback_locked(false)
+
+
 # A beat with nothing to frame must not swing the camera back to square-on -- absence means "keep
 # the angle you have", the same rule the subject schedule already follows. Driven at the rig, since
 # what is being pinned is how an EMPTY line is read.
