@@ -19,9 +19,12 @@
 # to disagree with the one Godot uses at load time.
 extends GdUnitTestSuite
 
-# The project's own content. addons/ is vendored (gdUnit4's own files are not ours to fix) and
-# .godot/ is cache.
-const SCANNED_ROOTS: Array[String] = ["res://Scenes/", "res://Resources/", "res://Scenarios/"]
+# The project's own content, which is not only the three content folders: Classes/dev/AttackTypeToggle.tres
+# and tests/support/CastFixture.tres are .tres the project authors too, and a law that says NO reference
+# resolves to nothing may not quietly mean "none of the ones in three folders". addons/ is vendored
+# (gdUnit4's own files are not ours to fix) and .godot/ is cache.
+const SCANNED_ROOTS: Array[String] = ["res://Scenes/", "res://Resources/", "res://Scenarios/",
+		"res://Classes/", "res://tests/"]
 
 # A uid= appears only on an ext_resource/sub_resource header line, and both start with '['.
 const UID_PREFIX := "uid://"
