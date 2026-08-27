@@ -20,7 +20,8 @@ static func create_unit(data: UnitData, grid: TileMapLayer, pos : Vector2i) -> U
 	# protects is the base_stats dictionary, which a shallow copy would share.
 	#
 	# Accepted trade-off (2026-07-27): editing a UnitData .tres no longer live-updates units
-	# already spawned from it. Nothing relied on that.
+	# already spawned from it. Nothing relied on that -- and since #589 there is a door,
+	# Unit.reseed_kit(), which reads unit_data_source below precisely because THIS is a copy.
 	#
 	# IF FACTION EVER NEEDS TO VARY per battle (mind control, defections, a unit that switches
 	# sides mid-mission), this copy is the wrong fix and you want the other one: move `faction`
