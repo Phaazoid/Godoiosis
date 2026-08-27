@@ -231,12 +231,23 @@ func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:
 		"the link vanished instead of following -- (2,1) is still adjacent to the ward").is_true()
 	assert_vector(_guard_link_tail_cell()).override_failure_message(
 		"the link still starts from the cell the blocker LEFT").is_equal(Vector2i(2, 1))
-	# The head lands HALF WAY between the two centres -- the shared edge -- which is both where the
-	# inset puts it and the one expression that says "it followed" without restating the inset.
+	# The head lands on the segment the moved pair now SHARES -- strictly between the two centres.
+	# Pinned as a RELATIONSHIP, exactly like the case below and for exactly its reason: the inset is a
+	# Game-tab knob. This line used to assert `from.lerp(to, 0.5)`, which pinned the knob's VALUE while
+	# claiming not to, and the dev's own tuning pass (0.5 -> 0.4, `c70c2e9`) reddened a case about
+	# whether the arrow FOLLOWED. Any inset the dev can dial still passes; an arrow left on the cell
+	# the blocker vacated is off this line entirely. Tuning razor, tests/README.md #8.
 	var from := GridUtils.cell_world(game.grid, Vector2i(2, 1))
 	var to := GridUtils.cell_world(game.grid, Vector2i(2, 0))
-	assert_vector(_guard_link_head_pos()).override_failure_message(
-		"the head is not on the edge the moved pair now shares").is_equal(from.lerp(to, 0.5))
+	var head := _guard_link_head_pos()
+	var span := to - from
+	assert_float(absf(span.cross(head - from)) / span.length()).override_failure_message(
+		"the head is off the line between the moved blocker and its ward").is_less(0.5)
+	var along := (head - from).dot(span) / span.length_squared()
+	assert_float(along).override_failure_message(
+		"the head never left the blocker's own cell centre").is_greater(0.0)
+	assert_float(along).override_failure_message(
+		"the head ran past the ward's centre").is_less(1.0)
 
 
 func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
