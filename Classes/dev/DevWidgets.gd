@@ -6,15 +6,18 @@ class_name DevWidgets
 # serves both -- and why a knob whose property does not resolve draws a labelled failure instead of
 # a row that edits nothing. The value and the writer are PASSED, so this stays ignorant of which
 # host either panel is bound to.
+# Returns EVERY control it appended, so a panel that filters rows can hide one without knowing what
+# shape it is -- a slider is a row, a colour is several, an unresolved knob is a bare label (#520
+# 2b slice 2, for the Playback page's profile and action filters). Existing callers ignore it.
 static func add_knob_row(rows: VBoxContainer, knob: Dictionary, value: Variant,
-		on_write: Callable, tip: String) -> void:
+		on_write: Callable, tip: String) -> Array[Node]:
 	var label: String = knob["label"]
+	var first := rows.get_child_count()
 	if typeof(value) == TYPE_NIL:
 		var where := "%s:%s" % [knob.get("node", "?"), knob.get("prop", "?")]
 		add_label(rows, "%s - UNRESOLVED (%s)" % [label, where])
 		push_error("knob does not resolve: %s" % where)
-		return
-	var first := rows.get_child_count()
+		return _added_since(rows, first)
 	if knob.has("options"):
 		var options: Array = knob["options"]
 		var current: int = int(value)
@@ -31,8 +34,18 @@ static func add_knob_row(rows: VBoxContainer, knob: Dictionary, value: Variant,
 				add_slider(rows, label, value, knob["min"], knob["max"], knob["step"],
 					func(moved: float) -> void: on_write.call(moved))
 	# Every control the row added, so hovering the slider handle answers as well as the label.
+	var added := _added_since(rows, first)
+	for control in added:
+		apply_tooltip(control, tip)
+	return added
+
+
+# What a row put into `rows` -- the same span apply_tooltip walks, returned so a caller can keep it.
+static func _added_since(rows: VBoxContainer, first: int) -> Array[Node]:
+	var added: Array[Node] = []
 	for i in range(first, rows.get_child_count()):
-		apply_tooltip(rows.get_child(i), tip)
+		added.append(rows.get_child(i))
+	return added
 
 
 # The GDScript spelling of a tuned value. Every reader writes it into a source declaration --

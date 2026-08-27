@@ -390,6 +390,107 @@ func _clock_row_color(game_2d: Node2D) -> Color:
 
 # --- The panel laws ------------------------------------------------------------------------
 
+# --- The Playback page's filters (#520 2b slice 2) --------------------------------------------
+#
+# The page shows one pacing profile and one action at a time. What makes that safe is that every row
+# is still BUILT and only `visible` moves -- the panel laws below walk the whole tree for a row per
+# knob and never ask about visibility, so a filter that skipped building would fail them for every
+# row not currently showing. These cases pin BOTH halves: hidden, and still there.
+
+func _checkbox_for(text: String) -> CheckBox:
+	return _find_checkbox(_game, text)
+
+
+func _find_checkbox(node: Node, text: String) -> CheckBox:
+	for child in node.get_children():
+		var box := child as CheckBox
+		if box != null and box.text == text:
+			return box
+		var found := _find_checkbox(child, text)
+		if found != null:
+			return found
+	return null
+
+
+func _row_visible(label_text: String) -> bool:
+	var row := _row_for(label_text)
+	assert_object(row).override_failure_message(
+			"'%s' has no row in the panel at all -- the filter is not building it" % label_text).is_not_null()
+	return row.visible
+
+
+func test_the_zoom_toggle_writes_the_real_player_setting() -> void:
+	# Not a preview and not a panel-local copy: the same store Pacing.active_profile reads, so the
+	# page cannot drift from what the player gets.
+	var was := PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM)
+	# A checkbox is a bare CheckBox carrying its own text, NOT an HBox-with-label -- which is the
+	# same asymmetry test_every_knob_has_a_row_somewhere_in_the_panel skips bools for.
+	var box := _checkbox_for("Battle zoom")
+	assert_object(box).override_failure_message(
+			"the Playback page has no battle-zoom toggle").is_not_null()
+
+	box.button_pressed = not was
+	box.toggled.emit(not was)
+	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM)).override_failure_message(
+			"flipping the toggle did not move the setting the game reads").is_equal(not was)
+
+	box.button_pressed = was
+	box.toggled.emit(was)
+
+
+func test_the_profile_filter_shows_one_column_and_hides_the_other() -> void:
+	# Named rows on purpose: these two are the same dial under each profile, which is the pair the
+	# dev could not read as a pair. Both must EXIST either way; only one is on screen.
+	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
+	_game._apply_playback_filter()
+	assert_bool(_row_visible("Base beat: your own Execute")).override_failure_message(
+			"the board column is hidden while the board profile is live").is_true()
+	assert_bool(_row_visible("Base beat")).override_failure_message(
+			"the cinematic base beat is on screen while the zoom is off -- it moves nothing there").is_false()
+
+	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+	_game._apply_playback_filter()
+	assert_bool(_row_visible("Base beat")).is_true()
+	assert_bool(_row_visible("Base beat: your own Execute")).override_failure_message(
+			"the board column survived into the cinematic page").is_false()
+
+
+func test_the_action_picker_shows_one_verb_at_a_time() -> void:
+	_game._shown_action = BaseAction.ActionType.ATTACK
+	_game._apply_playback_filter()
+	assert_bool(_row_visible("Hold: an attack")).is_true()
+	assert_bool(_row_visible("Linger: an attack")).override_failure_message(
+			"an action's two rows did not travel together").is_true()
+	assert_bool(_row_visible("Hold: a rescue")).override_failure_message(
+			"every verb is on the page at once -- the picker filters nothing").is_false()
+
+	_game._shown_action = BaseAction.ActionType.RESCUE
+	_game._apply_playback_filter()
+	assert_bool(_row_visible("Hold: a rescue")).is_true()
+	assert_bool(_row_visible("Hold: an attack")).is_false()
+
+
+# THE HALF THAT PROTECTS THE PANEL LAWS, and the reason the filter hides rather than skips: a hidden
+# row is still a row. Falsified by building only the matching rows, which reds
+# test_every_knob_has_a_row_somewhere_in_the_panel for every verb the picker is not showing.
+func test_a_filtered_out_row_still_exists_in_the_panel() -> void:
+	_game._shown_action = BaseAction.ActionType.ATTACK
+	_game._apply_playback_filter()
+	assert_object(_row_for("Hold: a rescue")).override_failure_message(
+			"a filtered-out row was never built -- every panel law that walks the tree for it now fails") \
+		.is_not_null()
+
+
+# An UNTAGGED row belongs to no column and no verb, so no filter may ever touch it.
+func test_an_untagged_playback_row_is_never_hidden() -> void:
+	for shown in [false, true]:
+		PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, shown)
+		_game._shown_action = BaseAction.ActionType.REV
+		_game._apply_playback_filter()
+		assert_bool(_row_visible("Hold: a unit goes down")).override_failure_message(
+				"an Outcomes row was hidden by a filter it carries no tag for").is_true()
+
+
 func test_every_knob_group_has_a_sub_tab() -> void:
 	var orphans: Array[String] = []
 	for knob: Dictionary in GameKnobs.KNOBS + GameKnobs.CLASS_KNOBS:

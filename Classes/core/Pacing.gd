@@ -54,6 +54,14 @@ static var CINEMATIC_ACTION := 0.4
 # What a beat earns for what it WAS. These do not stack -- the loudest single hold wins -- so the
 # drama ranking is whatever these NUMBERS say rather than an order written into code. Tune
 # HOLD_KNOCKBACK above HOLD_DOWN and a shove outranks a death, deliberately.
+#
+# HOLD_ATTACK is the LADDER'S FLOOR (dev, 2026-08-27: "I don't see controls for holding the most
+# common thing - a regular attack"). Every rung above it is extra time a beat EARNS, so without a
+# floor the commonest beat of all -- a hit that just does damage -- earned nothing and took the bare
+# base beat, and every other number here was a figure with no zero point to be read against.
+# hold_for seeds from it rather than from 0.0; it is not in coda_hold, which answers for side-channel
+# VERBS and must go on reporting ATTACK as undeclared.
+static var HOLD_ATTACK := 0.25     # a hit that just does damage -- the floor the rest are read against
 static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
 static var HOLD_CRISIS := 0.85      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
@@ -73,6 +81,37 @@ static var HOLD_BURROW := 0.5
 static var HOLD_CAPTURE := 0.5
 static var HOLD_GUARD := 0.5
 static var HOLD_OVERWATCH := 0.5
+
+# --- the LINGER: how long the camera stays AFTER an action plays (dev, 2026-08-27) --------------
+#
+# Every pause above lands BEFORE its action, which was right when a beat had nothing to watch on the
+# way out and wrong the moment health readouts gained debris: the cubes burst on UnitMirror's own HP
+# poll, fly for HealthBlockDebris.lifetime, and nothing ever waited for them -- so the last counter
+# killed someone and the pass cut away mid-explosion. The dev's report: "after the last counter
+# attack, we're still not waiting for the cubes to break off, the game just instantly transitions
+# back", widened to every verb: "even basic attacks knock away health cubes and we want that focused
+# too."
+#
+# FLAT -- no profile, no is_ai, and deliberately not multiplied by drama_of. A hold is anticipation
+# and scales with how dramatic you want the pass to feel; a linger is matched to an ANIMATION that
+# runs in real time whichever profile is live. Drama-scaling it would give the plain board none at
+# all (BOARD_DRAMA ships at 0.0), which is the instant cut this exists to close. If the board ever
+# wants its own pace here, linger_for is the one place that forks.
+#
+# One per ACTION (the dev's own axis), plus a single OUTCOME rung: a death bursts the whole
+# remaining grid at block_death_power rather than chipping a few cubes off it, so it is categorically
+# a longer thing to watch. Same largest-wins rule as the holds.
+static var LINGER_ATTACK := 0.45
+static var LINGER_DOWN := 1.0      # the whole grid goes at once -- the loudest thing to watch
+static var LINGER_RESCUE := 0.3
+static var LINGER_RALLY := 0.3
+static var LINGER_INTIMIDATE := 0.3
+static var LINGER_RELOAD := 0.2
+static var LINGER_REV := 0.2
+static var LINGER_BURROW := 0.3
+static var LINGER_CAPTURE := 0.4
+static var LINGER_GUARD := 0.3
+static var LINGER_OVERWATCH := 0.3
 
 # How much of a hold actually applies, per profile. BOARD ships at 0.0 -- flat, "small pauses
 # everywhere" (dev, 2026-08-26) -- so the shape exists but is dialled out rather than absent. That
@@ -125,7 +164,9 @@ static func hold_for(beat: BeatSheet.Beat) -> float:
 		# Floored, so an undeclared verb degrades to no hold rather than a negative beat. The law
 		# test is what actually refuses one -- a silent 0 in play is not a signal anybody sees.
 		return maxf(0.0, coda_hold(beat.coda_type))
-	var hold := 0.0
+	# Seeded from the FLOOR, not from zero: a volley that only does damage is still a blast, and
+	# every rung below is extra time measured against this one (#520, dev 2026-08-27).
+	var hold := HOLD_ATTACK
 	if beat.has_removal \
 			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
 			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
@@ -156,6 +197,50 @@ static func coda_hold(type: BaseAction.ActionType) -> float:
 		BaseAction.ActionType.CAPTURE: return HOLD_CAPTURE
 		BaseAction.ActionType.GUARD: return HOLD_GUARD
 		BaseAction.ActionType.OVERWATCH: return HOLD_OVERWATCH
+	return -1.0
+
+
+# hold_for's twin for the other side of the action (#520, dev 2026-08-27): how long to stay AFTER it
+# has finished playing. Same shape clause for clause -- a CODA answers per verb, a VOLLEY takes the
+# loudest rung by VALUE, punctuation earns nothing -- with two deliberate differences.
+#
+# It takes no profile and no is_ai, because a linger is flat (see the table above). And its VOLLEY
+# branch has one rung rather than five: what makes a beat longer to watch on the way out is how much
+# DEBRIS it threw, and only a death empties the grid. A shove's slide and a plummet are already
+# awaited inside AttackAction.execute, so they are not waiting this needs to invent.
+static func linger_for(beat: BeatSheet.Beat) -> float:
+	if beat == null:
+		return 0.0
+	if beat.kind == BeatSheet.Kind.CODA:
+		# Floored exactly as hold_for floors coda_hold: an undeclared verb degrades to no linger
+		# rather than a negative one. The law test is what refuses the omission.
+		return maxf(0.0, coda_linger(beat.coda_type))
+	if beat.kind != BeatSheet.Kind.VOLLEY:
+		return 0.0
+	var linger := LINGER_ATTACK
+	# The SAME clause hold_for uses for HOLD_DOWN -- one spelling of "this beat took someone out",
+	# so the two sides of the beat can never disagree about what happened in it.
+	if beat.has_removal \
+			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+		linger = maxf(linger, LINGER_DOWN)
+	return linger
+
+
+# coda_hold's twin, and it carries the same -1.0 sentinel for the same reason: an undeclared verb
+# must be distinguishable from a deliberate 0, and tests/law/test_action_registry.gd refuses it.
+static func coda_linger(type: BaseAction.ActionType) -> float:
+	match type:
+		BaseAction.ActionType.RESCUE: return LINGER_RESCUE
+		BaseAction.ActionType.RALLY: return LINGER_RALLY
+		BaseAction.ActionType.INTIMIDATE: return LINGER_INTIMIDATE
+		BaseAction.ActionType.RELOAD: return LINGER_RELOAD
+		BaseAction.ActionType.REV: return LINGER_REV
+		BaseAction.ActionType.BURROW: return LINGER_BURROW
+		BaseAction.ActionType.CAPTURE: return LINGER_CAPTURE
+		BaseAction.ActionType.GUARD: return LINGER_GUARD
+		BaseAction.ActionType.OVERWATCH: return LINGER_OVERWATCH
 	return -1.0
 
 

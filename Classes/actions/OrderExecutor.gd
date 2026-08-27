@@ -145,7 +145,8 @@ func execute_orders(unit):
 	# number comes from -- but it plays back after the walk instead of interrupting it. A crosser the
 	# shot downed has already stopped at the crossing cell (MoveAction.walked_path), so what trails
 	# the fiction is the ORDER OF THE VISUALS, never the outcome. Interrupting the walk is #567.
-	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan))
+	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan), {},
+			_watch_lingers(plan))
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -161,20 +162,23 @@ func execute_orders(unit):
 	_stage_the_fight(sheet, profile)
 
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
-			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
+			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)),
+			_beat_lingers(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of.
 	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
 	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
-			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)))
+			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)),
+			_beat_lingers(sheet.volleys(true)))
 	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
 		var codas := sheet.codas(type)
-		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai), _beat_subjects(codas))
+		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai),
+				_beat_subjects(codas), {}, _beat_lingers(codas))
 	BoardSpace.clear_staging()   # the tiles thud back into their sockets (#521)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
@@ -272,12 +276,17 @@ func _execute_action_phase_parallel(actions: Array, on_settled := Callable()):
 func _retire_move_markup(action: BaseAction) -> void:
 	game.overlay_manager.clear_move_markup(action.actor)
 
-# The beat lands BEFORE each action, never after: that also spaces this phase off the previous one
-# (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
-# leaves no trailing pause before the squad's turn ends. An empty batch returns above, so a phase
-# with nothing in it costs nothing.
+# The HOLD lands before each action and the LINGER after it -- two schedules, two moments, and they
+# are different questions: a hold is anticipation and scales with the drama profile, a linger is
+# matched to an animation and is flat (#520, dev 2026-08-27). The hold also spaces this phase off the
+# previous one with no separate between-phases pause. An empty batch returns above, so a phase with
+# nothing in it costs nothing.
+#
+# "Never after" was this comment's own rule until 2026-08-27, written when a beat had nothing worth
+# watching on the way out; health-cube debris is what made the trailing pause a feature rather than
+# dead air.
 func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
-		lines: Dictionary = {}):
+		lines: Dictionary = {}, lingers: Dictionary = {}):
 	if actions.is_empty():
 		return
 
@@ -303,6 +312,17 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 
 		while not action.execution_complete:
 			await get_tree().process_frame
+		# ...and the LINGER, the one pause in this file that lands AFTER (#520, dev 2026-08-27).
+		# execution_complete means the lunge, the shove and the fall are done -- it does NOT mean the
+		# health cubes have finished bursting, because those are thrown by UnitMirror's own HP poll
+		# and fly on HealthBlockDebris's own clock with nobody holding a reference. So this is a
+		# tuned wait rather than a wait ON anything: the two are matched by knob, deliberately.
+		#
+		# REASONED, NOT PINNED -- deleting this line leaves the whole suite green, because
+		# Pacing.beat returns without awaiting in a headless run (that escape is what keeps every
+		# resolve-pass test off the wall clock). Same declaration clear_guard_preview carries at the
+		# top of this function, and for the same reason. What IS pinned is the schedule and the table.
+		await Pacing.beat(self, float(lingers.get(action, 0.0)))
 
 # Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,
 # and #410's ruling that the two profiles SHARE timings is about pacing, not about lifting the board
@@ -364,6 +384,37 @@ func _watch_subjects(plan: ResolvedPlan) -> Dictionary:
 		if who != null and is_instance_valid(who):
 			subjects[shot] = who
 	return subjects
+
+
+# ...and how long to STAY once it has played (#520, dev 2026-08-27). A fourth schedule beside the
+# three above, built the same way and read the same way -- but keyed on the beat's LAST surviving
+# member where they key on its FIRST, and that difference is the whole of "one blast is one moment
+# however many it hits": a volley pans and holds at its opening action, plays every member, and
+# lingers once after the final one. A beat's `actions` are already absorbed down to what really
+# fired (BeatSheet.Beat._absorb), so [-1] can never be a skipped member.
+#
+# No profile and no is_ai, unlike _beat_holds: a linger is flat. See Pacing's LINGER table.
+func _beat_lingers(beats: Array[BeatSheet.Beat]) -> Dictionary:
+	var lingers: Dictionary = {}
+	for beat in beats:
+		if not beat.actions.is_empty():
+			lingers[beat.actions[-1]] = Pacing.linger_for(beat)
+	return lingers
+
+
+# The watch shots' own linger, built off the plan for the same reason _watch_subjects is: a triggered
+# shot is not part of the authored plan, so it has no BeatSheet beat to read a rung off.
+#
+# DECLARED CUT: every lead shot lingers as a plain attack, so a watch shot that DOWNS someone gets
+# the shorter wait a chip does. Reading the rung would mean re-deriving here what BeatSheet derives
+# everywhere else, and #567 is rewriting this playback into the walk anyway.
+func _watch_lingers(plan: ResolvedPlan) -> Dictionary:
+	var lingers: Dictionary = {}
+	for shot in plan.watch_shots:
+		if shot.is_secondary_hit:
+			continue
+		lingers[shot] = Pacing.LINGER_ATTACK
+	return lingers
 
 
 func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:

@@ -36,6 +36,23 @@ var _save_button: Button
 # where it is cheap -- once per save, from changed_indices()/changed_class_indices().
 var _dirty := false
 
+# --- The Playback page's two filters (#520 2b slice 2, dev 2026-08-27) ------------------------
+#
+# Thirty flat rows was unreadable, and half of them were inert depending on a setting the panel
+# never mentioned. So the page shows ONE pacing profile at a time and ONE action at a time, and the
+# thing that picks the profile is the real Battle zoom setting -- meaning you always tune the mode
+# you are watching, and a row that would move nothing is simply not in front of you.
+#
+# EVERY ROW IS STILL BUILT; the filter only sets `visible`. That is load-bearing rather than lazy:
+# tests/dev/test_game_knobs.gd's panel laws walk the whole tree for a row per knob and never ask
+# about visibility, so building on demand would fail them for every row not currently showing.
+# TileBrushTool._set_paint_mode is the same idiom one panel over.
+var _action_picker: OptionButton
+var _shown_action: BaseAction.ActionType = BaseAction.ActionType.ATTACK
+# Every control each row put on the page, by its row's tags. Kept because a row is not one node --
+# a colour row is several -- so hiding one means hiding the span DevWidgets.add_knob_row returned.
+var _filtered: Array = []   # of {"controls": Array[Node], "profile": String, "action": int}
+
 
 func _ready() -> void:
 	var buttons := HBoxContainer.new()
@@ -158,6 +175,9 @@ func _rebuild() -> void:
 		DevWidgets.add_label(_tab_rows[tab_titles()[0]],
 			"No 3D host attached - the flat 2D game has no markup stack to tune.")
 		return
+	_filtered.clear()
+	_action_picker = null
+	_build_playback_header()
 	var group := ""
 	for knob: Dictionary in GameKnobs.KNOBS:
 		var knob_group: String = knob["group"]
@@ -165,11 +185,12 @@ func _rebuild() -> void:
 		if knob_group != group:
 			group = knob_group
 			_add_heading(rows, knob_group)
-		DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
+			_build_group_header(rows, knob_group)
+		_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, LookKnobs.read(_host, knob),
 			func(value: Variant) -> void:
 				LookKnobs.write(_host, knob, value)
 				_touch(),
-			tip_for(knob))
+			tip_for(knob)))
 	group = ""
 	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
 		var knob_group: String = knob["group"]
@@ -177,7 +198,9 @@ func _rebuild() -> void:
 		if knob_group != group:
 			group = knob_group
 			_add_heading(rows, knob_group)
+			_build_group_header(rows, knob_group)
 		_build_class_row(rows, knob)
+	_apply_playback_filter()
 	_tabs.current_tab = clampi(showing, 0, maxi(0, _tabs.get_tab_count() - 1))
 
 
@@ -189,11 +212,11 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 		DevWidgets.add_label(rows, "%s - UNRESOLVED" % knob["label"])
 		push_error("GameTool: class knob does not resolve: %s" % knob["label"])
 		return
-	DevWidgets.add_knob_row(rows, knob, value,
+	_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, value,
 		func(picked: Variant) -> void:
 			GameKnobs.write_class(_host, knob, picked)
 			_touch(),
-		tip_for(knob))
+		tip_for(knob)))
 
 
 # The where-does-this-live note is appended per table rather than typed into each tip, so it cannot
@@ -201,6 +224,76 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 func tip_for(knob: Dictionary) -> String:
 	return GameKnobs.tip_for(knob) + "\n\n" + DevWidgets.wrap_tooltip(
 		"GAME-WIDE -- one value for every board. Save to source writes it into the declaration that authors it; no mission can carry its own.")
+
+
+# --- The Playback page's filters (#520 2b slice 2) --------------------------------------------
+
+# The BATTLE ZOOM toggle, at the top of the Playback tab and above every heading in it.
+#
+# It is not a knob row and cannot be one: a PlayerSettings value has none of KnobSource's three save
+# shapes (it is neither an @export default, nor a static var, nor a table entry) and needs no Save
+# at all -- the store is its own persistence. This is the first dev tool to write one.
+#
+# It writes the REAL setting, the same one Pacing.active_profile reads and the same one the pause
+# menu's Settings page shows, so the panel cannot drift from what the player gets -- and flipping it
+# here really does change your preference. That is the point: the fastest A/B for a pacing value is
+# the one that moves the game and the page together.
+func _build_playback_header() -> void:
+	var rows: VBoxContainer = _tab_rows.get(GameKnobs.PROFILE_TAB)
+	if rows == null:
+		return
+	DevWidgets.add_checkbox(rows, "Battle zoom",
+		PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM),
+		func(on: bool) -> void:
+			PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, on)
+			_apply_playback_filter(),
+		"THE REAL PLAYER SETTING, not a preview -- the same one the Settings page shows and the one Pacing reads to pick a profile. It also chooses which column of this page you are looking at, so you always tune the mode you are watching.")
+
+
+# A section's own control, drawn under its heading. Only Actions has one: the picker that decides
+# which verb's rows are on the page (ObjectTool's per-type dropdown, one panel over).
+func _build_group_header(rows: VBoxContainer, group: String) -> void:
+	if group != GameKnobs.ACTION_GROUP:
+		return
+	var labels: Array = []
+	for type: BaseAction.ActionType in GameKnobs.tunable_actions():
+		labels.append(GameKnobs.action_label(type))
+	var picker := DevWidgets.add_option(rows, "Action", labels,
+		GameKnobs.action_label(_shown_action),
+		func(picked: String) -> void:
+			_shown_action = GameKnobs.action_for_label(picked)
+			_apply_playback_filter())
+	_action_picker = picker.get_child(1) as OptionButton
+
+
+# What this row is tagged with, kept so the filter can find it again. Untagged rows are not stored
+# at all -- there is nothing to decide about them, and they must never be hidden.
+func _remember_filter(knob: Dictionary, controls: Array[Node]) -> void:
+	if controls.is_empty():
+		return
+	var profile: String = knob.get("profile", "")
+	var action: int = knob.get("action", -1)
+	if profile.is_empty() and action < 0:
+		return
+	_filtered.append({"controls": controls, "profile": profile, "action": action})
+
+
+# Show the column the live setting names, and the verb the picker names. Sets `visible` and nothing
+# else: every row stays in the tree (see the note on _filtered).
+func _apply_playback_filter() -> void:
+	var cinematic := Pacing.active_profile() == Pacing.Profile.CINEMATIC
+	for entry: Dictionary in _filtered:
+		var profile: String = entry["profile"]
+		var action: int = entry["action"]
+		var shown := true
+		if not profile.is_empty():
+			shown = shown and (profile == "cinematic") == cinematic
+		if action >= 0:
+			shown = shown and action == _shown_action
+		for control: Node in entry["controls"]:
+			var drawn := control as CanvasItem
+			if drawn != null:
+				drawn.visible = shown
 
 
 func _add_heading(rows: VBoxContainer, text: String) -> void:
