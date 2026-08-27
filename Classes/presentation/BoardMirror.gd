@@ -1078,6 +1078,14 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 # cell changes, so there is no per-cell fact to compare and invalidating at the source is the only
 # honest answer. (#342 widened the key to the corners, which is the opposite case — a per-CELL input
 # the reconcile already holds, read off the same store the build reads, so it cannot go stale.)
+# One cell's prop, so the next reconcile rebuilds it where its ground now is (#521). Invalidation at
+# the SOURCE, drop_props' shape, rather than widening _reconcile_prop's diff key: a tear-out changes
+# where a cell renders without changing anything the key is made of, so a prop left standing keeps
+# the position it had when its ground was still in the board.
+func drop_prop_at(cell: Vector2i) -> void:
+	_free_prop_at(cell)
+
+
 func drop_props() -> void:
 	for cell: Vector2i in _props.keys():
 		_props[cell].queue_free()

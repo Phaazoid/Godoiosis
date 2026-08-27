@@ -285,6 +285,11 @@ func _sync_staging() -> void:
 		return
 	var cells: Array[Vector2i] = []
 	cells.assign(touched.keys())
+	# The props go FIRST: _reconcile_prop leaves a standing one alone when its tile and corners are
+	# unchanged, which a tear-out does not touch -- so without this a crate stays on the board its
+	# ground just left. The flames re-seat through OverlayMirror's own staging poll.
+	for cell in cells:
+		_board_mirror.drop_prop_at(cell)
 	_board_mirror.sync_cells(game.grid, cells, game.board_heights,
 			_board_mirror.floor_row_of(game.board_heights))
 

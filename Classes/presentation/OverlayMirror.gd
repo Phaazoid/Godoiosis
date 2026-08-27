@@ -46,6 +46,13 @@ var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
 var _last_heights_version := -1
 var _heights_moved := false
 
+# ...and blind to the TEAR-OUT the same way (#521): a flame stands on its cell's surface, and the
+# whole cell can lift off the board while the burning set stays byte-identical. #308's rule applied
+# to the second store this poll now draws through -- gate on that store having moved, never on a
+# copy of what it holds.
+var _last_staging_version := -1
+var _staging_moved := false
+
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
@@ -68,6 +75,7 @@ func _process(_delta: float) -> void:
 		return
 	var om: OverlayManager = game.overlay_manager
 	_heights_moved = _poll_heights()   # once per frame, ahead of every diff that reads it
+	_staging_moved = _poll_staging()
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
@@ -112,6 +120,16 @@ func _poll_heights() -> bool:
 	return true
 
 
+# Has the tear-out moved since the last frame (#521)? BoardSpace.staging_version is monotonic and
+# non-consuming -- DirtyCells.version's shape -- so battle3d's own staging poll and this one can
+# both read it without either taking it away from the other.
+func _poll_staging() -> bool:
+	if BoardSpace.staging_version == _last_staging_version:
+		return false
+	_last_staging_version = BoardSpace.staging_version
+	return true
+
+
 # Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled
 # rather than wired because a states_changed signal would fire inside the resolver's per-effect
 # loop and churn markers many times within a single pass; the poll coalesces a frame into one
@@ -125,7 +143,7 @@ func _standing_states() -> void:
 	covered.sort()
 	# A marker STANDS on its cell's surface, so raising that cell moves it while the burning set
 	# stays byte-identical (#308).
-	if not _heights_moved and _last_fire == burning and _last_cover == covered:
+	if not _heights_moved and not _staging_moved and _last_fire == burning and _last_cover == covered:
 		return
 	_last_fire = burning
 	_last_cover = covered

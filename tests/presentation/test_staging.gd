@@ -138,6 +138,58 @@ func test_a_unit_on_torn_out_ground_rides_up_with_it() -> void:
 			"the unit stayed on the board its ground left").is_equal_approx(home + offset, Vector3.ONE * 0.01)
 
 
+# Anything STANDING on a torn-out cell goes up with it -- props, cover, and the flames here, all of
+# which BoardMirror places through its own surface_point. Driven end to end (deposit real fire, let
+# the poll stand it up, tear the cell out) because that offset is a wire and #103's law applies:
+# ADDED AFTER a mutant deleting it survived every case in this file.
+func test_what_stands_on_torn_out_ground_goes_up_with_it() -> void:
+	var cell := _painted_cells()[0]
+	var effect := ResolvedCellEffect.new()
+	effect.cell = cell
+	effect.states_added.assign([Terrain.TileState.BLAZE])
+	_game.terrain_states.apply(effect)
+	await _settle()
+
+	var mirror := _scene.get_node("BoardMirror") as BoardMirror
+	var flame := mirror.fire_marker_at(cell)
+	assert_object(flame).override_failure_message(
+			"no flame was ever stood up -- this case cannot see the offset").is_not_null()
+	var home: Vector3 = flame.position
+
+	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())
+	await _settle()
+
+	var offset := BoardSpace.stage_offset()
+	assert_float(offset.length()).override_failure_message(
+			"the lift is zero, so this case cannot fail").is_greater(0.1)
+	assert_vector(mirror.fire_marker_at(cell).position).override_failure_message(
+			"the fire stayed burning on the board its ground left") \
+		.is_equal_approx(home + offset, Vector3.ONE * 0.01)
+
+
+# ...and so does the MARKUP on it. Asked of OverlayMirror._anchor directly rather than of a drawn
+# marker: every channel that reads it is torn down by the time a pass ends, so there is nothing left
+# on screen to look at -- and this is the decision, one answer for every marker in that file.
+# ADDED AFTER the same mutant survived.
+func test_markup_on_torn_out_ground_goes_up_with_it() -> void:
+	var cell := _painted_cells()[0]
+	var mirror := _scene.get_node("OverlayMirror") as OverlayMirror
+	var home: Transform3D = mirror._anchor(cell)["surface"]
+
+	BoardSpace.stage([cell] as Array[Vector2i], BoardSpace.lift_offset())
+
+	var offset := BoardSpace.stage_offset()
+	assert_float(offset.length()).override_failure_message(
+			"the lift is zero, so this case cannot fail").is_greater(0.1)
+	var staged: Transform3D = mirror._anchor(cell)["surface"]
+	assert_vector(staged.origin).override_failure_message(
+			"markup stayed on the board the cell it marks left").is_equal_approx(
+			home.origin + offset, Vector3.ONE * 0.01)
+	assert_that(staged.basis).override_failure_message(
+			"the tear-out changed how markup LIES on the cell, which is not its business") \
+		.is_equal(home.basis)
+
+
 # --- the wire into a real pass ------------------------------------------------------------------
 
 # The executor tears out and puts back, and BOTH ends are pinned by one case -- the version moves
