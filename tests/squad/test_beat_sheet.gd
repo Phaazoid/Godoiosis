@@ -349,6 +349,12 @@ func test_a_move_beat_has_no_line_to_be_framed_across() -> void:
 # the case that fails if a REAL lethal blow reaches the table looking like a scratch. Asserted as a
 # relationship (something to hold for vs nothing) rather than a rung, because whether a felled unit
 # reads DOWNED or KILLED is the lifecycle rules' business, not this suite's.
+# REWRITTEN for #520 2b slice 2: its second assertion pinned "a scratch earns exactly 0", which was
+# the rule until HOLD_ATTACK became the ladder's floor. That was a real rule with a real fear behind
+# it -- its own message said "every beat now reads as a big moment" -- and the fear is still worth
+# guarding, so what replaces it is the RELATIONSHIP rather than the number: a felling blow must
+# outlast a scratch. That survives any tuning of either, which the zero never could once the floor
+# existed. (dev, 2026-08-27: "I don't see controls for holding the most common thing".)
 func test_a_real_felling_blow_reaches_the_beat_table_as_one() -> void:
 	var lethal := _hold_for_a_hit({Stats.Stat.STR: 60}, 1)
 	var scratch := _hold_for_a_hit({Stats.Stat.STR: 0}, 99)
@@ -356,7 +362,11 @@ func test_a_real_felling_blow_reaches_the_beat_table_as_one() -> void:
 	assert_float(lethal).override_failure_message(
 			"a blow that felled someone earned no hold -- the sheet's facts are not reaching Pacing").is_greater(0.0)
 	assert_float(scratch).override_failure_message(
-			"a scratch earned a hold -- every beat now reads as a big moment").is_equal_approx(0.0, 0.0001)
+			"a scratch earned no hold at all -- the ladder lost its floor and the commonest beat in the game is bare again") \
+		.is_greater(0.0)
+	assert_float(lethal).override_failure_message(
+			"a scratch is worth as much as a kill -- every beat reads as a big moment, which is what the floor must not do") \
+		.is_greater(scratch)
 
 
 # The PAUSE SCHEDULE itself: one hold per volley, keyed on the action that opens it, valued by the
@@ -386,6 +396,45 @@ func test_a_volley_gets_ONE_hold_on_the_action_that_opens_it() -> void:
 			"the hold is not on the action that OPENS the volley").is_true()
 	assert_float(holds[plan.attacks[0]]).is_equal_approx(
 			Pacing.duration_for(sheet.volleys(false)[0], Pacing.Profile.BOARD, false), 0.0001)
+	_break_volleys(plan)
+
+
+# ...and its TWIN on the other side of the beat (#520 2b slice 2). Same one-entry-per-volley rule,
+# keyed on the OPPOSITE END: the camera pans and holds at the action that opens the blast, and stays
+# once its LAST member has played. Keying both on [0] would put the linger between the first hit and
+# the second, which is dead air in the middle of one moment rather than a beat after it.
+#
+# This is the half that closes the wire up to the await, for the reason the case above states: the
+# await itself is invisible headless, so what can be pinned is that the schedule reaches it correct.
+func test_a_volley_lingers_ONCE_after_the_action_that_closes_it() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var a := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	var b := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.LDR: 3})
+	var c := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 0), {Stats.Stat.LDR: 3})
+
+	var plan := ResolvedPlan.new()
+	var victims: Array[Unit] = [a, b, c]
+	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
+			victims, attacker.get_equipped_weapon().template.main_attack))
+
+	var sheet := BeatSheet.read(attacker.squad, plan)
+	var executor := OrderExecutor.new()
+	auto_free(executor)
+	var beats := sheet.volleys(false)
+	var lingers: Dictionary = executor._beat_lingers(beats)
+
+	assert_int(lingers.size()).override_failure_message(
+			"three hits took three lingers -- a volley is one moment (#410)").is_equal(1)
+	# Non-vacuous: the beat really does have several members, so first and last are different
+	# actions and the assertion below can tell them apart.
+	assert_int(beats[0].actions.size()).override_failure_message(
+			"the volley collapsed to one member; the case cannot tell the two ends apart").is_greater(1)
+	assert_bool(lingers.has(beats[0].actions[-1])).override_failure_message(
+			"the linger is not on the action that CLOSES the volley").is_true()
+	assert_bool(lingers.has(beats[0].actions[0])).override_failure_message(
+			"the linger sits on the volley's OPENING action -- it would play between the first hit and the second") \
+		.is_false()
+	assert_float(lingers[beats[0].actions[-1]]).is_equal_approx(Pacing.linger_for(beats[0]), 0.0001)
 	_break_volleys(plan)
 
 
