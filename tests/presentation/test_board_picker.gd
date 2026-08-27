@@ -57,6 +57,26 @@ var _dipped_tops: Dictionary[Vector2i, int] = {
 }
 
 
+# Deeper than the plane by more than a whole level — the depth #582 was authored at, stated through
+# the constant so a re-based UNITS_PER_LEVEL cannot quietly float this fixture back up to the floor.
+const SUNKEN_HEIGHT := -Terrain.UNITS_PER_LEVEL - 1
+
+# ONE column, sunk, with nothing around it: the lone block the dev painted into open ground. The
+# void beside it is inside the apron, so the plane answers there and used to answer FIRST.
+var _sunken_tops: Dictionary[Vector2i, int] = {
+	Vector2i(0, 0): _top_for(SUNKEN_HEIGHT),
+}
+
+# _holed_tops with a sunken column added beyond the hole: the ray meets the HOLE, then solid ground
+# at plane level, then the pit — the only order that can tell "held" apart from "deferred". Same
+# hole at (1, 0), so the shallow ray the plane cases already use reaches it.
+var _hole_then_pit_tops: Dictionary[Vector2i, int] = {
+	Vector2i(0, 0): _top_for(SHORT_HEIGHT),
+	Vector2i(2, 0): _top_for(SHORT_HEIGHT),
+	Vector2i(3, 0): _top_for(SUNKEN_HEIGHT),
+}
+
+
 func _apron_of(tops: Dictionary[Vector2i, int]) -> Rect2i:
 	return BoardPicker.used_rect(tops).grow(APRON)
 
@@ -214,6 +234,83 @@ func test_a_dip_inside_the_plane_reads_as_the_dip_and_not_as_flat() -> void:
 		.is_less(BoardSpace.top_row_of(SHORT_HEIGHT))
 
 
+# --- The plane is a FLOOR, not a lid (#582) ------------------------------------
+
+func test_a_column_below_the_plane_is_visible_through_it() -> void:
+	# The headline. The apron's floor is INVISIBLE, so it must not hide a block that is drawn:
+	# a cell painted more than a level down used to pick as the void in front of it, which made it
+	# unpaintable, unerasable and unselectable at once.
+	var surface := BoardSpace.surface_y(BoardSpace.top_row_of(SUNKEN_HEIGHT))
+	var aim := Vector3(0.5, surface, 0.5)
+	var along := Vector3(2.0, -2.0, 0.0)
+	var plane := _apron_of(_sunken_tops)
+	var origin := aim - along.normalized() * 10.0
+
+	# Non-vacuity, and the whole mechanism in one line: the ray crosses the plane's own height
+	# SOMEWHERE ELSE, so under the old rule that column answered and this one never got asked.
+	assert_that(BoardSpace.flat(BoardPicker.pick_on_plane(origin, along, BoardSpace.FLAT_TOP_ROW, plane))) \
+		.override_failure_message("the ray meets the plane inside the sunken column; nothing occludes") \
+		.is_not_equal(Vector2i(0, 0))
+
+	assert_that(BoardPicker.pick_cell(origin, along, _sunken_tops, plane)) \
+		.override_failure_message("the invisible floor answered in front of a block you can see") \
+		.is_equal(_cell_at(Vector2i(0, 0), SUNKEN_HEIGHT))
+
+
+func test_ground_at_plane_level_blocks_and_the_held_hole_stands() -> void:
+	# The other side of the same rule, and the one that keeps #231: a held plane hit may only be
+	# beaten by a column BELOW the floor. Solid ground at floor level really does block, so the
+	# hole the ray entered first is the answer — never a pit further down the same ray.
+	var plane := _apron_of(_hole_then_pit_tops)
+	var cell := BoardPicker.pick_cell(Vector3(-1.5, 3.0, 0.5), Vector3(3.0, -2.0, 0.0),
+			_hole_then_pit_tops, plane)
+	assert_that(cell).override_failure_message(
+			"the hole lost its ray — to the ground that blocks, or to the pit past it") \
+		.is_equal(_cell_at(Vector2i(1, 0), SHORT_HEIGHT))
+	assert_bool(_hole_then_pit_tops.has(Vector2i(1, 0))).override_failure_message(
+			"the fixture's hole stopped being a hole; the case is vacuous").is_false()
+	assert_bool(_hole_then_pit_tops.has(Vector2i(2, 0))).override_failure_message(
+			"nothing blocks between the hole and the pit; the case is vacuous").is_true()
+
+
+func test_pick_on_plane_answers_the_crossing_column_and_not_the_blocker() -> void:
+	# The brush's aim (#582). Nothing can hide behind a plane — pick_on_plane takes no `tops` at
+	# all — so the tower this very ray strikes cannot change the answer. That is what lets the brush
+	# author a one-cell well the camera has no line into.
+	var origin := Vector3(-2.5, 5.0, 0.5)
+	var along := Vector3(4.0, -2.0, 0.0)
+	var row := BoardSpace.top_row_of(SUNKEN_HEIGHT) + 1
+	# The case states its own rect rather than borrowing the board's apron: a ray travels while it
+	# descends, so a crossing this far down lands well outside a board-sized one — which is the
+	# neighbouring case's point, not this one's.
+	var reach := _apron_of(_tower_tops).grow(APRON * 4)
+
+	var aimed := BoardPicker.pick_on_plane(origin, along, row, reach)
+	assert_that(aimed).override_failure_message("the aim fell outside its own rect") \
+		.is_not_equal(BoardSpace.NO_CELL)
+	assert_int(aimed.y).override_failure_message("the aimed cell came back at the wrong row") \
+		.is_equal(BoardSpace.top_row_of(SUNKEN_HEIGHT))
+
+	var struck := BoardPicker.pick_cell(origin, along, _tower_tops, reach)
+	assert_that(struck).override_failure_message("the ray strikes nothing; the case is vacuous") \
+		.is_not_equal(BoardSpace.NO_CELL)
+	assert_that(aimed).override_failure_message("the aim came back as the blocker the walk found") \
+		.is_not_equal(struck)
+
+
+func test_pick_on_plane_misses_outside_the_authoring_rect_and_behind_the_camera() -> void:
+	# The rect stays the caller's policy, exactly as pick_cell has it — and a plane the ray is
+	# travelling AWAY from is a miss, not a hit at a negative distance.
+	var plane := _apron_of(_tower_tops)
+	var outside := plane.end
+	assert_that(BoardPicker.pick_on_plane(Vector3(outside.x + 0.5, 5.0, outside.y + 0.5),
+			Vector3.DOWN, BoardSpace.FLAT_TOP_ROW, plane)).is_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_on_plane(Vector3(0.5, 5.0, 0.5), Vector3.UP,
+			BoardSpace.FLAT_TOP_ROW, plane)).is_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_on_plane(Vector3(0.5, 5.0, 0.5), Vector3(1.0, 0.0, 0.0),
+			BoardSpace.FLAT_TOP_ROW, plane)).is_equal(BoardSpace.NO_CELL)
+
+
 func test_a_ray_clearing_the_rim_strikes_the_dips_own_cell() -> void:
 	# The walk's hit test at h == 0, reached the way a real camera reaches it: over the near rim
 	# (both ends above the neighbours' top, so they do not answer) and down through the dip's
@@ -292,6 +389,20 @@ func test_pick_at_is_the_ray_pair_spelled_once() -> void:
 			camera.project_ray_origin(screen), camera.project_ray_normal(screen), tops, Rect2i())
 	assert_that(direct).is_not_equal(BoardSpace.NO_CELL)
 	assert_that(BoardPicker.pick_at(camera, screen, tops, Rect2i())).is_equal(direct)
+
+
+func test_pick_at_height_is_the_ray_pair_spelled_once() -> void:
+	# pick_at's twin, and the same reason it exists (#222): a caller building the origin/normal
+	# pair by hand is the copy these convenience wrappers are here to stop.
+	var board := _scene.get_node("Board") as GridMap
+	var camera := _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
+	var plane := BoardPicker.used_rect(BoardPicker.column_tops_from(board)).grow(APRON)
+	var screen := camera.unproject_position(BoardSpace.standing_point(Vector3i(8, 2, 3)))
+	var direct := BoardPicker.pick_on_plane(camera.project_ray_origin(screen),
+			camera.project_ray_normal(screen), BoardSpace.FLAT_TOP_ROW, plane)
+	assert_that(direct).is_not_equal(BoardSpace.NO_CELL)
+	assert_that(BoardPicker.pick_at_height(camera, screen, BoardSpace.FLAT_TOP_ROW, plane)) \
+		.is_equal(direct)
 
 
 func test_occluded_cell_yields_the_blocker_not_the_hidden_cell() -> void:

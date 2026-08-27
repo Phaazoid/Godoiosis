@@ -934,7 +934,7 @@ refusal is answered by ordering — tile first, then height), and a ramp wears t
 `BoardHeights.set_cell` takes both and a cell is one answer; two brushes would be two ways to author
 one thing. The wheel is read **first** in `DevController.handle_tile_brush` and returns, so a notch
 mid-stroke changes the level without ending the stroke, and it is gated on `event.pressed` because
-Godot emits a press *and* a release per notch. Four rulings worth keeping:
+Godot emits a press *and* a release per notch. Five rulings worth keeping:
 
 - **Negative levels are reachable, deliberately.** The dev: *"if I start designing a level and want a
   dip, without allowing negatives, I would have to shift everything up. no bueno."* Nothing in
@@ -943,6 +943,24 @@ Godot emits a press *and* a release per notch. Four rulings worth keeping:
   deep tops out at level `0`, which was also its "there is no column here" answer, so a dip read as
   flat inside the authoring apron and was unclickable outside it. `BoardPicker.NO_COLUMN` separates
   the two — **a level is a number, not a truth value**, and nothing may gate on `level > 0`.
+  [#582](https://github.com/Phaazoid/Godoiosis/issues/582) is the other half: #294 made a dip
+  **representable**, and it was still not **reachable**. The apron's implicit floor sits at
+  `FLAT_TOP_ROW`, and it used to end the walk like any real hit — so an *invisible* surface occluded
+  a block that is plainly drawn, and a cell painted more than a level down became unpaintable,
+  unerasable and unselectable at once, every dev gesture reading the one pick. **The plane is a
+  floor, not a lid:** a plane hit is HELD, the walk goes on, the first real column below floor level
+  wins, and the first real column at or above it blocks with the held hit standing — which is what
+  keeps [#231](https://github.com/Phaazoid/Godoiosis/issues/231)'s erased cell answering for itself.
+- **What the camera cannot see, the brush aims at instead.** The second half of #582, and a separate
+  problem wearing the same symptom: a **one-cell** well two units deep is hidden by its own
+  neighbours, honestly, at the rig's fixed 40° pitch — measured, it needs 56° to see the floor, and
+  no picking rule recovers what is not on screen. Anything **two cells across is visible on its own
+  at any depth** (3×3 and 5×5 measured, every cell), so the gap is exactly the one-wide well. The
+  Tile Brush's **Aim at brush height** toggle answers it by changing the QUESTION: while it is on the
+  pick resolves against the brush's own Height plane (`BoardPicker.pick_on_plane`) rather than the
+  board, so nothing can occlude it. Off by default, because it trades away reaching a tall column to
+  erase it — the commoner gesture by far. It is #340's ruling one layer down: the ghost already shows
+  the tile at the height you picked rather than the height the cell happens to be.
 - **Elevation goes with the ground.** `BoardHeights.prune_groundless` runs at both sites the tile-state
   sweep does (brush erase, `resize_map`), because a height under no tile is invisible junk that
   resurrects the moment ground is repainted there. The predicate is a **parameter**, not an injected

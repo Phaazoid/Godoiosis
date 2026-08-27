@@ -21,6 +21,13 @@ class_name BoardPicker
 #   as an analytic plane intersection before or after it, so a real column in front
 #   of a hole still wins by ray order rather than by a hand-written comparison.
 #   The rect is the caller's policy (board + authoring apron), never derived here.
+#   THE PLANE IS A FLOOR, NOT A LID (#582): it answers for ABSENT columns, and only a column
+#   BELOW it stays visible through it. It used to end the walk like any other hit, which made an
+#   INVISIBLE surface occlude a block that is plainly drawn — a cell painted more than one unit
+#   down became unpaintable, unerasable and unselectable at once, since every dev gesture reads
+#   this one answer. So a plane hit is now HELD rather than returned, and the walk goes on: the
+#   first real column below plane level wins, the first real column at or above it blocks and the
+#   held hit stands. Ray order still decides everything a ray can actually see.
 # - A ROW IS A NUMBER, NOT A TRUTH VALUE (#294): "nothing here" is NO_COLUMN, so every row in
 #   range — 0 and below included — is an ordinary answer. Nothing may gate on `row > 0`.
 
@@ -93,6 +100,37 @@ static func max_top(tops: Dictionary[Vector2i, int]) -> int:
 	return tallest
 
 
+# The column a ray meets a HORIZONTAL plane in, at `top_row` (#582) — the answer when the brush is
+# authoring at a height the board's own geometry hides. Deliberately NOT a walk: a 1-cell well two
+# units deep genuinely cannot be seen at the rig's 40 degree pitch, so no amount of ray-order
+# cleverness reaches it and the tool has to stop asking what is VISIBLE and start asking what the
+# brush is AIMED at. Nothing occludes a plane, so `tops` is not a parameter here.
+#
+# `plane` is the same authoring rect pick_cell takes, and it is still the caller's policy: outside
+# it there is no board to author, so the answer is the same miss.
+static func pick_on_plane(ray_origin: Vector3, ray_direction: Vector3, top_row: int,
+		plane: Rect2i) -> Vector3i:
+	var dir := ray_direction.normalized()
+	if not dir.is_finite() or is_zero_approx(dir.y):
+		return BoardSpace.NO_CELL   # along the surface: no crossing to read
+	var t := (top_row * BoardSpace.ROW_HEIGHT - ray_origin.y) / dir.y
+	if t < 0.0:
+		return BoardSpace.NO_CELL   # the plane is BEHIND the camera
+	var hit := ray_origin + dir * t
+	var column := Vector2i(floori(hit.x / BoardSpace.CELL_SIZE), floori(hit.z / BoardSpace.CELL_SIZE))
+	if not plane.has_point(column):
+		return BoardSpace.NO_CELL
+	return _top_cell(column, top_row)
+
+
+# pick_on_plane's camera convenience, pick_at's twin — the same reason #222 gives: a caller that
+# builds the origin/normal pair by hand is the copy this exists to stop.
+static func pick_at_height(camera: Camera3D, screen_pos: Vector2, top_row: int,
+		plane: Rect2i) -> Vector3i:
+	return pick_on_plane(camera.project_ray_origin(screen_pos),
+		camera.project_ray_normal(screen_pos), top_row, plane)
+
+
 # Ray-pair convenience: the cell under a camera's screen point. Every live caller
 # built the same origin/normal pair by hand (#222 collapsed three copies).
 static func pick_at(camera: Camera3D, screen_pos: Vector2, tops: Dictionary[Vector2i, int],
@@ -142,17 +180,31 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 	var t_delta_z := cs / absf(dir.z) if step.y != 0 else INF
 	var t := 0.0
 
+	# A plane hit the walk is holding while it looks for a real column BELOW plane level (#582).
+	# NO_CELL means "none yet", and it doubles as the miss the walk falls out with -- the plane's
+	# answer only ever stands in for one that never came.
+	var pending := BoardSpace.NO_CELL
+
 	for i in _MAX_STEPS:
 		var y_enter := ray_origin.y + dir.y * t
 		if dir.y >= 0.0 and y_enter > ceiling * rh:
-			return BoardSpace.NO_CELL  # level or rising, already above every top
+			return pending  # level or rising, already above every top
 		var t_exit := minf(t_max_x, t_max_z)
 		var row := _top_row(col, tops, plane)
 		if row != NO_COLUMN:
 			var h: float = row * rh
 			var y_exit := ray_origin.y + dir.y * t_exit
 			if y_enter <= h or y_exit <= h:
-				return _top_cell(col, row)
+				# `tops` is the REAL board; anything else here came from the plane. Asked of the
+				# table rather than by comparing the row, because a real column may legitimately
+				# sit AT plane level and must still block.
+				if not tops.has(col):
+					if pending == BoardSpace.NO_CELL:
+						pending = _top_cell(col, row)
+				elif pending == BoardSpace.NO_CELL or row < BoardSpace.FLAT_TOP_ROW:
+					return _top_cell(col, row)
+				else:
+					return pending   # solid ground at or above the floor: the held hole stands
 		if t_max_x < t_max_z:
 			t = t_max_x
 			t_max_x += t_delta_x
@@ -162,8 +214,8 @@ static func pick_cell(ray_origin: Vector3, ray_direction: Vector3, tops: Diction
 			t_max_z += t_delta_z
 			col.y += step.y
 		if _departed(col, step, min_col, max_col):
-			return BoardSpace.NO_CELL
-	return BoardSpace.NO_CELL
+			return pending
+	return pending
 
 
 # What the ray can hit in this column: the painted column's top row, else the plane's
