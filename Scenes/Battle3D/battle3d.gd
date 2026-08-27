@@ -1030,7 +1030,14 @@ func _cancel() -> void:
 		game._on_right_click()
 
 
+# ONE pick, whichever question is live (#582). The brush's aim-at-height mode replaces the geometry
+# walk here rather than beside it, so cell_source, pointer_source and _vertex_under keep reading the
+# single _pointer_cell below -- hover, the ghost, paint, erase and the corner tool cannot come to
+# different conclusions about where the mouse is, which is the whole reason this funnel exists.
 func _pick(screen_pos: Vector2) -> Vector3i:
+	var row: int = game.dev_controller.brush_pick_row()
+	if row != BoardPicker.NO_COLUMN:
+		return BoardPicker.pick_at_height(_camera, screen_pos, row, _paint_plane())
 	return BoardPicker.pick_at(_camera, screen_pos, _tops, _paint_plane())
 
 
