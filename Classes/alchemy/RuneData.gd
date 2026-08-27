@@ -106,14 +106,28 @@ func is_legal() -> bool:
 # FILTERED on purpose, and deliberately no longer the same list as choice_attacks (#166): this is
 # "what could actually fire", the list the AI probes and has_any_fireable_attack scans. The
 # catalogue the menu draws is choice_attacks. Don't collapse them back together.
+#
+# Both of them drop watch-only carvings (#590) -- a carving authored can_overwatch is declared as
+# a standing watch and never channelled, so it belongs to watch_attacks and to nothing here.
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+	return fireable_only(wielder, repertoire_of(channelable(wielder)))
+
+# Every carving this rune holds, fireable or watch-only -- the list watch_attacks comes off (#590).
+# Deliberately the UNFILTERED set, matching choice_attacks: an unaffordable watch carving lists and
+# greys with its reason like any other row.
+func repertoire(_wielder: Unit) -> Array[AttackData]:
+	return repertoire_of(inscriptions)
+
+# Array[TransmutationData] -> Array[AttackData]. GDScript will not pass the first where the second
+# is declared, and the three surfaces above all need the widening.
+func repertoire_of(carvings: Array[TransmutationData]) -> Array[AttackData]:
 	var result: Array[AttackData] = []
-	for t in channelable(wielder):
+	for t in carvings:
 		result.append(t)
 	return result
 
 func default_attack(wielder: Unit) -> AttackData:
-	var fireable := channelable(wielder)
+	var fireable := selectable_attacks(wielder)
 	if fireable.is_empty():
 		return null
 	return fireable[0]
@@ -123,11 +137,8 @@ func default_attack(wielder: Unit) -> AttackData:
 # reason, the same law _attack_entry has always applied to a weapon's unfireable secondary, which
 # is why WeaponInstance.secondary_attacks likewise returns all of them. Whether a carving can be
 # paid for is asked per entry, by attack_block_reason.
-func choice_attacks(_wielder: Unit) -> Array[AttackData]:
-	var result: Array[AttackData] = []
-	for t in inscriptions:
-		result.append(t)
-	return result
+func choice_attacks(wielder: Unit) -> Array[AttackData]:
+	return fireable_only(wielder, repertoire(wielder))
 
 # A rune counters with whatever it is CURRENTLY firing — the live pick included (#30 quirk).
 # A weapon deliberately does NOT; see WeaponInstance.counter_attack.

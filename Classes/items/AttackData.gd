@@ -111,5 +111,5 @@ static func property_tips() -> Dictionary:
 		"heals": "Reinterprets the damage number as HP restored instead. An attack is either damage or a heal, never both.",
 		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
-		"can_overwatch": "May be declared as a standing WATCH: aim it now, and it fires on the first enemy who enters the aimed cells during someone else's turn. Fires once, then it is spent.",
+		"can_overwatch": "Makes this an OVERWATCH attack, and only that -- it is aimed as a standing watch and never fired directly, so it does not appear in the attack menu, the AI never picks it, and it cannot be a weapon's main. It fires on the first enemy who enters the aimed cells during someone else's turn, once, then it is spent.",
 	}

@@ -987,12 +987,13 @@ func get_weapon_secondary_attacks() -> Array[AttackData]:
 # weapon carries one Overwatch action rather than a menu of them (dev, 2026-08-26). ONE answer, two
 # readers -- the kit-slice gate below and the menu's Overwatch rows -- so the slice can never offer
 # a watch that picks nothing, or hide one the unit could take.
+#
+# Reads the equipped source's WATCH view, never the fireable one it used to filter (#590): the two
+# are disjoint now, so filtering the fire list here would come back empty every time.
 func overwatch_attacks() -> Array[AttackData]:
-	var watchable: Array[AttackData] = []
-	for atk: AttackData in get_selectable_attacks():
-		if attack_can_overwatch(atk):
-			watchable.append(atk)
-	return watchable
+	if equipped_weapon == null:
+		return []
+	return equipped_weapon.watch_attacks(self)
 
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
 # reload), a fireable secondary attack, OR a watchable attack it could fire right now -- #413 made

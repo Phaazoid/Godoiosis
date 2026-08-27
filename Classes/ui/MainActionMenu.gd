@@ -296,17 +296,19 @@ func _transmutation_children(unit: Unit) -> Array:
 
 # Every watchable attack is its OWN ROW in the kit slice, never a submenu (dev, 2026-08-26: "The
 # Carbine will get 1 Overwatch action as a special weapon action. That's it. There will be no sub
-# menu.") -- clicking one picks that attack. A weapon carries exactly one today, and the day a mod
-# grants a second, "they will have their own special distinguishing names" (dev), which is also the
-# LABEL rule here: the weapon's own watch has no name but the verb, a granted one arrives with one.
+# menu.") -- clicking one picks that attack. Each arrives under its own name, which since #590 is
+# the ATTACK's name with nothing synthesised: a watch attack is watch-only, so it has no firing row
+# to collide with and the carbine's own watch is a .tres literally called "Overwatch". The label
+# used to fork on "is this the default attack" and hand a granted watch its attack's display_name
+# -- which is exactly the name its own fire row already wore, so build_tree's duplicate guard ate
+# the watch row and the ONLY reachable overwatch was the weapon main's.
 # The row greys with its attack's own reason, so a dry carbine says why it cannot stand watch --
 # #166's law, reached through the same door every attack row uses.
 func _overwatch_rows(unit: Unit) -> Array:
 	var rows: Array = []
 	for atk: AttackData in unit.overwatch_attacks():
-		var label: String = "Overwatch" if atk == unit.get_default_attack() else atk.display_name
 		rows.append(_synthetic_leaf(
-			_entry(label, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH)),
+			_entry(atk.display_name, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH)),
 			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
 	return rows
 

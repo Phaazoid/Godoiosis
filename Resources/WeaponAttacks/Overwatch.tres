@@ -3,7 +3,7 @@
 [ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_pat"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 
-[sub_resource type="Resource" id="Resource_main"]
+[sub_resource type="Resource" id="Resource_ow"]
 script = ExtResource("1_pat")
 max_range = 2
 min_range = 2
@@ -17,7 +17,8 @@ scaling_blend = Dictionary[int, int]({
 })
 requires_readiness = true
 consumes_readiness = true
-display_name = "Shot"
+display_name = "Overwatch"
 power = 4
-attack_pattern = SubResource("Resource_main")
+attack_pattern = SubResource("Resource_ow")
+can_overwatch = true
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"
