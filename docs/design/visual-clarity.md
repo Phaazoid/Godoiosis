@@ -1374,10 +1374,29 @@ cannot be offset individually** — it is a lattice — so:
 **A sprite's CELL is still a board fact.** `UnitMirror` reads it *before* adding the offset —
 reading it off the displaced point would name a cell in the sky.
 
-**Staged on the profile, so the law is a property rather than a promise.** `OrderExecutor` stages
-`BeatSheet.cells` — already computed once from the plan, and already documented there as this
-ticket's set — and stages nothing at all under `BOARD`. `tests/presentation/test_staging.gd` asserts
-zero displacement for **every painted cell** after a plain-board pass, read off the seam directly.
+**A MAIN ACTION is what tears the board open — movement never does** (dev, on playing it:
+*"there have to be main actions at play. Movement by itself doesn't do it."*). `BeatSheet.cells` is
+therefore what main actions touch: an attack's origin, aim, knockback flight and terrain deposits,
+plus the actor and target of every side-channel verb. Asked of `BaseAction.is_main_action()` rather
+than of `SIDE_CHANNEL_ORDER` membership — the two lists agree today and nothing pins that they must.
+
+**The GATE falls out of the SET rather than sitting beside it**: no main actions means no cells
+means nothing lifts. That is one rule, not two, and it is why `_stage_the_fight` asks whether the
+fight's cells are empty **before** the bystanders flag adds anything — asking after would let the
+feels-test put move-only passes back in the sky, which is the exact thing it exists to be judged
+against.
+
+What this replaced was a sweep over every cast member's standing cell, and the symptom was a hole
+in the board at the end of every move. It was also a Law #4 duplicate: whether a *non-fighter's*
+ground comes along is the feels-test flag's question, and the cast sweep was a second answer to it.
+
+**The tear-out waits for the walk.** An attacker's `origin_cell` is its *post-move* cell, so staging
+before the move phase makes it walk toward a hole and pop into the sky on arrival. The board is
+where you move; the diorama is where you fight.
+
+**Staged on the profile too, so #521's law is a property rather than a promise** — nothing stages
+under `BOARD`, and `tests/presentation/test_staging.gd` asserts zero displacement for **every
+painted cell** after a plain-board pass, read off the seam directly.
 
 **The feels-test fork is one bool**, `Experiments.Flag.DIORAMA_BYSTANDERS`: off stages the cells the
 fight touches, on adds the ground every other unit stands on so the diorama keeps its spatial
