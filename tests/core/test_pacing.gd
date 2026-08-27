@@ -3,7 +3,7 @@
 # sites -- a beat that actually waited would put real wall clock on every case that resolves a plan,
 # and the symptom would be a suite that just got slower, which nothing else here would catch.
 #
-# Deliberately asserts NOTHING about what any of the five constants are: they are tuned by feel, and
+# Deliberately asserts NOTHING about what any of the table's constants are: they are tuned by feel, and
 # tuning them must never turn the suite red. Measured in FRAMES rather than seconds for the same
 # reason -- a duration threshold would be a hard-coded number pretending to be a rule.
 #
