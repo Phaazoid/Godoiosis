@@ -291,7 +291,7 @@ static var _staged: Dictionary[Vector2i, bool] = {}
 static var _stage_offset := Vector3.ZERO
 # How far above the board the diorama sits, in CELLS. A feel value, so it is a GameKnobs row rather
 # than a constant -- and a `static var` because that is the only form a knob can write.
-static var STAGE_LIFT := 24.0
+static var STAGE_LIFT := 40.0
 # Monotonic, so a per-frame poll can tell "the staging moved" from "it did not" without diffing the
 # set. DirtyCells.version's shape, and for the same reason: any number of readers, none consuming.
 static var staging_version := 0
