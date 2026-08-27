@@ -66,28 +66,42 @@ func _surface_items(source_id: int, coords: Vector2i) -> PackedStringArray:
 	return names
 
 
-# THE wire. `deep` is not a look setting -- it is walkability, inverted, so a tile that declares
-# itself wadeable cannot render as the tile that drowns you.
-func test_every_water_surface_says_what_walkable_says() -> void:
-	var checked := 0
+# THE bake, and its DELETION (#552 slice 2b). `deep` used to be a per-material uniform, so the
+# generator built two water materials and picked between them by the tile's walkable flag. That is
+# gone: how deep a cell is now lives in the board mask, per CELL, where it can be interpolated --
+# and the walkable wire it used to carry moved with it, to
+# test_water_knobs.gd::test_the_mask_says_how_deep_each_water_cell_is.
+#
+# What is left to guard here is the COLLAPSE itself, and it is worth a case because a half-done
+# revert is silent: a shallow tile and a deep tile must wear the SAME material object. If they ever
+# wear two again, something is baking depth per material a second time, and the shader would be
+# reading two answers to one question.
+func test_shallow_and_deep_water_wear_the_one_material() -> void:
+	var by_walkable: Dictionary[bool, Array] = {true: [], false: []}
 	for tile: Dictionary in _water_tiles():
 		var data: TileData = tile["data"]
-		var want := 0.0 if GridUtils.walkable_of(data) else 1.0
 		for item_name in _surface_items(tile["source"], tile["coords"]):
 			assert_bool(_by_name.has(item_name)).override_failure_message(
 					"no item '%s' -- the meshlib is stale, regenerate it" % item_name).is_true()
+			if not _by_name.has(item_name):
+				continue
 			var mat := _library.get_item_mesh(_by_name[item_name]).surface_get_material(0)
 			var shaded := mat as ShaderMaterial
 			assert_object(shaded).override_failure_message(
 					"'%s' wears a %s, not the water shader" % [item_name, mat]).is_not_null()
-			var got: float = shaded.get_shader_parameter("deep")
-			assert_float(got).override_failure_message(
-					"'%s' renders as %s water while its tile declares walkable=%s, so it should " \
-					% [item_name, "deep" if got > 0.5 else "shallow", GridUtils.walkable_of(data)] \
-					+ "render as %s" % ["deep" if want > 0.5 else "shallow"]).is_equal(want)
-			checked += 1
-	assert_int(checked).override_failure_message(
-			"no WATER tiles authored; the case is vacuous").is_greater(0)
+			by_walkable[GridUtils.walkable_of(data)].append(shaded)
+	# Both sorts have to be present or the case proves nothing: one material is trivially true of a
+	# tileset with only shallow water in it.
+	assert_bool(by_walkable[true].is_empty()).override_failure_message(
+			"no WADEABLE water tile authored; the collapse is untested").is_false()
+	assert_bool(by_walkable[false].is_empty()).override_failure_message(
+			"no DROWNING water tile authored; the collapse is untested").is_false()
+	var all: Array = by_walkable[true] + by_walkable[false]
+	for mat: ShaderMaterial in all:
+		assert_bool(mat == all[0]).override_failure_message(
+				"water surfaces wear more than one material -- depth is baked per material " \
+				+ "again, which is the second answer the board mask exists to be the only one " \
+				+ "of, and a shallow/deep boundary cannot blend across it").is_true()
 
 
 # The blast radius, from the other end: the shader is on water and NOWHERE else. A material is
@@ -219,39 +233,65 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	assert_bool(names.is_empty()).override_failure_message(
 			"the water shader exposes no uniforms at all -- it failed to parse, and every water " \
 			+ "surface will render as an error").is_false()
-	for wanted in ["atlas", "body_tex", "deep"]:
+	for wanted in ["atlas", "body_tex"]:
 		assert_bool(names.has(wanted)).override_failure_message(
 				"gen_lookdev_assets sets shader parameter '%s' and the shader declares no such " \
 				% wanted + "uniform -- the value is dropped in silence").is_true()
 
 
+# BOARD DATA: the one declared exemption from the two laws below, and its guest list is CLOSED.
+# These describe the BOARD rather than either water, so they can never name a type and they have no
+# knob row -- the mask is derived from the terrain, not tuned. Membership is asserted in BOTH
+# directions, because a hole a future knob could fall into unnamed is the law quietly deleted,
+# while a named category with a fixed membership is a category.
+const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_board_shore_range"]
+
+
+# What the shader declares, in one place. Three cases used to parse this line for themselves with
+# the same one-liner, and the sampler #552 slice 2 added broke all three at once: a sampler carries
+# its hints after a colon (`: filter_linear, repeat_disable`), so the NAME is the last word before
+# that colon and not the last word on the line.
+func _declared_globals() -> PackedStringArray:
+	var out := PackedStringArray()
+	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
+		var text := line.strip_edges()
+		if not text.begins_with("global uniform "):
+			continue
+		var head := text.trim_suffix(";").split(":")[0].strip_edges()
+		var words := head.split(" ")
+		out.append(words[words.size() - 1])
+	return out
+
+
 # A global uniform is spelled in three files and NOTHING complains when two of them disagree: an
 # undeclared global refuses to compile, and a misspelled one silently reads zero. So the three
 # spellings are held to being one set.
+#
+# Board data is spelled in TWO of the three -- no knob row, because nobody tunes the shape of the
+# board -- so it is held to the project.godot half alone.
 func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
-	var declared: Dictionary[String, bool] = {}
-	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
-		var text := line.strip_edges()
-		if text.begins_with("global uniform "):
-			var words := text.trim_suffix(";").split(" ")
-			declared[words[words.size() - 1]] = true
-	assert_bool(declared.is_empty()).override_failure_message(
-			"the water shader declares no globals; the case is vacuous").is_false()
+	var declared := _declared_globals()
+	assert_int(declared.size()).override_failure_message(
+			"the water shader declares no globals; the case is vacuous").is_greater(0)
+	var tunable: Array[String] = []
+	for name in declared:
+		if not BOARD_GLOBALS.has(name):
+			tunable.append(name)
 
 	var rows: Dictionary[String, bool] = {}
 	for knob: Dictionary in GameKnobs.KNOBS:
 		# The Water FAMILY: two groups since every dial went per type. Matching the prefix rather
 		# than naming both is what stops a third group from silently falling out of this law -- and
-		# the non-vacuity assertion below is what stops the prefix being wrong, since a filter that
+		# the non-vacuity assertion above is what stops the prefix being wrong, since a filter that
 		# matches nothing would let every case pass over an empty set.
 		if (knob["group"] as String).begins_with("Water"):
 			rows[knob["prop"]] = true
 	assert_array(rows.keys()).override_failure_message(
-			"the Water knob rows and the shader's globals are different sets -- a row with no " \
-			+ "uniform moves nothing, and a uniform with no row cannot be tuned") \
-			.contains_exactly_in_any_order(declared.keys())
+			"the Water knob rows and the shader's tunable globals are different sets -- a row " \
+			+ "with no uniform moves nothing, and a uniform with no row cannot be tuned") \
+			.contains_exactly_in_any_order(tunable)
 
-	for name: String in declared:
+	for name in declared:
 		assert_bool(ProjectSettings.has_setting("shader_globals/%s" % name)) \
 				.override_failure_message("the shader declares global '%s' and project.godot " \
 				% name + "does not -- the shader will refuse to compile").is_true()
@@ -269,18 +309,18 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	var deep_side: Dictionary[String, bool] = {}
 	var shallow_side: Dictionary[String, bool] = {}
-	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
-		var text := line.strip_edges()
-		if not text.begins_with("global uniform "):
+	var board_side: Array[String] = []
+	for name in _declared_globals():
+		if BOARD_GLOBALS.has(name):
+			board_side.append(name)
 			continue
-		var words := text.trim_suffix(";").split(" ")
-		var name := words[words.size() - 1]
 		var deep := name.begins_with("water_deep_")
 		var shallow := name.begins_with("water_shallow_")
 		assert_bool(deep or shallow).override_failure_message(
 				"global '%s' names neither water type -- one dial moving both is what the " % name \
 				+ "per-type split deleted, and a ratio hidden in a const is a feel value with no " \
-				+ "surface").is_true()
+				+ "surface. If it is genuinely board data and not a knob, it belongs in " \
+				+ "BOARD_GLOBALS and needs saying out loud there").is_true()
 		if deep:
 			deep_side[name.trim_prefix("water_deep_")] = true
 		elif shallow:
@@ -291,6 +331,12 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 		assert_bool(shallow_side.has(stem)).override_failure_message(
 				"'%s' is tunable on deep water and not on shallow -- one type would be stuck " \
 				% stem + "with whatever the other was tuned to").is_true()
+	# The exemption holds EXACTLY what it says it holds. Missing means a board global was renamed
+	# without saying so; extra is impossible by construction, but asserting both directions is what
+	# makes this a list rather than a filter.
+	assert_array(board_side).override_failure_message(
+			"the board-data exemption is declared as %s and the shader's is %s" \
+			% [BOARD_GLOBALS, board_side]).contains_exactly_in_any_order(BOARD_GLOBALS)
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider
@@ -305,12 +351,7 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 func test_every_global_the_shader_declares_is_actually_read() -> void:
 	var code := (load(SHADER_PATH) as Shader).code
 	var checked := 0
-	for line in code.split("\n"):
-		var text := line.strip_edges()
-		if not text.begins_with("global uniform "):
-			continue
-		var words := text.trim_suffix(";").split(" ")
-		var name := words[words.size() - 1]
+	for name in _declared_globals():
 		# Count every mention and subtract the declaration itself; a comment naming it is close
 		# enough to a read for this purpose, and being generous here is the right side to err on --
 		# the finding worth having is ZERO.

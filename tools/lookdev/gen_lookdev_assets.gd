@@ -355,9 +355,11 @@ func _gen_meshlib() -> int:
 	_add_item(ml, 3, "dirt_block", _block_mesh(_mat(dirt_top), _mat(dirt_side)))
 	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
 	# The declared WATER fallback wears the shader too (#552): a cell the meshlib has no per-tile
-	# item for would otherwise sit dead still in the middle of a moving lake. DEEP, because a
-	# fallback cell has no tile to declare itself walkable.
-	var fallback_water := _water_mat(water_top, water_side, true)
+	# item for would otherwise sit dead still in the middle of a moving lake. It used to be forced
+	# DEEP because a fallback cell has no tile to declare itself walkable -- since slice 2b it does
+	# not have to guess, because deepness comes from the board mask per CELL and the cell under a
+	# fallback item is as real as any other.
+	var fallback_water := _water_mat(water_top, water_side)
 	_add_item(ml, 5, "water_block", _block_mesh(fallback_water, fallback_water))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
 	# Ids 0-6 are the hand-picked fallbacks and Scenes/LookDev/LookDev.tscn's diorama references them
@@ -480,13 +482,10 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		prop_mat.cull_mode = BaseMaterial3D.CULL_BACK
 		prop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		prop_mat.alpha_scissor_threshold = 0.5
-		# TWO water SURFACES over that same texture, and two is the whole count (#552): shallow and
-		# deep is the only thing one water tile may differ from another about, so `deep` keys these
-		# rather than the coords keying one material per tile.
-		var water_mats: Dictionary[bool, ShaderMaterial] = {
-			true: _water_mat(null, water_side_tex, true),
-			false: _water_mat(null, water_side_tex, false),
-		}
+		# ONE water SURFACE material over that same texture (#552 slice 2b). Shallow versus deep is
+		# still the only thing one water tile may differ from another about -- but that difference
+		# now lives in the board mask BoardMirror rebuilds, per cell, where it can be interpolated.
+		var water_mat := _water_mat(null, water_side_tex)
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
@@ -531,7 +530,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			# to run only on the four rim quads in surface 0, and BoardSpace.SIDE_RIM is 0.004 --
 			# a rim #559 built to be invisible -- so it was a slider driving nothing.
 			if kind == Terrain.Kind.WATER:
-				top = water_mats[not GridUtils.walkable_of(data)]
+				top = water_mat
 				side = top
 			# side_uv stays the whole texture: dirt and stone side are each their own sheet, not a
 			# region of the atlas, and water's body samples a WORLD-derived uv inside the shader
@@ -639,8 +638,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			return -1
 		atlas_mat.albedo_texture = composited
 		prop_mat.albedo_texture = composited
-		for mat: ShaderMaterial in water_mats.values():
-			mat.set_shader_parameter("atlas", composited)
+		water_mat.set_shader_parameter("atlas", composited)
 
 	var added := next_id - FIRST_TILE_ITEM
 	print("Tileset items %d..%d (%d ground + %d prop) from %s" \
@@ -760,16 +758,19 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 # texture may be handed over later (the composited atlas is not written until the source loop ends,
 # exactly as atlas_mat's is), so a null here is a promise, not a gap.
 #
-# `deep` is the tile's own `walkable` flag, inverted -- the flag the RULES read. There is no second
-# answer to which water drowns you, and a water tile authored tomorrow gets its look from its
-# walkability without touching this file. Every TUNING value is a global uniform instead, because a
-# per-material one would mean BoardMirror writing into the generated meshlib at runtime.
-func _water_mat(tex: Texture2D, body: Texture2D, deep: bool) -> ShaderMaterial:
+# The ONE water material. It used to be two, keyed on `deep` baked from the tile's walkable flag --
+# and that bake is deleted in #552 slice 2b, because the board mask now carries how deep a cell is
+# per CELL rather than per material. Two answers to "how deep is this water" is the duplicate-seam
+# shape that fails late, and the per-material one was also why a shallow/deep boundary could not
+# blend: it snapped at the cell edge with no code path that could do otherwise.
+#
+# Every TUNING value is a global uniform for the same reason it always was: a per-material one would
+# mean BoardMirror writing into the generated meshlib at runtime.
+func _water_mat(tex: Texture2D, body: Texture2D) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(WATER_SHADER_PATH)
 	mat.set_shader_parameter("atlas", tex)
 	mat.set_shader_parameter("body_tex", body)
-	mat.set_shader_parameter("deep", 1.0 if deep else 0.0)
 	return mat
 
 

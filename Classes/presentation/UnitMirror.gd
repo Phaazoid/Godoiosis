@@ -100,7 +100,7 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 # Whether the grid turns to face the camera. OFF by default (dev: "The health bars are 3D, they
 # should not billboard towards the camera") — held in place it sits on the board's own axes like the
 # voxel props, and goes edge-on at some yaws, which is what keeping it in place means.
-@export var hp_grid_faces_camera := false
+@export var hp_grid_faces_camera := true
 # Two FLAT colours, not a ramp (dev feel-check, 2026-08-15): the fill is what the unit HAS, and the
 # missing colour what it has LOST — a cube in both cases, since the readout draws no backing for one
 # to show through. Both fully opaque on purpose — this is a gameplay descriptor, meant to sit on top
