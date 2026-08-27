@@ -39,6 +39,15 @@ var follow_unit: Unit = null  # while set, target_position tracks this unit ever
 # already what the 3D rig mirrors, and OrderExecutor has no path to the rig (the same reason the pan
 # goes through here). The rig turns it into a yaw, since only the rig knows what to measure from.
 var directed_line: Array[Vector2i] = []
+# The two ends the shot must take IN, in sim cells (#520) -- a walk's start and its destination, so
+# the opening shot of a move shows where it begins and where it is going instead of just centring on
+# the walker (dev, scratchpad 2026-08-26). Empty for a beat that frames one thing.
+#
+# Carried here for the reason directed_line is: this is what the 3D rig already mirrors and
+# OrderExecutor has no path to the rig. A DIFFERENT question from that one, though, and the two must
+# never be folded together -- directed_line is an ANGLE and this is a FIT, so one field answering
+# both would spin the camera side-on to every walk.
+var framed_span: Array[Vector2i] = []
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
@@ -172,6 +181,10 @@ func set_playback_locked(locked: bool) -> void:
 	# re-solves this line against the detent it squares up to at that moment -- so a line left over
 	# from the previous squad would swing the camera off the new baseline before any beat ran.
 	directed_line = []
+	# The span goes with it, and needs the both-edges clear even more than the line does: the rig
+	# widens on the CHANGE, so a span surviving a claim would be the same value the mirror already
+	# has and the next squad's walk would open at whatever zoom the last one left.
+	framed_span = []
 	if not locked:
 		follow_unit = null
 
@@ -184,22 +197,26 @@ func follow(unit: Unit) -> void:
 # continuous follow() once the pan lands. The duration is Pacing's (#118); fixed-vs-speed is
 # the design, the number is a knob.
 func pan_to(unit: Unit, duration: float = Pacing.AI_SQUAD_PAN) -> void:
+	await pan_to_position(unit.global_position, duration)
+	follow(unit)
+
+# pan_to's POSITION-taking half, and the tween both share (#520): a point that is not a unit -- the
+# MIDPOINT of a walk, so the shot opens on both its ends. No closing follow(), and that is the whole
+# difference: framing both ends only means anything if the camera HOLDS while the walk crosses it,
+# where following would drag the far end straight back out of frame.
+func pan_to_position(world_pos: Vector2, duration: float = Pacing.AI_SQUAD_PAN) -> void:
 	follow_unit = null
 	# Nobody is watching a headless run, and the glide is awaited once per AI squad -- tweening it
-	# there is pure suite wall clock. Land on the destination and hand over to follow() exactly as
-	# the tweened path does.
+	# there is pure suite wall clock. Land on the destination exactly as the tweened path does.
 	if DisplayServer.get_name() == "headless":
-		_apply_pan_position(unit.global_position)
-		follow(unit)
+		_apply_pan_position(world_pos)
 		return
 	_panning = true
 	var start := global_position
-	var dest: Vector2 = unit.global_position
 	var tween := create_tween()
-	tween.tween_method(_apply_pan_position, start, dest, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_method(_apply_pan_position, start, world_pos, duration).set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
 	await tween.finished
 	_panning = false
-	follow(unit)
 
 func _apply_pan_position(pos: Vector2) -> void:
 	global_position = pos

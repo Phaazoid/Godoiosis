@@ -111,13 +111,30 @@ func execute_orders(unit):
 	game.camera_controller.set_playback_locked(true)
 
 	# The camera goes to the walk and the walk WAITS for it (#520, dev 2026-08-26). Moves are
-	# parallel, so one subject is framed -- the leader when the leader is walking -- and pan_to's
-	# closing follow() carries the camera along beside it for free. No hold here: the pan IS the
-	# beat, and a pause would be dead air between pressing Execute and anything happening.
+	# parallel, so one subject is framed -- the leader when the leader is walking. No hold here: the
+	# pan IS the beat, and a pause would be dead air between pressing Execute and anything happening.
+	#
+	# Framed across BOTH ENDS of that walk rather than centred on the walker (dev, scratchpad
+	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
+	# end position in the initial shot"). Two halves, both already-eased channels: the 2D camera
+	# travels to the MIDPOINT, and the span is published for the 3D rig to widen its distance to.
+	# The span goes out BEFORE the travel and is never awaited, exactly as a beat's angle is -- the
+	# rig widens on its own edge while the pan tweens, so the two are one movement.
 	var walk := sheet.moves()
 	var walker: Unit = walk.subject() if walk != null else null
 	if walker != null:
-		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
+		var from: Vector2i = walker.movement.cell
+		var to: Vector2i = walker.get_projected_destination()
+		# A hold-position order has no span to frame; the midpoint below is then the walker's own
+		# cell, i.e. exactly the shot this always took. Absence means "the camera keeps its zoom",
+		# which is already the idiom every other schedule here uses.
+		if to != from:
+			var span: Array[Vector2i] = [from, to]
+			game.camera_controller.framed_span = span
+		var grid: TileMapLayer = game.grid
+		await game.camera_controller.pan_to_position(
+				(GridUtils.cell_world(grid, from) + GridUtils.cell_world(grid, to)) * 0.5,
+				Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
 	# The shots the walk walked into (#413), in trigger order, and BEFORE the tear-out below: a
 	# watch fires at a crossing CELL, which the diorama's stage set does not hold (it holds what MAIN

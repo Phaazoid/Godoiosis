@@ -380,6 +380,12 @@ func clear_board():
 	# reload mid-enemy-phase rests game_state on _base_state() through exit_current_mode below, so an
 	# playback_locked left standing by an interrupted turn would lock the fresh board for good.
 	game.camera_controller.set_playback_locked(false)
+	# ...and the TEAR-OUT the same pass may have left in the sky (#521, wired to the camera in #520
+	# diff 2b). Same shape as the line above and the same trigger: only execute_orders clears the
+	# staging, so a board swapped mid-pass (F2, Mission Select) hands the fresh board a lifted set of
+	# cells nothing will ever put down -- and since the rig now RIDES that lift, the camera goes with
+	# it. `BoardSpace` is a static, so it outlives the board exactly the way that flag does.
+	BoardSpace.clear_staging()
 	game.zone_manager.load_dict({})   # zones are board content; load_scenario refills them after
 	overlay_manager.redraw_zones(game.zone_manager)
 	game.terrain_states.clear()   # tile states are board content too -- a sandbox spawn inherits no fire (#174)

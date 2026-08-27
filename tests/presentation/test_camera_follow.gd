@@ -17,7 +17,7 @@ const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
 
 var _scene: Node3D
 var _game: Node2D
-var _rig: Node3D
+var _rig: CameraRig3D
 var _camera3d: Camera3D
 
 
@@ -29,7 +29,7 @@ func before_test() -> void:
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 	_game = _scene.game
-	_rig = _scene.get_node("CameraRig") as Node3D
+	_rig = _scene.get_node("CameraRig") as CameraRig3D
 	_camera3d = _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
@@ -126,28 +126,84 @@ func test_a_menu_takes_the_zoom_wheel_back() -> void:
 #
 # LIMIT, stated rather than implied: pan_to snaps headless, so this pins the WIRE, not the ordering.
 # That the pan precedes the walk is structural -- the await sits above the phase.
-func test_the_move_phase_takes_the_camera_to_whoever_is_walking() -> void:
+# REWRITTEN for #520 diff 2b: the rule this pins CHANGED, so patching the old assertion would have
+# left its name pinning something the code no longer does. It used to read follow_unit -- the move
+# phase panned to the walker and then TRACKED them. The dev's ask (scratchpad, 2026-08-26) is
+# "instead of just centering on the unit, it should try to show both their start and end position in
+# the initial shot", and framing both ends only means anything if the camera HOLDS while the walk
+# crosses it: a follow would drag the far end straight back out of frame. So there is no follow left
+# to assert, and what replaces it is where the camera actually went.
+#
+# The midpoint is re-derived from the walk's own two ends rather than written down, so a fixture that
+# moves cannot red this and a board with different geometry still asks the same question.
+func test_the_move_phase_frames_the_walk_across_both_its_ends() -> void:
 	var mover := _mobile_player_unit()
 	assert_object(mover).override_failure_message(
 			"fixture: no player unit on this board can move").is_not_null()
 
+	var grid: TileMapLayer = _game.grid
 	_cam().set_playback_locked(true)
+	await _settle()
 
 	# Control first: the same pass with nothing queued must move the camera nowhere, or the case
 	# below would pass on any pan at all rather than on the move's.
+	var parked: Vector2 = _cam().global_position
 	await _game.order_executor.execute_orders(mover)
 	await _settle()
-	assert_object(_cam().follow_unit).override_failure_message(
-			"an empty pass panned the camera somewhere").is_null()
+	assert_vector(_cam().global_position).override_failure_message(
+			"an empty pass panned the camera somewhere").is_equal_approx(parked, Vector2.ONE * 0.01)
 
+	var from: Vector2i = mover.movement.cell
 	_queue_a_move(mover)
+	var to: Vector2i = mover.get_projected_destination()
+	assert_bool(to != from).override_failure_message(
+			"fixture: the queued move goes nowhere").is_true()
+	var midpoint: Vector2 = (GridUtils.cell_world(grid, from) + GridUtils.cell_world(grid, to)) * 0.5
+	# ...and the midpoint is deliberately NOT either end, or "both ends" would be indistinguishable
+	# from the centre-on-the-unit shot this replaced.
+	assert_bool(midpoint.distance_to(GridUtils.cell_world(grid, to)) > 1.0) \
+		.override_failure_message("start and end are the same point; the case proves nothing").is_true()
 
 	await _game.order_executor.execute_orders(mover)
 	await _settle()
 
+	assert_vector(_cam().global_position).override_failure_message(
+			"the move phase framed one end of the walk, not both") \
+		.is_equal_approx(midpoint, Vector2.ONE * 0.01)
 	assert_object(_cam().follow_unit).override_failure_message(
-			"the move phase played with the camera pointed wherever it was left").is_same(mover)
+			"the camera tracked the walker, which drags the far end of the walk out of frame").is_null()
 	_cam().set_playback_locked(false)
+
+
+# ...and the 3D half of the same shot: the span is published for the rig, which widens its distance
+# to hold both ends. Pinned at the SEAM (what the executor publishes) rather than at a zoom number,
+# which is a fit and therefore a function of fov, pitch and the fit margin -- all knobs.
+func test_the_move_phase_publishes_the_span_for_the_rig_to_widen_to() -> void:
+	var mover := _mobile_player_unit()
+	assert_object(mover).override_failure_message(
+			"fixture: no player unit on this board can move").is_not_null()
+
+	var from: Vector2i = mover.movement.cell
+	_queue_a_move(mover)
+	var to: Vector2i = mover.get_projected_destination()
+
+	# Sampled MID-PASS: execute_orders clears the lock on its way out, and set_playback_locked wipes
+	# the span on both edges, so the aftermath cannot answer this. Not awaited -- GDScript runs a
+	# coroutine synchronously to its first await, so the publish has already happened by the time
+	# this returns and the walk is still in front of us.
+	_game.order_executor.execute_orders(mover)
+	var published: Array[Vector2i] = _cam().framed_span
+	while _game.order_executor.executing_plan != null:
+		await await_idle_frame()
+	await _settle()
+
+	var expected: Array[Vector2i] = [from, to]
+	assert_array(published).override_failure_message(
+			"the move phase published no span, so the rig has nothing to widen to") \
+		.is_equal(expected)
+	assert_array(_cam().framed_span).override_failure_message(
+			"the span outlived the pass -- the next squad's walk would open at this one's zoom") \
+		.is_empty()
 
 
 # ...and so does the side-channel tail. ADDED BY FALSIFICATION, not by reasoning: deleting the
@@ -375,6 +431,87 @@ func test_a_pass_gives_the_player_their_view_back() -> void:
 			"the zoom stayed at the playback distance").is_equal_approx(distance, 0.01)
 
 
+# ...and it FLIES back rather than cutting (#520 diff 2b). The most visible of the four pans the
+# dev's never-teleport rule covers: this fires at the end of every Execute and every enemy turn.
+#
+# Pinned as the DECISION -- the target moved, the camera did not -- because headless both position
+# channels land inside the frame the release edge fires in (the rig's own escape), so the aftermath
+# cannot tell a pan from a cut. The case above is the wire; this is what kind of movement it is.
+func test_the_view_return_is_a_pan_rather_than_a_cut() -> void:
+	_rig.hold_at(Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y))
+	await _settle()
+	_rig.stash_view()
+
+	_rig.hold_at(Vector3(_rig.pan_limit.end.x, _rig.position.y, _rig.pan_limit.end.y))
+	await _settle()
+	var away: Vector3 = _rig.position
+	assert_bool(away.distance_to(_rig._borrowed_position) > 1.0).override_failure_message(
+			"the borrowed view is where the rig already sits; the case proves nothing").is_true()
+
+	_rig.restore_view()
+
+	assert_that(_rig.position).override_failure_message(
+			"the view return teleported -- it wrote the camera's position, not its target") \
+		.is_equal(away)
+	assert_that(_rig._target_aim).is_equal(_rig._borrowed_position)
+
+
+# The same rule at the other three: #471's return to the acting unit. Driven through the real
+# signal, and asserted with NO await for the same reason as above -- before #520 this call wrote
+# position outright and would still be at the unit by the time the statement after it ran.
+func test_a_committed_order_pans_the_rig_back_rather_than_cutting_to_it() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_rig.hold_at(Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y))
+	await _settle()
+	var before: Vector3 = _rig.position
+
+	_game.focus_view_on(unit)
+
+	assert_bool(_rig._target_aim.distance_to(before) > 1.0).override_failure_message(
+			"nothing was aimed at, so 'the camera did not jump' proves nothing").is_true()
+	assert_that(_rig.position).override_failure_message(
+			"the return to the acting unit still cuts").is_equal(before)
+
+
+# --- Riding the tear-out (#521, wired here in #520 diff 2b) -----------------------------------
+
+# THE GAP THIS CLOSES, flagged at PR #568 and missed in its build: _aim_over answers the BOARD's own
+# surface, so the fight lifted off into the diorama and the camera stayed down watching the hole.
+#
+# Driven through BoardSpace's real staging seam, and the expected height re-derived from that seam's
+# own offset -- the lift is a GameKnobs value, so the case pins "the camera goes with it", never how
+# far up "it" is.
+func test_the_camera_rides_the_tear_out_up_off_the_board() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)
+	await _settle()
+	var grounded: Vector3 = _rig.position
+
+	var stage: Array[Vector2i] = [unit.movement.cell]
+	BoardSpace.stage(stage, BoardSpace.lift_offset())
+	await _settle()
+
+	# Non-vacuous: the lift is a real distance rather than a knob someone has zeroed.
+	assert_bool(BoardSpace.stage_offset().length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case proves nothing").is_true()
+	assert_that(_rig.position).override_failure_message(
+			"the fight lifted off the board and the camera stayed down on it") \
+		.is_equal(grounded + BoardSpace.stage_offset())
+
+	# ...and the poll sits ABOVE the mirror's playback gate, which is what keeps the rig out of the
+	# sky once a pass ends: execute_orders clears the staging and puts the lock back in ONE
+	# synchronous stretch, so a poll below the gate would never see a frame with the tiles home.
+	_cam().set_playback_locked(false)
+	BoardSpace.clear_staging()
+	await _settle()
+	assert_float(_rig.position.y - _rig._target_aim.y).override_failure_message(
+			"the camera stayed lifted after playback let go -- the lift poll is below the gate") \
+		.is_equal_approx(0.0, 0.001)
+
+
 # ...and a BOARD SWAP drops what was borrowed, rather than flying back to a pose from a board that
 # no longer exists. ScenarioManager.clear_board releases the playback lock, so without this the
 # release fires the restore on the dead board. Invalidation is structural -- frame() and pose() both
@@ -499,7 +636,7 @@ func test_the_3d_camera_follows_the_ai_camera() -> void:
 	# The opening shot sits over the player's squad, i.e. over this very unit, so the rig
 	# has to be shoved off first — to a corner of its own pan limit, which the clamp will
 	# leave alone.
-	_rig.position = Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y)
+	_rig.hold_at(Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y))
 	assert_bool(_rig.position.distance_to(expected) > 1.0) \
 		.override_failure_message("the rig was already there; the case proves nothing").is_true()
 	await _settle()
@@ -729,7 +866,7 @@ func test_zooming_fully_out_still_shows_the_whole_board() -> void:
 		await _settle()
 		var board: AABB = _scene._board_volume()
 		var center := board.get_center()
-		_rig.position = Vector3(center.x, _rig.position.y, center.z)
+		_rig.hold_at(Vector3(center.x, _rig.position.y, center.z))
 		_rig.set_zoom(_rig.max_distance)
 		_camera3d.position.z = _rig._target_distance   # settle the exponential lerp outright
 		await _settle()
@@ -785,17 +922,22 @@ func test_space_recentres_the_diorama_on_the_pointer() -> void:
 	var unit := _player_unit()
 	var cell: Vector2i = unit.movement.cell
 	_scene._update_pointer(_screen_of(cell))
-	_rig.position = Vector3(_rig.position.x + 12.0, _rig.position.y, _rig.position.z + 12.0)
+	_rig.hold_at(Vector3(_rig.position.x + 12.0, _rig.position.y, _rig.position.z + 12.0))
 	var before := _rig.position
 
 	var space := InputEventKey.new()
 	space.keycode = KEY_SPACE
 	space.pressed = true
-	_scene._unhandled_input(space)
-
 	# The WHOLE point, height included (2026-08-23). It used to keep `before.y` — which is how the
 	# rig came to sit at the board's ceiling for ever on any board with elevation.
+	#
+	# Read BEFORE the key, not after the flight: SPACE is a PAN since #520, and the pointer poll
+	# re-picks on CAMERA movement (#471), so the cell under a motionless cursor legitimately changes
+	# while the rig is in the air. What SPACE acted on is the cell it was over when the key arrived.
 	var point := BoardSpace.surface_point(BoardSpace.flat(_scene._pointer_cell), _game.board_heights)
+	_scene._unhandled_input(space)
+	await _settle()   # headless the glide lands on the next frame
+
 	assert_that(_rig.position).is_equal(point)
 	assert_bool(_rig.position.distance_to(before) > 1.0).is_true()
 
@@ -812,7 +954,7 @@ func test_a_committed_order_brings_the_rig_back_to_the_acting_unit() -> void:
 	assert_object(unit).is_not_null()
 	# The opening shot sits over the player's squad, i.e. over this very unit, so the rig has to be
 	# shoved off first -- to a corner of its own pan limit, which the clamp will leave alone.
-	_rig.position = Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y)
+	_rig.hold_at(Vector3(_rig.pan_limit.position.x, _rig.position.y, _rig.pan_limit.position.y))
 	var before := _rig.position
 	# The unit's PROJECTED cell, which is what focus_view_on means by "where this unit is acting
 	# from" -- read through the same expression rather than assumed to be movement.cell.
@@ -842,7 +984,7 @@ func test_moving_the_camera_re_picks_the_cell_under_a_still_pointer() -> void:
 			"the fixture never got the pointer onto the unit's cell").is_equal(_picked(cell))
 
 	# The mouse does not move; the world does.
-	_rig.position = Vector3(_rig.position.x + 6.0, _rig.position.y, _rig.position.z + 6.0)
+	_rig.hold_at(Vector3(_rig.position.x + 6.0, _rig.position.y, _rig.position.z + 6.0))
 	await _settle()
 
 	assert_that(_scene._pointer_cell).override_failure_message(
@@ -864,7 +1006,7 @@ func test_moving_the_camera_re_picks_the_cell_under_a_still_pointer() -> void:
 func test_the_return_aims_at_the_surface_not_at_the_board_ceiling() -> void:
 	var unit := _player_unit()
 	assert_object(unit).is_not_null()
-	_rig.position = Vector3(_rig.position.x, 12.0, _rig.position.z)
+	_rig.hold_at(Vector3(_rig.position.x, 12.0, _rig.position.z))
 
 	_game.focus_view_on(unit)
 	await _settle()
@@ -886,7 +1028,7 @@ func test_the_ai_pan_aims_at_the_surface_too() -> void:
 	_game.game_state = _game.GameState.AI_TURN
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(unit)
-	_rig.position = Vector3(_rig.position.x, 12.0, _rig.position.z)
+	_rig.hold_at(Vector3(_rig.position.x, 12.0, _rig.position.z))
 	await _settle()
 
 	var wanted := _surface_aim(BoardSpace.of_pixels(_cam().global_position, 0.0))

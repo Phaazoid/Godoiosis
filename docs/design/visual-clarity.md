@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #565 (2026-08-26).**
+**Canon checked through #577 (2026-08-27).**
 
 ## Principles
 
@@ -1338,8 +1338,82 @@ whether the camera turns or not — the first draft of `test_a_pass_turns_the_ca
 did exactly that and survived every mutant. It aims diagonally now, and asserts the gap is real
 before asserting the camera closed it.
 
-Still open on #520: the pitch driver, the shake and micro-sway, the knockback and cliff follows
-(diff 2b), and lethality-aware direction (diff 2c).
+## The camera MOVES AS ONE THING ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2b slice 1, BUILT 2026-08-27)
+
+Yaw and distance were eased from the start; **position never was.** `CameraRig3D._process` lerped
+`rotation_degrees.y` and `_camera.position.z` and nothing else, so every writer that moved the rig
+across the board cut. That is what the dev's scratchpad note is about — *"the camera still has a few
+cases where it teleports - this should never happen, it should always be a pan"* — and it is the
+same movement the tear-out needs, which is why the two are one slice.
+
+**The rule has a SCOPE, and it is his** (2026-08-27): *"that only applies while we're on the map.
+One exception we can make is the transition from the map view to the battle view — what we're
+creating now. We can start with a pan, but I reserve the right to change the call on that."* So it
+is not a global invariant: three writers still cut on purpose, and the transition is a declared
+exception rather than an instance of the rule.
+
+**`position` is now DERIVED from two channels**, `_aim + _lift`, written in exactly one place.
+- `_aim` is the point on the board. `hold_at()` snaps it, `glide_to()` pans it. A raw
+  `rig.position = …` is *overwritten* on the next frame rather than half-honoured — which is a
+  loud failure, and it invalidated five test fixtures that had been shoving the rig that way.
+- `_lift` is how far the torn-out diorama has risen (#521). Its own channel because the two ease on
+  different clocks: **board tracking under playback is HELD** — the 2D camera it mirrors already
+  tweens its own travel, and easing on top of an ease is lag between the action and the frame it is
+  in — while the lift is the map→battle transition and is the one thing that pans.
+
+**Which writers glide, and which still cut.** The four the dev named are the whole glide list:
+the pass-end view return (`restore_view`), both recentres (SPACE and #471's return to the acting
+unit), and R. The snaps are `frame()`/`pose()` — a rig still lerping unprojects at one distance and
+picks at another, desyncing every screen-space read taken on the way in — WASD, because a held key
+is already continuous and easing it only adds lag, and the playback mirror, for the compounding
+reason above. All of them go through `hold_at`, so none leaves a stale target for the ease to fight.
+
+**THE GAP THIS CLOSED, and it was flagged at PR #568 and missed in its own build:** `_aim_over`
+answers the *board's* surface, so before this the fight lifted into the diorama and the camera
+stayed down watching the hole. The lift poll deliberately sits **above** `_mirror_camera`'s
+playback gate: `execute_orders` clears the staging and puts the lock back in one synchronous
+stretch, so a poll below the gate would never see a frame with the tiles home and the rig would
+stay in the sky for ever.
+
+**`_center_rig_on` must never be reached while the board is staged** — `BoardSpace.surface_point`
+carries the staged offset and `_aim_over` does not, so a call there would lift twice. Structural
+rather than guarded: both its callers are refused while playback owns the board, and playback is
+the only thing that stages anything.
+
+**An AI move is framed across BOTH ENDS** (dev: *"instead of just centering on the unit, it should
+try to show both their start and end position in the initial shot (should be doable unless super
+zoomed in)"*). Two already-eased channels, no new machinery: the 2D camera travels to the
+**midpoint** via `pan_to_position` — `pan_to`'s position-taking half, which the unit-taking one now
+delegates to — and the rig **widens its distance** through `widen_to_fit`.
+
+- **The follow is gone, and that is the point.** `pan_to` ended with `follow(unit)`; framing both
+  ends only means anything if the camera *holds* while the walk crosses it, because following would
+  drag the far end straight back out of frame. `test_the_move_phase_takes_the_camera_to_whoever_is_walking`
+  was rewritten rather than patched — its name pinned the rule that changed.
+- **`widen_to_fit` widens only, never narrows.** A short hop already has both ends in frame at the
+  playback distance; pulling *in* to fit one answers a question nobody asked. `set_zoom` is the
+  door, so the board's own ceiling still clamps it — which is the ticket's own *"unless super
+  zoomed in"*, expressed as a clamp rather than a special case.
+- **It is an EDGE, never a per-frame apply**, the same rule the playback-distance reset follows: the
+  shot is set up once and the wheel is the player's again for the rest of the pass. Gated on
+  `framed_span` itself — the store the answer is drawn from — not on a copy of what it resolves to.
+- **`framed_span` is a THIRD published field beside `directed_line`,** and folding them together
+  would be wrong: that one is an ANGLE and this is a FIT, so one field answering both would spin the
+  camera side-on to every walk.
+
+**The testing shape, and the limitation stated rather than hidden: the ease is invisible headless.**
+`_process` lands both position channels in one frame — the fourth escape of its kind in the repo,
+beside `Pacing.beat`, `pan_to` and `CameraController._process` — because a suite sampling an
+asymptotic lerp reads frame timing rather than the rig. So the cases pin the **decision**: a pan
+moves where the camera is *heading* and leaves the camera alone, a snap moves both. That difference
+is exactly what separates the four calls from the three, and it is what every mutant here attacks.
+
+One live interaction the change surfaced: **the pointer re-picks on camera movement** (#471), so
+the cell under a motionless cursor legitimately changes while the rig is in the air — a SPACE case
+must read the cell it acted on *before* the flight, not after.
+
+Still open on #520: the impact layer (pitch driver, shake, micro-sway) and the follows (knockback,
+cliff) — the rest of diff 2b — and lethality-aware direction (diff 2c).
 
 ## The fight TEARS OUT of the board ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice A, BUILT 2026-08-26)
 
@@ -1403,6 +1477,9 @@ painted cell** after a plain-board pass, read off the seam directly.
 **The feels-test fork is one bool**, `Experiments.Flag.DIORAMA_BYSTANDERS`: off stages the cells the
 fight touches, on adds the ground every other unit stands on so the diorama keeps its spatial
 context. A session-scoped dev toggle — one of the two gets deleted once it has been played.
+
+**The camera goes up with it** — built in #520 diff 2b slice 1 above, not here. Slice A shipped
+without it, and the section above says why that gap was invisible from inside this one.
 
 Still open on #521: the transition both ways (rise, white-out, the one-by-one slam in queue order,
 the exit thud and its dust shockwave), and strata on the cut edges, which is art-pass work.

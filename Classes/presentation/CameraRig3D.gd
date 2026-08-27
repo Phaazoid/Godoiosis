@@ -42,6 +42,19 @@ class_name CameraRig3D
 # align_to_detent() exists for the AI turn: an enemy phase plays out square-on however
 # the player left the camera. It is the only realign the rig does not owe to a keypress.
 #
+# WHERE IT LOOKS is two channels summed, and `position` is DERIVED from them every frame (#520):
+# _aim is the point on the board the rig sits over, _lift how far the torn-out diorama has risen
+# under it (#521). Kept apart because they ease on different clocks -- board tracking under playback
+# is HELD, since the 2D camera it mirrors already tweens its own travel and easing on top of an ease
+# is lag, while the lift is the map-to-battle transition and is the one thing that pans. Nothing may
+# write `position` directly; hold_at (the snap) and glide_to (the pan) are the doors, and a stray
+# assignment is simply overwritten on the next frame rather than half-honoured.
+#
+# glide_to exists because the dev's rule is that the camera never teleports (scratchpad, 2026-08-26:
+# "the camera still has a few cases where it teleports - this should never happen, it should always
+# be a pan"). Its scope is the BOARD -- his own narrowing, 2026-08-27: "that only applies while we're
+# on the map", with the map-to-battle transition a declared exception that starts as a pan.
+#
 # DoF focus TRACKS the zoom (dev note, 2026-08-12: static distances made the blur
 # swallow the board at close zoom): every frame the near/far focus distances are
 # re-derived as offsets around the camera's live distance to the rig, so the focus
@@ -62,6 +75,12 @@ class_name CameraRig3D
 @export var zoom_step := 1.5
 @export var pan_speed := 8.0
 @export var smoothing := 8.0
+# How fast a GLIDE closes, in the same units as `smoothing` above -- which stays the YAW and ZOOM
+# rate. Its own number because the two answer different questions: that one is how snappy the camera
+# feels under your hand, this is how a shot TRAVELS when playback moves it. Shared by every pan (the
+# view return, both recentres, R) AND by the tear-out lift, so the map-to-battle transition paces
+# with them; the day the transition wants its own rate, this is the line that forks.
+@export var glide_smoothing := 6.0
 @export var orbit_button: MouseButton = MOUSE_BUTTON_RIGHT: set = _set_orbit_button
 # Stood down by a host that needs the wheel for something else (#285: the elevation brush paints
 # at the wheel's level). Declarative, exactly like orbit_button above -- and it has to be a knob
@@ -101,6 +120,12 @@ class_name CameraRig3D
 
 var _target_yaw_degrees := 0.0
 var _target_distance := 14.0
+# The two position channels (see the header): where the rig looks NOW and where it is heading, plus
+# the same pair for the diorama's rise. `position` is their sum and nothing else.
+var _aim := Vector3.ZERO
+var _target_aim := Vector3.ZERO
+var _lift := Vector3.ZERO
+var _target_lift := Vector3.ZERO
 var _home_position := Vector3.ZERO
 var _home_yaw_degrees := 0.0
 var _home_distance := 14.0
@@ -128,6 +153,10 @@ var _orbit_travel_px := 0.0
 func _ready() -> void:
 	_target_yaw_degrees = rotation_degrees.y
 	_target_distance = _camera.position.z
+	# Whatever the scene authored is where the rig already IS, so both channels start there rather
+	# than gliding in from the origin on the first frame.
+	_aim = position
+	_target_aim = position
 	_home_position = position
 	_home_yaw_degrees = _target_yaw_degrees
 	_home_distance = _target_distance
@@ -171,7 +200,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			KEY_E:
 				_target_yaw_degrees = _next_detent(-1)
 			KEY_R:
-				position = _home_position
+				# A PAN since #520, like the other three that used to cut. Yaw and distance were
+				# already eased, so this is what makes all three axes of "back to the opening
+				# shot" one movement instead of a jump with a lerp bolted to it.
+				glide_to(_home_position)
 				_target_yaw_degrees = _home_yaw_degrees
 				_target_distance = _home_distance
 
@@ -237,6 +269,55 @@ func set_zoom(distance: float) -> void:
 	_target_distance = minf(distance, max_distance)
 
 
+# Widen the DISTANCE alone until `volume` fits, leaving the aim, the yaw and the opening shot exactly
+# where they are (#520). frame() cannot serve this: it re-aims, adopts _home_* and drops the borrowed
+# view -- all three wrong inside a pass, the last of them fatal, which is the same reason a directed
+# shot is aim_along rather than pose().
+#
+# WIDENS ONLY, never narrows. The ask is "show both their start and end position in the initial shot"
+# (dev, scratchpad 2026-08-26), and a short hop already has both ends in frame at the playback
+# distance -- pulling IN to fit one would answer a question nobody asked. set_zoom is the door, so the
+# board's own ceiling still clamps it and a span too big to fit simply frames as much as it can,
+# which is the ticket's own "should be doable unless super zoomed in".
+func widen_to_fit(volume: AABB) -> void:
+	var distance := _fit_distance(volume.grow(fit_margin_cells))
+	if distance <= 0.0:
+		return   # no valid projection yet -- the caller keeps what it has, as everywhere else here
+	set_zoom(maxf(_target_distance, distance))
+
+
+# --- Where the rig looks (#520) ---------------------------------------------------------------
+
+# Move the aim OUTRIGHT: the snap. Every writer that already has the camera where it wants it comes
+# through here -- WASD (a held key is already continuous, so easing it would only put lag between the
+# press and the board moving), frame()/pose() (a rig still lerping unprojects at one distance and
+# picks at another, desyncing every screen-space read on the way in), and the playback mirror, whose
+# 2D twin is already tweening the travel it reports.
+func hold_at(aim: Vector3) -> void:
+	_target_aim = aim
+	_aim = aim
+	_apply_position()
+
+
+# ...and the PAN: the target moves and _process closes the gap. The four places the camera used to
+# teleport are its whole caller list -- the pass-end view return, both recentres (SPACE and #471's
+# return to the acting unit), and R.
+func glide_to(aim: Vector3) -> void:
+	_target_aim = aim
+
+
+# How far the ground under the rig has been torn out of the board (#521). POLLED rather than latched,
+# with the staging's own offset, so the camera rides the diorama up and settles back down with it and
+# a tear-out that clears mid-pass needs nobody to remember to undo this.
+func lift_to(lift: Vector3) -> void:
+	_target_lift = lift
+
+
+# The ONE place the node's position is written. Both channels, summed -- see the header.
+func _apply_position() -> void:
+	position = _aim + _lift
+
+
 # Frame `volume` (in cells/world units): aim at it, sit far enough back that all of it
 # is inside THIS camera's frustum, adopt that as home, and bound panning. Callers supply
 # the volume; the trigonometry is the rig's because only it knows fov, aspect and pitch.
@@ -251,15 +332,18 @@ func frame(volume: AABB, bounds := AABB()) -> void:
 	if not rebound(limits):
 		return   # no valid projection yet (a viewport with no size); keep the current framing
 
-	position = _aim_at(box)
+	# Snap, never ease -- hold_at, not glide_to: a camera still lerping toward the fit unprojects at
+	# one distance and picks at another, which desyncs every screen-space read taken on the way.
+	hold_at(_aim_at(box))
 	set_zoom(_fit_distance(box))
-	# Snap, never ease: a camera still lerping toward the fit unprojects at one distance
-	# and picks at another, which desyncs every screen-space read taken on the way.
 	_camera.position.z = _target_distance
 
 	# R means "back to the opening shot". Position and distance are board facts and come
 	# from the fit; yaw is a scene fact and stays whatever the scene authored.
-	_home_position = position
+	#
+	# The AIM rather than `position`, which also carries the tear-out lift: home is a place on the
+	# board, and flying back to one taken mid-diorama would put the opening shot in the sky.
+	_home_position = _aim
 	_home_distance = _target_distance
 	drop_stashed_view()
 
@@ -293,13 +377,13 @@ func pose(aim: Vector3, yaw_degrees: float, distance: float, bounds: AABB) -> vo
 		_target_yaw_degrees = previous_target_yaw
 		return
 
-	position = aim
+	hold_at(aim)
 	set_zoom(distance)
 	_camera.position.z = _target_distance
 
 	# R means "back to the opening shot", and an authored opening shot INCLUDES its yaw -- so unlike
 	# frame(), which leaves yaw to the scene, this adopts all three.
-	_home_position = position
+	_home_position = _aim
 	_home_yaw_degrees = _target_yaw_degrees
 	_home_distance = _target_distance
 	drop_stashed_view()
@@ -391,8 +475,12 @@ func aim_along(line: Array[Vector2i]) -> void:
 #
 # Called on the EDGE into playback, BEFORE the detent/zoom reset -- after it would stash the reset
 # rather than the player's own framing.
+#
+# The AIM rather than `position`, and the TARGET rather than the live value: what is being put back
+# is where the player was heading on the board, so a claim landing while a previous pass's lift is
+# still settling must not bake that lift into the view it hands back.
 func stash_view() -> void:
-	_borrowed_position = position
+	_borrowed_position = _target_aim
 	_borrowed_yaw_degrees = _target_yaw_degrees
 	_borrowed_distance = _target_distance
 	_view_borrowed = true
@@ -401,15 +489,15 @@ func stash_view() -> void:
 # ...and on the edge back out. A no-op unless something is actually borrowed, so a release with no
 # claim behind it (a board clear, a fixture poking the flag) moves nothing.
 #
-# Restores exactly the way R does: position ASSIGNED, because the mirror writes it directly every
-# frame and there is no target to ease toward; yaw and distance set as TARGETS so _process eases
-# them. Distance goes through set_zoom rather than a raw assign so it lands in the same clamp every
-# other writer uses -- the board may have been repainted while playback held the camera.
+# Restores exactly the way R does, and since #520 that means all three axes are TARGETS the smoothing
+# closes: this is the most visible of the four pans, firing at the end of every Execute and every
+# enemy turn. Distance goes through set_zoom rather than a raw assign so it lands in the same clamp
+# every other writer uses -- the board may have been repainted while playback held the camera.
 func restore_view() -> void:
 	if not _view_borrowed:
 		return
 	_view_borrowed = false
-	position = _borrowed_position
+	glide_to(_borrowed_position)
 	_target_yaw_degrees = _borrowed_yaw_degrees
 	set_zoom(_borrowed_distance)
 
@@ -440,13 +528,28 @@ func _process(delta: float):
 			pan.x += 1.0
 		if pan != Vector2.ZERO:
 			pan = pan.normalized() * pan_speed * delta
-			position += Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y))
+			hold_at(_target_aim + Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y)))
 
-	# Clamped unconditionally, not inside the pan branch: a host driving position (the
-	# Battle3D camera mirror) writes it earlier in the same frame and must be bounded too.
+	# The two eased channels (#520). Headless, land now: nobody is watching, the asymptotic lerp
+	# never settles, and a suite sampling the rig must read the DECISION rather than frame timing.
+	# Fourth member of the escape Pacing.beat, CameraController.pan_to and CameraController._process
+	# already keep, and kept for the same reason.
+	var glide := 1.0 if DisplayServer.get_name() == "headless" else 1.0 - exp(-glide_smoothing * delta)
+	_aim = _aim.lerp(_target_aim, glide)
+	_lift = _lift.lerp(_target_lift, glide)
+
+	# Clamped unconditionally, not inside the pan branch: a host driving the aim (the Battle3D camera
+	# mirror) writes it earlier in the same frame and must be bounded too. On the AIM rather than on
+	# the node, because `position` is derived below and a clamp written there would be undone on the
+	# next frame -- and on the TARGET as well as the live value, or an aim parked off the board would
+	# drag the camera back out to it every frame it eased in.
 	if pan_limit.has_area():
-		position.x = clampf(position.x, pan_limit.position.x, pan_limit.end.x)
-		position.z = clampf(position.z, pan_limit.position.y, pan_limit.end.y)
+		_target_aim.x = clampf(_target_aim.x, pan_limit.position.x, pan_limit.end.x)
+		_target_aim.z = clampf(_target_aim.z, pan_limit.position.y, pan_limit.end.y)
+		_aim.x = clampf(_aim.x, pan_limit.position.x, pan_limit.end.x)
+		_aim.z = clampf(_aim.z, pan_limit.position.y, pan_limit.end.y)
+
+	_apply_position()
 
 
 func _lerp_angle_degrees(from_degrees: float, to_degrees: float, weight: float) -> float:

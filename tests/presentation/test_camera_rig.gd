@@ -164,6 +164,14 @@ func test_frame_snaps_the_camera_rather_than_easing_to_it() -> void:
 	var rig := _rig()
 	rig.frame(AABB(Vector3.ZERO, Vector3(50, 1, 50)))
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
+	# ...and the AIM, which is the half this case stopped covering the moment #520 made position an
+	# eased channel: the NAME claimed all three axes while the body asserted one, so a frame()
+	# routed through glide_to passed the whole suite. FOUND BY MUTATION, not by reasoning.
+	# Asserted as "nothing is left to ease" rather than as a coordinate, so the fit stays derived.
+	assert_that(rig._aim).override_failure_message(
+			"frame() eased toward the fit instead of landing on it -- every screen-space read taken " \
+			+ "on the way in unprojects at one place and picks at another") \
+		.is_equal(rig._target_aim)
 
 
 func test_frame_adopts_the_fit_as_home_so_reset_returns_to_it() -> void:
@@ -174,9 +182,15 @@ func test_frame_adopts_the_fit_as_home_so_reset_returns_to_it() -> void:
 	# Non-vacuous: the fit must differ from the scene's authored home, or R proves nothing.
 	assert_bool(framed_position.distance_to(Vector3(0, 1, 0)) > 1.0).is_true()
 
-	rig.position = Vector3(999, 1, 999)
+	# hold_at, not a raw write: `position` is DERIVED from the rig's two channels since #520, so an
+	# assignment to it is overwritten on the next frame and this fixture would shove nothing.
+	rig.hold_at(Vector3(999, 1, 999))
 	rig.set_zoom(1.0)   # any distance other than the one R must restore
 	_key(KEY_R)
+	# R is a PAN now, so the aim lands on the next frame rather than inside the keypress. Headless
+	# the glide closes in one (CameraRig3D._process's escape), which is what keeps this a decision
+	# rather than a reading of frame timing.
+	await await_idle_frame()
 	assert_that(rig.position).is_equal(framed_position)
 	assert_float(rig._target_distance).is_equal_approx(framed_distance, 0.001)
 
@@ -199,7 +213,9 @@ func test_pose_lands_the_camera_exactly_where_it_was_authored() -> void:
 	assert_float(_camera().position.z).is_equal_approx(16.0, 0.001)
 
 
-func test_pose_snaps_both_smoothed_axes_rather_than_easing_to_them() -> void:
+# RENAMED for #520 diff 2b: it was "..._both_smoothed_axes_...", and position became a third one.
+# A name that undercounts what it covers is the same blind spot the frame() case above had.
+func test_pose_snaps_every_smoothed_axis_rather_than_easing_to_them() -> void:
 	# frame()'s reason, applied to yaw as well: a rig still lerping unprojects at one basis
 	# and picks at another. Deliberately NOT awaiting a frame — the smoothing would hide it.
 	var rig := _rig()
@@ -210,6 +226,9 @@ func test_pose_snaps_both_smoothed_axes_rather_than_easing_to_them() -> void:
 			"yaw is still easing toward the authored pose — screen-space reads desync on the way" \
 			).is_equal_approx(130.0, 0.001)
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
+	assert_that(rig._aim).override_failure_message(
+			"the aim is still easing toward the authored pose, for the same reason") \
+		.is_equal(rig._target_aim)
 
 
 func test_pose_leaves_the_ceiling_and_pan_on_the_board_exactly_as_framing_does() -> void:
@@ -236,10 +255,11 @@ func test_pose_adopts_the_authored_yaw_as_home_unlike_framing() -> void:
 	var rig := _rig()
 	rig.pose(Vector3(20, 1, 14), 135.0, 16.0, BOARD)
 
-	rig.position = Vector3(5, 1, 5)
+	rig.hold_at(Vector3(5, 1, 5))
 	rig._target_yaw_degrees = 0.0
 	rig.set_zoom(1.0)   # any distance other than the one R must restore
 	_key(KEY_R)
+	await await_idle_frame()   # R is a pan since #520; headless the glide lands in one frame
 
 	assert_that(rig.position).is_equal(Vector3(20, 1, 14))
 	assert_float(rig._target_yaw_degrees).override_failure_message(
@@ -367,12 +387,176 @@ func test_a_short_drag_still_reads_as_a_click() -> void:
 func test_panning_is_clamped_to_the_framed_board() -> void:
 	var rig := _rig()
 	rig.frame(AABB(Vector3.ZERO, Vector3(10, 1, 10)))
-	rig.position = Vector3(500, 1, 500)
+	# Through the door, for the reason above: a raw `position =` is derived away rather than
+	# clamped, and this case would then pass on the rig never having left the board at all.
+	rig.hold_at(Vector3(500, 1, 500))
 	rig._process(0.016)
 	# Non-vacuous: it moved, and it stopped exactly at the bound rather than anywhere.
 	assert_float(rig.position.x).is_less(500.0)
 	assert_float(rig.position.x).is_equal_approx(rig.pan_limit.end.x, 0.001)
 	assert_float(rig.position.z).is_equal_approx(rig.pan_limit.end.y, 0.001)
+
+
+# --- The pan, and the snaps that stay snaps (#520) ---------------------------------
+#
+# The EASE ITSELF IS INVISIBLE HEADLESS: _process lands both position channels in one frame (the
+# rig's own escape, the fourth in the repo), because a suite sampling an asymptotic lerp reads frame
+# timing rather than the rig. So these pin the DECISION -- a pan moves where the camera is HEADING
+# and leaves the camera alone, a snap moves both -- which is exactly what separates the four calls
+# the dev asked to stop teleporting from the three that must keep cutting.
+
+func test_a_glide_moves_where_the_camera_is_heading_and_not_the_camera() -> void:
+	var rig := _rig()
+	rig.hold_at(Vector3(4, 1, 4))
+	var before: Vector3 = rig.position
+
+	rig.glide_to(Vector3(20, 1, 18))
+
+	# Non-vacuous: there is real distance to travel, so "it has not arrived" cannot pass by the
+	# destination already sitting under the camera.
+	assert_bool(before.distance_to(Vector3(20, 1, 18)) > 1.0).override_failure_message(
+			"the glide had nowhere to go; the case proves nothing").is_true()
+	assert_that(rig.position).override_failure_message(
+			"the pan teleported -- it wrote the camera's position instead of its target") \
+		.is_equal(before)
+	assert_that(rig._target_aim).is_equal(Vector3(20, 1, 18))
+
+
+func test_a_snap_moves_both_so_nothing_is_left_for_the_ease_to_fight() -> void:
+	var rig := _rig()
+	rig.glide_to(Vector3(4, 1, 4))
+	rig.hold_at(Vector3(20, 1, 18))
+
+	assert_that(rig.position).is_equal(Vector3(20, 1, 18))
+	# The target too, and that half is the load-bearing one: a snap that moved only the camera
+	# would be dragged straight back to wherever the last pan was heading on the very next frame.
+	assert_that(rig._target_aim).override_failure_message(
+			"the snap left a stale target behind, so the ease pulls the camera off it") \
+		.is_equal(Vector3(20, 1, 18))
+
+
+func test_the_ease_closes_the_gap_a_pan_opened() -> void:
+	var rig := _rig()
+	rig.frame(AABB(Vector3.ZERO, Vector3(30, 1, 30)))
+	rig.hold_at(Vector3(4, 1, 4))
+	rig.glide_to(Vector3(20, 1, 18))
+	assert_bool(rig.position.distance_to(Vector3(20, 1, 18)) > 1.0).override_failure_message(
+			"precondition: the pan left no gap to close").is_true()
+
+	await await_idle_frame()
+
+	assert_that(rig.position).override_failure_message(
+			"the target moved and the camera never followed it -- nothing eases the aim") \
+		.is_equal(Vector3(20, 1, 18))
+
+
+# The clamp bites the TARGET as well as the live aim, and this is the consequence that buys those
+# two lines. Headless the pair is otherwise indistinguishable — the ease lands in one frame, so a
+# surviving off-board target is re-clamped every frame and the camera never visibly moves. What it
+# costs is LATER: painting a tile grows the board and widens the limit without moving the view
+# (#231's rule), and a destination the clamp had already refused would come back to life there.
+func test_a_pan_aimed_off_the_board_does_not_come_back_when_the_board_grows() -> void:
+	var rig := _rig()
+	rig.frame(AABB(Vector3.ZERO, Vector3(20, 1, 20)))
+	rig.glide_to(Vector3(500, 1, 500))
+	await await_idle_frame()
+	var clamped: Vector3 = rig.position
+	# Non-vacuous: the aim really was outside, so a no-op clamp cannot pass this.
+	assert_bool(clamped.distance_to(Vector3(500, 1, 500)) > 1.0).override_failure_message(
+			"the aim was already inside the limit; the case proves nothing").is_true()
+
+	rig.rebound(AABB(Vector3.ZERO, Vector3(600, 1, 600)))
+	await await_idle_frame()
+
+	assert_that(rig.position).override_failure_message(
+			"the camera flew off to a destination the clamp had already refused, the moment the " \
+			+ "board grew enough to allow it").is_equal(clamped)
+
+
+func test_the_diorama_lift_carries_the_camera_up_with_it() -> void:
+	# #521's half: the fight tears out of the board and the camera has to go with it, or it stays
+	# down on the board watching a hole. A SECOND channel rather than part of the aim, because the
+	# aim is held every frame by the playback mirror and the lift is the one thing that pans.
+	var rig := _rig()
+	rig.frame(AABB(Vector3.ZERO, Vector3(30, 1, 30)))
+	rig.hold_at(Vector3(12, 1, 12))
+	var grounded: Vector3 = rig.position
+
+	rig.lift_to(Vector3(0.0, 9.0, 0.0))
+	await await_idle_frame()
+
+	assert_that(rig.position).override_failure_message(
+			"the camera stayed down on the board while the diorama rose") \
+		.is_equal(grounded + Vector3(0.0, 9.0, 0.0))
+
+	# ...and back down when the tiles thud into their sockets, without anyone remembering to undo it.
+	rig.lift_to(Vector3.ZERO)
+	await await_idle_frame()
+	assert_that(rig.position).override_failure_message(
+			"the camera never came back down -- the lift latched instead of being polled") \
+		.is_equal(grounded)
+
+
+# --- Widening to fit a span (#520) --------------------------------------------------
+#
+# The move phase's half of "instead of just centering on the unit, it should try to show both their
+# start and end position in the initial shot" (dev, scratchpad 2026-08-26). Asserted by EQUIVALENCE
+# against what framing that span outright solves for, never as a distance number, so fov, pitch and
+# the fit margin all stay the dev's knobs.
+
+func test_widening_to_a_span_reaches_the_distance_that_span_needs() -> void:
+	var rig := _rig()
+	var board := AABB(Vector3.ZERO, Vector3(64, 1, 40))
+	var span := AABB(Vector3(6, 0, 5), Vector3.ZERO).expand(Vector3(52, 1, 34))
+
+	rig.frame(span, board)
+	var wanted: float = rig._target_distance   # the oracle
+
+	rig.frame(AABB(Vector3(28, 0, 18), Vector3(4, 1, 4)), board)   # ...and a close opening shot
+	assert_float(rig._target_distance).override_failure_message(
+			"the shot already sat at the span's distance; the widen proves nothing").is_less(wanted)
+	var aim: Vector3 = rig.position
+
+	rig.widen_to_fit(span)
+
+	assert_float(rig._target_distance).override_failure_message(
+			"the widen did not pull back far enough to hold both ends of the walk") \
+		.is_equal_approx(wanted, 0.001)
+	assert_that(rig.position).override_failure_message(
+			"the widen moved the camera; it may only touch the distance").is_equal(aim)
+
+
+func test_widening_never_pulls_in_on_a_short_hop() -> void:
+	# A hop already has both ends in frame at the distance the pass opened on, so fitting it would
+	# mean zooming IN to a two-cell walk -- answering a question nobody asked.
+	var rig := _rig()
+	var board := AABB(Vector3.ZERO, Vector3(64, 1, 40))
+	var hop := AABB(Vector3(30, 0, 20), Vector3.ZERO).expand(Vector3(32, 1, 20))
+
+	rig.frame(hop, board)
+	var hop_distance: float = rig._target_distance
+	rig.frame(board)
+	assert_float(hop_distance).override_failure_message(
+			"the hop needs the whole-board distance; the case proves nothing").is_less(rig._target_distance)
+	var opened: float = rig._target_distance
+
+	rig.widen_to_fit(hop)
+
+	assert_float(rig._target_distance).override_failure_message(
+			"the widen pulled IN to fit a two-cell hop").is_equal_approx(opened, 0.001)
+
+
+func test_a_span_too_big_to_fit_stops_at_the_boards_own_ceiling() -> void:
+	# The ticket's own "should be doable unless super zoomed in": a span that will not fit is not a
+	# licence to leave the zoom ceiling the board sets behind.
+	var rig := _rig()
+	rig.frame(AABB(Vector3.ZERO, Vector3(20, 1, 20)))
+	var ceiling: float = rig.max_distance
+
+	rig.widen_to_fit(AABB(Vector3(-400, 0, -400), Vector3(800, 1, 800)))
+
+	assert_float(rig._target_distance).override_failure_message(
+			"the widen escaped the board's own zoom ceiling").is_equal_approx(ceiling, 0.001)
 
 
 func test_disabling_manual_input_refuses_keys_but_keeps_smoothing_alive() -> void:
