@@ -3,8 +3,11 @@
 # correct at both ends while nothing connects them to the panel.
 #
 # The catalog is real authored content, so nothing here asserts WHAT it holds: every claim is
-# derived from the same seam the panel reads, with a non-vacuity message where a claim needs the
-# content to be a certain shape at all (the content razor).
+# derived from the same seam the panel reads. Nor may a claim REQUIRE the content to be a certain
+# shape -- deleting a mod is authoring, not a regression (dev ruling, 2026-08-27: "a lack of
+# authored content shouldn't cause tests to fail", after #596 reddened this suite over a rename).
+# Where a case cannot be driven at all without content it warns and returns rather than failing,
+# which keeps the absence audible without calling it a fault.
 extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
@@ -43,20 +46,6 @@ func _weapon() -> WeaponInstance:
 			return WeaponInstance.make(base)
 	return null
 
-# A weapon of a family that at least one authored mod is locked AWAY from, so the filter has real
-# work to do. Null means the content cannot support the claim at all, which the caller says out loud
-# rather than passing quietly.
-func _weapon_the_catalog_can_refuse_something_for() -> WeaponInstance:
-	var mods := WeaponModCatalog.get_mods()
-	for base: WeaponData in WeaponCatalog.get_family_bases().values():
-		if base.weapon_type == WeaponData.WeaponType.NONE or base.mod_spaces.is_empty():
-			continue
-		for name in mods:
-			var mod: WeaponModData = mods[name]
-			if not mod.fits_family(base.weapon_type):
-				return WeaponInstance.make(base)
-	return null
-
 func _show(weapon: WeaponInstance) -> ItemEditorTool:
 	var tool_ref := _tool()
 	tool_ref.current_item = weapon
@@ -79,45 +68,40 @@ func _picker_entries(tool_ref: ItemEditorTool) -> Array[String]:
 	return names
 
 # ==============================================================================
-#  The picker offers only what the family allows
+#  The picker offers exactly what the family allows
 # ==============================================================================
 
-# The weapon is chosen so the catalog HAS something to refuse it. That is not fussiness: the first
-# draft asked this of whatever family sorted first (the Carbine), and the only family-locked mod on
-# disk is a Carbine one -- so nothing was refusable, `wrong` was empty by construction, and a
-# mutant deleting the filter outright passed. The discriminating power is in which weapon we ask
-# about (the #264 shape), so the pick derives it instead of assuming it.
-func test_the_picker_offers_nothing_the_family_refuses() -> void:
-	var weapon := _weapon_the_catalog_can_refuse_something_for()
-	assert_object(weapon).is_not_null()   # no mod is family-locked away from any family: proves nothing
+# One equality rather than two half-claims, because either half alone is passable by a broken
+# picker: "offers nothing it refuses" is satisfied by a picker that offers NOTHING, and "offers
+# everything it allows" by one that offers EVERYTHING. Derived from the same seam the panel reads,
+# so authoring a new mod cannot break it.
+#
+# What this can no longer do is guarantee its own teeth. The refusal half bites only while some
+# shipped mod is family-locked -- the first draft asked this of whatever family sorted first, the
+# only family-locked mod on disk was a Carbine one, and a mutant deleting the filter outright
+# passed. The old case answered that by hunting for a weapon the catalog could refuse something
+# for and FAILING when it found none, which made deleting that one mod a test failure (#596), and
+# a lack of authored content is not a failure. Teeth without the content dependency need a fixture
+# mod this case owns; that is filed, not faked here.
+func test_the_picker_offers_exactly_what_the_family_allows() -> void:
+	var weapon := _weapon()
+	if weapon == null:
+		push_warning("no family base carries a mod space, so the picker cannot be drawn at all")
+		return
 	var offered := _picker_entries(_show(weapon))
 
 	var wrong: Array[String] = []
-	var mods := WeaponModCatalog.get_mods()
-	for name in mods:
-		var mod: WeaponModData = mods[name]
-		if not mod.fits_family(weapon.template.weapon_type) and offered.has(name):
-			wrong.append(name)
-	assert_array(wrong).is_empty()
-
-# The other direction, or the case above passes against a picker that offers NOTHING. Derived from
-# the catalog rather than naming a mod, so authoring a new one cannot break it.
-func test_the_picker_offers_everything_the_family_allows() -> void:
-	var weapon := _weapon()
-	var offered := _picker_entries(_show(weapon))
-
 	var missing: Array[String] = []
-	var allowed := 0
 	var mods := WeaponModCatalog.get_mods()
 	for name in mods:
 		var mod: WeaponModData = mods[name]
-		if not mod.fits_family(weapon.template.weapon_type):
-			continue
-		allowed += 1
-		if not offered.has(name):
+		var allowed := mod.fits_family(weapon.template.weapon_type)
+		if allowed and not offered.has(name):
 			missing.append(name)
+		elif not allowed and offered.has(name):
+			wrong.append(name)
 	assert_array(missing).is_empty()
-	assert_int(allowed).is_greater(0)   # no mod fits this family: the case above is vacuous
+	assert_array(wrong).is_empty()
 
 # ==============================================================================
 #  A refusal reaches the panel with its reason
@@ -128,6 +112,9 @@ func test_the_picker_offers_everything_the_family_allows() -> void:
 # panel's own refusal string was a hardcoded "Not enough capacity" until this slice.
 func test_a_refused_fit_puts_the_models_own_reason_on_the_panel() -> void:
 	var weapon := _weapon()
+	if weapon == null:
+		push_warning("no family base carries a mod space, so there is no panel to refuse on")
+		return
 	var mods := WeaponModCatalog.get_mods()
 	var fitting: WeaponModData = null
 	for name in mods:
@@ -135,7 +122,9 @@ func test_a_refused_fit_puts_the_models_own_reason_on_the_panel() -> void:
 		if mod.fits_family(weapon.template.weapon_type) and weapon.can_fit(0, mod):
 			fitting = mod
 			break
-	assert_object(fitting).is_not_null()   # nothing the catalog holds fits space 0: proves nothing
+	if fitting == null:
+		push_warning("no mod in the catalog fits space 0, so nothing here can be refused a fit")
+		return
 
 	# Fill space 0 to its capacity, so the next fit of the same mod is refused.
 	while weapon.can_fit(0, fitting):

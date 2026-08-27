@@ -7,7 +7,7 @@
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="5_tddgv"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="6_l7hev"]
 [ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="7_tgyxx"]
-[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/brrr.tres" id="8_cke5f"]
+[ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Gun.tres" id="8_cke5f"]
 
 [resource]
 script = ExtResource("6_l7hev")

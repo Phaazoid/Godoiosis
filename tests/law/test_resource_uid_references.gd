@@ -1,4 +1,5 @@
-# No scene or resource may point at a UID that resolves to nothing (#240 follow-up).
+# No scene or resource may hold a reference that resolves to nothing -- graded in both of the
+# forms Godot writes one: the uid half (#240 follow-up) below, and the path half (#596) after it.
 #
 # Godot writes an ext_resource two ways: `path=` alone, or `uid=` PLUS `path=`. When both are
 # present the uid wins and the path is only the fallback, so a uid that resolves to nothing --
@@ -18,9 +19,12 @@
 # to disagree with the one Godot uses at load time.
 extends GdUnitTestSuite
 
-# The project's own content. addons/ is vendored (gdUnit4's own files are not ours to fix) and
-# .godot/ is cache.
-const SCANNED_ROOTS: Array[String] = ["res://Scenes/", "res://Resources/", "res://Scenarios/"]
+# The project's own content, which is not only the three content folders: Classes/dev/AttackTypeToggle.tres
+# and tests/support/CastFixture.tres are .tres the project authors too, and a law that says NO reference
+# resolves to nothing may not quietly mean "none of the ones in three folders". addons/ is vendored
+# (gdUnit4's own files are not ours to fix) and .godot/ is cache.
+const SCANNED_ROOTS: Array[String] = ["res://Scenes/", "res://Resources/", "res://Scenarios/",
+		"res://Classes/", "res://tests/"]
 
 # A uid= appears only on an ext_resource/sub_resource header line, and both start with '['.
 const UID_PREFIX := "uid://"
@@ -61,6 +65,35 @@ func test_every_uid_reference_resolves_to_the_file_beside_it() -> void:
 	).is_greater(0)
 
 
+# The sibling law, and the one a content rename breaks (#596). An ext_resource with no uid= is
+# path-only, so the case above skips it by construction and NOTHING graded the path itself:
+# `356a2e7` deleted two weapon .tres while four files still named them, Level_1 stopped loading,
+# and five cases went red in suites two steps from the cause. The tree that authors a rename is
+# structurally unable to notice -- the editor holds the old resource in memory and the deleted
+# file may still sit there untracked -- so a fresh clone, a worktree and CI are the only places
+# the fault is visible at all. That is what makes it a repo law rather than a fix.
+#
+# Asked of FileAccess, not ResourceLoader: "is a file there" is the entire question, and a loader
+# that merely recognises the extension would answer yes for a path resolving to nothing.
+func test_every_resource_path_points_at_a_real_file() -> void:
+	var checked := 0
+	for file: String in _scan():
+		for path: String in _reference_paths(file):
+			checked += 1
+			assert_bool(FileAccess.file_exists(path)).override_failure_message(
+				"%s references %s, which no file answers. Deleting or renaming a .tres sweeps "
+				% [file, path]
+				+ "its referrers IN THE SAME DIFF -- repoint this line, or restore the target."
+			).is_true()
+
+	# Scan integrity, not a content claim: the repo always ships scenes, so zero references read
+	# means SCANNED_ROOTS or the parser is wrong. An empty CONTENT folder is not a failure here --
+	# this law is about references that exist, and no reference is trivially no dangling one.
+	assert_int(checked).override_failure_message(
+		"the scan found no path references at all -- SCANNED_ROOTS is wrong, not the repo"
+	).is_greater(0)
+
+
 # Every .tscn/.tres under the scanned roots, recursively.
 func _scan() -> Array[String]:
 	var found: Array[String] = []
@@ -92,6 +125,22 @@ func _uid_references(file_path: String) -> Array[Dictionary]:
 			continue
 		refs.append({"uid": uid, "path": path})
 	return refs
+
+
+# Every path= on this file's resource header lines, uid-bearing or not. Deliberately the same text
+# read a second time rather than a second walk of the tree: one answer to "what does this file
+# reference", two laws grading it.
+func _reference_paths(file_path: String) -> Array[String]:
+	var paths: Array[String] = []
+	var text := FileAccess.get_file_as_string(file_path)
+	for line: String in text.split("\n"):
+		if not line.begins_with("[ext_resource") and not line.begins_with("[sub_resource"):
+			continue
+		var path := _quoted_after(line, "path=\"")
+		if path == "":
+			continue
+		paths.append(path)
+	return paths
 
 
 func _quoted_after(line: String, key: String) -> String:
