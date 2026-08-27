@@ -422,8 +422,12 @@ func _ribbon_point(cell: Vector2i, at: Vector3) -> Vector3:
 # Flat CORNERS for the same reason and it is the literal truth: it lies on nothing, so it takes the
 # flat quad however folded the ground beneath it happens to be.
 func _air_anchor(px: Vector2, from_cell: Vector2i) -> Dictionary:
-	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
-	return {"surface": Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y)),
+	# The flight hangs over the cell it was LAUNCHED from, so it is that cell's tear-out it follows
+	# (#521) -- the whole offset, since this builds its origin rather than inheriting one.
+	var staged := BoardSpace.staged_offset(from_cell)
+	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y + staged.y
+	return {"surface": Transform3D(Basis.IDENTITY,
+			BoardSpace.of_pixels(px, flight_y) + Vector3(staged.x, 0.0, staged.z)),
 			"corners": Vector4i.ZERO}
 
 
@@ -541,16 +545,25 @@ func _marker(anchor: Dictionary, texture: Texture2D, tint: Color) -> Dictionary:
 # lies flat against the slope. BoardSpace.surface_transform is the one answer.
 func _anchor(cell: Vector2i) -> Dictionary:
 	var heights := _heights()
-	return {"surface": BoardSpace.surface_transform(cell, heights),
+	# The tear-out rides here too (#521): markup belongs to the cell it marks, so it goes wherever
+	# that cell went. One line, because this is the one answer for every marker in the file.
+	var surface := BoardSpace.surface_transform(cell, heights)
+	surface.origin += BoardSpace.staged_offset(cell)
+	return {"surface": surface,
 			"corners": Vector4i.ZERO if heights == null else heights.corners_at(cell)}
 
 
 # The same, for a 2D world position (sprites sit at cell centers). The LEVEL and the SLOPE both come
 # from the cell those pixels fall in, so a ghost or arrow over a terrace lifts and tilts with it.
 func _anchor_px(px: Vector2) -> Dictionary:
-	var anchor := _anchor(_cell_of_px(px))
+	var cell := _cell_of_px(px)
+	var anchor := _anchor(cell)
 	var surface: Transform3D = anchor["surface"]
-	anchor["surface"] = Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
+	# Only the HORIZONTAL half of the tear-out offset (#521): the vertical already arrived through
+	# _anchor's surface origin, and of_pixels is what replaces x and z.
+	var staged := BoardSpace.staged_offset(cell)
+	anchor["surface"] = Transform3D(surface.basis,
+			BoardSpace.of_pixels(px, surface.origin.y) + Vector3(staged.x, 0.0, staged.z))
 	return anchor
 
 

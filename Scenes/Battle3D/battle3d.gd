@@ -113,6 +113,9 @@ var _floor_row := 0
 # would walk every column of the board each time the mouse moves.
 var _board_rect := Rect2i()
 var _pointer_cell: Vector3i = BoardSpace.NO_CELL
+# The staging this poll last drew (#521) -- its own last-drawn key, the _help_* fields' shape.
+var _staged_version := 0
+var _staged_drawn: Array[Vector2i] = []
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -157,6 +160,7 @@ func _ready() -> void:
 		get_viewport().size_changed.connect(_position_pip)
 		_update_help()
 	_board_mirror.board = $Board
+	_board_mirror.staged_board = $StagedBoard
 	_unit_mirror.units_root = game.units_root
 	_unit_mirror.heights = game.board_heights
 	_unit_mirror.hovered_unit_source = _hovered_unit
@@ -258,6 +262,33 @@ func _refresh_tops() -> void:
 # and panning stops at the old edge. Bounds only, never a re-frame: the 2D twin
 # (CameraController.refresh_bounds) moves limits and never re-aims, and yanking the
 # camera mid-stroke is not what painting a tile should do.
+# The tear-out's reconcile (#521): when the staged set changes, the cells that CROSSED between the
+# board and the diorama have to be re-routed, and the staged lattice moved to its offset.
+#
+# The UNION of what was staged and what is staged now, because a cell coming HOME is as much a
+# change as one going up and neither set alone names it. Gated on a monotonic version rather than a
+# diff, DirtyCells.version's shape -- and the previously-staged set is remembered here rather than
+# on BoardSpace, because it is this poll's own last-drawn key, not a fact about the board.
+func _sync_staging() -> void:
+	if BoardSpace.staging_version == _staged_version:
+		return
+	_staged_version = BoardSpace.staging_version
+	var now := BoardSpace.staged_cells()
+	var touched: Dictionary[Vector2i, bool] = {}
+	for cell in _staged_drawn:
+		touched[cell] = true
+	for cell in now:
+		touched[cell] = true
+	_staged_drawn = now
+	$StagedBoard.position = BoardSpace.stage_offset()
+	if touched.is_empty():
+		return
+	var cells: Array[Vector2i] = []
+	cells.assign(touched.keys())
+	_board_mirror.sync_cells(game.grid, cells, game.board_heights,
+			_board_mirror.floor_row_of(game.board_heights))
+
+
 func _sync_terrain_while_authoring() -> void:
 	if game.game_state != game.GameState.DEV_MODE:
 		return
@@ -518,6 +549,7 @@ func _process(_delta: float) -> void:
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
 	_sync_terrain_while_authoring()
+	_sync_staging()
 	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.
