@@ -268,6 +268,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -393,6 +394,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Drama: zoom on", "static": "CINEMATIC_DRAMA",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "The same multiplier with the zoom on. At 0 the zoom paces flat; above 1 every big moment stretches together, so this is the one dial for 'more dramatic' overall."},
+	{"group": "Playback", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
+		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
+		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from."},
 	{"group": "Playback", "label": "Camera angle: zoom off", "static": "BOARD_DIRECTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How far the camera turns to see each blast side-on, zoom off. Ships at 0 -- square-on, exactly as the enemy phase has always played. At 1 it takes the full profile shot."},
@@ -591,6 +595,7 @@ static func read_static(name: String) -> Variant:
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
+		"STAGE_LIFT": return BoardSpace.STAGE_LIFT
 		"BOARD_DRAMA": return Pacing.BOARD_DRAMA
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
@@ -678,6 +683,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"CINEMATIC_ACTION":
 			Pacing.CINEMATIC_ACTION = value
+			return
+		"STAGE_LIFT":
+			BoardSpace.STAGE_LIFT = value
 			return
 		"BOARD_DRAMA":
 			Pacing.BOARD_DRAMA = value

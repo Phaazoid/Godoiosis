@@ -46,6 +46,13 @@ var _pick_texture: Texture2D   # the (1,0) "pick this unit" tile art, cut lazily
 var _last_heights_version := -1
 var _heights_moved := false
 
+# ...and blind to the TEAR-OUT the same way (#521): a flame stands on its cell's surface, and the
+# whole cell can lift off the board while the burning set stays byte-identical. #308's rule applied
+# to the second store this poll now draws through -- gate on that store having moved, never on a
+# copy of what it holds.
+var _last_staging_version := -1
+var _staging_moved := false
+
 var _last_trace_version := -1   # OverlayManager.sight_trace_version -- the store's own signal (#308)
 
 # How far the drop pointer stands off the cliff face it hangs on (#431), in cells. A depth-buffer
@@ -68,6 +75,7 @@ func _process(_delta: float) -> void:
 		return
 	var om: OverlayManager = game.overlay_manager
 	_heights_moved = _poll_heights()   # once per frame, ahead of every diff that reads it
+	_staging_moved = _poll_staging()
 
 	_fill(BoardOverlays.Layer.MOVE, om.move_overlay.get_used_cells())
 	_fill(BoardOverlays.Layer.INVALID_MOVE, om.invalidmove_overlay.get_used_cells())
@@ -112,6 +120,16 @@ func _poll_heights() -> bool:
 	return true
 
 
+# Has the tear-out moved since the last frame (#521)? BoardSpace.staging_version is monotonic and
+# non-consuming -- DirtyCells.version's shape -- so battle3d's own staging poll and this one can
+# both read it without either taking it away from the other.
+func _poll_staging() -> bool:
+	if BoardSpace.staging_version == _last_staging_version:
+		return false
+	_last_staging_version = BoardSpace.staging_version
+	return true
+
+
 # Which cells are alight and which are dug in, each straight off its ONE enumeration form. Polled
 # rather than wired because a states_changed signal would fire inside the resolver's per-effect
 # loop and churn markers many times within a single pass; the poll coalesces a frame into one
@@ -125,7 +143,7 @@ func _standing_states() -> void:
 	covered.sort()
 	# A marker STANDS on its cell's surface, so raising that cell moves it while the burning set
 	# stays byte-identical (#308).
-	if not _heights_moved and _last_fire == burning and _last_cover == covered:
+	if not _heights_moved and not _staging_moved and _last_fire == burning and _last_cover == covered:
 		return
 	_last_fire = burning
 	_last_cover = covered
@@ -422,8 +440,12 @@ func _ribbon_point(cell: Vector2i, at: Vector3) -> Vector3:
 # Flat CORNERS for the same reason and it is the literal truth: it lies on nothing, so it takes the
 # flat quad however folded the ground beneath it happens to be.
 func _air_anchor(px: Vector2, from_cell: Vector2i) -> Dictionary:
-	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y
-	return {"surface": Transform3D(Basis.IDENTITY, BoardSpace.of_pixels(px, flight_y)),
+	# The flight hangs over the cell it was LAUNCHED from, so it is that cell's tear-out it follows
+	# (#521) -- the whole offset, since this builds its origin rather than inheriting one.
+	var staged := BoardSpace.staged_offset(from_cell)
+	var flight_y := BoardSpace.surface_transform(from_cell, _heights()).origin.y + staged.y
+	return {"surface": Transform3D(Basis.IDENTITY,
+			BoardSpace.of_pixels(px, flight_y) + Vector3(staged.x, 0.0, staged.z)),
 			"corners": Vector4i.ZERO}
 
 
@@ -550,16 +572,25 @@ func _marker(anchor: Dictionary, texture: Texture2D, tint: Color) -> Dictionary:
 # lies flat against the slope. BoardSpace.surface_transform is the one answer.
 func _anchor(cell: Vector2i) -> Dictionary:
 	var heights := _heights()
-	return {"surface": BoardSpace.surface_transform(cell, heights),
+	# The tear-out rides here too (#521): markup belongs to the cell it marks, so it goes wherever
+	# that cell went. One line, because this is the one answer for every marker in the file.
+	var surface := BoardSpace.surface_transform(cell, heights)
+	surface.origin += BoardSpace.staged_offset(cell)
+	return {"surface": surface,
 			"corners": Vector4i.ZERO if heights == null else heights.corners_at(cell)}
 
 
 # The same, for a 2D world position (sprites sit at cell centers). The LEVEL and the SLOPE both come
 # from the cell those pixels fall in, so a ghost or arrow over a terrace lifts and tilts with it.
 func _anchor_px(px: Vector2) -> Dictionary:
-	var anchor := _anchor(_cell_of_px(px))
+	var cell := _cell_of_px(px)
+	var anchor := _anchor(cell)
 	var surface: Transform3D = anchor["surface"]
-	anchor["surface"] = Transform3D(surface.basis, BoardSpace.of_pixels(px, surface.origin.y))
+	# Only the HORIZONTAL half of the tear-out offset (#521): the vertical already arrived through
+	# _anchor's surface origin, and of_pixels is what replaces x and z.
+	var staged := BoardSpace.staged_offset(cell)
+	anchor["surface"] = Transform3D(surface.basis,
+			BoardSpace.of_pixels(px, surface.origin.y) + Vector3(staged.x, 0.0, staged.z))
 	return anchor
 
 
