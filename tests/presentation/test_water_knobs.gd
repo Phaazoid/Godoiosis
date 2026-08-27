@@ -64,6 +64,10 @@ func test_every_water_knob_reaches_a_uniform_of_its_own_name() -> void:
 		assert_array(_mirror.pushed.keys()).override_failure_message(
 				"setting BoardMirror.%s pushed %s -- a knob writes ITS OWN uniform and nothing " \
 				% [props[i], _mirror.pushed.keys()] + "else").contains_exactly([props[i]])
+		# A gdUnit assertion does not halt, so a wrong-name push has to be stepped over or the
+		# clean failure above arrives wearing a script error from the lookup below.
+		if not _mirror.pushed.has(props[i]):
+			continue
 		assert_float(_mirror.pushed[props[i]]).override_failure_message(
 				"BoardMirror.%s pushed a value it was not given" % props[i]) \
 				.is_equal_approx(value, 0.0001)
@@ -88,6 +92,10 @@ func test_entering_the_tree_pushes_every_declared_default() -> void:
 		assert_bool(_mirror.pushed.has(prop)).override_failure_message(
 				"_ready pushed no uniform '%s' -- the board would wear project.godot's saved " \
 				% prop + "value until someone moved that slider").is_true()
+		# A gdUnit assertion does not halt, so the missing key has to be stepped over or the clean
+		# failure above arrives wearing a script error from the lookup below.
+		if not _mirror.pushed.has(prop):
+			continue
 		assert_float(_mirror.pushed[prop]).override_failure_message(
 				"_ready pushed '%s' as something other than its own declared default" % prop) \
 				.is_equal_approx(declared, 0.0001)
