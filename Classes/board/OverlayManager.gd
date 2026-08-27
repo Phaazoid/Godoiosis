@@ -128,7 +128,7 @@ const ICON_TEXTURES = {
 
 # The armed-Guard pair's ground mark (#414). Neutral by default now the art is real -- these stay as
 # the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
-static var GUARD_RING_COLOR := Color.WHITE
+static var GUARD_RING_COLOR := Color(1.0, 1.0, 0.9961, 1.0)
 # NO Game-tab row, deliberately, where GUARD_RING_COLOR has one (#450): OverlayMirror._marker copies
 # a marker's texture and tint and NOT its scale, and 3D sizes a ground quad from its texture's own
 # pixels, so this moves the flat board and leaves the one the game boots into alone. A knob that
@@ -137,7 +137,7 @@ static var GUARD_RING_SCALE := 1.0
 # The blocker->ward arrow (#450). WHITE on purpose: the shared arrow art is desaturated, so the
 # tint IS the colour (the three planned-move knobs' own reasoning) and starting neutral leaves the
 # Game tab's picker its full range rather than multiplying against a baked-in hue.
-static var GUARD_LINK_MODULATE := Color.WHITE
+static var GUARD_LINK_MODULATE := Color(1.0, 1.0, 0.9961, 0.6078)
 # How far back from the ward's cell CENTRE the link's arrowhead sits, in cells (#450 round 2, dev
 # found it in play: "the shield just isn't as readable as I'd like it to be under the arrowhead").
 #
@@ -150,7 +150,7 @@ static var GUARD_LINK_MODULATE := Color.WHITE
 # TUNE IT WITH THE ALPHA ABOVE, not alone (found the first time the dev tuned this for real): both
 # buy the shield the same separation, so a translucent arrow needs less distance and an opaque one
 # needs more. Whichever you reach for, check the other still makes sense.
-static var GUARD_LINK_HEAD_INSET := 0.5
+static var GUARD_LINK_HEAD_INSET := 0.4
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
