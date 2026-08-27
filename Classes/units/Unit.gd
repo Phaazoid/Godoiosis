@@ -934,14 +934,30 @@ func get_weapon_secondary_attacks() -> Array[AttackData]:
 		return []
 	return equipped_weapon.secondary_attacks(self)
 
+# Which of this unit's attacks may be declared as a WATCH (#413) -- normally exactly one, since a
+# weapon carries one Overwatch action rather than a menu of them (dev, 2026-08-26). ONE answer, two
+# readers -- the kit-slice gate below and the menu's Overwatch rows -- so the slice can never offer
+# a watch that picks nothing, or hide one the unit could take.
+func overwatch_attacks() -> Array[AttackData]:
+	var watchable: Array[AttackData] = []
+	for atk: AttackData in get_selectable_attacks():
+		if attack_can_overwatch(atk):
+			watchable.append(atk)
+	return watchable
+
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
-# reload) OR a fireable secondary attack. Mere existence isn't enough — a mace's Blowback that can't
-# fire yet (0 charge) must not light up the button. Unfireable secondaries still LIST (disabled)
-# inside the submenu when something else opens it. Runes never qualify (the ability queries fail the cast).
+# reload), a fireable secondary attack, OR a watchable attack it could fire right now -- #413 made
+# Overwatch a weapon action, so the slice has to open for it. Mere existence isn't enough -- a
+# mace's Blowback that can't fire yet (0 charge) must not light up the button. Unfireable picks
+# still LIST (disabled) inside the submenu once something else opens it. Runes never qualify (the
+# ability queries fail the cast).
 func has_weapon_actions() -> bool:
 	if can_rev_weapon() or can_reload_weapon() or can_burrow_weapon():
 		return true
 	for atk in get_weapon_secondary_attacks():
+		if is_attack_fireable(atk):
+			return true
+	for atk in overwatch_attacks():
 		if is_attack_fireable(atk):
 			return true
 	return false
