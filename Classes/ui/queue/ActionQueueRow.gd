@@ -1,6 +1,11 @@
 extends HBoxContainer
 class_name ActionQueueRow
 
+# One row of the action-queue panel: actor sprite, action icon, target sprite, description, cancel.
+# Draws whatever BaseAction it is handed and asks the ORDER every question about itself -- icon,
+# description, validity tint, whether it may be dragged -- so a new action type needs nothing here.
+# Built by SquadActionQueueControl, which owns the drag and the sectioning.
+
 @onready var actor_texture: TextureRect = $ActorTexture
 @onready var action_icon: TextureRect = $ActionIcon
 @onready var target_texture: TextureRect = $TargetTexture
@@ -136,10 +141,21 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	hp_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	hp_label.offset_top = -12   # ride the bottom ~12px of the 32px icon, row height unchanged
 	
-func is_attack_row() -> bool:
-	# Only real attacks reorder. Counters are AttackActions too, but they're derived and live in
-	# their own (inert) section.
-	return action is AttackAction and not action is CounterAttackAction
+# Extra lines under the row's own description (#413) — what this walk walks into. On the ROW rather
+# than in a section of their own, deliberately: the payoff of a draggable move row is watching the
+# shot it eats change as you drag it, so the feedback has to be on the thing being dragged.
+func add_annotations(notes: Array[String]) -> void:
+	if notes.is_empty():
+		return
+	description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	for note: String in notes:
+		description_label.text += "\n  ↳ %s" % note
+
+
+func is_reorderable_row() -> bool:
+	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a
+	# hold-position filler are not orders the player sequenced (#412).
+	return action != null and action.is_reorderable()
 
 func _gui_input(event: InputEvent) -> void:
 	# Draggable single attacks AND volley headers (collapsed header: drag to reorder / click to expand).

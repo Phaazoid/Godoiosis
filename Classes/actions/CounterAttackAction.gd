@@ -23,6 +23,9 @@ func init_counter(counter_unit: Unit, target_unit: Unit, attack_origin: Vector2i
 	action_type = ActionType.COUNTER_ATTACK
 	source_attack = source
 
+func is_reorderable() -> bool:
+	return false   # derived, never queued — its section is inert (#412)
+
 func get_description() -> String:
 	if fired_attack != null and fired_attack.heals:
 		return "%s heals %s" % [actor.get_unit_name(), get_target_name()]

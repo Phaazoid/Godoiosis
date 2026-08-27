@@ -271,6 +271,11 @@ const FLAME_FRAMES := 8
 @export var cover_scale := 0.98: set = _set_cover_scale
 
 var board: GridMap
+# The tear-out's second lattice (#521): same mesh library, same cell_size, same cell coordinates,
+# and a NODE transform carrying the staged offset. A staged cell's column is written here and
+# cleared from `board`, leaving the socket the exit will thud back into. Null outside Battle3D --
+# the look-dev scene has one board and never stages.
+var staged_board: GridMap
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
 # crossing N cells inside one frame must cost one pass, not N.
@@ -423,12 +428,18 @@ func _flicker_of(marker: Node3D) -> float:
 func rebuild(grid: TileMapLayer, heights: BoardHeights, burning: Array[Vector2i],
 		covered: Array[Vector2i]) -> void:
 	board.clear()
+	if staged_board != null:
+		staged_board.clear()
 	sync(grid, heights)
 	refresh_states(heights, burning, covered)
 
 
+# Where anything STANDING on this cell goes -- and it is the one seam every per-cell node in this
+# file is placed by (props, flames, cover clusters, state markers), which is why the tear-out's
+# offset needs exactly this one line rather than an edit per object kind (#521).
 func surface_point(cell: Vector2i, heights: BoardHeights) -> Vector3:
-	return BoardSpace.surface_point(cell, heights)   # the one answer lives with the convention
+	# the one answer lives with the convention; the offset is zero unless this cell is torn out
+	return BoardSpace.surface_point(cell, heights) + BoardSpace.staged_offset(cell)
 
 
 # The live terrain diff: write only what differs, erase what the 2D no longer paints.
@@ -447,10 +458,14 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	# A prop on a cell that lost its ground entirely: reconcile_cell's own else-branch covers a cell
 	# repainted from prop to flat, but this walk only visits cells that still HAVE ground.
 	_free_props_except(live)
-	# get_used_cells returns a copy, so erasing inside the walk is safe.
-	for cell: Vector3i in board.get_used_cells():
-		if not live.has(BoardSpace.flat(cell)):
-			board.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
+	# get_used_cells returns a copy, so erasing inside the walk is safe. BOTH maps: a torn-out cell
+	# whose ground the 2D no longer paints is over on the staged lattice (#521).
+	for map: GridMap in [board, staged_board]:
+		if map == null:
+			continue
+		for cell: Vector3i in map.get_used_cells():
+			if not live.has(BoardSpace.flat(cell)):
+				map.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
 
 
 # The INCREMENTAL door (#319), and the whole reason sync() above was split. Same reconcile, over the
@@ -498,11 +513,36 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 # rather than approximate: _write_column fills floor..level contiguously (plus the ramp wedge one
 # above), so a column can never have a hole for this to stop early on. The same contiguity is what
 # _write_column's own walk-up cleanup already assumes.
+# BOTH maps, because a cell that loses its ground may have been torn out at the time (#521) -- and
+# because "clear this column" must mean the same thing wherever the column happens to live.
 func _clear_column(cell: Vector2i, floor_row: int) -> void:
+	_clear_column_on(board, cell, floor_row)
+	_clear_column_on(staged_board, cell, floor_row)
+
+
+func _clear_column_on(map: GridMap, cell: Vector2i, floor_row: int) -> void:
+	if map == null:
+		return
 	var y := floor_row
-	while board.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
-		board.set_cell_item(Vector3i(cell.x, y, cell.y), GridMap.INVALID_CELL_ITEM)
+	while map.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
+		map.set_cell_item(Vector3i(cell.x, y, cell.y), GridMap.INVALID_CELL_ITEM)
 		y += 1
+
+
+# Which GridMap a cell's column belongs in (#521). A GridMap cell CANNOT be offset individually --
+# it is a lattice -- so the tear-out moves the tiles by writing them into a second map whose NODE
+# transform is the displacement. Both share one lattice and one mesh library, which is what makes
+# the diorama an exact reconstruction rather than an arithmetic one.
+#
+# Null staged_board (the look-dev scene, a bare fixture) simply never stages.
+func _map_for(cell: Vector2i) -> GridMap:
+	if staged_board != null and BoardSpace.is_staged(cell):
+		return staged_board
+	return board
+
+
+func _other_map(map: GridMap) -> GridMap:
+	return board if map == staged_board else staged_board
 
 
 # The lowest ROW any column has to reach down to. A dip must have a bottom rather than a hole,
@@ -536,6 +576,10 @@ func floor_row_of(heights: BoardHeights) -> int:
 # cell -- almost every cell -- has no cap to pick art for.
 func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: BoardHeights,
 		floor_row: int) -> void:
+	# Routed, and the OTHER map's column cleared first (#521): a cell that just staged (or just came
+	# home) still holds its old column over there, and nothing else would ever come back for it.
+	var map := _map_for(cell)
+	_clear_column_on(_other_map(map), cell, floor_row)
 	var corners := heights.corners_at(cell)
 	var top_row := BoardSpace.top_row_of(Terrain.low_of_corners(corners))   # units -> drawn row
 	# The block at top_row is LOAD-BEARING under a cap, not just filler: its top face sits exactly at
@@ -545,8 +589,8 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 	# this block and that half becomes a hole; draw it AND the cap's floor triangle and they fight.
 	for y in range(floor_row, top_row + 1):
 		var at := Vector3i(cell.x, y, cell.y)
-		if board.get_cell_item(at) != item:
-			board.set_cell_item(at, item)
+		if map.get_cell_item(at) != item:
+			map.set_cell_item(at, item)
 	var top := top_row
 	var climb := Terrain.climb_of_corners(corners)
 	if climb > 0:
@@ -554,21 +598,21 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 		var mask := Terrain.corner_mask(corners)
 		var orientation := _form_orientation(mask)
 		var cap_item := form_item_for_cell(grid, cell, mask, climb)
-		if board.get_cell_item(cap) != cap_item \
-				or board.get_cell_item_orientation(cap) != orientation:
-			board.set_cell_item(cap, cap_item, orientation)
+		if map.get_cell_item(cap) != cap_item \
+				or map.get_cell_item_orientation(cap) != orientation:
+			map.set_cell_item(cap, cap_item, orientation)
 		# The cap's own upper rows, declared but not drawn -- see RAMP_FILL_ITEM_NAME.
 		var fill := ramp_fill_item()
 		for y in range(top_row + 2, top_row + climb + 1):
 			var above_cap := Vector3i(cell.x, y, cell.y)
-			if board.get_cell_item(above_cap) != fill:
-				board.set_cell_item(above_cap, fill)
+			if map.get_cell_item(above_cap) != fill:
+				map.set_cell_item(above_cap, fill)
 		top = top_row + climb
 	# LOWERING a cell strands everything the column used to hold above its new top. Walk up until
 	# the column is genuinely clear rather than assuming one stale cell — a 5-level cut leaves 5.
 	var above := top + 1
-	while board.get_cell_item(Vector3i(cell.x, above, cell.y)) != GridMap.INVALID_CELL_ITEM:
-		board.set_cell_item(Vector3i(cell.x, above, cell.y), GridMap.INVALID_CELL_ITEM)
+	while map.get_cell_item(Vector3i(cell.x, above, cell.y)) != GridMap.INVALID_CELL_ITEM:
+		map.set_cell_item(Vector3i(cell.x, above, cell.y), GridMap.INVALID_CELL_ITEM)
 		above += 1
 
 
@@ -1177,6 +1221,14 @@ func _reconcile_prop(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights) 
 # cell changes, so there is no per-cell fact to compare and invalidating at the source is the only
 # honest answer. (#342 widened the key to the corners, which is the opposite case — a per-CELL input
 # the reconcile already holds, read off the same store the build reads, so it cannot go stale.)
+# One cell's prop, so the next reconcile rebuilds it where its ground now is (#521). Invalidation at
+# the SOURCE, drop_props' shape, rather than widening _reconcile_prop's diff key: a tear-out changes
+# where a cell renders without changing anything the key is made of, so a prop left standing keeps
+# the position it had when its ground was still in the board.
+func drop_prop_at(cell: Vector2i) -> void:
+	_free_prop_at(cell)
+
+
 func drop_props() -> void:
 	for cell: Vector2i in _props.keys():
 		_props[cell].queue_free()

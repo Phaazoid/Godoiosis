@@ -75,6 +75,16 @@ func execute_orders(unit):
 	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
 
 	game.overlay_manager.clear_knockback_preview()
+	# The queued-Guard ghost goes with it (#450): both are plan-time marks, and the pass starting is
+	# the moment the plan stops being a plan. The SOLID pair replaces it at the far end of this
+	# function, where refresh_guard_markers runs once the ward has actually armed.
+	#
+	# REASONED, NOT PINNED -- deleting this line leaves the whole suite green, and that is a property
+	# of the suite rather than of the line. What it protects is the stretch WHILE the pass animates,
+	# where refresh_action_queue refuses to re-derive (#361) so nothing else would take the ghost
+	# down; headless, Pacing collapses every beat to zero frames and execute_orders runs start to
+	# finish synchronously, so that stretch does not exist to assert on (measured, #450).
+	game.overlay_manager.clear_guard_preview()
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
@@ -109,6 +119,30 @@ func execute_orders(unit):
 	if walker != null:
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
+	# The shots the walk walked into (#413), in trigger order, and BEFORE the tear-out below: a
+	# watch fires at a crossing CELL, which the diorama's stage set does not hold (it holds what MAIN
+	# ACTIONS touch), so lifting the ground first would play the shot over a hole. The board is where
+	# you move, and a watch shot is the tail of moving.
+	#
+	# DECLARED v1 CUT: the damage lands at the crossing moment in the RESOLVE -- that is where every
+	# number comes from -- but it plays back after the walk instead of interrupting it. A crosser the
+	# shot downed has already stopped at the crossing cell (MoveAction.walked_path), so what trails
+	# the fiction is the ORDER OF THE VISUALS, never the outcome. Interrupting the walk is #567.
+	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan))
+
+	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
+	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
+	# is no second answer to what is on stage -- and it holds only what MAIN ACTIONS touch, which is
+	# the dev's rule: *"there have to be main actions at play. Movement by itself doesn't do it."*
+	#
+	# AFTER the walk, not before it, and that is forced by the same rule: an attacker's origin_cell
+	# IS its post-move cell, so tearing out at the top of the pass makes it walk toward a hole and
+	# pop into the sky on arrival. The board is where you move; the diorama is where you fight.
+	#
+	# Gated on the PROFILE too, which is what makes "displacement is provably zero with the cinematic
+	# off" a property rather than a promise.
+	_stage_the_fight(sheet, profile)
+
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
@@ -124,6 +158,7 @@ func execute_orders(unit):
 		var batch: Array = side_channel.get(type, [])
 		var codas := sheet.codas(type)
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai), _beat_subjects(codas))
+	BoardSpace.clear_staging()   # the tiles thud back into their sockets (#521)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
 	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
@@ -137,6 +172,7 @@ func execute_orders(unit):
 	# The pass has settled, so this is where a Guard has finished arming (side channel) or been spent
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
+	game.refresh_watch_markers()   # a watch that fired, or one that just armed (#413)
 	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
 	# squad-validity guard below -- a squad that wiped itself must not skip the check.
 	game.mission_controller.check()
@@ -251,6 +287,37 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		while not action.execution_complete:
 			await get_tree().process_frame
 
+# Which ground goes on stage (#521). BOARD stages nothing at all -- the tear-out is the cinematic's,
+# and #410's ruling that the two profiles SHARE timings is about pacing, not about lifting the board
+# into the sky. An empty cell set stages nothing either, so a pass with no fight in it is untouched.
+#
+# BYSTANDERS is the feels-test fork the ticket asks for, and it is one bool because the sheet has
+# already decided who is in the fight: OFF stages the cells the fight touches, ON adds the ground
+# every OTHER unit is standing on, so the diorama keeps its spatial context.
+func _stage_the_fight(sheet: BeatSheet, profile: Pacing.Profile) -> void:
+	if profile != Pacing.Profile.CINEMATIC:
+		return
+	# THE GATE, and it is asked of the FIGHT's cells BEFORE any bystander is added -- an empty sheet
+	# means no main actions, which is the whole rule. Asking after would let the feels-test flag put
+	# a move-only pass back on stage, i.e. re-create the exact thing it is there to be judged next to.
+	var cells: Array[Vector2i] = sheet.cells.duplicate()
+	if cells.is_empty():
+		return
+	if Experiments.is_on(Experiments.Flag.DIORAMA_BYSTANDERS):
+		var on_stage: Dictionary[Vector2i, bool] = {}
+		for cell in cells:
+			on_stage[cell] = true
+		for child in game.units_root.get_children():
+			var unit := child as Unit
+			if unit == null:
+				continue
+			var cell := unit.get_projected_destination()
+			if not on_stage.has(cell):
+				on_stage[cell] = true
+				cells.append(cell)
+	BoardSpace.stage(cells, BoardSpace.lift_offset())
+
+
 # Pause schedule for one phase: the action that OPENS each beat -> how long to hold before it.
 # Keyed by the beat's first SURVIVING member, so a volley whose lead was skipped (R7 downs the
 # counter-er) still pauses before the member that actually swings. Every action is executed either
@@ -266,6 +333,22 @@ func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: b
 # Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
 # that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
 # means "don't move", which is the right answer when there is nothing left to look at.
+# Who the camera frames for a triggered watch shot (#413) — the CROSSER, because the moment is
+# somebody walking into a line, not the watcher standing still. Built here rather than in BeatSheet:
+# a watch shot is not part of the plan the player authored, so it has no beat to read a subject off,
+# and one line of data beats teaching the sheet about a list it does not own. Keyed the way every
+# other schedule is — the volley's lead member — so a splashing shot still pans once.
+func _watch_subjects(plan: ResolvedPlan) -> Dictionary:
+	var subjects: Dictionary = {}
+	for shot in plan.watch_shots:
+		if shot.is_secondary_hit:
+			continue
+		var who: Unit = shot.triggered_by
+		if who != null and is_instance_valid(who):
+			subjects[shot] = who
+	return subjects
+
+
 func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	var subjects: Dictionary = {}
 	for beat in beats:

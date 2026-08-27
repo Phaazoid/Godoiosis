@@ -112,25 +112,41 @@ func _tooltip(row: Dictionary) -> String:
 	return String(row.get("tooltip", ""))
 
 
-# Open the unit's ring and drill into Attack the way a player does: point at the slice, click.
-# Carvings AND weapon secondaries both live there since #467 -- the #88 separation was overturned
-# with the rework. Pointing rather than calling a pick is the point: selection is the ANGLE, so a
-# test that set an index directly would not exercise the thing that can break.
+# Which slice on the LIVE ring carries this name, or -1. One lookup, so the gesture below and the
+# depth check above it cannot disagree about which row they mean.
+func _slice_index(controller: ActionMenuController, label: String) -> int:
+	var rows: Array = controller.level_nodes()
+	for i in range(rows.size()):
+		if String(rows[i].get("name", "")) == label:
+			return i
+	return -1
+
+
+# Point at a row by NAME and click it, the way a player does. Pointing rather than calling a pick is
+# the whole point: selection is the ANGLE, so a case that set an index directly would not exercise
+# the thing that can break.
+func _aim_and_click(controller: ActionMenuController, label: String) -> void:
+	var index := _slice_index(controller, label)
+	assert_int(index).override_failure_message("the ring offered no '%s' slice" % label).is_greater(-1)
+	controller.aim_at(controller.point_in_slice(index))
+	controller.commit()
+
+
+# A CATEGORY row: the ring GROWS. A terminal row uses _aim_and_click alone, where this assertion
+# would be exactly wrong -- the menu ends there instead of opening anything.
+func _drill(controller: ActionMenuController, label: String) -> void:
+	var depth := controller.level_count()
+	_aim_and_click(controller, label)
+	assert_int(controller.level_count()).override_failure_message(
+			"committing '%s' did not open a ring" % label).is_equal(depth + 1)
+
+
+# Open the unit's ring and drill into the KIT slice. Carvings AND weapon secondaries both live
+# there since #467 -- the #88 separation was overturned with the rework.
 func _enter_attack_ring(unit: Unit) -> void:
 	game.main_action_menu.show_main_menu(unit, Vector2i(400, 300))
 	await await_idle_frame()
-	var controller := _controller()
-	var rows: Array = controller.level_nodes()
-	var kit := MD.kit_category(game, unit)
-	var index := -1
-	for i in range(rows.size()):
-		if String(rows[i].get("name", "")) == kit:
-			index = i
-	assert_int(index).override_failure_message("the ring offered no '%s' slice" % kit).is_greater(-1)
-	controller.aim_at(controller.point_in_slice(index))
-	controller.commit()
-	assert_int(controller.level_count()) \
-		.override_failure_message("committing the kit slice did not open a ring").is_equal(2)
+	_drill(_controller(), MD.kit_category(game, unit))
 
 
 # ==============================================================================
@@ -277,3 +293,48 @@ func _sprung_springspear() -> WeaponInstance:
 	var spear := WeaponInstance.make(template) as SpringspearWeaponInstance
 	spear.ready = false   # spent: the secondary is gated, the family has words for it
 	return spear
+
+
+# Overwatch is a WEAPON ACTION and ONE ROW (dev, 2026-08-26: "Overwatch should be a weapon action,
+# not it's own top rung on the menu" / "The Carbine will get 1 Overwatch action as a special weapon
+# action. That's it. There will be no sub menu."), so it sits in the kit slice beside Reload, named
+# for the VERB, and clicking it picks the attack.
+#
+# The case DRIVES the path instead of reading the tree, because both ends can be right while nothing
+# joins them: the row exists, `enter_overwatch_mode` works, and the leaf's own pick is the wire. It
+# pins three things a reshuffle would break silently -- the top ring staying clear (a rung of its own
+# is what this replaced), the row opening NO submenu, and the attack it chooses.
+func test_overwatch_is_one_weapon_action_row_that_picks_its_attack() -> void:
+	var watcher := _spawn(Vector2i(2, 0))
+	var weapon := H.make_weapon(4)
+	weapon.template.main_attack.display_name = "Shot"
+	weapon.template.main_attack.can_overwatch = true
+	watcher.equipped_weapon = weapon
+
+	game.main_action_menu.show_main_menu(watcher, Vector2i(400, 300))
+	await await_idle_frame()
+	var controller := _controller()
+	assert_bool(_row_named(controller.level_nodes(), "Overwatch").is_empty()).override_failure_message(
+			"Overwatch took a top rung of its own -- it is a weapon action").is_true()
+
+	_drill(controller, MD.kit_category(game, watcher))
+	var row := _row_named(controller.level_nodes(), "Overwatch")
+	assert_bool(row.is_empty()).override_failure_message(
+			"the kit slice drew no Overwatch row").is_false()
+	var children: Array = row.get("children", [])
+	assert_bool(children.is_empty()).override_failure_message(
+			"the Overwatch row opened a submenu -- it is one row that picks its own attack").is_true()
+
+	# The WIRE, not the two ends.
+	_aim_and_click(controller, "Overwatch")
+	await await_idle_frame()
+	var state: int = game.game_state
+	var targeting: int = game.GameState.ATTACK_TARGETING
+	assert_int(state).override_failure_message(
+			"picking Overwatch opened no targeting at all").is_equal(targeting)
+	var intent: int = game.aim_intent
+	var watching: int = game.AimIntent.WATCH
+	assert_int(intent).override_failure_message(
+			"the row opened an ordinary shot's aim, not a watch").is_equal(watching)
+	assert_object(watcher.active_attack).override_failure_message(
+			"the row aimed no attack -- clicking Overwatch is what chooses it").is_same(weapon.template.main_attack)

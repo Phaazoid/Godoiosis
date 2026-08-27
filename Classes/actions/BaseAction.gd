@@ -30,7 +30,8 @@ enum ActionType {
 	REV,
 	BURROW,
 	CAPTURE,
-	GUARD
+	GUARD,
+	OVERWATCH
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -48,7 +49,8 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.REV,
 	ActionType.BURROW,
 	ActionType.CAPTURE,
-	ActionType.GUARD
+	ActionType.GUARD,
+	ActionType.OVERWATCH
 ]
 
 # Execution order of the side-channel tail — stored orders that bypass PlanResolver
@@ -62,6 +64,10 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.REV,
 	ActionType.BURROW,
 	ActionType.CAPTURE,
+	# A watch armed this pass must arm AFTER every hit it was resolved against has played back
+	# (#413) -- a same-pass shove combo can already have spent it, and re-arming here would hand
+	# execution a live watch the queue previewed as fired. GuardAction's rule, one slot up.
+	ActionType.OVERWATCH,
 	# LAST in the tail deliberately (#414): a Guard armed this pass must arm AFTER every hit it was
 	# resolved against has played back, or the ward it just absorbed for would be re-armed live.
 	ActionType.GUARD
@@ -69,6 +75,14 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 
 func is_main_action() -> bool:
 	return MAIN_ACTION_TYPES.has(action_type)
+
+# May the queue panel resequence the row this order draws (#412)? Queue order is the pass's clock —
+# resolve_plan walks action_queue and nothing else — so a row standing for an order somebody GAVE
+# is draggable, while a derived row (a counter) and a filler (hold position) are not. Asked of the
+# order rather than of the row, because only the order knows which it is; Squad.reorder_by_actor
+# asks the same question of the queue.
+func is_reorderable() -> bool:
+	return true
 
 # Actor-intrinsic requirement for queueing this action; subclasses override (move ordering,
 # verb locks, ability gates). SquadManager.queue_action is the sole enforcement point

@@ -19,8 +19,20 @@ static func render_overview(session) -> String:
 
 # Mark every downed-but-alive body on the board ("v"). Downed units cling at 1 HP, are out
 # of action, and have been ejected into solo squads — but they still occupy their cell.
+#
+# Watched cells ("!") ride the same channel (#413), because the graphical board telegraphs every
+# live watch to both sides and a headless player has to be able to see the same thing. A body on a
+# watched cell keeps its "v": knowing a unit is down outranks knowing the cell is covered, and the
+# watch is still named in the legend.
 static func _downed_overlay(session) -> Dictionary:
 	var overlay := {}
+	for unit in session.live_units():
+		if unit.watch == null or unit.watch.spent or not unit.watch.is_intact():
+			continue
+		if not unit.watch.is_anchored(unit.movement.cell):
+			continue
+		for cell in unit.watch.footprint:
+			overlay[cell] = "!"
 	for unit in session.live_units():
 		if unit.is_downed():
 			overlay[unit.movement.cell] = "v"
@@ -161,6 +173,11 @@ static func _unit_line(session, unit: Unit) -> String:
 	if unit.has_equipped_weapon():
 		wep = _weapon_str(unit.get_equipped_weapon())
 	var state := "  [DOWNED]" if unit.is_downed() else ""
+	# Whose watch the "!" cells belong to, and what it fires (#413). Named on the unit line rather
+	# than in a second block: the footprint is on the board, this says who is behind it.
+	if unit.watch != null and not unit.watch.spent and unit.watch.is_intact() \
+			and unit.watch.is_anchored(unit.movement.cell):
+		state += "  [WATCHING %s]" % (unit.watch.attack.display_name if unit.watch.attack != null else "?")
 	return "%s %s  %s  hp%d/%d  %s  %s%s" % [
 		session.handle_for(unit), unit.get_unit_name(), fac,
 		unit.get_current_hp(), unit.get_max_hp(),

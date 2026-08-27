@@ -404,7 +404,14 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row
 	# boundary, and the cell wanted is the one BELOW it — dropping a whole row would name the one
 	# under that.
+	#
+	# Taken BEFORE the tear-out offset (#521): a sprite's CELL is a board fact, and the diorama is
+	# the same board somewhere else. Reading it off the displaced point would name a cell in the sky.
 	sprite.cell = BoardSpace.cell_of(stand - Vector3(0.0, BoardSpace.ROW_HEIGHT * 0.5, 0.0))
+	# ...and the sprite goes wherever the ground it is standing on went. The horizontal half comes
+	# from PIXELS above rather than from BoardSpace, which is why the offset is added to the whole
+	# placement here instead of hiding inside surface_point.
+	stand += BoardSpace.staged_offset(over)
 	# The attack lunge and the invalid-order shake (#321) tween $MapSprite's LOCAL position, which
 	# unit.position never sees — the one fact UnitVisuals expresses that the reads above cannot
 	# reach. Mapped through the same metric and the same axes as the stand point: a 2D y is board
@@ -552,7 +559,10 @@ func _bar_anchor(unit: Unit, sprite: UnitSprite3D) -> Vector3:
 	var lift := Vector3(0.0, sprite.art_top_height() + hud_lift, 0.0)
 	if not unit.visuals.projected:
 		return sprite.position + lift
-	return BoardSpace.surface_point(unit.get_projected_destination(), heights) + lift
+	# The ghost's cell, so the readout rides the diorama with the ground it is over (#521). The
+	# branch above needs no offset: sprite.position already carries it.
+	var ghost_cell := unit.get_projected_destination()
+	return BoardSpace.surface_point(ghost_cell, heights) + BoardSpace.staged_offset(ghost_cell) + lift
 
 
 # HP moving, and what the readout does about it (#314). The BASELINE is written before anything

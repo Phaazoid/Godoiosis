@@ -15,6 +15,7 @@ class_name Experiments
 
 enum Flag {
 	EXAMPLE_FLAG,
+	DIORAMA_BYSTANDERS,
 }
 
 # Per-flag metadata. Literal-only, so it can be a compile-time const (like STAT_DEFAULTS).
@@ -25,6 +26,11 @@ const DEFS := {
 	Flag.EXAMPLE_FLAG: {
 		"title": "Example flag",
 		"desc": "Throwaway sample proving the harness end-to-end. Safe to delete.",
+		"default": false,
+	},
+	Flag.DIORAMA_BYSTANDERS: {
+		"title": "Diorama keeps its bystanders",
+		"desc": "Tear out the ground under every unit, not just the fight's, so the battle diorama keeps its spatial context. #521's feels test -- pick one and the loser gets deleted.",
 		"default": false,
 	},
 }

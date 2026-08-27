@@ -69,6 +69,11 @@ var stat_effects: Array[StatEffect] = []
 # Written only through the four doors below.
 var guard: GuardWard = null
 
+# The Overwatch this unit currently has ARMED (#413) — null when it is watching nothing. Same
+# battle-scoped-but-SAVED reason as `guard` above: a save taken between a pass and the enemy phase
+# is exactly when a live watch is the whole point. Written only through the three doors below.
+var watch: Watch = null
+
 # Fired once per settled stat change, for READOUTS only. It is not how plan validity is decided —
 # "may this be queued?" is a question about the PROJECTED stat and belongs to SquadPlanValidator
 # (#113); answering it in a listener would put Law #2 one race away from breaking.
@@ -490,6 +495,31 @@ func spend_guard() -> void:
 func lapse_guard() -> void:
 	guard = null
 
+# The three doors on the armed watch (#413), mirroring the ward's. Whether a watch TRIGGERS on a
+# given entry is the resolver's question; these only own the state's life.
+#
+# `spent` carries the same fact GuardAction.resolved_spent does: a watch its own pass's shove combo
+# already fired must arm used, and OverwatchAction.execute is the only caller that can know.
+func arm_watch(origin: Vector2i, aim_cell: Vector2i, watched_cells: Array[Vector2i],
+		attack: AttackData, spent := false) -> void:
+	if attack == null or watched_cells.is_empty():
+		return
+	watch = Watch.arm(self, origin, aim_cell, watched_cells, attack)
+	watch.spent = spent
+
+# Fired its one shot. The watch object stays (spent) for the same reason a spent ward does: "you
+# already took your shot" and "you were never watching" are different facts, and both save.
+func spend_watch() -> void:
+	if watch != null:
+		watch.spent = true
+
+# The lifetime rule, from the owning faction's turn-start tick pass beside lapse_guard: a watch that
+# nobody walked into is gone before its owner acts again. What drops it EARLY is the anchor rule,
+# and that is the resolver's read (Watch.is_anchored) rather than a door here — the watcher can be
+# shoved off its cell mid-pass, and a pass mutates copies.
+func lapse_watch() -> void:
+	watch = null
+
 # The element-state doors own the paired-StatEffect lockstep (Elemental.paired_stat_mods): the
 # marker answers "is it chilled", the effect carries the stat change and the clock. The two
 # restore paths (ScenarioUnitEntry.apply_unit_state, restore_stat_effects) bypass these doors on
@@ -722,8 +752,9 @@ static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid
 		if require_valid and not action.is_valid:
 			continue
 		# A hold-position move means "not going anywhere under my own power" — a shove still moves
-		# you, so it wins. A REAL move beats the shove: you walked out from under it.
-		if action.is_hold_position and shoved:
+		# you, so it wins. A REAL move beats the shove: you walked out from under it. A walk the
+		# pass HALTED (#413) did not: it was stopped where the shot found it.
+		if shoved and (action.is_hold_position or (action as MoveAction).was_halted()):
 			return unit._projected_knockback_cell
 		return action.get_destination()
 	return unit._projected_knockback_cell if shoved else unit.movement.cell
@@ -903,14 +934,30 @@ func get_weapon_secondary_attacks() -> Array[AttackData]:
 		return []
 	return equipped_weapon.secondary_attacks(self)
 
+# Which of this unit's attacks may be declared as a WATCH (#413) -- normally exactly one, since a
+# weapon carries one Overwatch action rather than a menu of them (dev, 2026-08-26). ONE answer, two
+# readers -- the kit-slice gate below and the menu's Overwatch rows -- so the slice can never offer
+# a watch that picks nothing, or hide one the unit could take.
+func overwatch_attacks() -> Array[AttackData]:
+	var watchable: Array[AttackData] = []
+	for atk: AttackData in get_selectable_attacks():
+		if attack_can_overwatch(atk):
+			watchable.append(atk)
+	return watchable
+
 # Does the Weapon Action submenu have anything ACTIONABLE right now? A weapon self-ability (rev /
-# reload) OR a fireable secondary attack. Mere existence isn't enough — a mace's Blowback that can't
-# fire yet (0 charge) must not light up the button. Unfireable secondaries still LIST (disabled)
-# inside the submenu when something else opens it. Runes never qualify (the ability queries fail the cast).
+# reload), a fireable secondary attack, OR a watchable attack it could fire right now -- #413 made
+# Overwatch a weapon action, so the slice has to open for it. Mere existence isn't enough -- a
+# mace's Blowback that can't fire yet (0 charge) must not light up the button. Unfireable picks
+# still LIST (disabled) inside the submenu once something else opens it. Runes never qualify (the
+# ability queries fail the cast).
 func has_weapon_actions() -> bool:
 	if can_rev_weapon() or can_reload_weapon() or can_burrow_weapon():
 		return true
 	for atk in get_weapon_secondary_attacks():
+		if is_attack_fireable(atk):
+			return true
+	for atk in overwatch_attacks():
 		if is_attack_fireable(atk):
 			return true
 	return false
@@ -955,6 +1002,13 @@ func attack_hits_allies(attack: AttackData) -> bool:
 	if equipped_weapon == null:
 		return attack != null and attack.hits_allies
 	return equipped_weapon.effective_hits_allies(self, attack)
+
+# Whether this attack may be declared as a standing watch (#413) -- same delegation, same reason:
+# the menu holds a Unit, and the answer is the equipped source's to give once a mod may edit it.
+func attack_can_overwatch(attack: AttackData) -> bool:
+	if equipped_weapon == null:
+		return attack != null and attack.can_overwatch
+	return equipped_weapon.effective_can_overwatch(self, attack)
 
 # Does this unit's CURRENT attack source permit a counter? #30/#72: reads get_counter_attack(),
 # never the live selection — see that method's header for why. Since #84 the counter attack must

@@ -314,6 +314,7 @@ func apply_scenario(scenario: ScenarioData) -> void:
 		var guarding_unit: Unit = unit_of_entry[entry]
 		guarding_unit.arm_guard(unit_of_entry[ward_entry], guarding_unit.get_guard_range(), entry.guard_spent)
 	game.refresh_guard_markers()
+	game.refresh_watch_markers()   # a loaded watch is telegraphed the moment the board is up (#413)
 
 	turn_manager.set_active_faction(scenario.active_faction)
 	game.refresh_end_turn_button()   # a resumed save can load straight into an already-spent faction (#189)

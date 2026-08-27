@@ -54,24 +54,25 @@ static var CINEMATIC_ACTION := 0.4
 # What a beat earns for what it WAS. These do not stack -- the loudest single hold wins -- so the
 # drama ranking is whatever these NUMBERS say rather than an order written into code. Tune
 # HOLD_KNOCKBACK above HOLD_DOWN and a shove outranks a death, deliberately.
-static var HOLD_DOWN := 0.6        # a unit goes down, is killed, maimed, or removed from the board
+static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
 static var HOLD_CRISIS := 0.85      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
-static var HOLD_KNOCKBACK := 0.2   # the hit shoved its target
-static var HOLD_TURNOVER := 0.5    # the act break: the defending line raises weapons
-static var HOLD_HEAL := 0.35       # HP came back -- the quiet beat this table had no row for
+static var HOLD_KNOCKBACK := 0.6   # the hit shoved its target
+static var HOLD_TURNOVER := 0.7    # the act break: the defending line raises weapons
+static var HOLD_HEAL := 0.45       # HP came back -- the quiet beat this table had no row for
 
 # The side-channel tail (dev, 2026-08-26: "the side channel actions are going to need emphasis as
 # well"). PER VERB rather than one shared number, because a rescue and a reload are not the same
 # moment. coda_hold() below is the one lookup.
 static var HOLD_RESCUE := 0.2
 static var HOLD_RALLY := 0.4
-static var HOLD_INTIMIDATE := 0.4
+static var HOLD_INTIMIDATE := 0.35
 static var HOLD_RELOAD := 0.2
 static var HOLD_REV := 0.15
 static var HOLD_BURROW := 0.25
 static var HOLD_CAPTURE := 0.5
 static var HOLD_GUARD := 0.35
+static var HOLD_OVERWATCH := 0.35
 
 # How much of a hold actually applies, per profile. BOARD ships at 0.0 -- flat, "small pauses
 # everywhere" (dev, 2026-08-26) -- so the shape exists but is dialled out rather than absent. That
@@ -154,6 +155,7 @@ static func coda_hold(type: BaseAction.ActionType) -> float:
 		BaseAction.ActionType.BURROW: return HOLD_BURROW
 		BaseAction.ActionType.CAPTURE: return HOLD_CAPTURE
 		BaseAction.ActionType.GUARD: return HOLD_GUARD
+		BaseAction.ActionType.OVERWATCH: return HOLD_OVERWATCH
 	return -1.0
 
 

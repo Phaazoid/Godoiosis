@@ -62,6 +62,10 @@ shadow_enabled = true
 mesh_library = ExtResource("6")
 cell_size = Vector3(1, 0.5, 1)
 
+[node name="StagedBoard" type="GridMap" parent="." unique_id=1466093521]
+mesh_library = ExtResource("6")
+cell_size = Vector3(1, 0.5, 1)
+
 [node name="BoardOverlays" type="Node3D" parent="." unique_id=1690625544]
 script = ExtResource("5")
 

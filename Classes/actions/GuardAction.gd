@@ -9,10 +9,13 @@ class_name GuardAction
 # A basic action everyone has (the doc's working model, and the one fork it left deliberately open),
 # so actor_can_perform is the inherited `true`; what kit grants is the brace bonus, not the verb.
 
-# Cut from ProjectUtumno_full row 38 col 30 (dev pick, 2026-08-21), downscaled 32 -> 16 with NEAREST
-# — the exact 2:1 every other ActionIcon is sized at, and a smooth filter mushes art this small.
-# The only place this action's art comes from.
-const GUARD_ICON := preload("res://Art/Icons/ActionIcons/GuardIcon.png")
+# THE board's ward shield, not a second cut of one (#450, dev call): the row and the decal under the
+# defendee are now one texture, so a player who learns the shield on the board reads the queue with
+# it. It replaced the row's own ProjectUtumno col 30 art, which is deleted rather than parked --
+# two shields meaning the same thing is exactly the drift this collapses. ActionQueueRow draws it at
+# 32x32 over a 16px source, so the plank features double rather than mush; the CrownIcon it already
+# preloads out of BoardIcons is the precedent for reaching across.
+const GUARD_ICON := preload("res://Art/Icons/BoardIcons/GuardWardIcon.png")
 
 var target: Unit         # the ward — the unit being bodyguarded
 var guard_range: int = 1 # stamped at declare (Law #2 provenance, CaptureAction's shape)

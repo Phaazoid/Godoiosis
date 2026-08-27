@@ -8,7 +8,7 @@
 
 > **Range became a per-unit STAT — 2026-08-06 ([#142](https://github.com/Phaazoid/Godoiosis/issues/142)).** `Squad.SQUAD_RANGE` is **deleted**. Cohesion radius is now **`Stats.Stat.COH`**, an ordinary per-unit stat (default 3 then; 4 since #151, `Stats.STAT_DEFAULTS`) read off the **leader** — `get_max_squad_range()` returns `leader.get_effective_stat(COH)`, the same shape `max_size()` already used for effective LDR. That buys the whole stat pipeline for free: job `stat_nudges`, `StatEffect`s, and gear modifiers can all move a captain's leash per unit. **#63's actual call survives** — COH is still fully decoupled from LDR, no band feeds either into the other; what changed is that the number is per-unit rather than global. Leader-derived on purpose: squads churn (`leave_squad` destroys and rebuilds one), units persist, so a leader swap re-derives the leash for free and a member's own COH never widens the squad. Editable from the Unit Editor with no new widget — that tab generates one spinbox per live stat.
 
-**Canon checked through #461 (2026-08-21).**
+**Canon checked through #565 (2026-08-26).**
 
 ## Purpose
 

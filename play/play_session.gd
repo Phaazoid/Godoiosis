@@ -222,6 +222,28 @@ func guard(handle: String, ward_handle: String) -> Dictionary:
 		return {"ok": false, "error": "%s can't Guard now (already has a main action, or another squad is active)" % handle}
 	return {"ok": true, "summary": "%s -> guard %s" % [handle, ward_handle]}
 
+# Overwatch (#413): aim an attack and hold fire — the same OverwatchAction the menu queues, gated on
+# the same two questions its ring row asks, the attack's own can_overwatch capability and whether the
+# aim is legal at all. Play never sets active_attack, so this watches with what the unit would fire.
+func overwatch(handle: String, aim: Vector2i) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	var aiming := unit.get_fired_attack()
+	if aiming == null or not unit.attack_can_overwatch(aiming):
+		return {"ok": false, "error": "%s's attack cannot stand watch" % handle}
+	var origin := unit.get_projected_destination()
+	if not Reach.is_directional_attack(aiming) and not Reach.can_hit_cell_from(unit, origin, aim, aiming, _board()):
+		return {"ok": false, "error": "%s cannot aim at %s from %s" % [handle, str(aim), str(origin)]}
+	var action := OverwatchAction.new()
+	action.init(unit, aim, aiming)
+	if action.watched_cells_from(origin).is_empty():
+		return {"ok": false, "error": "%s's aim at %s watches no cells" % [handle, str(aim)]}
+	if not squad_manager.queue_action(unit.squad, action):
+		return {"ok": false, "error": "%s can't stand watch now (already has a main action, or another squad is active)" % handle}
+	return {"ok": true, "summary": "%s -> overwatch %s" % [handle, str(aim)]}
+
 # Rally: self-targeted Will restore (a main action) — the same RallyAction the menu queues.
 func rally(handle: String) -> Dictionary:
 	var unit := unit_by_handle(handle)
@@ -438,6 +460,12 @@ func execute() -> Dictionary:
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
+	# 1b) the watches those walks walked into (#413), in trigger order — the twin of
+	# OrderExecutor's own post-move sequence, and the same declared v1 cut: the damage was resolved
+	# at the crossing moment, this only plays it.
+	for shot in plan.watch_shots:
+		_apply_attack(shot, events)
+
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
 	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
 	# follow it, and for every later pass.
@@ -488,6 +516,11 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect], events: Array[
 func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 	var actor := atk.actor
 	var target := atk.target
+	# The watch absorbs its one trigger (#413) — MIRRORS AttackAction.execute, including its
+	# position: above every early-out, because a shot that whiffs or lands on an empty cell has
+	# still been taken. Lead volley member only.
+	if atk.is_watch_shot and not atk.is_secondary_hit and actor != null and is_instance_valid(actor):
+		actor.spend_watch()
 	if actor == null or target == null:
 		return
 	if not is_instance_valid(actor) or not is_instance_valid(target):

@@ -418,5 +418,19 @@ func effective_hits_allies(wielder: Unit, attack: AttackData) -> bool:
 			answer = true
 	return answer
 
+# Same composition, same reason (#413): a mod may grant or revoke the watch capability, and OFF
+# short-circuits so fitting order cannot change the answer.
+func effective_can_overwatch(wielder: Unit, attack: AttackData) -> bool:
+	var weapon_attack := attack as WeaponAttackData
+	if weapon_attack == null:
+		return super(wielder, attack)
+	var answer := weapon_attack.can_overwatch
+	for mod in _mods_for(wielder, weapon_attack):
+		if mod.can_overwatch_override == WeaponModData.Override.OFF:
+			return false
+		if mod.can_overwatch_override == WeaponModData.Override.ON:
+			answer = true
+	return answer
+
 # hits_map() is gone from here: with the null->main fallback removed it did nothing but forward to
 # AttackData.hits_map(), which both attack kinds already answer. PlanResolver calls that directly.

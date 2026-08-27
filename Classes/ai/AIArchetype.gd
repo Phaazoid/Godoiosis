@@ -46,18 +46,22 @@ const MAIN_ACTION_PRIORITY := {
 # player's. The AI contests it positionally, which it already does: Rushdown walks into the
 # approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit
 # only when non-player factions get objectives of their own.
-# GUARD everywhere at v1 (#414): the entire AI side of the standing reactions is deferred to the
-# next big AI pass and filed on #117 (a Guard builder, defended-target deprioritization, watch-aware
-# pathing). NEVER is a legal declaration, absence is red. Accepted cost, stated in the doc: enemies
-# do not play Guard yet, so playtest reads on FACING one wait for that pass.
+# GUARD and OVERWATCH everywhere at v1 (#414/#413): the entire AI side of the standing reactions is
+# deferred to the next big AI pass and filed on #117 (a Guard builder, defended-target
+# deprioritization, watch-aware pathing, crossing-order smarts, a Sentry watch stance). NEVER is a
+# legal declaration, absence is red. Accepted cost, stated in the doc: enemies play neither yet, so
+# playtest reads on FACING them wait for that pass.
 const MAIN_ACTION_NEVER := {
 	Type.RUSHDOWN: [BaseAction.ActionType.RESCUE, BaseAction.ActionType.RALLY,
 			BaseAction.ActionType.INTIMIDATE, BaseAction.ActionType.BURROW,
-			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD],
+			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
+			BaseAction.ActionType.OVERWATCH],
 	Type.HOLD: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
-			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD],
+			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
+			BaseAction.ActionType.OVERWATCH],
 	Type.SENTRY: [BaseAction.ActionType.RALLY, BaseAction.ActionType.REV, BaseAction.ActionType.BURROW,
-			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD],
+			BaseAction.ActionType.CAPTURE, BaseAction.ActionType.GUARD,
+			BaseAction.ActionType.OVERWATCH],
 }
 
 static func main_action_priority(t: Type) -> Array:

@@ -301,6 +301,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -323,6 +324,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
+	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
+	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
+	# the board is legible or a christmas tree. Tune it against the reach fills, not away from white:
+	# red already means a damaging reach, and a watch is a promise of exactly that.
+	{"group": "Board markup colours", "label": "Watch footprint (2D+3D)", "static": "WATCH_MARK_COLOR",
+		"tip": "The mark on every cell a standing Overwatch covers, yours and the enemy's alike. Always on screen while a watch is live, so this is the dial between 'unmissable' and 'noise'."},
+	{"group": "Board markup colours", "label": "Watch mark size", "static": "WATCH_MARK_SCALE",
+		"min": 0.25, "max": 2.0, "step": 0.05,
+		"tip": "How big the watch mark draws relative to its cell. 1.0 is one cell exactly, which is what the art is authored at; smaller reads as a tick in the middle of the tile."},
+
 	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
 	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
@@ -340,6 +351,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "A queued move the plan has since refused -- out of the leader's cohesion range, or its destination taken. Reads brighter than before the art was desaturated, because the cyan used to multiply it down."},
 	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
 		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
+
+	# The armed-Guard pair (#414 shield, #450 arrow). The statics existed from #414 and their own
+	# comment called them the loudness knobs, but neither had ever had a row in any panel -- so the
+	# one knob the dev asked for brought its two siblings with it rather than leaving a mark half
+	# tunable. The arrow ships WHITE deliberately: see GUARD_LINK_MODULATE's declaration.
+	{"group": "Board markup colours", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
+		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
+	{"group": "Board markup colours", "label": "Guard link head inset", "static": "GUARD_LINK_HEAD_INSET",
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far back from the ward's cell centre the link's arrowhead stops, in cells. 0 puts it on the shield, which is what the dev reported as unreadable; 0.5 parks it on the edge the pair shares and leaves three columns of overlap; about 0.7 clears the shield outright. Redraws links already on the board."},
+	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
+		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
 
 	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
 	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
@@ -416,6 +439,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Drama: zoom on", "static": "CINEMATIC_DRAMA",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "The same multiplier with the zoom on. At 0 the zoom paces flat; above 1 every big moment stretches together, so this is the one dial for 'more dramatic' overall."},
+	{"group": "Playback", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
+		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
+		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from."},
 	{"group": "Playback", "label": "Camera angle: zoom off", "static": "BOARD_DIRECTION",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How far the camera turns to see each blast side-on, zoom off. Ships at 0 -- square-on, exactly as the enemy phase has always played. At 1 it takes the full profile shot."},
@@ -459,6 +485,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
+	{"group": "Playback", "label": "Hold: a watch arming", "static": "HOLD_OVERWATCH",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit takes up an overwatch. Sits beside the guard hold -- both are a unit settling into a stance rather than doing something."},
 	{"group": "Playback", "label": "Hold: a burrow", "static": "HOLD_BURROW",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a unit digs itself cover."},
@@ -602,9 +631,14 @@ static func read_static(name: String) -> Variant:
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
+		"WATCH_MARK_COLOR": return OverlayManager.WATCH_MARK_COLOR
+		"WATCH_MARK_SCALE": return OverlayManager.WATCH_MARK_SCALE
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"GUARD_LINK_MODULATE": return OverlayManager.GUARD_LINK_MODULATE
+		"GUARD_LINK_HEAD_INSET": return OverlayManager.GUARD_LINK_HEAD_INSET
+		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
@@ -613,6 +647,7 @@ static func read_static(name: String) -> Variant:
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
 		"AI_ACTION": return Pacing.AI_ACTION
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
+		"STAGE_LIFT": return BoardSpace.STAGE_LIFT
 		"BOARD_DRAMA": return Pacing.BOARD_DRAMA
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
@@ -631,6 +666,7 @@ static func read_static(name: String) -> Variant:
 		"HOLD_BURROW": return Pacing.HOLD_BURROW
 		"HOLD_CAPTURE": return Pacing.HOLD_CAPTURE
 		"HOLD_GUARD": return Pacing.HOLD_GUARD
+		"HOLD_OVERWATCH": return Pacing.HOLD_OVERWATCH
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -671,9 +707,14 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
+		"WATCH_MARK_COLOR": OverlayManager.WATCH_MARK_COLOR = value
+		"WATCH_MARK_SCALE": OverlayManager.WATCH_MARK_SCALE = value
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
+		"GUARD_LINK_MODULATE": OverlayManager.GUARD_LINK_MODULATE = value
+		"GUARD_LINK_HEAD_INSET": OverlayManager.GUARD_LINK_HEAD_INSET = value
+		"GUARD_RING_COLOR": OverlayManager.GUARD_RING_COLOR = value
 		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
 		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
@@ -697,6 +738,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"CINEMATIC_ACTION":
 			Pacing.CINEMATIC_ACTION = value
+			return
+		"STAGE_LIFT":
+			BoardSpace.STAGE_LIFT = value
 			return
 		"BOARD_DRAMA":
 			Pacing.BOARD_DRAMA = value
@@ -751,6 +795,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOLD_GUARD":
 			Pacing.HOLD_GUARD = value
+			return
+		"HOLD_OVERWATCH":
+			Pacing.HOLD_OVERWATCH = value
 			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
@@ -849,6 +896,19 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
 		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
+		# The armed-Guard pair (#414/#450). Two sweeps, not one, because the halves live in different
+		# stores -- the shield is a pooled OverlayIcon that _style_icon restyles, the link is a loose
+		# arrow sprite. Both re-tint in place: neither store can rebuild a pair, since redrawing one
+		# needs the unit list and this manager has none.
+		"GUARD_LINK_MODULATE": manager.restyle_guard_link()
+		"GUARD_RING_COLOR": manager.restyle_squad_markers()
+		# The inset MOVES a sprite rather than re-tinting one, and neither store can rebuild a pair
+		# from itself -- redrawing needs the unit list. So this one goes back to the game's own door
+		# (#450 round 2), which is where every other write point already goes.
+		"GUARD_LINK_HEAD_INSET": _refresh_guard_markers(host)
+		# Written once when the marks are built, so a tuned value needs a re-apply or the slider moves
+		# and nothing on the board does (#264's born-dead slider).
+		"WATCH_MARK_COLOR", "WATCH_MARK_SCALE": manager.restyle_watch_marks()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
@@ -865,6 +925,18 @@ static func _refresh_mission_status(host: Node3D) -> void:
 	if game_2d == null:
 		return
 	game_2d.refresh_mission_status()
+
+
+# The armed-Guard pair's re-apply, for the one knob that MOVES a marker instead of re-tinting it
+# (#450). Same shape and same reason as the mission-status one above: game.refresh_guard_markers is
+# already the door every write point uses, so a knob takes it rather than growing a second redraw.
+static func _refresh_guard_markers(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	game_2d.refresh_guard_markers()
 
 
 static func overlays_of(host: Node3D) -> BoardOverlays:
