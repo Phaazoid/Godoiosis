@@ -188,22 +188,22 @@ const FLAME_FRAMES := 8
 # The shallow defaults below are the old ratios already folded in, so the split landed as a VISUAL
 # no-op and only the panel changed.
 @export var water_deep_wave_speed := 2.32: set = _set_water_deep_wave_speed
-@export var water_shallow_wave_speed := 3.132: set = _set_water_shallow_wave_speed
+@export var water_shallow_wave_speed := 3.26: set = _set_water_shallow_wave_speed
 @export var water_deep_wave_scale := 4.4: set = _set_water_deep_wave_scale
-@export var water_shallow_wave_scale := 7.48: set = _set_water_shallow_wave_scale
+@export var water_shallow_wave_scale := 5.8: set = _set_water_shallow_wave_scale
 # How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
 @export var water_deep_band_contrast := 0.8: set = _set_water_deep_band_contrast
 @export var water_shallow_band_contrast := 0.8: set = _set_water_shallow_band_contrast
-@export var water_deep_ripple := 1.86: set = _set_water_deep_ripple
+@export var water_deep_ripple := 1.32: set = _set_water_deep_ripple
 @export var water_shallow_ripple := 1.86: set = _set_water_shallow_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
 @export var water_deep_roughness := 0.41: set = _set_water_deep_roughness
-@export var water_shallow_roughness := 0.41: set = _set_water_shallow_roughness
+@export var water_shallow_roughness := 0.37: set = _set_water_shallow_roughness
 @export var water_deep_specular := 0.51: set = _set_water_deep_specular
-@export var water_shallow_specular := 0.51: set = _set_water_shallow_specular
+@export var water_shallow_specular := 0.44: set = _set_water_shallow_specular
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket. Per type because the bed's mottle already breaks shallow water up
@@ -214,7 +214,7 @@ const FLAME_FRAMES := 8
 # face of it. It drove the 0.004-unit rim alone until the shader reached surface 1, which is a
 # slider that moves nothing.
 @export var water_deep_body_shade := 0.3: set = _set_water_deep_body_shade
-@export var water_shallow_body_shade := 0.18: set = _set_water_shallow_body_shade
+@export var water_shallow_body_shade := 0.29: set = _set_water_shallow_body_shade
 
 # The bed and its caustics have no deep twin BY NATURE rather than by omission — they are what you
 # see THROUGH shallow water, and deep water is opaque. They still carry `shallow` in their names, so
@@ -225,7 +225,7 @@ const FLAME_FRAMES := 8
 # phenomenon, and multiplying them by the bed is what made this read as grain instead of as depth.
 # The base colours are the tiles' own authored modulate, not a knob: those reach the flat view too,
 # and these cannot.
-@export var water_shallow_bed := 0.39: set = _set_water_shallow_bed
+@export var water_shallow_bed := 1.0: set = _set_water_shallow_bed
 @export var water_shallow_bed_color := Color(0.60, 0.52, 0.38): set = _set_water_shallow_bed_color
 # Pebble size, in art pixels. 1 is per-pixel silt — which is below what the eye resolves at a
 # playing camera distance, and is why the first version of this knob appeared to do nothing.
@@ -233,8 +233,8 @@ const FLAME_FRAMES := 8
 # The light net on the bottom. It MOVES while the bed under it stays nailed to the board, and that
 # contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
 # one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
-@export var water_shallow_caustics := 1.35: set = _set_water_shallow_caustics
-@export var water_shallow_caustics_scale := 18.5: set = _set_water_shallow_caustics_scale
+@export var water_shallow_caustics := 0.37: set = _set_water_shallow_caustics
+@export var water_shallow_caustics_scale := 16.0: set = _set_water_shallow_caustics_scale
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
