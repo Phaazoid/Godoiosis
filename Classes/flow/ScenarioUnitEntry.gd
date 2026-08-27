@@ -151,11 +151,13 @@ func capture_unit_state(unit: Unit) -> void:
 
 	# The armed watch (#413). A save taken between a pass and the enemy phase is exactly when a live
 	# one is the whole point, which is why it is captured here rather than left to reset.
+	# Indexed into the WATCH view, not the fireable one (#590) -- the two lists are disjoint now, so
+	# a watch attack is not in get_selectable_attacks() at all and the find would never resolve.
 	watch_cells = []
 	watch_attack_index = -1
 	watch_spent = false
 	if unit.watch != null and unit.watch.is_intact():
-		watch_attack_index = unit.get_selectable_attacks().find(unit.watch.attack)
+		watch_attack_index = unit.overwatch_attacks().find(unit.watch.attack)
 		if watch_attack_index >= 0:
 			watch_anchor = unit.watch.anchor_cell
 			watch_aim = unit.watch.aim_cell
@@ -239,9 +241,10 @@ func apply_unit_state(unit: Unit) -> void:
 	# The armed watch (#413), after the inventory, because the stored index IS the attack's identity —
 	# the same way weapon_battle_states' index is a weapon's. An index that no longer resolves loses
 	# the watch rather than failing the load: a stale reference degrades, it never breaks a board.
+	# Same list the capture indexed into (#590): the unit's watch view.
 	unit.lapse_watch()
 	if not watch_cells.is_empty():
-		var watchable := unit.get_selectable_attacks()
+		var watchable := unit.overwatch_attacks()
 		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
 			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
 					watchable[watch_attack_index], watch_spent)

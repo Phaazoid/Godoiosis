@@ -435,3 +435,39 @@ func test_applying_a_default_entry_leaves_a_healthy_unit_alone() -> void:
 	assert_bool(unit.in_crisis).is_false()
 	assert_int(unit.rally_count).is_equal(0)
 	assert_int(unit.get_current_hp()).is_equal(unit.get_max_hp())
+
+
+# ==============================================================================
+#  The armed watch (#413) — and which LIST its index means (#590)
+# ==============================================================================
+
+# The watch is stored as an INDEX, so the capture and the restore have to agree about the list they
+# are indexing into. Since #590 that list is the unit's WATCH view: a watch attack is watch-only, so
+# it is not in get_selectable_attacks() at all and an index into that list resolves to nothing.
+# Nothing pinned this before -- the round trip had no watch case, so both halves could have gone on
+# reading the fireable list and every suite would have stayed green while a saved watch quietly
+# lapsed on load.
+func test_an_armed_watch_round_trips_with_the_attack_it_was_aimed_with() -> void:
+	var a: Unit = H.spawn_unit(self, Team.Faction.PLAYER, Vector2i.ZERO, {}, false)
+	var weapon := _family_weapon(WeaponData.WeaponType.CARBINE)
+	weapon.template.main_attack.display_name = "Shot"
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Overwatch"
+	watch.can_overwatch = true
+	weapon.template.extra_attacks = [watch]
+	a.add_item(weapon)
+
+	var footprint: Array[Vector2i] = [Vector2i(2, 0), Vector2i(3, 0)]
+	a.arm_watch(Vector2i.ZERO, Vector2i(2, 0), footprint, watch)
+	assert_object(a.watch).is_not_null()   # the fixture's own setup, not the assertion under test
+
+	var loaded := _round_trip(a)
+
+	assert_object(loaded.watch).override_failure_message(
+			"the armed watch did not survive the save at all").is_not_null()
+	assert_object(loaded.watch.attack).override_failure_message(
+			"the watch came back aimed with a different attack -- the stored index resolved elsewhere"
+			).is_same(watch)
+	assert_array(loaded.watch.footprint).is_equal(footprint)
+	assert_int(loaded.watch.anchor_cell.x).is_equal(0)
+	assert_int(loaded.watch.aim_cell.x).is_equal(2)

@@ -34,7 +34,8 @@ func can_equip(_wielder: Unit) -> bool:
 # --- Attack-source surface ---
 # Every default here is the INERT answer, so a kind that can't fire (armor) needs no override.
 
-# Everything the wielder could choose to fire right now — the attack pick-menu's contents.
+# Everything the wielder could choose to fire right now — the attack pick-menu's contents. A
+# watch-only attack is never here; the overwatch fork below is what keeps the two views apart.
 func selectable_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
 
@@ -57,6 +58,44 @@ func secondary_attacks(_wielder: Unit) -> Array[AttackData]:
 # this stays empty. Exactly the split secondary_attacks() makes, from the other side.
 func choice_attacks(_wielder: Unit) -> Array[AttackData]:
 	return []
+
+# --- The overwatch fork (#590) ---
+# THE exclusivity rule, and its only spelling. `can_overwatch` does not ADD a verb to a fireable
+# attack -- it IS what the attack is (dev, 2026-08-27: "when I check the 'can overwatch' box, I
+# expect to get an attack that is an overwatch, and only an overwatch. It isn't an either or
+# thing."). So whatever a source carries splits into two DISJOINT views -- what can be fired, and
+# what can be watched with -- and nothing sits in both.
+#
+# Asked through effective_can_overwatch rather than the raw flag, so a mod that grants or revokes
+# the capability MOVES an attack between the views instead of leaving it in one and claiming the
+# other. One question, one answer: #590 happened because the two views were the SAME list, so a
+# watch attack kept a firing twin whose name ate its row in the menu's duplicate guard.
+
+# Everything this source carries, fireable or watch-only -- the ONE list the views come off. A
+# weapon's is its available attacks (main + extras + mod grants), a rune's is every carving.
+func repertoire(_wielder: Unit) -> Array[AttackData]:
+	return []
+
+# The watch view. Unit.overwatch_attacks is its only caller, so the menu's Overwatch rows and the
+# kit-slice gate reach it through one door and can never disagree. Reads the FULL repertoire, not
+# the affordable subset -- #166's law, an unusable row lists and greys with its own reason.
+func watch_attacks(wielder: Unit) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	for attack: AttackData in repertoire(wielder):
+		if effective_can_overwatch(wielder, attack):
+			result.append(attack)
+	return result
+
+# The fire view's filter, applied by every surface that offers something to FIRE: the pick menu,
+# the Weapon Action rows, the Transmutation rows, the AI's candidate list. Takes the list rather
+# than deriving it, because each of those answers a different question first (channelable,
+# non-main, affordable) and only the overwatch clause is shared between them.
+func fireable_only(wielder: Unit, attacks: Array[AttackData]) -> Array[AttackData]:
+	var result: Array[AttackData] = []
+	for attack: AttackData in attacks:
+		if not effective_can_overwatch(wielder, attack):
+			result.append(attack)
+	return result
 
 # What an attack's SHOVE and ALLY-SPLASH actually are once the firing source has had its say
 # (#529). Two fields a fitted mod may edit, and the pair is deliberately small: an override may

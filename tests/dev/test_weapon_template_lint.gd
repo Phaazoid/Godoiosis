@@ -49,6 +49,20 @@ func test_a_missing_main_attack_degrades_rather_than_blocks() -> void:
 	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.DEGRADES)
 
 
+# #590: a can_overwatch attack is watch-ONLY, so a main authored that way leaves the weapon with
+# nothing to attack with -- BLOCKS, the same tier an unset family gets and for the same reason.
+# Deliberately harsher than the missing-main rule above: a family with no main yet is a known
+# intermediate state, while a main that exists and can never fire is finished and wrong.
+func test_a_watch_only_main_blocks() -> void:
+	var t := _template()
+	t.main_attack.display_name = "Overwatch"
+	t.main_attack.can_overwatch = true
+	var findings := WeaponTemplateLint.check(t)
+	assert_array(findings).is_not_empty()
+	assert_int(findings[0]["severity"]).is_equal(WeaponTemplateLint.Severity.BLOCKS)
+	assert_str(_texts(findings)).contains("Overwatch")
+
+
 # A capacity below 1 refuses every mod including a size-1 one, leaving a space the fitting UI
 # still draws and nothing can go into. The editor's SpinBox floors at 1, so this covers the door
 # the lint does not own -- a hand-edited .tres.
