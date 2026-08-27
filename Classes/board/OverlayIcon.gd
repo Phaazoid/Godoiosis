@@ -18,8 +18,9 @@ var grid: TileMapLayer
 # retired: CURSOR and INVALID never had a producer, and TARGET duplicated the target-pick
 # ground marker. Ordinals are read by OverlayMirror's z-stagger and persisted nowhere.
 # GUARD_WARD (#414) is a GROUND marker by #346's rule -- an armed Guard is an INTERACTION between
-# two units, not something either of them IS. It is hung on BOTH ends of the pair; which end is
-# which is read from the queue row today, and becomes a shield-plus-connector when the art exists.
+# two units, not something either of them IS. Since #450 it hangs on the WARD alone: the blocker's
+# half of the pair is the arrow OverlayManager draws at it, which is what makes the direction
+# readable off the board instead of only off the queue row.
 enum IconType {
 	CROWN,
 	SQUADMEMBER,

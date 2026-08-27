@@ -25,16 +25,29 @@ const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 
 var _scene: Node3D
 var _game: GameTool
-# The reach colours and the ring alpha are STATIC vars, i.e. process-global: a case that tunes one
-# would leak into every later case AND every later suite in the run. Snapshot and restore per case.
-var _static_snapshot: Array = []
+# Every knob here is a STATIC var, i.e. process-global: a case that tunes one leaks into every later
+# case AND every later suite in the run. Snapshot and restore per case.
+#
+# DERIVED from CLASS_KNOBS rather than named, since #450. It was a hand-written list of eight, which
+# is a copy of "which statics can this suite move" -- and the suite moves all sixty-three, because
+# test_every_static_knob_takes_the_write_its_slider_makes walks the whole table and nudges each one.
+# The copy could only ever go stale in the silent direction: adding a knob left its static
+# unrestored, and the symptom is another suite behaving oddly much later in the run. The list had
+# already grown twice by hand (#101 appended the clock threshold), and this ticket's three arrows
+# and shields would have been the third time. Keyed by NAME through read_static/write_static, the
+# same pair the panel uses, so there is one answer to how a class knob is read and written.
+var _static_snapshot: Dictionary = {}
 
 
 func before_test() -> void:
-	_static_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE,
-		OverlayManager.SQUAD_RING_ALPHA, OverlayManager.KNOCKBACK_MODULATE,
-		OverlayManager.MOVE_ARROW_MODULATE, OverlayManager.INVALID_ARROW_MODULATE,
-		OverlayManager.TRAILING_ARROW_MODULATE, MissionStatusPanel.URGENT_ROUNDS]
+	_static_snapshot = {}
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if not knob.has("static"):
+			continue
+		var current: Variant = GameKnobs.read_static(knob["static"])
+		if typeof(current) == TYPE_NIL:
+			continue   # a missing READ arm is test_every_class_knob_resolves' finding; never write null back
+		_static_snapshot[knob["static"]] = current
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property or a class value
@@ -45,14 +58,10 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	OverlayManager.ATTACK_MODULATE = _static_snapshot[0]
-	OverlayManager.HEAL_ATTACK_MODULATE = _static_snapshot[1]
-	OverlayManager.SQUAD_RING_ALPHA = _static_snapshot[2]
-	OverlayManager.KNOCKBACK_MODULATE = _static_snapshot[3]
-	OverlayManager.MOVE_ARROW_MODULATE = _static_snapshot[4]
-	OverlayManager.INVALID_ARROW_MODULATE = _static_snapshot[5]
-	OverlayManager.TRAILING_ARROW_MODULATE = _static_snapshot[6]
-	MissionStatusPanel.URGENT_ROUNDS = _static_snapshot[7]
+	# BEFORE the scene goes: write_static runs each knob's re-apply sweep, which reaches the live
+	# overlay manager through the host.
+	for name: String in _static_snapshot:
+		GameKnobs.write_static(_scene, name, _static_snapshot[name])
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 

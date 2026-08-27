@@ -94,6 +94,7 @@ func _process(_delta: float) -> void:
 	_markers(BoardOverlays.Layer.KNOCKBACK, kb_trails)
 
 	_icons(om)
+	_guard_links(om)
 	_terrain(om)
 	_ghost_sync(om, kb_ghosts)
 	_standing_states()
@@ -465,6 +466,19 @@ func _icons(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.ICONS, heads)
 	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
 	_markers(BoardOverlays.Layer.GUARD_ICONS, wards)
+
+
+# The armed-Guard links (#450): the blocker->ward arrows OverlayManager drew beside the ward
+# shields _icons pushed just above. Their own layer, never PATH_ARROWS, because those two trails
+# can cover the same cell -- a queued move that crosses between a warded pair -- and a layer is a
+# plane. Copied like every other sprite channel: texture and tint arrive already picked.
+func _guard_links(om: OverlayManager) -> void:
+	var entries: Array[Dictionary] = []
+	for sprite in om.guard_link_sprites:
+		if not is_instance_valid(sprite) or sprite.texture == null:
+			continue
+		entries.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
+	_markers(BoardOverlays.Layer.GUARD_LINK, entries)
 
 
 # Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is

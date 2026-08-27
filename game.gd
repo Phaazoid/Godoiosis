@@ -923,6 +923,12 @@ func refresh_action_queue(squad: Squad):
 	squad_manager.validate_squad_plan(squad, plan)
 	squad_action_queue_control.show_display_entries(ActionQueueDisplayEntry.build_for(squad, plan))
 	_preview_plan_effects(plan)
+	# The fourth moment a Guard's markers can move, and the one #450 added: a plan change. The ward
+	# SHIELD is an OverlayIcon that re-reads its projected cell every frame, while the blocker's
+	# ARROW is a static sprite -- so queueing a move for either end walks the shield off and leaves
+	# the arrow pointing where the unit used to be. AFTER the resolve above, because a projection
+	# reads published knockback and that is what publishes it.
+	refresh_guard_markers()
 	var can_execute: bool = (squad_manager.active_squad == squad
 		and not squad_manager.only_hold_actions(squad)
 		and not squad_manager.squad_has_invalid_actions(squad)
@@ -1270,8 +1276,9 @@ func refresh_squad_rings() -> void:
 # board information that has to survive selection changes and the whole enemy phase -- and since
 # #435 that channel redraws the standing squad rings on every clear, which is a different question
 # (a player SETTING about membership) from this one (live ward state).
-# Called from the three moments a ward can appear, be spent, or lapse -- a settled pass, a turn
-# start, a board load.
+# Called from the four moments a ward can appear, be spent, lapse, or MOVE -- a settled pass, a turn
+# start, a board load, and a plan change (#450: the link arrows are static sprites, so a queued move
+# for either end of a pair has to redraw them; see the call in refresh_action_queue).
 func refresh_guard_markers() -> void:
 	overlay_manager.redraw_guard_wards(_all_units())
 

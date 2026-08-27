@@ -308,6 +308,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
 		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
 
+	# The armed-Guard pair (#414 shield, #450 arrow). The statics existed from #414 and their own
+	# comment called them the loudness knobs, but neither had ever had a row in any panel -- so the
+	# one knob the dev asked for brought its two siblings with it rather than leaving a mark half
+	# tunable. The arrow ships WHITE deliberately: see GUARD_LINK_MODULATE's declaration.
+	{"group": "Board markup colours", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
+		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
+	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
+		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
+	{"group": "Board markup colours", "label": "Guard ward shield size", "static": "GUARD_RING_SCALE",
+		"min": 0.5, "max": 2.0, "step": 0.05,
+		"tip": "How large that shield draws relative to its cell. 1.0 is one cell, the size the art was cut at -- above that it starts reaching over its neighbours."},
+
 	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
 	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
 	# would be a second answer to what that layer looks like.
@@ -568,6 +580,9 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"GUARD_LINK_MODULATE": return OverlayManager.GUARD_LINK_MODULATE
+		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
+		"GUARD_RING_SCALE": return OverlayManager.GUARD_RING_SCALE
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
@@ -637,6 +652,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
+		"GUARD_LINK_MODULATE": OverlayManager.GUARD_LINK_MODULATE = value
+		"GUARD_RING_COLOR": OverlayManager.GUARD_RING_COLOR = value
+		"GUARD_RING_SCALE": OverlayManager.GUARD_RING_SCALE = value
 		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
 		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
@@ -812,6 +830,12 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
 		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
+		# The armed-Guard pair (#414/#450). Two sweeps, not one, because the halves live in different
+		# stores -- the shield is a pooled OverlayIcon that _style_icon restyles, the link is a loose
+		# arrow sprite. Both re-tint in place: neither store can rebuild a pair, since redrawing one
+		# needs the unit list and this manager has none.
+		"GUARD_LINK_MODULATE": manager.restyle_guard_link()
+		"GUARD_RING_COLOR", "GUARD_RING_SCALE": manager.restyle_squad_markers()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

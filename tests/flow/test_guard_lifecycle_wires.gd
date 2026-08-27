@@ -46,11 +46,38 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
+# The WARD's half: the shield decal. Since #450 the blocker never wears one -- ask _guard_linked.
 func _guard_marked(unit: Unit) -> bool:
 	var icons: Dictionary = game.overlay_manager.icons_by_unit
 	if not icons.has(unit):
 		return false
 	return (icons[unit] as Dictionary).has(OverlayIcon.IconType.GUARD_WARD)
+
+
+# The BLOCKER's half: the arrow trail aimed at its ward (#450). Counted rather than merely
+# non-empty, because a one-step trail is exactly two sprites (a start tile and an arrowhead) and
+# "some arrows exist somewhere" would pass against a link drawn for the wrong pair.
+func _guard_link_count() -> int:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	var live := 0
+	for sprite in sprites:
+		if is_instance_valid(sprite):
+			live += 1
+	return live
+
+
+func _guard_linked() -> bool:
+	return _guard_link_count() == 2
+
+
+# Which CELLS the link's sprites sit on, read back through the grid rather than compared as world
+# floats -- the arrow is placed by GridUtils.cell_world, so this is its own inverse.
+func _guard_link_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for sprite in game.overlay_manager.guard_link_sprites:
+		if is_instance_valid(sprite):
+			cells.append(game.grid.local_to_map(game.grid.to_local(sprite.global_position)))
+	return cells
 
 
 # --- 1. the lapse tick --------------------------------------------------------------------------
@@ -77,7 +104,11 @@ func test_a_factions_turn_start_lapses_its_own_guards_and_leaves_the_others() ->
 
 # --- 2. the ground markers ----------------------------------------------------------------------
 
-func test_an_armed_guard_marks_both_ends_of_the_pair() -> void:
+func test_an_armed_guard_shields_the_ward_and_points_a_link_at_it_from_the_blocker() -> void:
+	# #450 replaced #414's marks-both-ends rule, which this case used to carry IN ITS NAME. The
+	# board has to say which end is which -- both ends wearing the same shield said only that the
+	# two were connected, and the direction was readable off the queue row alone, i.e. not at all
+	# during the enemy phase.
 	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
 	await await_idle_frame()
@@ -85,8 +116,13 @@ func test_an_armed_guard_marks_both_ends_of_the_pair() -> void:
 
 	game.refresh_guard_markers()
 
-	assert_bool(_guard_marked(blocker)).is_true()
-	assert_bool(_guard_marked(ward)).is_true()
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"no shield under the WARD -- it is the one end that wears one").is_true()
+	assert_bool(_guard_marked(blocker)).override_failure_message(
+		"the BLOCKER wears a shield; #450 gave it the arrow's tail instead").is_false()
+	assert_bool(_guard_linked()).override_failure_message(
+		"expected a two-sprite link from blocker to ward, got %d sprites" % _guard_link_count()) \
+		.is_true()
 
 
 func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> void:
@@ -112,9 +148,39 @@ func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> voi
 	assert_bool(_guard_marked(ward)) \
 		.override_failure_message("no ground marker under the WARD after a real queue-and-execute") \
 		.is_true()
-	assert_bool(_guard_marked(blocker)) \
-		.override_failure_message("no ground marker under the BLOCKER after a real queue-and-execute") \
+	assert_bool(_guard_linked()) \
+		.override_failure_message("no link from the BLOCKER after a real queue-and-execute") \
 		.is_true()
+
+
+func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:
+	# #450's fourth refresh moment, and the one the other three cannot cover. The ward's shield is an
+	# OverlayIcon that re-reads its own projected cell every frame; the blocker's link is a static
+	# sprite. Without the refresh_guard_markers call in refresh_action_queue the shield walks and the
+	# arrow stays, pointing at a cell nobody is standing on -- and every case above still passes,
+	# because none of them ever changes a plan. Driven through squad_manager.queue_action so the real
+	# squad_action_queued -> refresh_action_queue chain is what does the work.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(ward, blocker.squad)
+	blocker.arm_guard(ward, blocker.get_guard_range())
+	game.refresh_guard_markers()
+	assert_bool(_guard_linked()).override_failure_message("fixture drew no link to begin with").is_true()
+
+	var move := MoveAction.new()
+	move.init(blocker, [Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1)], null)
+	assert_bool(game.squad_manager.queue_action(blocker.squad, move)) \
+		.override_failure_message("fixture failed to queue the move").is_true()
+	await await_idle_frame()
+
+	assert_vector(blocker.get_projected_destination()) \
+		.override_failure_message("fixture's move did not move the projection").is_equal(Vector2i(2, 1))
+	assert_bool(_guard_linked()).override_failure_message(
+		"the link vanished instead of following -- (2,1) is still adjacent to the ward").is_true()
+	assert_array(_guard_link_cells()).override_failure_message(
+		"the link still points out of the cell the blocker LEFT") \
+		.contains_exactly_in_any_order([Vector2i(2, 1), Vector2i(2, 0)])
 
 
 func test_a_spent_guard_stops_being_marked() -> void:
@@ -128,8 +194,9 @@ func test_a_spent_guard_stops_being_marked() -> void:
 	blocker.spend_guard()
 	game.refresh_guard_markers()
 
-	assert_bool(_guard_marked(blocker)).is_false()
 	assert_bool(_guard_marked(ward)).is_false()
+	assert_int(_guard_link_count()).override_failure_message(
+		"a spent Guard left its link on the board").is_equal(0)
 
 
 func test_a_guard_marker_survives_a_selection_clear() -> void:
@@ -143,7 +210,9 @@ func test_a_guard_marker_survives_a_selection_clear() -> void:
 
 	game.clear_selection_icons()
 
-	assert_bool(_guard_marked(blocker)).is_true()
+	assert_bool(_guard_marked(ward)).is_true()
+	assert_bool(_guard_linked()).override_failure_message(
+		"the link went with the selection channel -- it must outlive a selection clear too").is_true()
 
 
 # --- 3. the save round trip ---------------------------------------------------------------------

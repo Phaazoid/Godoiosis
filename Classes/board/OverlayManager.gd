@@ -130,6 +130,10 @@ const ICON_TEXTURES = {
 # the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
 static var GUARD_RING_COLOR := Color.WHITE
 static var GUARD_RING_SCALE := 1.0
+# The blocker->ward arrow (#450). WHITE on purpose: the shared arrow art is desaturated, so the
+# tint IS the colour (the three planned-move knobs' own reasoning) and starting neutral leaves the
+# Game tab's picker its full range rather than multiplying against a baked-in hue.
+static var GUARD_LINK_MODULATE := Color.WHITE
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
@@ -192,6 +196,9 @@ var standing_rings_drawer: Callable = func() -> void: pass
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
+# The blocker->ward arrows of every armed Guard (#450). Owned and cleared by redraw_guard_wards
+# alongside the ward shields, because the two are one marker with two halves -- see it there.
+var guard_link_sprites: Array[Sprite2D] = []
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
@@ -723,11 +730,19 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 		for type in types:
 			clear_unit_icon(unit, type)
 
-# Every armed, unspent Guard on the board (#414), marked at BOTH ends of the pair. Its own redraw
+# Every armed, unspent Guard on the board: a shield under the WARD, and an arrow from the blocker
+# pointing at it (#450). #414 shipped the same shield at both ends, which said the pair was linked
+# but never which way round -- and the direction was readable only off the queue row, i.e. exactly
+# not during the enemy phase, when a standing reaction is the thing you need to read.
+#
+# One redraw owns both halves because they are one marker: same source (live ward state), same
+# lifetime, so there is no moment either can be right while the other is stale. Its own redraw
 # rather than a clause in redraw_squad_unit_icons: a Guard is not selection markup and must stay on
 # screen through the enemy phase -- that is the whole point of a standing reaction being telegraphed.
-# Called from the three moments the state can move: a pass settling, a faction's turn starting, and
-# a board load. Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
+# Called from the moments the state can move: a pass settling, a faction's turn starting, a board
+# load, and a plan change (the arrows are static sprites where the shield is an OverlayIcon that
+# re-reads its own cell every frame, so a queued move would walk one and leave the other behind).
+# Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
 #
 # Deliberately NOT routed through #435's standing_rings_drawer, though the two are adjacent: that
 # Callable exists because redraw_squad_unit_icons clears the CROWN/SQUADMEMBER channel WHOLE and has
@@ -736,13 +751,47 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 # the day a third marker wants to stand is the day to generalise -- not before (Law #4 cuts both ways).
 func redraw_guard_wards(units: Array[Unit]) -> void:
 	clear_unit_icon_types([OverlayIcon.IconType.GUARD_WARD])
+	_clear_guard_links()
 	for unit in units:
 		if not is_instance_valid(unit) or unit.guard == null:
 			continue
 		if unit.guard.spent or not unit.guard.is_intact():
 			continue   # a used Guard protects nobody; drawing it would promise cover that is gone
-		create_unit_icon(unit, OverlayIcon.IconType.GUARD_WARD)
 		create_unit_icon(unit.guard.ward, OverlayIcon.IconType.GUARD_WARD)
+		_draw_guard_link(unit, unit.guard.ward)
+
+# The blocker's half of the mark: the shared path-arrow trail, one step long, aimed at the ward.
+# The SAME arrows a move draws (dev call) rather than a bespoke connector -- the tail under the
+# blocker is what says "this one is doing the covering", so the blocker needs no icon of its own.
+#
+# PROJECTED cells, the same expression OverlayIcon.current_cell() reads, so the shield and the arrow
+# structurally cannot point at different cells (#308 -- derived, never copied).
+#
+# Drawn only across ONE ORTHOGONAL STEP, which is the arrow atlas's limit rather than a rule about
+# Guard: _path_arrow_texture has no tile for a diagonal or a gap and falls to PATH_ERROR. Manhattan
+# range 1 (Abilities.GUARD_BASE_RANGE) always satisfies it, but guard_range is authored per-content
+# and a shove can already drag a live pair apart -- and a pair with no drawable link still keeps its
+# shield, so nothing goes silent. A longer link needs an interpolated path or a drawn line; that is
+# the day to build one, not before.
+func _draw_guard_link(blocker: Unit, ward: Unit) -> void:
+	var from := blocker.get_projected_destination()
+	var to := ward.get_projected_destination()
+	if GridUtils.manhattan_distance(from, to) != 1:
+		return
+	guard_link_sprites.append_array(_draw_arrow_trail([from, to], GUARD_LINK_MODULATE))
+
+func _clear_guard_links() -> void:
+	for sprite in guard_link_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	guard_link_sprites.clear()
+
+# The Game tab's colour knob re-applying to links already on screen (restyle_knockback_trail's
+# shape). Re-tints rather than redrawing: this manager has no unit list to rebuild the pairs from.
+func restyle_guard_link() -> void:
+	for sprite in guard_link_sprites:
+		if is_instance_valid(sprite):
+			sprite.modulate = GUARD_LINK_MODULATE
 
 # The channel is cleared whole, so everything that should be on it after this call has to be drawn
 # by it: the STANDING set first, then the squad the caller is actually about (which may already be
