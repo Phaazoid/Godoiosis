@@ -1089,7 +1089,64 @@ func test_an_armed_guards_ground_mark_reaches_the_3d_ward_channel() -> void:
 			found += 1
 	assert_int(found).override_failure_message(
 			"the Guard's ward mark never reached its 3D channel — 3D is the view the game boots into"
-			).is_equal(2)
+			).is_equal(1)   # the WARD alone since #450; the blocker's end is the link below
+
+
+# The link's half of the same wire (#450). Its own case rather than an assertion inside the one
+# above, because the two halves reach 3D through DIFFERENT mirror branches — the shield rides
+# _icons off icons_by_unit, the arrows ride _guard_links off guard_link_sprites — so a missing
+# branch takes exactly one of them out and the other keeps passing.
+func test_an_armed_guards_link_reaches_the_3d_view() -> void:
+	# Its own ADJACENT pair rather than _squad_pair, whose two units stand three cells apart: the
+	# link is drawn across one orthogonal step only, so that fixture correctly draws none. The
+	# shield case above can use it because a shield asks nothing about the gap.
+	var blocker := _spawn(PLAYER, Vector2i(2, 2))
+	var ward := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(ward, blocker.squad)
+	blocker.arm_guard(ward, blocker.get_guard_range())
+	game.refresh_guard_markers()
+	await _settle()
+
+	# Two sprites for a one-step trail: the start tile under the blocker, the arrowhead on the ward.
+	assert_int(game.overlay_manager.guard_link_sprites.size()).override_failure_message(
+			"the 2D never drew the link, so this case cannot speak for the mirror").is_equal(2)
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_LINK).size()).override_failure_message(
+			"the blocker→ward link never reached 3D — the board there still cannot say which unit "
+			+ "is covering which").is_equal(2)
+
+
+# The other side of that limit, and the reason it is a rule rather than an accident: the arrow atlas
+# has no tile for a diagonal or a gap, so _path_arrow_texture answers PATH_ERROR for both. A pair a
+# shove has dragged apart (or an authored guard_range above 1) therefore keeps its SHIELD and draws
+# no link, rather than laying a row of error tiles across the board. It goes red the day someone
+# widens the trail without deciding what a long link looks like.
+func test_a_queued_guards_ghost_reaches_both_3d_channels() -> void:
+	# The ghost rides the SAME two layers as the armed pair (#450 part 2) -- it is the same mark
+	# saying "not yet", so a layer of its own would be a second plane for one question. It reaches
+	# them through the same two mirror branches, which is why one case can speak for both.
+	var blocker := _spawn(PLAYER, Vector2i(2, 2))
+	var ward := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(ward, blocker.squad)
+	game.overlay_manager.show_guard_preview([{"blocker": blocker, "ward": ward}])
+	await _settle()
+
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_ICONS).size()).override_failure_message(
+			"the ghosted shield never reached 3D").is_equal(1)
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_LINK).size()).override_failure_message(
+			"the ghosted link never reached 3D").is_equal(2)
+
+
+func test_a_pair_further_than_one_step_keeps_its_shield_and_draws_no_link() -> void:
+	var pair := _squad_pair()   # three cells apart, which is exactly the case under test
+	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
+	game.refresh_guard_markers()
+	await _settle()
+
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_ICONS).size()).override_failure_message(
+			"the ward lost its shield too — the gap is the LINK's limit, not the mark's").is_equal(1)
+	assert_array(game.overlay_manager.guard_link_sprites).override_failure_message(
+			"a link was drawn across a gap the arrow atlas cannot spell, so it is PATH_ERROR tiles") \
+		.is_empty()
 
 
 # The Z-FIGHT, as a rule rather than a bug report. A layer IS a plane (_lift_of is
@@ -1110,14 +1167,30 @@ func test_the_ward_mark_and_the_squad_ring_are_on_different_planes() -> void:
 # A ward mark can also share a cell with an aim fill, a target-pick marker, an arrow or a sight
 # trace, so its sort has to be free of EVERY other layer's, not just the ring's. This is the rule
 # that says why 8 and not 4 -- and it goes red the day someone else takes the slot.
-func test_the_ward_channels_sort_is_unshared() -> void:
-	for layer in BoardOverlays.LAYERS:
-		if layer == BoardOverlays.Layer.GUARD_ICONS:
-			continue
-		assert_int(BoardOverlays.LAYERS[layer]["sort"]).override_failure_message(
-				"%s now shares the ward channel's sort — they will lift to one plane and z-fight"
-				% BoardOverlays.Layer.keys()[layer]
-			).is_not_equal(BoardOverlays.LAYERS[BoardOverlays.Layer.GUARD_ICONS]["sort"])
+#
+# Widened to the LINK by #450 rather than copied for it: the arrow lands on the very cells the
+# shield does, so both channels ask the identical question and one loop is the one answer. Checking
+# each against every other layer covers the pair against each other too.
+func test_both_guard_channels_sorts_are_unshared() -> void:
+	var guard_layers: Array[BoardOverlays.Layer] = [
+		BoardOverlays.Layer.GUARD_ICONS, BoardOverlays.Layer.GUARD_LINK]
+	for guard_layer in guard_layers:
+		for layer in BoardOverlays.LAYERS:
+			if layer == guard_layer:
+				continue
+			assert_int(BoardOverlays.LAYERS[layer]["sort"]).override_failure_message(
+					"%s now shares %s's sort — they will lift to one plane and z-fight"
+					% [BoardOverlays.Layer.keys()[layer], BoardOverlays.Layer.keys()[guard_layer]]
+				).is_not_equal(BoardOverlays.LAYERS[guard_layer]["sort"])
+
+
+# The link draws OVER the shield, in both views (#450). 2D settles it by tree order -- the arrows'
+# overlay is a later sibling than the icons' at the same z_index -- so 3D has to be told, and the
+# two views disagreeing is the #292 drift this pins. Reverse both together or neither.
+func test_the_guard_link_sorts_above_the_shield_it_points_at() -> void:
+	assert_int(BoardOverlays.LAYERS[BoardOverlays.Layer.GUARD_LINK]["sort"]).override_failure_message(
+			"the 3D draws the link under the shield while the 2D draws it over — one arrowhead, "
+			+ "two answers").is_greater(BoardOverlays.LAYERS[BoardOverlays.Layer.GUARD_ICONS]["sort"])
 
 
 # The SIZE law, and the reason this channel needs one at all: BoardOverlays sizes a ground quad as

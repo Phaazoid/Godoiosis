@@ -22,19 +22,33 @@
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+const H := preload("res://tests/support/squad_fixtures.gd")   # the guard-link sweep case needs units
 
 var _scene: Node3D
 var _game: GameTool
-# The reach colours and the ring alpha are STATIC vars, i.e. process-global: a case that tunes one
-# would leak into every later case AND every later suite in the run. Snapshot and restore per case.
-var _static_snapshot: Array = []
+# Every knob here is a STATIC var, i.e. process-global: a case that tunes one leaks into every later
+# case AND every later suite in the run. Snapshot and restore per case.
+#
+# DERIVED from CLASS_KNOBS rather than named, since #450. It was a hand-written list of eight, which
+# is a copy of "which statics can this suite move" -- and the suite moves all sixty-three, because
+# test_every_static_knob_takes_the_write_its_slider_makes walks the whole table and nudges each one.
+# The copy could only ever go stale in the silent direction: adding a knob left its static
+# unrestored, and the symptom is another suite behaving oddly much later in the run. The list had
+# already grown twice by hand (#101 appended the clock threshold), and this ticket's three arrows
+# and shields would have been the third time. Keyed by NAME through read_static/write_static, the
+# same pair the panel uses, so there is one answer to how a class knob is read and written.
+var _static_snapshot: Dictionary = {}
 
 
 func before_test() -> void:
-	_static_snapshot = [OverlayManager.ATTACK_MODULATE, OverlayManager.HEAL_ATTACK_MODULATE,
-		OverlayManager.SQUAD_RING_ALPHA, OverlayManager.KNOCKBACK_MODULATE,
-		OverlayManager.MOVE_ARROW_MODULATE, OverlayManager.INVALID_ARROW_MODULATE,
-		OverlayManager.TRAILING_ARROW_MODULATE, MissionStatusPanel.URGENT_ROUNDS]
+	_static_snapshot = {}
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if not knob.has("static"):
+			continue
+		var current: Variant = GameKnobs.read_static(knob["static"])
+		if typeof(current) == TYPE_NIL:
+			continue   # a missing READ arm is test_every_class_knob_resolves' finding; never write null back
+		_static_snapshot[knob["static"]] = current
 	var packed := load(SCENE_PATH) as PackedScene
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property or a class value
@@ -45,14 +59,10 @@ func before_test() -> void:
 
 
 func after_test() -> void:
-	OverlayManager.ATTACK_MODULATE = _static_snapshot[0]
-	OverlayManager.HEAL_ATTACK_MODULATE = _static_snapshot[1]
-	OverlayManager.SQUAD_RING_ALPHA = _static_snapshot[2]
-	OverlayManager.KNOCKBACK_MODULATE = _static_snapshot[3]
-	OverlayManager.MOVE_ARROW_MODULATE = _static_snapshot[4]
-	OverlayManager.INVALID_ARROW_MODULATE = _static_snapshot[5]
-	OverlayManager.TRAILING_ARROW_MODULATE = _static_snapshot[6]
-	MissionStatusPanel.URGENT_ROUNDS = _static_snapshot[7]
+	# BEFORE the scene goes: write_static runs each knob's re-apply sweep, which reaches the live
+	# overlay manager through the host.
+	for name: String in _static_snapshot:
+		GameKnobs.write_static(_scene, name, _static_snapshot[name])
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
@@ -334,6 +344,37 @@ func test_moving_the_clock_threshold_repaints_a_countdown_already_on_screen() ->
 
 	assert_bool(_clock_row_color(game_2d).is_equal_approx(calm)) \
 		.override_failure_message("the static moved but the row did not repaint -- the slider does nothing until the next turn") \
+		.is_false()
+
+
+func test_moving_the_guard_link_inset_moves_an_arrow_already_on_the_board() -> void:
+	# The clock case above, one knob along, and the reason it needed writing: EVERY other guard knob
+	# re-TINTS, so `restyle_*` covers them, but the inset MOVES a sprite and its sweep is the game's
+	# own redraw. Falsified 2026-08-26 by deleting that sweep arm -- all 31 cases stayed green, which
+	# is #264's born-dead slider surviving the suite that exists to catch it. Nothing generic can:
+	# `test_every_static_knob_takes_the_write_its_slider_makes` proves the STATIC moves, never that
+	# anything on screen followed. A knob whose re-apply is bespoke needs a case of its own.
+	var game_2d: Node2D = _scene.game
+	for x in range(4):
+		game_2d.grid.set_cell(Vector2i(x, 0), 0, Vector2i(5, 0))
+	await await_idle_frame()
+	var blocker: Unit = game_2d.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(1, 0))
+	var ward: Unit = game_2d.spawn_unit(H.make_unit_data({}, Team.Faction.PLAYER), Vector2i(2, 0))
+	assert_object(ward).override_failure_message("fixture failed to spawn the pair").is_not_null()
+	blocker.arm_guard(ward, blocker.get_guard_range())
+	game_2d.refresh_guard_markers()
+	var links: Array[Sprite2D] = game_2d.overlay_manager.guard_link_sprites
+	assert_int(links.size()).override_failure_message(
+		"fixture drew no link, so this case cannot speak for the sweep").is_equal(2)
+	var before: Vector2 = links[1].global_position
+
+	GameKnobs.write_static(_scene, "GUARD_LINK_HEAD_INSET", 0.0)
+
+	# Re-read the store: the sweep REDRAWS rather than nudging, so the old sprites are freed.
+	var after: Array[Sprite2D] = game_2d.overlay_manager.guard_link_sprites
+	assert_int(after.size()).override_failure_message("the sweep tore the link down and left it down").is_equal(2)
+	assert_bool(after[1].global_position.is_equal_approx(before)) \
+		.override_failure_message("the static moved but the arrowhead did not -- the slider does nothing until the next pass") \
 		.is_false()
 
 

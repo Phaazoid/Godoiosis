@@ -129,7 +129,24 @@ const ICON_TEXTURES = {
 # The armed-Guard pair's ground mark (#414). Neutral by default now the art is real -- these stay as
 # the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
 static var GUARD_RING_COLOR := Color.WHITE
+# NO Game-tab row, deliberately, where GUARD_RING_COLOR has one (#450): OverlayMirror._marker copies
+# a marker's texture and tint and NOT its scale, and 3D sizes a ground quad from its texture's own
+# pixels, so this moves the flat board and leaves the one the game boots into alone. A knob that
+# lies is worse than a missing one -- give the mirror a scale before giving this a slider.
 static var GUARD_RING_SCALE := 1.0
+# The blocker->ward arrow (#450). WHITE on purpose: the shared arrow art is desaturated, so the
+# tint IS the colour (the three planned-move knobs' own reasoning) and starting neutral leaves the
+# Game tab's picker its full range rather than multiplying against a baked-in hue.
+static var GUARD_LINK_MODULATE := Color.WHITE
+# How far back from the ward's cell CENTRE the link's arrowhead sits, in cells (#450 round 2, dev
+# found it in play: "the shield just isn't as readable as I'd like it to be under the arrowhead").
+#
+# Measured rather than guessed. The arrowhead tile's ink runs x=0..11 of 16 with the chevron tip at
+# 11, and GuardWardIcon's runs x=1..13 -- so drawn on the ward's own cell the arrow covers ELEVEN of
+# the shield's thirteen columns. At half a cell that is three, and they are the shield's thinnest.
+# 0.5 is the geometric rule (the head stops at the edge the pair shares) rather than an art-derived
+# number; ~0.7 clears the shield entirely, which is what the range above 0.5 is for.
+static var GUARD_LINK_HEAD_INSET := 0.5
 
 # The watched footprint's threat mark (#413). A per-CELL marker, deliberately not a filled-square
 # range layer (dev: "they shouldn't just be filled in squares") — a watch is a threat, not a reach
@@ -210,6 +227,15 @@ var standing_rings_drawer: Callable = func() -> void: pass
 var planned_move_by_unit := {} #{Unit : MoveAction}
 var terrain_live_sprites: Array[Sprite2D] = []       # live terrain icons (persist across selection)
 var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghosts (Part B)
+# The blocker->ward arrows of every armed Guard (#450). Owned and cleared by redraw_guard_wards
+# alongside the ward shields, because the two are one marker with two halves -- see it there.
+var guard_link_sprites: Array[Sprite2D] = []
+# The same pair GHOSTED, for a Guard that is only QUEUED (#450 part 2). Two stores rather than one
+# because the halves reach 3D through different mirror branches, exactly as the armed pair does --
+# and separate from the armed stores because the LIFETIMES differ: these are plan-time and die with
+# the next re-plan, while an armed ward outlives the whole enemy phase.
+var guard_preview_icons: Array[Sprite2D] = []
+var guard_preview_links: Array[Sprite2D] = []
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
@@ -741,11 +767,19 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 		for type in types:
 			clear_unit_icon(unit, type)
 
-# Every armed, unspent Guard on the board (#414), marked at BOTH ends of the pair. Its own redraw
+# Every armed, unspent Guard on the board: a shield under the WARD, and an arrow from the blocker
+# pointing at it (#450). #414 shipped the same shield at both ends, which said the pair was linked
+# but never which way round -- and the direction was readable only off the queue row, i.e. exactly
+# not during the enemy phase, when a standing reaction is the thing you need to read.
+#
+# One redraw owns both halves because they are one marker: same source (live ward state), same
+# lifetime, so there is no moment either can be right while the other is stale. Its own redraw
 # rather than a clause in redraw_squad_unit_icons: a Guard is not selection markup and must stay on
 # screen through the enemy phase -- that is the whole point of a standing reaction being telegraphed.
-# Called from the three moments the state can move: a pass settling, a faction's turn starting, and
-# a board load. Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
+# Called from the moments the state can move: a pass settling, a faction's turn starting, a board
+# load, and a plan change (the arrows are static sprites where the shield is an OverlayIcon that
+# re-reads its own cell every frame, so a queued move would walk one and leave the other behind).
+# Both views get it free -- OverlayMirror routes every non-CROWN type to GROUND_ICONS.
 #
 # Deliberately NOT routed through #435's standing_rings_drawer, though the two are adjacent: that
 # Callable exists because redraw_squad_unit_icons clears the CROWN/SQUADMEMBER channel WHOLE and has
@@ -754,13 +788,107 @@ func clear_unit_icon_types(types: Array[OverlayIcon.IconType]):
 # the day a third marker wants to stand is the day to generalise -- not before (Law #4 cuts both ways).
 func redraw_guard_wards(units: Array[Unit]) -> void:
 	clear_unit_icon_types([OverlayIcon.IconType.GUARD_WARD])
+	_clear_guard_links()
 	for unit in units:
 		if not is_instance_valid(unit) or unit.guard == null:
 			continue
 		if unit.guard.spent or not unit.guard.is_intact():
 			continue   # a used Guard protects nobody; drawing it would promise cover that is gone
-		create_unit_icon(unit, OverlayIcon.IconType.GUARD_WARD)
 		create_unit_icon(unit.guard.ward, OverlayIcon.IconType.GUARD_WARD)
+		_draw_guard_link(unit, unit.guard.ward)
+
+# The blocker's half of the mark: the shared path-arrow trail, one step long, aimed at the ward.
+# The SAME arrows a move draws (dev call) rather than a bespoke connector -- the tail under the
+# blocker is what says "this one is doing the covering", so the blocker needs no icon of its own.
+#
+# PROJECTED cells, the same expression OverlayIcon.current_cell() reads, so the shield and the arrow
+# structurally cannot point at different cells (#308 -- derived, never copied).
+#
+# Drawn only across ONE ORTHOGONAL STEP, which is the arrow atlas's limit rather than a rule about
+# Guard: _path_arrow_texture has no tile for a diagonal or a gap and falls to PATH_ERROR. Manhattan
+# range 1 (Abilities.GUARD_BASE_RANGE) always satisfies it, but guard_range is authored per-content
+# and a shove can already drag a live pair apart -- and a pair with no drawable link still keeps its
+# shield, so nothing goes silent. A longer link needs an interpolated path or a drawn line; that is
+# the day to build one, not before.
+func _draw_guard_link(blocker: Unit, ward: Unit) -> void:
+	guard_link_sprites.append_array(_guard_link_trail(blocker, ward, GUARD_LINK_MODULATE))
+
+# The trail itself, shared by the armed pair and the queued ghost so the two can never disagree
+# about where a link runs or when there is one to run.
+func _guard_link_trail(blocker: Unit, ward: Unit, tint: Color) -> Array[Sprite2D]:
+	var none: Array[Sprite2D] = []
+	var from := blocker.get_projected_destination()
+	var to := ward.get_projected_destination()
+	if GridUtils.manhattan_distance(from, to) != 1:
+		return none
+	var trail := _draw_arrow_trail([from, to], tint)
+	# The head STOPS SHORT, so the ward's cell is the shield's (#450 round 2). The trail is exactly
+	# two sprites here -- a start tile on the blocker and the head on the ward -- and only the head
+	# moves; the tail stays put, so the link still visibly crosses between the pair.
+	#
+	# A sub-cell position is honest in BOTH views, which is the whole reason this is available:
+	# OverlayMirror._anchor_px keeps the sprite's true pixels through BoardSpace.of_pixels and snaps
+	# only the cell it looks the surface tilt up by. Contrast SCALE and OFFSET, which _marker does
+	# not carry at all -- nudging either would move the flat board and leave 3D behind (#414's art
+	# fix, and the reason GUARD_RING_SCALE has no knob).
+	if trail.size() == 2:
+		var back := Vector2(from - to) * GridUtils.TILE_SIZE * GUARD_LINK_HEAD_INSET
+		trail[1].global_position += back
+	return trail
+
+func _clear_guard_links() -> void:
+	for sprite in guard_link_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	guard_link_sprites.clear()
+
+# Plan-time preview of Guards that are QUEUED but not yet armed (#450 part 2). Every other queued
+# verb previews -- a move gets arrows and a ghost, an ignite gets a ghosted icon -- and a Guard was
+# the odd one out, visible only as a queue row until you pressed Execute.
+#
+# The SAME two marks the armed pair wears, at the ghost alpha the board already uses for "planned,
+# not yet real" (TERRAIN_PREVIEW_MODULATE's). Drawing them identically would be the board telling
+# the player they are covered when they are not yet, which is the question #450 left open; borrowing
+# the existing alpha rather than inventing a second one is the rest of the answer.
+#
+# Takes {"blocker": Unit, "ward": Unit} entries, show_terrain_preview's shape -- the caller decides
+# which Guards are still pending, since only a resolved plan knows.
+func show_guard_preview(pairs: Array) -> void:
+	clear_guard_preview()
+	for pair in pairs:
+		var blocker: Unit = pair["blocker"]
+		var ward: Unit = pair["ward"]
+		if not is_instance_valid(blocker) or not is_instance_valid(ward):
+			continue
+		var shield := Sprite2D.new()
+		shield.texture = ICON_TEXTURES[OverlayIcon.IconType.GUARD_WARD]
+		shield.global_position = GridUtils.cell_world(board_tilemap, ward.get_projected_destination())
+		shield.z_index = RING_Z_INDEX + 1        # the armed shield's plane, so the two read as one mark
+		shield.scale = Vector2.ONE * GUARD_RING_SCALE
+		shield.modulate = _ghosted(GUARD_RING_COLOR)
+		icon_overlay.add_child(shield)
+		guard_preview_icons.append(shield)
+		guard_preview_links.append_array(_guard_link_trail(blocker, ward, _ghosted(GUARD_LINK_MODULATE)))
+
+func clear_guard_preview() -> void:
+	for sprite in guard_preview_icons + guard_preview_links:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	guard_preview_icons.clear()
+	guard_preview_links.clear()
+
+# ONE answer to how ghosted a plan-time mark is, derived from the ignite preview's alpha rather than
+# restated -- a second ghosting constant is a second answer to "does the board mean this yet".
+# Multiplied into the live tint, so a tuned Guard colour carries into its own ghost.
+func _ghosted(tint: Color) -> Color:
+	return Color(tint.r, tint.g, tint.b, tint.a * TERRAIN_PREVIEW_MODULATE.a)
+
+# The Game tab's colour knob re-applying to links already on screen (restyle_knockback_trail's
+# shape). Re-tints rather than redrawing: this manager has no unit list to rebuild the pairs from.
+func restyle_guard_link() -> void:
+	for sprite in guard_link_sprites:
+		if is_instance_valid(sprite):
+			sprite.modulate = GUARD_LINK_MODULATE
 
 # The channel is cleared whole, so everything that should be on it after this call has to be drawn
 # by it: the STANDING set first, then the squad the caller is actually about (which may already be
@@ -807,8 +935,14 @@ func _rebuild_watch_sprites() -> void:
 		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
 		# The ward mark's band: above terrain state and the squad rings, below units. Left at the
 		# default 0 this drew UNDER a frost icon and under a membership ring, i.e. the one marker
-		# you must not miss yielding to ambient markup — #346's rule inverted. The 3D says the same
-		# thing with its own sort, one layer above the ward's (a layer there is a plane).
+		# you must not miss yielding to ambient markup -- #346's rule inverted.
+		#
+		# DECLARED 2D/3D ASYMMETRY (#292), from the #450 merge: 3D now sorts watch(10) above the ward
+		# LINK(9) and shield(8), but 2D has no integer left between this band(3) and the units(4), so
+		# all three sit here and tree order decides -- and ArrowIconOverlay is a later sibling than
+		# IconOverlay, so the link wins in 2D and the watch wins in 3D on a cell carrying both. Two
+		# 16px marks on one cell; a shared band is what #450's own comment already accepted for the
+		# shield. Fixing it means re-banding 2D markup, not tuning a number here.
 		sprite.z_index = RING_Z_INDEX + 1
 		sprite.position = board_tilemap.map_to_local(cell)
 		icon_overlay.add_child(sprite)

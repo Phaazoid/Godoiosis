@@ -9,9 +9,9 @@ metadata/_custom_type_script = "uid://dsxc14gee2d01"
 
 [resource]
 script = ExtResource("2_wad")
+builds_readiness = true
 display_name = "Smash"
 power = 3
 attack_pattern = SubResource("Resource_pat")
-builds_readiness = true
 vertical_rule = 1
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

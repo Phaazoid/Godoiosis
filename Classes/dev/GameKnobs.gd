@@ -319,6 +319,18 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Trailing-move arrow", "static": "TRAILING_ARROW_MODULATE",
 		"tip": "A Group Move member that stays in range but ends FURTHER from its leader than it started (Case 1) -- legal, but worth seeing. Same brightening as the refused colour above."},
 
+	# The armed-Guard pair (#414 shield, #450 arrow). The statics existed from #414 and their own
+	# comment called them the loudness knobs, but neither had ever had a row in any panel -- so the
+	# one knob the dev asked for brought its two siblings with it rather than leaving a mark half
+	# tunable. The arrow ships WHITE deliberately: see GUARD_LINK_MODULATE's declaration.
+	{"group": "Board markup colours", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
+		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
+	{"group": "Board markup colours", "label": "Guard link head inset", "static": "GUARD_LINK_HEAD_INSET",
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far back from the ward's cell centre the link's arrowhead stops, in cells. 0 puts it on the shield, which is what the dev reported as unreadable; 0.5 parks it on the edge the pair shares and leaves three columns of overlap; about 0.7 clears the shield outright. Redraws links already on the board."},
+	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
+		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
+
 	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
 	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
 	# would be a second answer to what that layer looks like.
@@ -587,6 +599,9 @@ static func read_static(name: String) -> Variant:
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
+		"GUARD_LINK_MODULATE": return OverlayManager.GUARD_LINK_MODULATE
+		"GUARD_LINK_HEAD_INSET": return OverlayManager.GUARD_LINK_HEAD_INSET
+		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
@@ -660,6 +675,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
+		"GUARD_LINK_MODULATE": OverlayManager.GUARD_LINK_MODULATE = value
+		"GUARD_LINK_HEAD_INSET": OverlayManager.GUARD_LINK_HEAD_INSET = value
+		"GUARD_RING_COLOR": OverlayManager.GUARD_RING_COLOR = value
 		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
 		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
@@ -841,6 +859,16 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
 		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
+		# The armed-Guard pair (#414/#450). Two sweeps, not one, because the halves live in different
+		# stores -- the shield is a pooled OverlayIcon that _style_icon restyles, the link is a loose
+		# arrow sprite. Both re-tint in place: neither store can rebuild a pair, since redrawing one
+		# needs the unit list and this manager has none.
+		"GUARD_LINK_MODULATE": manager.restyle_guard_link()
+		"GUARD_RING_COLOR": manager.restyle_squad_markers()
+		# The inset MOVES a sprite rather than re-tinting one, and neither store can rebuild a pair
+		# from itself -- redrawing needs the unit list. So this one goes back to the game's own door
+		# (#450 round 2), which is where every other write point already goes.
+		"GUARD_LINK_HEAD_INSET": _refresh_guard_markers(host)
 		# Written once when the marks are built, so a tuned value needs a re-apply or the slider moves
 		# and nothing on the board does (#264's born-dead slider).
 		"WATCH_MARK_COLOR", "WATCH_MARK_SCALE": manager.restyle_watch_marks()
@@ -860,6 +888,18 @@ static func _refresh_mission_status(host: Node3D) -> void:
 	if game_2d == null:
 		return
 	game_2d.refresh_mission_status()
+
+
+# The armed-Guard pair's re-apply, for the one knob that MOVES a marker instead of re-tinting it
+# (#450). Same shape and same reason as the mission-status one above: game.refresh_guard_markers is
+# already the door every write point uses, so a knob takes it rather than growing a second redraw.
+static func _refresh_guard_markers(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	game_2d.refresh_guard_markers()
 
 
 static func overlays_of(host: Node3D) -> BoardOverlays:
