@@ -16,7 +16,7 @@
 >
 > **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset. What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
 
-**Canon checked through #562 (2026-08-26).**
+**Canon checked through #574 (2026-08-27).**
 
 ## The tile model (implemented — [LOCKED shape])
 

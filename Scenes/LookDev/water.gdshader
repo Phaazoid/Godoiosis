@@ -32,21 +32,40 @@ uniform sampler2D body_tex : source_color, filter_nearest;
 // 0 = shallow, 1 = deep. Content, not tuning, which is why it is per-material and not a global.
 uniform float deep : hint_range(0.0, 1.0) = 1.0;
 
-// Every tuning value is a GLOBAL, pushed by BoardMirror's @exports. Per-material uniforms would
-// mean writing into lookdev_meshlib.tres at runtime -- mutating a generated artifact.
-global uniform float water_wave_speed;
-global uniform float water_wave_scale;
-global uniform float water_band_contrast;
-global uniform float water_ripple;
-global uniform float water_roughness;
-global uniform float water_specular;
-global uniform float water_bed;
-global uniform vec4 water_bed_color;
-global uniform float water_bed_grain;
-global uniform float water_caustics;
-global uniform float water_caustics_scale;
-global uniform float water_seam;
-global uniform float water_body_shade;
+// EVERY tuning value is a GLOBAL, pushed by BoardMirror's @exports -- a per-material one would mean
+// writing into lookdev_meshlib.tres at runtime, i.e. mutating a generated artifact.
+//
+// And every one of them comes in a PAIR, because the two water types are tuned separately (dev,
+// 2026-08-27: "we need these dials separate for the different water types"). This replaced a fixed
+// RATIO -- shallow's wave scale was 1.7x deep's, its speed 1.35x, its body shade 0.6x, all consts in
+// here. **A ratio between two authored things is itself an authored thing**, so burying it made it a
+// feel value with no surface: moving Wave speed moved both types together and "shallow choppy, deep
+// glassy" could not be expressed at all. The constants are DELETED rather than kept as a fallback.
+global uniform float water_deep_wave_speed;
+global uniform float water_shallow_wave_speed;
+global uniform float water_deep_wave_scale;
+global uniform float water_shallow_wave_scale;
+global uniform float water_deep_band_contrast;
+global uniform float water_shallow_band_contrast;
+global uniform float water_deep_ripple;
+global uniform float water_shallow_ripple;
+global uniform float water_deep_roughness;
+global uniform float water_shallow_roughness;
+global uniform float water_deep_specular;
+global uniform float water_shallow_specular;
+global uniform float water_deep_seam;
+global uniform float water_shallow_seam;
+global uniform float water_deep_body_shade;
+global uniform float water_shallow_body_shade;
+
+// The bed and its caustics have no deep twin BY NATURE rather than by omission: they are what you
+// see THROUGH shallow water, and deep water is opaque. They carry `shallow` in their names anyway,
+// so no water knob leaves you working out which water it acts on.
+global uniform float water_shallow_bed;
+global uniform vec4 water_shallow_bed_color;
+global uniform float water_shallow_bed_grain;
+global uniform float water_shallow_caustics;
+global uniform float water_shallow_caustics_scale;
 
 // Art pixels per cell -- the quantiser that keeps everything here pixel art instead of a smooth
 // gradient. The sheet's own resolution (gen_lookdev_assets.TILE), so it is a const rather than a
@@ -54,10 +73,6 @@ global uniform float water_body_shade;
 const float PIXELS_PER_CELL = 32.0;
 // How wide the cell seam runs, in those pixels.
 const float SEAM_PIXELS = 1.5;
-// How much tighter and quicker SHALLOW water moves than deep. The character split, not the pace:
-// water_wave_scale/speed set how fast the pair goes, these only say which one is the busier.
-const float SHALLOW_SCALE = 1.7;
-const float SHALLOW_SPEED = 1.35;
 // The caustic net travels at its own fraction of the surface's pace. DERIVED rather than given its
 // own knob, because it is the same water moving -- a second speed dial would let the two layers
 // disagree about that and there is no reading in which they should.
@@ -110,64 +125,75 @@ float speckle(vec2 cell_px) {
 
 
 void fragment() {
+	// `deep` is baked 0.0 or 1.0, so every one of these is an exact pick between the two dials --
+	// and a mix rather than a branch keeps it sensible if a fractional depth is ever authored.
+	float body_shade = mix(water_shallow_body_shade, water_deep_body_shade, deep);
+	float seam = mix(water_shallow_seam, water_deep_seam, deep);
+
 	if (abs(world_normal.y) < 0.5) {
 		// THE BODY -- a block's walls, plus the four rim quads _block_mesh puts in surface 0 beside
-		// the up-facing one. Water seen edge-on is not a surface: no waves, no highlight, and
-		// darker the deeper it is. Sampled on a WORLD-derived UV so a wall and a rim agree; the
-		// mesh's own UVs disagree by construction between the two surfaces.
+		// the up-facing one. Water seen edge-on is not a surface: no waves, no highlight. Sampled on
+		// a WORLD-derived UV so a wall and a rim agree; the mesh's own UVs disagree by construction
+		// between the two surfaces.
 		vec2 body_uv = vec2((world_pos.x + world_pos.z) / BODY_TILE, -world_pos.y / BODY_TILE);
-		vec3 body = texture(body_tex, body_uv).rgb;
-		ALBEDO = body * (1.0 - water_body_shade * mix(0.6, 1.0, deep));
+		ALBEDO = texture(body_tex, body_uv).rgb * (1.0 - body_shade);
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
 	} else {
+		float wave_speed = mix(water_shallow_wave_speed, water_deep_wave_speed, deep);
+		float wave_scale = mix(water_shallow_wave_scale, water_deep_wave_scale, deep);
+		float band_contrast = mix(water_shallow_band_contrast, water_deep_band_contrast, deep);
+		float ripple = mix(water_shallow_ripple, water_deep_ripple, deep);
+
 		vec3 base = texture(atlas, UV).rgb;
 		float px = 1.0 / PIXELS_PER_CELL;
 		vec2 cell_px = floor(world_pos.xz * PIXELS_PER_CELL);
 		vec2 p = cell_px * px;
-		float scale = water_wave_scale * mix(SHALLOW_SCALE, 1.0, deep);
-		float t = TIME * water_wave_speed * mix(SHALLOW_SPEED, 1.0, deep);
+		float t = TIME * wave_speed;
 
 		// --- What is UNDER the water -------------------------------------------------------
 		// The bed is hashed off the STATIC art-pixel index, so it stays nailed to the board while
 		// the caustics travel over it. That contrast is the depth cue, and it is the one thing an
 		// ice sheet cannot fake -- a frozen pane moves all of itself or none of it.
-		vec2 grain = floor(world_pos.xz * (PIXELS_PER_CELL / max(water_bed_grain, 1.0)));
-		vec3 bed = water_bed_color.rgb * mix(0.72, 1.28, speckle(grain));
-		bed += vec3(caustic(p, t * CAUSTIC_SPEED, water_caustics_scale) * water_caustics);
+		vec2 grain = floor(world_pos.xz * (PIXELS_PER_CELL / max(water_shallow_bed_grain, 1.0)));
+		vec3 bed = water_shallow_bed_color.rgb * mix(0.72, 1.28, speckle(grain));
+		bed += vec3(caustic(p, t * CAUSTIC_SPEED, water_shallow_caustics_scale)
+				* water_shallow_caustics);
 		// Seen THROUGH the water, so the water tints it. Without this the bed reads as painted on
 		// the surface rather than lying beneath it.
 		vec3 through = bed * base;
 
 		// Deep water is opaque and unchanged; shallow lets its bottom show.
-		vec3 col = mix(base, through, clamp(water_bed * (1.0 - deep), 0.0, 1.0));
+		vec3 col = mix(base, through, clamp(water_shallow_bed * (1.0 - deep), 0.0, 1.0));
 
 		// --- What happens ON the water ------------------------------------------------------
 		// Bands are a SURFACE phenomenon and go on top, additively -- they must ride over the bed,
 		// never modulate it, or the bed reads as noise painted across the highlights. Two hard
 		// thresholds rather than a gradient, which is how pixel water reads.
-		float w = wave(p, t, scale);
+		float w = wave(p, t, wave_scale);
 		float tone = step(0.20, w) * 0.45 + step(0.72, w) * 0.55;
-		col += base * tone * water_band_contrast;
+		col += base * tone * band_contrast;
 
 		// The cell seam. A lake driven off world position erases the grid, and the hover bracket is
 		// then the only thing saying where a tile ends -- so the surface draws its own boundary.
-		// 0 turns it off and hands the job back to the bracket alone.
+		// 0 turns it off and hands the job back to the bracket alone. Per type, because the bed's
+		// mottle already breaks shallow water up while a deep expanse has nothing else going on
+		// (dev, 2026-08-27).
 		float edge = 0.5 - max(abs(cell_xz.x), abs(cell_xz.y));
-		col *= 1.0 - water_seam * (1.0 - smoothstep(0.0, SEAM_PIXELS * px, edge));
+		col *= 1.0 - seam * (1.0 - smoothstep(0.0, SEAM_PIXELS * px, edge));
 
 		ALBEDO = col;
-		ROUGHNESS = water_roughness;
-		SPECULAR = water_specular;
+		ROUGHNESS = mix(water_shallow_roughness, water_deep_roughness, deep);
+		SPECULAR = mix(water_shallow_specular, water_deep_specular, deep);
 		METALLIC = 0.0;
 
 		// The highlight has to TRAVEL, so the wave bends the normal. A finite difference over the
 		// same quantised field, carried into view space by hand: a NORMAL_MAP would want tangents
 		// the block mesh does not generate.
 		vec3 bent = normalize(vec3(
-				-(wave(p + vec2(px, 0.0), t, scale) - w) * water_ripple,
+				-(wave(p + vec2(px, 0.0), t, wave_scale) - w) * ripple,
 				1.0,
-				-(wave(p + vec2(0.0, px), t, scale) - w) * water_ripple));
+				-(wave(p + vec2(0.0, px), t, wave_scale) - w) * ripple));
 		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
 	}
 }

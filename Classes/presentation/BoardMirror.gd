@@ -177,44 +177,64 @@ const FLAME_FRAMES := 8
 # _ready pushes the lot, because a global that nothing has written yet is whatever project.godot
 # says and not what these declarations say.
 #
-# The shader is on the TOP surface of every water block. `deep` is not here: which water drowns you
-# is the tile's own `walkable` flag, baked per material by the generator, not a dial.
-@export var water_wave_speed := 2.32: set = _set_water_wave_speed
-@export var water_wave_scale := 4.4: set = _set_water_wave_scale
+# The shader wears BOTH surfaces of every water block. `deep` is not here: which water drowns you is
+# the tile's own `walkable` flag, baked per material by the generator, not a dial.
+#
+# EVERY value comes in a PAIR, one per water type (dev, 2026-08-27: "we need these dials separate
+# for the different water types. Otherwise, I can't tune them separately."). It replaced a fixed
+# RATIO living in the shader as constants — shallow's wave scale was 1.7x deep's, its speed 1.35x,
+# its body shade 0.6x. **A ratio between two authored things is itself an authored thing**, so
+# burying it made a feel value with no surface; the constants are deleted, not kept as a fallback.
+# The shallow defaults below are the old ratios already folded in, so the split landed as a VISUAL
+# no-op and only the panel changed.
+@export var water_deep_wave_speed := 2.32: set = _set_water_deep_wave_speed
+@export var water_shallow_wave_speed := 3.132: set = _set_water_shallow_wave_speed
+@export var water_deep_wave_scale := 4.4: set = _set_water_deep_wave_scale
+@export var water_shallow_wave_scale := 7.48: set = _set_water_shallow_wave_scale
 # How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
-@export var water_band_contrast := 0.8: set = _set_water_band_contrast
-@export var water_ripple := 1.86: set = _set_water_ripple
+@export var water_deep_band_contrast := 0.8: set = _set_water_deep_band_contrast
+@export var water_shallow_band_contrast := 0.8: set = _set_water_shallow_band_contrast
+@export var water_deep_ripple := 1.86: set = _set_water_deep_ripple
+@export var water_shallow_ripple := 1.86: set = _set_water_shallow_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
-@export var water_roughness := 0.41: set = _set_water_roughness
-@export var water_specular := 0.51: set = _set_water_specular
-# The SHALLOW half of the shallow/deep read, and the thing that stops shallow water reading as ICE:
-# you see the BOTTOM through it, and the bottom is warm. Deep water never gets it. The bed is
-# composited UNDER the surface bands rather than over them — bands are a surface phenomenon, and
-# multiplying them by the bed is what made this read as grain instead of as depth.
+@export var water_deep_roughness := 0.41: set = _set_water_deep_roughness
+@export var water_shallow_roughness := 0.41: set = _set_water_shallow_roughness
+@export var water_deep_specular := 0.51: set = _set_water_deep_specular
+@export var water_shallow_specular := 0.51: set = _set_water_shallow_specular
+# How hard the surface draws its own cell boundary. Water driven off world position is one
+# continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
+# the job back to the bracket. Per type because the bed's mottle already breaks shallow water up
+# while a deep expanse has nothing else going on (dev's call, and a better one than shared).
+@export var water_deep_seam := 0.12: set = _set_water_deep_seam
+@export var water_shallow_seam := 0.12: set = _set_water_shallow_seam
+# How much darker a water block's WALLS and top rim read than its surface — the body rather than the
+# face of it. It drove the 0.004-unit rim alone until the shader reached surface 1, which is a
+# slider that moves nothing.
+@export var water_deep_body_shade := 0.3: set = _set_water_deep_body_shade
+@export var water_shallow_body_shade := 0.18: set = _set_water_shallow_body_shade
+
+# The bed and its caustics have no deep twin BY NATURE rather than by omission — they are what you
+# see THROUGH shallow water, and deep water is opaque. They still carry `shallow` in their names, so
+# no water knob leaves you working out which water it acts on.
 #
-# The base colours are the tiles' own authored modulate, not a knob — those reach the flat view too,
+# This is what stops shallow water reading as ICE: you see the BOTTOM through it, and the bottom is
+# warm. The bed is composited UNDER the surface bands rather than over them — bands are a surface
+# phenomenon, and multiplying them by the bed is what made this read as grain instead of as depth.
+# The base colours are the tiles' own authored modulate, not a knob: those reach the flat view too,
 # and these cannot.
-@export var water_bed := 0.39: set = _set_water_bed
-@export var water_bed_color := Color(0.60, 0.52, 0.38): set = _set_water_bed_color
+@export var water_shallow_bed := 0.39: set = _set_water_shallow_bed
+@export var water_shallow_bed_color := Color(0.60, 0.52, 0.38): set = _set_water_shallow_bed_color
 # Pebble size, in art pixels. 1 is per-pixel silt — which is below what the eye resolves at a
 # playing camera distance, and is why the first version of this knob appeared to do nothing.
-@export var water_bed_grain := 1.5: set = _set_water_bed_grain
+@export var water_shallow_bed_grain := 1.5: set = _set_water_shallow_bed_grain
 # The light net on the bottom. It MOVES while the bed under it stays nailed to the board, and that
 # contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
 # one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
-@export var water_caustics := 1.35: set = _set_water_caustics
-@export var water_caustics_scale := 18.5: set = _set_water_caustics_scale
-# How hard the surface draws its own cell boundary. Water driven off world position is one
-# continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
-# the job back to the bracket.
-@export var water_seam := 0.12: set = _set_water_seam
-# How much darker a water block's WALLS and top rim read than its surface — the body rather than the
-# face of it. The shader wears both of a water block's surfaces so this reaches the real walls; it
-# drove the 0.004-unit rim alone until then, which is a slider that moves nothing.
-@export var water_body_shade := 0.3: set = _set_water_body_shade
+@export var water_shallow_caustics := 1.35: set = _set_water_shallow_caustics
+@export var water_shallow_caustics_scale := 18.5: set = _set_water_shallow_caustics_scale
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
@@ -1040,84 +1060,132 @@ func _push_water(uniform: StringName, value: Variant) -> void:
 # defaults until someone happens to move a slider, which is the same born-dead-knob failure #264
 # shipped and #380 named.
 func _push_all_water() -> void:
-	_push_water(&"water_wave_speed", water_wave_speed)
-	_push_water(&"water_wave_scale", water_wave_scale)
-	_push_water(&"water_band_contrast", water_band_contrast)
-	_push_water(&"water_ripple", water_ripple)
-	_push_water(&"water_roughness", water_roughness)
-	_push_water(&"water_specular", water_specular)
-	_push_water(&"water_bed", water_bed)
-	_push_water(&"water_bed_color", water_bed_color)
-	_push_water(&"water_bed_grain", water_bed_grain)
-	_push_water(&"water_caustics", water_caustics)
-	_push_water(&"water_caustics_scale", water_caustics_scale)
-	_push_water(&"water_seam", water_seam)
-	_push_water(&"water_body_shade", water_body_shade)
+	_push_water(&"water_deep_wave_speed", water_deep_wave_speed)
+	_push_water(&"water_shallow_wave_speed", water_shallow_wave_speed)
+	_push_water(&"water_deep_wave_scale", water_deep_wave_scale)
+	_push_water(&"water_shallow_wave_scale", water_shallow_wave_scale)
+	_push_water(&"water_deep_band_contrast", water_deep_band_contrast)
+	_push_water(&"water_shallow_band_contrast", water_shallow_band_contrast)
+	_push_water(&"water_deep_ripple", water_deep_ripple)
+	_push_water(&"water_shallow_ripple", water_shallow_ripple)
+	_push_water(&"water_deep_roughness", water_deep_roughness)
+	_push_water(&"water_shallow_roughness", water_shallow_roughness)
+	_push_water(&"water_deep_specular", water_deep_specular)
+	_push_water(&"water_shallow_specular", water_shallow_specular)
+	_push_water(&"water_deep_seam", water_deep_seam)
+	_push_water(&"water_shallow_seam", water_shallow_seam)
+	_push_water(&"water_deep_body_shade", water_deep_body_shade)
+	_push_water(&"water_shallow_body_shade", water_shallow_body_shade)
+	_push_water(&"water_shallow_bed", water_shallow_bed)
+	_push_water(&"water_shallow_bed_color", water_shallow_bed_color)
+	_push_water(&"water_shallow_bed_grain", water_shallow_bed_grain)
+	_push_water(&"water_shallow_caustics", water_shallow_caustics)
+	_push_water(&"water_shallow_caustics_scale", water_shallow_caustics_scale)
 
 
-func _set_water_wave_speed(value: float) -> void:
-	water_wave_speed = value
-	_push_water(&"water_wave_speed", value)
+func _set_water_deep_wave_speed(value: float) -> void:
+	water_deep_wave_speed = value
+	_push_water(&"water_deep_wave_speed", value)
 
 
-func _set_water_wave_scale(value: float) -> void:
-	water_wave_scale = value
-	_push_water(&"water_wave_scale", value)
+func _set_water_shallow_wave_speed(value: float) -> void:
+	water_shallow_wave_speed = value
+	_push_water(&"water_shallow_wave_speed", value)
 
 
-func _set_water_band_contrast(value: float) -> void:
-	water_band_contrast = value
-	_push_water(&"water_band_contrast", value)
+func _set_water_deep_wave_scale(value: float) -> void:
+	water_deep_wave_scale = value
+	_push_water(&"water_deep_wave_scale", value)
 
 
-func _set_water_ripple(value: float) -> void:
-	water_ripple = value
-	_push_water(&"water_ripple", value)
+func _set_water_shallow_wave_scale(value: float) -> void:
+	water_shallow_wave_scale = value
+	_push_water(&"water_shallow_wave_scale", value)
 
 
-func _set_water_roughness(value: float) -> void:
-	water_roughness = value
-	_push_water(&"water_roughness", value)
+func _set_water_deep_band_contrast(value: float) -> void:
+	water_deep_band_contrast = value
+	_push_water(&"water_deep_band_contrast", value)
 
 
-func _set_water_specular(value: float) -> void:
-	water_specular = value
-	_push_water(&"water_specular", value)
+func _set_water_shallow_band_contrast(value: float) -> void:
+	water_shallow_band_contrast = value
+	_push_water(&"water_shallow_band_contrast", value)
 
 
-func _set_water_bed(value: float) -> void:
-	water_bed = value
-	_push_water(&"water_bed", value)
+func _set_water_deep_ripple(value: float) -> void:
+	water_deep_ripple = value
+	_push_water(&"water_deep_ripple", value)
 
 
-func _set_water_bed_color(value: Color) -> void:
-	water_bed_color = value
-	_push_water(&"water_bed_color", value)
+func _set_water_shallow_ripple(value: float) -> void:
+	water_shallow_ripple = value
+	_push_water(&"water_shallow_ripple", value)
 
 
-func _set_water_bed_grain(value: float) -> void:
-	water_bed_grain = value
-	_push_water(&"water_bed_grain", value)
+func _set_water_deep_roughness(value: float) -> void:
+	water_deep_roughness = value
+	_push_water(&"water_deep_roughness", value)
 
 
-func _set_water_caustics(value: float) -> void:
-	water_caustics = value
-	_push_water(&"water_caustics", value)
+func _set_water_shallow_roughness(value: float) -> void:
+	water_shallow_roughness = value
+	_push_water(&"water_shallow_roughness", value)
 
 
-func _set_water_caustics_scale(value: float) -> void:
-	water_caustics_scale = value
-	_push_water(&"water_caustics_scale", value)
+func _set_water_deep_specular(value: float) -> void:
+	water_deep_specular = value
+	_push_water(&"water_deep_specular", value)
 
 
-func _set_water_seam(value: float) -> void:
-	water_seam = value
-	_push_water(&"water_seam", value)
+func _set_water_shallow_specular(value: float) -> void:
+	water_shallow_specular = value
+	_push_water(&"water_shallow_specular", value)
 
 
-func _set_water_body_shade(value: float) -> void:
-	water_body_shade = value
-	_push_water(&"water_body_shade", value)
+func _set_water_deep_seam(value: float) -> void:
+	water_deep_seam = value
+	_push_water(&"water_deep_seam", value)
+
+
+func _set_water_shallow_seam(value: float) -> void:
+	water_shallow_seam = value
+	_push_water(&"water_shallow_seam", value)
+
+
+func _set_water_deep_body_shade(value: float) -> void:
+	water_deep_body_shade = value
+	_push_water(&"water_deep_body_shade", value)
+
+
+func _set_water_shallow_body_shade(value: float) -> void:
+	water_shallow_body_shade = value
+	_push_water(&"water_shallow_body_shade", value)
+
+
+func _set_water_shallow_bed(value: float) -> void:
+	water_shallow_bed = value
+	_push_water(&"water_shallow_bed", value)
+
+
+func _set_water_shallow_bed_color(value: Color) -> void:
+	water_shallow_bed_color = value
+	_push_water(&"water_shallow_bed_color", value)
+
+
+func _set_water_shallow_bed_grain(value: float) -> void:
+	water_shallow_bed_grain = value
+	_push_water(&"water_shallow_bed_grain", value)
+
+
+func _set_water_shallow_caustics(value: float) -> void:
+	water_shallow_caustics = value
+	_push_water(&"water_shallow_caustics", value)
+
+
+func _set_water_shallow_caustics_scale(value: float) -> void:
+	water_shallow_caustics_scale = value
+	_push_water(&"water_shallow_caustics_scale", value)
 
 
 func _set_flame_lift(value: float) -> void:

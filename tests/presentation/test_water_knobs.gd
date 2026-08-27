@@ -49,7 +49,10 @@ func after_test() -> void:
 func _water_props() -> PackedStringArray:
 	var out := PackedStringArray()
 	for knob: Dictionary in GameKnobs.KNOBS:
-		if knob["group"] == "Water" and knob["node"] == "BoardMirror":
+		# The Water FAMILY, matched by prefix: two groups since every dial went per type, and a third
+		# should join without editing this. The vacuity assertion in each case is what guards the
+		# prefix, since a filter matching nothing passes everything.
+		if (knob["group"] as String).begins_with("Water") and knob["node"] == "BoardMirror":
 			out.append(knob["prop"])
 	return out
 

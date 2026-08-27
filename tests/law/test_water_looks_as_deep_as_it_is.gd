@@ -240,7 +240,11 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 
 	var rows: Dictionary[String, bool] = {}
 	for knob: Dictionary in GameKnobs.KNOBS:
-		if knob["group"] == "Water":
+		# The Water FAMILY: two groups since every dial went per type. Matching the prefix rather
+		# than naming both is what stops a third group from silently falling out of this law -- and
+		# the non-vacuity assertion below is what stops the prefix being wrong, since a filter that
+		# matches nothing would let every case pass over an empty set.
+		if (knob["group"] as String).begins_with("Water"):
 			rows[knob["prop"]] = true
 	assert_array(rows.keys()).override_failure_message(
 			"the Water knob rows and the shader's globals are different sets -- a row with no " \
@@ -251,6 +255,42 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 		assert_bool(ProjectSettings.has_setting("shader_globals/%s" % name)) \
 				.override_failure_message("the shader declares global '%s' and project.godot " \
 				% name + "does not -- the shader will refuse to compile").is_true()
+
+
+# THE regression guard for #552 slice 1c: no water uniform is ambiguous about which water it acts
+# on. Shallow's character used to be a fixed RATIO off deep's, living in the shader as constants --
+# so one dial moved both types together and "shallow choppy, deep glassy" could not be expressed at
+# all. A ratio between two authored things is itself an authored thing; the failure this catches is
+# a value quietly reverting to acting on both.
+#
+# Every DEEP one must have a shallow twin. The reverse is deliberately NOT required: the bed and its
+# caustics are what you see THROUGH shallow water and deep water is opaque, so they are shallow-only
+# by nature rather than by omission -- they carry the word anyway so the panel needs no remembering.
+func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
+	var deep_side: Dictionary[String, bool] = {}
+	var shallow_side: Dictionary[String, bool] = {}
+	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
+		var text := line.strip_edges()
+		if not text.begins_with("global uniform "):
+			continue
+		var words := text.trim_suffix(";").split(" ")
+		var name := words[words.size() - 1]
+		var deep := name.begins_with("water_deep_")
+		var shallow := name.begins_with("water_shallow_")
+		assert_bool(deep or shallow).override_failure_message(
+				"global '%s' names neither water type -- one dial moving both is what the " % name \
+				+ "per-type split deleted, and a ratio hidden in a const is a feel value with no " \
+				+ "surface").is_true()
+		if deep:
+			deep_side[name.trim_prefix("water_deep_")] = true
+		elif shallow:
+			shallow_side[name.trim_prefix("water_shallow_")] = true
+	assert_bool(deep_side.is_empty()).override_failure_message(
+			"the shader declares no deep globals; the case is vacuous").is_false()
+	for stem: String in deep_side:
+		assert_bool(shallow_side.has(stem)).override_failure_message(
+				"'%s' is tunable on deep water and not on shallow -- one type would be stuck " \
+				% stem + "with whatever the other was tuned to").is_true()
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider
