@@ -56,6 +56,24 @@ class_name ScenarioUnitEntry
 @export var guard_ward_index := -1
 @export var guard_spent := false
 
+# The Overwatch this unit had armed (#413). Unlike a Guard it names no second unit, so it needs no
+# re-link and capture_unit_state/apply_unit_state own it like the rest of the battle state.
+#
+# `watch_cells` EMPTY is the "no watch" sentinel, and it is the field's own default — a watch with an
+# empty footprint is not a thing that can exist (Unit.arm_watch refuses one), so nothing is lost.
+# The footprint is STORED rather than re-derived on load: freezing it is the mechanic, and asking
+# Reach again would be a second authority for geometry that is deliberately not re-asked.
+#
+# The attack is an INDEX into the watcher's own selectable attacks rather than a Resource reference —
+# equipped_index's pattern, and the reason is #253's: a dangling ext_resource can fail the whole
+# scenario load, while a stale index degrades to "no watch". A carving the wielder's aura no longer
+# channels is the one way it can drift, and losing the watch is the right answer there anyway.
+@export var watch_anchor := Vector2i.ZERO
+@export var watch_aim := Vector2i.ZERO
+@export var watch_cells: Array[Vector2i] = []
+@export var watch_attack_index := -1
+@export var watch_spent := false
+
 # Snapshot the unit's persistent side of the seam. Inventory copies via copy_equippable()
 # — never duplicate(true), which would fork a WeaponInstance off its shared template. An
 # installed prosthetic saves as the INDEX of its carried instance so load can re-link.
@@ -131,6 +149,19 @@ func capture_unit_state(unit: Unit) -> void:
 	crisis_surge_pending = unit.crisis_surge_pending
 	rally_count = unit.rally_count
 
+	# The armed watch (#413). A save taken between a pass and the enemy phase is exactly when a live
+	# one is the whole point, which is why it is captured here rather than left to reset.
+	watch_cells = []
+	watch_attack_index = -1
+	watch_spent = false
+	if unit.watch != null and unit.watch.is_intact():
+		watch_attack_index = unit.get_selectable_attacks().find(unit.watch.attack)
+		if watch_attack_index >= 0:
+			watch_anchor = unit.watch.anchor_cell
+			watch_aim = unit.watch.aim_cell
+			watch_cells = unit.watch.footprint.duplicate()
+			watch_spent = unit.watch.spent
+
 # Write the snapshot back onto a freshly spawned unit. Runs AFTER initialize() (which
 # rebuilds stats/limbs/aura and refills HP+Will), deliberately overriding that reset.
 # Order matters: stats before HP/Will (their maxes may be edited), inventory before
@@ -204,6 +235,16 @@ func apply_unit_state(unit: Unit) -> void:
 	unit.crisis_surge_pending = crisis_surge_pending
 	unit.rally_count = rally_count
 	unit.restore_lifecycle(lifecycle_state, downed_turns_remaining)
+
+	# The armed watch (#413), after the inventory, because the stored index IS the attack's identity —
+	# the same way weapon_battle_states' index is a weapon's. An index that no longer resolves loses
+	# the watch rather than failing the load: a stale reference degrades, it never breaks a board.
+	unit.lapse_watch()
+	if not watch_cells.is_empty():
+		var watchable := unit.get_selectable_attacks()
+		if watch_attack_index >= 0 and watch_attack_index < watchable.size():
+			unit.arm_watch(watch_anchor, watch_aim, watch_cells.duplicate(),
+					watchable[watch_attack_index], watch_spent)
 
 	if current_hp >= 0:
 		# Through the UNIT, not inst: armor was restored above, and until #106 this clamp read a

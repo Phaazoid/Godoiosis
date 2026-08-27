@@ -290,6 +290,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
+	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
+	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
+	# the board is legible or a christmas tree. Tune it against the reach fills, not away from white:
+	# red already means a damaging reach, and a watch is a promise of exactly that.
+	{"group": "Board markup colours", "label": "Watch footprint (2D+3D)", "static": "WATCH_MARK_COLOR",
+		"tip": "The mark on every cell a standing Overwatch covers, yours and the enemy's alike. Always on screen while a watch is live, so this is the dial between 'unmissable' and 'noise'."},
+	{"group": "Board markup colours", "label": "Watch mark size", "static": "WATCH_MARK_SCALE",
+		"min": 0.25, "max": 2.0, "step": 0.05,
+		"tip": "How big the watch mark draws relative to its cell. 1.0 is one cell exactly, which is what the art is authored at; smaller reads as a tick in the middle of the tile."},
+
 	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
 	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
@@ -568,6 +578,8 @@ static func read_static(name: String) -> Variant:
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
+		"WATCH_MARK_COLOR": return OverlayManager.WATCH_MARK_COLOR
+		"WATCH_MARK_SCALE": return OverlayManager.WATCH_MARK_SCALE
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
@@ -638,6 +650,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
+		"WATCH_MARK_COLOR": OverlayManager.WATCH_MARK_COLOR = value
+		"WATCH_MARK_SCALE": OverlayManager.WATCH_MARK_SCALE = value
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
@@ -819,6 +833,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"SQUAD_RING_ALPHA": manager.restyle_squad_markers()
 		"KNOCKBACK_MODULATE": manager.restyle_knockback_trail()
+		# Written once when the marks are built, so a tuned value needs a re-apply or the slider moves
+		# and nothing on the board does (#264's born-dead slider).
+		"WATCH_MARK_COLOR", "WATCH_MARK_SCALE": manager.restyle_watch_marks()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

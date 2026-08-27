@@ -31,7 +31,7 @@ enum Layer {
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
-	GUARD_ICONS,
+	GUARD_ICONS, WATCH_ICONS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -103,6 +103,14 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# reads OVER ground markup, which is #346's rule -- the interaction is the thing you must not
 	# miss, and ambient membership yielding to it is the trade. One integer if that reads wrong.
 	Layer.GUARD_ICONS: {"color": Color.WHITE, "sort": 8, "kind": Kind.SPRITE},
+	# The watched-footprint threat mark (#413), and it takes a layer of its OWN for the same reason
+	# the ward mark did: a layer IS a plane, so a marker that can share a CELL with another marker
+	# must not share its sort. A watched cell can carry an aim fill (4), a target-pick marker (5), an
+	# arrow (6), a sight trace (7) and a ward mark (8) — a warded unit standing in a watched line is
+	# an ordinary board state, not a corner case — so 9 is the first sort free of all of them.
+	# Colour stays WHITE here: OverlayMirror copies the 2D sprite's own modulate, which is the
+	# knob-tuned OverlayManager.WATCH_MARK_COLOR, so a second value here could only disagree with it.
+	Layer.WATCH_ICONS: {"color": Color.WHITE, "sort": 9, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.

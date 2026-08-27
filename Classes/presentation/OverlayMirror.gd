@@ -465,6 +465,15 @@ func _icons(om: OverlayManager) -> void:
 	_markers(BoardOverlays.Layer.ICONS, heads)
 	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
 	_markers(BoardOverlays.Layer.GUARD_ICONS, wards)
+	# The watched footprint (#413), read off the SAME store the 2D sprites are built from
+	# (OverlayManager.watch_cells) rather than off those sprites — parity is mandatory here, this is
+	# gameplay information, and two derivations are how a #292 asymmetry starts. The texture and
+	# tint come from the one authored pair, so tuning the knob moves both views.
+	var watched: Array[Dictionary] = []
+	for cell: Vector2i in om.watch_cells:
+		watched.append(_marker(_anchor(cell), OverlayManager.WATCH_MARK_TEXTURE,
+				OverlayManager.WATCH_MARK_COLOR))
+	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
 
 
 # Terrain live icons (FROZEN) + plan-time preview ghosts. A state whose art draws OBJECTS is

@@ -143,6 +143,7 @@ func execute_orders(unit):
 	# The pass has settled, so this is where a Guard has finished arming (side channel) or been spent
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
+	game.refresh_watch_markers()   # a watch that fired, or one that just armed (#413)
 	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
 	# squad-validity guard below -- a squad that wiped itself must not skip the check.
 	game.mission_controller.check()

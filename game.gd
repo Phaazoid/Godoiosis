@@ -492,6 +492,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 func _on_turn_started(faction: Team.Faction):
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
+	refresh_watch_markers()   # ...and its untriggered watches (#413)
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
 	# (#151) -- the other way a squad splits without any move having authored it.
 	squad_manager.enforce_contact()
@@ -1301,6 +1302,12 @@ func refresh_squad_rings() -> void:
 # start, a board load.
 func refresh_guard_markers() -> void:
 	overlay_manager.redraw_guard_wards(_all_units())
+
+# The standing watches' footprints (#413). Its own door beside the ward one rather than folded into
+# it: the two channels answer different questions and are cleared independently, and a single
+# "refresh standing reactions" would be one name for two redraws that happen to fire together today.
+func refresh_watch_markers() -> void:
+	overlay_manager.redraw_watch_marks(_all_units())
 
 # ==============================================================================
 #  Board queries
