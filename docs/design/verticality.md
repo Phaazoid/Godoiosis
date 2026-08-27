@@ -683,8 +683,13 @@ The geometry, all of it dev-ruled in play across four rounds:
   sideways — broke that join twice, and then needed `no_depth_test` to survive the z-fight that
   left, which turned the pointer into an x-ray visible through platforms the camera had panned
   behind. Standing clear of the cliff face is a separate, far smaller epsilon (`WALL_CLEARANCE`).
-- **One quad, never a cross.** The rig's pitch is fixed at 40°, so a vertical quad across the trail
-  never goes edge-on — its width bottoms out at 64% and no camera-facing pick is needed.
+- **One quad, never a cross.** At the board's authored 40° pitch a vertical quad across the trail
+  never goes edge-on — its width bottoms out at 64% and no camera-facing pick is needed. **That 40°
+  stopped being a constant at [#586](https://github.com/Phaazoid/Godoiosis/issues/586)**: the player
+  can tilt to the steep clamp, and a vertical quad viewed from near-overhead approaches edge-on by
+  construction. Unmeasured, and not necessarily a fault — the steep limit is a knob precisely so this
+  kind of answer can move — but the "one quad is enough" reasoning is now conditional on where that
+  limit sits rather than on a fixed rig.
 
 **A void removal drops the full plummet.** `MovementComponent.VOID_PLUMMET_CELLS` is one distance
 with two readers — the pointer's length and the fall the sprite actually takes — because a preview
@@ -953,8 +958,13 @@ Godot emits a press *and* a release per notch. Six rulings worth keeping:
   keeps [#231](https://github.com/Phaazoid/Godoiosis/issues/231)'s erased cell answering for itself.
 - **What the camera cannot see, the brush aims at instead.** The second half of #582, and a separate
   problem wearing the same symptom: a **one-cell** well two units deep is hidden by its own
-  neighbours, honestly, at the rig's fixed 40° pitch — measured, it needs 56° to see the floor, and
-  no picking rule recovers what is not on screen. Anything **two cells across is visible on its own
+  neighbours, honestly, at the board's authored 40° pitch — measured, it needs 56° to see the floor,
+  and no picking rule recovers what is not on screen. **[#586](https://github.com/Phaazoid/Godoiosis/issues/586)
+  later gave the player that 56°** — the tilt band reaches −80°, so the well *can* now be looked into
+  directly. That does not retire the brush answer, and the ordering matters: the brush plane needs no
+  gesture at all, works at whatever angle the player is already holding, and answers the same for a
+  well the tilt cannot help with. The tilt is a second, slower road to the same cell, not the fix.
+  Anything **two cells across is visible on its own
   at any depth** (3×3 and 5×5 measured, every cell), so the gap is exactly the one-wide well. The
   brush answers it by changing the QUESTION: while the level row is up, the pick resolves against the
   brush's own Height plane (`BoardPicker.pick_on_plane`, via `DevController.brush_pick_row`) rather

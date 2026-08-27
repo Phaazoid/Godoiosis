@@ -297,6 +297,113 @@ func test_dragging_the_orbit_button_rotates_freely() -> void:
 	assert_float(fmod(absf(rig._target_yaw_degrees), rig.yaw_step)).is_not_equal(0.0)
 
 
+# --- The tilt (#586) ----------------------------------------------------------------
+#
+# The same drag's vertical half. Dev, reversing #586's original dev-only scope: "I think it's better
+# to just let the player in general tilt the camera up and down too ... I don't see the harm."
+
+func test_dragging_up_and_down_tilts_the_camera() -> void:
+	var rig := _rig()
+	rig._target_pitch_degrees = -40.0
+	_drag(rig.orbit_button, Vector2(0.0, 30.0))
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the vertical half of the orbit drag went nowhere").is_not_equal(-40.0)
+
+
+func test_the_tilt_is_clamped_to_its_own_band() -> void:
+	# On the TARGET, so a drag past the limit cannot park an angle the ease would keep fighting.
+	# The band is a knob, so the case drives PAST whatever it is set to rather than naming a number.
+	var rig := _rig()
+	var span: float = rig.max_pitch_degrees - rig.min_pitch_degrees
+	var pixels: float = (span * 4.0) / rig.orbit_sensitivity
+
+	rig._target_pitch_degrees = rig.max_pitch_degrees
+	_drag(rig.orbit_button, Vector2(0.0, -pixels))
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the shallow end of the tilt is unbounded -- the camera can look along the board") \
+		.is_equal_approx(rig.max_pitch_degrees, 0.001)
+
+	rig._target_pitch_degrees = rig.min_pitch_degrees
+	_drag(rig.orbit_button, Vector2(0.0, pixels))
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the steep end of the tilt is unbounded") \
+		.is_equal_approx(rig.min_pitch_degrees, 0.001)
+
+
+func test_r_levels_the_tilt_back_to_the_boards_own_angle() -> void:
+	# R is the ONLY leveller, and it returns to what the MOOD authored rather than to a _home_ of
+	# pitch's own -- the board already says what the opening angle is, so a second copy could drift.
+	var rig := _rig()
+	rig.board_pitch_degrees = -35.0
+	rig._target_pitch_degrees = -70.0
+	_key(KEY_R)
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"R left the camera tilted -- it is the one gesture that puts the board's angle back") \
+		.is_equal_approx(-35.0, 0.001)
+
+
+func test_a_realign_keeps_the_tilt():
+	# Dev ruling 2026-08-27: Q/E stays a YAW realign. Tilting to read a pit and then turning to see
+	# its other side is the gesture the tilt exists for, and levelling here would cost it.
+	var rig := _rig()
+	rig.board_pitch_degrees = -40.0
+	rig._target_pitch_degrees = -72.0
+	_key(KEY_Q)
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"Q levelled the tilt -- a realign is yaw only, or you cannot turn while looking down") \
+		.is_equal_approx(-72.0, 0.001)
+	_key(KEY_E)
+	rig.align_to_detent()
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"squaring up for playback levelled the tilt").is_equal_approx(-72.0, 0.001)
+
+
+func test_the_authored_pitch_snaps_rather_than_easing_in() -> void:
+	# frame()'s reasoning, on the axis frame() does not own: pitch is part of the camera's BASIS, so
+	# a rig still lerping toward a newly applied mood unprojects at one angle and picks at another.
+	# A mood arriving is a board arriving. Deliberately no awaited frame -- smoothing would hide it.
+	var rig := _rig()
+	rig.board_pitch_degrees = -55.0
+	assert_float(_scene.get_node("CameraRig/Pitch").rotation_degrees.x) \
+		.override_failure_message("the applied mood eased in instead of landing") \
+		.is_equal_approx(-55.0, 0.001)
+
+
+func test_the_pitch_node_is_an_output_and_is_never_read_back() -> void:
+	# The rig's live angle is its OWN float; the node is where that float is written and nothing
+	# more. Pinned because reading it back is what made the channel unable to settle -- the basis
+	# round-trip returns -39.999992 for an authored -40, so the ease chased a target it could never
+	# reach and rewrote the camera transform every frame for ever.
+	var rig := _rig()
+	var node: Node3D = _scene.get_node("CameraRig/Pitch")
+	rig.board_pitch_degrees = -45.0
+	node.rotation_degrees.x = -12.0   # a stale writer, of the kind the old knob was
+	_drag(rig.orbit_button, Vector2(0.0, 4.0))
+	await await_idle_frame()
+	assert_float(node.rotation_degrees.x).override_failure_message(
+			"the tilt eased from a value written ONTO the node -- the rig is reading its own output "
+			+ "back, which is what stops the channel settling") \
+		.is_less(-30.0)
+
+
+# NB there is deliberately NO "the camera settles" case here or in test_input_bridge: two written for
+# it both PASSED against the mutant they were aimed at. The read-back's real guard is the pair of
+# health-readout suites named in CameraRig3D._process.
+
+
+func test_the_camera_return_brings_the_tilt_back_with_the_rest() -> void:
+	# A player who tilted to read a pit and then pressed Execute is standing where they were
+	# standing; #534's return owes them the pitch exactly as it owes them the yaw.
+	var rig := _rig()
+	rig._target_pitch_degrees = -68.0
+	rig.stash_view()
+	rig._target_pitch_degrees = -30.0   # playback points the camera somewhere else
+	rig.restore_view()
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the view came back without the tilt the player left on it") \
+		.is_equal_approx(-68.0, 0.001)
+
+
 func test_q_and_e_land_on_the_next_detent_from_anywhere() -> void:
 	var rig := _rig()
 	# From off-axis, one press realigns — the whole point of the detents.

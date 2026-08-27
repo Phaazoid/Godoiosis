@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #581 (2026-08-27).**
+**Canon checked through #586 (2026-08-27).**
 
 ---
 
@@ -33,6 +33,31 @@ which had NO surface anywhere) into the Game tab, so each row is one tab again. 
 purely per-type now: which object glows, how tall THIS one stands. The lamp defaults also gained
 the setter-plus-sweep the geometry globals already had, so tuning one re-lights every standing lamp
 instead of waiting for a repaint (#264's born-dead slider, closed for lights).
+
+### A value the PLAYER also moves sits on both sides of the split ([#586](https://github.com/Phaazoid/Godoiosis/issues/586), 2026-08-27)
+
+Camera pitch is the first one, and it is worth stating because the table above reads as though every
+value picks exactly one home. Pitch picks two, and the question *who may disagree about this?* is what
+separates them:
+
+- **Where the board is composed** — one mission vs another — is mood: `CameraRig3D.board_pitch_degrees`,
+  the Moods tab's *Board pitch*, carried by a preset.
+- **How far a hand may take it from there** — nobody, ever — is a game constant: the Game tab's
+  *Tilt limit: shallow* / *Tilt limit: steep*, beside orbit sensitivity with the rest of camera
+  handling. A mission may not re-teach the controls.
+
+**What makes the pair work is that the live angle is DERIVED and neither knob names it.** The player
+tilts, so `_process` eases `CameraRig/Pitch.rotation_degrees.x` every frame — and a knob naming a
+property the game writes back per frame is exactly the slider that moves and silently reverts, which
+is the one failure a tuning panel cannot survive. So the Look knob was **re-keyed off the node onto
+the rig's own export** (13 preset files migrated with it), and the node became the sum the way
+`position` became `_aim + _lift` in #520. The baseline is authored, the deviation is the player's, and
+R is the one gesture that puts the deviation back — Q/E stays a yaw realign, so tilting to read a hole
+and then turning to see its other side keeps the angle (dev, 2026-08-27).
+
+**The generalizable rule: before giving the player a hand on a tuned value, check whether a knob
+addresses the property directly — and if it does, split it into an authored baseline and a derived
+live value rather than letting two writers share one field.**
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source

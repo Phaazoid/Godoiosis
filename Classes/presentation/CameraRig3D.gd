@@ -87,8 +87,18 @@ class_name CameraRig3D
 # rather than the host consuming the event, because this rig is a CHILD of the host and therefore
 # sees _unhandled_input FIRST: a set_input_as_handled() up there lands after the zoom (measured).
 @export var wheel_zoom_enabled := true
-@export var orbit_sensitivity := 0.25        # degrees of yaw per pixel dragged
+@export var orbit_sensitivity := 0.25        # degrees of yaw AND pitch per pixel dragged
 @export var orbit_click_slop_px := 4.0       # travel under this still counts as a click
+
+# How far the player's own drag may tilt, in degrees below the horizon (#586). Handling rather than
+# mood, so they are GameKnobs rows and not a Look preset's business -- the board authors where the
+# camera STARTS (board_pitch_degrees below), these say how far a hand may take it from there.
+#
+# The steep end is where the HD-2D conceit gives out: a billboard seen from overhead is being looked
+# at from the one angle its art is not drawn for. The shallow end is where you start seeing along the
+# board rather than at it. Both are feel values -- tune them, do not reason about them.
+@export var min_pitch_degrees := -80.0
+@export var max_pitch_degrees := -20.0
 @export var pan_margin_cells := 4.0          # how far past the board panning may stray
 @export var fit_margin_cells := 1.0          # breathing room around a framed board
 @export var zoom_out_slack := 1.0            # 1.0 = may not zoom out past the whole board
@@ -115,11 +125,31 @@ class_name CameraRig3D
 # not a leash, and the wheel is live again immediately after.
 @export var playback_distance := 11.0
 
+# The board's AUTHORED pitch (#586) -- what a mood carries and what R returns to. It moved OFF the
+# Pitch node's own `rotation_degrees:x`, which the Look knob used to address directly, because that
+# property is now DERIVED: _process eases it every frame, and a knob naming a property the game
+# writes back per frame is the slider that moves and silently reverts -- the one failure
+# tests/dev/test_moods_tool.gd exists to refuse.
+#
+# So the split is the same one #520 drew for position (`_aim + _lift`): the BASELINE is authored and
+# owned here, the live angle is derived from it plus whatever the player's hand has done. The setter
+# re-seeds that live angle, which is what keeps the Moods slider honest -- drag it and the camera
+# moves, rather than the value landing somewhere nothing reads.
+@export var board_pitch_degrees := -40.0: set = _set_board_pitch_degrees
+
+@onready var _pitch: Node3D = $Pitch
 @onready var _camera: Camera3D = $Pitch/Camera
 @onready var _attributes: CameraAttributesPractical = _camera.attributes as CameraAttributesPractical
 
 var _target_yaw_degrees := 0.0
 var _target_distance := 14.0
+# The live pitch the player's drag writes and _process eases the Pitch node onto (#586). Seeded from
+# board_pitch_degrees and put back there by R -- so a tilt is a DEVIATION from what the board
+# authored, never a replacement for it. Third eased channel, beside the yaw and the distance.
+var _target_pitch_degrees := -40.0
+# The LIVE angle, and the rig's OWN -- never read back off the Pitch node, which is a pure output.
+# See _process for why that read is what stopped this channel settling.
+var _pitch_degrees := -40.0
 # The two position channels (see the header): where the rig looks NOW and where it is heading, plus
 # the same pair for the diorama's rise. `position` is their sum and nothing else.
 var _aim := Vector3.ZERO
@@ -137,6 +167,7 @@ var _home_distance := 14.0
 var _borrowed_position := Vector3.ZERO
 var _borrowed_yaw_degrees := 0.0
 var _borrowed_distance := 0.0
+var _borrowed_pitch_degrees := 0.0
 var _view_borrowed := false
 
 # What a DIRECTED shot is measured from (#520): the detent align_to_detent squared playback up to.
@@ -153,6 +184,12 @@ var _orbit_travel_px := 0.0
 func _ready() -> void:
 	_target_yaw_degrees = rotation_degrees.y
 	_target_distance = _camera.position.z
+	# The EXPORT is the owner now (#586), not the Pitch node's own rotation -- so the node is written
+	# from it here rather than read into it. The two agree in every shipped scene; if they ever
+	# disagree, the one a mood can address is the one that should win.
+	_target_pitch_degrees = board_pitch_degrees
+	_pitch_degrees = board_pitch_degrees
+	_pitch.rotation_degrees.x = board_pitch_degrees
 	# Whatever the scene authored is where the rig already IS, so both channels start there rather
 	# than gliding in from the origin on the first frame.
 	_aim = position
@@ -190,6 +227,15 @@ func _unhandled_input(event: InputEvent) -> void:
 		if drag != null:
 			_orbit_travel_px += drag.relative.length()
 			_target_yaw_degrees -= drag.relative.x * orbit_sensitivity
+			# The same drag's OTHER axis, which this branch used to throw away (#586, dev: "I don't
+			# see the harm in letting the player drag up/down too"). Grab-the-world in both, so
+			# dragging DOWN pulls the far edge down and the camera looks further down with it.
+			#
+			# Clamped on the TARGET rather than after easing: a target parked past the limit would
+			# drag the angle back out to it on every frame it eased in -- the same reasoning the
+			# pan_limit clamp states for the aim.
+			_target_pitch_degrees = clampf(_target_pitch_degrees - drag.relative.y * orbit_sensitivity,
+					min_pitch_degrees, max_pitch_degrees)
 			return
 
 	var key := event as InputEventKey
@@ -206,6 +252,12 @@ func _unhandled_input(event: InputEvent) -> void:
 				glide_to(_home_position)
 				_target_yaw_degrees = _home_yaw_degrees
 				_target_distance = _home_distance
+				# ...and the tilt, to the BOARD's angle rather than a _home_ of its own (#586): pitch
+				# is authored by the mood, so the board already says what "the opening shot" means
+				# here and a second copy would only drift from it. R is the ONLY leveller -- Q/E
+				# stays a yaw realign, so a tilt survives turning the board to look at the other
+				# side of what you tilted for (dev, 2026-08-27).
+				_target_pitch_degrees = board_pitch_degrees
 
 
 # One notch of zoom. Public so a host that has taken the wheel away can still hand a MODIFIED
@@ -263,6 +315,28 @@ func _set_manual_input_enabled(value: bool) -> void:
 	manual_input_enabled = value
 	if not value:
 		release_orbit()
+
+
+# Re-seeds the live tilt, which is the whole reason this is a setter (#586). A mood applying its
+# authored pitch, or the Moods slider moving under a dev's hand, has to MOVE THE CAMERA -- a baseline
+# that only took effect on the next R would be a knob writing somewhere nothing reads, which is the
+# no-placebo law's failure with the revert running slowly instead of instantly.
+#
+# It therefore also discards a player's tilt, and that is right at both call sites: applying a look is
+# a board arriving, and a dev dragging the slider is asking to see THIS angle.
+func _set_board_pitch_degrees(value: float) -> void:
+	board_pitch_degrees = value
+	_target_pitch_degrees = value
+	_pitch_degrees = value
+	# SNAPPED, not eased -- frame()'s "hold_at, not glide_to" reasoning, and for its exact reason:
+	# pitch is part of the camera's basis, so a rig still lerping toward a newly applied mood
+	# unprojects at one angle and picks at another, and every screen-space read taken on the way in
+	# desyncs. A mood arriving is a board arriving. The player's own drag still eases, in _process.
+	#
+	# Guarded because an @export setter can fire while the scene is still being built, before
+	# @onready has resolved anything; _ready writes the node itself for that first pass.
+	if _pitch != null:
+		_pitch.rotation_degrees.x = value
 
 
 func set_zoom(distance: float) -> void:
@@ -483,6 +557,7 @@ func stash_view() -> void:
 	_borrowed_position = _target_aim
 	_borrowed_yaw_degrees = _target_yaw_degrees
 	_borrowed_distance = _target_distance
+	_borrowed_pitch_degrees = _target_pitch_degrees
 	_view_borrowed = true
 
 
@@ -500,6 +575,9 @@ func restore_view() -> void:
 	glide_to(_borrowed_position)
 	_target_yaw_degrees = _borrowed_yaw_degrees
 	set_zoom(_borrowed_distance)
+	# The tilt comes back with the rest (#586). A player who tilted to read a pit and then pressed
+	# Execute is standing where they were standing; the pitch is part of that, exactly as the yaw is.
+	_target_pitch_degrees = _borrowed_pitch_degrees
 
 
 # Anything that redefines the OPENING SHOT is a new board, and a view borrowed from the old one
@@ -513,6 +591,29 @@ func _process(delta: float):
 	var blend := 1.0 - exp(-smoothing * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	_camera.position.z = lerpf(_camera.position.z, _target_distance, blend)
+	# The third eased channel (#586), on the SAME rate as the yaw: they are two axes of one drag, and
+	# a pitch that settled at a different speed would make a diagonal drag curve. Plain lerpf rather
+	# than the angle helper -- pitch is a bounded band, never a circle, so there is no short way round.
+	#
+	# THE LIVE ANGLE IS THIS FLOAT AND THE NODE IS A PURE OUTPUT -- `position`'s shape (#520), and here
+	# it is load-bearing rather than tidy.
+	#
+	# MEASURED, and the reason this is not the obvious `_pitch.rotation_degrees.x = lerpf(...)`:
+	# reading the angle back off the node reds `tests/presentation/test_unit_health_bar.gd` (3 cases)
+	# and `test_health_block_debris.gd`, on a branch that touches nothing but the camera -- one of them
+	# reporting a wrong CUBE COUNT. Own-float, green; read-back, red; verified both ways.
+	#
+	# The MECHANISM is unconfirmed. What is known: the read-back round-trips through the basis, which
+	# returns -39.999992 for an authored -40 (the number every LookPreset records), so the ease chases
+	# a target it cannot express. The obvious story from there is `battle3d._poll_pointer`, which skips
+	# its work only while `_camera.global_transform` compares EQUAL -- but two cases written to pin
+	# that (a settling transform, and a synthetic pointer surviving) BOTH PASSED against the mutant,
+	# so do not repeat it as fact. The suites above are the real guard; if this line is ever touched,
+	# run them. Yaw survives the identical code only because the scenes author it at 0.
+	var next_pitch := lerpf(_pitch_degrees, _target_pitch_degrees, blend)
+	if not is_equal_approx(next_pitch, _pitch_degrees):
+		_pitch_degrees = next_pitch
+		_pitch.rotation_degrees.x = next_pitch
 	_attributes.dof_blur_near_distance = maxf(0.5, _camera.position.z - focus_band_near)
 	_attributes.dof_blur_far_distance = _camera.position.z + focus_band_far
 
