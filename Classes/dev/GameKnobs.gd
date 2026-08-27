@@ -242,6 +242,31 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Cover", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
 
+	# --- Water (#552) ---
+	# World construction like Fire, not mood: a lake looks the same in every mission. These reach
+	# the shader as global uniforms rather than as material parameters, so each row moves the whole
+	# board's water at once. What is NOT here: how much lighter shallow water is than deep. That is
+	# the two tiles' authored modulate, because it has to reach the flat view as well and a knob on
+	# this node structurally cannot.
+	{"group": "Water", "node": "BoardMirror", "prop": "water_wave_speed", "label": "Wave speed", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "How fast the light bands travel across the surface. Zero holds the water still without flattening it -- the bands, the highlight and the bed all stay, they simply stop moving. Shallow water runs a little quicker than deep at any setting."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_wave_scale", "label": "Wave scale", "min": 0.5, "max": 24.0, "step": 0.1,
+		"tip": "How tightly packed the bands are, in radians per cell -- roughly, how many wave crests cross one tile. Low reads as a slow open lake, high as choppy. Shallow water is tighter than deep at any setting."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_band_contrast", "label": "Band contrast", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How much the moving bands lighten the tile's own colour. This is the visible half of the motion; its twin, Ripple, is the half you only see in the highlight. At zero the water still glints but no longer reads as banded."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_ripple", "label": "Ripple", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard the wave bends the surface's normal, which is what makes the SUN's highlight travel rather than sit still. Zero leaves a mirror-flat surface that still shows bands; high enough and the whole surface scintillates."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_roughness", "label": "Roughness", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How diffuse the surface is. 1.0 is what every other ground uses and is why water had no specular response at all before #552; low values give it a tight, wet highlight. Tuned together with Specular and with the Moods tab's Sun elevation, which decides where the highlight falls."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_specular", "label": "Specular", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How strong the highlight is once Roughness lets there be one. Roughness sets how TIGHT the highlight is, this sets how BRIGHT -- a broad dim sheen and a small fierce glint are the two ends."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_bed", "label": "Shallow bed", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How strongly SHALLOW water shows the bottom through it, as a static mottle that does not move with the waves. Deep water never gets it -- that asymmetry is half of how a wadeable tile is told apart from one that drowns you."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_seam", "label": "Cell seam", "min": 0.0, "max": 0.6, "step": 0.005,
+		"tip": "How darkly the surface draws its own cell boundaries. The waves run off world position so a lake is one continuous body, which erases the grid -- and on water the hover bracket is then the only thing showing where a tile ends. Zero hands that job back to the bracket alone."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much darker a water block's SIDES and its top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge."},
+
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A

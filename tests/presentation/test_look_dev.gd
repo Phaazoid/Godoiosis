@@ -120,13 +120,46 @@ func test_tile_materials_are_nearest_filtered_and_textured() -> void:
 				"'%s' draws nothing but is not the declared filler" % library.get_item_name(item_id)) \
 			.is_true()
 		for surface in mesh.get_surface_count():
-			var material := mesh.surface_get_material(surface) as StandardMaterial3D
-			assert_object(material).is_not_null()
-			assert_object(material.albedo_texture).is_not_null()
-			assert_int(material.texture_filter).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
+			_assert_textured_and_nearest(mesh.surface_get_material(surface),
+					"'%s' surface %d" % [library.get_item_name(item_id), surface])
 	assert_int(invisible).override_failure_message(
 			"the meshlib has no wedge filler at all; a tall ramp cannot declare its own rows") \
 		.is_equal(1)
+
+
+# The rule above, asked of whichever material kind a surface wears. It WIDENED for #552's water
+# shader and was not relaxed: a drawn surface still has to name a texture and still has to sample it
+# NEAREST, or the board's pixel art draws blurred. What differs is only where those two facts live --
+# a StandardMaterial3D carries both as properties, while a shader carries the texture as a parameter
+# and the filter as a hint on the uniform declaration that reads it, which is not reachable through
+# get_shader_uniform_list. Every sampler the shader declares is held to it, not just the one set,
+# since a second texture sampled bilinear would blur just as visibly.
+func _assert_textured_and_nearest(material: Material, where: String) -> void:
+	var standard := material as StandardMaterial3D
+	if standard != null:
+		assert_object(standard.albedo_texture).override_failure_message(
+				"%s has no texture" % where).is_not_null()
+		assert_int(standard.texture_filter).override_failure_message(
+				"%s does not sample NEAREST" % where).is_equal(BaseMaterial3D.TEXTURE_FILTER_NEAREST)
+		return
+	var shaded := material as ShaderMaterial
+	assert_object(shaded).override_failure_message(
+			"%s wears no material this rule knows how to check" % where).is_not_null()
+	var samplers := 0
+	for line in shaded.shader.code.split("\n"):
+		var text := line.strip_edges()
+		if not text.begins_with("uniform sampler2D"):
+			continue
+		samplers += 1
+		assert_bool(text.contains("filter_nearest")).override_failure_message(
+				"%s reads a texture through '%s' without filter_nearest -- the board's pixel " \
+				% [where, text] + "art would draw blurred").is_true()
+		var param := text.trim_suffix(";").split(" ")[2].trim_suffix(":")
+		assert_object(shaded.get_shader_parameter(param)).override_failure_message(
+				"%s declares sampler '%s' and nothing was assigned to it" \
+				% [where, param]).is_not_null()
+	assert_int(samplers).override_failure_message(
+			"%s wears a shader that samples no texture at all" % where).is_greater(0)
 
 
 func test_every_bound_mood_resolves_to_the_preset_it_names() -> void:

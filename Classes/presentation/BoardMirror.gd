@@ -171,6 +171,37 @@ const FLAME_FRAMES := 8
 @export var flame_light_range := 4.0: set = _set_flame_light_range
 @export var flame_light_color := Color(1, 0.62, 0.3): set = _set_flame_light_color
 
+# Water knobs (#552). They reach Scenes/LookDev/water.gdshader as GLOBAL shader uniforms, declared
+# in project.godot's [shader_globals], rather than as parameters on the meshlib's own material —
+# writing to that material would mutate a GENERATED artifact at runtime. One push per knob, and
+# _ready pushes the lot, because a global that nothing has written yet is whatever project.godot
+# says and not what these declarations say.
+#
+# The shader is on the TOP surface of every water block. `deep` is not here: which water drowns you
+# is the tile's own `walkable` flag, baked per material by the generator, not a dial.
+@export var water_wave_speed := 0.8: set = _set_water_wave_speed
+@export var water_wave_scale := 5.0: set = _set_water_wave_scale
+# How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
+# normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
+# banded-but-matte one are both wrong in different directions.
+@export var water_band_contrast := 0.35: set = _set_water_band_contrast
+@export var water_ripple := 0.35: set = _set_water_ripple
+# The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
+# specular response at all. Low roughness is what lets the sun sit on it.
+@export var water_roughness := 0.25: set = _set_water_roughness
+@export var water_specular := 0.6: set = _set_water_specular
+# The SHALLOW half of the shallow/deep read: a static mottle of the bed showing through, which deep
+# water does not get. The base colours are the tiles' own authored modulate, not a knob — those
+# reach the flat view too, and this one cannot.
+@export var water_bed := 0.5: set = _set_water_bed
+# How hard the surface draws its own cell boundary. Water driven off world position is one
+# continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
+# the job back to the bracket.
+@export var water_seam := 0.12: set = _set_water_seam
+# How much darker a water block's SIDE and top rim read than its surface — the body rather than the
+# face of it.
+@export var water_body_shade := 0.45: set = _set_water_body_shade
+
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
 
@@ -314,6 +345,10 @@ func _flame_animating() -> bool:
 # Fire is the one thing this mirror draws that MOVES on its own (#324). Everything else here is
 # reconciled from the game and then left standing, so the loop early-outs to nothing on a board
 # that is not alight — the cost is proportional to burning cells, which is normally none.
+func _ready() -> void:
+	_push_all_water()
+
+
 func _process(delta: float) -> void:
 	if _fire_markers.is_empty():
 		return
@@ -931,6 +966,76 @@ func _rebuild_fires() -> void:
 		var at := standing.position
 		standing.queue_free()
 		_fire_markers[cell] = _make_fire(cell, at)
+
+
+# --- Water (#552) ------------------------------------------------------------------------------
+
+# The ONE spelling of "push a water knob at the shader", so a new row is a name and a value rather
+# than a fourth way to reach RenderingServer. Names match the shader's `global uniform` lines and
+# project.godot's [shader_globals] section exactly — a typo here is silent in GLSL, which is what
+# test_the_water_shader_declares_every_knob_board_mirror_pushes exists to catch.
+func _push_water(uniform: StringName, value: float) -> void:
+	RenderingServer.global_shader_parameter_set(uniform, value)
+
+
+# Everything at once, on entering the tree. Without it the board wears project.godot's saved
+# defaults until someone happens to move a slider, which is the same born-dead-knob failure #264
+# shipped and #380 named.
+func _push_all_water() -> void:
+	_push_water(&"water_wave_speed", water_wave_speed)
+	_push_water(&"water_wave_scale", water_wave_scale)
+	_push_water(&"water_band_contrast", water_band_contrast)
+	_push_water(&"water_ripple", water_ripple)
+	_push_water(&"water_roughness", water_roughness)
+	_push_water(&"water_specular", water_specular)
+	_push_water(&"water_bed", water_bed)
+	_push_water(&"water_seam", water_seam)
+	_push_water(&"water_body_shade", water_body_shade)
+
+
+func _set_water_wave_speed(value: float) -> void:
+	water_wave_speed = value
+	_push_water(&"water_wave_speed", value)
+
+
+func _set_water_wave_scale(value: float) -> void:
+	water_wave_scale = value
+	_push_water(&"water_wave_scale", value)
+
+
+func _set_water_band_contrast(value: float) -> void:
+	water_band_contrast = value
+	_push_water(&"water_band_contrast", value)
+
+
+func _set_water_ripple(value: float) -> void:
+	water_ripple = value
+	_push_water(&"water_ripple", value)
+
+
+func _set_water_roughness(value: float) -> void:
+	water_roughness = value
+	_push_water(&"water_roughness", value)
+
+
+func _set_water_specular(value: float) -> void:
+	water_specular = value
+	_push_water(&"water_specular", value)
+
+
+func _set_water_bed(value: float) -> void:
+	water_bed = value
+	_push_water(&"water_bed", value)
+
+
+func _set_water_seam(value: float) -> void:
+	water_seam = value
+	_push_water(&"water_seam", value)
+
+
+func _set_water_body_shade(value: float) -> void:
+	water_body_shade = value
+	_push_water(&"water_body_shade", value)
 
 
 func _set_flame_lift(value: float) -> void:

@@ -35,6 +35,7 @@ extends SceneTree
 const ART_DIR := "res://Art/LookDev"
 const MESHLIB_PATH := "res://Scenes/LookDev/lookdev_meshlib.tres"
 const TILESET_PATH := "res://Resources/TestTiles.tres"
+const WATER_SHADER_PATH := "res://Scenes/LookDev/water.gdshader"
 const TILE := 32
 
 # The composed ground atlas, one PNG per tileset source (#540) -- a generated artifact like every
@@ -86,6 +87,15 @@ func _gen_textures() -> int:
 	_save(_speckled(rng, Color8(74, 58, 44), 0.14), "mud_top.png")
 	_save(_water_top(rng), "water_top.png")
 	_save(_speckled(rng, Color8(44, 86, 52), 0.16), "tree_top.png")
+	# The water BODY seen edge-on (#552) -- the sheet's own water blue driven down toward black.
+	# Water was the only kind wearing its own SURFACE down its sides, which is what made a cell of it
+	# read as a cube of water rather than as a body of one; every other kind has paired a top with a
+	# distinct side since #215.
+	#
+	# APPENDED, never inserted: one seeded rng runs this whole list, so a texture added anywhere but
+	# the end re-rolls the noise in every texture after it. Measured -- dropping this in beside
+	# water_top rewrote tree_top.png for nothing.
+	_save(_speckled(rng, Color8(28, 62, 104), 0.18), "water_side.png")
 	print("LookDev textures written to %s" % ART_DIR)
 	return 0
 
@@ -105,6 +115,9 @@ func _speckled(rng: RandomNumberGenerator, base: Color, spread: float) -> Image:
 	return img
 
 
+# The base of the WATER fallback block and the backing under every water tile in the composed
+# atlas. Since #552 the shader draws the motion over it, so the flecks here are a still-life the
+# waves cover; what still matters is the colour.
 func _water_top(rng: RandomNumberGenerator) -> Image:
 	var img := Image.create_empty(TILE, TILE, false, Image.FORMAT_RGBA8)
 	var base := Color8(52, 96, 150)
@@ -315,8 +328,10 @@ func _gen_meshlib() -> int:
 	var dirt_top := _load_tex("dirt_top.png")
 	var mud_top := _load_tex("mud_top.png")
 	var water_top := _load_tex("water_top.png")
+	var water_side := _load_tex("water_side.png")
 	var tree_top := _load_tex("tree_top.png")
-	if dirt_top == null or mud_top == null or water_top == null or tree_top == null:
+	if dirt_top == null or mud_top == null or water_top == null or water_side == null \
+			or tree_top == null:
 		push_error("Kind textures missing (#215) -- rerun --textures, then --import, first.")
 		return 1
 
@@ -339,7 +354,10 @@ func _gen_meshlib() -> int:
 			Terrain.UNITS_PER_LEVEL), _mat(grass_top), _mat(dirt_side)))
 	_add_item(ml, 3, "dirt_block", _block_mesh(_mat(dirt_top), _mat(dirt_side)))
 	_add_item(ml, 4, "mud_block", _block_mesh(_mat(mud_top), _mat(dirt_side)))
-	_add_item(ml, 5, "water_block", _block_mesh(_mat(water_top), _mat(water_top)))
+	# The declared WATER fallback wears the shader too (#552): a cell the meshlib has no per-tile
+	# item for would otherwise sit dead still in the middle of a moving lake. DEEP, because a
+	# fallback cell has no tile to declare itself walkable.
+	_add_item(ml, 5, "water_block", _block_mesh(_water_mat(water_top, true), _mat(water_side)))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
 	# Ids 0-6 are the hand-picked fallbacks and Scenes/LookDev/LookDev.tscn's diorama references them
 	# BY ID, so #427 slice 2's additions append rather than renumber. The gentle fallback wedge is the
@@ -368,7 +386,8 @@ func _gen_meshlib() -> int:
 		Terrain.Kind.WATER: water_top,
 		Terrain.Kind.DIRT: dirt_top,
 	}
-	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), bases, dirt_top) < 0:
+	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), _mat(water_side), bases,
+			dirt_top) < 0:
 		return 1
 
 	var err := ResourceSaver.save(ml, MESHLIB_PATH)
@@ -397,7 +416,8 @@ func _gen_meshlib() -> int:
 # The multi-cell ones are all props, so their art DOES reach the board -- on a billboard,
 # which has no 1x1 constraint. This loop only decides what the GROUND under them looks like.
 func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Material,
-		bases: Dictionary[Terrain.Kind, Texture2D], default_base: Texture2D) -> int:
+		water_side: Material, bases: Dictionary[Terrain.Kind, Texture2D],
+		default_base: Texture2D) -> int:
 	var ts := load(TILESET_PATH) as TileSet
 	if ts == null:
 		push_error("Tileset missing or unreadable at %s" % TILESET_PATH)
@@ -459,6 +479,13 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		prop_mat.cull_mode = BaseMaterial3D.CULL_BACK
 		prop_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA_SCISSOR
 		prop_mat.alpha_scissor_threshold = 0.5
+		# TWO water SURFACES over that same texture, and two is the whole count (#552): shallow and
+		# deep is the only thing one water tile may differ from another about, so `deep` keys these
+		# rather than the coords keying one material per tile.
+		var water_mats: Dictionary[bool, ShaderMaterial] = {
+			true: _water_mat(null, true),
+			false: _water_mat(null, false),
+		}
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
@@ -484,19 +511,29 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			var shape := GridUtils.prop_shape_of(data)
 			var stands_up := shape != GridUtils.PropShape.FLAT
 			if not stands_up:
-				ground.blend_rect(source_image, region, region.position)
+				var art := _tinted(source_image, region, data.modulate)
+				ground.blend_rect(art, Rect2i(Vector2i.ZERO, region.size), region.position)
 			elif shape == GridUtils.PropShape.TUFT:
 				ground.blit_rect(_tuft_ground(rng, source_image, region),
 						Rect2i(Vector2i.ZERO, region.size), region.position)
 
 			var top_uv := _uv_rect(region, atlas_size)
+			var top: Material = atlas_mat
 			var side: Material = stone_side if kind == Terrain.Kind.ROCK else dirt_side
-			var side_uv := Rect2(0, 0, 1, 1)
+			# Water is the one surface that MOVES, and the one whose sides stopped wearing it
+			# (#552). Which of the two surfaces it gets is the tile's own walkability -- deep is
+			# water you cannot stand on, the same reading RulesService.drowns_in and the hover card
+			# already make, so the tile and the rules cannot drift apart about it.
 			if kind == Terrain.Kind.WATER:
-				side = atlas_mat        # water wears its own surface down the sides, as water_block does
-				side_uv = top_uv
+				top = water_mats[not GridUtils.walkable_of(data)]
+				side = water_side
+			# side_uv stays the whole texture: dirt, stone and water side are each their own sheet,
+			# not a region of the atlas. It was top_uv for water until #552, which is the trap the
+			# _block_mesh comment warns about -- an unpassed side_uv put the ENTIRE tilesheet on a
+			# water slope, and the fix was passing the water's atlas rect rather than taking water
+			# off the atlas.
 			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
-					_block_mesh(atlas_mat, side, top_uv, side_uv))
+					_block_mesh(top, side, top_uv))
 			next_id += 1
 
 			# The same surface on a SLOPE (#340). EVERY 1x1 tile gets one, wearing exactly what the
@@ -524,8 +561,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 						Terrain.Form.INNER]:
 					_add_item(ml, next_id,
 							BoardMirror.ramp_item_name(source_id, coords, climb, form),
-							_form_mesh(_canonical_corners(form, climb), atlas_mat, side,
-									top_uv, side_uv))
+							_form_mesh(_canonical_corners(form, climb), top, side, top_uv))
 					next_id += 1
 
 			# The solid prop's own item: real geometry sized by the art, wearing faces GENERATED in
@@ -597,6 +633,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			return -1
 		atlas_mat.albedo_texture = composited
 		prop_mat.albedo_texture = composited
+		for mat: ShaderMaterial in water_mats.values():
+			mat.set_shader_parameter("atlas", composited)
 
 	var added := next_id - FIRST_TILE_ITEM
 	print("Tileset items %d..%d (%d ground + %d prop) from %s" \
@@ -709,6 +747,42 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 	# and test_a_cap_opening_lies_on_the_block_top pins it.
 	mat.cull_mode = BaseMaterial3D.CULL_BACK
 	return mat
+
+
+# The water SURFACE material (#552). Not a _mat: water is the one ground whose top face moves, and
+# it moves off world position so a lake reads as one body rather than as N rippling tiles. The
+# texture may be handed over later (the composited atlas is not written until the source loop ends,
+# exactly as atlas_mat's is), so a null here is a promise, not a gap.
+#
+# `deep` is the tile's own `walkable` flag, inverted -- the flag the RULES read. There is no second
+# answer to which water drowns you, and a water tile authored tomorrow gets its look from its
+# walkability without touching this file. Every TUNING value is a global uniform instead, because a
+# per-material one would mean BoardMirror writing into the generated meshlib at runtime.
+func _water_mat(tex: Texture2D, deep: bool) -> ShaderMaterial:
+	var mat := ShaderMaterial.new()
+	mat.shader = load(WATER_SHADER_PATH)
+	mat.set_shader_parameter("atlas", tex)
+	mat.set_shader_parameter("deep", 1.0 if deep else 0.0)
+	return mat
+
+
+# A tile's own art with its authored TileData.modulate multiplied in, so the composed atlas carries
+# the same tint the 2D TileMapLayer applies natively -- ONE number, both views (#292). White is
+# returned untouched rather than multiplied by 1.0, which keeps every other tile's bytes identical.
+#
+# GROUND art only. A standing prop's sprite reaches the board through BoardMirror's billboard and
+# its generated faces are drawn in _palette_of's colours, so neither passes through here; no prop
+# tile authors a modulate today, and one that did would need this widened deliberately.
+func _tinted(source: Image, region: Rect2i, modulate: Color) -> Image:
+	var patch := source.get_region(region)
+	if modulate == Color(1, 1, 1, 1):
+		return patch
+	for y in patch.get_height():
+		for x in patch.get_width():
+			var c := patch.get_pixel(x, y)
+			patch.set_pixel(x, y, Color(c.r * modulate.r, c.g * modulate.g, c.b * modulate.b,
+					c.a * modulate.a))
+	return patch
 
 
 func _add_item(ml: MeshLibrary, id: int, item_name: String, mesh: Mesh) -> void:

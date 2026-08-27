@@ -113,3 +113,42 @@ textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 textures/decals/filter=0
 2d/snap/snap_2d_transforms_to_pixel=true
+
+[shader_globals]
+
+water_wave_speed={
+"type": "float",
+"value": 0.8
+}
+water_wave_scale={
+"type": "float",
+"value": 5.0
+}
+water_band_contrast={
+"type": "float",
+"value": 0.35
+}
+water_ripple={
+"type": "float",
+"value": 0.35
+}
+water_roughness={
+"type": "float",
+"value": 0.25
+}
+water_specular={
+"type": "float",
+"value": 0.6
+}
+water_bed={
+"type": "float",
+"value": 0.5
+}
+water_seam={
+"type": "float",
+"value": 0.12
+}
+water_body_shade={
+"type": "float",
+"value": 0.45
+}

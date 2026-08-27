@@ -122,6 +122,20 @@ static func terrain_kind_of(data: TileData) -> Terrain.Kind:
 	var raw: int = data.get_custom_data("terrain_type")
 	return raw as Terrain.Kind
 
+
+# Whether a TILE TYPE declares itself walkable, with #109's guard: a tile whose tileset does not
+# declare the flag is NOT walkable, and the has_custom_data check is what stops get_custom_data
+# raising and returning Nil into a bool.
+#
+# BoardContext.is_walkable is still THE walkability answer for a CELL -- it alone knows tile STATE,
+# so a FROZEN water tile is passable there and is not here. This is the narrower question, and it
+# exists because #552's generator asks it of a tileset that has no board: which water drowns you is
+# a tile fact, and the surface a water tile wears must not be a second reading of it.
+static func walkable_of(data: TileData) -> bool:
+	if data == null or not data.has_custom_data("walkable"):
+		return false
+	return data.get_custom_data("walkable")
+
 # What FORM this tile's art wants in 3D (#264, widening #255's `stands_up` bool). A presentation
 # fact with no existing answer, which is why it is authored rather than inferred -- every candidate
 # rule has a counterexample in the sheet we ship: crate carries no kind and is a prop, pot is
