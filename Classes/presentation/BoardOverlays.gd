@@ -31,7 +31,7 @@ enum Layer {
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
-	GUARD_ICONS,
+	GUARD_ICONS, GUARD_LINK,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -103,6 +103,16 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	# reads OVER ground markup, which is #346's rule -- the interaction is the thing you must not
 	# miss, and ambient membership yielding to it is the trade. One integer if that reads wrong.
 	Layer.GUARD_ICONS: {"color": Color.WHITE, "sort": 8, "kind": Kind.SPRITE},
+	# The blocker->ward arrow (#450), and its own layer for the reason the shield above has one: a
+	# layer is a plane, and this trail's two cells are exactly the cells the shield, an aim fill, a
+	# target-pick mark, a path arrow or a sight trace can already be sitting on. 9 is the first slot
+	# free of all of them.
+	#
+	# ABOVE the shield rather than under it, which is a decision and not the leftover integer: the
+	# 2D draws these into ArrowIconOverlay, a later sibling than IconOverlay at the same z_index, so
+	# the arrowhead lands over the shield there whatever this number says -- and the two views must
+	# agree. Reverse BOTH (swap with 8, give the 2D link RING_Z_INDEX) if the head crowds the shield.
+	Layer.GUARD_LINK: {"color": Color.WHITE, "sort": 9, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.

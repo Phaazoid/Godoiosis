@@ -46,11 +46,52 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
+# The WARD's half: the shield decal. Since #450 the blocker never wears one -- ask _guard_linked.
 func _guard_marked(unit: Unit) -> bool:
 	var icons: Dictionary = game.overlay_manager.icons_by_unit
 	if not icons.has(unit):
 		return false
 	return (icons[unit] as Dictionary).has(OverlayIcon.IconType.GUARD_WARD)
+
+
+# The BLOCKER's half: the arrow trail aimed at its ward (#450). Counted rather than merely
+# non-empty, because a one-step trail is exactly two sprites (a start tile and an arrowhead) and
+# "some arrows exist somewhere" would pass against a link drawn for the wrong pair.
+func _guard_link_count() -> int:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	var live := 0
+	for sprite in sprites:
+		if is_instance_valid(sprite):
+			live += 1
+	return live
+
+
+func _guard_linked() -> bool:
+	return _guard_link_count() == 2
+
+
+# The GHOSTED pair a queued-but-unarmed Guard draws (#450 part 2). Counted as one shield plus a
+# two-sprite trail, the same shape the armed pair is asserted at.
+func _guard_preview_count() -> int:
+	var om = game.overlay_manager
+	return (om.guard_preview_icons as Array).size() + (om.guard_preview_links as Array).size()
+
+
+# Where the link's TAIL sits -- the start tile, which is the only half still anchored to a cell.
+# Read back through the grid rather than compared as world floats, since GridUtils.cell_world placed
+# it and this is that call's own inverse.
+func _guard_link_tail_cell() -> Vector2i:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	return game.grid.local_to_map(game.grid.to_local(sprites[0].global_position))
+
+
+# Where the link's HEAD sits, in world pixels. Deliberately NOT a cell: since #450 round 2 the head
+# is inset half a cell so the ward's shield is legible under it, which puts it ON the boundary --
+# where local_to_map answers with whichever side the floor lands on and would read as the blocker's
+# own cell. The position is the fact; the cell is not.
+func _guard_link_head_pos() -> Vector2:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	return sprites[sprites.size() - 1].global_position
 
 
 # --- 1. the lapse tick --------------------------------------------------------------------------
@@ -77,7 +118,11 @@ func test_a_factions_turn_start_lapses_its_own_guards_and_leaves_the_others() ->
 
 # --- 2. the ground markers ----------------------------------------------------------------------
 
-func test_an_armed_guard_marks_both_ends_of_the_pair() -> void:
+func test_an_armed_guard_shields_the_ward_and_points_a_link_at_it_from_the_blocker() -> void:
+	# #450 replaced #414's marks-both-ends rule, which this case used to carry IN ITS NAME. The
+	# board has to say which end is which -- both ends wearing the same shield said only that the
+	# two were connected, and the direction was readable off the queue row alone, i.e. not at all
+	# during the enemy phase.
 	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
 	await await_idle_frame()
@@ -85,8 +130,13 @@ func test_an_armed_guard_marks_both_ends_of_the_pair() -> void:
 
 	game.refresh_guard_markers()
 
-	assert_bool(_guard_marked(blocker)).is_true()
-	assert_bool(_guard_marked(ward)).is_true()
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"no shield under the WARD -- it is the one end that wears one").is_true()
+	assert_bool(_guard_marked(blocker)).override_failure_message(
+		"the BLOCKER wears a shield; #450 gave it the arrow's tail instead").is_false()
+	assert_bool(_guard_linked()).override_failure_message(
+		"expected a two-sprite link from blocker to ward, got %d sprites" % _guard_link_count()) \
+		.is_true()
 
 
 func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> void:
@@ -112,9 +162,110 @@ func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> voi
 	assert_bool(_guard_marked(ward)) \
 		.override_failure_message("no ground marker under the WARD after a real queue-and-execute") \
 		.is_true()
-	assert_bool(_guard_marked(blocker)) \
-		.override_failure_message("no ground marker under the BLOCKER after a real queue-and-execute") \
+	assert_bool(_guard_linked()) \
+		.override_failure_message("no link from the BLOCKER after a real queue-and-execute") \
 		.is_true()
+
+
+func test_a_queued_guard_previews_ghosted_and_goes_solid_once_it_arms() -> void:
+	# A Guard was the only queued verb that showed NOTHING on the board until Execute (#450 part 2):
+	# a move gets arrows and a ghost, an ignite gets a ghosted icon, a Guard got a queue row. It now
+	# draws the same pair the armed one does, at the plan-time alpha -- and the difference matters,
+	# because identical marks would tell the player they are covered while the cover is still a plan.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var _enemy := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(ward, blocker.squad)
+
+	game.queue_guard(blocker, ward)
+	await await_idle_frame()
+
+	assert_int(_guard_preview_count()).override_failure_message(
+		"a queued Guard drew no ghost -- it is the only queued verb that previews nothing") \
+		.is_equal(3)
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"the queued Guard drew a SOLID shield -- the board is promising cover that is not live yet") \
+		.is_false()
+	assert_int(_guard_link_count()).override_failure_message(
+		"the queued Guard drew a solid link").is_equal(0)
+	var ghost: Sprite2D = game.overlay_manager.guard_preview_icons[0]
+	assert_float(ghost.modulate.a).override_failure_message(
+		"the ghost is as opaque as an armed ward, so the board cannot say 'not yet'") \
+		.is_less(OverlayManager.GUARD_RING_COLOR.a)
+
+	await game.order_executor.execute_orders(blocker.squad.get_leader())
+
+	assert_int(_guard_preview_count()).override_failure_message(
+		"the ghost outlived the plan it previewed and now sits beside the real mark").is_equal(0)
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"the armed shield never replaced the ghost").is_true()
+	assert_bool(_guard_linked()).override_failure_message(
+		"the armed link never replaced the ghost").is_true()
+
+
+func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:
+	# #450's fourth refresh moment, and the one the other three cannot cover. The ward's shield is an
+	# OverlayIcon that re-reads its own projected cell every frame; the blocker's link is a static
+	# sprite. Without the refresh_guard_markers call in refresh_action_queue the shield walks and the
+	# arrow stays, pointing at a cell nobody is standing on -- and every case above still passes,
+	# because none of them ever changes a plan. Driven through squad_manager.queue_action so the real
+	# squad_action_queued -> refresh_action_queue chain is what does the work.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(ward, blocker.squad)
+	blocker.arm_guard(ward, blocker.get_guard_range())
+	game.refresh_guard_markers()
+	assert_bool(_guard_linked()).override_failure_message("fixture drew no link to begin with").is_true()
+
+	var move := MoveAction.new()
+	move.init(blocker, [Vector2i(1, 0), Vector2i(1, 1), Vector2i(2, 1)], null)
+	assert_bool(game.squad_manager.queue_action(blocker.squad, move)) \
+		.override_failure_message("fixture failed to queue the move").is_true()
+	await await_idle_frame()
+
+	assert_vector(blocker.get_projected_destination()) \
+		.override_failure_message("fixture's move did not move the projection").is_equal(Vector2i(2, 1))
+	assert_bool(_guard_linked()).override_failure_message(
+		"the link vanished instead of following -- (2,1) is still adjacent to the ward").is_true()
+	assert_vector(_guard_link_tail_cell()).override_failure_message(
+		"the link still starts from the cell the blocker LEFT").is_equal(Vector2i(2, 1))
+	# The head lands HALF WAY between the two centres -- the shared edge -- which is both where the
+	# inset puts it and the one expression that says "it followed" without restating the inset.
+	var from := GridUtils.cell_world(game.grid, Vector2i(2, 1))
+	var to := GridUtils.cell_world(game.grid, Vector2i(2, 0))
+	assert_vector(_guard_link_head_pos()).override_failure_message(
+		"the head is not on the edge the moved pair now shares").is_equal(from.lerp(to, 0.5))
+
+
+func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
+	# Round 2, found in play: "the shield just isn't as readable as I'd like it to be under the
+	# arrowhead." The arrow tile's ink runs x=0..11 of 16 and the shield's x=1..13, so drawn on the
+	# ward's own cell the arrow covered eleven of the shield's thirteen columns.
+	#
+	# Pinned as a RELATIONSHIP against the ward's centre, never as the inset's number -- that value
+	# is a Game-tab knob and the tuning razor forbids a test that reddens when the dev turns it.
+	# What must stay true is only the direction: the head sits strictly BLOCKER-side of the shield.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	await await_idle_frame()
+	blocker.arm_guard(ward, blocker.get_guard_range())
+
+	game.refresh_guard_markers()
+
+	var ward_centre := GridUtils.cell_world(game.grid, Vector2i(2, 0))
+	var blocker_centre := GridUtils.cell_world(game.grid, Vector2i(1, 0))
+	var head := _guard_link_head_pos()
+	assert_float(head.distance_to(ward_centre)).override_failure_message(
+		"the head sits ON the ward's cell centre, i.e. on top of the shield") \
+		.is_greater(0.0)
+	assert_float(head.distance_to(blocker_centre)).override_failure_message(
+		"the head was inset PAST the blocker -- it should stop between the pair, not behind it") \
+		.is_greater(0.0)
+	assert_float(head.distance_to(ward_centre)).override_failure_message(
+		"the head is closer to the ward than to the blocker, so it still crowds the shield") \
+		.is_less_equal(head.distance_to(blocker_centre))
 
 
 func test_a_spent_guard_stops_being_marked() -> void:
@@ -128,8 +279,9 @@ func test_a_spent_guard_stops_being_marked() -> void:
 	blocker.spend_guard()
 	game.refresh_guard_markers()
 
-	assert_bool(_guard_marked(blocker)).is_false()
 	assert_bool(_guard_marked(ward)).is_false()
+	assert_int(_guard_link_count()).override_failure_message(
+		"a spent Guard left its link on the board").is_equal(0)
 
 
 func test_a_guard_marker_survives_a_selection_clear() -> void:
@@ -143,7 +295,9 @@ func test_a_guard_marker_survives_a_selection_clear() -> void:
 
 	game.clear_selection_icons()
 
-	assert_bool(_guard_marked(blocker)).is_true()
+	assert_bool(_guard_marked(ward)).is_true()
+	assert_bool(_guard_linked()).override_failure_message(
+		"the link went with the selection channel -- it must outlive a selection clear too").is_true()
 
 
 # --- 3. the save round trip ---------------------------------------------------------------------
