@@ -16,40 +16,43 @@ const CINEMATIC := Pacing.Profile.CINEMATIC
 var _saved: Dictionary = {}
 
 
+# DERIVED from the knob table rather than named, since #520 2b slice 2 -- the fix #450 already made
+# in test_game_knobs, for this exact shape. A hand-written list of statics is a COPY of "which values
+# this suite can move", and it can only go stale in the SILENT direction: a value added without its
+# restore poisons every later case in the RUN, not just in this file. The list had already grown to
+# eighteen by hand and this ticket would have added twelve more.
+#
+# Keyed by NAME through read_static/write_static, the same pair the panel uses -- and filtered to the
+# PACING rows, since those are the only statics this suite touches. A null host is safe for exactly
+# them: every Pacing arm assigns and returns, with no re-apply sweep to reach a scene through.
 func before_test() -> void:
 	PlayerSettings.reset_for_test()
-	_saved = {
-		"player": Pacing.PLAYER_ACTION, "ai": Pacing.AI_ACTION, "cine": Pacing.CINEMATIC_ACTION,
-		"bd": Pacing.BOARD_DRAMA, "cd": Pacing.CINEMATIC_DRAMA,
-		"down": Pacing.HOLD_DOWN, "crisis": Pacing.HOLD_CRISIS, "iron": Pacing.HOLD_IRON_WILL,
-		"knock": Pacing.HOLD_KNOCKBACK, "turn": Pacing.HOLD_TURNOVER, "heal": Pacing.HOLD_HEAL,
-		"rescue": Pacing.HOLD_RESCUE, "rally": Pacing.HOLD_RALLY, "intim": Pacing.HOLD_INTIMIDATE,
-		"reload": Pacing.HOLD_RELOAD, "rev": Pacing.HOLD_REV, "burrow": Pacing.HOLD_BURROW,
-		"capture": Pacing.HOLD_CAPTURE, "guard": Pacing.HOLD_GUARD,
-	}
+	_saved = {}
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if not knob.has("static") or knob.get("script", "") != GameKnobs.PACING_SCRIPT:
+			continue
+		var current: Variant = GameKnobs.read_static(knob["static"])
+		if typeof(current) == TYPE_NIL:
+			continue   # a missing READ arm is test_every_class_knob_resolves' finding, not ours
+		_saved[knob["static"]] = current
 
 
 func after_test() -> void:
-	Pacing.PLAYER_ACTION = _saved["player"]
-	Pacing.AI_ACTION = _saved["ai"]
-	Pacing.CINEMATIC_ACTION = _saved["cine"]
-	Pacing.BOARD_DRAMA = _saved["bd"]
-	Pacing.CINEMATIC_DRAMA = _saved["cd"]
-	Pacing.HOLD_DOWN = _saved["down"]
-	Pacing.HOLD_CRISIS = _saved["crisis"]
-	Pacing.HOLD_IRON_WILL = _saved["iron"]
-	Pacing.HOLD_KNOCKBACK = _saved["knock"]
-	Pacing.HOLD_TURNOVER = _saved["turn"]
-	Pacing.HOLD_HEAL = _saved["heal"]
-	Pacing.HOLD_RESCUE = _saved["rescue"]
-	Pacing.HOLD_RALLY = _saved["rally"]
-	Pacing.HOLD_INTIMIDATE = _saved["intim"]
-	Pacing.HOLD_RELOAD = _saved["reload"]
-	Pacing.HOLD_REV = _saved["rev"]
-	Pacing.HOLD_BURROW = _saved["burrow"]
-	Pacing.HOLD_CAPTURE = _saved["capture"]
-	Pacing.HOLD_GUARD = _saved["guard"]
+	for name: String in _saved:
+		GameKnobs.write_static(null, name, _saved[name])
 	PlayerSettings.reset_for_test()
+
+
+# The guard on the derivation above, and the lesson the hand-list paid twice: a snapshot that
+# silently covers NOTHING restores nothing. If the Pacing rows are ever renamed out from under this
+# filter, that is the failure to see -- not a suite that quietly stops protecting the run.
+func test_the_snapshot_actually_covers_the_table() -> void:
+	assert_int(_saved.size()).override_failure_message(
+			"the Pacing snapshot is empty -- every case here now leaks its tuning into the whole run") \
+		.is_greater(10)
+	for name: String in ["HOLD_ATTACK", "HOLD_DOWN", "LINGER_ATTACK", "LINGER_DOWN"]:
+		assert_bool(_saved.has(name)).override_failure_message(
+				"%s is not covered by the snapshot" % name).is_true()
 
 
 # --- the profile fork -------------------------------------------------------------------------
@@ -201,6 +204,89 @@ func test_a_computed_beat_still_costs_a_headless_run_nothing() -> void:
 
 
 # --- beat builders ----------------------------------------------------------------------------
+
+# --- the ladder's FLOOR, and the linger (#520 2b slice 2) --------------------------------------
+
+# The dev's finding: "I don't see controls for holding the most common thing - a regular attack."
+# A plain hit used to earn hold = 0 and take the bare base beat, which is also why every rung above
+# it was a number with no zero point. Asserted as the RELATIONSHIP, never as a value.
+func test_a_plain_hit_earns_the_attack_hold_rather_than_nothing() -> void:
+	Pacing.HOLD_ATTACK = 0.3
+	assert_float(Pacing.hold_for(_chip())).override_failure_message(
+			"a blast that only did damage earned no hold at all -- the ladder has no floor") \
+		.is_equal_approx(0.3, 0.0001)
+
+
+func test_the_attack_hold_is_a_floor_and_not_a_ceiling() -> void:
+	# Largest-wins, seeded from the floor: a louder rung must still win, and a floor tuned ABOVE one
+	# must lift it. Both directions, because "seed from HOLD_ATTACK" and "return HOLD_ATTACK" pass
+	# the first half identically.
+	Pacing.HOLD_ATTACK = 0.1
+	Pacing.HOLD_DOWN = 0.9
+	assert_float(Pacing.hold_for(_kill())).override_failure_message(
+			"the floor swallowed a death -- it is seeding the ladder, not capping it") \
+		.is_equal_approx(0.9, 0.0001)
+
+	Pacing.HOLD_ATTACK = 1.5
+	assert_float(Pacing.hold_for(_kill())).override_failure_message(
+			"a floor tuned above the death rung did not lift it") \
+		.is_equal_approx(1.5, 0.0001)
+
+
+# A CODA is unaffected by the floor: it answers per verb, and its own rung is the whole answer.
+func test_the_attack_floor_does_not_reach_the_side_channel_tail() -> void:
+	Pacing.HOLD_ATTACK = 2.0
+	Pacing.HOLD_RELOAD = 0.1
+	assert_float(Pacing.hold_for(_coda(BaseAction.ActionType.RELOAD))).override_failure_message(
+			"the attack floor lifted a reload -- coda_hold is meant to be the whole answer there") \
+		.is_equal_approx(0.1, 0.0001)
+
+
+# The other side of the beat. Same ladder shape, one rung: what makes a beat longer to WATCH is how
+# much debris it threw, and only a death empties the grid.
+func test_a_death_lingers_longer_than_a_plain_hit() -> void:
+	assert_float(Pacing.linger_for(_kill())).override_failure_message(
+			"a death left the screen as fast as a scratch -- the whole grid bursts on one and not the other") \
+		.is_greater(Pacing.linger_for(_chip()))
+
+
+func test_a_coda_lingers_for_its_own_verb() -> void:
+	Pacing.LINGER_RESCUE = 0.9
+	Pacing.LINGER_RELOAD = 0.1
+	assert_float(Pacing.linger_for(_coda(BaseAction.ActionType.RESCUE))) \
+		.is_greater(Pacing.linger_for(_coda(BaseAction.ActionType.RELOAD)))
+
+
+# Punctuation has no action to stay after, so it earns no linger -- unlike hold_for, where a
+# TURNOVER has a rung of its own. The two sides of the beat are deliberately not symmetric here.
+func test_punctuation_earns_no_linger() -> void:
+	assert_float(Pacing.linger_for(_turnover())).override_failure_message(
+			"the act break lingered -- there is no action there to stay after") \
+		.is_equal_approx(0.0, 0.0001)
+	assert_float(Pacing.linger_for(null)).is_equal_approx(0.0, 0.0001)
+
+
+# coda_linger carries coda_hold's sentinel for the same reason, and linger_for floors it for the
+# same reason: an undeclared verb must degrade to no wait rather than a negative one.
+func test_an_undeclared_verb_never_shortens_the_linger() -> void:
+	var stray := _coda(BaseAction.ActionType.ATTACK)   # never a side-channel verb
+	assert_float(Pacing.coda_linger(BaseAction.ActionType.ATTACK)).is_less(0.0)
+	assert_float(Pacing.linger_for(stray)).is_equal_approx(0.0, 0.0001)
+
+
+# The linger is FLAT -- the one place it deliberately differs from the hold. A hold is anticipation
+# and scales with drama; a linger is matched to an animation that runs in real time either way.
+# Falsified against the alternative: multiply it by drama_of and this reds, because BOARD_DRAMA
+# ships at 0 and the plain board would get no linger at all.
+func test_the_linger_does_not_fork_on_the_profile() -> void:
+	Pacing.BOARD_DRAMA = 0.0
+	Pacing.CINEMATIC_DRAMA = 3.0
+	# linger_for takes no profile at all, which is the property -- so the assertion is that the one
+	# answer is non-zero while the two drama values it might have been scaled by differ wildly.
+	assert_float(Pacing.linger_for(_kill())).override_failure_message(
+			"the board profile lingers for nothing -- it has been scaled by drama, which ships at 0") \
+		.is_greater(0.0)
+
 
 func _chip() -> BeatSheet.Beat:
 	var beat := BeatSheet.Beat.new()
