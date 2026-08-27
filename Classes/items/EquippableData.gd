@@ -72,6 +72,9 @@ func effective_knockback(_wielder: Unit, attack: AttackData) -> int:
 func effective_hits_allies(_wielder: Unit, attack: AttackData) -> bool:
 	return attack != null and attack.hits_allies
 
+func effective_can_overwatch(_wielder: Unit, attack: AttackData) -> bool:
+	return attack != null and attack.can_overwatch
+
 # --- Explaining an attack (#166) ---
 # Why a menu row is greyed, and what the row does — both asked of the SOURCE, because only it knows
 # its own economy (a weapon's readiness, a rune's aura). Keeping them here is what lets the menu

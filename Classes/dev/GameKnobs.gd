@@ -426,6 +426,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
+	{"group": "Playback", "label": "Hold: a watch arming", "static": "HOLD_OVERWATCH",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit takes up an overwatch. Sits beside the guard hold -- both are a unit settling into a stance rather than doing something."},
 	{"group": "Playback", "label": "Hold: a burrow", "static": "HOLD_BURROW",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a unit digs itself cover."},
@@ -594,6 +597,7 @@ static func read_static(name: String) -> Variant:
 		"HOLD_BURROW": return Pacing.HOLD_BURROW
 		"HOLD_CAPTURE": return Pacing.HOLD_CAPTURE
 		"HOLD_GUARD": return Pacing.HOLD_GUARD
+		"HOLD_OVERWATCH": return Pacing.HOLD_OVERWATCH
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -714,6 +718,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOLD_GUARD":
 			Pacing.HOLD_GUARD = value
+			return
+		"HOLD_OVERWATCH":
+			Pacing.HOLD_OVERWATCH = value
 			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value

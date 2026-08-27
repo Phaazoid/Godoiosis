@@ -24,7 +24,7 @@ enum Term {
 	# a radial category is a row the player hovers and so owes a readout like any other (#467) --
 	# plus ATTACK_TARGETING, the channel axis)
 	EXECUTE_ORDERS, MOVE, GROUP_MOVE, ATTACK, ATTACK_TARGETING, WEAPON_ACTION, TRANSMUTATION, ABILITY_ACTION,
-	GUARD, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
+	GUARD, OVERWATCH, RESCUE, RALLY, CAPTURE, SQUAD_UP, JOIN_SQUAD, LEAVE_SQUAD, DISBAND_SQUAD, WAIT,
 	CANCEL_ACTIONS, INSPECT, END_TURN,
 	ACTION, RUNE, SQUAD_ACTIONS,
 	# Elemental
@@ -349,6 +349,19 @@ static func _build_entries() -> Dictionary:
 			% Abilities.BRACE_DEF_BONUS
 			+ "absorbs at full price. Counterplay: pierce it, shove either of you apart, or catch "
 			+ "the pair in one blast — a bodyguard caught beside their ward is billed twice."}
+	# Guard's other half (#413): a reactive ATTACK where Guard is a reactive defense. The two share
+	# a lifetime sentence on purpose, so learning one teaches the other.
+	e[Term.OVERWATCH] = {"category": Category.ACTIONS, "title": "Overwatch",
+		"short": "Aim now, fire later: the first enemy who walks into the aimed cells takes the shot.",
+		"long": "Aim an attack the ordinary way, but hold your fire. The cells you aimed at stay "
+			+ "watched, marked on the board for both sides, and the first ACTIVE enemy who ENTERS "
+			+ "one — walking, or shoved into it — takes that attack where they stand. Standing "
+			+ "there already is not entering; moving from one watched cell to another is. It fires "
+			+ "exactly once and is then spent, and lapses when your next turn begins. Leaving the "
+			+ "cell you aimed from drops it, however that happens. A triggered shot draws no "
+			+ "counter, and it does not stop the walk unless it puts the crosser down. Which of "
+			+ "your units crosses FIRST is the queue order you set, so a watch is something you "
+			+ "plan around as well as something you plan."}
 	e[Term.RESCUE] = {"category": Category.ACTIONS, "title": "Rescue",
 		"short": "Stand an adjacent downed ally back up at 1 HP.",
 		"long": "Revives an adjacent downed ally at 1 HP before their clock runs out. The rescued "

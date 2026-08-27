@@ -45,6 +45,12 @@ enum Override { UNCHANGED, ON, OFF }
 # rearranging fitted mods must not change what an attack does (design law #1), and a safety device
 # a later mod could silently cancel is worse than no safety device at all.
 
+@export var can_overwatch_override: Override = Override.UNCHANGED
+# Whether the attacks applies_to names may be declared as a standing watch, overriding what each one
+# authored (#413) -- Watchman's Sear's original job. Same OFF-beats-ON composition as
+# hits_allies_override above and for the same reason: fitting order must never change what a weapon
+# can do. The base carbines author the capability themselves; this is the grant for everything else.
+
 @export var scaling_change: Dictionary[Stats.Stat, int] = {}
 # Percentage-POINT shifts against the blend of the family main attack this was authored against,
 # +/-, stacked additively across every fitted mod. Was `scaling_nudge` until #74 — the storage is

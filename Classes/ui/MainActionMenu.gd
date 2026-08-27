@@ -70,6 +70,7 @@ const WEAPON_ACTION := 16
 const CAPTURE := 17
 const TRANSMUTATION := 18
 const GUARD := 19
+const OVERWATCH := 20
 
 # The ring's categories, and their order IS the inner ring's clockwise order.
 #
@@ -113,6 +114,7 @@ const ACTION_DATA := {
 	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION, "group": Group.ATTACK_GROUP, "expands": true},
 	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION, "group": Group.ACT_GROUP, "expands": true},
 	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD, "group": Group.ACT_GROUP},
+	OVERWATCH: {"name": "Overwatch", "term": Glossary.Term.OVERWATCH, "group": Group.ACT_GROUP, "expands": true},
 	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE, "group": Group.ACT_GROUP},
 	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY, "group": Group.ACT_GROUP},
 	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE, "group": Group.ACT_GROUP},
@@ -237,6 +239,8 @@ func _expanded_children(unit: Unit, id: int) -> Array:
 			return _transmutation_children(unit)
 		ABILITY_ACTION:
 			return _ability_children(unit)
+		OVERWATCH:
+			return _overwatch_children(unit)
 	push_error("MainActionMenu: no children builder for expander %s" % id)
 	return []
 
@@ -289,6 +293,32 @@ func _transmutation_children(unit: Unit) -> Array:
 	for atk: AttackData in unit.get_transmutation_choices():
 		children.append(_attack_leaf(unit, atk))
 	return children
+
+
+# Which of this unit's attacks may be declared as a WATCH (#413). One answer, two readers — the
+# populate gate above and the children builder below — so the row can never offer a category whose
+# rows are all missing, or hide one that has some.
+func overwatch_attacks(unit: Unit) -> Array[AttackData]:
+	var watchable: Array[AttackData] = []
+	for atk: AttackData in unit.get_selectable_attacks():
+		if unit.attack_can_overwatch(atk):
+			watchable.append(atk)
+	return watchable
+
+
+# Each watch-capable attack is its own leaf, named and greyed exactly as its firing twin is —
+# _attack_leaf's shape, differing only in where the pick sends you.
+func _overwatch_children(unit: Unit) -> Array:
+	var children: Array = []
+	for atk: AttackData in overwatch_attacks(unit):
+		children.append(_synthetic_leaf(_attack_entry(unit, atk),
+			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
+	return children
+
+
+func _pick_watch(unit: Unit, attack: AttackData) -> void:
+	unit.active_attack = attack
+	game.enter_overwatch_mode(unit)
 
 
 func _ability_children(unit: Unit) -> Array:
@@ -387,6 +417,12 @@ func populate(unit: Unit) -> Array:
 	# brace bonus, not the verb. Listed only when there is somebody in range to stand in front of.
 	if _can_take_main_action(unit) and not RulesService.guard_candidates(unit, game._board()).is_empty():
 		options.append(GUARD)
+
+	# Same query the children builder uses (#413) — the gate and the rows must agree about what a
+	# unit can watch with, the #126 lesson. Readiness is NOT asked here: an unfireable watch-capable
+	# attack still LISTS, greyed with its own reason, exactly as the kit slice lists a dry weapon.
+	if _can_take_main_action(unit) and not overwatch_attacks(unit).is_empty():
+		options.append(OVERWATCH)
 
 	if _can_take_main_action(unit) and not RulesService.adjacent_downed_allies(unit, game._board(), game.squad_manager.resolved_plan_for(unit.squad)).is_empty() and unit.can_rescue_carry():
 		options.append(RESCUE)

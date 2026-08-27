@@ -30,7 +30,8 @@ enum ActionType {
 	REV,
 	BURROW,
 	CAPTURE,
-	GUARD
+	GUARD,
+	OVERWATCH
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -48,7 +49,8 @@ const MAIN_ACTION_TYPES: Array[ActionType] = [
 	ActionType.REV,
 	ActionType.BURROW,
 	ActionType.CAPTURE,
-	ActionType.GUARD
+	ActionType.GUARD,
+	ActionType.OVERWATCH
 ]
 
 # Execution order of the side-channel tail — stored orders that bypass PlanResolver
@@ -62,6 +64,10 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 	ActionType.REV,
 	ActionType.BURROW,
 	ActionType.CAPTURE,
+	# A watch armed this pass must arm AFTER every hit it was resolved against has played back
+	# (#413) -- a same-pass shove combo can already have spent it, and re-arming here would hand
+	# execution a live watch the queue previewed as fired. GuardAction's rule, one slot up.
+	ActionType.OVERWATCH,
 	# LAST in the tail deliberately (#414): a Guard armed this pass must arm AFTER every hit it was
 	# resolved against has played back, or the ward it just absorbed for would be re-armed live.
 	ActionType.GUARD
