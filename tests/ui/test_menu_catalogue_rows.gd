@@ -304,11 +304,10 @@ func _sprung_springspear() -> WeaponInstance:
 # the fire row -- listed first -- is the one that survived. Authoring it on the main hid that
 # entirely, which is how the case that used to live here passed over the bug for a fortnight.
 #
-# The case DRIVES the path instead of reading the tree, because both ends can be right while nothing
-# joins them: the row exists, `enter_overwatch_mode` works, and the leaf's own pick is the wire. It
-# pins four things a reshuffle would break silently -- the top ring staying clear (a rung of its own
-# is what this replaced), the row opening NO submenu, the attack it chooses, and the absence of a
-# fire row for a watch-only attack.
+# The case DRIVES the path instead of reading the tree, and here that is not a preference: the bug
+# is unreadable from the tree (see the note in the body). It pins four things a reshuffle would
+# break silently -- the top ring staying clear (a rung of its own is what this replaced), the row
+# opening NO submenu, the VERB it opens, and the attack it chooses.
 func test_a_watch_attack_gets_one_reachable_row_and_no_fire_row() -> void:
 	var watcher := _spawn(Vector2i(2, 0))
 	var weapon := H.make_weapon(4)
@@ -334,15 +333,12 @@ func test_a_watch_attack_gets_one_reachable_row_and_no_fire_row() -> void:
 	assert_bool(children.is_empty()).override_failure_message(
 			"the Overwatch row opened a submenu -- it is one row that picks its own attack").is_true()
 
-	# #590: exactly ONE row wears that name. Two would mean the watch attack kept a firing twin,
-	# which is the collision the exclusivity rule exists to make impossible -- and which the menu
-	# resolves by DROPPING one, so the count is the only place it is visible.
-	var named := 0
-	for node: Dictionary in rows:
-		if String(node.get("name", "")) == "Overwatch":
-			named += 1
-	assert_int(named).override_failure_message(
-			"the watch attack was offered twice -- it kept a fire row, so one of the two is eaten").is_equal(1)
+	# #590 is INVISIBLE to a row count, and that is the trap worth naming: _append_unique
+	# guarantees at most one node per name in a bucket, so a watch attack that kept its firing twin
+	# does not show up as two rows -- it shows up as ONE row that fires. Counting rows here passes
+	# against the bug (measured). The only tell from the menu side is which verb the row opens,
+	# which is what the drive below asserts, and the data-layer half is
+	# tests/weapons/test_overwatch_is_exclusive.gd.
 
 	# The WIRE, not the two ends.
 	_aim_and_click(controller, "Overwatch")
