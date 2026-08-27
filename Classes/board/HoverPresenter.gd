@@ -65,7 +65,13 @@ func refresh() -> void:
 
 func update_hover_visuals(hovered_cell: Vector2i) -> void:
 	if game.grid.get_cell_tile_data(hovered_cell) == null:
-		return   # off the map -- every mode draws nothing out there
+		# Off the map -- every mode draws nothing out there. CLEARING is part of drawing nothing
+		# (#582): a bare return left the last card standing, so the readout went on describing a
+		# cell the pointer had left, and while chasing an unclickable tile it insisted the cell was
+		# at height -1 when the board said -3. A card that cannot be trusted to be about NOW is
+		# worse than no card.
+		game.hover_info_panel.clear()
+		return
 
 	# Only IDLE produces squad icons. They're collected rather than drawn inline because that
 	# branch clears icon types partway through; drawing once at the end survives the clear.
@@ -91,7 +97,12 @@ func update_hover_visuals(hovered_cell: Vector2i) -> void:
 		for icontype in icons_to_draw[unit]:
 			game.overlay_manager.create_unit_icon(unit, icontype)
 
+# CLEARS the card rather than filling it (#582). Dev mode never wrote it, so it held whatever the
+# last IDLE hover had left -- a card from before the mode was even entered, which is how a readout
+# for a cell at -3 came to say -1. Clearing rather than describing, because the dev-mode height
+# readout is HeightDebugOverlay's and a second voice for it is a second thing to keep in step.
 func _hover_dev_mode(cell: Vector2i) -> void:
+	game.hover_info_panel.clear()
 	var board: BoardContext = game._board()
 	if not board.is_walkable(cell) or game.unit_at_pointer(cell) != null:
 		game.cursor_controller.set_state(CursorController.CursorState.INVALID)

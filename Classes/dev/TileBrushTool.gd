@@ -61,8 +61,22 @@ var _state_values: Array[Terrain.TileState] = []
 var _elevation := 0
 var _rise := Terrain.RampRise.NONE
 var _climb := Terrain.UNITS_PER_LEVEL
+
+# Whether a click is aimed at the brush's own Height plane rather than at the block you can see
+# (#582). Public because the pick reads it, and OFF by default: it trades away reaching a tall
+# column, which is the commoner gesture by far.
+#
+# It exists because the two halves of "I can't click this cell" have different causes. An INVISIBLE
+# floor occluding a sunken block is a picker bug and is fixed there. A one-cell well two units deep
+# is not: the ground beside it really does hide it at the rig's fixed pitch, and no picking rule
+# recovers what the camera cannot see. So the brush stops asking what is VISIBLE and asks what it is
+# AIMED at -- the same move #340 already made for the ghost, which shows the tile at the height you
+# picked rather than the height the cell happens to be.
+var pick_at_brush_height := false
+
 var _elevation_row: HBoxContainer
 var _elevation_spin: SpinBox
+var _pick_plane_row: HBoxContainer
 var _rise_row: HBoxContainer
 var _rise_option: OptionButton
 var _climb_row: HBoxContainer
@@ -421,6 +435,21 @@ func _build_extra_controls() -> void:
 		+ "Half is the gentle slope, one unit over one cell, so two of them stacked climb a level "
 		+ "across two cells. Greyed out with the direction, for the same reason."))
 
+	_pick_plane_row = HBoxContainer.new()
+	DevWidgets.add_checkbox(_pick_plane_row, "Aim at brush height", pick_at_brush_height,
+		func(on: bool): pick_at_brush_height = on,
+		DevWidgets.wrap_tooltip(
+			"Where a click LANDS while you author below the surface. Off, the pointer picks the "
+			+ "block you can see -- which is what you want almost always, and it is how you reach a "
+			+ "tall column to erase it. On, it picks the cell under the pointer on the brush's own "
+			+ "Height plane instead, whether or not anything is in the way. The ghost shows the "
+			+ "answer either way, so you can see where the click goes before you make it.\n\n"
+			+ "Turn it on to dig a hole ONE CELL wide: at the camera's angle you cannot see into "
+			+ "one deeper than a level, so the cell you just sank stops being clickable. Anything "
+			+ "two cells across is visible on its own and does not need this. 3D view only -- the "
+			+ "flat 2D board has no depth to be hidden by."))
+	add_child(_pick_plane_row)
+
 	_set_paint_mode(PaintMode.TERRAIN)
 
 func selected_elevation() -> int:
@@ -610,6 +639,9 @@ func _set_paint_mode(mode: PaintMode) -> void:
 	_elevation_row.visible = mode == PaintMode.TERRAIN or mode == PaintMode.CORNER
 	_rise_row.visible = mode == PaintMode.TERRAIN
 	_climb_row.visible = mode == PaintMode.TERRAIN
+	# Rides the LEVEL row exactly (#582): it aims at that height, so it is offered wherever that
+	# height is asked for and nowhere else. Same predicate DevController._elevation_brush gates on.
+	_pick_plane_row.visible = _elevation_row.visible
 	update_zone_highlight()   # draws on entering ZONE mode, clears on leaving it
 
 # NB the height readout is NOT lit from here. Painting height into an invisible store is blind, so it

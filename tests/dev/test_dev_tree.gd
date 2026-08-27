@@ -153,6 +153,43 @@ func test_a_stale_brush_flag_does_not_arm_from_another_page() -> void:
 		"the brush refuses to arm on its own page; the clause is refusing everything").is_true()
 
 
+# --- brush_pick_row(): where a click is AIMED (#582) ------------------------------------------
+
+# The toggle that lets the brush author a cell the camera cannot see. It is gated on the same arming
+# the rest of the brush is, and it rides the LEVEL row -- so it must go quiet in every mode that does
+# not ask for a height, and the moment the brush is not armed at all.
+func test_the_aim_row_follows_the_brush_height_and_only_while_it_is_armed() -> void:
+	game.set_dev_mode(true)
+	await _select("Tile Brush")
+	var brush: TileBrushTool = overlay.tile_brush
+	brush.brush_active = true
+	brush.paint_mode = TileBrushTool.PaintMode.TERRAIN
+
+	assert_int(game.dev_controller.brush_pick_row()).override_failure_message(
+		"the aim answered while the toggle was off; ordinary picking must stand") \
+		.is_equal(BoardPicker.NO_COLUMN)
+
+	brush.pick_at_brush_height = true
+	brush.set_elevation(-Terrain.UNITS_PER_LEVEL - 1)
+	assert_int(game.dev_controller.brush_pick_row()).override_failure_message(
+		"the aim did not follow the brush's own Height") \
+		.is_equal(BoardSpace.top_row_of(brush.selected_elevation()) + 1)
+	assert_int(game.dev_controller.brush_pick_row()).override_failure_message(
+		"a sunken aim came back at or above the floor; the case proves nothing") \
+		.is_less(BoardSpace.FLAT_TOP_ROW)
+
+	# The gates, one at a time: a mode with no level row, then no armed brush at all.
+	brush.paint_mode = TileBrushTool.PaintMode.ZONE
+	assert_int(game.dev_controller.brush_pick_row()).override_failure_message(
+		"the aim survived a mode that never asks for a height") \
+		.is_equal(BoardPicker.NO_COLUMN)
+	brush.paint_mode = TileBrushTool.PaintMode.TERRAIN
+	brush.brush_active = false
+	assert_int(game.dev_controller.brush_pick_row()).override_failure_message(
+		"the aim survived a disarmed brush") \
+		.is_equal(BoardPicker.NO_COLUMN)
+
+
 # --- showing(): the one answer to which page owns input (2026-08-23) -------------------------
 
 # It replaced four hand-rolled spellings, and the NESTED pair is why it has to be a function rather

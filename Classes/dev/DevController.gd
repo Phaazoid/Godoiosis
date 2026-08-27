@@ -500,6 +500,22 @@ func elevation_brush_live() -> bool:
 	return _elevation_brush() != null
 
 
+# The row a pick should resolve against instead of the board's geometry (#582), or NO_COLUMN while
+# ordinary picking stands. Lives HERE beside brush_ghost() because it is the same question that one
+# answers -- what the next click is aimed at -- and a host assembling it out of brush fields would be
+# a second place that knows what "the brush's height" means.
+#
+# Reads elevation_brush_live() rather than the paint mode, so the aim follows the LEVEL row exactly:
+# offered in TERRAIN and CORNER, which are the two modes that ask for a height at all.
+func brush_pick_row() -> int:
+	var brush := _elevation_brush()
+	if brush == null or not brush.pick_at_brush_height:
+		return BoardPicker.NO_COLUMN
+	# A "top row" is the row ABOVE the top cell -- pick_cell's convention, so a surface sits at
+	# row * ROW_HEIGHT. column_tops_from spells the same +1.
+	return BoardSpace.top_row_of(brush.selected_elevation()) + 1
+
+
 # The scroll wheel sets the level the elevation brush places at (#260).
 func _nudge_elevation(delta: int) -> void:
 	var brush := _elevation_brush()
