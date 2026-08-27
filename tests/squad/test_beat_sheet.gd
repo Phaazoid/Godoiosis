@@ -104,9 +104,12 @@ func test_the_cast_holds_every_member_of_every_participating_squad() -> void:
 	for unit in [attacker, mate, foe, foe_mate]:
 		assert_bool(sheet.cast.has(unit)).override_failure_message(
 				"cast is missing %s" % unit).is_true()
-	# The bystander squadmate never acts and is never hit, so only the cast sweep puts its ground
-	# in the tear-out set.
-	assert_bool(sheet.cells.has(Vector2i(0, 1))).is_true()
+	# The CAST is who is in the scene; the tear-out set is what a MAIN ACTION touches, and those are
+	# different questions (dev, 2026-08-26). The bystander squadmate never acts and is never hit, so
+	# it is cast and its ground stays on the board -- bringing it along for context is #521's own
+	# feels-test flag, deliberately not a fact of the sheet.
+	assert_bool(sheet.cells.has(mate.movement.cell)).override_failure_message(
+			"a bystander's ground is in the tear-out set").is_false()
 	_break_volleys(plan)
 
 
@@ -114,6 +117,37 @@ func test_the_cast_holds_every_member_of_every_participating_squad() -> void:
 
 # One blast is one shot however many it hits -- #410 rules an AoE striking three victims a single
 # sweep, not three cuts. Grouping follows is_secondary_hit, the same read the resolver makes.
+# THE TEAR-OUT'S GATE, and it lives in the SET rather than beside it (dev, 2026-08-26): *"there
+# have to be main actions at play. Movement by itself doesn't do it."* A pass that only walks
+# touches no main-action cell, so there is nothing to lift and no second predicate to keep in step.
+#
+# Found in play: the cast sweep this replaced tore a hole in the board at the end of every move.
+func test_a_pass_that_only_walks_touches_no_ground() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	leader.squad._queue_action(_walk(leader, Vector2i(0, 1)))
+
+	var sheet := BeatSheet.read(leader.squad, ResolvedPlan.new())
+	assert_object(sheet.moves()).override_failure_message(
+			"fixture drifted: this case needs a real move beat").is_not_null()
+	assert_array(sheet.cells).override_failure_message(
+			"walking tore out ground: %s" % [sheet.cells]).is_empty()
+
+
+# ...and a MAIN ACTION does, whichever one it is. A rally is the cheapest to stage -- no target, no
+# terrain -- and it is a side-channel verb, so this is the half an attack-shaped rule would miss.
+func test_a_side_channel_main_action_puts_its_ground_on_stage() -> void:
+	var unit := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 3), {Stats.Stat.LDR: 3})
+	var rally := RallyAction.new()
+	rally.init(unit)
+	assert_bool(rally.is_main_action()).override_failure_message(
+			"fixture drifted: this case needs a MAIN action").is_true()
+	unit.squad._queue_action(rally)
+
+	var sheet := BeatSheet.read(unit.squad, ResolvedPlan.new())
+	assert_array(sheet.cells).override_failure_message(
+			"a main action tore out nothing").contains([unit.movement.cell])
+
+
 func test_a_three_victim_volley_is_one_beat_in_strike_order() -> void:
 	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
 	var a := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})

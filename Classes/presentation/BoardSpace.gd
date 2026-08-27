@@ -14,6 +14,12 @@ class_name BoardSpace
 # UNITS_PER_LEVEL rows, which is what keeps every world position exactly where it was.
 # Boundary rule: a position exactly on a face floors UPWARD (cell_of is a volume
 # query for interior points; round-trip through cell_center, not standing_point).
+#
+# STATEFUL SINCE #521, and that is a deliberate change of character -- everything above is pure
+# arithmetic. The tear-out asks one new question, "is this cell STAGED, and where", and the dev's
+# ruling on #410 puts it here: answered where BoardSpace is already consulted, never in a separate
+# diorama scene, which would be a second answer to where a thing renders. A Staging class this
+# delegated to would be two names for one fact. Pacing and PlayerSettings are the precedent.
 
 const CELL_SIZE := 1.0
 
@@ -269,3 +275,74 @@ static func side_on_yaw(from: Vector2i, to: Vector2i, baseline: float) -> float:
 			< absf(angle_difference(deg_to_rad(baseline), deg_to_rad(side_on))):
 		return opposite
 	return side_on
+
+
+# --- the tear-out: which cells are staged, and where (#521) ------------------------------------
+#
+# Zero displacement IS the board, so every reader below is safe on an unstaged board and on a board
+# that has never staged anything. One rigid offset for the whole set rather than one per cell: the
+# diorama is a TRUE reconstruction (dev, #410), so board-relative geometry is preserved by moving
+# the set as a body -- exact by construction, with no arithmetic to get wrong.
+#
+# A static outlives a suite (#449's lesson on PlayerSettings._state), which is what reset_for_test
+# is for. Nothing here reads the profile: WHETHER to stage is the caller's question, and
+# OrderExecutor asks it once per pass.
+static var _staged: Dictionary[Vector2i, bool] = {}
+static var _stage_offset := Vector3.ZERO
+# How far above the board the diorama sits, in CELLS. A feel value, so it is a GameKnobs row rather
+# than a constant -- and a `static var` because that is the only form a knob can write.
+static var STAGE_LIFT := 24.0
+# Monotonic, so a per-frame poll can tell "the staging moved" from "it did not" without diffing the
+# set. DirtyCells.version's shape, and for the same reason: any number of readers, none consuming.
+static var staging_version := 0
+
+
+static func stage(cells: Array[Vector2i], offset: Vector3) -> void:
+	_staged.clear()
+	for cell in cells:
+		_staged[cell] = true
+	_stage_offset = offset
+	staging_version += 1
+
+
+static func clear_staging() -> void:
+	if _staged.is_empty():
+		return
+	_staged.clear()
+	_stage_offset = Vector3.ZERO
+	staging_version += 1
+
+
+# Where this cell's contents render, relative to the board. THE placement question -- every mirror
+# adds it at its own placement site, and the ground GridMap honours it as a node transform because
+# a GridMap cell cannot be offset individually.
+static func staged_offset(cell: Vector2i) -> Vector3:
+	return _stage_offset if _staged.has(cell) else Vector3.ZERO
+
+
+static func is_staged(cell: Vector2i) -> bool:
+	return _staged.has(cell)
+
+
+# The set itself, for the one reader that must walk it: the mirror re-routing whole columns between
+# the board and the staged GridMap when the staging changes.
+static func staged_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	cells.assign(_staged.keys())
+	return cells
+
+
+static func stage_offset() -> Vector3:
+	return _stage_offset
+
+
+# Where the diorama sits for a tear-out starting now. Straight up: the tiles rise OUT of the board
+# (#521), and the exit drops them back into the sockets they left.
+static func lift_offset() -> Vector3:
+	return Vector3(0.0, STAGE_LIFT * CELL_SIZE, 0.0)
+
+
+static func reset_for_test() -> void:
+	_staged.clear()
+	_stage_offset = Vector3.ZERO
+	staging_version = 0

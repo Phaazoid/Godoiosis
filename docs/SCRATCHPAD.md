@@ -38,6 +38,11 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 - Hover-until-appear time should maybe be a dev-mode toggle *(dev, 2026-08-22, filed at his request during #467 round 3 — "maybe hover until appear time should be a dev mode toggle, file that away")*. Context so the sweep does not have to re-derive it: the action ring's readout now waits out `gui/timers/tooltip_delay_sec`, the **project** setting the inspect panel's own tooltips already read, so there is exactly one number and no second seam. A dev toggle would be a *second writer* of that number, which is [#422](https://github.com/Phaazoid/Godoiosis/issues/422)'s question (dev defaults vs player settings) rather than a knob-table line — and note the same value is arguably a **player** setting, not a dev one, since a slow reader and a fast one want different waits.
 
+
+Currently, the camera still has a few cases where it teleports - this should never happen, it should always be a pan.  Plus, on the AIs turn, when the camera is showing their movement, instead of just centering on the unit, it should try to show both their start and end position in the initial shot (should be doable unless super zoomed in)
+
+I don't see a dev tuning tool for wait on unit death - currently the camera leaves while the health blocks are still exploding, no drama there.  
+
 ## 🗂 Dispersed (log)
 
 *Swept 2026-08-20 — twelve entries. Four were issue-shaped and are now **filed**: [#417](https://github.com/Phaazoid/Godoiosis/issues/417) move re-entry, [#418](https://github.com/Phaazoid/Godoiosis/issues/418) the health-bar third option, [#419](https://github.com/Phaazoid/Godoiosis/issues/419) the hazard warning, [#420](https://github.com/Phaazoid/Godoiosis/issues/420) the composed-view question behind the glow ask. The last two are filed `agent/human` because each waits on a design fork this sweep deliberately left unpicked.*

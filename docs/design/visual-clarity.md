@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #564 (2026-08-26).**
+**Canon checked through #565 (2026-08-26).**
 
 ## Principles
 
@@ -1338,6 +1338,72 @@ before asserting the camera closed it.
 
 Still open on #520: the pitch driver, the shake and micro-sway, the knockback and cliff follows
 (diff 2b), and lethality-aware direction (diff 2c).
+
+## The fight TEARS OUT of the board ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice A, BUILT 2026-08-26)
+
+The ground a fight happens on lifts off the board into a diorama and thuds back when the pass ends.
+This slice is the **seam and a static tear-out** — no rise off the top of frame, no white-out, no
+one-by-one slam. What it buys is the question every later slice depends on: does the reconstruction
+read right?
+
+**One question, one answer: `BoardSpace.staged_offset(cell)`.** The dev's ruling on #410 puts it
+here — *answered where `BoardSpace` is already consulted*, never in a separate diorama scene, which
+would be a second answer to where a thing renders. `Vector3.ZERO` is the board, so every reader is
+inert on a board that has never staged.
+
+**It makes `BoardSpace` stateful for the first time**, and that is declared in its own header: the
+file was pure arithmetic. A `Staging` class it delegated to would be two names for one fact.
+`Pacing` and `PlayerSettings` are the precedent, and #449's hazard comes with it — a static outlives
+a suite, hence `reset_for_test()`.
+
+**Two mechanisms honour that one answer, and the split is forced by the engine.** A **GridMap cell
+cannot be offset individually** — it is a lattice — so:
+
+- **The ground routes to a second `GridMap`** (`$StagedBoard`), same mesh library, same `cell_size`,
+  same cell coordinates, with the displacement as its **node transform**. A staged cell's column is
+  written there and cleared from `$Board`, leaving the socket the exit thuds back into. Because both
+  share one lattice, **the reconstruction is exact by construction** — board-relative geometry,
+  horizontal and vertical, with no arithmetic to get wrong.
+- **Everything else adds the offset at its own placement site** — and there are far fewer than there
+  look to be. `BoardMirror.surface_point` is the one seam every prop, flame, cover cluster and state
+  marker in that file is placed by; `OverlayMirror._anchor` is the one seam every marker gets its
+  transform from. Units are the exception that proves why the offset is its own question:
+  **`UnitMirror` places horizontally from PIXELS, not from `BoardSpace`**, so an offset hidden
+  inside `surface_point` would have lifted a unit vertically and left it behind horizontally.
+
+**A sprite's CELL is still a board fact.** `UnitMirror` reads it *before* adding the offset —
+reading it off the displaced point would name a cell in the sky.
+
+**A MAIN ACTION is what tears the board open — movement never does** (dev, on playing it:
+*"there have to be main actions at play. Movement by itself doesn't do it."*). `BeatSheet.cells` is
+therefore what main actions touch: an attack's origin, aim, knockback flight and terrain deposits,
+plus the actor and target of every side-channel verb. Asked of `BaseAction.is_main_action()` rather
+than of `SIDE_CHANNEL_ORDER` membership — the two lists agree today and nothing pins that they must.
+
+**The GATE falls out of the SET rather than sitting beside it**: no main actions means no cells
+means nothing lifts. That is one rule, not two, and it is why `_stage_the_fight` asks whether the
+fight's cells are empty **before** the bystanders flag adds anything — asking after would let the
+feels-test put move-only passes back in the sky, which is the exact thing it exists to be judged
+against.
+
+What this replaced was a sweep over every cast member's standing cell, and the symptom was a hole
+in the board at the end of every move. It was also a Law #4 duplicate: whether a *non-fighter's*
+ground comes along is the feels-test flag's question, and the cast sweep was a second answer to it.
+
+**The tear-out waits for the walk.** An attacker's `origin_cell` is its *post-move* cell, so staging
+before the move phase makes it walk toward a hole and pop into the sky on arrival. The board is
+where you move; the diorama is where you fight.
+
+**Staged on the profile too, so #521's law is a property rather than a promise** — nothing stages
+under `BOARD`, and `tests/presentation/test_staging.gd` asserts zero displacement for **every
+painted cell** after a plain-board pass, read off the seam directly.
+
+**The feels-test fork is one bool**, `Experiments.Flag.DIORAMA_BYSTANDERS`: off stages the cells the
+fight touches, on adds the ground every other unit stands on so the diorama keeps its spatial
+context. A session-scoped dev toggle — one of the two gets deleted once it has been played.
+
+Still open on #521: the transition both ways (rise, white-out, the one-by-one slam in queue order,
+the exit thud and its dust shockwave), and strata on the cut edges, which is art-pass work.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
