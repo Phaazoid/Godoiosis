@@ -78,6 +78,12 @@ func execute_orders(unit):
 	# The queued-Guard ghost goes with it (#450): both are plan-time marks, and the pass starting is
 	# the moment the plan stops being a plan. The SOLID pair replaces it at the far end of this
 	# function, where refresh_guard_markers runs once the ward has actually armed.
+	#
+	# REASONED, NOT PINNED -- deleting this line leaves the whole suite green, and that is a property
+	# of the suite rather than of the line. What it protects is the stretch WHILE the pass animates,
+	# where refresh_action_queue refuses to re-derive (#361) so nothing else would take the ghost
+	# down; headless, Pacing collapses every beat to zero frames and execute_orders runs start to
+	# finish synchronously, so that stretch does not exist to assert on (measured, #450).
 	game.overlay_manager.clear_guard_preview()
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
