@@ -77,7 +77,13 @@ const OVERWATCH := 20
 # INSPECT_GROUP is a category of ONE, holding the verb of the same name, which means the collapse
 # rule in build_tree hands it up as a plain terminal slice -- "Inspect is top level" (dev, #467
 # round 2) costs no new mechanism, just a group nobody else joins.
-enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP }
+#
+# OVERWATCH_GROUP is a category of one EXPANDER (#413), which is a third shape again: its children
+# are named after ATTACKS, not after the verb, so the collapse rule leaves it a ring — which is
+# exactly right. A watch declared with "Shot" sitting bare in the Action slice would say nothing
+# about being a watch; under its own slice it reads "Overwatch > Shot", and it scales the day a
+# carbine carries two watchable attacks.
+enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, OVERWATCH_GROUP, SQUAD_GROUP, INSPECT_GROUP }
 
 # A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
 # it, pinned by tests/law/test_glossary_coverage.gd). Move / Attack / Inspect reuse the verb terms
@@ -86,6 +92,7 @@ const CATEGORIES := {
 	Group.MOVE_GROUP: {"name": "Move", "term": Glossary.Term.MOVE},
 	Group.ATTACK_GROUP: {"name": "Weapon", "term": Glossary.Term.WEAPON_ACTION},
 	Group.ACT_GROUP: {"name": "Action", "term": Glossary.Term.ACTION},
+	Group.OVERWATCH_GROUP: {"name": "Overwatch", "term": Glossary.Term.OVERWATCH},
 	Group.SQUAD_GROUP: {"name": "Squad", "term": Glossary.Term.SQUAD_ACTIONS},
 	Group.INSPECT_GROUP: {"name": "Inspect", "term": Glossary.Term.INSPECT},
 }
@@ -114,7 +121,7 @@ const ACTION_DATA := {
 	TRANSMUTATION: {"name": "Transmutation", "term": Glossary.Term.TRANSMUTATION, "group": Group.ATTACK_GROUP, "expands": true},
 	ABILITY_ACTION: {"name": "Ability Action", "term": Glossary.Term.ABILITY_ACTION, "group": Group.ACT_GROUP, "expands": true},
 	GUARD: {"name": "Guard", "term": Glossary.Term.GUARD, "group": Group.ACT_GROUP},
-	OVERWATCH: {"name": "Overwatch", "term": Glossary.Term.OVERWATCH, "group": Group.ACT_GROUP, "expands": true},
+	OVERWATCH: {"name": "Overwatch", "term": Glossary.Term.OVERWATCH, "group": Group.OVERWATCH_GROUP, "expands": true},
 	RESCUE: {"name": "Rescue", "term": Glossary.Term.RESCUE, "group": Group.ACT_GROUP},
 	RALLY: {"name": "Rally", "term": Glossary.Term.RALLY, "group": Group.ACT_GROUP},
 	CAPTURE: {"name": "Capture Point", "term": Glossary.Term.CAPTURE, "group": Group.ACT_GROUP},

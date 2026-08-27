@@ -277,3 +277,31 @@ func _sprung_springspear() -> WeaponInstance:
 	var spear := WeaponInstance.make(template) as SpringspearWeaponInstance
 	spear.ready = false   # spent: the secondary is gated, the family has words for it
 	return spear
+
+
+# Overwatch takes its OWN ring slice (#413), and the case exists because it shipped wrong once: the
+# row expands into per-ATTACK children, so filing it under Action put a bare "Shot" beside Guard and
+# Rescue with nothing on screen saying it was a watch. A category of one EXPANDER is a third shape
+# the collapse rule handles correctly only because its child is named after the ATTACK rather than
+# after the verb — assert the slice AND its child, or the next reshuffle silently flattens it again.
+func test_overwatch_gets_its_own_slice_named_for_the_verb() -> void:
+	var watcher := _spawn(Vector2i(2, 0))
+	var weapon := H.make_weapon(4)
+	weapon.template.main_attack.display_name = "Shot"
+	weapon.template.main_attack.can_overwatch = true
+	watcher.equipped_weapon = weapon
+
+	game.main_action_menu.show_main_menu(watcher, Vector2i(400, 300))
+	await await_idle_frame()
+	var controller := _controller()
+	var rows: Array = controller.level_nodes()
+
+	var slice := _row_named(rows, "Overwatch")
+	assert_bool(slice.is_empty()).override_failure_message(
+			"the ring drew no Overwatch slice — a watchable attack was filed somewhere else").is_false()
+	# Not collapsed to a bare attack row, and not loose in the Action slice.
+	assert_bool(_row_named(rows, "Shot").is_empty()).override_failure_message(
+			"a watchable attack is loose on the top ring — nothing says it stands watch").is_true()
+	var children: Array = slice.get("children", [])
+	assert_bool(_row_named(children, "Shot").is_empty()).override_failure_message(
+			"the Overwatch slice does not offer the attack it would watch with").is_false()
