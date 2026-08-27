@@ -185,7 +185,7 @@ const FLAME_FRAMES := 8
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
 @export var water_band_contrast := 0.8: set = _set_water_band_contrast
-@export var water_ripple := 1.89: set = _set_water_ripple
+@export var water_ripple := 1.86: set = _set_water_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
 @export var water_roughness := 0.41: set = _set_water_roughness
@@ -201,16 +201,16 @@ const FLAME_FRAMES := 8
 @export var water_bed_color := Color(0.60, 0.52, 0.38): set = _set_water_bed_color
 # Pebble size, in art pixels. 1 is per-pixel silt — which is below what the eye resolves at a
 # playing camera distance, and is why the first version of this knob appeared to do nothing.
-@export var water_bed_grain := 3.0: set = _set_water_bed_grain
+@export var water_bed_grain := 1.5: set = _set_water_bed_grain
 # The light net on the bottom. It MOVES while the bed under it stays nailed to the board, and that
 # contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
 # one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
-@export var water_caustics := 0.22: set = _set_water_caustics
-@export var water_caustics_scale := 9.0: set = _set_water_caustics_scale
+@export var water_caustics := 1.35: set = _set_water_caustics
+@export var water_caustics_scale := 18.5: set = _set_water_caustics_scale
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket.
-@export var water_seam := 0.095: set = _set_water_seam
+@export var water_seam := 0.12: set = _set_water_seam
 # How much darker a water block's WALLS and top rim read than its surface — the body rather than the
 # face of it. The shader wears both of a water block's surfaces so this reaches the real walls; it
 # drove the 0.004-unit rim alone until then, which is a slider that moves nothing.
