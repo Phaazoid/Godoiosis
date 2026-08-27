@@ -225,33 +225,59 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 				% wanted + "uniform -- the value is dropped in silence").is_true()
 
 
+# BOARD DATA: the one declared exemption from the two laws below, and its guest list is CLOSED.
+# These describe the BOARD rather than either water, so they can never name a type and they have no
+# knob row -- the mask is derived from the terrain, not tuned. Membership is asserted in BOTH
+# directions, because a hole a future knob could fall into unnamed is the law quietly deleted,
+# while a named category with a fixed membership is a category.
+const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect"]
+
+
+# What the shader declares, in one place. Three cases used to parse this line for themselves with
+# the same one-liner, and the sampler #552 slice 2 added broke all three at once: a sampler carries
+# its hints after a colon (`: filter_linear, repeat_disable`), so the NAME is the last word before
+# that colon and not the last word on the line.
+func _declared_globals() -> PackedStringArray:
+	var out := PackedStringArray()
+	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
+		var text := line.strip_edges()
+		if not text.begins_with("global uniform "):
+			continue
+		var head := text.trim_suffix(";").split(":")[0].strip_edges()
+		var words := head.split(" ")
+		out.append(words[words.size() - 1])
+	return out
+
+
 # A global uniform is spelled in three files and NOTHING complains when two of them disagree: an
 # undeclared global refuses to compile, and a misspelled one silently reads zero. So the three
 # spellings are held to being one set.
+#
+# Board data is spelled in TWO of the three -- no knob row, because nobody tunes the shape of the
+# board -- so it is held to the project.godot half alone.
 func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
-	var declared: Dictionary[String, bool] = {}
-	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
-		var text := line.strip_edges()
-		if text.begins_with("global uniform "):
-			var words := text.trim_suffix(";").split(" ")
-			declared[words[words.size() - 1]] = true
-	assert_bool(declared.is_empty()).override_failure_message(
-			"the water shader declares no globals; the case is vacuous").is_false()
+	var declared := _declared_globals()
+	assert_int(declared.size()).override_failure_message(
+			"the water shader declares no globals; the case is vacuous").is_greater(0)
+	var tunable: Array[String] = []
+	for name in declared:
+		if not BOARD_GLOBALS.has(name):
+			tunable.append(name)
 
 	var rows: Dictionary[String, bool] = {}
 	for knob: Dictionary in GameKnobs.KNOBS:
 		# The Water FAMILY: two groups since every dial went per type. Matching the prefix rather
 		# than naming both is what stops a third group from silently falling out of this law -- and
-		# the non-vacuity assertion below is what stops the prefix being wrong, since a filter that
+		# the non-vacuity assertion above is what stops the prefix being wrong, since a filter that
 		# matches nothing would let every case pass over an empty set.
 		if (knob["group"] as String).begins_with("Water"):
 			rows[knob["prop"]] = true
 	assert_array(rows.keys()).override_failure_message(
-			"the Water knob rows and the shader's globals are different sets -- a row with no " \
-			+ "uniform moves nothing, and a uniform with no row cannot be tuned") \
-			.contains_exactly_in_any_order(declared.keys())
+			"the Water knob rows and the shader's tunable globals are different sets -- a row " \
+			+ "with no uniform moves nothing, and a uniform with no row cannot be tuned") \
+			.contains_exactly_in_any_order(tunable)
 
-	for name: String in declared:
+	for name in declared:
 		assert_bool(ProjectSettings.has_setting("shader_globals/%s" % name)) \
 				.override_failure_message("the shader declares global '%s' and project.godot " \
 				% name + "does not -- the shader will refuse to compile").is_true()
@@ -269,18 +295,18 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	var deep_side: Dictionary[String, bool] = {}
 	var shallow_side: Dictionary[String, bool] = {}
-	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
-		var text := line.strip_edges()
-		if not text.begins_with("global uniform "):
+	var board_side: Array[String] = []
+	for name in _declared_globals():
+		if BOARD_GLOBALS.has(name):
+			board_side.append(name)
 			continue
-		var words := text.trim_suffix(";").split(" ")
-		var name := words[words.size() - 1]
 		var deep := name.begins_with("water_deep_")
 		var shallow := name.begins_with("water_shallow_")
 		assert_bool(deep or shallow).override_failure_message(
 				"global '%s' names neither water type -- one dial moving both is what the " % name \
 				+ "per-type split deleted, and a ratio hidden in a const is a feel value with no " \
-				+ "surface").is_true()
+				+ "surface. If it is genuinely board data and not a knob, it belongs in " \
+				+ "BOARD_GLOBALS and needs saying out loud there").is_true()
 		if deep:
 			deep_side[name.trim_prefix("water_deep_")] = true
 		elif shallow:
@@ -291,6 +317,12 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 		assert_bool(shallow_side.has(stem)).override_failure_message(
 				"'%s' is tunable on deep water and not on shallow -- one type would be stuck " \
 				% stem + "with whatever the other was tuned to").is_true()
+	# The exemption holds EXACTLY what it says it holds. Missing means a board global was renamed
+	# without saying so; extra is impossible by construction, but asserting both directions is what
+	# makes this a list rather than a filter.
+	assert_array(board_side).override_failure_message(
+			"the board-data exemption is declared as %s and the shader's is %s" \
+			% [BOARD_GLOBALS, board_side]).contains_exactly_in_any_order(BOARD_GLOBALS)
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider
@@ -305,12 +337,7 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 func test_every_global_the_shader_declares_is_actually_read() -> void:
 	var code := (load(SHADER_PATH) as Shader).code
 	var checked := 0
-	for line in code.split("\n"):
-		var text := line.strip_edges()
-		if not text.begins_with("global uniform "):
-			continue
-		var words := text.trim_suffix(";").split(" ")
-		var name := words[words.size() - 1]
+	for name in _declared_globals():
 		# Count every mention and subtract the declaration itself; a comment naming it is close
 		# enough to a read for this purpose, and being generous here is the right side to err on --
 		# the finding worth having is ZERO.

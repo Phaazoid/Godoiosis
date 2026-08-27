@@ -236,6 +236,21 @@ const FLAME_FRAMES := 8
 @export var water_shallow_caustics := 0.37: set = _set_water_shallow_caustics
 @export var water_shallow_caustics_scale := 16.0: set = _set_water_shallow_caustics_scale
 
+# The SHORELINE (#552 slice 2) — foam where water meets land, which is the other half of what the
+# ticket says makes water read as water. Width is in HALF-CELLS, so 1.0 reaches from the shore to
+# the cell's own centre and there is nowhere further for a one-texel-per-cell mask to reach.
+#
+# The colour's ALPHA is how hard the foam lands. One knob rather than two, because a foam hue and a
+# foam strength are not separately meaningful — you pick a surf colour and how much of it there is.
+#
+# Deep and shallow start DIFFERENT rather than matched: a shallow shore laps, so it gets the wider
+# softer band, while deep water meeting a wall stops dead and gets a narrow hard one. A guess to
+# react to, not an answer — the whole point of it being a knob.
+@export var water_deep_foam_width := 0.3: set = _set_water_deep_foam_width
+@export var water_shallow_foam_width := 0.5: set = _set_water_shallow_foam_width
+@export var water_deep_foam_color := Color(0.86, 0.93, 0.96, 0.7): set = _set_water_deep_foam_color
+@export var water_shallow_foam_color := Color(0.86, 0.93, 0.96, 0.5): set = _set_water_shallow_foam_color
+
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
 
@@ -486,6 +501,7 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 		for cell: Vector3i in map.get_used_cells():
 			if not live.has(BoardSpace.flat(cell)):
 				map.set_cell_item(cell, GridMap.INVALID_CELL_ITEM)
+	_rebuild_water_mask(grid)
 
 
 # The INCREMENTAL door (#319), and the whole reason sync() above was split. Same reconcile, over the
@@ -502,6 +518,7 @@ func sync_cells(grid: TileMapLayer, cells: Array[Vector2i], heights: BoardHeight
 	sync_passes += 1
 	for cell in cells:
 		reconcile_cell(grid, cell, heights, floor_row)
+	_rebuild_water_mask(grid)
 
 
 # ONE cell, in whatever direction it moved — the single implementation both sync() and sync_cells()
@@ -1081,6 +1098,57 @@ func _push_all_water() -> void:
 	_push_water(&"water_shallow_bed_grain", water_shallow_bed_grain)
 	_push_water(&"water_shallow_caustics", water_shallow_caustics)
 	_push_water(&"water_shallow_caustics_scale", water_shallow_caustics_scale)
+	_push_water(&"water_deep_foam_width", water_deep_foam_width)
+	_push_water(&"water_shallow_foam_width", water_shallow_foam_width)
+	_push_water(&"water_deep_foam_color", water_deep_foam_color)
+	_push_water(&"water_shallow_foam_color", water_shallow_foam_color)
+
+
+# The board's own water, as something the SHADER can read (#552 slice 2). One texel per cell, white
+# where that cell is water -- and the answer to the objection #552 filed against keeping water a
+# MeshLibrary item at all: "a foam edge has to know its neighbours, and a meshlib item knows nothing
+# about the cell next to it."
+#
+# The texture's texel centres land on CELL centres, so the shader's filter_linear gives it a
+# distance-to-shore ramp for nothing: 1.0 inside the water, exactly 0.5 on the shared edge with
+# land. No distance field to bake and no neighbour walk here.
+#
+# BOARD DATA, so it is derived rather than an @export -- but it rides _push_water like every water
+# global, because "how does a water value reach the shader" should have one answer.
+#
+# Held as a MEMBER on purpose: the global uniform stores the texture's RID, and a local would free
+# the ImageTexture the moment this returns.
+var _water_mask := ImageTexture.new()
+
+
+# Called from BOTH sync doors rather than from reconcile_cell: the mask is a whole-board artifact
+# and reconcile_cell is per-cell, so there is nothing to write there. One implementation, two call
+# sites -- which is not a second answer to anything.
+func _rebuild_water_mask(grid: TileMapLayer) -> void:
+	var rect := grid.get_used_rect()
+	if rect.size.x <= 0 or rect.size.y <= 0:
+		# An empty board still owes the shader a DEFINED mask. An unset sampler reads as white, which
+		# would mean "every cell is water" -- and therefore no shore anywhere.
+		_push_mask(Image.create(1, 1, false, Image.FORMAT_L8), Vector4(0.0, 0.0, 1.0, 1.0))
+		return
+	var image := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_L8)
+	image.fill(Color.BLACK)
+	for cell in grid.get_used_cells():
+		if GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.WATER:
+			image.set_pixel(cell.x - rect.position.x, cell.y - rect.position.y, Color.WHITE)
+	# A 2D cell's y IS the world z (BoardSpace.flat), and a cell is one world unit across, so the
+	# used rect doubles as the world rect with no conversion.
+	_push_mask(image, Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y))
+
+
+func _push_mask(image: Image, rect: Vector4) -> void:
+	# set_image unconditionally rather than branching to the cheaper ImageTexture.update() when the
+	# size happens to match. Two code paths for an operation that runs when TERRAIN IS EDITED buys
+	# nothing measurable, and only one of them would ever be exercised by a board that never
+	# changes shape.
+	_water_mask.set_image(image)
+	_push_water(&"water_board_mask", _water_mask)
+	_push_water(&"water_board_mask_rect", rect)
 
 
 func _set_water_deep_wave_speed(value: float) -> void:
@@ -1186,6 +1254,26 @@ func _set_water_shallow_caustics(value: float) -> void:
 func _set_water_shallow_caustics_scale(value: float) -> void:
 	water_shallow_caustics_scale = value
 	_push_water(&"water_shallow_caustics_scale", value)
+
+
+func _set_water_deep_foam_width(value: float) -> void:
+	water_deep_foam_width = value
+	_push_water(&"water_deep_foam_width", value)
+
+
+func _set_water_shallow_foam_width(value: float) -> void:
+	water_shallow_foam_width = value
+	_push_water(&"water_shallow_foam_width", value)
+
+
+func _set_water_deep_foam_color(value: Color) -> void:
+	water_deep_foam_color = value
+	_push_water(&"water_deep_foam_color", value)
+
+
+func _set_water_shallow_foam_color(value: Color) -> void:
+	water_shallow_foam_color = value
+	_push_water(&"water_shallow_foam_color", value)
 
 
 func _set_flame_lift(value: float) -> void:

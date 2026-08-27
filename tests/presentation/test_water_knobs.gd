@@ -25,6 +25,17 @@ extends GdUnitTestSuite
 # GDScript refuses an override whose signature narrows its parent's.
 class SpyMirror extends BoardMirror:
 	var pushed: Dictionary[String, Variant] = {}
+	# The mask as BUILT. Not read back off the ImageTexture, because headless it cannot be: measured
+	# under the dummy renderer, get_image() answers the FIRST image the texture was ever given and
+	# never changes again -- a second set_image, even at a different SIZE, still reads back the
+	# original. A case that read the texture would be green on a mask that stopped updating, which
+	# is the exact bug these cases exist to catch.
+	var mask_image: Image
+
+	func _push_mask(image: Image, rect: Vector4) -> void:
+		mask_image = image
+		super(image, rect)
+
 
 	func _push_water(uniform: StringName, value: Variant) -> void:
 		pushed[String(uniform)] = value
@@ -133,3 +144,158 @@ func test_every_water_uniform_is_registered_with_the_renderer() -> void:
 		assert_bool(registered.has(StringName(prop))).override_failure_message(
 				"'%s' is not a registered global shader parameter -- project.godot's " % prop \
 				+ "[shader_globals] and the knob table disagree").is_true()
+
+
+# --- The board mask (#552 slice 2) --------------------------------------------------------------
+#
+# Foam is the one thing in this shader that has to know about the cell NEXT DOOR, and a meshlib item
+# knows nothing about its neighbours -- which is the objection #552 filed against keeping water a
+# meshlib item at all. The mask is the answer: one texel per cell, pushed down the same funnel as
+# every knob above.
+#
+# It is BOARD DATA rather than tuning, so it has no knob and none of the cases above see it. What
+# can drift here is different too: not a name, but whether the picture matches the board and whether
+# anyone rebuilds it when the board moves.
+
+const TILESET_PATH := "res://Resources/TestTiles.tres"
+
+
+# A tile of each sort, read OFF the tileset rather than named here -- 5:6 and its neighbours are
+# content, and a case that hardcodes them breaks the day the sheet is re-cut.
+func _a_tile_of(kind_is_water: bool) -> Dictionary:
+	var tiles := load(TILESET_PATH) as TileSet
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var atlas := tiles.get_source(source_id) as TileSetAtlasSource
+		if atlas == null:
+			continue
+		for i in atlas.get_tiles_count():
+			var coords := atlas.get_tile_id(i)
+			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+				continue
+			var kind := GridUtils.terrain_kind_of(atlas.get_tile_data(coords, 0))
+			if kind == Terrain.Kind.VOID or kind == Terrain.Kind.NONE:
+				continue
+			if (kind == Terrain.Kind.WATER) == kind_is_water:
+				return {"tileset": tiles, "source": source_id, "coords": coords}
+	return {}
+
+
+# Painted at a deliberate OFFSET from the origin: a mask rect that quietly assumed (0,0) still
+# passes over a board that starts there, and every real level starts somewhere else.
+func _grid_with(water: Array[Vector2i], land: Array[Vector2i]) -> TileMapLayer:
+	var wet := _a_tile_of(true)
+	var dry := _a_tile_of(false)
+	assert_bool(wet.is_empty() or dry.is_empty()).override_failure_message(
+			"the tileset has no water tile or no land tile; these cases would be vacuous") \
+			.is_false()
+	var grid := TileMapLayer.new()
+	grid.tile_set = wet["tileset"]
+	for cell in water:
+		grid.set_cell(cell, wet["source"], wet["coords"])
+	for cell in land:
+		grid.set_cell(cell, dry["source"], dry["coords"])
+	return grid
+
+
+func _pushed_mask_image() -> Image:
+	assert_object(_mirror.pushed.get("water_board_mask")).override_failure_message(
+			"nothing pushed a water_board_mask texture at all").is_not_null()
+	assert_object(_mirror.mask_image).override_failure_message(
+			"_push_mask was never reached").is_not_null()
+	return _mirror.mask_image
+
+
+# Per CELL, not in aggregate: a count of white texels passes while they sit in the wrong places,
+# and where a cell's water lands is the entire point of the picture.
+func _assert_mask_matches(grid: TileMapLayer, where: String) -> void:
+	var image := _pushed_mask_image()
+	if image == null:
+		return
+	var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+	var seen_water := false
+	var seen_land := false
+	for cell in grid.get_used_cells():
+		var is_water := GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.WATER
+		seen_water = seen_water or is_water
+		seen_land = seen_land or not is_water
+		var reads_water := image.get_pixel(cell.x - int(rect.x), cell.y - int(rect.y)).r > 0.5
+		assert_bool(reads_water == is_water).override_failure_message(
+				"%s: cell %s is %s on the board but the mask reads it as %s -- the shoreline " \
+				% [where, cell, "WATER" if is_water else "land",
+						"water" if reads_water else "land"] \
+				+ "would be drawn in the wrong place").is_true()
+	# Both sorts present, or the comparison above proves nothing: an all-land board matches a mask
+	# that is black because it was never filled in.
+	assert_bool(seen_water and seen_land).override_failure_message(
+			"%s: the fixture has only one sort of cell; the case is vacuous" % where).is_true()
+
+
+func test_the_mask_says_water_exactly_where_the_board_does() -> void:
+	var grid := _grid_with([Vector2i(4, 3), Vector2i(5, 3)], [Vector2i(4, 4), Vector2i(6, 3)])
+	_mirror._rebuild_water_mask(grid)
+	_assert_mask_matches(grid, "freshly built")
+	grid.free()
+
+
+# Where the picture LIVES. The shader turns a world position into a texel with this rect alone, so
+# an origin one cell out slides the whole shoreline one cell sideways -- and nothing else in the
+# suite would notice, because the picture itself would still be correct.
+func test_the_mask_rect_is_the_board_it_was_built_from() -> void:
+	var grid := _grid_with([Vector2i(4, 3)], [Vector2i(4, 4), Vector2i(6, 3)])
+	_mirror._rebuild_water_mask(grid)
+	var used := grid.get_used_rect()
+	var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+	assert_bool(rect.is_equal_approx(Vector4(used.position.x, used.position.y,
+			used.size.x, used.size.y))).override_failure_message(
+			"mask rect %s does not describe the board's used rect %s -- a cell of drift here " \
+			% [rect, used] + "slides every shoreline sideways").is_true()
+	var image := _pushed_mask_image()
+	if image != null:
+		assert_bool(image.get_size() == used.size).override_failure_message(
+				"the mask is %s for a board of %s" % [image.get_size(), used.size]).is_true()
+	grid.free()
+
+
+# An empty board still owes the shader a DEFINED mask: an unset sampler global reads as WHITE, which
+# says every cell is water and puts a shoreline nowhere at all.
+func test_an_empty_board_still_pushes_a_mask() -> void:
+	var grid := TileMapLayer.new()
+	_mirror._rebuild_water_mask(grid)
+	var image := _pushed_mask_image()
+	if image != null:
+		assert_bool(image.get_pixel(0, 0).r < 0.5).override_failure_message(
+				"an empty board pushed a WHITE mask -- the shader would read the whole world " \
+				+ "as water").is_true()
+	grid.free()
+
+
+# THE case this slice exists for, and the one a call-count would only half ask. The mask is built
+# from the board, so a mask built ONCE and never again is a shoreline frozen at whatever the board
+# looked like when the level loaded -- and every other case in this file would stay green, because
+# the first build is correct.
+#
+# So it asserts the CONSEQUENCE rather than the call: paint a land cell into water, run the door,
+# and the picture has to have changed. Both doors, because sync() and sync_cells() are two entry
+# points and only one of them is on the path a brush edit takes.
+func test_both_sync_doors_rebuild_the_mask() -> void:
+	_mirror.board = auto_free(GridMap.new())
+	var heights := BoardHeights.new()
+	var dry := _a_tile_of(false)
+	var wet := _a_tile_of(true)
+	var swing := Vector2i(6, 3)
+	var grid := _grid_with([Vector2i(4, 3)], [Vector2i(4, 4), swing])
+
+	_mirror.sync(grid, heights)
+	_assert_mask_matches(grid, "after sync()")
+
+	# The same cell, repainted -- so a stale mask is a WRONG mask rather than merely an old one.
+	grid.set_cell(swing, wet["source"], wet["coords"])
+	_mirror.sync_cells(grid, [swing], heights, _mirror.floor_row_of(heights))
+	_assert_mask_matches(grid, "after sync_cells()")
+
+	# And back the other way, so the case cannot pass on a mask that only ever gains water.
+	grid.set_cell(swing, dry["source"], dry["coords"])
+	_mirror.sync_cells(grid, [swing], heights, _mirror.floor_row_of(heights))
+	_assert_mask_matches(grid, "after sync_cells() painted it back to land")
+	grid.free()

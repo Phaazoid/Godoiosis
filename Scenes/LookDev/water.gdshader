@@ -58,6 +58,18 @@ global uniform float water_shallow_seam;
 global uniform float water_deep_body_shade;
 global uniform float water_shallow_body_shade;
 
+// The SHORELINE (#552 slice 2). Foam is the other half of what the ticket says does the work, and
+// it is the one effect in here that has to know about the cell NEXT DOOR -- which a meshlib item
+// structurally cannot. That is what the board mask below is for.
+//
+// Width is in HALF-CELLS: 1.0 reaches from the shore to the cell's centre, which is as far as a
+// one-texel-per-cell mask can say anything about. The colour's ALPHA is how hard it lands, so hue
+// and strength stay ONE knob rather than two that are only meaningful together.
+global uniform float water_deep_foam_width;
+global uniform float water_shallow_foam_width;
+global uniform vec4 water_deep_foam_color;
+global uniform vec4 water_shallow_foam_color;
+
 // The bed and its caustics have no deep twin BY NATURE rather than by omission: they are what you
 // see THROUGH shallow water, and deep water is opaque. They carry `shallow` in their names anyway,
 // so no water knob leaves you working out which water it acts on.
@@ -66,6 +78,22 @@ global uniform vec4 water_shallow_bed_color;
 global uniform float water_shallow_bed_grain;
 global uniform float water_shallow_caustics;
 global uniform float water_shallow_caustics_scale;
+
+// BOARD DATA, not tuning. These two name no water type because they describe the BOARD rather than
+// either water, and nobody tunes them -- BoardMirror rebuilds both whenever the terrain changes.
+// test_no_water_uniform_is_ambiguous_about_its_type knows this category by name and its guest list
+// is closed, so a real knob cannot slip in here unnamed.
+//
+// The mask is one texel per cell, red = this cell is water. Its texel centres land on CELL centres,
+// so filter_linear hands over a distance-to-shore ramp for free: 1.0 well inside the water, exactly
+// 0.5 on the shared edge with land, hardware doing the interpolation. No SDF bake, no neighbour
+// loop, one texture read. Clamped rather than repeated, so water running off the edge of the board
+// meets its own value there and does not foam against the void.
+//
+// The rect says where that mask LIVES in world space -- xy origin, zw size, in cells, which are
+// world units because BoardSpace.CELL_SIZE is 1.0.
+global uniform sampler2D water_board_mask : filter_linear, repeat_disable;
+global uniform vec4 water_board_mask_rect;
 
 // Art pixels per cell -- the quantiser that keeps everything here pixel art instead of a smooth
 // gradient. The sheet's own resolution (gen_lookdev_assets.TILE), so it is a const rather than a
@@ -81,6 +109,10 @@ const float CAUSTIC_SPEED = 0.45;
 const float CAUSTIC_SHARPNESS = 5.0;
 // How far the BODY's texture runs before it repeats, in cells.
 const float BODY_TILE = 1.0;
+// How hard the shoreline BREATHES, as a fraction of the foam's own width. Derived rather than given
+// its own dial, for CAUSTIC_SPEED's reason: it is the same water moving, and a wider band of surf
+// swings further by itself. A band that does not move at all is a painted outline, not surf.
+const float FOAM_WOBBLE = 0.35;
 
 varying vec3 world_pos;
 varying vec3 world_normal;
@@ -181,6 +213,29 @@ void fragment() {
 		// (dev, 2026-08-27).
 		float edge = 0.5 - max(abs(cell_xz.x), abs(cell_xz.y));
 		col *= 1.0 - seam * (1.0 - smoothstep(0.0, SEAM_PIXELS * px, edge));
+
+		// --- The SHORELINE -------------------------------------------------------------------
+		// AFTER the seam on purpose: the seam draws EVERY cell boundary, and a grid line running
+		// through the surf is exactly what a shore must not have.
+		//
+		// 3D ONLY, and declared here rather than left to be rediscovered (#292, #285 is the model).
+		// The flat view's water is a TILE PICK, and a shoreline is a sub-tile gradient no tile pick
+		// can express. That view already carries the one distinction the RULES make -- shallow vs
+		// deep, via TileData.modulate -- so foam adds no rule information to the authority view.
+		float foam_width = mix(water_shallow_foam_width, water_deep_foam_width, deep);
+		vec4 foam_color = mix(water_shallow_foam_color, water_deep_foam_color, deep);
+		vec2 mask_uv = (world_pos.xz - water_board_mask_rect.xy)
+				/ max(water_board_mask_rect.zw, vec2(1.0));
+		// 1.0 well inside the water and 0.5 on the land boundary -- never BELOW 0.5, because this
+		// shader only ever runs on a cell that is already water. The same wave field that moves the
+		// surface moves the shoreline, so the band breathes instead of sitting there.
+		float wet = texture(water_board_mask, mask_uv).r + w * FOAM_WOBBLE * foam_width;
+		// Width 0 means OFF, not a hairline: a zero-wide smoothstep still fires on whichever pixel
+		// lands exactly on the boundary.
+		float foam = foam_width <= 0.0
+				? 0.0
+				: 1.0 - smoothstep(0.5, 0.5 + 0.5 * foam_width, wet);
+		col = mix(col, foam_color.rgb, foam * foam_color.a);
 
 		ALBEDO = col;
 		ROUGHNESS = mix(water_shallow_roughness, water_deep_roughness, deep);

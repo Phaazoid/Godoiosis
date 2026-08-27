@@ -269,6 +269,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How darkly deep water draws its own cell boundaries. The waves run off world position so a lake is one continuous body, which erases the grid -- and on water the hover bracket is then the only thing showing where a tile ends. A deep expanse has nothing else breaking it up, so it usually wants more of this than shallow does."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a deep block's WALLS and top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_foam_width", "label": "Foam width", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre. Deep water usually meets a wall rather than a beach, so a NARROWER band than shallow's reads better: water stopping dead, not running out."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_foam_color", "label": "Foam colour",
+		"tip": "The surf's own colour, and its ALPHA is how hard it lands. Deep water breaking against something wants the harder, brighter edge -- it is the one place on a deep expanse where a bright highlight is doing work rather than adding glare."},
 
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_speed", "label": "Wave speed", "min": 0.0, "max": 6.0, "step": 0.01,
 		"tip": "How fast shallow water's bands travel. It also carries the CAUSTICS, whose speed is derived from this rather than taking a dial of its own -- it is the same water moving."},
@@ -296,6 +300,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The rippling net of light on the bottom. It MOVES while the bed under it stays nailed to the board, and that contrast is the whole depth cue -- ice moves all of itself or none of it, so this is the one thing a frozen surface structurally cannot fake."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_caustics_scale", "label": "Caustics scale", "min": 1.0, "max": 30.0, "step": 0.5,
 		"tip": "How tightly the light net is woven, in radians per cell. Low is a few broad shifting patches; high is a fine mesh. Worth keeping clearly different from Wave scale -- if the two agree, the bottom and the surface stop reading as separate layers."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_foam_width", "label": "Foam width", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre, which is as far as a one-texel-per-cell mask can see. 0 turns foam off entirely. A shallow shore laps, so it can afford a wider softer band than deep water does."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_foam_color", "label": "Foam colour",
+		"tip": "The surf's own colour, and its ALPHA is how hard it lands -- those are one decision, not two. Cool white is the safe read; pushing it warm makes shallow water read as a beach rather than a lake. Alpha 0 is the other way to turn foam off."},
 
 ]
 
