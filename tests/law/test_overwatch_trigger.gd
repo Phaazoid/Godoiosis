@@ -206,6 +206,31 @@ func test_a_crosser_the_shot_downs_stops_at_the_crossing_cell() -> void:
 	_break_volleys(plan)
 
 
+# Law #2's half of the mechanic, and it lives in this suite because it is the same claim from the
+# other side: a queued move that would cross a standing watch shows the shot it triggers IMMEDIATELY,
+# on its own row. Deliberately the crossing MOVE's row rather than a section of its own — dragging
+# that row is what changes who eats the shot, so the feedback has to be on the thing being dragged.
+func test_the_crossing_move_row_says_what_it_walks_into() -> void:
+	var watcher := _watcher()
+	var crosser := _walker(PLAYER)
+	crosser.squad._queue_action(_walk(crosser))
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+	var entries := ActionQueueDisplayEntry.build_for(crosser.squad, plan)
+
+	var move_notes: Array[String] = []
+	for entry in entries:
+		if entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION \
+				and entry.action.action_type == BaseAction.ActionType.MOVE:
+			move_notes.append_array(entry.annotations)
+	assert_int(move_notes.size()).is_equal(1)
+	# The number is the resolve's, not a re-derivation -- what the row says and what the pass does
+	# are one answer (R3/R8).
+	assert_str(move_notes[0]).contains(str(plan.watch_shots[0].resolved.damage))
+	assert_str(move_notes[0]).contains(watcher.get_unit_name())
+	_break_volleys(plan)
+
+
 # A derived attack is never counter-bait: the shot is a reaction, and its victim's answer is the
 # rest of their own turn. Structural rather than filtered — watch shots are not in plan.attacks,
 # which is the only list calculate_reactions_for_squad reads.

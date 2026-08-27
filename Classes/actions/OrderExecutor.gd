@@ -114,7 +114,7 @@ func execute_orders(unit):
 	# back after the walk instead of interrupting it. A crosser the shot downed has already stopped
 	# at the crossing cell (MoveAction.walked_path), so what trails the fiction is the ORDER OF THE
 	# VISUALS, never the outcome. Interrupting the walk is its own issue.
-	await _execute_action_sequence(plan.watch_shots, beat)
+	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan))
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
@@ -273,6 +273,22 @@ func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: b
 # Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
 # that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
 # means "don't move", which is the right answer when there is nothing left to look at.
+# Who the camera frames for a triggered watch shot (#413) — the CROSSER, because the moment is
+# somebody walking into a line, not the watcher standing still. Built here rather than in BeatSheet:
+# a watch shot is not part of the plan the player authored, so it has no beat to read a subject off,
+# and one line of data beats teaching the sheet about a list it does not own. Keyed the way every
+# other schedule is — the volley's lead member — so a splashing shot still pans once.
+func _watch_subjects(plan: ResolvedPlan) -> Dictionary:
+	var subjects: Dictionary = {}
+	for shot in plan.watch_shots:
+		if shot.is_secondary_hit:
+			continue
+		var who: Unit = shot.triggered_by
+		if who != null and is_instance_valid(who):
+			subjects[shot] = who
+	return subjects
+
+
 func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	var subjects: Dictionary = {}
 	for beat in beats:
