@@ -42,6 +42,10 @@ func actor_can_perform() -> bool:
 	# resolve from the final position — no attack-then-flee).
 	return not actor.has_main_action_queued()
 
+func is_reorderable() -> bool:
+	# A hold is a filler nobody ordered and crosses nothing — resequencing it means nothing (#412).
+	return not is_hold_position
+
 func execute():
 	begin_execution()
 	# NOT clear_preview_sprites() here (#558, dev 2026-08-26: "have the arrow match the ghost's

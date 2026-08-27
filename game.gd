@@ -207,7 +207,7 @@ func _wire_signals() -> void:
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
-	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
+	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
@@ -890,14 +890,14 @@ func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
 			squad_manager.remove_action(squad, action)
 			return
 
-func _on_queue_reorder_attacks(ordered_actors: Array) -> void:
+func _on_queue_reorder(action_type: BaseAction.ActionType, ordered_actors: Array) -> void:
 	if _board_locked_for_player():
 		return
 	var squad: Squad = squad_manager.active_squad
 	if squad == null or not is_instance_valid(squad):
 		return
-	squad.reorder_attacks_by_actor(ordered_actors)
-	refresh_action_queue(squad)   # re-resolve + redraw: the queue now reflects the new combo order
+	squad.reorder_by_actor(action_type, ordered_actors)
+	refresh_action_queue(squad)   # re-resolve + redraw: the queue now reflects the new order
 
 func refresh_action_queue(squad: Squad):
 	if squad == null:

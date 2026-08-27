@@ -70,6 +70,14 @@ const SIDE_CHANNEL_ORDER: Array[ActionType] = [
 func is_main_action() -> bool:
 	return MAIN_ACTION_TYPES.has(action_type)
 
+# May the queue panel resequence the row this order draws (#412)? Queue order is the pass's clock —
+# resolve_plan walks action_queue and nothing else — so a row standing for an order somebody GAVE
+# is draggable, while a derived row (a counter) and a filler (hold position) are not. Asked of the
+# order rather than of the row, because only the order knows which it is; Squad.reorder_by_actor
+# asks the same question of the queue.
+func is_reorderable() -> bool:
+	return true
+
 # Actor-intrinsic requirement for queueing this action; subclasses override (move ordering,
 # verb locks, ability gates). SquadManager.queue_action is the sole enforcement point
 # (Law #3). Plan-context checks (adjacency, occupancy) belong to plan validation instead.
