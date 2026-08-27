@@ -29,9 +29,10 @@ func after_test() -> void:
 # SILENTLY on load, the file keeping its text while the value simply stops coming. A
 # Dictionary[Stats.Stat, int] is the likeliest shape to go that way.
 #
-# Read back with CACHE_MODE_IGNORE, or the round trip is a lie: ResourceSaver.save claims the path,
-# so a plain load() hands back the very object saved a line earlier and the assertion below would
-# be reading the value it just set.
+# Read back with CACHE_MODE_IGNORE and asserted not-same, so the round trip cannot be satisfied
+# by the resource cache returning the object saved a line earlier. Whether ResourceSaver.save
+# claims the path here is a Godot detail this should not be resting on in either direction --
+# the assertion measures it rather than the comment asserting it.
 func test_a_scaling_change_survives_a_save_and_load() -> void:
 	var change: Dictionary[Stats.Stat, int] = {Stats.Stat.DEX: 5, Stats.Stat.PER: -5}
 	var authored := WeaponModData.new()
