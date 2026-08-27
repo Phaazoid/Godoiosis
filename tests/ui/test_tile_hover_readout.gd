@@ -128,6 +128,41 @@ func test_every_tile_shows_a_card_with_its_kind() -> void:
 	assert_bool(game.hover_info_panel.hover_panel.visible).is_false()
 
 
+func test_leaving_the_map_takes_the_card_with_it() -> void:
+	# #582: the off-map branch used to bare-return, so the last card stayed up and went on
+	# describing a cell the pointer had left. A card is about NOW or it is a lie -- and this one
+	# lied about a tile's height while the dev was hunting why he could not click it.
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
+	await await_idle_frame()
+	assert_bool(game.hover_info_panel.visible) \
+		.override_failure_message("no card to leave behind; the case is vacuous").is_true()
+
+	var off_map := Vector2i(-40, -40)
+	assert_object(game.grid.get_cell_tile_data(off_map)) \
+		.override_failure_message("the fixture grew a tile out there").is_null()
+	game.hover_presenter.update_hover_visuals(off_map)
+	await await_idle_frame()
+	assert_bool(game.hover_info_panel.visible) \
+		.override_failure_message("the card outlived the tile it describes").is_false()
+
+
+func test_dev_mode_does_not_inherit_the_last_card_from_play() -> void:
+	# The other half of the same lie (#582), and the one that actually bit: DEV_MODE never wrote
+	# the card at all, so it held whatever IDLE last hovered -- a readout from before the mode was
+	# even entered. Cleared rather than filled, because the dev-mode height readout belongs to
+	# HeightDebugOverlay and must not gain a second voice.
+	game.hover_presenter.update_hover_visuals(Vector2i(2, 0))
+	await await_idle_frame()
+	assert_bool(game.hover_info_panel.visible) \
+		.override_failure_message("no card to carry over; the case is vacuous").is_true()
+
+	game.game_state = game.GameState.DEV_MODE
+	game.hover_presenter.update_hover_visuals(Vector2i(3, 0))
+	await await_idle_frame()
+	assert_bool(game.hover_info_panel.visible) \
+		.override_failure_message("the play card followed the dev into DEV_MODE").is_false()
+
+
 func test_a_named_tile_headers_its_authored_name() -> void:
 	# The 2026-08-12 report: the card assumed the name off the Kind enum, so an authored
 	# variant read as plain "Grass" however it was named.
