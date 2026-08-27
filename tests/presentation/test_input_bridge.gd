@@ -920,6 +920,46 @@ func _unshadowed_cell(a: Vector2, b: Vector2) -> Vector2i:
 	return GridUtils.NO_CELL
 
 
+# The mouse is ONE place (#582 follow-up). Reported in play against the shipped #585: the ghost drew
+# at the brush's height while the selector bracket drew at the picked column's own, so they sat at two
+# heights AND two screen positions -- "my mouse is kind of in two places at once ... I don't know
+# where I'm aiming" -- and a drag slipped onto another layer the moment a cell sank under it.
+#
+# Asserted on what each renderer is HANDED rather than on the world Y it computes: BoardOverlays reads
+# the picked cell and BoardMirror reads the ghost, so agreeing here is the whole property, while
+# re-deriving surface_y on both sides would pass against any mutant that broke the pick.
+func test_the_brush_ghost_and_the_hover_selector_name_one_cell() -> void:
+	var uv := Vector2(0.5, 0.5)
+	var cell := _unshadowed_cell(uv, uv)
+	assert_object(cell).override_failure_message(
+			"no cell on this board picks back to itself").is_not_equal(GridUtils.NO_CELL)
+	_arm_brush()
+	var brush: TileBrushTool = _game.dev_overlay.tile_brush
+	brush.paint_mode = TileBrushTool.PaintMode.TERRAIN
+	brush.set_elevation(-Terrain.UNITS_PER_LEVEL - 1)
+	await _pump()
+
+	_scene._update_pointer(_screen_in(cell, uv))
+	var ghost: BrushGhost = _game.dev_controller.brush_ghost()
+	assert_object(ghost).override_failure_message("the armed brush previews nothing").is_not_null()
+
+	var hovered: Array[Vector3i] = _overlays.cells_of(BoardOverlays.Layer.HOVER)
+	assert_int(hovered.size()).override_failure_message(
+			"the pointer marked no cell; there is nothing to compare").is_equal(1)
+	# Non-vacuity, and the bug in one line: the brush is authoring BELOW the ground here, so a pick
+	# that read geometry would answer the surface row and disagree with the ghost.
+	assert_int(BoardSpace.top_row_of(ghost.height)).override_failure_message(
+			"the brush is level with the ground; the case cannot tell the two apart") \
+		.is_not_equal(_scene._tops.get(cell, BoardSpace.FLAT_TOP_ROW) - 1)
+
+	assert_object(ghost.cell).override_failure_message(
+			"the ghost and the selector are on different cells -- two places at once") \
+		.is_equal(BoardSpace.flat(hovered[0]))
+	assert_int(hovered[0].y).override_failure_message(
+			"the selector sits at the board's height while the ghost hangs at the brush's") \
+		.is_equal(BoardSpace.top_row_of(ghost.height))
+
+
 func test_the_pointer_vertex_follows_the_cursor_across_one_cell() -> void:
 	# The corner tool's answer changes halfway ACROSS a cell, so it is computed ABOVE
 	# _update_pointer's cell early-out. Below it the marker sticks to whichever corner the cursor

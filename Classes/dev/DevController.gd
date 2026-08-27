@@ -500,16 +500,27 @@ func elevation_brush_live() -> bool:
 	return _elevation_brush() != null
 
 
-# The row a pick should resolve against instead of the board's geometry (#582), or NO_COLUMN while
-# ordinary picking stands. Lives HERE beside brush_ghost() because it is the same question that one
-# answers -- what the next click is aimed at -- and a host assembling it out of brush fields would be
-# a second place that knows what "the brush's height" means.
+# The row a pick resolves against while the brush is authoring at a height (#582), or NO_COLUMN while
+# ordinary geometry picking stands. Lives HERE beside brush_ghost() because it is the same question
+# that one answers -- what the next click is aimed at -- and a host assembling it out of brush fields
+# would be a second place that knows what "the brush's height" means.
+#
+# UNCONDITIONAL while the level row is up, and that is the correction #585 needed (dev, 2026-08-27:
+# "in the tile brush mode, it should only ever be selecting where my ghost tile is"). It shipped as an
+# opt-in toggle defaulting to OFF, which left the tool answering "where is the mouse" TWICE: the ghost
+# draws at the brush's height and the selector bracket at the picked column's own, so they sat at two
+# heights and two screen positions at once. They can only coincide when the PICK is on the plane --
+# the bracket reads its height straight off the picked cell -- and only then is the ghost under the
+# cursor at all, since the picked column is where the ray crosses. The geometry pick is what displaces
+# it. A drag was the other half: reading geometry the drag is MUTATING, the pick slips onto a
+# neighbour the moment a cell sinks, and a plane cannot.
 #
 # Reads elevation_brush_live() rather than the paint mode, so the aim follows the LEVEL row exactly:
-# offered in TERRAIN and CORNER, which are the two modes that ask for a height at all.
+# TERRAIN and CORNER, the two modes that ask for a height at all. ZONE and STATE keep geometry
+# picking, which is right -- they mark a cell you can SEE and have no height to aim at.
 func brush_pick_row() -> int:
 	var brush := _elevation_brush()
-	if brush == null or not brush.pick_at_brush_height:
+	if brush == null:
 		return BoardPicker.NO_COLUMN
 	# A "top row" is the row ABOVE the top cell -- pick_cell's convention, so a surface sits at
 	# row * ROW_HEIGHT. column_tops_from spells the same +1.

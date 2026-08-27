@@ -934,7 +934,7 @@ refusal is answered by ordering — tile first, then height), and a ramp wears t
 `BoardHeights.set_cell` takes both and a cell is one answer; two brushes would be two ways to author
 one thing. The wheel is read **first** in `DevController.handle_tile_brush` and returns, so a notch
 mid-stroke changes the level without ending the stroke, and it is gated on `event.pressed` because
-Godot emits a press *and* a release per notch. Five rulings worth keeping:
+Godot emits a press *and* a release per notch. Six rulings worth keeping:
 
 - **Negative levels are reachable, deliberately.** The dev: *"if I start designing a level and want a
   dip, without allowing negatives, I would have to shift everything up. no bueno."* Nothing in
@@ -956,11 +956,26 @@ Godot emits a press *and* a release per notch. Five rulings worth keeping:
   neighbours, honestly, at the rig's fixed 40° pitch — measured, it needs 56° to see the floor, and
   no picking rule recovers what is not on screen. Anything **two cells across is visible on its own
   at any depth** (3×3 and 5×5 measured, every cell), so the gap is exactly the one-wide well. The
-  Tile Brush's **Aim at brush height** toggle answers it by changing the QUESTION: while it is on the
-  pick resolves against the brush's own Height plane (`BoardPicker.pick_on_plane`) rather than the
-  board, so nothing can occlude it. Off by default, because it trades away reaching a tall column to
-  erase it — the commoner gesture by far. It is #340's ruling one layer down: the ghost already shows
-  the tile at the height you picked rather than the height the cell happens to be.
+  brush answers it by changing the QUESTION: while the level row is up, the pick resolves against the
+  brush's own Height plane (`BoardPicker.pick_on_plane`, via `DevController.brush_pick_row`) rather
+  than the board, so nothing can occlude it. It is #340's ruling one layer down — the ghost already
+  showed the tile at the height you picked rather than the height the cell happens to be.
+- **And it is NOT a preference — that was the correction, found in play.** It shipped in #585 as an
+  opt-in toggle defaulting to off, on the reasoning that it trades away reaching a tall column to
+  erase it. What that reasoning missed is that the tool then answers *"where is the mouse"* **twice**:
+  the ghost draws at the brush's height and the hover bracket at the picked column's own, so they sit
+  at two heights and two screen positions at once. Dev, 2026-08-27: *"my mouse is kind of in two
+  places at once … I don't know where I'm aiming, and I can't click/drag to paint low, because it
+  jumps between which is the correct layer. we need to compress this, in the tile brush mode, it
+  should only ever be selecting where my ghost tile is."* **They can only coincide when the PICK is on
+  the plane** — `BoardOverlays._marker_transform` reads its height straight off the picked cell — and
+  only then is the ghost under the cursor at all, since the picked column is where the ray crosses;
+  the geometry pick is what displaces it. The drag was the same fault moving: a pick that reads
+  geometry the drag is MUTATING slips onto a neighbour the moment a cell sinks, and a plane cannot.
+  So it is unconditional in **TERRAIN and CORNER**, the two modes that ask for a height; ZONE and
+  STATE keep geometry picking, marking a cell you can see. The accepted cost is the one the toggle
+  was protecting: reaching a column whose top is elsewhere means scrolling the wheel to that height
+  first, which the selector makes visible rather than surprising.
 - **Elevation goes with the ground.** `BoardHeights.prune_groundless` runs at both sites the tile-state
   sweep does (brush erase, `resize_map`), because a height under no tile is invisible junk that
   resurrects the moment ground is repainted there. The predicate is a **parameter**, not an injected
