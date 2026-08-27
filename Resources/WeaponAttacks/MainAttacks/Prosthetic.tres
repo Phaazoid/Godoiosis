@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://bv3vse3abbfcx"]
 
 [ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_pat"]
 [ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
