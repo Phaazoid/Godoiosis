@@ -314,6 +314,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# tunable. The arrow ships WHITE deliberately: see GUARD_LINK_MODULATE's declaration.
 	{"group": "Board markup colours", "label": "Guard link arrow", "static": "GUARD_LINK_MODULATE",
 		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
+	{"group": "Board markup colours", "label": "Guard link head inset", "static": "GUARD_LINK_HEAD_INSET",
+		"min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far back from the ward's cell centre the link's arrowhead stops, in cells. 0 puts it on the shield, which is what the dev reported as unreadable; 0.5 parks it on the edge the pair shares and leaves three columns of overlap; about 0.7 clears the shield outright. Redraws links already on the board."},
 	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
 		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
 
@@ -578,6 +581,7 @@ static func read_static(name: String) -> Variant:
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
 		"GUARD_LINK_MODULATE": return OverlayManager.GUARD_LINK_MODULATE
+		"GUARD_LINK_HEAD_INSET": return OverlayManager.GUARD_LINK_HEAD_INSET
 		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
@@ -649,6 +653,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
 		"GUARD_LINK_MODULATE": OverlayManager.GUARD_LINK_MODULATE = value
+		"GUARD_LINK_HEAD_INSET": OverlayManager.GUARD_LINK_HEAD_INSET = value
 		"GUARD_RING_COLOR": OverlayManager.GUARD_RING_COLOR = value
 		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
@@ -831,6 +836,10 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# needs the unit list and this manager has none.
 		"GUARD_LINK_MODULATE": manager.restyle_guard_link()
 		"GUARD_RING_COLOR": manager.restyle_squad_markers()
+		# The inset MOVES a sprite rather than re-tinting one, and neither store can rebuild a pair
+		# from itself -- redrawing needs the unit list. So this one goes back to the game's own door
+		# (#450 round 2), which is where every other write point already goes.
+		"GUARD_LINK_HEAD_INSET": _refresh_guard_markers(host)
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
@@ -847,6 +856,18 @@ static func _refresh_mission_status(host: Node3D) -> void:
 	if game_2d == null:
 		return
 	game_2d.refresh_mission_status()
+
+
+# The armed-Guard pair's re-apply, for the one knob that MOVES a marker instead of re-tinting it
+# (#450). Same shape and same reason as the mission-status one above: game.refresh_guard_markers is
+# already the door every write point uses, so a knob takes it rather than growing a second redraw.
+static func _refresh_guard_markers(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	game_2d.refresh_guard_markers()
 
 
 static func overlays_of(host: Node3D) -> BoardOverlays:

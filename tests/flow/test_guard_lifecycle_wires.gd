@@ -77,14 +77,21 @@ func _guard_preview_count() -> int:
 	return (om.guard_preview_icons as Array).size() + (om.guard_preview_links as Array).size()
 
 
-# Which CELLS the link's sprites sit on, read back through the grid rather than compared as world
-# floats -- the arrow is placed by GridUtils.cell_world, so this is its own inverse.
-func _guard_link_cells() -> Array[Vector2i]:
-	var cells: Array[Vector2i] = []
-	for sprite in game.overlay_manager.guard_link_sprites:
-		if is_instance_valid(sprite):
-			cells.append(game.grid.local_to_map(game.grid.to_local(sprite.global_position)))
-	return cells
+# Where the link's TAIL sits -- the start tile, which is the only half still anchored to a cell.
+# Read back through the grid rather than compared as world floats, since GridUtils.cell_world placed
+# it and this is that call's own inverse.
+func _guard_link_tail_cell() -> Vector2i:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	return game.grid.local_to_map(game.grid.to_local(sprites[0].global_position))
+
+
+# Where the link's HEAD sits, in world pixels. Deliberately NOT a cell: since #450 round 2 the head
+# is inset half a cell so the ward's shield is legible under it, which puts it ON the boundary --
+# where local_to_map answers with whichever side the floor lands on and would read as the blocker's
+# own cell. The position is the fact; the cell is not.
+func _guard_link_head_pos() -> Vector2:
+	var sprites: Array[Sprite2D] = game.overlay_manager.guard_link_sprites
+	return sprites[sprites.size() - 1].global_position
 
 
 # --- 1. the lapse tick --------------------------------------------------------------------------
@@ -222,9 +229,43 @@ func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:
 		.override_failure_message("fixture's move did not move the projection").is_equal(Vector2i(2, 1))
 	assert_bool(_guard_linked()).override_failure_message(
 		"the link vanished instead of following -- (2,1) is still adjacent to the ward").is_true()
-	assert_array(_guard_link_cells()).override_failure_message(
-		"the link still points out of the cell the blocker LEFT") \
-		.contains_exactly_in_any_order([Vector2i(2, 1), Vector2i(2, 0)])
+	assert_vector(_guard_link_tail_cell()).override_failure_message(
+		"the link still starts from the cell the blocker LEFT").is_equal(Vector2i(2, 1))
+	# The head lands HALF WAY between the two centres -- the shared edge -- which is both where the
+	# inset puts it and the one expression that says "it followed" without restating the inset.
+	var from := GridUtils.cell_world(game.grid, Vector2i(2, 1))
+	var to := GridUtils.cell_world(game.grid, Vector2i(2, 0))
+	assert_vector(_guard_link_head_pos()).override_failure_message(
+		"the head is not on the edge the moved pair now shares").is_equal(from.lerp(to, 0.5))
+
+
+func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
+	# Round 2, found in play: "the shield just isn't as readable as I'd like it to be under the
+	# arrowhead." The arrow tile's ink runs x=0..11 of 16 and the shield's x=1..13, so drawn on the
+	# ward's own cell the arrow covered eleven of the shield's thirteen columns.
+	#
+	# Pinned as a RELATIONSHIP against the ward's centre, never as the inset's number -- that value
+	# is a Game-tab knob and the tuning razor forbids a test that reddens when the dev turns it.
+	# What must stay true is only the direction: the head sits strictly BLOCKER-side of the shield.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	await await_idle_frame()
+	blocker.arm_guard(ward, blocker.get_guard_range())
+
+	game.refresh_guard_markers()
+
+	var ward_centre := GridUtils.cell_world(game.grid, Vector2i(2, 0))
+	var blocker_centre := GridUtils.cell_world(game.grid, Vector2i(1, 0))
+	var head := _guard_link_head_pos()
+	assert_float(head.distance_to(ward_centre)).override_failure_message(
+		"the head sits ON the ward's cell centre, i.e. on top of the shield") \
+		.is_greater(0.0)
+	assert_float(head.distance_to(blocker_centre)).override_failure_message(
+		"the head was inset PAST the blocker -- it should stop between the pair, not behind it") \
+		.is_greater(0.0)
+	assert_float(head.distance_to(ward_centre)).override_failure_message(
+		"the head is closer to the ward than to the blocker, so it still crowds the shield") \
+		.is_less_equal(head.distance_to(blocker_centre))
 
 
 func test_a_spent_guard_stops_being_marked() -> void:

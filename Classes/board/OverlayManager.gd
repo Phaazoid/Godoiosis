@@ -138,6 +138,15 @@ static var GUARD_RING_SCALE := 1.0
 # tint IS the colour (the three planned-move knobs' own reasoning) and starting neutral leaves the
 # Game tab's picker its full range rather than multiplying against a baked-in hue.
 static var GUARD_LINK_MODULATE := Color.WHITE
+# How far back from the ward's cell CENTRE the link's arrowhead sits, in cells (#450 round 2, dev
+# found it in play: "the shield just isn't as readable as I'd like it to be under the arrowhead").
+#
+# Measured rather than guessed. The arrowhead tile's ink runs x=0..11 of 16 with the chevron tip at
+# 11, and GuardWardIcon's runs x=1..13 -- so drawn on the ward's own cell the arrow covers ELEVEN of
+# the shield's thirteen columns. At half a cell that is three, and they are the shield's thinnest.
+# 0.5 is the geometric rule (the head stops at the edge the pair shares) rather than an art-derived
+# number; ~0.7 clears the shield entirely, which is what the range above 0.5 is for.
+static var GUARD_LINK_HEAD_INSET := 0.5
 
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
@@ -794,7 +803,20 @@ func _guard_link_trail(blocker: Unit, ward: Unit, tint: Color) -> Array[Sprite2D
 	var to := ward.get_projected_destination()
 	if GridUtils.manhattan_distance(from, to) != 1:
 		return none
-	return _draw_arrow_trail([from, to], tint)
+	var trail := _draw_arrow_trail([from, to], tint)
+	# The head STOPS SHORT, so the ward's cell is the shield's (#450 round 2). The trail is exactly
+	# two sprites here -- a start tile on the blocker and the head on the ward -- and only the head
+	# moves; the tail stays put, so the link still visibly crosses between the pair.
+	#
+	# A sub-cell position is honest in BOTH views, which is the whole reason this is available:
+	# OverlayMirror._anchor_px keeps the sprite's true pixels through BoardSpace.of_pixels and snaps
+	# only the cell it looks the surface tilt up by. Contrast SCALE and OFFSET, which _marker does
+	# not carry at all -- nudging either would move the flat board and leave 3D behind (#414's art
+	# fix, and the reason GUARD_RING_SCALE has no knob).
+	if trail.size() == 2:
+		var back := Vector2(from - to) * GridUtils.TILE_SIZE * GUARD_LINK_HEAD_INSET
+		trail[1].global_position += back
+	return trail
 
 func _clear_guard_links() -> void:
 	for sprite in guard_link_sprites:
