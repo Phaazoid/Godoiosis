@@ -383,6 +383,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Drama: zoom on", "static": "CINEMATIC_DRAMA",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "The same multiplier with the zoom on. At 0 the zoom paces flat; above 1 every big moment stretches together, so this is the one dial for 'more dramatic' overall."},
+	{"group": "Playback", "label": "Camera angle: zoom off", "static": "BOARD_DIRECTION",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the camera turns to see each blast side-on, zoom off. Ships at 0 -- square-on, exactly as the enemy phase has always played. At 1 it takes the full profile shot."},
+	{"group": "Playback", "label": "Camera angle: zoom on", "static": "CINEMATIC_DIRECTION",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "The same turn with the zoom on. 1 puts the attacker and their target across the frame instead of one behind the other; part-way is a hint of the angle without leaving the square-on read."},
 	{"group": "Playback", "label": "Hold: a unit goes down", "static": "HOLD_DOWN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time a blast earns for downing, killing, maiming or removing someone. Holds do NOT stack -- the largest single one wins -- so these numbers ARE the drama ranking. Set this under the shove hold and a shove outranks a death."},
@@ -572,6 +578,8 @@ static func read_static(name: String) -> Variant:
 		"CINEMATIC_ACTION": return Pacing.CINEMATIC_ACTION
 		"BOARD_DRAMA": return Pacing.BOARD_DRAMA
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
+		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
+		"CINEMATIC_DIRECTION": return Pacing.CINEMATIC_DIRECTION
 		"HOLD_DOWN": return Pacing.HOLD_DOWN
 		"HOLD_CRISIS": return Pacing.HOLD_CRISIS
 		"HOLD_IRON_WILL": return Pacing.HOLD_IRON_WILL
@@ -658,6 +666,12 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"CINEMATIC_DRAMA":
 			Pacing.CINEMATIC_DRAMA = value
+			return
+		"BOARD_DIRECTION":
+			Pacing.BOARD_DIRECTION = value
+			return
+		"CINEMATIC_DIRECTION":
+			Pacing.CINEMATIC_DIRECTION = value
 			return
 		"HOLD_DOWN":
 			Pacing.HOLD_DOWN = value

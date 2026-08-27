@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #558 (2026-08-26).**
+**Canon checked through #564 (2026-08-26).**
 
 ## Principles
 
@@ -1280,6 +1280,64 @@ accessibility knob whose home is that same page. **Note the tuning-surface colli
 building:** those same layer colours are `GameKnobs.CLASS_KNOBS` rows (#373), i.e. dev-tunable
 game constants written back into their declarations — a player override is a *second* writer of the
 same value and needs a declared relationship with the authored default, not a second seam.
+
+## The camera takes an ANGLE ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2a, BUILT 2026-08-26)
+
+Diff 1 made the camera *go to* the action and made the action wait for it. This is the first of
+#520's choreography: the camera also turns, so a blast is seen **side-on** — attacker and target
+across the frame instead of one behind the other — and the turn between beats reads as a spin.
+
+**Yaw is the only axis of this camera that was already authorable, which is why it went first.**
+`battle3d._mirror_camera` writes `_rig.position` from the 2D camera every frame, so the rig's
+position is a mirror and moving the node stages nothing — the `UnitMirror` reconcile trap one layer
+up. Yaw and distance are the rig's own and already eased in `_process`, and free orbit and Q/E
+already write `_target_yaw_degrees` directly with no bounds re-solve, so a director doing the same
+is doing exactly what the player does.
+
+**`pose()` is not the door.** It snaps the yaw, adopts the result as the OPENING SHOT, and calls
+`drop_stashed_view()` — which is what the camera return is holding. `CameraRig3D.aim_along()` is
+the director's own entry point and writes one thing: a yaw target.
+
+**Three yaws now live on the rig, named apart** (Law #4). `_home_*` is where the BOARD starts and
+is what R restores; `_borrowed_*` is where the PLAYER was standing, restored when playback gives
+the camera back; `_squared_up_yaw` is where THIS PASS started — the detent `align_to_detent()`
+snapped to. A directed shot is measured from the third. Captured on the edge rather than read live,
+because a live read compounds: beat two would lerp from where beat one landed, so a partial
+strength would give the fifth beat more angle than the first.
+
+**Strength is a per-profile multiplier, not a switch** — `Pacing.direction_of`, sitting beside
+`drama_of` and shaped the same way. `BOARD_DIRECTION` ships at **0.0**, which is bit-for-bit the
+square-on enemy phase the game has always played, so wanting some angle on the plain board later is
+one number rather than a restructure. Both are `GameKnobs` Playback rows.
+
+**Two of the three questions cross the seam as data, not as an angle.** `OrderExecutor` cannot see
+the rig — it talks to the 2D `CameraController`, which is what the 3D mirrors. So a beat publishes
+its **aim line** (`origin_cell → target_cell`, the resolver's own aim) and the rig turns that into a
+yaw, because only the rig knows what to measure from. The line comes off the ATTACK rather than off
+the two units, so #47's swing at open ground still has a direction and a victim freed mid-pass
+cannot take the angle down with it. `BoardSpace.side_on_yaw` is the arithmetic, and it returns the
+NEARER of the two perpendiculars — which is what makes the shot a spin instead of a lurch.
+
+`_beat_lines` is a third schedule beside `_beat_holds` and `_beat_subjects`, keyed identically by
+the beat's opening action, and inherits their rule: **a beat left out means the camera keeps the
+angle it has.** A MOVES beat, punctuation and the side-channel tail have no pair and so no line.
+
+**The consequence to know before touching this: every sprite on the board re-faces as the camera
+turns.** `UnitMirror._refresh_facing_on_camera_turn` re-judges `flip_h` against the live camera
+basis and the health cube grids `face()` it too, so a spin re-faces the whole board continuously.
+That is the effect, not a side effect — it is what makes 2D-in-3D read as dimensional.
+
+**The testing trap, and it is the claimed-camera one again.** A pass on the player's own turn
+releases at the end, and the release fires the view return — so the yaw an assertion reads after
+`execute_orders` is the camera coming home, not the shot. Claim the lock first (the AI-turn shape)
+so the pass's own save/restore lands on `true`. The other half is non-vacuity: **an aim along a
+board axis is already seen side-on from a detent**, so an axial fixture gives a case that passes
+whether the camera turns or not — the first draft of `test_a_pass_turns_the_camera_to_see_each_blast_side_on`
+did exactly that and survived every mutant. It aims diagonally now, and asserts the gap is real
+before asserting the camera closed it.
+
+Still open on #520: the pitch driver, the shake and micro-sway, the knockback and cliff follows
+(diff 2b), and lethality-aware direction (diff 2c).
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

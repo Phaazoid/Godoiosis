@@ -113,6 +113,11 @@ var _borrowed_position := Vector3.ZERO
 var _borrowed_yaw_degrees := 0.0
 var _borrowed_distance := 0.0
 var _view_borrowed := false
+
+# What a DIRECTED shot is measured from (#520): the detent align_to_detent squared playback up to.
+# A third yaw beside the two above, and a third question -- _home_ is where the BOARD starts,
+# _borrowed_ where the PLAYER was standing, and this is where THIS PASS started.
+var _squared_up_yaw := 0.0
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
@@ -355,6 +360,31 @@ func _fit_distance(box: AABB) -> float:
 # its caller: an enemy phase reads square-on however the player left the camera.
 func align_to_detent() -> void:
 	_target_yaw_degrees = roundf(_target_yaw_degrees / yaw_step) * yaw_step
+	# ...and THAT is what a directed shot is measured from (#520). Captured here rather than read
+	# live at aim_along below, because a live read would compound: beat two would lerp from where
+	# beat one landed, so a partial strength would give the fifth beat more angle than the first.
+	_squared_up_yaw = _target_yaw_degrees
+
+
+# The camera DIRECTOR's door, and deliberately not pose() (#520): pose() snaps the yaw, adopts the
+# result as the OPENING SHOT, and drops the borrowed view -- all three wrong for a shot inside a
+# pass, the last of them fatal, since it is what the camera return is holding.
+#
+# So this writes the one thing a directed shot is: a yaw TARGET, eased by _process exactly as free
+# orbit and Q/E are eased. It re-solves rather than latching, so the per-frame mirror poll may call
+# it every frame with the same line and land on the same angle.
+#
+# An EMPTY line leaves the yaw alone rather than returning to square-on -- absence means "the camera
+# does not move", which is already the schedule's idiom for a beat with nobody to frame.
+func aim_along(line: Array[Vector2i]) -> void:
+	if line.size() != 2:
+		return
+	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
+	if is_nan(side_on):
+		return
+	var strength := Pacing.direction_of(Pacing.active_profile())
+	_target_yaw_degrees = _squared_up_yaw + rad_to_deg(
+			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength
 
 
 # --- the view playback borrows (#520 follow-up) ------------------------------------------------

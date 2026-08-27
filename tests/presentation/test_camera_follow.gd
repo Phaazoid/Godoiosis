@@ -179,6 +179,116 @@ func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	_cam().set_playback_locked(false)
 
 
+# --- and from which SIDE it frames them (#520 diff 2a) ----------------------------------------
+
+# The whole wire, driven end to end: the executor publishes the beat's aim line, the mirror poll
+# reads it, and the rig turns. Written this way BECAUSE the diff-1 side-channel mutant survived 587
+# cases by having both ends pinned and nothing driving the middle (#103's shape) -- so this queues a
+# REAL attack through the real executor rather than poking directed_line.
+#
+# The expected yaw is re-derived from the beat's own line rather than written down, so the case
+# says "it went side-on to what it was framing", not "it went to 90 degrees" -- a fixture that
+# moves, or a rig parked on a different axis, must not red this.
+#
+# The STRENGTH is set rather than read: it is a feel value the dev tunes, so the case pins the fork
+# (full turn vs none) and never one side's number.
+func test_a_pass_turns_the_camera_to_see_each_blast_side_on() -> void:
+	var was := [Pacing.BOARD_DIRECTION, Pacing.CINEMATIC_DIRECTION]
+	Pacing.BOARD_DIRECTION = 1.0
+	Pacing.CINEMATIC_DIRECTION = 1.0
+
+	# Claimed FIRST, the AI-turn shape: a pass on the player's own turn RELEASES at the end, and the
+	# release fires the view return -- which puts the pre-pass yaw back, so an assertion taken after
+	# it is looking at the camera coming home rather than at the shot. Claiming first makes the
+	# pass's own save/restore land on `true`, so the angle it reached survives to be read.
+	_cam().set_playback_locked(true)
+	await _settle()
+	var attacker := _player_unit()
+	var line := _swing_at_open_ground(attacker)
+	var detent: float = _rig._target_yaw_degrees
+
+	await _game.order_executor.execute_orders(attacker)
+	await _settle()
+
+	var want := BoardSpace.side_on_yaw(line[0], line[1], detent)
+	assert_bool(is_nan(want)).override_failure_message(
+			"fixture drifted: the staged swing has no direction").is_false()
+	# THE NON-VACUITY GUARD, and it is the whole case: an aim along a board axis is already seen
+	# side-on from a detent, so a pass that turned nothing at all would satisfy the assertion below.
+	# The first draft of this case aimed along +x and passed against every mutant.
+	assert_float(_yaw_gap(want, detent)).override_failure_message(
+			"fixture drifted: this swing is already square-on, so the case cannot fail") \
+		.is_greater(10.0)
+	assert_float(_yaw_gap(_rig._target_yaw_degrees, want)).override_failure_message(
+			"the pass played square-on: yaw %.1f, side-on to the blast was %.1f" \
+			% [_rig._target_yaw_degrees, want]).is_equal_approx(0.0, 0.5)
+
+	Pacing.BOARD_DIRECTION = was[0]
+	Pacing.CINEMATIC_DIRECTION = was[1]
+	_cam().set_playback_locked(false)
+
+
+# ...and at strength 0 the identical pass does not move the camera a degree. That is what makes the
+# knob a DIAL rather than a switch, and it is what keeps the plain board bit-for-bit the square-on
+# enemy phase it has always been. Both profiles are zeroed, so this cannot pass by the fixture
+# happening to run under the other one.
+func test_at_zero_strength_the_same_pass_leaves_the_camera_square_on() -> void:
+	var was := [Pacing.BOARD_DIRECTION, Pacing.CINEMATIC_DIRECTION]
+	Pacing.BOARD_DIRECTION = 0.0
+	Pacing.CINEMATIC_DIRECTION = 0.0
+
+	_cam().set_playback_locked(true)   # same claimed-camera shape as the case above
+	await _settle()
+	var attacker := _player_unit()
+	_swing_at_open_ground(attacker)
+	var detent: float = _rig._target_yaw_degrees
+
+	await _game.order_executor.execute_orders(attacker)
+	await _settle()
+
+	assert_float(_yaw_gap(_rig._target_yaw_degrees, detent)).override_failure_message(
+			"a zeroed camera angle still turned the camera, to %.1f" % _rig._target_yaw_degrees) \
+		.is_equal_approx(0.0, 0.01)
+
+	Pacing.BOARD_DIRECTION = was[0]
+	Pacing.CINEMATIC_DIRECTION = was[1]
+	_cam().set_playback_locked(false)
+
+
+# A beat with nothing to frame must not swing the camera back to square-on -- absence means "keep
+# the angle you have", the same rule the subject schedule already follows. Driven at the rig, since
+# what is being pinned is how an EMPTY line is read.
+func test_a_beat_with_no_line_leaves_the_angle_where_it_was() -> void:
+	_cam().set_playback_locked(true)
+	await _settle()
+	_rig.aim_along([Vector2i(0, 0), Vector2i(3, 0)] as Array[Vector2i])
+	var turned: float = _rig._target_yaw_degrees
+
+	_rig.aim_along([] as Array[Vector2i])
+
+	assert_float(_rig._target_yaw_degrees).override_failure_message(
+			"an empty line snapped the camera back to square-on").is_equal_approx(turned, 0.01)
+	_cam().set_playback_locked(false)
+
+
+# #47's swing at open ground: a legal aim with no unit on the cell, which resolves and plays. It is
+# the one attack this suite can stage without asking what the board contains (the content razor) --
+# every alternative needs an enemy standing in reach. Returns the line the beat will carry.
+func _swing_at_open_ground(attacker: Unit) -> Array[Vector2i]:
+	var origin: Vector2i = attacker.movement.cell
+	# DIAGONAL, deliberately: a pair on a board axis is already side-on from a detent, so an axial
+	# aim gives a case that passes whether the camera turns or not.
+	var aim := origin + Vector2i(1, 1)
+	# _queue_action is the raw door -- the queue-time whiff gate would refuse an aim at nobody, and
+	# what is being staged here is a beat, not a player gesture.
+	attacker.squad._queue_action(AttackAction.declare(attacker, origin, aim))
+	return [origin, aim] as Array[Vector2i]
+
+
+func _yaw_gap(a: float, b: float) -> float:
+	return absf(rad_to_deg(angle_difference(deg_to_rad(a), deg_to_rad(b))))
+
+
 func _any_unit_besides(other: Unit) -> Unit:
 	for child in _game.units_root.get_children():
 		var unit := child as Unit

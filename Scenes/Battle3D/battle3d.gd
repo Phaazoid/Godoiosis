@@ -577,6 +577,11 @@ func _mirror_camera() -> void:
 	# would jolt the whole diorama mid-beat.
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
 	_rig.position = _aim_over(flat.x, flat.z)
+	# ...and the 2D camera answers WHERE, while the beat answers FROM WHICH SIDE (#520). Polled
+	# beside the position for the same reason it is: this is the one block that already runs every
+	# frame under playback. Below the early return deliberately -- the release edge above restores
+	# the player's own yaw, and re-aiming after it would undo the return in the same frame.
+	_rig.aim_along(cam.directed_line)
 
 
 func _unhandled_input(event: InputEvent) -> void:

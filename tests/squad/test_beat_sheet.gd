@@ -262,6 +262,52 @@ func test_a_swing_at_open_ground_frames_the_actor_instead() -> void:
 	_break_volleys(plan)
 
 
+# --- from which SIDE the camera frames it (#520 diff 2a) --------------------------------------
+
+# The line is the RESOLVER's aim, origin_cell -> target_cell, not the two units' live positions.
+# Asserted as the aim rather than as literal cells so the case survives the fixture moving.
+func test_a_volley_beat_names_the_line_it_is_framed_across() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var foe := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker, foe]))
+	var beat: BeatSheet.Beat = BeatSheet.read(attacker.squad, plan).volleys(false)[0]
+	var opener: AttackAction = beat.actions[0]
+	assert_array(beat.aim_line()).is_equal([opener.origin_cell, opener.target_cell])
+	_break_volleys(plan)
+
+
+# A swing at open ground HAS a direction even with nobody to hit -- the aim points somewhere. That
+# is the whole reason the line comes off the attack rather than off actor-and-victim: the beat that
+# frames its actor by fallback (see above) is still a beat with a side to be seen from.
+func test_a_swing_at_open_ground_still_has_a_line() -> void:
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	_sm.active_squad = attacker.squad
+	attacker.squad._queue_action(AttackAction.declare(attacker, attacker.movement.cell, Vector2i(1, 0)))
+
+	var plan := _sm.resolve_plan(attacker.squad, _board_with([attacker]))
+	var beat: BeatSheet.Beat = BeatSheet.read(attacker.squad, plan).volleys(false)[0]
+	assert_array(beat.victims).override_failure_message(
+			"fixture drifted: this case needs the no-victim cell attack").is_empty()
+	assert_array(beat.aim_line()).is_not_empty()
+	_break_volleys(plan)
+
+
+# A MOVES beat has no pair, so it has no line -- and absence is what the schedule reads as "leave
+# the camera's angle where it is". A walk framed side-on to nothing would be an angle invented from
+# whatever two cells happened to be reachable.
+func test_a_move_beat_has_no_line_to_be_framed_across() -> void:
+	var leader := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	leader.squad._queue_action(_walk(leader, Vector2i(0, 1)))
+
+	var moves := BeatSheet.read(leader.squad, ResolvedPlan.new()).moves()
+	assert_object(moves).override_failure_message(
+			"fixture drifted: this case needs a real move beat").is_not_null()
+	assert_array(moves.aim_line()).is_empty()
+
+
 # --- the wire into the beat table (#519) ------------------------------------------------------
 
 # The sheet's whole point downstream is that a beat KNOWS what it was before anything plays. Both

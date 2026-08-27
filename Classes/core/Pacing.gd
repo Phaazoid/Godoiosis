@@ -80,6 +80,14 @@ static var HOLD_GUARD := 0.35
 static var BOARD_DRAMA := 0.0
 static var CINEMATIC_DRAMA := 0.95
 
+# How far the camera turns toward a beat's SIDE-ON angle, per profile (#520) -- 0 leaves the yaw
+# exactly where playback squared it up, 1 takes the full profile shot. DRAMA's shape applied to the
+# angle instead of the hold, and for the same reason: at 0.0 the BOARD profile is bit-for-bit the
+# square-on enemy phase it has always been, so wanting some angle on the plain board later is one
+# number rather than a restructure.
+static var BOARD_DIRECTION := 0.0
+static var CINEMATIC_DIRECTION := 1.0
+
 
 # Which profile playback is running under. ONE answer, so a caller never re-reads the setting.
 static func active_profile() -> Profile:
@@ -102,6 +110,10 @@ static func base_for(profile: Profile, is_ai: bool) -> float:
 
 static func drama_of(profile: Profile) -> float:
 	return CINEMATIC_DRAMA if profile == Profile.CINEMATIC else BOARD_DRAMA
+
+
+static func direction_of(profile: Profile) -> float:
+	return CINEMATIC_DIRECTION if profile == Profile.CINEMATIC else BOARD_DIRECTION
 
 
 # The loudest hold this beat earns, by VALUE rather than by rung order (see the holds above).
