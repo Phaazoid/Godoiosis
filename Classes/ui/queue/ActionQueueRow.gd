@@ -141,6 +141,17 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	hp_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	hp_label.offset_top = -12   # ride the bottom ~12px of the 32px icon, row height unchanged
 	
+# Extra lines under the row's own description (#413) — what this walk walks into. On the ROW rather
+# than in a section of their own, deliberately: the payoff of a draggable move row is watching the
+# shot it eats change as you drag it, so the feedback has to be on the thing being dragged.
+func add_annotations(notes: Array[String]) -> void:
+	if notes.is_empty():
+		return
+	description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	for note: String in notes:
+		description_label.text += "\n  ↳ %s" % note
+
+
 func is_reorderable_row() -> bool:
 	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a
 	# hold-position filler are not orders the player sequenced (#412).

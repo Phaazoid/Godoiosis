@@ -20,6 +20,11 @@ var label := ""
 var action: BaseAction = null
 var indent_level = 0
 
+# Extra lines the row carries UNDER its own description (#413). A deliberate divergence from how
+# counters display, which get their own section: #412's whole payoff is dragging a move row and
+# watching who eats the shot change, so the feedback has to live on the row being dragged.
+var annotations: Array[String] = []
+
 static func header(text: String) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
 	entry.entry_type = EntryType.HEADER
@@ -31,11 +36,12 @@ static func divider() -> ActionQueueDisplayEntry:
 	entry.entry_type = EntryType.DIVIDER
 	return entry
 
-static func action_row(action_ref: BaseAction, indent := 0) -> ActionQueueDisplayEntry:
+static func action_row(action_ref: BaseAction, indent := 0, notes: Array[String] = []) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
 	entry.entry_type = EntryType.ACTION
 	entry.action = action_ref
 	entry.indent_level = indent
+	entry.annotations = notes
 	return entry
 
 # Section order: MOVE -> ATTACK -> each side-channel verb in registry order -> REACTION.
@@ -52,7 +58,7 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 				side_channel[action.action_type] = []
 			side_channel[action.action_type].append(action)
 
-	_add_section(entries, "MOVE", move_actions)
+	_add_section(entries, "MOVE", move_actions, plan)
 	_add_section(entries, "ATTACK", plan.attacks)
 
 	# Side-channel sections in registry order — the header IS the enum name, so a newly
@@ -73,11 +79,35 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the
 # panel. An empty batch contributes nothing at all — no header, no divider.
-static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array) -> void:
+static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array,
+		plan: ResolvedPlan = null) -> void:
 	if batch.is_empty():
 		return
 	if not entries.is_empty():
 		entries.append(divider())
 	entries.append(header(title))
 	for action in batch:
-		entries.append(action_row(action, 0))
+		entries.append(action_row(action, 0, _watch_notes(plan, action)))
+
+
+# What a queued walk WALKS INTO (#413), one line per hit, stacking when one route crosses several
+# watches. Read off the resolve like every other row — plan.watch_shots already holds the derived
+# shots with their outcomes, so nothing is recomputed here (R3/R8).
+static func _watch_notes(plan: ResolvedPlan, action: BaseAction) -> Array[String]:
+	var notes: Array[String] = []
+	if plan == null or action == null or action.action_type != BaseAction.ActionType.MOVE:
+		return notes
+	for shot in plan.watch_shots:
+		if shot.triggered_by != action.actor or shot.resolved == null or shot.resolved.skipped:
+			continue
+		var watcher := "someone" if shot.actor == null or not is_instance_valid(shot.actor) else shot.actor.get_unit_name()
+		var weapon := shot.fired_attack.display_name if shot.fired_attack != null else "a watch"
+		# Who actually eats it: the crosser normally, an ally caught in the splash otherwise.
+		if shot.target == null or not is_instance_valid(shot.target):
+			notes.append("triggers %s's watch — %s fires" % [watcher, weapon])
+		elif shot.target == action.actor:
+			notes.append("triggers %s's watch — takes %d from %s" % [watcher, shot.resolved.damage, weapon])
+		else:
+			notes.append("triggers %s's watch — %s takes %d from %s"
+					% [watcher, shot.target.get_unit_name(), shot.resolved.damage, weapon])
+	return notes

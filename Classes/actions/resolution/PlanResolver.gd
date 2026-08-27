@@ -109,6 +109,162 @@ static func _guard_for(action: AttackAction, plan: ResolvedPlan, hypo: Dictionar
 		return guard
 	return null
 
+# --- Overwatch (#413, docs/design/standing-reactions.md) ------------------------------------
+#
+# WATCHES LISTEN TO ENTRIES. Everything below is one rule applied twice: a unit is now standing on a
+# cell it was not standing on a moment ago, and the first live watch covering that cell fires. The
+# two moments an entry happens are a step of a queued walk (resolve_move, below) and the landing of
+# a shove (SquadManager.resolve_plan, after each volley) — which is what makes the shove combo and
+# the watch-to-watch chain the SAME mechanism rather than two features.
+#
+# The shot is a DERIVED AttackAction resolved through resolve_attack_group, #414's lesson applied
+# again: DEF mitigation, elemental immunity, Iron Will, the knockback landing, the elevation stamp,
+# the lethality rung, the queue row and execution's playback all inherit with no second copy of
+# anything. It lives in plan.watch_shots rather than plan.attacks so "a derived attack is never
+# counter-bait" holds structurally — calculate_reactions_for_squad reads plan.attacks.
+
+# A mover has not moved YET (#412). _hypo_for seeds a unit at its projected DESTINATION, which is
+# the right answer everywhere except inside the move phase itself: until a walk is resolved, the unit
+# is standing where it started, and everything that reads a threaded position during the walk has to
+# see that. Called for every queued mover before ANY of them walks, so the ordering is real rather
+# than an artifact of which mover happened to be looked at first.
+static func seed_at_origin(mover: Unit, hypo: Dictionary) -> void:
+	_hypo_for(mover, hypo).position = mover.movement.cell
+
+
+# One queued MOVE, walked in the order it sits in the queue (#412). The walk is this pass's clock
+# for anything that happens DURING movement; a watch trigger is its first customer.
+#
+# The mover's threaded position IS the walk: it is written cell by cell, so a shot fired mid-path
+# gathers its victims with the crosser at the crossing cell and every LATER mover still at its
+# origin. That ordering is the whole point of the ticket — which of your units crosses first is a
+# row you dragged.
+static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	var mover := action.actor
+	if mover == null or not is_instance_valid(mover):
+		return
+	action.resolved_stop_index = -1   # a re-resolve must not inherit last pass's halt
+	var walk := action.path
+	# A hold crosses nothing and a one-cell path never leaves its origin: no entry either way.
+	if action.is_hold_position or walk.size() < 2:
+		_hypo_for(mover, hypo).position = mover.movement.cell
+		return
+
+	# path[0] is where the mover already stands. Arming does not fire on a unit ALREADY in the
+	# footprint — the trigger is ENTRY — so the walk starts at the first cell it actually enters.
+	# The threaded position is left wherever the loop leaves it: the mover's own step when nothing
+	# fired, and the shot's landing cell when one shoved them.
+	for i in range(1, walk.size()):
+		_hypo_for(mover, hypo).position = walk[i]
+		fire_watch_entries([mover], plan, hypo, reactions, board, terrain_reactions)
+		# A crosser the shot DOWNS stops where it was hit — lifecycle, not a new rule. So does one
+		# the shot THREW: you cannot resume a path you were knocked off (the doc's "involuntary
+		# displacement ends a move").
+		if projected_lifecycle(mover, hypo) != Unit.LifecycleState.ACTIVE \
+				or projected_position(mover, hypo) != walk[i]:
+			# Stamped even when the halt lands on the last cell: it is what tells the projection
+			# that this mover did NOT walk out from under a shove (Unit.projected_cell).
+			action.resolved_stop_index = i
+			return
+
+
+# Every watch these entrants trigger, plus every watch the resulting shots' shoves trigger in turn.
+# Watch-to-watch pinball is legal and deterministic (the doc): a shot's knockback throwing someone
+# into a second watch is an entry like any other. Bounded — each watch absorbs exactly one trigger,
+# so the cascade cannot outlive the list.
+static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictionary,
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+	if plan.watches.is_empty() or board == null:
+		return
+	var pending: Array = entrants.duplicate()
+	while not pending.is_empty():
+		var entrant: Unit = pending.pop_front()
+		if entrant == null or not is_instance_valid(entrant):
+			continue
+		var watch := _watch_triggered_by(entrant, plan, hypo)
+		if watch == null:
+			continue
+		watch.spent = true
+		var before := _positions_snapshot(board, hypo)
+		var group := _derive_watch_shot(watch, entrant, board, hypo)
+		plan.watch_shots.append_array(group)
+		resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
+		# Whoever the shot MOVED has entered wherever they landed — including the crosser.
+		for unit: Unit in board.units:
+			if not is_instance_valid(unit):
+				continue
+			if before.get(unit, projected_position(unit, hypo)) != projected_position(unit, hypo):
+				pending.append(unit)
+
+
+# The watch that fires on this entrant, or null. Arm order, so an older watch shoots first — the
+# same precedence rule stacked Guards use, and for the same reason.
+static func _watch_triggered_by(entrant: Unit, plan: ResolvedPlan, hypo: Dictionary) -> Watch:
+	# A downed body does not trip a watch (the doc's accepted cut: you cannot spend a watch by
+	# throwing a corpse through it), and neither does the watcher's own side.
+	if projected_lifecycle(entrant, hypo) != Unit.LifecycleState.ACTIVE:
+		return null
+	var cell := projected_position(entrant, hypo)
+	for watch in plan.watches:
+		if watch.spent or not watch.is_intact() or not watch.covers(cell):
+			continue
+		if not Team.is_enemy(watch.watcher.get_faction(), entrant.get_faction()):
+			continue
+		if projected_lifecycle(watch.watcher, hypo) != Unit.LifecycleState.ACTIVE:
+			continue
+		# The ANCHOR rule: the footprint is geometry aimed from one cell, so a watcher shoved off it
+		# mid-pass has no watch left. Threaded, not live — the shove may be this very pass's.
+		if not watch.is_anchored(projected_position(watch.watcher, hypo)):
+			continue
+		return watch
+	return null
+
+
+# The shot itself, as an ordinary volley fired from the anchor cell. Victims are gathered over the
+# FROZEN footprint against THREADED positions, so a bystander who has not moved yet is where they
+# started — RulesService.is_attack_victim is asked the identical question the live gather asks, which
+# is exactly why it was split out of gather_attack_victims.
+static func _derive_watch_shot(watch: Watch, entrant: Unit, board: BoardContext, hypo: Dictionary) -> Array[AttackAction]:
+	var victims: Array[Unit] = []
+	for cell in watch.footprint:
+		var unit := _unit_threaded_at(cell, board, hypo)
+		if unit == null or victims.has(unit):
+			continue
+		if RulesService.is_attack_victim(watch.watcher, unit, watch.attack):
+			victims.append(unit)
+	var group: Array[AttackAction] = []
+	if victims.is_empty():
+		# #47's rule: a shot with nobody left in the footprint still resolves as a cell attack. Only
+		# reachable through a chain that shoved the crosser out before this watch fired.
+		var cell_shot := AttackAction.create(watch.watcher, watch.anchor_cell, null, watch.aim_cell)
+		cell_shot.fired_attack = watch.attack
+		group.append(cell_shot)
+	else:
+		group = AttackAction.create_volley(watch.watcher, watch.anchor_cell, watch.aim_cell, victims, watch.attack)
+	for shot in group:
+		shot.is_watch_shot = true
+		shot.triggered_by = entrant
+	return group
+
+
+# Cell-first, matching gather_attack_victims' own iteration, so a watch shot's volley order is the
+# order every other volley uses and the HP threading inside it cannot differ.
+static func _unit_threaded_at(cell: Vector2i, board: BoardContext, hypo: Dictionary) -> Unit:
+	for unit: Unit in board.units:
+		if is_instance_valid(unit) and projected_position(unit, hypo) == cell:
+			return unit
+	return null
+
+
+static func _positions_snapshot(board: BoardContext, hypo: Dictionary) -> Dictionary:
+	var snapshot: Dictionary = {}
+	for unit: Unit in board.units:
+		if is_instance_valid(unit):
+			snapshot[unit] = projected_position(unit, hypo)
+	return snapshot
+
+
 static func _resolve_one(action: AttackAction, reactions: Array[ElementalReaction], hypo: Dictionary, board: BoardContext = null) -> void:
 	var outcome := ResolvedOutcome.new()
 	var attacker := action.actor

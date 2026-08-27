@@ -91,7 +91,8 @@ func _render() -> void:
 					i += group.size()
 				else:
 					# Moves and the side-channel verbs drag too (#412) -- the order decides.
-					_make_row(current_list, entry.action, entry.indent_level, entry.action.is_reorderable())
+					var row := _make_row(current_list, entry.action, entry.indent_level, entry.action.is_reorderable())
+					row.add_annotations(entry.annotations)
 					i += 1
 			_:
 				i += 1

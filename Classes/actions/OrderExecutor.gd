@@ -109,6 +109,12 @@ func execute_orders(unit):
 	if walker != null:
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
+	# The shots the walk walked into (#413), in trigger order. DECLARED v1 CUT: the damage lands at
+	# the crossing moment in the RESOLVE -- that is where every number comes from -- but it plays
+	# back after the walk instead of interrupting it. A crosser the shot downed has already stopped
+	# at the crossing cell (MoveAction.walked_path), so what trails the fiction is the ORDER OF THE
+	# VISUALS, never the outcome. Interrupting the walk is its own issue.
+	await _execute_action_sequence(plan.watch_shots, beat)
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)

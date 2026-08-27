@@ -608,6 +608,36 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	plan.guards.append_array(live_guards)
 	var guard_orders: Dictionary = {}   # GuardWard (this pass's copy) -> the GuardAction that armed it
 
+	# Standing watches armed in an EARLIER pass (#413) — the enemy-phase case, and the whole point of
+	# the mechanic. Same two-sources-one-list shape the wards above have; watches queued in THIS plan
+	# join at their own slot in the walk below, which is what makes a shove combo sequence-able.
+	var live_watches: Array[Watch] = []
+	for unit in board.units:
+		if unit.watch != null and unit.watch.is_intact() and not unit.watch.spent:
+			live_watches.append(unit.watch.copy())
+	live_watches.sort_custom(func(a: Watch, b: Watch) -> bool: return a.sequence < b.sequence)
+	plan.watches.append_array(live_watches)
+	var watch_orders: Dictionary = {}   # Watch (this pass's copy) -> the OverwatchAction that armed it
+
+	# --- The MOVE phase (#412) -------------------------------------------------------------
+	# Moves resolve in the order they sit in the queue, and that order is the player's to set (the
+	# queue panel's MOVE section drags). They resolve as a BLOCK ahead of the attacks because that is
+	# the phase order everything else already agrees on — the panel's sections, OrderExecutor's
+	# phases, the Play API's twin — so this walk moves nothing that was not already going to happen
+	# in this order.
+	#
+	# Every mover is seeded at its ORIGIN first, and only then walked. That is the ordering the whole
+	# ticket is about: a shot fired while mover #1 crosses gathers its victims with movers #2 and #3
+	# still standing where they started. When the block ends, every mover is at its destination
+	# again, so the attack walk below and everything downstream of it read exactly what they always
+	# did — the halted crosser being the one deliberate exception.
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.MOVE and action.actor != null and is_instance_valid(action.actor):
+			PlanResolver.seed_at_origin(action.actor, hypo)
+	for action in squad.action_queue:
+		if action.action_type == BaseAction.ActionType.MOVE:
+			PlanResolver.resolve_move(action as MoveAction, plan, hypo, reactions, board, terrain_reactions)
+
 	# Expand each stored AIM order into a fresh volley from CURRENT projected positions (#15):
 	# AoE victims are derived data, never stored. RulesService.gather_attack_victims is already
 	# projection-aware, so a re-planned move re-targets the blast — like counters.
@@ -628,6 +658,21 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 				var ward := GuardWard.make(order.actor, order.target, order.guard_range)
 				plan.guards.append(ward)
 				guard_orders[ward] = order
+			continue
+		# A watch ARMS AT ITS QUEUE SLOT too (#413), for the same reason and by the same append.
+		# Its footprint is derived HERE rather than stored, from the actor's projected cell — a
+		# re-planned walk must move the preview, exactly as it re-targets a stored attack aim (#15).
+		# The geometry only becomes frozen when the order executes and the watcher has arrived.
+		if action.action_type == BaseAction.ActionType.OVERWATCH:
+			var watch_order := action as OverwatchAction
+			watch_order.resolved_spent = false   # a re-resolve must not inherit last pass's verdict
+			var watch_origin := watch_order.actor.get_projected_destination()
+			var watched := watch_order.watched_cells_from(watch_origin)
+			if not watched.is_empty():
+				var armed := Watch.make(watch_order.actor, watch_origin, watch_order.target_cell,
+						watched, watch_order.fired_attack)
+				plan.watches.append(armed)
+				watch_orders[armed] = watch_order
 			continue
 		if action.action_type != BaseAction.ActionType.ATTACK:
 			continue
@@ -656,13 +701,20 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		# victim gather, the counter derivation below, and the board preview all read where the
 		# target LANDS (#84 approach B, extended to same-plan attacks by #105).
 		PlanResolver.resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
+		var shoved: Array[Unit] = []
 		for atk in group:
 			if atk.resolved != null and atk.resolved.knockback_applied and atk.target != null and is_instance_valid(atk.target):
+				shoved.append(atk.target)
 				# A REMOVED target (#259) publishes nothing: a doomed unit must not become
 				# pickable or aimable on the chasm cell -- its sprite never moves, the trail
 				# alone says where it goes, and the hypo's DEAD lifecycle covers the resolve.
 				if not atk.resolved.removed:
 					atk.target.set_projected_knockback(atk.resolved.knockback_to)
+		# A shove is an ENTRY (#413): mace them into your squadmate's watched line and it fires.
+		# The intended combo, and the reason arming happens at a queue slot — sequence the shove
+		# after the watch and it connects, before it and it does not.
+		if not shoved.is_empty():
+			PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions)
 
 	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire
@@ -734,6 +786,10 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	# the action" pattern for an order that has no ResolvedOutcome of its own.
 	for ward in guard_orders:
 		(guard_orders[ward] as GuardAction).resolved_spent = (ward as GuardWard).spent
+
+	# Same verdict, same reason, for a watch its own pass's shove combo already fired (#413).
+	for armed in watch_orders:
+		(watch_orders[armed] as OverwatchAction).resolved_spent = (armed as Watch).spent
 
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad

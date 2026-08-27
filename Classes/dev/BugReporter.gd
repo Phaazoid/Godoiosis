@@ -281,6 +281,10 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 					var flag: String = "" if entry.action.is_valid else "   **[INVALID]**"
 					out += "- %s%s%s\n" % [entry.action.get_description(),
 						_outcome_note(entry.action), flag]
+					# The row's own extra lines (#413) — a projection of the panel, so what the
+					# panel says a move walks into has to reach the report too.
+					for annotation: String in entry.annotations:
+						out += "  - %s\n" % annotation
 				ActionQueueDisplayEntry.EntryType.DIVIDER:
 					pass
 

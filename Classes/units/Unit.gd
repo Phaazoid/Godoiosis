@@ -752,8 +752,9 @@ static func projected_cell(unit: Unit, actions: Array[BaseAction], require_valid
 		if require_valid and not action.is_valid:
 			continue
 		# A hold-position move means "not going anywhere under my own power" — a shove still moves
-		# you, so it wins. A REAL move beats the shove: you walked out from under it.
-		if action.is_hold_position and shoved:
+		# you, so it wins. A REAL move beats the shove: you walked out from under it. A walk the
+		# pass HALTED (#413) did not: it was stopped where the shot found it.
+		if shoved and (action.is_hold_position or (action as MoveAction).was_halted()):
 			return unit._projected_knockback_cell
 		return action.get_destination()
 	return unit._projected_knockback_cell if shoved else unit.movement.cell
