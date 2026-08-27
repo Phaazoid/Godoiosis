@@ -426,109 +426,200 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"script": MISSION_STATUS_SCRIPT,
 		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
 
+	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
+	#
+	# It was ONE group of thirty flat rows and unreadable at that length: "I also see a lot of
+	# similar controls, per action... it might be best to have an actions section, where there's a
+	# dropdown with each action in it". The split costs no machinery -- GROUP_TABS already maps
+	# several groups onto one tab (Water does it) and _add_heading already fires per group -- so a
+	# section is a group name, and the rows below simply have to stay contiguous within one.
+	#
+	# Two optional TAGS drive the page's filters, and a row carrying neither is always shown:
+	#   "profile" -- "board" / "cinematic": which battle-zoom state this row is live under. The pairs
+	#                read as a binary toggle rendered wrong ("having them as two options next to each
+	#                other with value sliders makes them very hard to understand"), when they are one
+	#                dial measured under each mode. The page shows one column at a time.
+	#   "action"  -- an ActionType: which entry of the Actions dropdown owns this row.
+	#
+	# Both are inert to every existing law: the generic loops read only the keys they know, and
+	# GameTool BUILDS every row either way and toggles visibility (see _apply_playback_filter).
+
+	# THE PROFILE: the same three dials, once per battle-zoom state. Only the column matching the
+	# toggle at the top of the page is shown, so a slider that would be inert is never in front of
+	# you. The base beat is the ragged cell -- zoom OFF forks again on whose pass it is, zoom ON does
+	# not (#410 rules the zoom fires for every combat) -- and it stays here rather than in Actions
+	# below, per the dev: "if there's a base value that these sliders all execute against, that base
+	# value shouldn't then be tied to one of the actions."
+	{"group": "The profile", "label": "Base beat: your own Execute", "static": "PLAYER_ACTION",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "The floor under EVERY beat on your own pass -- what a blast waits before it plays, before anything it earns on top. Was 0.0 until 2026-08-26; no gap at all is what made health readouts flash in and out. Zero restores that."},
+	{"group": "The profile", "label": "Base beat: an AI pass", "static": "AI_ACTION",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "The same floor on an AI faction's pass. Longer than yours on purpose: their plan is being read for the first time, yours was authored by the person watching it. The battle zoom has no such fork -- flip the toggle above to see its one row."},
+	{"group": "The profile", "label": "Base beat", "static": "CINEMATIC_ACTION",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The floor under every beat with the battle zoom on. ONE row rather than two: the zoom does not fork on whose pass it is, because it fires for every combat, enemy assaults included."},
+	{"group": "The profile", "label": "Drama", "static": "BOARD_DRAMA",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How much of the Actions and Outcomes holds apply with the zoom off. SHIPS AT 0, which is why every hold row further down does nothing in this column -- the plain board is deliberately flat. Raise it to let a death land harder than a scratch here too. Lingers are NOT scaled by this."},
+	{"group": "The profile", "label": "Drama", "static": "CINEMATIC_DRAMA",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The same multiplier with the zoom on, and this is the one dial for 'more dramatic' overall. At 0 the zoom paces flat; above 1 every big moment stretches together. Lingers are NOT scaled by this -- they are matched to an animation, not to a mood."},
+	{"group": "The profile", "label": "Camera angle", "static": "BOARD_DIRECTION",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the camera turns to see each blast side-on with the zoom off. Ships at 0 -- square-on, exactly as the enemy phase has always played. At 1 it takes the full profile shot."},
+	{"group": "The profile", "label": "Camera angle", "static": "CINEMATIC_DIRECTION",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "The same turn with the zoom on. 1 puts the attacker and their target across the frame instead of one behind the other; part-way is a hint of the angle without leaving the square-on read."},
+
+	# THE ACTIONS SECTION (dev, 2026-08-27). One picker, two rows: what each verb waits BEFORE it
+	# plays and how long the camera STAYS after. Attack is folded in as an entry of its own, which is
+	# what the dev found missing -- "I don't see controls for holding the most common thing, a regular
+	# attack" -- and the dropdown is what keeps this from being twenty flat rows: a verb that grows a
+	# third dial costs no page.
+	#
+	# Attack's numbers are read by hold_for/linger_for's VOLLEY branch rather than by
+	# coda_hold/coda_linger, which answer for side-channel verbs only. Same page, different lookup.
+	{"group": "Actions", "label": "Hold: an attack", "static": "HOLD_ATTACK",
+		"action": BaseAction.ActionType.ATTACK,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Base extra time for a blast that just does damage -- the FLOOR every Outcomes row is measured against. Holds do not stack, so a rung set below this one can never lengthen a beat. It had no row at all until 2026-08-27, which left the commonest beat in the game with nothing but the base beat."},
+	{"group": "Actions", "label": "Linger: an attack", "static": "LINGER_ATTACK",
+		"action": BaseAction.ActionType.ATTACK,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays after a hit lands, in seconds -- the pause that lets you watch the health cubes come off. Zero is the pre-2026-08-27 behaviour, where the pass cut away mid-burst. A death overrides this with its own longer linger on the Outcomes section."},
+	{"group": "Actions", "label": "Hold: a rescue", "static": "HOLD_RESCUE",
+		"action": BaseAction.ActionType.RESCUE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a body is picked up off the floor. Ships long: it is the loudest thing in the tail."},
+	{"group": "Actions", "label": "Linger: a rescue", "static": "LINGER_RESCUE",
+		"action": BaseAction.ActionType.RESCUE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays once the body is up and hauled onto the tile you picked."},
+	{"group": "Actions", "label": "Hold: a capture", "static": "HOLD_CAPTURE",
+		"action": BaseAction.ActionType.CAPTURE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a zone is taken. Ships beside the rescue hold -- it is the moment a mission moves."},
+	{"group": "Actions", "label": "Linger: a capture", "static": "LINGER_CAPTURE",
+		"action": BaseAction.ActionType.CAPTURE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on a zone that has just changed hands."},
+	{"group": "Actions", "label": "Hold: a rally", "static": "HOLD_RALLY",
+		"action": BaseAction.ActionType.RALLY,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when Will comes back."},
+	{"group": "Actions", "label": "Linger: a rally", "static": "LINGER_RALLY",
+		"action": BaseAction.ActionType.RALLY,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays after Will comes back."},
+	{"group": "Actions", "label": "Hold: an intimidate", "static": "HOLD_INTIMIDATE",
+		"action": BaseAction.ActionType.INTIMIDATE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when Will is drained out of someone."},
+	{"group": "Actions", "label": "Linger: an intimidate", "static": "LINGER_INTIMIDATE",
+		"action": BaseAction.ActionType.INTIMIDATE,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on the unit whose Will just went."},
+	{"group": "Actions", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
+		"action": BaseAction.ActionType.GUARD,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
+	{"group": "Actions", "label": "Linger: a guard arming", "static": "LINGER_GUARD",
+		"action": BaseAction.ActionType.GUARD,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on a bodyguard that has just taken station."},
+	{"group": "Actions", "label": "Hold: a watch arming", "static": "HOLD_OVERWATCH",
+		"action": BaseAction.ActionType.OVERWATCH,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit takes up an overwatch. Sits beside the guard hold -- both are a unit settling into a stance rather than doing something."},
+	{"group": "Actions", "label": "Linger: a watch arming", "static": "LINGER_OVERWATCH",
+		"action": BaseAction.ActionType.OVERWATCH,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on a unit that has just settled into a watch."},
+	{"group": "Actions", "label": "Hold: a burrow", "static": "HOLD_BURROW",
+		"action": BaseAction.ActionType.BURROW,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit digs itself cover."},
+	{"group": "Actions", "label": "Linger: a burrow", "static": "LINGER_BURROW",
+		"action": BaseAction.ActionType.BURROW,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on the cover a unit has just dug."},
+	{"group": "Actions", "label": "Hold: a reload", "static": "HOLD_RELOAD",
+		"action": BaseAction.ActionType.RELOAD,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time for working the action. Ships short -- housekeeping, not drama."},
+	{"group": "Actions", "label": "Linger: a reload", "static": "LINGER_RELOAD",
+		"action": BaseAction.ActionType.RELOAD,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays after the action is worked. Ships short, like its hold."},
+	{"group": "Actions", "label": "Hold: a rev", "static": "HOLD_REV",
+		"action": BaseAction.ActionType.REV,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time for spinning a chainsword up. Ships short, beside the reload."},
+	{"group": "Actions", "label": "Linger: a rev", "static": "LINGER_REV",
+		"action": BaseAction.ActionType.REV,
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera stays on a chainsword that has just spun up."},
+
+	# The OUTCOMES a blast earns extra time for, on top of the Actions floor above. Largest wins.
+	{"group": "Outcomes", "label": "Hold: a unit goes down", "static": "HOLD_DOWN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time a blast earns for downing, killing, maiming or removing someone. Holds do NOT stack -- the largest single one wins -- so these numbers ARE the drama ranking. Set this under the shove hold and a shove outranks a death."},
+	{"group": "Outcomes", "label": "Hold: Crisis", "static": "HOLD_CRISIS",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when someone stands up surged instead of falling. The loudest thing that can happen to a unit, so it ships as the longest hold."},
+	{"group": "Outcomes", "label": "Hold: Iron Will save", "static": "HOLD_IRON_WILL",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when the Iron Will cap actually BIT -- that should have killed them and did not. The held breath, as against the blow that lands."},
+	{"group": "Outcomes", "label": "Hold: a shove", "static": "HOLD_KNOCKBACK",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when the hit knocked its target back. Pre-set small: a shove is worth a moment, not the moment a death gets."},
+	{"group": "Outcomes", "label": "Hold: counter turnover", "static": "HOLD_TURNOVER",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "The act break between the attacker's last swing and the defending line's answer. Held once per pass, not per counter."},
+	{"group": "Outcomes", "label": "Hold: a heal", "static": "HOLD_HEAL",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when HP came back -- a player-aimed heal or a reactive one. The table had no row for this until 2026-08-26, so a heal was the flattest thing a pass could contain."},
+
+	{"group": "Outcomes", "label": "Linger: a unit goes down", "static": "LINGER_DOWN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
+		"tip": "How long the camera STAYS after a blast that took someone out, in seconds. A death bursts the unit's whole remaining health grid at once rather than chipping a few cubes off it, so it is categorically longer to watch than the plain hit below -- which is why it is the one outcome with a linger of its own. Largest wins, exactly like the holds. NOT scaled by Drama: the burst animation runs in real time in both profiles."},
+
+	# The beat table (#519, umbrella #410). Playback pacing had never had a door -- these are the
+	# five #118 constants plus the battle-beat shape, all read at each pass, so a change applies
+	# from the next Execute with nothing standing to re-apply it to.
+	{"group": "Camera travel", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
+	{"group": "Camera travel", "label": "Camera travel to a burning unit", "static": "ENVIRONMENT_PAN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
+		"tip": "How long the camera takes to reach each unit in the end-of-turn effect pass -- today, everyone standing in fire. Its own number rather than a share of the blast travel above, because this phase is bookkeeping and paced against the others, not with them. Zero snaps."},
+	{"group": "Camera travel", "label": "Hold: a unit burns", "static": "ENVIRONMENT_HOLD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "How long the camera stays on a burning unit AFTER its damage lands, in seconds. This is the pause that shows the health drop, so it is the dial for how legible the pass is. Does not fork on the battle zoom -- the board acts here, not a faction."},
+	# The tear-out is its own section because it is CINEMATIC-ONLY by construction: _stage_the_fight
+	# returns early on BOARD, so this slider is dead in the other column rather than merely unused.
+	{"group": "The tear-out", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
+		"profile": "cinematic", "script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
+		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from. Nothing stages at all with the battle zoom off."},
+
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
-	{"group": "Playback", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
+	{"group": "Motion", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
 		"script": MOVEMENT_SCRIPT, "min": 60.0, "max": 960.0, "step": 10.0,
 		"tip": "How fast a shoved unit slides along its knockback trail, in pixels/second (a walk is 120). Read at each shove, so a change applies from the next one."},
-	{"group": "Playback", "label": "Shove fall speed", "static": "SHOVE_FALL_SPEED",
+	{"group": "Motion", "label": "Shove fall speed", "static": "SHOVE_FALL_SPEED",
 		"script": MOVEMENT_SCRIPT, "min": 0.5, "max": 20.0, "step": 0.1,
 		"tip": "How fast a shoved unit DROPS at a break in its slide, in cells/second -- off a cliff, off a ramp's lip, wherever the trail hangs a drop pointer. The slide pauses for exactly this long and then carries on, which is what makes it read as fly-then-fall instead of a teleport. Read at each fall."},
 
 	# The void plummet (#431), the same shape one row along. The DEPTH is read twice -- by the fall
 	# and by the preview pointer's length -- so this one slider moves both, which is the point.
-	{"group": "Playback", "label": "Void fall depth", "static": "VOID_PLUMMET_CELLS",
+	{"group": "Motion", "label": "Void fall depth", "static": "VOID_PLUMMET_CELLS",
 		"script": MOVEMENT_SCRIPT, "min": 1.0, "max": 40.0, "step": 0.5,
 		"tip": "How far a unit shoved into a hole keeps falling before it is removed, in cells below the lip. The plan-time drop arrow reaches exactly this far too, so raising it lengthens both. Read at each shove."},
-	{"group": "Playback", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
+	{"group": "Motion", "label": "Void fall time", "static": "VOID_PLUMMET_SECONDS",
 		"script": MOVEMENT_SCRIPT, "min": 0.0, "max": 4.0, "step": 0.05,
 		"tip": "How long that fall takes, in seconds. Zero removes the unit at the lip with no fall at all -- the pre-#431 behaviour. Does not affect the preview arrow, only the playback."},
-
-	# The beat table (#519, umbrella #410). Playback pacing had never had a door -- these are the
-	# five #118 constants plus the battle-beat shape, all read at each pass, so a change applies
-	# from the next Execute with nothing standing to re-apply it to.
-	{"group": "Playback", "label": "Camera travel to the action", "static": "PLAYBACK_PAN",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "How long the camera takes to reach the next blast, in seconds -- and therefore how long the action waits for it. Fixed duration, not speed, so a short hop and a long one read at the same pace. Zero snaps."},
-	{"group": "Playback", "label": "Camera travel to a burning unit", "static": "ENVIRONMENT_PAN",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "How long the camera takes to reach each unit in the end-of-turn effect pass -- today, everyone standing in fire. Its own number rather than a share of the blast travel above, because this phase is bookkeeping and paced against the others, not with them. Zero snaps."},
-	{"group": "Playback", "label": "Hold: a unit burns", "static": "ENVIRONMENT_HOLD",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "How long the camera stays on a burning unit AFTER its damage lands, in seconds. This is the pause that shows the health drop, so it is the dial for how legible the pass is. Does not fork on the battle zoom -- the board acts here, not a faction."},
-	{"group": "Playback", "label": "Beat: your own Execute", "static": "PLAYER_ACTION",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "Base pause before each blast on YOUR pass, in seconds, with the battle zoom off. Was 0.0 until 2026-08-26 -- no gap at all is what made health readouts flash in and out. Zero restores that."},
-	{"group": "Playback", "label": "Beat: an AI pass", "static": "AI_ACTION",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "The same base pause on an AI faction's pass, zoom off. Longer than yours on purpose: their plan is being read for the first time, yours was authored by the person watching it."},
-	{"group": "Playback", "label": "Beat: battle zoom on", "static": "CINEMATIC_ACTION",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Base pause before each blast with the battle zoom ON. Does not fork on whose pass it is -- the zoom fires for every combat, enemy assaults included."},
-	{"group": "Playback", "label": "Drama: zoom off", "static": "BOARD_DRAMA",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.05,
-		"tip": "How much of the holds below apply with the zoom off. Ships at 0 -- flat, small pauses everywhere. Raise it to let a death land harder than a scratch on the plain board too."},
-	{"group": "Playback", "label": "Drama: zoom on", "static": "CINEMATIC_DRAMA",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "The same multiplier with the zoom on. At 0 the zoom paces flat; above 1 every big moment stretches together, so this is the one dial for 'more dramatic' overall."},
-	{"group": "Playback", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
-		"script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
-		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from."},
-	{"group": "Playback", "label": "Camera angle: zoom off", "static": "BOARD_DIRECTION",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How far the camera turns to see each blast side-on, zoom off. Ships at 0 -- square-on, exactly as the enemy phase has always played. At 1 it takes the full profile shot."},
-	{"group": "Playback", "label": "Camera angle: zoom on", "static": "CINEMATIC_DIRECTION",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "The same turn with the zoom on. 1 puts the attacker and their target across the frame instead of one behind the other; part-way is a hint of the angle without leaving the square-on read."},
-	{"group": "Playback", "label": "Hold: a unit goes down", "static": "HOLD_DOWN",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time a blast earns for downing, killing, maiming or removing someone. Holds do NOT stack -- the largest single one wins -- so these numbers ARE the drama ranking. Set this under the shove hold and a shove outranks a death."},
-	{"group": "Playback", "label": "Hold: Crisis", "static": "HOLD_CRISIS",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when someone stands up surged instead of falling. The loudest thing that can happen to a unit, so it ships as the longest hold."},
-	{"group": "Playback", "label": "Hold: Iron Will save", "static": "HOLD_IRON_WILL",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when the Iron Will cap actually BIT -- that should have killed them and did not. The held breath, as against the blow that lands."},
-	{"group": "Playback", "label": "Hold: a shove", "static": "HOLD_KNOCKBACK",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when the hit knocked its target back. Pre-set small: a shove is worth a moment, not the moment a death gets."},
-	{"group": "Playback", "label": "Hold: counter turnover", "static": "HOLD_TURNOVER",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "The act break between the attacker's last swing and the defending line's answer. Held once per pass, not per counter."},
-	{"group": "Playback", "label": "Hold: a heal", "static": "HOLD_HEAL",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when HP came back -- a player-aimed heal or a reactive one. The table had no row for this until 2026-08-26, so a heal was the flattest thing a pass could contain."},
-
-	# One hold per side-channel verb (dev, 2026-08-26). Per VERB rather than one shared number
-	# because a rescue and a reload are not the same moment. Every SIDE_CHANNEL_ORDER member must
-	# have one -- tests/law/test_action_registry.gd refuses an undeclared verb.
-	{"group": "Playback", "label": "Hold: a rescue", "static": "HOLD_RESCUE",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when a body is picked up off the floor. Ships long: it is the loudest thing in the tail."},
-	{"group": "Playback", "label": "Hold: a capture", "static": "HOLD_CAPTURE",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when a zone is taken. Ships beside the rescue hold -- it is the moment a mission moves."},
-	{"group": "Playback", "label": "Hold: a rally", "static": "HOLD_RALLY",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will comes back."},
-	{"group": "Playback", "label": "Hold: an intimidate", "static": "HOLD_INTIMIDATE",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when Will is drained out of someone."},
-	{"group": "Playback", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
-	{"group": "Playback", "label": "Hold: a watch arming", "static": "HOLD_OVERWATCH",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when a unit takes up an overwatch. Sits beside the guard hold -- both are a unit settling into a stance rather than doing something."},
-	{"group": "Playback", "label": "Hold: a burrow", "static": "HOLD_BURROW",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time when a unit digs itself cover."},
-	{"group": "Playback", "label": "Hold: a reload", "static": "HOLD_RELOAD",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time for working the action. Ships short -- housekeeping, not drama."},
-	{"group": "Playback", "label": "Hold: a rev", "static": "HOLD_REV",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
-		"tip": "Extra time for spinning a chainsword up. Ships short, beside the reload."},
 
 	# The action ring (#467). Statics on a TRANSIENT node, which is why they are class knobs: the
 	# menu exists only while the player holds it open, so there is no standing property for a KNOBS
@@ -602,6 +693,37 @@ const CLASS_KNOBS: Array[Dictionary] = [
 # one line and adding a GROUP is one line here -- and a group with no tab is a group that silently
 # vanishes from the panel, which is why a law test pins the mapping complete. Declaration order
 # below is the tab order.
+# Which tab carries the battle-zoom toggle and the profile columns, and which group carries the
+# action picker (#520 2b slice 2). Named here rather than spelled in GameTool, so the panel has no
+# opinion about what a section is called -- the table stays the one declaration.
+const PROFILE_TAB := "Playback"
+const ACTION_GROUP := "Actions"
+
+
+# The verbs the Actions section can show, in the order its picker lists them. DERIVED from the
+# registry rather than written down: ATTACK first because it is the commonest beat by far, then
+# SIDE_CHANNEL_ORDER's own order, which is also the order the tail plays in. A verb added to the
+# registry appears here with no edit, and tests/law/test_action_registry.gd is what refuses one that
+# arrives without its knobs.
+static func tunable_actions() -> Array[BaseAction.ActionType]:
+	var types: Array[BaseAction.ActionType] = [BaseAction.ActionType.ATTACK]
+	types.append_array(BaseAction.SIDE_CHANNEL_ORDER)
+	return types
+
+
+# The picker's label for a verb, and its inverse. The enum's own key, title-cased -- so a new verb
+# needs no name typed anywhere, and the two can never disagree about one.
+static func action_label(type: BaseAction.ActionType) -> String:
+	return String(BaseAction.ActionType.keys()[type]).capitalize()
+
+
+static func action_for_label(label: String) -> BaseAction.ActionType:
+	for type: BaseAction.ActionType in tunable_actions():
+		if action_label(type) == label:
+			return type
+	return BaseAction.ActionType.ATTACK
+
+
 const GROUP_TABS: Dictionary[String, String] = {
 	"Board markup": "Markup",
 	"Dev chrome": "Markup",
@@ -622,7 +744,16 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
 	"Fire": "Elemental",
 	"Cover": "Elemental",
-	"Playback": "Playback",
+	# Playback is SIX groups on one tab (dev, 2026-08-27) -- thirty flat rows was unreadable, and a
+	# group is what draws a heading. Same two-groups-one-tab shape Water uses, three sections further.
+	# Declaration order here is only the TAB order; the section order inside the tab is the KNOBS
+	# table's own, which is why those rows are kept contiguous and in this same sequence.
+	"The profile": "Playback",
+	"Actions": "Playback",
+	"Outcomes": "Playback",
+	"Camera travel": "Playback",
+	"The tear-out": "Playback",
+	"Motion": "Playback",
 	"Action ring": "Action ring",
 }
 
@@ -686,6 +817,7 @@ static func read_static(name: String) -> Variant:
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
 		"CINEMATIC_DIRECTION": return Pacing.CINEMATIC_DIRECTION
+		"HOLD_ATTACK": return Pacing.HOLD_ATTACK
 		"HOLD_DOWN": return Pacing.HOLD_DOWN
 		"HOLD_CRISIS": return Pacing.HOLD_CRISIS
 		"HOLD_IRON_WILL": return Pacing.HOLD_IRON_WILL
@@ -701,6 +833,17 @@ static func read_static(name: String) -> Variant:
 		"HOLD_CAPTURE": return Pacing.HOLD_CAPTURE
 		"HOLD_GUARD": return Pacing.HOLD_GUARD
 		"HOLD_OVERWATCH": return Pacing.HOLD_OVERWATCH
+		"LINGER_ATTACK": return Pacing.LINGER_ATTACK
+		"LINGER_DOWN": return Pacing.LINGER_DOWN
+		"LINGER_RESCUE": return Pacing.LINGER_RESCUE
+		"LINGER_RALLY": return Pacing.LINGER_RALLY
+		"LINGER_INTIMIDATE": return Pacing.LINGER_INTIMIDATE
+		"LINGER_RELOAD": return Pacing.LINGER_RELOAD
+		"LINGER_REV": return Pacing.LINGER_REV
+		"LINGER_BURROW": return Pacing.LINGER_BURROW
+		"LINGER_CAPTURE": return Pacing.LINGER_CAPTURE
+		"LINGER_GUARD": return Pacing.LINGER_GUARD
+		"LINGER_OVERWATCH": return Pacing.LINGER_OVERWATCH
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -788,6 +931,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"CINEMATIC_DIRECTION":
 			Pacing.CINEMATIC_DIRECTION = value
 			return
+		"HOLD_ATTACK":
+			Pacing.HOLD_ATTACK = value
+			return
 		"HOLD_DOWN":
 			Pacing.HOLD_DOWN = value
 			return
@@ -832,6 +978,39 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOLD_OVERWATCH":
 			Pacing.HOLD_OVERWATCH = value
+			return
+		"LINGER_ATTACK":
+			Pacing.LINGER_ATTACK = value
+			return
+		"LINGER_DOWN":
+			Pacing.LINGER_DOWN = value
+			return
+		"LINGER_RESCUE":
+			Pacing.LINGER_RESCUE = value
+			return
+		"LINGER_RALLY":
+			Pacing.LINGER_RALLY = value
+			return
+		"LINGER_INTIMIDATE":
+			Pacing.LINGER_INTIMIDATE = value
+			return
+		"LINGER_RELOAD":
+			Pacing.LINGER_RELOAD = value
+			return
+		"LINGER_REV":
+			Pacing.LINGER_REV = value
+			return
+		"LINGER_BURROW":
+			Pacing.LINGER_BURROW = value
+			return
+		"LINGER_CAPTURE":
+			Pacing.LINGER_CAPTURE = value
+			return
+		"LINGER_GUARD":
+			Pacing.LINGER_GUARD = value
+			return
+		"LINGER_OVERWATCH":
+			Pacing.LINGER_OVERWATCH = value
 			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
