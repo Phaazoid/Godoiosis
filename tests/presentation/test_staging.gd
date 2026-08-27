@@ -160,6 +160,38 @@ func test_a_pass_tears_the_fight_out_and_puts_the_board_back() -> void:
 				"%s was left in the sky after the pass" % cell).is_equal(Vector3.ZERO)
 
 
+# WHICH ground goes up, asked of the decision itself. The pass cases above cannot see this: the
+# staging is cleared before execute_orders returns, so a version that staged the WHOLE BOARD and put
+# it back would satisfy every one of them. Driven at _stage_the_fight because that is the decision,
+# and the expected set is BeatSheet's own -- computed the same way the executor computes it, so the
+# case says "the fight's ground, nobody else's" rather than naming cells.
+func test_the_tear_out_set_is_the_fights_ground_and_not_the_whole_board() -> void:
+	var unit := _a_unit()
+	_queue_a_move(unit)
+	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
+	var sheet := BeatSheet.read(unit.squad, plan)
+	assert_array(sheet.cells).override_failure_message(
+			"fixture drifted: this pass touches no cells").is_not_empty()
+	# Non-vacuity: if the fight already covered the board, "not the whole board" proves nothing.
+	assert_int(sheet.cells.size()).override_failure_message(
+			"the fight covers the whole board, so this case cannot fail") \
+		.is_less(_painted_cells().size())
+
+	_game.order_executor._stage_the_fight(sheet, Pacing.Profile.CINEMATIC)
+
+	var staged := BoardSpace.staged_cells()
+	staged.sort()
+	var want: Array[Vector2i] = sheet.cells.duplicate()
+	want.sort()
+	assert_array(staged).is_equal(want)
+
+	# ...and the plain board tears out nothing at all, asked of the same door.
+	BoardSpace.clear_staging()
+	_game.order_executor._stage_the_fight(sheet, Pacing.Profile.BOARD)
+	assert_array(BoardSpace.staged_cells()).override_failure_message(
+			"the plain board tore the fight out anyway").is_empty()
+
+
 # THE LAW #521 asks for: with the cinematic off, displacement is provably zero EVERYWHERE. Read off
 # the seam directly -- never off a mirror, which something rebuilds every frame and would report
 # zero for a reason of its own. The version is asserted too, so "nothing was displaced" cannot pass
