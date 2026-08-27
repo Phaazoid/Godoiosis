@@ -386,9 +386,9 @@ func test_the_pitch_node_is_an_output_and_is_never_read_back() -> void:
 		.is_less(-30.0)
 
 
-# NB the "a resting camera settles" law lives in tests/presentation/test_input_bridge.gd, not here:
-# it is Battle3D's pointer poll that the drift breaks, and a LookDev-hosted version of it PASSED
-# against the very mutant it was written for (measured).
+# NB there is deliberately NO "the camera settles" case here or in test_input_bridge: two written for
+# it both PASSED against the mutant they were aimed at. The read-back's real guard is the pair of
+# health-readout suites named in CameraRig3D._process.
 
 
 func test_the_camera_return_brings_the_tilt_back_with_the_rest() -> void:

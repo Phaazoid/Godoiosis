@@ -596,14 +596,20 @@ func _process(delta: float):
 	# than the angle helper -- pitch is a bounded band, never a circle, so there is no short way round.
 	#
 	# THE LIVE ANGLE IS THIS FLOAT AND THE NODE IS A PURE OUTPUT -- `position`'s shape (#520), and here
-	# it is load-bearing rather than tidy. Reading the angle back off the node round-trips it through
-	# the basis, which returns -39.999992 for an authored -40 (the number every LookPreset records), so
-	# a lerp toward the export's -40.0 NEVER SETTLES and the camera transform changes every frame for
-	# ever. Invisible on screen, and lethal to `battle3d._poll_pointer`: that skips its work only while
-	# `_camera.global_transform` compares EQUAL, so the pointer re-derived from the REAL mouse every
-	# frame, overwrote the synthetic one the health-readout suites set, and took the readout with it --
-	# which surfaces as a wrong CUBE COUNT, nowhere near the camera. Yaw survives the identical code
-	# only because the scenes author it at 0, where the lerp is exact.
+	# it is load-bearing rather than tidy.
+	#
+	# MEASURED, and the reason this is not the obvious `_pitch.rotation_degrees.x = lerpf(...)`:
+	# reading the angle back off the node reds `tests/presentation/test_unit_health_bar.gd` (3 cases)
+	# and `test_health_block_debris.gd`, on a branch that touches nothing but the camera -- one of them
+	# reporting a wrong CUBE COUNT. Own-float, green; read-back, red; verified both ways.
+	#
+	# The MECHANISM is unconfirmed. What is known: the read-back round-trips through the basis, which
+	# returns -39.999992 for an authored -40 (the number every LookPreset records), so the ease chases
+	# a target it cannot express. The obvious story from there is `battle3d._poll_pointer`, which skips
+	# its work only while `_camera.global_transform` compares EQUAL -- but two cases written to pin
+	# that (a settling transform, and a synthetic pointer surviving) BOTH PASSED against the mutant,
+	# so do not repeat it as fact. The suites above are the real guard; if this line is ever touched,
+	# run them. Yaw survives the identical code only because the scenes author it at 0.
 	var next_pitch := lerpf(_pitch_degrees, _target_pitch_degrees, blend)
 	if not is_equal_approx(next_pitch, _pitch_degrees):
 		_pitch_degrees = next_pitch
