@@ -213,7 +213,7 @@ const FLAME_FRAMES := 8
 # How much darker a water block's WALLS and top rim read than its surface — the body rather than the
 # face of it. It drove the 0.004-unit rim alone until the shader reached surface 1, which is a
 # slider that moves nothing.
-@export var water_deep_body_shade := 0.3: set = _set_water_deep_body_shade
+@export var water_deep_body_shade := 0.22: set = _set_water_deep_body_shade
 @export var water_shallow_body_shade := 0.29: set = _set_water_shallow_body_shade
 
 # The bed and its caustics have no deep twin BY NATURE rather than by omission — they are what you
@@ -246,9 +246,9 @@ const FLAME_FRAMES := 8
 # Deep and shallow start DIFFERENT rather than matched: a shallow shore laps, so it gets the wider
 # softer band, while deep water meeting a wall stops dead and gets a narrow hard one. A guess to
 # react to, not an answer — the whole point of it being a knob.
-@export var water_deep_foam_width := 0.3: set = _set_water_deep_foam_width
+@export var water_deep_foam_width := 0.15: set = _set_water_deep_foam_width
 @export var water_shallow_foam_width := 0.5: set = _set_water_shallow_foam_width
-@export var water_deep_foam_color := Color(0.86, 0.93, 0.96, 0.7): set = _set_water_deep_foam_color
+@export var water_deep_foam_color := Color(0.2196, 0.6, 0.96, 0.7): set = _set_water_deep_foam_color
 @export var water_shallow_foam_color := Color(0.86, 0.93, 0.96, 0.5): set = _set_water_shallow_foam_color
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).

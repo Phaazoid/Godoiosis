@@ -1,15 +1,19 @@
 [gd_resource type="Resource" script_class="ScenarioData" format=4]
 
 [ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="1_02ul2"]
+[ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_cl8yi"]
 [ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="2_ggi03"]
 [ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="3_h6kap"]
+[ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_ykmmo"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/SpringspearWeaponInstance.gd" id="4_nn2sb"]
 [ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="5_dv1lo"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Springspear.tres" id="6_e7coi"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="7_ty032"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="8_uy5w0"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="9_8pdvm"]
+[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="9_ukvwx"]
 [ext_resource type="Texture2D" path="res://Art/Units/Portraits/faceless_one.png" id="10_x0m8r"]
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="11_o386q"]
 [ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="11_vi37y"]
 [ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="12_vltmb"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="13_r84dj"]
@@ -34,10 +38,12 @@
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="32_r84dj"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="33_udnht"]
 [ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="34_2ao25"]
+[ext_resource type="Resource" path="res://Resources/WeaponMods/Line Sniper.tres" id="35_os73n"]
 
 [sub_resource type="Resource" id="Resource_cl8yi"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_ykmmo"]
@@ -70,22 +76,30 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_cl8yi")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
+})
 
 [sub_resource type="Resource" id="Resource_o386q"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_os73n"]
@@ -119,22 +133,30 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_o386q")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_g8ks8"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_eturi"]
@@ -167,22 +189,30 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_g8ks8")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_0qra6"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_yhng1"]
@@ -216,22 +246,30 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_0qra6")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
+})
 
 [sub_resource type="Resource" id="Resource_enc8v"]
 script = ExtResource("4_nn2sb")
 template = ExtResource("6_e7coi")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Springy"
 
 [sub_resource type="Resource" id="Resource_32q60"]
@@ -265,23 +303,31 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_enc8v")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"ready": true
+}
+})
 
 [sub_resource type="Resource" id="Resource_e7ndh"]
 script = ExtResource("20_os73n")
 template = ExtResource("21_ds0m5")
-display_name = "vroom"
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
+display_name = "Chainsword"
 
 [sub_resource type="Resource" id="Resource_766s7"]
 script = ExtResource("11_vi37y")
@@ -313,23 +359,31 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_e7ndh")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"rev": 0
+}
+})
 
 [sub_resource type="Resource" id="Resource_7qklc"]
 script = ExtResource("25_e7coi")
 template = ExtResource("26_ty032")
-display_name = "brrr"
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
+display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_odq6y"]
 script = ExtResource("11_vi37y")
@@ -361,12 +415,14 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_7qklc")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
@@ -377,7 +433,8 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_gl26j"]
 script = ExtResource("25_e7coi")
 template = ExtResource("26_ty032")
-display_name = "brrr"
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
+display_name = "Drill"
 
 [sub_resource type="Resource" id="Resource_njqnc"]
 script = ExtResource("11_vi37y")
@@ -410,12 +467,14 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_gl26j")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
@@ -426,7 +485,8 @@ limb_states = Dictionary[int, int]({
 [sub_resource type="Resource" id="Resource_wtwd2"]
 script = ExtResource("30_vi37y")
 template = ExtResource("31_vltmb")
-display_name = "poppop"
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([ExtResource("35_os73n")]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
+display_name = "Super Scoper"
 
 [sub_resource type="Resource" id="Resource_8r6kq"]
 script = ExtResource("11_vi37y")
@@ -458,22 +518,30 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_wtwd2")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
 })
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"shots": 2
+}
+})
 
 [sub_resource type="Resource" id="Resource_rs6iw"]
 script = ExtResource("12_vltmb")
 template = ExtResource("13_r84dj")
+spaces = Array[Array]([Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([]), Array[ExtResource("5_dv1lo")]([])])
 display_name = "Smasher"
 
 [sub_resource type="Resource" id="Resource_2aysn"]
@@ -507,17 +575,24 @@ stats = Dictionary[int, int]({
 3: 5,
 4: 5,
 5: 5,
-6: 5
+6: 5,
+7: 4
 })
 current_hp = 20
 current_will = 5
 inventory = Array[ExtResource("3_h6kap")]([SubResource("Resource_rs6iw")])
 equipped_index = 0
+affinity_saved = true
 limb_states = Dictionary[int, int]({
 0: 0,
 1: 0,
 2: 0,
 3: 0
+})
+weapon_battle_states = Dictionary[int, Dictionary]({
+0: {
+"charge": 0
+}
 })
 
 [resource]
