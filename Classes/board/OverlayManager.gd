@@ -146,6 +146,10 @@ static var GUARD_LINK_MODULATE := Color(1.0, 1.0, 0.9961, 0.6078)
 # the shield's thirteen columns. At half a cell that is three, and they are the shield's thinnest.
 # 0.5 is the geometric rule (the head stops at the edge the pair shares) rather than an art-derived
 # number; ~0.7 clears the shield entirely, which is what the range above 0.5 is for.
+#
+# TUNE IT WITH THE ALPHA ABOVE, not alone (found the first time the dev tuned this for real): both
+# buy the shield the same separation, so a translucent arrow needs less distance and an opaque one
+# needs more. Whichever you reach for, check the other still makes sense.
 static var GUARD_LINK_HEAD_INSET := 0.4
 
 # The watched footprint's threat mark (#413). A per-CELL marker, deliberately not a filled-square
