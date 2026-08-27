@@ -179,28 +179,28 @@ const FLAME_FRAMES := 8
 #
 # The shader is on the TOP surface of every water block. `deep` is not here: which water drowns you
 # is the tile's own `walkable` flag, baked per material by the generator, not a dial.
-@export var water_wave_speed := 0.8: set = _set_water_wave_speed
-@export var water_wave_scale := 5.0: set = _set_water_wave_scale
+@export var water_wave_speed := 2.32: set = _set_water_wave_speed
+@export var water_wave_scale := 4.4: set = _set_water_wave_scale
 # How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
-@export var water_band_contrast := 0.35: set = _set_water_band_contrast
-@export var water_ripple := 0.35: set = _set_water_ripple
+@export var water_band_contrast := 0.8: set = _set_water_band_contrast
+@export var water_ripple := 1.89: set = _set_water_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
-@export var water_roughness := 0.25: set = _set_water_roughness
-@export var water_specular := 0.6: set = _set_water_specular
+@export var water_roughness := 0.41: set = _set_water_roughness
+@export var water_specular := 0.51: set = _set_water_specular
 # The SHALLOW half of the shallow/deep read: a static mottle of the bed showing through, which deep
 # water does not get. The base colours are the tiles' own authored modulate, not a knob — those
 # reach the flat view too, and this one cannot.
-@export var water_bed := 0.5: set = _set_water_bed
+@export var water_bed := 0.39: set = _set_water_bed
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket.
-@export var water_seam := 0.12: set = _set_water_seam
+@export var water_seam := 0.095: set = _set_water_seam
 # How much darker a water block's SIDE and top rim read than its surface — the body rather than the
 # face of it.
-@export var water_body_shade := 0.45: set = _set_water_body_shade
+@export var water_body_shade := 0.3: set = _set_water_body_shade
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
