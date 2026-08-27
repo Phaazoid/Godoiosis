@@ -1120,6 +1120,22 @@ func test_an_armed_guards_link_reaches_the_3d_view() -> void:
 # shove has dragged apart (or an authored guard_range above 1) therefore keeps its SHIELD and draws
 # no link, rather than laying a row of error tiles across the board. It goes red the day someone
 # widens the trail without deciding what a long link looks like.
+func test_a_queued_guards_ghost_reaches_both_3d_channels() -> void:
+	# The ghost rides the SAME two layers as the armed pair (#450 part 2) -- it is the same mark
+	# saying "not yet", so a layer of its own would be a second plane for one question. It reaches
+	# them through the same two mirror branches, which is why one case can speak for both.
+	var blocker := _spawn(PLAYER, Vector2i(2, 2))
+	var ward := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(ward, blocker.squad)
+	game.overlay_manager.show_guard_preview([{"blocker": blocker, "ward": ward}])
+	await _settle()
+
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_ICONS).size()).override_failure_message(
+			"the ghosted shield never reached 3D").is_equal(1)
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_LINK).size()).override_failure_message(
+			"the ghosted link never reached 3D").is_equal(2)
+
+
 func test_a_pair_further_than_one_step_keeps_its_shield_and_draws_no_link() -> void:
 	var pair := _squad_pair()   # three cells apart, which is exactly the case under test
 	pair[0].arm_guard(pair[1], pair[0].get_guard_range())

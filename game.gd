@@ -904,6 +904,7 @@ func refresh_action_queue(squad: Squad):
 		squad_action_queue_control.show_display_entries([])
 		overlay_manager.clear_terrain_preview()
 		overlay_manager.clear_knockback_preview()
+		overlay_manager.clear_guard_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
 	# A running pass owns its plan (#361). Every order is still in the queue until _end_squad_turn,
@@ -996,6 +997,15 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 				"to": atk.resolved.knockback_to, "removed": atk.resolved.removed,
 				"landing_index": atk.resolved.knockback_landing_index})
 	overlay_manager.show_knockback_preview(shoves)
+	# Guards this plan has QUEUED but not yet armed (#450 part 2). ResolvedPlan.guards holds the
+	# armed wards and the pending ones together, and GuardWard.sequence already tells them apart --
+	# make() leaves it 0, arm() stamps 1 upward and copy() preserves it -- so "is this only a plan?"
+	# needs no new field. The armed ones are refresh_guard_markers' business and are drawn solid.
+	var pending: Array = []
+	for ward: GuardWard in plan.guards:
+		if ward.sequence == 0 and ward.is_intact():
+			pending.append({"blocker": ward.blocker, "ward": ward.ward})
+	overlay_manager.show_guard_preview(pending)
 
 func _squad_all_committed(squad: Squad) -> bool:
 	# True when every member has locked in at least one REAL order — a main action, or a

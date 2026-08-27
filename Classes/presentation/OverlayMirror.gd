@@ -463,6 +463,13 @@ func _icons(om: OverlayManager) -> void:
 				wards.append(entry)
 			else:
 				ground.append(entry)
+	# The QUEUED pair's ghosted shield joins the armed ones on their own layer (#450 part 2). Same
+	# channel on purpose -- it is the same mark saying "not yet", and a layer of its own would be a
+	# second plane for one question. Loose sprites rather than OverlayIcons, so they arrive by
+	# position like the terrain ghosts do.
+	for sprite in om.guard_preview_icons:
+		if is_instance_valid(sprite) and sprite.texture != null:
+			wards.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.ICONS, heads)
 	_markers(BoardOverlays.Layer.GROUND_ICONS, ground)
 	_markers(BoardOverlays.Layer.GUARD_ICONS, wards)
@@ -474,7 +481,7 @@ func _icons(om: OverlayManager) -> void:
 # plane. Copied like every other sprite channel: texture and tint arrive already picked.
 func _guard_links(om: OverlayManager) -> void:
 	var entries: Array[Dictionary] = []
-	for sprite in om.guard_link_sprites:
+	for sprite in om.guard_link_sprites + om.guard_preview_links:
 		if not is_instance_valid(sprite) or sprite.texture == null:
 			continue
 		entries.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))

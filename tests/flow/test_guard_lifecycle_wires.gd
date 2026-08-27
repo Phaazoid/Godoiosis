@@ -70,6 +70,13 @@ func _guard_linked() -> bool:
 	return _guard_link_count() == 2
 
 
+# The GHOSTED pair a queued-but-unarmed Guard draws (#450 part 2). Counted as one shield plus a
+# two-sprite trail, the same shape the armed pair is asserted at.
+func _guard_preview_count() -> int:
+	var om = game.overlay_manager
+	return (om.guard_preview_icons as Array).size() + (om.guard_preview_links as Array).size()
+
+
 # Which CELLS the link's sprites sit on, read back through the grid rather than compared as world
 # floats -- the arrow is placed by GridUtils.cell_world, so this is its own inverse.
 func _guard_link_cells() -> Array[Vector2i]:
@@ -151,6 +158,43 @@ func test_queueing_and_executing_a_guard_leaves_the_marker_on_the_board() -> voi
 	assert_bool(_guard_linked()) \
 		.override_failure_message("no link from the BLOCKER after a real queue-and-execute") \
 		.is_true()
+
+
+func test_a_queued_guard_previews_ghosted_and_goes_solid_once_it_arms() -> void:
+	# A Guard was the only queued verb that showed NOTHING on the board until Execute (#450 part 2):
+	# a move gets arrows and a ghost, an ignite gets a ghosted icon, a Guard got a queue row. It now
+	# draws the same pair the armed one does, at the plan-time alpha -- and the difference matters,
+	# because identical marks would tell the player they are covered while the cover is still a plan.
+	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
+	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
+	var _enemy := _spawn(Team.Faction.ENEMY, Vector2i(6, 0))
+	await await_idle_frame()
+	game.squad_manager.join_squad(ward, blocker.squad)
+
+	game.queue_guard(blocker, ward)
+	await await_idle_frame()
+
+	assert_int(_guard_preview_count()).override_failure_message(
+		"a queued Guard drew no ghost -- it is the only queued verb that previews nothing") \
+		.is_equal(3)
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"the queued Guard drew a SOLID shield -- the board is promising cover that is not live yet") \
+		.is_false()
+	assert_int(_guard_link_count()).override_failure_message(
+		"the queued Guard drew a solid link").is_equal(0)
+	var ghost: Sprite2D = game.overlay_manager.guard_preview_icons[0]
+	assert_float(ghost.modulate.a).override_failure_message(
+		"the ghost is as opaque as an armed ward, so the board cannot say 'not yet'") \
+		.is_less(OverlayManager.GUARD_RING_COLOR.a)
+
+	await game.order_executor.execute_orders(blocker.squad.get_leader())
+
+	assert_int(_guard_preview_count()).override_failure_message(
+		"the ghost outlived the plan it previewed and now sits beside the real mark").is_equal(0)
+	assert_bool(_guard_marked(ward)).override_failure_message(
+		"the armed shield never replaced the ghost").is_true()
+	assert_bool(_guard_linked()).override_failure_message(
+		"the armed link never replaced the ghost").is_true()
 
 
 func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:

@@ -203,6 +203,12 @@ var terrain_preview_sprites: Array[Sprite2D] = []    # ephemeral plan-time ghost
 # The blocker->ward arrows of every armed Guard (#450). Owned and cleared by redraw_guard_wards
 # alongside the ward shields, because the two are one marker with two halves -- see it there.
 var guard_link_sprites: Array[Sprite2D] = []
+# The same pair GHOSTED, for a Guard that is only QUEUED (#450 part 2). Two stores rather than one
+# because the halves reach 3D through different mirror branches, exactly as the armed pair does --
+# and separate from the armed stores because the LIFETIMES differ: these are plan-time and die with
+# the next re-plan, while an armed ward outlives the whole enemy phase.
+var guard_preview_icons: Array[Sprite2D] = []
+var guard_preview_links: Array[Sprite2D] = []
 var hover_move_preview: MoveAction = null
 var hover_move_previews: Array[MoveAction] = []
 var projected_unit_sprites := {} # { Unit : Sprite2D }
@@ -778,17 +784,64 @@ func redraw_guard_wards(units: Array[Unit]) -> void:
 # shield, so nothing goes silent. A longer link needs an interpolated path or a drawn line; that is
 # the day to build one, not before.
 func _draw_guard_link(blocker: Unit, ward: Unit) -> void:
+	guard_link_sprites.append_array(_guard_link_trail(blocker, ward, GUARD_LINK_MODULATE))
+
+# The trail itself, shared by the armed pair and the queued ghost so the two can never disagree
+# about where a link runs or when there is one to run.
+func _guard_link_trail(blocker: Unit, ward: Unit, tint: Color) -> Array[Sprite2D]:
+	var none: Array[Sprite2D] = []
 	var from := blocker.get_projected_destination()
 	var to := ward.get_projected_destination()
 	if GridUtils.manhattan_distance(from, to) != 1:
-		return
-	guard_link_sprites.append_array(_draw_arrow_trail([from, to], GUARD_LINK_MODULATE))
+		return none
+	return _draw_arrow_trail([from, to], tint)
 
 func _clear_guard_links() -> void:
 	for sprite in guard_link_sprites:
 		if is_instance_valid(sprite):
 			sprite.queue_free()
 	guard_link_sprites.clear()
+
+# Plan-time preview of Guards that are QUEUED but not yet armed (#450 part 2). Every other queued
+# verb previews -- a move gets arrows and a ghost, an ignite gets a ghosted icon -- and a Guard was
+# the odd one out, visible only as a queue row until you pressed Execute.
+#
+# The SAME two marks the armed pair wears, at the ghost alpha the board already uses for "planned,
+# not yet real" (TERRAIN_PREVIEW_MODULATE's). Drawing them identically would be the board telling
+# the player they are covered when they are not yet, which is the question #450 left open; borrowing
+# the existing alpha rather than inventing a second one is the rest of the answer.
+#
+# Takes {"blocker": Unit, "ward": Unit} entries, show_terrain_preview's shape -- the caller decides
+# which Guards are still pending, since only a resolved plan knows.
+func show_guard_preview(pairs: Array) -> void:
+	clear_guard_preview()
+	for pair in pairs:
+		var blocker: Unit = pair["blocker"]
+		var ward: Unit = pair["ward"]
+		if not is_instance_valid(blocker) or not is_instance_valid(ward):
+			continue
+		var shield := Sprite2D.new()
+		shield.texture = ICON_TEXTURES[OverlayIcon.IconType.GUARD_WARD]
+		shield.global_position = GridUtils.cell_world(board_tilemap, ward.get_projected_destination())
+		shield.z_index = RING_Z_INDEX + 1        # the armed shield's plane, so the two read as one mark
+		shield.scale = Vector2.ONE * GUARD_RING_SCALE
+		shield.modulate = _ghosted(GUARD_RING_COLOR)
+		icon_overlay.add_child(shield)
+		guard_preview_icons.append(shield)
+		guard_preview_links.append_array(_guard_link_trail(blocker, ward, _ghosted(GUARD_LINK_MODULATE)))
+
+func clear_guard_preview() -> void:
+	for sprite in guard_preview_icons + guard_preview_links:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	guard_preview_icons.clear()
+	guard_preview_links.clear()
+
+# ONE answer to how ghosted a plan-time mark is, derived from the ignite preview's alpha rather than
+# restated -- a second ghosting constant is a second answer to "does the board mean this yet".
+# Multiplied into the live tint, so a tuned Guard colour carries into its own ghost.
+func _ghosted(tint: Color) -> Color:
+	return Color(tint.r, tint.g, tint.b, tint.a * TERRAIN_PREVIEW_MODULATE.a)
 
 # The Game tab's colour knob re-applying to links already on screen (restyle_knockback_trail's
 # shape). Re-tints rather than redrawing: this manager has no unit list to rebuild the pairs from.

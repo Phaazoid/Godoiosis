@@ -75,6 +75,10 @@ func execute_orders(unit):
 	var side_channel: Dictionary[BaseAction.ActionType, Array] = {}
 
 	game.overlay_manager.clear_knockback_preview()
+	# The queued-Guard ghost goes with it (#450): both are plan-time marks, and the pass starting is
+	# the moment the plan stops being a plan. The SOLID pair replaces it at the far end of this
+	# function, where refresh_guard_markers runs once the ward has actually armed.
+	game.overlay_manager.clear_guard_preview()
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
