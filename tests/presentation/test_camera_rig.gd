@@ -450,6 +450,29 @@ func test_the_ease_closes_the_gap_a_pan_opened() -> void:
 		.is_equal(Vector3(20, 1, 18))
 
 
+# The clamp bites the TARGET as well as the live aim, and this is the consequence that buys those
+# two lines. Headless the pair is otherwise indistinguishable — the ease lands in one frame, so a
+# surviving off-board target is re-clamped every frame and the camera never visibly moves. What it
+# costs is LATER: painting a tile grows the board and widens the limit without moving the view
+# (#231's rule), and a destination the clamp had already refused would come back to life there.
+func test_a_pan_aimed_off_the_board_does_not_come_back_when_the_board_grows() -> void:
+	var rig := _rig()
+	rig.frame(AABB(Vector3.ZERO, Vector3(20, 1, 20)))
+	rig.glide_to(Vector3(500, 1, 500))
+	await await_idle_frame()
+	var clamped: Vector3 = rig.position
+	# Non-vacuous: the aim really was outside, so a no-op clamp cannot pass this.
+	assert_bool(clamped.distance_to(Vector3(500, 1, 500)) > 1.0).override_failure_message(
+			"the aim was already inside the limit; the case proves nothing").is_true()
+
+	rig.rebound(AABB(Vector3.ZERO, Vector3(600, 1, 600)))
+	await await_idle_frame()
+
+	assert_that(rig.position).override_failure_message(
+			"the camera flew off to a destination the clamp had already refused, the moment the " \
+			+ "board grew enough to allow it").is_equal(clamped)
+
+
 func test_the_diorama_lift_carries_the_camera_up_with_it() -> void:
 	# #521's half: the fight tears out of the board and the camera has to go with it, or it stays
 	# down on the board watching a hole. A SECOND channel rather than part of the aim, because the

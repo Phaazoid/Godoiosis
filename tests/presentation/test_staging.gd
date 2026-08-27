@@ -213,6 +213,32 @@ func test_a_pass_tears_the_fight_out_and_puts_the_board_back() -> void:
 				"%s was left in the sky after the pass" % cell).is_equal(Vector3.ZERO)
 
 
+# ...and a board SWAPPED mid-tear-out puts it down too (#520 diff 2b). Only execute_orders clears
+# the staging, so an interrupted pass — F2, Mission Select — used to hand the fresh board a lifted
+# set of cells nothing would ever put back down, and since the rig now RIDES that lift the camera
+# went with them. `BoardSpace` is a static and outlives the board exactly the way playback_locked
+# does, which is the line this one now sits beside in clear_board.
+#
+# Staged DIRECTLY rather than through a pass: what is under test is the clear, and driving a real
+# pass to reach the state would clear it on the way out.
+func test_a_board_swap_puts_the_tear_out_down() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 3)
+	assert_bool(cells.size() == 3).override_failure_message(
+			"fixture: this board has fewer than three painted cells").is_true()
+	BoardSpace.stage(cells, BoardSpace.lift_offset())
+	await _settle()
+	assert_bool(BoardSpace.stage_offset().length() > 1.0).override_failure_message(
+			"the stage lift is zero; the case proves nothing").is_true()
+
+	_game.scenario_manager.clear_board()
+	await _settle()
+
+	for cell in cells:
+		assert_vector(BoardSpace.staged_offset(cell)).override_failure_message(
+				"%s stayed in the sky after the board it belonged to was swapped out" % cell) \
+			.is_equal(Vector3.ZERO)
+
+
 # WHICH ground goes up, asked of the decision itself. The pass cases above cannot see this: the
 # staging is cleared before execute_orders returns, so a version that staged the WHOLE BOARD and put
 # it back would satisfy every one of them. Driven at _stage_the_fight because that is the decision,
