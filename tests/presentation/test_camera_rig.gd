@@ -369,20 +369,26 @@ func test_the_authored_pitch_snaps_rather_than_easing_in() -> void:
 		.is_equal_approx(-55.0, 0.001)
 
 
-func test_the_pitch_node_is_derived_and_not_a_second_store() -> void:
-	# The Look knob addresses board_pitch_degrees, never this node, BECAUSE _process writes the node
-	# every frame -- a knob naming a property the game writes back is the slider that moves and
-	# silently reverts. This pins the direction: the export wins, the node follows.
+func test_the_pitch_node_is_an_output_and_is_never_read_back() -> void:
+	# The rig's live angle is its OWN float; the node is where that float is written and nothing
+	# more. Pinned because reading it back is what made the channel unable to settle -- the basis
+	# round-trip returns -39.999992 for an authored -40, so the ease chased a target it could never
+	# reach and rewrote the camera transform every frame for ever.
 	var rig := _rig()
 	var node: Node3D = _scene.get_node("CameraRig/Pitch")
 	rig.board_pitch_degrees = -45.0
 	node.rotation_degrees.x = -12.0   # a stale writer, of the kind the old knob was
+	_drag(rig.orbit_button, Vector2(0.0, 4.0))
 	await await_idle_frame()
-	# Asserted as DIRECTION rather than as a landing: the smoothing rate is a knob, so how far one
-	# frame closes the gap is the dev's to tune. What is not tunable is which way it goes.
 	assert_float(node.rotation_degrees.x).override_failure_message(
-			"a raw write to the Pitch node survived -- it is a second store for the camera's angle") \
-		.is_less(-12.0)
+			"the tilt eased from a value written ONTO the node -- the rig is reading its own output "
+			+ "back, which is what stops the channel settling") \
+		.is_less(-30.0)
+
+
+# NB the "a resting camera settles" law lives in tests/presentation/test_input_bridge.gd, not here:
+# it is Battle3D's pointer poll that the drift breaks, and a LookDev-hosted version of it PASSED
+# against the very mutant it was written for (measured).
 
 
 func test_the_camera_return_brings_the_tilt_back_with_the_rest() -> void:

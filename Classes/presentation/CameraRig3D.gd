@@ -147,6 +147,9 @@ var _target_distance := 14.0
 # board_pitch_degrees and put back there by R -- so a tilt is a DEVIATION from what the board
 # authored, never a replacement for it. Third eased channel, beside the yaw and the distance.
 var _target_pitch_degrees := -40.0
+# The LIVE angle, and the rig's OWN -- never read back off the Pitch node, which is a pure output.
+# See _process for why that read is what stopped this channel settling.
+var _pitch_degrees := -40.0
 # The two position channels (see the header): where the rig looks NOW and where it is heading, plus
 # the same pair for the diorama's rise. `position` is their sum and nothing else.
 var _aim := Vector3.ZERO
@@ -185,6 +188,7 @@ func _ready() -> void:
 	# from it here rather than read into it. The two agree in every shipped scene; if they ever
 	# disagree, the one a mood can address is the one that should win.
 	_target_pitch_degrees = board_pitch_degrees
+	_pitch_degrees = board_pitch_degrees
 	_pitch.rotation_degrees.x = board_pitch_degrees
 	# Whatever the scene authored is where the rig already IS, so both channels start there rather
 	# than gliding in from the origin on the first frame.
@@ -323,6 +327,7 @@ func _set_manual_input_enabled(value: bool) -> void:
 func _set_board_pitch_degrees(value: float) -> void:
 	board_pitch_degrees = value
 	_target_pitch_degrees = value
+	_pitch_degrees = value
 	# SNAPPED, not eased -- frame()'s "hold_at, not glide_to" reasoning, and for its exact reason:
 	# pitch is part of the camera's basis, so a rig still lerping toward a newly applied mood
 	# unprojects at one angle and picks at another, and every screen-space read taken on the way in
@@ -589,7 +594,20 @@ func _process(delta: float):
 	# The third eased channel (#586), on the SAME rate as the yaw: they are two axes of one drag, and
 	# a pitch that settled at a different speed would make a diagonal drag curve. Plain lerpf rather
 	# than the angle helper -- pitch is a bounded band, never a circle, so there is no short way round.
-	_pitch.rotation_degrees.x = lerpf(_pitch.rotation_degrees.x, _target_pitch_degrees, blend)
+	#
+	# THE LIVE ANGLE IS THIS FLOAT AND THE NODE IS A PURE OUTPUT -- `position`'s shape (#520), and here
+	# it is load-bearing rather than tidy. Reading the angle back off the node round-trips it through
+	# the basis, which returns -39.999992 for an authored -40 (the number every LookPreset records), so
+	# a lerp toward the export's -40.0 NEVER SETTLES and the camera transform changes every frame for
+	# ever. Invisible on screen, and lethal to `battle3d._poll_pointer`: that skips its work only while
+	# `_camera.global_transform` compares EQUAL, so the pointer re-derived from the REAL mouse every
+	# frame, overwrote the synthetic one the health-readout suites set, and took the readout with it --
+	# which surfaces as a wrong CUBE COUNT, nowhere near the camera. Yaw survives the identical code
+	# only because the scenes author it at 0, where the lerp is exact.
+	var next_pitch := lerpf(_pitch_degrees, _target_pitch_degrees, blend)
+	if not is_equal_approx(next_pitch, _pitch_degrees):
+		_pitch_degrees = next_pitch
+		_pitch.rotation_degrees.x = next_pitch
 	_attributes.dof_blur_near_distance = maxf(0.5, _camera.position.z - focus_band_near)
 	_attributes.dof_blur_far_distance = _camera.position.z + focus_band_far
 

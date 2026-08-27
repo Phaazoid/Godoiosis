@@ -920,6 +920,25 @@ func _unshadowed_cell(a: Vector2, b: Vector2) -> Vector2i:
 	return GridUtils.NO_CELL
 
 
+func test_a_resting_camera_stops_moving_so_the_pointer_poll_can_rest() -> void:
+	# `_poll_pointer` skips its work only while `_camera.global_transform` compares EQUAL frame to
+	# frame. A camera channel that never settles therefore re-fires the poll every frame, which
+	# re-derives the pointer from the REAL mouse -- overwriting any synthetic one, so hover-driven
+	# surfaces silently stop being hovered. #586's pitch shipped exactly that: the symptom was a
+	# health readout throwing the wrong number of cubes, with nothing about the camera looking wrong.
+	#
+	# It lives HERE rather than in the rig's own suite because the rig's scene does not exercise the
+	# poll -- a LookDev-hosted version of this case PASSED against the mutant that causes it.
+	_scene._rig.board_pitch_degrees = -40.0
+	for i in 30:
+		await _pump()   # let every eased channel arrive
+	var settled: Transform3D = _camera3d.global_transform
+	await _pump()
+	assert_bool(_camera3d.global_transform == settled).override_failure_message(
+			"the camera transform still moves with nothing driving it, so every frame reads as a "
+			+ "camera move and _poll_pointer can never rest").is_true()
+
+
 # The mouse is ONE place (#582 follow-up). Reported in play against the shipped #585: the ghost drew
 # at the brush's height while the selector bracket drew at the picked column's own, so they sat at two
 # heights AND two screen positions -- "my mouse is kind of in two places at once ... I don't know
