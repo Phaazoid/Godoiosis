@@ -19,12 +19,12 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 |-----|--------|
 | Left-click | Act on the cell under the pointer (delivered straight to the 2D dispatchers) |
 | Right-click | Exactly as in the 2D table above — cancel the open mode, or undo the last order from a board at rest ([#228](https://github.com/Phaazoid/Godoiosis/issues/228)). Not a parallel implementation: the picker calls `game._on_right_click`, the same dispatcher, so the two views cannot drift |
-| Right-drag | Orbit freely; the yaw rests wherever you leave it. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press). While the Tile Brush is armed the brush takes right-click to erase, so orbit falls back to **middle**-drag on its own and the help bar reads whichever is live |
-| Q / E | Snap to the next 90° detent — one press realigns from any angle |
+| Right-drag | Orbit **and tilt** freely; both rest wherever you leave them. Sideways turns the yaw, up/down tilts the pitch ([#586](https://github.com/Phaazoid/Godoiosis/issues/586)) — grab-the-world in each axis, at one shared `orbit_sensitivity`. The tilt is clamped to a band the *Game* tab owns (`Tilt limit: shallow` / `Tilt limit: steep`), not a mood: a mission may not re-teach the controls. Steeper is how you see into a one-cell hole the board's own angle hides. It shares the button with cancel: a drag orbits, a click under the slop cancels (`orbit_button` is an inspector knob, and flipping it to middle moves cancel back to press). While the Tile Brush is armed the brush takes right-click to erase, so orbit falls back to **middle**-drag on its own and the help bar reads whichever is live |
+| Q / E | Snap to the next 90° detent — one press realigns from any angle. **Yaw only: the tilt survives** (dev ruling, 2026-08-27). Looking down into a pit and then turning to see its other side is the gesture the tilt exists for, so squaring up must not throw the first half away |
 | Mouse wheel | Zoom (clamped so you cannot pull back past the whole board). While the Tile Brush is armed in **Terrain** or **Corners** mode the brush takes the wheel for its paint level and **Ctrl+wheel** zooms instead ([#285](https://github.com/Phaazoid/Godoiosis/issues/285)) — scoped to the two modes that pick a height (Terrain and **Corners**), since Zones and Tile States never read the wheel. The help bar reads whichever is live |
 | W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
 | Space | Recentre the diorama on the pointer cell — **unless dev mode is up**, where it spawns instead, the same precedence the flat game gives it |
-| R | Reset to the opening shot (the framing the board loaded with) |
+| R | Reset to the opening shot (the framing the board loaded with) — **the only leveller for the tilt**, which returns to the board's own authored angle rather than a second copy of it |
 | F4 | Toggle the flat 2D game full-screen and back *(dev builds)* |
 | Shift + F4 | The corner picture-in-picture debug view *(dev builds)* |
 
