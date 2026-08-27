@@ -82,9 +82,9 @@ func test_every_water_surface_says_what_walkable_says() -> void:
 					"'%s' wears a %s, not the water shader" % [item_name, mat]).is_not_null()
 			var got: float = shaded.get_shader_parameter("deep")
 			assert_float(got).override_failure_message(
-					"'%s' renders as %s water while its tile declares walkable=%s" \
-					% [item_name, "deep" if want > 0.5 else "shallow",
-					GridUtils.walkable_of(data)]).is_equal(want)
+					"'%s' renders as %s water while its tile declares walkable=%s, so it should " \
+					% [item_name, "deep" if got > 0.5 else "shallow", GridUtils.walkable_of(data)] \
+					+ "render as %s" % ["deep" if want > 0.5 else "shallow"]).is_equal(want)
 			checked += 1
 	assert_int(checked).override_failure_message(
 			"no WATER tiles authored; the case is vacuous").is_greater(0)
@@ -135,34 +135,62 @@ func test_shallow_water_reads_lighter_than_deep() -> void:
 	assert_bool(deep.is_empty()).override_failure_message(
 			"no unwalkable water tile authored; the case is vacuous").is_false()
 
-	var atlas_image := (load(ATLAS_PATH) as Texture2D).get_image()
-	if atlas_image.is_compressed():
-		atlas_image.decompress()
 	for wet: Dictionary in shallow:
 		for dry: Dictionary in deep:
-			# The tileset's own modulate -- what the flat view multiplies the sprite by.
 			var lit: Color = (wet["data"] as TileData).modulate
 			var dark: Color = (dry["data"] as TileData).modulate
 			assert_float(lit.get_luminance()).override_failure_message(
 					"tile %s is walkable but its modulate is no lighter than %s's -- in the FLAT " \
 					% [wet["coords"], dry["coords"]] + "view that tint is the whole difference " \
 					+ "between wading and drowning").is_greater(dark.get_luminance())
-			# And the COMPOSED atlas, which is where 3D reads the same number from. Two surfaces,
-			# one authored value -- this is what would catch the generator dropping the tint.
-			assert_float(_mean_luminance(atlas_image, wet)).override_failure_message(
-					"the composed atlas draws %s no lighter than %s -- the tileset carries the " \
-					% [wet["coords"], dry["coords"]] + "tint but the generator is not baking it") \
-					.is_greater(_mean_luminance(atlas_image, dry))
 
 
-func _mean_luminance(image: Image, tile: Dictionary) -> float:
-	var region: Rect2i = (tile["atlas"] as TileSetAtlasSource).get_tile_texture_region(
-			tile["coords"], 0)
-	var total := 0.0
-	for y in range(region.position.y, region.end.y):
-		for x in range(region.position.x, region.end.x):
-			total += image.get_pixel(x, y).get_luminance()
-	return total / float(maxi(1, region.get_area()))
+# The tint's OTHER end: the composed atlas is where the 3D board reads that same authored number
+# from, so the generator has to bake it in. Asserted per PIXEL against sheet-art x modulate, not as
+# "shallow looks lighter than deep" -- that comparison was the first draft and a mutant dropping the
+# tint entirely PASSED it, because the sheet gives the shallow tile eleven incidentally lighter
+# pixels and eleven pixels are enough to carry a mean. A rule about whether a multiply happened has
+# to compare against the multiply.
+func test_the_composed_atlas_carries_each_water_tile_s_authored_tint() -> void:
+	var baked := (load(ATLAS_PATH) as Texture2D).get_image()
+	if baked.is_compressed():
+		baked.decompress()
+	var tinted := 0
+	for tile: Dictionary in _water_tiles():
+		var source: TileSetAtlasSource = tile["atlas"]
+		var modulate: Color = (tile["data"] as TileData).modulate
+		if modulate == Color(1, 1, 1, 1):
+			continue
+		var sheet := source.texture.get_image()
+		if sheet.is_compressed():
+			sheet.decompress()
+		var region := source.get_tile_texture_region(tile["coords"], 0)
+		for y in range(region.size.y):
+			for x in range(region.size.x):
+				var art := sheet.get_pixel(region.position.x + x, region.position.y + y)
+				# Water tiles are fully opaque -- measured -- so the kind base the generator blits
+				# underneath is covered and the composed pixel is the art alone, times its tint.
+				assert_float(art.a).override_failure_message(
+						"tile %s is not opaque, so this comparison would be reading the kind " \
+						% tile["coords"] + "base through it").is_equal_approx(1.0, 0.01)
+				# CLAMPED, because the atlas is 8-bit and a modulate may brighten: shallow water's
+				# is above 1.0 on two channels, so its handful of already-light pixels saturate.
+				var want := Color(clampf(art.r * modulate.r, 0.0, 1.0),
+						clampf(art.g * modulate.g, 0.0, 1.0), clampf(art.b * modulate.b, 0.0, 1.0))
+				var got := baked.get_pixel(region.position.x + x, region.position.y + y)
+				assert_bool(_within(got, want, 2.0 / 255.0)).override_failure_message(
+						"the composed atlas draws %s at %s where the tile's art times its own " \
+						% [tile["coords"], got] + "modulate is %s -- the tileset carries the tint " \
+						% want + "and the generator is not baking it, so the two views disagree") \
+						.is_true()
+		tinted += 1
+	assert_int(tinted).override_failure_message(
+			"no water tile authors a modulate; the case is vacuous").is_greater(0)
+
+
+func _within(a: Color, b: Color, tolerance: float) -> bool:
+	return absf(a.r - b.r) <= tolerance and absf(a.g - b.g) <= tolerance \
+			and absf(a.b - b.b) <= tolerance
 
 
 # The parse canary. Godot compiles its own shader language to GLSL, and a shader that fails that
