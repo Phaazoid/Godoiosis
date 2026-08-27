@@ -542,6 +542,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
 	"World": "World",
+	# Water rides World rather than Elemental (#552): that tab is world construction AND terrain
+	# effects, and water is a terrain KIND -- the ground itself -- while Fire and Cover next door are
+	# terrain STATES whose art draws objects. Its rows draw under their own heading either way.
+	"Water": "World",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.
