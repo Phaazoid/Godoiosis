@@ -200,3 +200,27 @@ water_shallow_caustics_scale={
 "type": "float",
 "value": 18.5
 }
+water_deep_foam_width={
+"type": "float",
+"value": 0.3
+}
+water_shallow_foam_width={
+"type": "float",
+"value": 0.5
+}
+water_deep_foam_color={
+"type": "color",
+"value": Color(0.86, 0.93, 0.96, 0.7)
+}
+water_shallow_foam_color={
+"type": "color",
+"value": Color(0.86, 0.93, 0.96, 0.5)
+}
+water_board_mask={
+"type": "sampler2D",
+"value": ""
+}
+water_board_mask_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 1, 1)
+}
