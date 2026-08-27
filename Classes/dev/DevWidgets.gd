@@ -1,6 +1,10 @@
 extends Object
 class_name DevWidgets
 
+# The dev panels' shared widget kit: the builders every tool draws its rows with (knobs, reflective
+# resource forms, pickers) and the guards every tool saves through (name refusal, overwrite confirm,
+# the single ResourceSaver door below). Never shown to a player.
+
 # One knob row, whichever panel is drawing it (#212's Moods tab, #272's Object tab). The widget is
 # picked from the LIVE VALUE's type rather than from a column on the table, which is why one builder
 # serves both -- and why a knob whose property does not resolve draws a labelled failure instead of
@@ -687,11 +691,20 @@ static func refuse_existing_file(path: String, noun: String, status_label: Label
 # load() serves the resource cache: without claiming the path first, a re-save leaves every later
 # load() returning the stale object. No-op when the resource already owns the path. It also preserves
 # the uid already in the file's header, which ResourceSaver.save() drops at runtime (#481).
+#
+# A path has exactly ONE object, and a save writes THROUGH to it (#589). The pool editors stage their
+# edits on a duplicate(true), and saving that copy used to take_over_path it -- which clears the
+# ORIGINAL's resource_path and evicts it from the cache, leaving the object every board unit, every
+# mod's granted_attacks and every template's main_attack still points at alive with the old values.
+# Three symptoms, one cause: the board never saw an edit, a RESPAWN never saw it either (the mod is a
+# cache hit still holding the orphan, so only a relaunch cleared it), and the path-less orphan
+# re-saved INLINE as a sub_resource instead of an ext_resource, forking the content silently.
 static func save_over(resource: Resource, path: String, status_label: Label = null) -> bool:
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var target := _live_target(resource, path)
 	var prior_uids := uid_map_in_file(path)   # a committed file's uids must survive an overwrite (#481)
-	resource.take_over_path(path)
-	var err := ResourceSaver.save(resource, path)
+	target.take_over_path(path)
+	var err := ResourceSaver.save(target, path)
 	if err != OK:
 		var msg := "Failed to save %s (error %s)" % [path, err]
 		push_error(msg)
@@ -705,6 +718,51 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 	if status_label != null:
 		status_label.text = ""   # clears a stale refusal now that a save actually landed
 	return true
+
+
+# What save_over should actually write: the object that already owns `path`, carrying `edited`'s
+# values, or `edited` itself when there is nothing to write through to.
+#
+# Gated on the path being CACHED, because only a cached path can have stale holders -- an uncached
+# one is nobody's reference yet, so it stays the cheap take_over_path it always was. The three tools
+# that already hand out the live object (the Attack Editor's FAMILY mode, the Item Editor's
+# templates, ObjectKnobs' TileSet) land on `live == edited` and are untouched by this.
+#
+# A SCRIPT mismatch falls back rather than refusing: save_over is not the surface that polices what
+# kind of content belongs at a path, and adopting across scripts would set properties the target
+# does not have.
+static func _live_target(edited: Resource, path: String) -> Resource:
+	if not ResourceLoader.has_cached(path):
+		return edited
+	var live := ResourceLoader.load(path)
+	if live == null or live == edited or live.get_script() != edited.get_script():
+		return edited
+	_adopt(live, edited)
+	return live
+
+
+# Godot owns these: take_over_path writes the path, the caller already proved the scripts match, and
+# the other two describe the file rather than the content.
+const ADOPT_SKIP := ["resource_path", "resource_name", "resource_local_to_scene", "script"]
+
+
+# Copy `edited`'s stored values onto `live` IN PLACE, so every existing reference sees them.
+#
+# Through a duplicate(true) SNAPSHOT rather than straight off `edited`: a deep copy leaves path'd
+# sub-resources shared, so ext_resource references survive the save, while giving `live` its OWN
+# inline ones (an AttackPattern, a nested effect). Assigning `edited`'s objects directly would leave
+# the editor's still-open form sharing them, and later keystrokes would then reach the board on
+# nested fields but not on scalars -- half-live, which is worse than neither.
+#
+# Iterates the SNAPSHOT's properties, not `live`'s: the two agree on everything the script declares,
+# and where they can differ (metadata) the edited version is the one being saved.
+static func _adopt(live: Resource, edited: Resource) -> void:
+	var snapshot := edited.duplicate(true)
+	for prop in snapshot.get_property_list():
+		if prop.name in ADOPT_SKIP or (prop.usage & PROPERTY_USAGE_STORAGE) == 0:
+			continue
+		live.set(prop.name, snapshot.get(prop.name))
+	live.emit_changed()   # the hook a panel can redraw off; nothing listens yet
 
 
 # The uid= attributes a .tres carries, keyed by the reference id -- its own header under "_header",
