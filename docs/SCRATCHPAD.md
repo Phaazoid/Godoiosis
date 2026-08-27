@@ -41,7 +41,7 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 Currently, the camera still has a few cases where it teleports - this should never happen, it should always be a pan.  Plus, on the AIs turn, when the camera is showing their movement, instead of just centering on the unit, it should try to show both their start and end position in the initial shot (should be doable unless super zoomed in)
 
-I don't see a dev tuning tool for wait on unit death - currently the camera leaves while the health blocks are still exploding, no drama there.  
+I don't see a dev tuning tool for wait on unit death - currently the camera leaves while the health blocks are still exploding, no drama there.  Also, healthbars must always face the camera during battle.  
 
 ## 🗂 Dispersed (log)
 
