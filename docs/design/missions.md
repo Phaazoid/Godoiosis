@@ -2,7 +2,7 @@
 
 **Status: ALL FOUR SLICES BUILT 2026-07-28 ([#96](https://github.com/Phaazoid/Godoiosis/issues/96)).** Filed 2026-07-27, when the project acquired a win condition for the first time. Before this, Iosis had ten interlocking systems and no way to finish a battle — which meant a design question could be answered *"is this coherent?"* but never *"does this improve play?"*
 
-**Canon checked through #101 (2026-08-26).**
+**Canon checked through #572 (2026-08-26).**
 
 ## What a mission is
 
@@ -35,7 +35,7 @@ What a mission requires is a list on that resource:
 - **`CAPTURE`** — every `ZoneManager.Kind.CAPTURE` zone claimed.
 - **`EXTRACT`** — every surviving player unit inside a `Kind.EXTRACTION` zone.
 
-Objectives **compose by AND**: every declared one must be MET. Authorable OR-composition is scope on [#101](https://github.com/Phaazoid/Godoiosis/issues/101), along with the grouping question (a flat flag can't express *"A and (B or C)"*).
+Objectives **compose by AND**: every declared one must be MET. Authorable OR-composition is **unfiled scope** — it was #101's fork F and outlived that issue's close; see *What #101 did NOT ship* below for the grouping question (a flat flag can't express *"A and (B or C)"*).
 
 An **empty list is a plain rout map**, which is what every scenario saved before objectives existed still is — that fallback is why the change broke nothing.
 
@@ -111,9 +111,17 @@ Fork D's prerequisite was already built: [#134](https://github.com/Phaazoid/Godo
 
 The **banner names the reason**: `MissionRules.defeat_reason` is the one place the wording lives, so the card holds no second copy of *"Your squad has fallen."*
 
-### Still open on #101
+### What #101 did NOT ship
 
-**Defend a point** (an enemy taking a friendly zone — the first non-player-faction objective, and what the AI-and-CAPTURE section below is waiting on), **protect a unit**, and **authorable OR-composition** (fork F: grouped OR-lists inside an AND, arriving when a real mission design wants it). Previewing *"this move loses"* in the queue is still fork B's question, now that the clock it was parked against exists.
+**#101 is CLOSED** (dev, 2026-08-26): with the seam built, the rest of it was three unrelated features sharing one design capture, so they were split out and it closed rather than becoming an umbrella. That number is history now — the successors are:
+
+- **[#571](https://github.com/Phaazoid/Godoiosis/issues/571) — defend a point.** An enemy taking a friendly zone. The first non-player-faction objective, and what *The AI and CAPTURE* below is waiting on. Its real cost is not the condition: **a captured zone has no OWNER** (`_captured_zones: Array[String]`, and `CaptureAction.execute` discards its own actor), so "captured" is a per-zone boolean that only works while the player is the only faction that can claim one.
+- **[#572](https://github.com/Phaazoid/Godoiosis/issues/572) — protect a unit.** Escort and VIP. Same shape: the rule is nearly free on this seam, and the gap is that **`ScenarioUnitEntry` has no stable identity field**, so a mission has nothing to point at when it names a person.
+- **Authorable OR-composition (fork F)** — grouped OR-lists inside an AND, so a mission can be won by *either* taking the point *or* routing. **Not filed**, deliberately: the lean was always *arriving only when a real mission design wants it*, and this section is the record until one does. A flat `require_all` flag is the version to avoid — it cannot express *"A and (B or C)"* and gets outgrown.
+
+The Play API's blindness to all of this went to **[#46](https://github.com/Phaazoid/Godoiosis/issues/46)**, the Play API evergreen, rather than becoming a fourth issue.
+
+Previewing *"this move loses"* in the queue is still fork B's question, now that the clock it was parked against exists.
 
 ## `MissionRules.Progress` vs `MissionRules.Objective`
 
@@ -212,23 +220,23 @@ The end-of-mission banner offers **Retry** (hidden when the board wasn't loaded 
 
 **This is not the Burrow-style drift** (Rev shipped for Rushdown 2026-08-06; Burrow remains the
 live example — nobody has written it a scored builder yet). There is nothing for an AI faction
-to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#101](https://github.com/Phaazoid/Godoiosis/issues/101)'s "defend a point".
+to *win* by capturing, because enemy objectives are out of #96's scope — the point is the player's. The AI contests it positionally, which it already does: Rushdown walks into the approach, and a Sentry squad zoned over the point defends it with no AI code at all. Revisit when non-player factions get objectives of their own, which is [#571](https://github.com/Phaazoid/Godoiosis/issues/571), *defend a point*.
 
 ## Known gaps
 
-- **The Play API cannot see authored objectives, and now cannot see lose conditions either.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it passes `Progress.NONE` and no `failure` — so headless runs evaluate every board as a rout map with no clock, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat. The clock is precisely the kind of rule headless play is good at pressure-testing, so this is worth closing before the conditions with geometry land.
+- **The Play API cannot see authored objectives, and now cannot see lose conditions either.** `play_session.mission_outcome()` calls the same `MissionRules.evaluate`, but with no `MissionController` it passes `Progress.NONE` and no `failure` — so headless runs evaluate every board as a rout map with no clock, and there is no `capture` command to queue. Headless coverage of the loop stops at rout/defeat. The clock is precisely the kind of rule headless play is good at pressure-testing, so this is worth closing before the conditions with geometry land. **Tracked on [#46](https://github.com/Phaazoid/Godoiosis/issues/46)**, the Play API evergreen — it is a headless-interface gap rather than a mission one, and it already had a home.
 - **The end-of-mission banner's three choices are untested.** `_end_mission` awaits `MissionEndBanner.show_banner`, and a button press cannot be given headlessly, so RETRY (reload + re-begin the turn), MISSION_SELECT (back to the front door) and STAY (unlock the board, mission stays over) are verified only in play. Coverage stops at the board reaching `MISSION_OVER` with input locked. *(The rest of `MissionController` IS covered as of 2026-07-29 — `tests/flow/test_mission_controller.gd`, 31 cases on a real game scene, pinning both latches, AND-composition, whole-zone capture, extraction counting the downed, declared-but-unpainted reading PENDING, and DEFEAT beating a met objective in the same pass; falsified against seven mutations, each caught by its own test. The "game scene segfaults in the runner" belief that had blocked this was false — see [#114](https://github.com/Phaazoid/Godoiosis/issues/114).)*
 - ~~**No mission-status UI.**~~ BUILT [#134](https://github.com/Phaazoid/Godoiosis/issues/134) (2026-08-11) — `MissionStatusPanel` shows every declared objective and its live progress. The prerequisite [#101](https://github.com/Phaazoid/Godoiosis/issues/101) fork D named is now in place.
 - **`CaptureAction`'s icon is a placeholder** (the board target marker).
 
 ## Not in scope for #96
 
-Campaign layer (mission ordering, unlocks, roster carried between missions, between-battle recovery) · objectives for non-player factions · story/briefing framing, rewards, acquisition · ~~**lose conditions beyond the last unit falling**~~ — the SEAM and the turn clock landed as [#101](https://github.com/Phaazoid/Godoiosis/issues/101) (2026-08-26, see *Losing on purpose* above); defend-a-point and protect-a-unit are their own issues.
+Campaign layer (mission ordering, unlocks, roster carried between missions, between-battle recovery) · objectives for non-player factions · story/briefing framing, rewards, acquisition · ~~**lose conditions beyond the last unit falling**~~ — the SEAM and the turn clock landed as [#101](https://github.com/Phaazoid/Godoiosis/issues/101) (2026-08-26, see *Losing on purpose* above); defend-a-point is [#571](https://github.com/Phaazoid/Godoiosis/issues/571) and protect-a-unit [#572](https://github.com/Phaazoid/Godoiosis/issues/572).
 
 ## What this unblocks
 
 - [#70](https://github.com/Phaazoid/Godoiosis/issues/70) — between-missions-only job swap, blocked purely because no mission-boundary concept existed (`set_main_job`/`set_sub_job` carry a `TODO(campaign layer)`).
 - [#87](https://github.com/Phaazoid/Godoiosis/issues/87) — the mid-battle-save split above. **BUILT 2026-07-30**; `restore_progress()` is the restore half, and `ScenarioData` now carries the captured zones, the `contested` latch and the round count (#101).
-- [#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions. **The seam and the turn clock are BUILT (2026-08-26, see *Losing on purpose* above)**, and they did reuse `check()` and the objectives list wholesale, exactly as predicted. What remains on that number is the conditions with geometry — defend-a-point and protect-a-unit — plus authorable OR-composition.
+- ~~[#101](https://github.com/Phaazoid/Godoiosis/issues/101) — lose conditions.~~ **BUILT and CLOSED 2026-08-26** (see *Losing on purpose* above); it did reuse `check()` and the objectives list wholesale, exactly as predicted. Its unbuilt half became [#571](https://github.com/Phaazoid/Godoiosis/issues/571) and [#572](https://github.com/Phaazoid/Godoiosis/issues/572).
 
 Cross-refs: [level-concepts.md](level-concepts.md) (the set-piece pool missions will draw from), [will-and-death.md](will-and-death.md) (why all-downed is terminal, and why extraction counts the downed), [ai-tactics.md](ai-tactics.md), [resolution-pipeline.md](resolution-pipeline.md) (the persistence seam).
