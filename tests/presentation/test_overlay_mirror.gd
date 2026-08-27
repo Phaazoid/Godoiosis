@@ -1097,8 +1097,13 @@ func test_an_armed_guards_ground_mark_reaches_the_3d_ward_channel() -> void:
 # _icons off icons_by_unit, the arrows ride _guard_links off guard_link_sprites — so a missing
 # branch takes exactly one of them out and the other keeps passing.
 func test_an_armed_guards_link_reaches_the_3d_view() -> void:
-	var pair := _squad_pair()
-	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
+	# Its own ADJACENT pair rather than _squad_pair, whose two units stand three cells apart: the
+	# link is drawn across one orthogonal step only, so that fixture correctly draws none. The
+	# shield case above can use it because a shield asks nothing about the gap.
+	var blocker := _spawn(PLAYER, Vector2i(2, 2))
+	var ward := _spawn(PLAYER, Vector2i(3, 2))
+	game.squad_manager.join_squad(ward, blocker.squad)
+	blocker.arm_guard(ward, blocker.get_guard_range())
 	game.refresh_guard_markers()
 	await _settle()
 
@@ -1108,6 +1113,24 @@ func test_an_armed_guards_link_reaches_the_3d_view() -> void:
 	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_LINK).size()).override_failure_message(
 			"the blocker→ward link never reached 3D — the board there still cannot say which unit "
 			+ "is covering which").is_equal(2)
+
+
+# The other side of that limit, and the reason it is a rule rather than an accident: the arrow atlas
+# has no tile for a diagonal or a gap, so _path_arrow_texture answers PATH_ERROR for both. A pair a
+# shove has dragged apart (or an authored guard_range above 1) therefore keeps its SHIELD and draws
+# no link, rather than laying a row of error tiles across the board. It goes red the day someone
+# widens the trail without deciding what a long link looks like.
+func test_a_pair_further_than_one_step_keeps_its_shield_and_draws_no_link() -> void:
+	var pair := _squad_pair()   # three cells apart, which is exactly the case under test
+	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
+	game.refresh_guard_markers()
+	await _settle()
+
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.GUARD_ICONS).size()).override_failure_message(
+			"the ward lost its shield too — the gap is the LINK's limit, not the mark's").is_equal(1)
+	assert_array(game.overlay_manager.guard_link_sprites).override_failure_message(
+			"a link was drawn across a gap the arrow atlas cannot spell, so it is PATH_ERROR tiles") \
+		.is_empty()
 
 
 # The Z-FIGHT, as a rule rather than a bug report. A layer IS a plane (_lift_of is

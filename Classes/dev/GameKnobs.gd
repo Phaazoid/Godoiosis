@@ -316,9 +316,6 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The arrow running from a bodyguard to the unit it is covering. Starts neutral white, so this picker is the whole colour rather than a shade over one baked into the art. Tune it against the arrow palette -- cyan already means a queued move, red a refused one, green a member falling behind. Takes effect on links already on the board."},
 	{"group": "Board markup colours", "label": "Guard ward shield", "static": "GUARD_RING_COLOR",
 		"tip": "The shield decal under the unit a Guard is protecting -- the other half of the mark the arrow above points at. Neutral white by default now the art is real."},
-	{"group": "Board markup colours", "label": "Guard ward shield size", "static": "GUARD_RING_SCALE",
-		"min": 0.5, "max": 2.0, "step": 0.05,
-		"tip": "How large that shield draws relative to its cell. 1.0 is one cell, the size the art was cut at -- above that it starts reaching over its neighbours."},
 
 	# The tile-pick flash (#116). A PERIOD and a peak ALPHA rather than a colour: the pick borrows
 	# the reach layer, whose hue is already the two knobs above, so a flash that set its own colour
@@ -582,7 +579,6 @@ static func read_static(name: String) -> Variant:
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
 		"GUARD_LINK_MODULATE": return OverlayManager.GUARD_LINK_MODULATE
 		"GUARD_RING_COLOR": return OverlayManager.GUARD_RING_COLOR
-		"GUARD_RING_SCALE": return OverlayManager.GUARD_RING_SCALE
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
@@ -654,7 +650,6 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
 		"GUARD_LINK_MODULATE": OverlayManager.GUARD_LINK_MODULATE = value
 		"GUARD_RING_COLOR": OverlayManager.GUARD_RING_COLOR = value
-		"GUARD_RING_SCALE": OverlayManager.GUARD_RING_SCALE = value
 		# Both are read when a pick OPENS, so there is never a standing flash to re-apply one to --
 		# SHOVE_SLIDE_SPEED's early-return reasoning, and why neither needs a sweep.
 		"PICK_FLASH_ALPHA": OverlayManager.PICK_FLASH_ALPHA = value
@@ -835,7 +830,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# arrow sprite. Both re-tint in place: neither store can rebuild a pair, since redrawing one
 		# needs the unit list and this manager has none.
 		"GUARD_LINK_MODULATE": manager.restyle_guard_link()
-		"GUARD_RING_COLOR", "GUARD_RING_SCALE": manager.restyle_squad_markers()
+		"GUARD_RING_COLOR": manager.restyle_squad_markers()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

@@ -129,6 +129,10 @@ const ICON_TEXTURES = {
 # The armed-Guard pair's ground mark (#414). Neutral by default now the art is real -- these stay as
 # the tuning knobs for how loud the mark is, not as a way of faking a distinct sprite.
 static var GUARD_RING_COLOR := Color.WHITE
+# NO Game-tab row, deliberately, where GUARD_RING_COLOR has one (#450): OverlayMirror._marker copies
+# a marker's texture and tint and NOT its scale, and 3D sizes a ground quad from its texture's own
+# pixels, so this moves the flat board and leaves the one the game boots into alone. A knob that
+# lies is worse than a missing one -- give the mirror a scale before giving this a slider.
 static var GUARD_RING_SCALE := 1.0
 # The blocker->ward arrow (#450). WHITE on purpose: the shared arrow art is desaturated, so the
 # tint IS the colour (the three planned-move knobs' own reasoning) and starting neutral leaves the
