@@ -1200,7 +1200,9 @@ could never have stacked beside the first. **The invalidation was already exerci
 invalid-in-red instead. **And a re-planned move goes to the BACK of the queue**, since displacement
 is remove-then-append; that is pre-existing and invisible today, and is written down here because
 [#412](https://github.com/Phaazoid/Godoiosis/issues/412) makes move order tactical, at which point
-drag-reorder is the escape hatch rather than a surprise.
+drag-reorder is the escape hatch rather than a surprise. **#412 shipped 2026-08-26 and that is now
+live on both counts**: re-planning a move still sends it to the back of the queue, and the MOVE
+section is draggable, so the escape hatch exists exactly where this note said it would need to.
 
 Two things deliberately did NOT change. **Move-before-main stands**: a unit holding a main action
 still loses the row, because `MoveAction.actor_can_perform` refuses the order at the chokepoint, so

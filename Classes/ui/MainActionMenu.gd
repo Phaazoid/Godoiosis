@@ -17,8 +17,9 @@ class_name MainActionMenu
 #
 #   MOVE    -- Move, Group Move
 #   ATTACK  -- the equipped KIT's verbs, each by ITS OWN NAME: a weapon's main and other attacks
-#              plus its self-verbs (Reload/Rev/Burrow), or a rune's carvings. The slice is LABELLED
-#              "Weapon" or "Rune" after what is equipped, never "Attack" -- see category_display.
+#              plus its self-verbs (Reload/Rev/Burrow) and its Overwatch row (#413), or a rune's
+#              carvings. The slice is LABELLED "Weapon" or "Rune" after what is equipped, never
+#              "Attack" -- see category_display.
 #   ACT     -- the main actions that are not kit use (Guard, Rescue, Rally, Capture, the
 #              ability-driven verbs) plus Wait, which spends the squad's turn the same way.
 #              Labelled "Action".
@@ -76,6 +77,7 @@ const GUARD := 19
 # INSPECT_GROUP is a category of ONE, holding the verb of the same name, which means the collapse
 # rule in build_tree hands it up as a plain terminal slice -- "Inspect is top level" (dev, #467
 # round 2) costs no new mechanism, just a group nobody else joins.
+#
 enum Group { MOVE_GROUP, ATTACK_GROUP, ACT_GROUP, SQUAD_GROUP, INSPECT_GROUP }
 
 # A category is a row the player hovers, so it owes a readout like any other (#135's law reaches
@@ -262,12 +264,13 @@ func _default_attack_children(unit: Unit) -> Array:
 	return [_attack_leaf(unit, atk)]
 
 
-# The equipped weapon's non-main attacks plus its self-verbs. Reload's LABEL is per-family
-# (a Springspear says "Spring Load", a Carbine says "Reload") while the order is one type.
+# The equipped weapon's non-main attacks, its Overwatch row, and its self-verbs. Reload's LABEL is
+# per-family (a Springspear says "Spring Load", a Carbine says "Reload") while the order is one type.
 func _weapon_children(unit: Unit) -> Array:
 	var children: Array = []
 	for atk: AttackData in unit.get_weapon_secondary_attacks():
 		children.append(_attack_leaf(unit, atk))
+	children.append_array(_overwatch_rows(unit))
 	if unit.can_reload_weapon():
 		children.append(_self_verb_leaf(unit.reload_label(), BaseAction.ActionType.RELOAD))
 	if unit.can_rev_weapon():
@@ -289,6 +292,28 @@ func _transmutation_children(unit: Unit) -> Array:
 	for atk: AttackData in unit.get_transmutation_choices():
 		children.append(_attack_leaf(unit, atk))
 	return children
+
+
+# Every watchable attack is its OWN ROW in the kit slice, never a submenu (dev, 2026-08-26: "The
+# Carbine will get 1 Overwatch action as a special weapon action. That's it. There will be no sub
+# menu.") -- clicking one picks that attack. A weapon carries exactly one today, and the day a mod
+# grants a second, "they will have their own special distinguishing names" (dev), which is also the
+# LABEL rule here: the weapon's own watch has no name but the verb, a granted one arrives with one.
+# The row greys with its attack's own reason, so a dry carbine says why it cannot stand watch --
+# #166's law, reached through the same door every attack row uses.
+func _overwatch_rows(unit: Unit) -> Array:
+	var rows: Array = []
+	for atk: AttackData in unit.overwatch_attacks():
+		var label: String = "Overwatch" if atk == unit.get_default_attack() else atk.display_name
+		rows.append(_synthetic_leaf(
+			_entry(label, unit.attack_block_reason(atk), Glossary.short(Glossary.Term.OVERWATCH)),
+			func(picking_unit: Unit) -> void: _pick_watch(picking_unit, atk)))
+	return rows
+
+
+func _pick_watch(unit: Unit, attack: AttackData) -> void:
+	unit.active_attack = attack
+	game.enter_overwatch_mode(unit)
 
 
 func _ability_children(unit: Unit) -> Array:

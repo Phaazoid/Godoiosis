@@ -148,6 +148,17 @@ static var GUARD_LINK_MODULATE := Color(1.0, 1.0, 0.9961, 0.6078)
 # number; ~0.7 clears the shield entirely, which is what the range above 0.5 is for.
 static var GUARD_LINK_HEAD_INSET := 0.4
 
+# The watched footprint's threat mark (#413). A per-CELL marker, deliberately not a filled-square
+# range layer (dev: "they shouldn't just be filled in squares") — a watch is a threat, not a reach
+# readout, and it has to read as one from across the board while every other range overlay is off.
+#
+# PLACEHOLDER ART: the board cursor's corner brackets, standing in for a crosshair cut nobody has
+# picked yet. Authored at ONE cell (16px) like every other board icon — a 32px cut is a four-cell
+# decal, which is how #414's ward mark first shipped and read as "the marker isn't showing up".
+const WATCH_MARK_TEXTURE := preload("res://Art/Icons/BoardIcons/CursorIcon.png")
+static var WATCH_MARK_COLOR := Color(1.0, 0.35, 0.25, 0.9)
+static var WATCH_MARK_SCALE := 1.0
+
 # --- Squad markers (#325, settled 2026-08-19) ----------------------------------------------
 # The dev played both styles and took a MIX: membership is a per-squad coloured RING underfoot,
 # leadership is the ORIGINAL crown over the head. The legacy green squares lost and are deleted --
@@ -200,6 +211,13 @@ const HEAD_ICON_Z_INDEX := 8  # the legacy squares' z; code re-asserts it so the
 
 var overlay_map = {}
 var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
+
+# The cells every live watch covers (#413) — THE store, written only by redraw_watch_marks. Both
+# views read it: the 2D sprites beside it, and OverlayMirror's Layer.WATCH_ICONS markers. A cell
+# rather than a unit anchors this markup, which is why it is not an OverlayIcon: an OverlayIcon
+# FOLLOWS its unit, and a watch's footprint is frozen geometry that deliberately does not.
+var watch_cells: Array[Vector2i] = []
+var _watch_sprites: Array[Sprite2D] = []
 
 # Puts the STANDING markers back after this manager clears the channel whole, injected by game (the
 # squad_manager.board_source idiom). A Callable that DRAWS rather than one that returns a squad
@@ -875,6 +893,71 @@ func restyle_guard_link() -> void:
 # The channel is cleared whole, so everything that should be on it after this call has to be drawn
 # by it: the STANDING set first, then the squad the caller is actually about (which may already be
 # in that set -- create_unit_icon is idempotent, so the overlap costs nothing).
+# Every armed, unspent watch on the board (#413), marked on every cell it covers, BOTH DIRECTIONS —
+# yours to the enemy and theirs to you. Axiom 4's telegraph: a watch is never a surprise, and the
+# victim staying undirected is what keeps it a puzzle rather than a warning label.
+#
+# `watch_cells` is THE store and this is its only writer; the 2D sprites below and OverlayMirror's
+# 3D markers are two projections of it, never two derivations (the parallel-stacks rule). Called
+# from the same three moments the ward markers are: a pass settling, a faction's turn starting, and
+# a board load.
+func redraw_watch_marks(units: Array[Unit]) -> void:
+	watch_cells = []
+	for unit in units:
+		if not is_instance_valid(unit) or unit.watch == null:
+			continue
+		if unit.watch.spent or not unit.watch.is_intact():
+			continue   # a spent watch threatens nobody; drawing it would promise a shot that is gone
+		# The ANCHOR rule, asked of the LIVE cell here because this draws settled state — the
+		# resolver asks the same predicate of a threaded one mid-pass. One rule, two positional
+		# sources, exactly as GuardWard.in_range is asked by three callers.
+		if not unit.watch.is_anchored(unit.movement.cell):
+			continue
+		for cell in unit.watch.footprint:
+			if not watch_cells.has(cell):
+				watch_cells.append(cell)
+	_rebuild_watch_sprites()
+
+# The 2D projection. Sprites rather than a tile layer because a TileMapLayer holds ONE tile per cell
+# and would evict whatever range fill is already there — the same rule that keeps target-pick marks
+# off the reach layer.
+func _rebuild_watch_sprites() -> void:
+	for sprite in _watch_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	_watch_sprites.clear()
+	if board_tilemap == null or icon_overlay == null:
+		return
+	for cell in watch_cells:
+		var sprite := Sprite2D.new()
+		sprite.texture = WATCH_MARK_TEXTURE
+		sprite.modulate = WATCH_MARK_COLOR
+		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+		# The ward mark's band: above terrain state and the squad rings, below units. Left at the
+		# default 0 this drew UNDER a frost icon and under a membership ring, i.e. the one marker
+		# you must not miss yielding to ambient markup -- #346's rule inverted.
+		#
+		# DECLARED 2D/3D ASYMMETRY (#292), from the #450 merge: 3D now sorts watch(10) above the ward
+		# LINK(9) and shield(8), but 2D has no integer left between this band(3) and the units(4), so
+		# all three sit here and tree order decides -- and ArrowIconOverlay is a later sibling than
+		# IconOverlay, so the link wins in 2D and the watch wins in 3D on a cell carrying both. Two
+		# 16px marks on one cell; a shared band is what #450's own comment already accepted for the
+		# shield. Fixing it means re-banding 2D markup, not tuning a number here.
+		sprite.z_index = RING_Z_INDEX + 1
+		sprite.position = board_tilemap.map_to_local(cell)
+		icon_overlay.add_child(sprite)
+		_watch_sprites.append(sprite)
+
+# Re-apply the tuned look to marks that are already standing (the GameKnobs sweep). Restyle rather
+# than rebuild: the CELLS have not moved, only how loud they are, and the 3D mirror reads the
+# statics directly so it needs nothing here.
+func restyle_watch_marks() -> void:
+	for sprite in _watch_sprites:
+		if not is_instance_valid(sprite):
+			continue
+		sprite.modulate = WATCH_MARK_COLOR
+		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])
 	standing_rings_drawer.call()

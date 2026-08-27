@@ -119,6 +119,16 @@ func execute_orders(unit):
 	if walker != null:
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
+	# The shots the walk walked into (#413), in trigger order, and BEFORE the tear-out below: a
+	# watch fires at a crossing CELL, which the diorama's stage set does not hold (it holds what MAIN
+	# ACTIONS touch), so lifting the ground first would play the shot over a hole. The board is where
+	# you move, and a watch shot is the tail of moving.
+	#
+	# DECLARED v1 CUT: the damage lands at the crossing moment in the RESOLVE -- that is where every
+	# number comes from -- but it plays back after the walk instead of interrupting it. A crosser the
+	# shot downed has already stopped at the crossing cell (MoveAction.walked_path), so what trails
+	# the fiction is the ORDER OF THE VISUALS, never the outcome. Interrupting the walk is #567.
+	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan))
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -162,6 +172,7 @@ func execute_orders(unit):
 	# The pass has settled, so this is where a Guard has finished arming (side channel) or been spent
 	# (an absorbed hit). One redraw for both (#414).
 	game.refresh_guard_markers()
+	game.refresh_watch_markers()   # a watch that fired, or one that just armed (#413)
 	# The pass has settled: this is where a mission is won or lost (#96, fork E). Before the
 	# squad-validity guard below -- a squad that wiped itself must not skip the check.
 	game.mission_controller.check()
@@ -322,6 +333,22 @@ func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: b
 # Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
 # that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
 # means "don't move", which is the right answer when there is nothing left to look at.
+# Who the camera frames for a triggered watch shot (#413) — the CROSSER, because the moment is
+# somebody walking into a line, not the watcher standing still. Built here rather than in BeatSheet:
+# a watch shot is not part of the plan the player authored, so it has no beat to read a subject off,
+# and one line of data beats teaching the sheet about a list it does not own. Keyed the way every
+# other schedule is — the volley's lead member — so a splashing shot still pans once.
+func _watch_subjects(plan: ResolvedPlan) -> Dictionary:
+	var subjects: Dictionary = {}
+	for shot in plan.watch_shots:
+		if shot.is_secondary_hit:
+			continue
+		var who: Unit = shot.triggered_by
+		if who != null and is_instance_valid(who):
+			subjects[shot] = who
+	return subjects
+
+
 func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	var subjects: Dictionary = {}
 	for beat in beats:

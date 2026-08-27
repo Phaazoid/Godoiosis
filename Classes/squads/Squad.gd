@@ -137,25 +137,31 @@ func _remove_volley(member: AttackAction) -> void:
 		_remove_action(sib)
 	member.volley.clear()                    # break the RefCounted cycle (see #35)
 
-# Reorder the stored ATTACK aims to follow the given actor order (one aim per unit — the AoE
-# volley is re-derived at resolve, so each row maps to its aim by actor). resolve_plan iterates
-# action_queue in order, so queue order IS combo order: this re-times the elemental combo
-# deterministically — a planned reorder, Law #2 intact. Non-attack orders keep their place.
-func reorder_attacks_by_actor(ordered_actors: Array) -> void:
-	var attack_aims: Array[BaseAction] = []
+# Reorder the stored orders of ONE type to follow the given actor order — one order per unit per
+# type, so each row maps to its order by actor (an AoE volley is re-derived at resolve; a main
+# action is mutually exclusive; a unit gets one move). resolve_plan iterates action_queue in order,
+# so queue order IS resolution order: this re-times the pass deterministically — a planned reorder,
+# Law #2 intact. Orders of every OTHER type keep their place, and so do the ones that answer
+# is_reorderable() false (the hold-position fillers).
+#
+# ONE seam for every draggable section (#412), not one per type: a queue-panel section IS an action
+# type, and queue order is the clock for all of them — combo timing for attacks, who eats a watch
+# for moves, which stacked Guard absorbs first for the side channel.
+func reorder_by_actor(action_type: BaseAction.ActionType, ordered_actors: Array) -> void:
+	var block: Array[BaseAction] = []
 	for action in action_queue:
-		if action.action_type == BaseAction.ActionType.ATTACK:
-			attack_aims.append(action)
-	if attack_aims.size() <= 1:
+		if action.action_type == action_type and action.is_reorderable():
+			block.append(action)
+	if block.size() <= 1:
 		return
-	attack_aims.sort_custom(func(a, b): return ordered_actors.find(a.actor) < ordered_actors.find(b.actor))
+	block.sort_custom(func(a, b): return ordered_actors.find(a.actor) < ordered_actors.find(b.actor))
 
 	var rebuilt: Array[BaseAction] = []
 	var inserted := false
 	for action in action_queue:
-		if action.action_type == BaseAction.ActionType.ATTACK:
+		if action.action_type == action_type and action.is_reorderable():
 			if not inserted:
-				rebuilt.append_array(attack_aims)   # drop the reordered block at the first attack slot
+				rebuilt.append_array(block)   # drop the reordered block at its first slot
 				inserted = true
 		else:
 			rebuilt.append(action)

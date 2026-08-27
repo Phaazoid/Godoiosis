@@ -31,7 +31,7 @@ enum Layer {
 	INVALID_MOVE, SQUAD, SQUAD_RANGE, AIM,
 	TARGET_PICK, PATH_ARROWS, KNOCKBACK, TERRAIN, TERRAIN_PREVIEW, ICONS,
 	ZONE_PATROL, ZONE_HIGHLIGHT, GROUND_ICONS, ATTACK_BLOCKED, SIGHT_TRACE,
-	GUARD_ICONS, GUARD_LINK,
+	GUARD_ICONS, GUARD_LINK, WATCH_ICONS,
 }
 enum Kind { FILL, BRACKET, SPRITE, BILLBOARD, LINE }
 
@@ -105,14 +105,24 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 	Layer.GUARD_ICONS: {"color": Color.WHITE, "sort": 8, "kind": Kind.SPRITE},
 	# The blocker->ward arrow (#450), and its own layer for the reason the shield above has one: a
 	# layer is a plane, and this trail's two cells are exactly the cells the shield, an aim fill, a
-	# target-pick mark, a path arrow or a sight trace can already be sitting on. 9 is the first slot
-	# free of all of them.
+	# target-pick mark, a path arrow or a sight trace can already be sitting on.
 	#
 	# ABOVE the shield rather than under it, which is a decision and not the leftover integer: the
 	# 2D draws these into ArrowIconOverlay, a later sibling than IconOverlay at the same z_index, so
 	# the arrowhead lands over the shield there whatever this number says -- and the two views must
 	# agree. Reverse BOTH (swap with 8, give the 2D link RING_Z_INDEX) if the head crowds the shield.
 	Layer.GUARD_LINK: {"color": Color.WHITE, "sort": 9, "kind": Kind.SPRITE},
+	# The watched-footprint threat mark (#413), and it takes a layer of its OWN for the same reason
+	# the ward mark did: a layer IS a plane, so a marker that can share a CELL with another marker
+	# must not share its sort. A watched cell can carry an aim fill (4), a target-pick marker (5), an
+	# arrow (6), a sight trace (7), a ward mark (8) and now the ward LINK (9) -- a warded pair
+	# standing in a watched line is an ordinary board state, not a corner case -- so 10 is the first
+	# sort free of all of them. #413 and #450 both landed on 9 on their own branches; this is the one
+	# that moved, because the link's 9 encodes a stated relationship to the shield's 8 and this does
+	# not care which side of the pair it sits on, only that it is not IN it.
+	# Colour stays WHITE here: OverlayMirror copies the 2D sprite's own modulate, which is the
+	# knob-tuned OverlayManager.WATCH_MARK_COLOR, so a second value here could only disagree with it.
+	Layer.WATCH_ICONS: {"color": Color.WHITE, "sort": 10, "kind": Kind.SPRITE},
 	# Sort 2, NOT above the arrows: the 2D is the authority and it puts terrain state at
 	# TERRAIN_Z_INDEX (above the board, below unit sprites) with arrows above it. At 6 this
 	# was the top of the table, so freeze icons drew over path arrows and planning ghosts.

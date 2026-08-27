@@ -2,7 +2,10 @@ extends Control
 class_name SquadActionQueueControl
 
 # The action-queue panel: renders a squad's plan as sectioned rows (via ActionQueueDisplayEntry)
-# with drag-reorder for attacks and the Execute button. Layout invariant (#160): the scene ROOT
+# with drag-reorder and the Execute button. A section IS an action type and a drag never leaves its
+# own section, so the sections are the pass's phase order and the rows inside one are its clock
+# (#412). Which rows may be dragged is the ORDER's answer, not this panel's -- see
+# ActionQueueRow.is_reorderable_row. Layout invariant (#160): the scene ROOT
 # is full-rect with mouse_filter IGNORE — never STOP, or it eats every board click — and
 # BackgroundPanel is anchored to the RIGHT edge so the dock follows a window resize; don't let
 # an editor resave quietly restore absolute offsets.
@@ -34,7 +37,7 @@ var _last_entries: Array[ActionQueueDisplayEntry] = []  # cached so a toggle re-
 signal execute_requested
 signal cancel_requested(action: BaseAction)
 signal row_hover_changed(action: BaseAction, hovering: bool)
-signal reorder_attacks_requested(ordered_actors: Array)
+signal reorder_requested(action_type: BaseAction.ActionType, ordered_actors: Array)
 
 func _ready() -> void:
 	execute_button.text = "Execute Orders"
@@ -87,7 +90,9 @@ func _render() -> void:
 						_make_row(current_list, entry.action, 0, true)   # single attack: draggable
 					i += group.size()
 				else:
-					_make_row(current_list, entry.action, entry.indent_level, false)
+					# Moves and the side-channel verbs drag too (#412) -- the order decides.
+					var row := _make_row(current_list, entry.action, entry.indent_level, entry.action.is_reorderable())
+					row.add_annotations(entry.annotations)
 					i += 1
 			_:
 				i += 1
@@ -256,13 +261,15 @@ func _end_drag() -> void:
 	_drag_dirty = false
 	set_process(false)
 
-	if dirty and is_instance_valid(section):
+	if dirty and is_instance_valid(section) and is_instance_valid(row) and row.action != null:
+		# A section holds ONE action type, so the dragged row names the type being resequenced.
+		var reordered_type: BaseAction.ActionType = row.action.action_type
 		var ordered_actors: Array = []
 		for sib in section.get_children():
 			var r := _row_in(sib)
-			if r != null and r.is_attack_row() and r.action.actor != null and not ordered_actors.has(r.action.actor):
+			if r != null and r.is_reorderable_row() and r.action.actor != null and not ordered_actors.has(r.action.actor):
 				ordered_actors.append(r.action.actor)
-		reorder_attacks_requested.emit(ordered_actors)
+		reorder_requested.emit(reordered_type, ordered_actors)
 		return
 
 	# No movement = a click. On a volley header, that toggles expand/collapse (UI-only re-render).

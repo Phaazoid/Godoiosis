@@ -54,6 +54,12 @@ enum VerticalRule { RANGED, MELEE }
 # shove the ward, AoE the cluster) and need no flag. On the shared base beside the two above, so a
 # weapon attack and a carving author it identically.
 @export var pierces_guard := false
+# May this attack be declared as a standing WATCH instead of fired (#413)? The capability lives on
+# the shared base so a carbine's WeaponAttackData and a transmutation carving ride one mechanism,
+# exactly like `heals` and `pierces_guard` before it. Authored stock on the carbines and
+# mod-grantable through WeaponModData.can_overwatch_override -- the watch is the attack, so nothing
+# about its geometry or payload is duplicated here.
+@export var can_overwatch := false
 func hits_map() -> bool:
 	return targets == EquippableData.TargetMode.MAP or targets == EquippableData.TargetMode.BOTH
 
@@ -105,4 +111,5 @@ static func property_tips() -> Dictionary:
 		"heals": "Reinterprets the damage number as HP restored instead. An attack is either damage or a heal, never both.",
 		"deals_no_damage": "Pure utility: scaling is suppressed, so neither aura nor a weapon's stat blend can sneak damage into a damageless effect. Mutually exclusive with Heals.",
 		"pierces_guard": "Ignores a Guard -- the hit lands on whoever it was aimed at, bodyguard or no.",
+		"can_overwatch": "May be declared as a standing WATCH: aim it now, and it fires on the first enemy who enters the aimed cells during someone else's turn. Fires once, then it is spent.",
 	}

@@ -207,7 +207,7 @@ func _wire_signals() -> void:
 
 	squad_action_queue_control.execute_requested.connect(_on_queue_execute_requested)
 	squad_action_queue_control.cancel_requested.connect(_on_queue_cancel_requested)
-	squad_action_queue_control.reorder_attacks_requested.connect(_on_queue_reorder_attacks)
+	squad_action_queue_control.reorder_requested.connect(_on_queue_reorder)
 	squad_action_queue_control.row_hover_changed.connect(hover_presenter.on_queue_row_hover_changed)
 	end_turn_button.end_turn_requested.connect(_on_end_turn_button_pressed)
 
@@ -464,8 +464,13 @@ func _click_attack_targeting(cell: Vector2i) -> void:
 			# #47: cells are the target. A legal aim is queueable whether or not a unit is
 			# there — victims (and terrain effects, #50) are derived at resolve time (#15).
 			# Store the AIM only (actor + aimed cell); null target = derived later.
-			var attack := AttackAction.declare(attacker, origin, cell)
-			squad_manager.queue_action(attacker.squad, attack)
+			# The one place the two aim verbs part company (#413): same legality, same stamp,
+			# different order. A watch aims and holds fire.
+			if aim_intent == AimIntent.WATCH:
+				queue_overwatch(attacker, cell)
+			else:
+				var attack := AttackAction.declare(attacker, origin, cell)
+				squad_manager.queue_action(attacker.squad, attack)
 	exit_current_mode() #TODO will need different logic later.  Show enemy stats before trying attack, not exit back to idle after attack, etc
 
 func _click_picking_target(cell: Vector2i) -> void:
@@ -487,6 +492,7 @@ func _click_picking_target(cell: Vector2i) -> void:
 func _on_turn_started(faction: Team.Faction):
 	_run_turn_start_ticks(faction)
 	refresh_guard_markers()   # the ticks lapsed this faction's Guards -- pull their markers with them
+	refresh_watch_markers()   # ...and its untriggered watches (#413)
 	# AFTER the ticks: melting ice can strand a squadmate across water it walked over while frozen
 	# (#151) -- the other way a squad splits without any move having authored it.
 	squad_manager.enforce_contact()
@@ -573,6 +579,7 @@ func _run_turn_start_ticks(faction: Team.Faction) -> void:
 		unit.advance_crisis_surge()
 		unit.tick_weapon_rev()
 		unit.lapse_guard()            # #414: last turn's Guard is gone BEFORE this turn's move phase
+		unit.lapse_watch()            # #413: and so is last turn's untriggered watch
 
 # The board is fully hands-off for the player while an AI faction resolves its turn, while the
 # end-of-mission card is up, and while Mission Select is up.
@@ -690,8 +697,21 @@ func enter_group_move_mode(unit: Unit):
 	overlay_manager.show_overlay(OverlayManager.OverlayType.MOVE, green, OverlayManager.ATLAS_COORDS)
 	overlay_manager.show_overlay(OverlayManager.OverlayType.INVALIDMOVE, red, OverlayManager.ATLAS_COORDS)
 
-func enter_attack_mode(unit: Unit):
+# What the aim being taken will PRODUCE (#413). Overwatch is declared through the normal targeting
+# flow — same reach, same facing, same overlay, same legality — and diverges at exactly one line:
+# which order the click queues. A second GameState would have been a second copy of the whole
+# aiming handler for one branch, so the mode carries the verb instead.
+enum AimIntent { FIRE, WATCH }
+var aim_intent: AimIntent = AimIntent.FIRE
+
+# Aiming a WATCH rather than a shot (#413). A named door so no caller has to reach through the
+# untyped `game` ref for the enum -- and so "declare an overwatch" reads as one act at the menu.
+func enter_overwatch_mode(unit: Unit):
+	enter_attack_mode(unit, AimIntent.WATCH)
+
+func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE):
 	game_state = GameState.ATTACK_TARGETING
+	aim_intent = intent
 	var aiming := unit.get_fired_attack()
 	# The reach layer is the whole range and NEVER changes. What an aim will actually affect is
 	# pulsed by HoverPresenter instead -- one tile per cell means any marker drawn here erases the
@@ -749,6 +769,7 @@ func set_dev_mode(active: bool):
 func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
+		aim_intent = AimIntent.FIRE   # the verb dies with the aim, same as the pick
 	overlay_manager.clear_target_pulse()
 	overlay_manager.clear_ring_pulse()
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
@@ -845,6 +866,13 @@ func queue_guard(guarding_unit: Unit, ward: Unit) -> void:
 	guard.init(guarding_unit, ward)
 	squad_manager.queue_action(guarding_unit.squad, guard)
 
+# The watch's declaration (#413). Stamps the aim and the chosen attack exactly as AttackAction.declare
+# does — a watch that re-picked its attack later would be a Law #2 break, not a convenience.
+func queue_overwatch(watching_unit: Unit, cell: Vector2i) -> void:
+	var watch := OverwatchAction.new()
+	watch.init(watching_unit, cell, watching_unit.get_fired_attack())
+	squad_manager.queue_action(watching_unit.squad, watch)
+
 # ==============================================================================
 #  The action-queue panel
 # ==============================================================================
@@ -890,14 +918,14 @@ func _cancel_stored_main_action(unit: Unit, squad: Squad) -> void:
 			squad_manager.remove_action(squad, action)
 			return
 
-func _on_queue_reorder_attacks(ordered_actors: Array) -> void:
+func _on_queue_reorder(action_type: BaseAction.ActionType, ordered_actors: Array) -> void:
 	if _board_locked_for_player():
 		return
 	var squad: Squad = squad_manager.active_squad
 	if squad == null or not is_instance_valid(squad):
 		return
-	squad.reorder_attacks_by_actor(ordered_actors)
-	refresh_action_queue(squad)   # re-resolve + redraw: the queue now reflects the new combo order
+	squad.reorder_by_actor(action_type, ordered_actors)
+	refresh_action_queue(squad)   # re-resolve + redraw: the queue now reflects the new order
 
 func refresh_action_queue(squad: Squad):
 	if squad == null:
@@ -1291,6 +1319,12 @@ func refresh_squad_rings() -> void:
 # for either end of a pair has to redraw them; see the call in refresh_action_queue).
 func refresh_guard_markers() -> void:
 	overlay_manager.redraw_guard_wards(_all_units())
+
+# The standing watches' footprints (#413). Its own door beside the ward one rather than folded into
+# it: the two channels answer different questions and are cleared independently, and a single
+# "refresh standing reactions" would be one name for two redraws that happen to fire together today.
+func refresh_watch_markers() -> void:
+	overlay_manager.redraw_watch_marks(_all_units())
 
 # ==============================================================================
 #  Board queries

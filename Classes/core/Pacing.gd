@@ -72,6 +72,7 @@ static var HOLD_REV := 0.15
 static var HOLD_BURROW := 0.25
 static var HOLD_CAPTURE := 0.5
 static var HOLD_GUARD := 0.35
+static var HOLD_OVERWATCH := 0.35
 
 # How much of a hold actually applies, per profile. BOARD ships at 0.0 -- flat, "small pauses
 # everywhere" (dev, 2026-08-26) -- so the shape exists but is dialled out rather than absent. That
@@ -154,6 +155,7 @@ static func coda_hold(type: BaseAction.ActionType) -> float:
 		BaseAction.ActionType.BURROW: return HOLD_BURROW
 		BaseAction.ActionType.CAPTURE: return HOLD_CAPTURE
 		BaseAction.ActionType.GUARD: return HOLD_GUARD
+		BaseAction.ActionType.OVERWATCH: return HOLD_OVERWATCH
 	return -1.0
 
 

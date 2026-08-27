@@ -45,6 +45,12 @@ enum Override { UNCHANGED, ON, OFF }
 # rearranging fitted mods must not change what an attack does (design law #1), and a safety device
 # a later mod could silently cancel is worse than no safety device at all.
 
+@export var can_overwatch_override: Override = Override.UNCHANGED
+# Whether the attacks applies_to names may be declared as a standing watch, overriding what each one
+# authored (#413) -- Watchman's Sear's original job. Same OFF-beats-ON composition as
+# hits_allies_override above and for the same reason: fitting order must never change what a weapon
+# can do. The base carbines author the capability themselves; this is the grant for everything else.
+
 @export var scaling_change: Dictionary[Stats.Stat, int] = {}
 # Percentage-POINT shifts against the blend of the family main attack this was authored against,
 # +/-, stacked additively across every fitted mod. Was `scaling_nudge` until #74 — the storage is
@@ -137,6 +143,7 @@ static func property_tips() -> Dictionary:
 		"added_element": "An element this mod adds ON TOP of whatever the attack already carries, on whichever attacks Applies To names. NONE = adds nothing.",
 		"knockback_delta": "Tiles this mod ADDS to the shove of the attacks it affects. Stacks with other mods; 0 changes nothing. A negative total is no shove, never a pull.",
 		"hits_allies_override": "Whether the attacks this mod affects splash allies, overriding what each attack authored. Unchanged leaves them alone. Off wins over On no matter which space each mod sits in, so rearranging your mods never changes what an attack does.",
+		"can_overwatch_override": "Whether the attacks this mod affects may be declared as a standing WATCH -- aimed now, fired on the first enemy who walks into the aimed cells. Unchanged leaves each attack's own setting alone; Off wins over On whichever space each mod sits in, same as ally splash above.",
 		"weight": "Mass this mod adds to the weapon. Counts whether or not the space is proficiency-active -- mass is physical, not a capability.",
 		"replaces_main": "Swaps out the weapon's MAIN attack -- the standard swing BECOMES this one. Counters, default aim and the weapon menu all follow it. Leave unset for a mod that does not change what the weapon swings.",
 		"granted_attacks": "Attacks this mod ADDS to the weapon's repertoire, alongside the family's stock list. To CHANGE the standard attack rather than add beside it, use Replaces Main. Pick from attacks authored in the Attack Editor.",

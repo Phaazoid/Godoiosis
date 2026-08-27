@@ -291,6 +291,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
 
+	# The watched footprint (#413). It has to read as a THREAT while every range overlay is off, and
+	# it is on screen for both sides at once, so its loudness is the one dial that decides whether
+	# the board is legible or a christmas tree. Tune it against the reach fills, not away from white:
+	# red already means a damaging reach, and a watch is a promise of exactly that.
+	{"group": "Board markup colours", "label": "Watch footprint (2D+3D)", "static": "WATCH_MARK_COLOR",
+		"tip": "The mark on every cell a standing Overwatch covers, yours and the enemy's alike. Always on screen while a watch is live, so this is the dial between 'unmissable' and 'noise'."},
+	{"group": "Board markup colours", "label": "Watch mark size", "static": "WATCH_MARK_SCALE",
+		"min": 0.25, "max": 2.0, "step": 0.05,
+		"tip": "How big the watch mark draws relative to its cell. 1.0 is one cell exactly, which is what the art is authored at; smaller reads as a tick in the middle of the tile."},
+
 	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
 	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
@@ -442,6 +452,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Playback", "label": "Hold: a guard arming", "static": "HOLD_GUARD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a bodyguard takes up station. Arms last in the pass, after every hit it was resolved against has played."},
+	{"group": "Playback", "label": "Hold: a watch arming", "static": "HOLD_OVERWATCH",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
+		"tip": "Extra time when a unit takes up an overwatch. Sits beside the guard hold -- both are a unit settling into a stance rather than doing something."},
 	{"group": "Playback", "label": "Hold: a burrow", "static": "HOLD_BURROW",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "Extra time when a unit digs itself cover."},
@@ -581,6 +594,8 @@ static func read_static(name: String) -> Variant:
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
+		"WATCH_MARK_COLOR": return OverlayManager.WATCH_MARK_COLOR
+		"WATCH_MARK_SCALE": return OverlayManager.WATCH_MARK_SCALE
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
@@ -614,6 +629,7 @@ static func read_static(name: String) -> Variant:
 		"HOLD_BURROW": return Pacing.HOLD_BURROW
 		"HOLD_CAPTURE": return Pacing.HOLD_CAPTURE
 		"HOLD_GUARD": return Pacing.HOLD_GUARD
+		"HOLD_OVERWATCH": return Pacing.HOLD_OVERWATCH
 		"SHOVE_SLIDE_SPEED": return MovementComponent.SHOVE_SLIDE_SPEED
 		"SHOVE_FALL_SPEED": return MovementComponent.SHOVE_FALL_SPEED
 		"VOID_PLUMMET_CELLS": return MovementComponent.VOID_PLUMMET_CELLS
@@ -654,6 +670,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
+		"WATCH_MARK_COLOR": OverlayManager.WATCH_MARK_COLOR = value
+		"WATCH_MARK_SCALE": OverlayManager.WATCH_MARK_SCALE = value
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
@@ -740,6 +758,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"HOLD_GUARD":
 			Pacing.HOLD_GUARD = value
+			return
+		"HOLD_OVERWATCH":
+			Pacing.HOLD_OVERWATCH = value
 			return
 		"SHOVE_SLIDE_SPEED":
 			MovementComponent.SHOVE_SLIDE_SPEED = value
@@ -848,6 +869,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# from itself -- redrawing needs the unit list. So this one goes back to the game's own door
 		# (#450 round 2), which is where every other write point already goes.
 		"GUARD_LINK_HEAD_INSET": _refresh_guard_markers(host)
+		# Written once when the marks are built, so a tuned value needs a re-apply or the slider moves
+		# and nothing on the board does (#264's born-dead slider).
+		"WATCH_MARK_COLOR", "WATCH_MARK_SCALE": manager.restyle_watch_marks()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

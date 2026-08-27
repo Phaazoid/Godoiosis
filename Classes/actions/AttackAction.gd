@@ -27,6 +27,14 @@ var fired_attack: AttackData = null
 # `target` is always the unit that actually takes the payload — the resolver rewrote it — so this is
 # an annotation for the readouts and the block lunge, never a second answer to "who is hit".
 var blocked_for: Unit = null
+# This hit is a triggered OVERWATCH shot (#413), not an authored attack. Annotation only — the shot
+# resolves as an ordinary derived attack in every respect; what reads this is presentation (the
+# queue hangs it on the crossing move's row) and the readouts.
+var is_watch_shot := false
+# Who ENTERED the watched cell to set this shot off (#413) — the crosser, not necessarily the
+# victim: a triggered shot is the attack, full stop, so its splash reaches bystanders too. Read by
+# the queue panel, which hangs every line of one shot on the crossing move's own row.
+var triggered_by: Unit = null
 
 var preview_sprites: Array[Node2D] = []
 
@@ -55,6 +63,13 @@ func execute():
 	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
 		finish_execution()
 		return
+
+	# The watch absorbs exactly one trigger, and THIS was it (#413). The ACTOR is the watcher, and
+	# only the LIVE watch is touched here — the resolver spent its own per-pass copy (R2). Placed
+	# above every remaining early-out and outside the target block, because a triggered shot that
+	# whiffs or lands on an empty cell has still been taken; lead volley member only.
+	if is_watch_shot and not is_secondary_hit:
+		actor.spend_watch()
 
 	# A UNIT attack whose target vanished this pass — nothing to hit, no lunge (unchanged).
 	# A null target is intentional (a cell attack) and falls through to the lunge.

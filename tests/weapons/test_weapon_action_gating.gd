@@ -63,3 +63,25 @@ func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
 	template.main_attack = WeaponAttackData.new()
 	unit.equipped_weapon = WeaponInstance.make(template)
 	assert_bool(unit.has_weapon_actions()).is_false()
+
+
+# #413 made Overwatch a WEAPON action, so the gate has a third clause -- and it follows the same
+# rule as the other two: a watchable attack the unit could fire RIGHT NOW opens the row, one it
+# cannot does not open it alone. Both halves, because the fireability filter IS the rule.
+func test_a_watchable_attack_opens_the_weapon_row_only_when_it_can_fire() -> void:
+	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHEMICAL_SPITTER   # the one family with no signature
+	template.main_attack = WeaponAttackData.new()
+	unit.equipped_weapon = WeaponInstance.make(template)
+	assert_bool(unit.has_weapon_actions()).is_false()   # the baseline: nothing to do in the slice
+
+	template.main_attack.can_overwatch = true
+	assert_bool(unit.has_weapon_actions()).is_true()
+
+	# The unfireable half: Blowback is the only watchable attack and the mace has no charge, so the
+	# row must stay shut -- it still LISTS, greyed, once a self-ability opens the slice.
+	var mace := _mace_unit()
+	var weapon := mace.get_equipped_weapon() as WeaponInstance
+	weapon.template.extra_attacks[0].can_overwatch = true
+	assert_bool(mace.has_weapon_actions()).is_false()

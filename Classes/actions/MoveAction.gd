@@ -10,6 +10,12 @@ var is_hold_position := false
 # falling behind. Set by GroupMoveSolver; the only thing that reads it is the arrow's colour.
 var is_trailing := false
 
+# Where this walk ACTUALLY ends, once the resolver has walked it (#413): an index into `path`, or -1
+# for "all the way". Written every resolve (PlanResolver.resolve_move), so it can never carry a
+# previous pass's verdict — GuardAction.resolved_spent's rule. A crosser an overwatch shot downs
+# stops at the crossing cell, and so does one it throws.
+var resolved_stop_index := -1
+
 const GENERIC_TILE := preload("res://Art/Icons/BoardIcons/GenericTileIcon.png")
 const MOVE_ICON := preload("res://Art/Icons/ActionIcons/MoveActionIcon.png")
 const HOLD_ICON := preload("res://Art/Icons/ArrowIcons/nomove.png")
@@ -42,13 +48,17 @@ func actor_can_perform() -> bool:
 	# resolve from the final position — no attack-then-flee).
 	return not actor.has_main_action_queued()
 
+func is_reorderable() -> bool:
+	# A hold is a filler nobody ordered and crosses nothing — resequencing it means nothing (#412).
+	return not is_hold_position
+
 func execute():
 	begin_execution()
 	# NOT clear_preview_sprites() here (#558, dev 2026-08-26: "have the arrow match the ghost's
 	# lifecycle"). The arrow stays up while the unit walks it and goes on ARRIVAL, with the ghost.
 	# The old clear was also only durable by luck: redraw_planned_paths rebuilds every arrow from
 	# planned_move_by_unit, which still named this unit, so any redraw during a pass put it back.
-	actor.movement.move_along_path(path)
+	actor.movement.move_along_path(walked_path())
 	
 	if actor.movement.moving:
 		await actor.movement.movement_finished
@@ -72,7 +82,19 @@ func get_target_texture() -> Texture2D:
 	return destination_texture
 	
 func get_destination() -> Vector2i:
-	return destination
+	return walked_path().back() if was_halted() else destination
+
+# The pass stopped this walk short of its destination (#413). Read by Unit.projected_cell as well as
+# by execution: a mover the shot HALTED did not walk out from under a shove, so the shove wins.
+func was_halted() -> bool:
+	return resolved_stop_index >= 0 and resolved_stop_index < path.size()
+
+# What the unit actually walks — the whole path, or the prefix a watch shot stopped it at. ONE
+# spelling, so the preview's destination and the playback cannot disagree (Law #2).
+func walked_path() -> Array[Vector2i]:
+	if not was_halted():
+		return path
+	return path.slice(0, resolved_stop_index + 1)
 	
 func clear_preview_sprites():
 	for sprite in preview:
