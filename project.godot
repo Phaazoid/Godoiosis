@@ -113,3 +113,90 @@ textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 textures/decals/filter=0
 2d/snap/snap_2d_transforms_to_pixel=true
+
+[shader_globals]
+
+water_deep_wave_speed={
+"type": "float",
+"value": 2.32
+}
+water_shallow_wave_speed={
+"type": "float",
+"value": 3.132
+}
+water_deep_wave_scale={
+"type": "float",
+"value": 4.4
+}
+water_shallow_wave_scale={
+"type": "float",
+"value": 7.48
+}
+water_deep_band_contrast={
+"type": "float",
+"value": 0.8
+}
+water_shallow_band_contrast={
+"type": "float",
+"value": 0.8
+}
+water_deep_ripple={
+"type": "float",
+"value": 1.86
+}
+water_shallow_ripple={
+"type": "float",
+"value": 1.86
+}
+water_deep_roughness={
+"type": "float",
+"value": 0.41
+}
+water_shallow_roughness={
+"type": "float",
+"value": 0.41
+}
+water_deep_specular={
+"type": "float",
+"value": 0.51
+}
+water_shallow_specular={
+"type": "float",
+"value": 0.51
+}
+water_deep_seam={
+"type": "float",
+"value": 0.12
+}
+water_shallow_seam={
+"type": "float",
+"value": 0.12
+}
+water_deep_body_shade={
+"type": "float",
+"value": 0.3
+}
+water_shallow_body_shade={
+"type": "float",
+"value": 0.18
+}
+water_shallow_bed={
+"type": "float",
+"value": 0.39
+}
+water_shallow_bed_color={
+"type": "color",
+"value": Color(0.6, 0.52, 0.38, 1)
+}
+water_shallow_bed_grain={
+"type": "float",
+"value": 1.5
+}
+water_shallow_caustics={
+"type": "float",
+"value": 1.35
+}
+water_shallow_caustics_scale={
+"type": "float",
+"value": 18.5
+}

@@ -242,6 +242,61 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Cover", "node": "BoardMirror", "prop": "cover_scale", "label": "Cover bump scale", "min": 0.0, "max": 2.0, "step": 0.01,
 		"tip": "How tall the mud bumps a dug-in Cover tile pops up stand, relative to the icon that draws them. 1.0 is the drawn size. Only the height changes: how many bumps there are and where they sit in the cell both come off the art."},
 
+	# --- Water (#552) ---
+	# World construction like Fire, not mood: a lake looks the same in every mission. These reach the
+	# shader as global uniforms rather than material parameters, so each row moves the whole board's
+	# water at once.
+	#
+	# EVERY value is PER TYPE (dev, 2026-08-27: "we need these dials separate for the different water
+	# types. Otherwise, I can't tune them separately."). It replaced a fixed RATIO living in the
+	# shader as constants -- a ratio between two authored things is itself an authored thing, so
+	# burying it made a feel value with no surface. What is NOT here: how much lighter shallow water
+	# is than deep. That is the two tiles' authored modulate, because it has to reach the flat view
+	# as well and a knob on this node structurally cannot.
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_wave_speed", "label": "Wave speed", "min": 0.0, "max": 4.0, "step": 0.01,
+		"tip": "How fast the light bands travel across deep water. Zero holds it still without flattening it -- the bands, the highlight and the body all stay, they simply stop moving."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_wave_scale", "label": "Wave scale", "min": 0.5, "max": 24.0, "step": 0.1,
+		"tip": "How tightly packed deep water's bands are, in radians per cell -- roughly how many crests cross one tile. Low reads as a slow open lake, high as choppy."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_band_contrast", "label": "Band contrast", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How much deep water's moving bands lighten the tile's own colour. The visible half of the motion; its twin, Ripple, is the half you only see in the highlight."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_ripple", "label": "Ripple", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard deep water's wave bends the surface normal, which is what makes the SUN's highlight travel rather than sit still. Zero leaves a mirror-flat surface that still shows bands."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_roughness", "label": "Roughness", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How diffuse deep water is. 1.0 is what every other ground uses and is why water had no specular response at all before #552. Tuned together with Specular and with the Moods tab's Sun elevation, which decides where the highlight falls."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_specular", "label": "Specular", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How strong deep water's highlight is once Roughness lets there be one. Roughness sets how TIGHT the highlight is, this sets how BRIGHT."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_seam", "label": "Cell seam", "min": 0.0, "max": 0.6, "step": 0.005,
+		"tip": "How darkly deep water draws its own cell boundaries. The waves run off world position so a lake is one continuous body, which erases the grid -- and on water the hover bracket is then the only thing showing where a tile ends. A deep expanse has nothing else breaking it up, so it usually wants more of this than shallow does."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much darker a deep block's WALLS and top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge."},
+
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_speed", "label": "Wave speed", "min": 0.0, "max": 6.0, "step": 0.01,
+		"tip": "How fast shallow water's bands travel. It also carries the CAUSTICS, whose speed is derived from this rather than taking a dial of its own -- it is the same water moving."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_scale", "label": "Wave scale", "min": 0.5, "max": 24.0, "step": 0.1,
+		"tip": "How tightly packed shallow water's bands are, in radians per cell. Shallow water reads as busier than deep at the same number, so this is usually the higher of the pair."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_band_contrast", "label": "Band contrast", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "How much shallow water's moving bands lighten the tile's own colour. Worth keeping lower than deep's once the bed is doing work -- bright hard bands over a visible bottom is what reads as ice."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_ripple", "label": "Ripple", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard shallow water's wave bends the surface normal, which is what makes the sun's highlight travel. High values scintillate, which fights the bed for attention."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_roughness", "label": "Roughness", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How diffuse shallow water is. Rougher than deep is the usual reading -- a wadeable shallows is broken up, not glassy."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_specular", "label": "Specular", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How strong shallow water's highlight is once Roughness lets there be one. A hard bright glint over a visible bottom is the ice reading; the bed wants to win here."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_seam", "label": "Cell seam", "min": 0.0, "max": 0.6, "step": 0.005,
+		"tip": "How darkly shallow water draws its own cell boundaries. Usually lower than deep's -- the bed's mottle already breaks shallow water up, so it needs less help showing where a tile ends."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much darker a shallow block's WALLS and top rim read than its surface. Less than deep's is the physical reading: there is less water above you to darken it."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bed", "label": "Bed", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much of the BOTTOM shows through. 0 is opaque water, 1 is clear. Deep water has no bed at all, and that asymmetry is most of how a wadeable tile is told apart from one that drowns you -- seeing the bed is also the difference between water and ICE."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bed_color", "label": "Bed colour",
+		"tip": "What the bottom is made of. Warm and desaturated is the point -- sand or silt under a cool surface is what reads as shallow WATER; a cool bed under a cool surface reads as a frozen pane. The water tints it on the way through, so this is the bed's own colour and not what you end up seeing."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_bed_grain", "label": "Bed grain", "min": 1.0, "max": 12.0, "step": 0.5,
+		"tip": "Pebble size on the bottom, in art pixels. 1 is per-pixel silt, which at a playing camera distance averages out to nothing -- that is exactly why the first Bed knob appeared to do nothing at all."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_caustics", "label": "Caustics", "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "The rippling net of light on the bottom. It MOVES while the bed under it stays nailed to the board, and that contrast is the whole depth cue -- ice moves all of itself or none of it, so this is the one thing a frozen surface structurally cannot fake."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_caustics_scale", "label": "Caustics scale", "min": 1.0, "max": 30.0, "step": 0.5,
+		"tip": "How tightly the light net is woven, in radians per cell. Low is a few broad shifting patches; high is a fine mesh. Worth keeping clearly different from Wave scale -- if the two agree, the bottom and the surface stop reading as separate layers."},
+
 ]
 
 # Board-markup values that are NOT node properties (#212 slice 2, moved here whole by #373). A
@@ -546,6 +601,12 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
 	"World": "World",
+	# Water took its OWN sub-tab once every dial went per type (#552): twenty-one rows under the prop
+	# lamps on World is a scroll rather than a panel. Two groups into one tab, and since a group draws
+	# its own heading inside a tab it reads as Water (deep) / Water (shallow) -- which is also why the
+	# split needs no third table, only a second group name.
+	"Water (deep)": "Water",
+	"Water (shallow)": "Water",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.

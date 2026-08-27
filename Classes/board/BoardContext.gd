@@ -37,15 +37,11 @@ func is_walkable(cell: Vector2i) -> bool:
 	# carry a bare grid with no TileSet, and ice-over-water is the one thing they need to answer.
 	if terrain_states != null and terrain_states.has_state(cell, Terrain.TileState.FROZEN):
 		return true
-	var tile_data: TileData = grid.get_cell_tile_data(cell)
-	if tile_data == null:
-		return false
-	# DECIDED (#109): a tile whose tileset doesn't declare `walkable` is NOT walkable. Without this
-	# guard get_custom_data raises "TileSet has no layer with name: walkable" and then returns Nil
-	# into a bool return — twice per call, per neighbour, inside the move-range BFS.
-	if not tile_data.has_custom_data("walkable"):
-		return false
-	return tile_data.get_custom_data("walkable")
+	# #109's rule (a tile that doesn't declare the flag is NOT walkable, and the guard that stops
+	# get_custom_data raising) lives in GridUtils.walkable_of since #552, because the meshlib
+	# generator asks the same question of a tileset with no board. The STATE half above is what
+	# stays here: it is the half that needs a cell.
+	return GridUtils.walkable_of(grid.get_cell_tile_data(cell))
 
 # Which unit ends up here once the plan resolves — the inverse of Unit.get_projected_destination,
 # derived from it (#105). Reads THIS board's own unit list, so the rules never resolve a cell
