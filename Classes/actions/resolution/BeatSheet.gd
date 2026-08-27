@@ -126,9 +126,18 @@ var beats: Array[Beat] = []
 # by construction, so they are never gathered separately.
 var cast: Array[Unit] = []
 
-# Every cell the fight touches: attacker origins, aimed cells, whole knockback flights and their
-# landings, terrain deposits, and the standing cell of any cast member none of that mentions.
-# Slice #521's tear-out set is exactly this, computed once here rather than again there.
+# Every cell a MAIN ACTION touches: attacker origins, aimed cells, whole knockback flights and their
+# landings, terrain deposits, and the actor and target of every side-channel verb. Slice #521's
+# tear-out set is exactly this, computed once here rather than again there.
+#
+# MOVEMENT CONTRIBUTES NOTHING, and that is the rule rather than an omission (dev, 2026-08-26):
+# *"there have to be main actions at play. Movement by itself doesn't do it."* This used to sweep
+# every cast member's standing cell, so a pass that only walked tore holes in the board with no
+# fight in it. An attacker's post-move cell is still here -- it IS origin_cell.
+#
+# The tear-out's GATE therefore falls out of the set rather than being a second rule: no main
+# actions means no cells means nothing lifts. Whether a NON-fighter's ground comes along for
+# context is #521's own feels-test flag, which the cast sweep was a second answer to.
 var cells: Array[Vector2i] = []
 
 
@@ -314,9 +323,22 @@ func _gather_cells(plan: ResolvedPlan) -> void:
 			_mark(out.knockback_to, seen)
 	for effect in plan.cell_effects:
 		_mark(effect.cell, seen)
-	# A squadmate who neither acts nor is hit is still on stage, so its ground is torn out too.
-	for unit in cast:
-		_mark(unit.get_projected_destination(), seen)
+	# ...and the side-channel verbs, which are main actions too: a rescue tears out the ground the
+	# body is lifted from as much as a swing tears out the ground it lands on.
+	#
+	# Asked of is_main_action() rather than of SIDE_CHANNEL_ORDER membership, which today is
+	# MAIN_ACTION_TYPES minus ATTACK and so would give the same answer -- nothing pins that the two
+	# lists must keep agreeing, and the rule is about MAIN ACTIONS.
+	for beat in beats:
+		if beat.kind != Kind.CODA:
+			continue
+		for action in beat.actions:
+			if not action.is_main_action():
+				continue
+			_mark(action.actor.get_projected_destination(), seen)
+			var target := action.aimed_at()
+			if target != null and is_instance_valid(target):
+				_mark(target.get_projected_destination(), seen)
 
 
 func _mark(cell: Vector2i, seen: Dictionary) -> void:

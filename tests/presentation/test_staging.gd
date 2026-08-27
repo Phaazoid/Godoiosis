@@ -41,6 +41,7 @@ func before_test() -> void:
 func after_test() -> void:
 	BoardSpace.reset_for_test()
 	PlayerSettings.reset_for_test()
+	Experiments.reset_for_test()   # a flag a case SET is a static that outlives it (#449)
 	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
 	get_tree().root.remove_child(_scene)
 	_scene.free()
@@ -199,7 +200,7 @@ func test_markup_on_torn_out_ground_goes_up_with_it() -> void:
 func test_a_pass_tears_the_fight_out_and_puts_the_board_back() -> void:
 	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
 	var unit := _a_unit()
-	_queue_a_move(unit)
+	_swing_at_open_ground(unit)
 	var before := BoardSpace.staging_version
 
 	await _game.order_executor.execute_orders(unit)
@@ -219,7 +220,7 @@ func test_a_pass_tears_the_fight_out_and_puts_the_board_back() -> void:
 # case says "the fight's ground, nobody else's" rather than naming cells.
 func test_the_tear_out_set_is_the_fights_ground_and_not_the_whole_board() -> void:
 	var unit := _a_unit()
-	_queue_a_move(unit)
+	_swing_at_open_ground(unit)
 	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
 	var sheet := BeatSheet.read(unit.squad, plan)
 	assert_array(sheet.cells).override_failure_message(
@@ -244,6 +245,81 @@ func test_the_tear_out_set_is_the_fights_ground_and_not_the_whole_board() -> voi
 			"the plain board tore the fight out anyway").is_empty()
 
 
+# WALKING TEARS OUT NOTHING (dev, 2026-08-26: *"there have to be main actions at play. Movement by
+# itself doesn't do it."*). Driven end to end through the real executor, since the rule is about
+# what a PASS does -- and reported in play, not reasoned about: the version that shipped tore a hole
+# in the board at the end of every move.
+#
+# The cinematic is deliberately ON, so this cannot pass for the profile gate's reason.
+func test_walking_tears_out_nothing() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+	var unit := _a_unit()
+	_queue_a_move(unit)
+	assert_int(unit.squad.action_queue.size()).override_failure_message(
+			"fixture drifted: no move was queued, so this case cannot fail").is_greater(0)
+	var before := BoardSpace.staging_version
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"a pass with nothing but movement in it tore out the board").is_equal(before)
+
+
+# THE WALK HAPPENS ON THE BOARD; the fight is what tears out. An attacker's origin_cell IS its
+# post-move cell, so staging before the move phase makes it walk toward a hole and pop into the sky
+# on arrival -- which is why the tear-out sits AFTER _execute_action_phase_parallel.
+#
+# Sampled every frame rather than asserted at the end, because the ordering is only observable
+# WHILE the pass runs: execute_orders is started without awaiting, and executing_plan is the
+# published "a pass is running" fact that bounds the loop. Both are read, never driven.
+func test_the_tear_out_waits_for_the_walk_to_finish() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+	var mover := _a_mobile_unit()
+	assert_object(mover).override_failure_message(
+			"fixture: no unit on this board can move").is_not_null()
+	_queue_a_move(mover)
+	_swing_at_open_ground(mover)     # a MAIN action, or nothing would tear out at all
+	var before := BoardSpace.staging_version
+
+	var saw_walking := false
+	var staged_mid_walk := false
+	_game.order_executor.execute_orders(mover)   # deliberately NOT awaited
+	while _game.order_executor.executing_plan != null:
+		if mover.movement.moving:
+			saw_walking = true
+			if BoardSpace.staging_version != before:
+				staged_mid_walk = true
+		await await_idle_frame()
+	await _settle()
+
+	# Non-vacuity: a walk that never spanned a frame would make the assertion below free.
+	assert_bool(saw_walking).override_failure_message(
+			"the mover was never observed walking, so this case cannot fail").is_true()
+	assert_bool(staged_mid_walk).override_failure_message(
+			"the ground tore out from under a unit that was still walking to it").is_false()
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"the pass never staged at all, so the ordering was not exercised").is_greater(before)
+
+
+# ...and the bystanders flag does NOT get to reopen that. It widens WHAT comes along once a fight
+# is on stage; it is not a second answer to WHETHER one is, which is why _stage_the_fight asks the
+# gate before adding anything. Written because the first draft asked it after, so switching the
+# feels-test on would have put move-only passes back in the sky.
+func test_the_bystanders_flag_does_not_put_a_walk_on_stage() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+	Experiments.set_on(Experiments.Flag.DIORAMA_BYSTANDERS, true)
+	var unit := _a_unit()
+	_queue_a_move(unit)
+	var before := BoardSpace.staging_version
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"the feels-test flag tore out a pass with no main action in it").is_equal(before)
+
+
 # THE LAW #521 asks for: with the cinematic off, displacement is provably zero EVERYWHERE. Read off
 # the seam directly -- never off a mirror, which something rebuilds every frame and would report
 # zero for a reason of its own. The version is asserted too, so "nothing was displaced" cannot pass
@@ -251,7 +327,7 @@ func test_the_tear_out_set_is_the_fights_ground_and_not_the_whole_board() -> voi
 func test_with_the_cinematic_off_a_pass_displaces_nothing_at_all() -> void:
 	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
 	var unit := _a_unit()
-	_queue_a_move(unit)
+	_swing_at_open_ground(unit)
 	var before := BoardSpace.staging_version
 
 	await _game.order_executor.execute_orders(unit)
@@ -290,12 +366,34 @@ func _column_of(map: GridMap, cell: Vector2i) -> Array[int]:
 	return items
 
 
+func _a_mobile_unit() -> Unit:
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null:
+			continue
+		var reachable: Array[Vector2i] = _game.get_move_range(_game.compute_move_range(unit), unit)
+		if not reachable.is_empty():
+			return unit
+	return null
+
+
 func _a_unit() -> Unit:
 	for child in _game.units_root.get_children():
 		var unit := child as Unit
 		if unit != null:
 			return unit
 	return null
+
+
+# #47's swing at open ground: a legal aim with no unit on the cell, which resolves and PLAYS. The
+# cheapest MAIN ACTION this suite can stage without asking what the board contains (the content
+# razor) -- every alternative needs an enemy standing in reach. _queue_action is the raw door,
+# since the queue-time whiff gate would refuse an aim at nobody and what is staged here is a pass.
+func _swing_at_open_ground(attacker: Unit) -> void:
+	# The PROJECTED cell, so this is still a legal aim when a move is queued ahead of it -- an aim
+	# stamped from the pre-move cell would be refused and the whole pass with it.
+	var origin: Vector2i = attacker.get_projected_destination()
+	attacker.squad._queue_action(AttackAction.declare(attacker, origin, origin + Vector2i(1, 1)))
 
 
 # The production door game._click_choosing_move uses, minus the click.

@@ -100,14 +100,6 @@ func execute_orders(unit):
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
 
-	# THE TEAR-OUT (#521): the ground this fight happens on lifts off the board into a diorama, and
-	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, and
-	# already documented there as this ticket's -- so there is no second answer to what is on stage.
-	#
-	# Gated on the PROFILE, which is what makes "displacement is provably zero with the cinematic
-	# off" a property rather than a promise. A pass with nothing to tear out stages nothing.
-	_stage_the_fight(sheet, profile)
-
 	# The camera goes to the walk and the walk WAITS for it (#520, dev 2026-08-26). Moves are
 	# parallel, so one subject is framed -- the leader when the leader is walking -- and pan_to's
 	# closing follow() carries the camera along beside it for free. No hold here: the pan IS the
@@ -117,6 +109,20 @@ func execute_orders(unit):
 	if walker != null:
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
+
+	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
+	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
+	# is no second answer to what is on stage -- and it holds only what MAIN ACTIONS touch, which is
+	# the dev's rule: *"there have to be main actions at play. Movement by itself doesn't do it."*
+	#
+	# AFTER the walk, not before it, and that is forced by the same rule: an attacker's origin_cell
+	# IS its post-move cell, so tearing out at the top of the pass makes it walk toward a hole and
+	# pop into the sky on arrival. The board is where you move; the diorama is where you fight.
+	#
+	# Gated on the PROFILE too, which is what makes "displacement is provably zero with the cinematic
+	# off" a property rather than a promise.
+	_stage_the_fight(sheet, profile)
+
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
@@ -270,7 +276,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 func _stage_the_fight(sheet: BeatSheet, profile: Pacing.Profile) -> void:
 	if profile != Pacing.Profile.CINEMATIC:
 		return
+	# THE GATE, and it is asked of the FIGHT's cells BEFORE any bystander is added -- an empty sheet
+	# means no main actions, which is the whole rule. Asking after would let the feels-test flag put
+	# a move-only pass back on stage, i.e. re-create the exact thing it is there to be judged next to.
 	var cells: Array[Vector2i] = sheet.cells.duplicate()
+	if cells.is_empty():
+		return
 	if Experiments.is_on(Experiments.Flag.DIORAMA_BYSTANDERS):
 		var on_stage: Dictionary[Vector2i, bool] = {}
 		for cell in cells:
@@ -283,8 +294,6 @@ func _stage_the_fight(sheet: BeatSheet, profile: Pacing.Profile) -> void:
 			if not on_stage.has(cell):
 				on_stage[cell] = true
 				cells.append(cell)
-	if cells.is_empty():
-		return
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
 
 
