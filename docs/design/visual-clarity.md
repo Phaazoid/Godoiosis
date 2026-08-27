@@ -107,7 +107,7 @@ you read it *afterwards*. Both are #44 children.
   takes it away; the dev's words were *"parts are too fast, but others are too slow."*
 
   **`Classes/core/Pacing.gd` is the one seam — a tuning table, not a system**, in the shape of
-  `UiLayers`: five constants with exactly one reader each (`AI_SQUAD_PAN`, `AI_PLAN_READ`,
+  `UiLayers`: five constants at the time, each with exactly one reader (`AI_SQUAD_PAN`, `AI_PLAN_READ`,
   `AI_ACTION`, `PLAYER_ACTION`, `TURN_HANDOFF`), plus `beat(host, seconds)`, which every pause routes
   through. The two pre-existing numbers moved onto it rather than being duplicated — the pan's
   default arg, and `game.start_faction_turn`'s hardcoded `create_timer(1.0)`, whose TODO read
@@ -118,6 +118,10 @@ you read it *afterwards*. Both are #44 children.
     free — the parallel move phase, then each side-channel batch — so there is no separate
     between-phases pause to keep in sync, and no trailing pause before the squad's turn ends. An
     empty batch returns early, so a phase with nothing in it costs nothing.
+    *(**"Never after" was REPEALED 2026-08-27** — see *The camera STAYS* below. It was written when
+    a beat had nothing worth watching on its way out; health-cube debris is what made a trailing
+    pause a feature rather than dead air. The rest of this bullet stands: the hold still lands
+    before, and it is still what spaces the phases.)*
   - **AI and player are two values off one read.** `execute_orders` keys on the same
     `is_ai_faction` call its invalid-plan concede already makes (#103), so a hotseat faction with AI
     off is a *human* and paces like one. `PLAYER_ACTION` is **0.0** by dev call (2026-08-10): an AI
@@ -128,7 +132,7 @@ you read it *afterwards*. Both are #44 children.
 
   **The headless escape in `beat()` is a safety property, not a convenience** (same gate
   `ReportUploader.is_configured` and `BugReporter.capture_frame` use): `execute_orders` is awaited
-  directly by nine test call sites, so a literal timer at an await site would put real wall clock on
+  directly by 34 test call sites across 12 suites (nine at #118; measured again 2026-08-27), so a literal timer at an await site would put real wall clock on
   every case that resolves a plan. `pan_to` got the same escape and snaps instead of tweening —
   `tests/ai` went **19.0s → 7.5s** on that alone. `play/play_session.gd` is untouched and stays at
   zero unconditionally; it is the synchronous mirror by design.
@@ -1411,6 +1415,92 @@ is exactly what separates the four calls from the three, and it is what every mu
 One live interaction the change surfaced: **the pointer re-picks on camera movement** (#471), so
 the cell under a motionless cursor legitimately changes while the rig is in the air — a SPACE case
 must read the cell it acted on *before* the flight, not after.
+
+## The camera STAYS ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2b slice 2, BUILT 2026-08-27)
+
+Three findings from one play-check, two of them the same bug.
+
+**Every pause in the game landed BEFORE its action** — `_execute_action_sequence`'s own comment said
+so, and it was right when it was written. Then health readouts gained debris. `AttackAction.execute`
+does await its lunge, its block, the knockback slide and the plummet — but the cube burst is thrown
+by `UnitMirror`'s own per-frame HP poll (and by `unit_died` for a death, because `die()` emits and
+`queue_free`s in one frame), flies on `HealthBlockDebris`'s own clock, and **nothing anywhere holds a
+reference to it.** So the last counter killed someone and the pass cut away mid-explosion — the dev's
+report, widened by his own ruling to *"every action action kind... even basic attacks knock away
+health cubes and we want that focused too."*
+
+**`linger_for` mirrors `hold_for` clause for clause**, with two deliberate differences.
+
+- **It is FLAT** — no profile, no `is_ai`, not multiplied by `drama_of`. A hold is *anticipation* and
+  scales with how dramatic you want the pass; a linger is matched to an ANIMATION that runs in real
+  time whichever profile is live. Drama-scaling it would give the plain board none at all
+  (`BOARD_DRAMA` ships at 0.0), which is the instant cut it exists to close. `linger_for` is the one
+  line that would fork if the board ever wants its own pace.
+- **Its volley branch has ONE rung** where the hold's has five: what makes a beat longer to *watch*
+  is how much debris it threw, and only a death empties the grid. A shove's slide and a plummet are
+  already awaited inside `execute`, so they are not waiting this needs to invent.
+
+**`_beat_lingers` keys on the beat's LAST surviving member** where its three sibling schedules key on
+the first. That is the whole of *one blast is one moment however many it hits*: a volley pans and
+holds at its opening action, plays every member, and lingers once after the final one. Keying both
+ends on `[0]` puts the pause between the first hit and the second.
+
+**The await is REASONED, NOT PINNED, and says so at the call site.** `Pacing.beat` returns without
+awaiting in a headless run — the escape that keeps every resolve-pass test off the wall clock — so
+deleting the `await` leaves the whole suite green. **Measured, not assumed: 86 cases across four
+suites passed with the linger computed and never awaited.** That is a property of the suite rather
+than of the line, and `clear_guard_preview` three phases up already carries the same declaration for
+the same reason. What *is* pinned is the table and the schedule.
+
+### The ladder gained a floor
+
+`HOLD_ATTACK`, and `hold_for`'s volley branch seeds from it instead of `0.0`. The dev found it as a
+missing control — *"I don't see controls for holding the most common thing, a regular attack"* — and
+it was worse than missing: a hit that only did damage earned `hold = 0` and took the bare base beat,
+which also left every other rung a number with no zero point to be read against.
+
+**It is not in `coda_hold`.** That answers for side-channel *verbs*, and `ActionType.ATTACK` is
+deliberately its "undeclared" example (`test_an_undeclared_verb_never_shortens_the_beat`). Attack is
+an entry of the panel's Actions list; in the code its numbers live in the volley branch. Different
+lookups, same page.
+
+### The Playback page, in six sections
+
+Thirty flat rows, of which fifteen said `Hold:` and were really two different questions — six
+*outcomes* of an attack, nine per-*verb* numbers — and half of which did nothing depending on a
+setting the panel never mentioned. His fix, and it is the right one: *"an actions section, where
+there's a dropdown with each action in it, so if we ever add more tuners per action it doesn't bloat
+the page."*
+
+**The sections cost no machinery.** `GROUP_TABS` already maps several groups onto one tab (Water does
+it) and `_add_heading` already fires per group, so a section is a group name — The profile / Actions
+/ Outcomes / Camera travel / The tear-out / Motion — and the only requirement is that a group's rows
+stay contiguous in the table, since that order *is* the section order.
+
+**A battle-zoom toggle sits at the top and writes the real `PlayerSettings` value.** The first dev
+tool to write one. It is not a knob row and cannot be: a `PlayerSettings` value has none of
+`KnobSource`'s three save shapes and needs no Save, the store being its own persistence. Writing the
+real setting is what stops the panel drifting from what the player gets — and it doubles as the
+page's profile filter, which is what kills the born-dead slider: **you always tune the mode you are
+watching**, and a row that would move nothing is not in front of you.
+
+**The `zoom off` / `zoom on` pairs were never a binary.** They are one dial measured under each of
+two live play modes, and showing both branches of a fork at once is what made them unreadable. The
+page shows one column. The base beat is the ragged cell — zoom-off forks again on whose pass it is,
+zoom-on does not — and it stays in The profile rather than Actions, per his ruling that *"a base
+value all these sliders execute against shouldn't be tied to one of the actions."*
+
+**EVERY ROW IS STILL BUILT; the filter only sets `visible`.** Load-bearing rather than lazy: the
+panel laws walk the whole tree for a row per knob and never ask about visibility, so building on
+demand fails them for every row not currently showing — confirmed by mutation, which reds with
+*"has no row in the panel at all — the filter is not building it"*. `TileBrushTool._set_paint_mode`
+is the same idiom one panel over; `GameTool` and `MoodsTool` had only ever torn down and rebuilt, so
+`DevWidgets.add_knob_row` now returns the span it appended.
+
+**A completeness law covers the surface, which neither existing law could see.** `coda_hold`'s law
+proves a verb has a *number*; it cannot prove the dev can *reach* it, and ATTACK fell through exactly
+that gap. So every `MAIN_ACTION_TYPES` member must now have a hold row, a linger row, and a place in
+the Action picker.
 
 Still open on #520: the impact layer (pitch driver, shake, micro-sway) and the follows (knockback,
 cliff) — the rest of diff 2b — and lethality-aware direction (diff 2c).
