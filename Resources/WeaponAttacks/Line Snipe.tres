@@ -1,14 +1,21 @@
 [gd_resource type="Resource" script_class="WeaponAttackData" format=3]
 
 [ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="1_e0www"]
+[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_w8rux"]
+
+[sub_resource type="Resource" id="Resource_bjgfl"]
+script = ExtResource("1_w8rux")
+length = 5
 
 [resource]
 script = ExtResource("1_e0www")
 elemental_damage_type = 3
-display_name = "Line Snipe"
-power = 5
-hits_allies = true
 scaling_blend = Dictionary[int, int]({
 4: 40,
 5: 60
 })
+display_name = "Line Snipe"
+power = 5
+attack_pattern = SubResource("Resource_bjgfl")
+hits_allies = true
+can_overwatch = true

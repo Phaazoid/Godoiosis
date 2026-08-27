@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WeaponModData" format=3]
+
+[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="1_hqo4d"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="2_8p4f5"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Line Snipe.tres" id="3_uje83"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="4_wkoxx"]
+
+[resource]
+script = ExtResource("4_wkoxx")
+display_name = "Line Sniper"
+power_delta = 5
+granted_attacks = Array[ExtResource("2_8p4f5")]([ExtResource("3_uje83")])

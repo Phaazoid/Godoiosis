@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3]
+
+[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_un2vx"]
+[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_4te43"]
+[ext_resource type="Resource" path="res://Resources/WeaponMods/Line Sniper.tres" id="3_hjk44"]
+[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="4_nx3jn"]
+
+[resource]
+script = ExtResource("1_un2vx")
+template = ExtResource("4_nx3jn")
+spaces = Array[Array]([Array[ExtResource("2_4te43")]([ExtResource("3_hjk44")]), Array[ExtResource("2_4te43")]([]), Array[ExtResource("2_4te43")]([])])
+display_name = "Super Scoper"
