@@ -164,6 +164,14 @@ func test_frame_snaps_the_camera_rather_than_easing_to_it() -> void:
 	var rig := _rig()
 	rig.frame(AABB(Vector3.ZERO, Vector3(50, 1, 50)))
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
+	# ...and the AIM, which is the half this case stopped covering the moment #520 made position an
+	# eased channel: the NAME claimed all three axes while the body asserted one, so a frame()
+	# routed through glide_to passed the whole suite. FOUND BY MUTATION, not by reasoning.
+	# Asserted as "nothing is left to ease" rather than as a coordinate, so the fit stays derived.
+	assert_that(rig._aim).override_failure_message(
+			"frame() eased toward the fit instead of landing on it -- every screen-space read taken " \
+			+ "on the way in unprojects at one place and picks at another") \
+		.is_equal(rig._target_aim)
 
 
 func test_frame_adopts_the_fit_as_home_so_reset_returns_to_it() -> void:
@@ -205,7 +213,9 @@ func test_pose_lands_the_camera_exactly_where_it_was_authored() -> void:
 	assert_float(_camera().position.z).is_equal_approx(16.0, 0.001)
 
 
-func test_pose_snaps_both_smoothed_axes_rather_than_easing_to_them() -> void:
+# RENAMED for #520 diff 2b: it was "..._both_smoothed_axes_...", and position became a third one.
+# A name that undercounts what it covers is the same blind spot the frame() case above had.
+func test_pose_snaps_every_smoothed_axis_rather_than_easing_to_them() -> void:
 	# frame()'s reason, applied to yaw as well: a rig still lerping unprojects at one basis
 	# and picks at another. Deliberately NOT awaiting a frame — the smoothing would hide it.
 	var rig := _rig()
@@ -216,6 +226,9 @@ func test_pose_snaps_both_smoothed_axes_rather_than_easing_to_them() -> void:
 			"yaw is still easing toward the authored pose — screen-space reads desync on the way" \
 			).is_equal_approx(130.0, 0.001)
 	assert_float(_camera().position.z).is_equal_approx(rig._target_distance, 0.001)
+	assert_that(rig._aim).override_failure_message(
+			"the aim is still easing toward the authored pose, for the same reason") \
+		.is_equal(rig._target_aim)
 
 
 func test_pose_leaves_the_ceiling_and_pan_on_the_board_exactly_as_framing_does() -> void:
