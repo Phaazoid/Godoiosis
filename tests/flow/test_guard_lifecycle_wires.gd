@@ -231,12 +231,15 @@ func test_queueing_a_move_drags_the_link_along_with_the_shield() -> void:
 		"the link vanished instead of following -- (2,1) is still adjacent to the ward").is_true()
 	assert_vector(_guard_link_tail_cell()).override_failure_message(
 		"the link still starts from the cell the blocker LEFT").is_equal(Vector2i(2, 1))
-	# The head lands HALF WAY between the two centres -- the shared edge -- which is both where the
-	# inset puts it and the one expression that says "it followed" without restating the inset.
+	# The head lands ON THE SEGMENT joining the moved pair, which is what "it followed" means without
+	# restating where along that segment the inset puts it -- a midpoint assertion here was a value
+	# pin, and the dev's own 0.3 would have reddened it (see the sibling case's note).
 	var from := GridUtils.cell_world(game.grid, Vector2i(2, 1))
 	var to := GridUtils.cell_world(game.grid, Vector2i(2, 0))
-	assert_vector(_guard_link_head_pos()).override_failure_message(
-		"the head is not on the edge the moved pair now shares").is_equal(from.lerp(to, 0.5))
+	var head := _guard_link_head_pos()
+	assert_float(head.distance_to(from) + head.distance_to(to)).override_failure_message(
+		"the head is off the line between the moved pair, so it did not follow them") \
+		.is_equal_approx(from.distance_to(to), 0.01)
 
 
 func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
@@ -244,9 +247,18 @@ func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
 	# arrowhead." The arrow tile's ink runs x=0..11 of 16 and the shield's x=1..13, so drawn on the
 	# ward's own cell the arrow covered eleven of the shield's thirteen columns.
 	#
-	# Pinned as a RELATIONSHIP against the ward's centre, never as the inset's number -- that value
-	# is a Game-tab knob and the tuning razor forbids a test that reddens when the dev turns it.
-	# What must stay true is only the direction: the head sits strictly BLOCKER-side of the shield.
+	# Pinned as a RELATIONSHIP, never as the inset's number -- that value is a Game-tab knob and the
+	# tuning razor forbids a test that reddens when the dev turns it. What must stay true is only
+	# that the head lands strictly BETWEEN the pair: off the shield at one end, not behind the
+	# blocker at the other.
+	#
+	# It carried a third assertion until the dev tuned this for real (2026-08-27), and that one
+	# pinned the value while claiming not to: `head-to-ward <= head-to-blocker` is only satisfiable
+	# at an inset of 0.5 or less, so the ~0.7 this ticket ADVERTISES as the way to clear the shield
+	# outright would have reddened the suite. Its failure message described the opposite case, which
+	# is the tell. **An assertion phrased as a comparison between two derived distances is a value
+	# pin wearing a relationship's clothes** -- ask which knob settings it admits, not whether it
+	# mentions a literal.
 	var blocker := _spawn(Team.Faction.PLAYER, Vector2i(1, 0))
 	var ward := _spawn(Team.Faction.PLAYER, Vector2i(2, 0))
 	await await_idle_frame()
@@ -263,9 +275,6 @@ func test_the_link_head_stops_short_of_the_cell_the_shield_is_on() -> void:
 	assert_float(head.distance_to(blocker_centre)).override_failure_message(
 		"the head was inset PAST the blocker -- it should stop between the pair, not behind it") \
 		.is_greater(0.0)
-	assert_float(head.distance_to(ward_centre)).override_failure_message(
-		"the head is closer to the ward than to the blocker, so it still crowds the shield") \
-		.is_less_equal(head.distance_to(blocker_centre))
 
 
 func test_a_spent_guard_stops_being_marked() -> void:
