@@ -4,7 +4,7 @@ class_name UnitEditorTool
 # Dev-only unit editor: the tab (in DevOverlay) for editing whichever unit is currently
 # selected — stats, inventory, squad, and job assignment. Never shown to a player.
 # Laid out as three sub-tabs (Stats / Gear & Jobs / Body & Affinity) between an always-visible
-# header+Save row and the five action buttons (2026-08-11 dev ask).
+# header+Save row and the action buttons (2026-08-11 dev ask; the two re-seed ones joined in #589).
 #
 # Every control edits the STAGED buffer below, never the unit; Save is the only writer.
 # UnitInstance can't serve as that buffer (its fields are plain vars, so duplicate() returns a
@@ -290,6 +290,23 @@ func populate_unit_editor(unit):
 	revive_button.disabled = not unit.is_downed()
 	revive_button.pressed.connect(func(): _revive_unit(unit))
 	unit_editor_container.add_child(revive_button)
+
+	# The gear a unit is HOLDING is a copy made at spawn (#589), so an Item Editor fitting or a new
+	# starting_inventory entry reaches it only by re-granting. The refusal is the unit's own words.
+	var reseed_button := Button.new()
+	reseed_button.text = "Re-seed Kit"
+	var reason: String = unit.reseed_block_reason()   # `unit` is untyped here, so no inference
+	reseed_button.disabled = reason != ""
+	reseed_button.tooltip_text = reason if reason != "" else \
+		"Throw this unit's gear away and re-grant it from its character file — picks up mods fitted and weapons added since it spawned. Ammo, rev and spring load reset."
+	reseed_button.pressed.connect(func(): _reseed_unit(unit))
+	unit_editor_container.add_child(reseed_button)
+
+	var reseed_all_button := Button.new()
+	reseed_all_button.text = "Re-seed All Kits"
+	reseed_all_button.tooltip_text = "Re-seed every unit on the board that came from a character file. Units built in the Spawn form, or embedded in the scenario, are skipped."
+	reseed_all_button.pressed.connect(_reseed_board)
+	unit_editor_container.add_child(reseed_all_button)
 
 func _add_subtab(tabs: TabContainer, title: String) -> VBoxContainer:
 	var scroll := ScrollContainer.new()
@@ -713,6 +730,31 @@ func _revive_unit(unit: Unit) -> void:
 	game.refresh_action_queue(game.squad_manager.active_squad)   # a rescue aimed here just went invalid
 	_mark_live_edit(unit, true)
 	_resync(unit)
+
+# Re-grant from the character file. Marks the unit dev_edited for the same reason Save does: its
+# gear no longer matches what a re-reference would load, so an authored save has to snapshot it.
+func _reseed_unit(unit: Unit) -> void:
+	if not is_instance_valid(unit) or not unit.reseed_kit():
+		return
+	_mark_live_edit(unit, true)
+	_resync(unit)
+
+# The board sweep. Reports rather than refuses -- a board is normally a MIX, and "3 of 7" is the
+# useful answer, not a refusal naming the four it skipped.
+func _reseed_board() -> void:
+	if game == null:
+		return
+	var done := 0
+	var units: Array = game._all_units()
+	for unit: Unit in units:
+		if unit.can_reseed_kit() and unit.reseed_kit():
+			unit.dev_edited = true
+			done += 1
+	if _header != null:
+		_header.mark_modified()
+	print("Re-seeded %d of %d units from their character files" % [done, units.size()])
+	if is_instance_valid(editing_unit):
+		_resync(editing_unit)
 
 # The unit moved underneath the staged buffer, so re-read it -- the trade Revert already makes.
 # Skipping it would leave the panel showing pre-down HP, and a later Save would write it back.

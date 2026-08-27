@@ -129,7 +129,7 @@ func _ready():
 	unit_instance.data = unit_data
 	unit_instance.initialize()
 	unit_instance.died.connect(_on_instance_died)
-	_seed_starting_kit()
+	_seed_starting_kit(unit_data)
 	map_sprite.z_index = BASE_SPRITE_INDEX
 	move_sprite.z_index = BASE_SPRITE_INDEX
 	downed_sprite.z_index = BASE_SPRITE_INDEX
@@ -146,22 +146,27 @@ func _ready():
 # Runs once, right after initialize() — aura is already seeded, so the #157 equip gates read real
 # values. Everything goes through the gated doors; a refusal is an AUTHORING error and warns loudly
 # rather than silently correcting. A kit-less UnitData makes this a no-op.
-func _seed_starting_kit() -> void:
-	if not unit_data.has_starting_kit():
+#
+# Takes its SOURCE rather than reading unit_data (#589): a spawn seeds from this unit's own copy, the
+# dev re-seed below seeds from the character FILE. One rule, two callers — and it has to be a
+# parameter, because `unit_data` is the duplicate(true) UnitFactory makes, which by the 2026-07-27
+# ruling there deliberately stopped tracking the file it came from.
+func _seed_starting_kit(source: UnitData) -> void:
+	if not source.has_starting_kit():
 		return
 
-	for job_id in unit_data.starting_jobs:
+	for job_id in source.starting_jobs:
 		if not unit_instance.add_job(job_id):
 			push_warning("%s: starting job '%s' unknown or duplicate — skipped" % [get_unit_name(), job_id])
 
-	for family: WeaponData.WeaponType in unit_data.starting_proficiency:
-		unit_instance.set_proficiency(family, unit_data.starting_proficiency[family])
+	for family: WeaponData.WeaponType in source.starting_proficiency:
+		unit_instance.set_proficiency(family, source.starting_proficiency[family])
 
 	# Grant copies, never the authored resources; remember where each kit index landed so the
 	# explicit picks below address the CARRIED instance.
 	var slot_for_kit_index: Dictionary[int, int] = {}
-	for i in unit_data.starting_inventory.size():
-		var authored := unit_data.starting_inventory[i]
+	for i in source.starting_inventory.size():
+		var authored := source.starting_inventory[i]
 		if authored == null:
 			continue
 		var granted := authored.copy_equippable()
@@ -177,22 +182,66 @@ func _seed_starting_kit() -> void:
 			continue
 		slot_for_kit_index[i] = inventory.find(granted)
 
-	if unit_data.starting_equipped_index >= 0:
-		var equip_slot: int = slot_for_kit_index.get(unit_data.starting_equipped_index, -1)
+	if source.starting_equipped_index >= 0:
+		var equip_slot: int = slot_for_kit_index.get(source.starting_equipped_index, -1)
 		if equip_slot < 0 or not set_equipped_weapon(inventory[equip_slot]):
-			push_warning("%s: starting equipped pick %d refused" % [get_unit_name(), unit_data.starting_equipped_index])
+			push_warning("%s: starting equipped pick %d refused" % [get_unit_name(), source.starting_equipped_index])
 
-	if unit_data.starting_worn_index >= 0:
-		var wear_slot: int = slot_for_kit_index.get(unit_data.starting_worn_index, -1)
+	if source.starting_worn_index >= 0:
+		var wear_slot: int = slot_for_kit_index.get(source.starting_worn_index, -1)
 		if wear_slot < 0 or not wear_armor(wear_slot):
-			push_warning("%s: starting worn pick %d refused" % [get_unit_name(), unit_data.starting_worn_index])
+			push_warning("%s: starting worn pick %d refused" % [get_unit_name(), source.starting_worn_index])
 
-	for limb_slot: UnitInstance.LimbSlot in unit_data.starting_prosthetics:
-		var kit_index: int = unit_data.starting_prosthetics[limb_slot]
+	for limb_slot: UnitInstance.LimbSlot in source.starting_prosthetics:
+		var kit_index: int = source.starting_prosthetics[limb_slot]
 		var item_slot: int = slot_for_kit_index.get(kit_index, -1)
 		var prosthetic := (inventory[item_slot] as WeaponInstance) if item_slot >= 0 else null
 		if prosthetic == null or not unit_instance.install_prosthetic(limb_slot, prosthetic):
 			push_warning("%s: starting prosthetic for slot %s refused" % [get_unit_name(), UnitInstance.LimbSlot.keys()[limb_slot]])
+
+# --- Dev re-seed (#589) ---
+
+# "" = this unit can be re-seeded. The REASON rather than a bool, so the button that greys can SAY
+# why (#166's shape): a form-built or scenario-embedded UnitData has no file to re-read.
+func reseed_block_reason() -> String:
+	if unit_data_source == null:
+		return "%s wasn't spawned from a character file, so there is no authored kit to re-read." % get_unit_name()
+	if not unit_data_source.has_starting_kit():
+		return "%s's character file authors no starting kit." % unit_data_source.display_name
+	return ""
+
+func can_reseed_kit() -> bool:
+	return reseed_block_reason() == ""
+
+# Throw this unit's gear away and re-grant it from the character FILE, so a mod fitted in the Item
+# Editor or a new starting_inventory entry reaches a unit already standing on the board. DEV ONLY —
+# no guard for a running pass or a mid-action actor (dev ruling 2026-08-27: misuse is his, not the
+# tool's). Read through unit_data_source, never `unit_data`, which is a copy that stopped tracking
+# its file.
+#
+# GEAR only: jobs and proficiency come along because the file authors them as part of the kit, but
+# HP, Will, limb STATE, element states and lifecycle are this unit's battle, not its loadout.
+# Battle state (ammo, rev, spring load) resets with the weapons — the grant is a fresh
+# copy_equippable, exactly what a spawn hands back.
+#
+# The clear is DIRECT rather than remove_item, matching ScenarioUnitEntry.apply_unit_state: an
+# installed prosthetic refuses to be dropped, and the seed re-links every fitting anyway. Jobs clear
+# so the re-grant's add_job isn't refusing what it just held.
+func reseed_kit() -> bool:
+	var reason := reseed_block_reason()
+	if reason != "":
+		push_warning(reason)
+		return false
+	lapse_watch()          # its stamped attack belongs to a weapon that is about to stop existing
+	active_attack = null   # ditto the live aim pick
+	for limb_slot: UnitInstance.LimbSlot in unit_instance.limbs:
+		unit_instance.limbs[limb_slot].prosthetic_item = null
+	inventory.fill(null)
+	unequip_weapon()
+	worn_armor = null
+	unit_instance.jobs.clear()
+	_seed_starting_kit(unit_data_source)
+	return true
 
 func add_item(item: Item) -> bool:
 	for i in range(inventory.size()):
