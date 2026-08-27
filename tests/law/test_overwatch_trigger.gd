@@ -93,6 +93,39 @@ func test_standing_in_the_footprint_is_not_entering_it() -> void:
 	assert_array(plan.watch_shots).is_empty()
 
 
+# Stepping OUT is not an entry either. The unit's first path cell is where it already stands, which
+# is the same fact the case above states about a unit that never moves at all — and the reason the
+# walk starts at path[1] rather than path[0].
+func test_stepping_out_of_a_watched_cell_is_not_an_entry() -> void:
+	var watcher := _watcher()
+	var leaver := H.spawn_solo(self, _sm, PLAYER, WATCHED[0], {Stats.Stat.MHP: 60}, false)
+	var path: Array[Vector2i] = [WATCHED[0], Vector2i(3, 0), Vector2i(4, 0)]
+	var move := MoveAction.new()
+	move.init(leaver, path, null)
+	leaver.squad._queue_action(move)
+
+	var plan := _sm.resolve_plan(leaver.squad, _board_with([watcher, leaver]))
+
+	assert_array(plan.watch_shots).is_empty()
+
+
+# But moving from one watched cell to ANOTHER is an entry — there is no safe repositioning inside a
+# watched line.
+func test_moving_between_two_watched_cells_is_an_entry() -> void:
+	var watcher := _watcher()
+	var shuffler := H.spawn_solo(self, _sm, PLAYER, WATCHED[0], {Stats.Stat.MHP: 60}, false)
+	var path: Array[Vector2i] = [WATCHED[0], WATCHED[1]]
+	var move := MoveAction.new()
+	move.init(shuffler, path, null)
+	shuffler.squad._queue_action(move)
+
+	var plan := _sm.resolve_plan(shuffler.squad, _board_with([watcher, shuffler]))
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	assert_object(plan.watch_shots[0].target).is_same(shuffler)
+	_break_volleys(plan)
+
+
 # Allies never trigger a watch — the whole mechanic is aimed at the other side.
 func test_an_ally_of_the_watcher_never_triggers_it() -> void:
 	var watcher := _watcher()
