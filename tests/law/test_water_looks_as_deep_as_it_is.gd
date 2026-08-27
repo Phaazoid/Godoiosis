@@ -66,28 +66,42 @@ func _surface_items(source_id: int, coords: Vector2i) -> PackedStringArray:
 	return names
 
 
-# THE wire. `deep` is not a look setting -- it is walkability, inverted, so a tile that declares
-# itself wadeable cannot render as the tile that drowns you.
-func test_every_water_surface_says_what_walkable_says() -> void:
-	var checked := 0
+# THE bake, and its DELETION (#552 slice 2b). `deep` used to be a per-material uniform, so the
+# generator built two water materials and picked between them by the tile's walkable flag. That is
+# gone: how deep a cell is now lives in the board mask, per CELL, where it can be interpolated --
+# and the walkable wire it used to carry moved with it, to
+# test_water_knobs.gd::test_the_mask_says_how_deep_each_water_cell_is.
+#
+# What is left to guard here is the COLLAPSE itself, and it is worth a case because a half-done
+# revert is silent: a shallow tile and a deep tile must wear the SAME material object. If they ever
+# wear two again, something is baking depth per material a second time, and the shader would be
+# reading two answers to one question.
+func test_shallow_and_deep_water_wear_the_one_material() -> void:
+	var by_walkable: Dictionary[bool, Array] = {true: [], false: []}
 	for tile: Dictionary in _water_tiles():
 		var data: TileData = tile["data"]
-		var want := 0.0 if GridUtils.walkable_of(data) else 1.0
 		for item_name in _surface_items(tile["source"], tile["coords"]):
 			assert_bool(_by_name.has(item_name)).override_failure_message(
 					"no item '%s' -- the meshlib is stale, regenerate it" % item_name).is_true()
+			if not _by_name.has(item_name):
+				continue
 			var mat := _library.get_item_mesh(_by_name[item_name]).surface_get_material(0)
 			var shaded := mat as ShaderMaterial
 			assert_object(shaded).override_failure_message(
 					"'%s' wears a %s, not the water shader" % [item_name, mat]).is_not_null()
-			var got: float = shaded.get_shader_parameter("deep")
-			assert_float(got).override_failure_message(
-					"'%s' renders as %s water while its tile declares walkable=%s, so it should " \
-					% [item_name, "deep" if got > 0.5 else "shallow", GridUtils.walkable_of(data)] \
-					+ "render as %s" % ["deep" if want > 0.5 else "shallow"]).is_equal(want)
-			checked += 1
-	assert_int(checked).override_failure_message(
-			"no WATER tiles authored; the case is vacuous").is_greater(0)
+			by_walkable[GridUtils.walkable_of(data)].append(shaded)
+	# Both sorts have to be present or the case proves nothing: one material is trivially true of a
+	# tileset with only shallow water in it.
+	assert_bool(by_walkable[true].is_empty()).override_failure_message(
+			"no WADEABLE water tile authored; the collapse is untested").is_false()
+	assert_bool(by_walkable[false].is_empty()).override_failure_message(
+			"no DROWNING water tile authored; the collapse is untested").is_false()
+	var all: Array = by_walkable[true] + by_walkable[false]
+	for mat: ShaderMaterial in all:
+		assert_bool(mat == all[0]).override_failure_message(
+				"water surfaces wear more than one material -- depth is baked per material " \
+				+ "again, which is the second answer the board mask exists to be the only one " \
+				+ "of, and a shallow/deep boundary cannot blend across it").is_true()
 
 
 # The blast radius, from the other end: the shader is on water and NOWHERE else. A material is
@@ -219,7 +233,7 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	assert_bool(names.is_empty()).override_failure_message(
 			"the water shader exposes no uniforms at all -- it failed to parse, and every water " \
 			+ "surface will render as an error").is_false()
-	for wanted in ["atlas", "body_tex", "deep"]:
+	for wanted in ["atlas", "body_tex"]:
 		assert_bool(names.has(wanted)).override_failure_message(
 				"gen_lookdev_assets sets shader parameter '%s' and the shader declares no such " \
 				% wanted + "uniform -- the value is dropped in silence").is_true()
@@ -230,7 +244,7 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 # knob row -- the mask is derived from the terrain, not tuned. Membership is asserted in BOTH
 # directions, because a hole a future knob could fall into unnamed is the law quietly deleted,
 # while a named category with a fixed membership is a category.
-const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect"]
+const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_board_shore_range"]
 
 
 # What the shader declares, in one place. Three cases used to parse this line for themselves with

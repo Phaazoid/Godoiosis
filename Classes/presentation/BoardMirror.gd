@@ -1121,24 +1121,134 @@ func _push_all_water() -> void:
 var _water_mask := ImageTexture.new()
 
 
+# How far from the shore the distance ramp runs before it saturates, in CELLS, and the reason the
+# mask stopped being a bitmap (#552 slice 2b). A BINARY mask thresholded through filter_linear gives
+# a band whose width follows the interpolation GRADIENT -- steep across a straight edge, shallow
+# near a corner -- so an L-shaped patch grew a fat mushy corner while its straight runs stayed
+# crisp. A real distance field has a constant gradient, so the band has a constant width everywhere,
+# which is the whole fix.
+#
+# It is PUSHED rather than spelled again in the shader. The decode needs this number, and a const in
+# each language is one edit away from two different answers with nothing to catch it.
+const SHORE_RANGE := 2.0
+
+# Chamfer weights: orthogonal, then diagonal. The standard two-sweep approximation to Euclidean --
+# a couple of percent out on long diagonals, which is invisible in a field that saturates at
+# SHORE_RANGE and is read through an 8-bit channel.
+const CHAMFER_ORTHOGONAL := 1.0
+const CHAMFER_DIAGONAL := 1.41421356
+
+
 # Called from BOTH sync doors rather than from reconcile_cell: the mask is a whole-board artifact
 # and reconcile_cell is per-cell, so there is nothing to write there. One implementation, two call
 # sites -- which is not a second answer to anything.
 func _rebuild_water_mask(grid: TileMapLayer) -> void:
 	var rect := grid.get_used_rect()
 	if rect.size.x <= 0 or rect.size.y <= 0:
-		# An empty board still owes the shader a DEFINED mask. An unset sampler reads as white, which
-		# would mean "every cell is water" -- and therefore no shore anywhere.
-		_push_mask(Image.create(1, 1, false, Image.FORMAT_L8), Vector4(0.0, 0.0, 1.0, 1.0))
+		# An empty board still owes the shader a DEFINED mask. An unset sampler reads as white,
+		# which would mean "every cell is water" -- and therefore no shore anywhere.
+		_push_mask(Image.create(1, 1, false, Image.FORMAT_RG8), Vector4(0.0, 0.0, 1.0, 1.0))
 		return
-	var image := Image.create(rect.size.x, rect.size.y, false, Image.FORMAT_L8)
-	image.fill(Color.BLACK)
+	var w := rect.size.x
+	var h := rect.size.y
+	# Flat board-order arrays rather than Dictionaries: the sweeps below touch every neighbour of
+	# every cell four times over, and this is the one place in the mask that could get expensive.
+	var wet := PackedByteArray()
+	wet.resize(w * h)
+	var dry := PackedByteArray()
+	dry.resize(w * h)
+	var deep := PackedByteArray()
+	deep.resize(w * h)
+	for i in w * h:
+		# Anything that is not water is shore, INCLUDING a cell inside the rect nobody painted --
+		# a hole is a bank as far as a shoreline is concerned.
+		dry[i] = 1
 	for cell in grid.get_used_cells():
-		if GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.WATER:
-			image.set_pixel(cell.x - rect.position.x, cell.y - rect.position.y, Color.WHITE)
+		if GridUtils.get_terrain_kind_at_cell(grid, cell) != Terrain.Kind.WATER:
+			continue
+		var i := (cell.y - rect.position.y) * w + (cell.x - rect.position.x)
+		wet[i] = 1
+		dry[i] = 0
+		# The SAME flag the rules read and the generator used to bake per material -- GridUtils
+		# .walkable_of, one spelling (#552 slice 1). Deep is the water that drowns you.
+		deep[i] = 0 if GridUtils.walkable_of(grid.get_cell_tile_data(cell)) else 1
+
+	var to_dry := _chamfer(dry, w, h)
+	var to_wet := _chamfer(wet, w, h)
+	var image := Image.create(w, h, false, Image.FORMAT_RG8)
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			# Centre-to-centre distance minus the half cell that separates a centre from its own
+			# edge, so a water cell touching land sits at exactly +0.5 and its neighbour at -0.5 --
+			# which is what puts the shader's 0.5 threshold back on the shared cell edge, exactly
+			# where the binary mask had it. Straight shores are unchanged; corners are not.
+			var signed := (to_dry[i] - 0.5) if wet[i] == 1 else -(to_wet[i] - 0.5)
+			var r := clampf(0.5 + signed / (2.0 * SHORE_RANGE), 0.0, 1.0)
+			image.set_pixel(x, y, Color(r, _deepness_at(wet, deep, w, h, x, y), 0.0, 1.0))
 	# A 2D cell's y IS the world z (BoardSpace.flat), and a cell is one world unit across, so the
 	# used rect doubles as the world rect with no conversion.
 	_push_mask(image, Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y))
+
+
+# G, and the DILATE that makes it usable. A water cell's own deepness is exact -- 0 or 1 -- so the
+# shader reads the same value at a cell centre that the material used to carry, and away from a
+# type boundary this whole slice is a visual no-op.
+#
+# A LAND cell takes the deepness of the water beside it, and without that the blend breaks at every
+# cliff: bilinear from a deep cell's centre reaches into its land neighbours, so a land 0 would drag
+# deep water toward shallow along the whole rim and fade the bed in where no bottom should show.
+# Eight neighbours because the sample can reach a cell's own corner, and the DEEPER wins a tie --
+# arbitrary where a land cell touches both, and stated rather than discovered.
+func _deepness_at(wet: PackedByteArray, deep: PackedByteArray, w: int, h: int,
+		x: int, y: int) -> float:
+	var i := y * w + x
+	if wet[i] == 1:
+		return float(deep[i])
+	for dy in [-1, 0, 1]:
+		for dx in [-1, 0, 1]:
+			var nx: int = x + dx
+			var ny: int = y + dy
+			if nx < 0 or ny < 0 or nx >= w or ny >= h:
+				continue
+			var n := ny * w + nx
+			if wet[n] == 1 and deep[n] == 1:
+				return 1.0
+	return 0.0
+
+
+# Distance from every cell to the nearest SET cell, in cells. Two sweeps, forward then backward,
+# which is the whole algorithm: after the first every cell knows the best route from above-left, and
+# after the second from below-right, and between them that is every route there is.
+func _chamfer(seed: PackedByteArray, w: int, h: int) -> PackedFloat32Array:
+	var far := float(w + h) * 2.0
+	var d := PackedFloat32Array()
+	d.resize(w * h)
+	for i in w * h:
+		d[i] = 0.0 if seed[i] == 1 else far
+	for y in h:
+		for x in w:
+			var i := y * w + x
+			if x > 0:
+				d[i] = minf(d[i], d[i - 1] + CHAMFER_ORTHOGONAL)
+			if y > 0:
+				d[i] = minf(d[i], d[i - w] + CHAMFER_ORTHOGONAL)
+				if x > 0:
+					d[i] = minf(d[i], d[i - w - 1] + CHAMFER_DIAGONAL)
+				if x < w - 1:
+					d[i] = minf(d[i], d[i - w + 1] + CHAMFER_DIAGONAL)
+	for y in range(h - 1, -1, -1):
+		for x in range(w - 1, -1, -1):
+			var i := y * w + x
+			if x < w - 1:
+				d[i] = minf(d[i], d[i + 1] + CHAMFER_ORTHOGONAL)
+			if y < h - 1:
+				d[i] = minf(d[i], d[i + w] + CHAMFER_ORTHOGONAL)
+				if x < w - 1:
+					d[i] = minf(d[i], d[i + w + 1] + CHAMFER_DIAGONAL)
+				if x > 0:
+					d[i] = minf(d[i], d[i + w - 1] + CHAMFER_DIAGONAL)
+	return d
 
 
 func _push_mask(image: Image, rect: Vector4) -> void:
@@ -1149,6 +1259,9 @@ func _push_mask(image: Image, rect: Vector4) -> void:
 	_water_mask.set_image(image)
 	_push_water(&"water_board_mask", _water_mask)
 	_push_water(&"water_board_mask_rect", rect)
+	# Travels WITH the mask rather than from _push_all_water: it is how to decode this picture, and
+	# a mask pushed before its scale would be decoded through a zero.
+	_push_water(&"water_board_shore_range", SHORE_RANGE)
 
 
 func _set_water_deep_wave_speed(value: float) -> void:

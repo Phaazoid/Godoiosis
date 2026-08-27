@@ -219,12 +219,24 @@ func _assert_mask_matches(grid: TileMapLayer, where: String) -> void:
 		var is_water := GridUtils.get_terrain_kind_at_cell(grid, cell) == Terrain.Kind.WATER
 		seen_water = seen_water or is_water
 		seen_land = seen_land or not is_water
-		var reads_water := image.get_pixel(cell.x - int(rect.x), cell.y - int(rect.y)).r > 0.5
+		# The SIGN is what the shader thresholds, and it survives the encoding: R runs above 0.5
+		# on the water side of a boundary and below it on the land side, at any scale.
+		var texel := image.get_pixel(cell.x - int(rect.x), cell.y - int(rect.y))
+		var reads_water := texel.r > 0.5
 		assert_bool(reads_water == is_water).override_failure_message(
 				"%s: cell %s is %s on the board but the mask reads it as %s -- the shoreline " \
 				% [where, cell, "WATER" if is_water else "land",
 						"water" if reads_water else "land"] \
 				+ "would be drawn in the wrong place").is_true()
+		# THE WALKABLE WIRE, which lived on the material's baked `deep` until slice 2b deleted it. A
+		# tile that declares itself wadeable must not render as the water that drowns you, and the
+		# mask is now the only thing saying which is which. Water cells only: a land texel's G is
+		# the DILATE, asserted by its own case below.
+		if is_water:
+			var drowns := not GridUtils.walkable_of(grid.get_cell_tile_data(cell))
+			assert_bool((texel.g > 0.5) == drowns).override_failure_message(
+					"%s: cell %s declares walkable=%s and the mask renders it as %s water" \
+					% [where, cell, not drowns, "deep" if texel.g > 0.5 else "shallow"]).is_true()
 	# Both sorts present, or the comparison above proves nothing: an all-land board matches a mask
 	# that is black because it was never filled in.
 	assert_bool(seen_water and seen_land).override_failure_message(
@@ -298,4 +310,103 @@ func test_both_sync_doors_rebuild_the_mask() -> void:
 	grid.set_cell(swing, dry["source"], dry["coords"])
 	_mirror.sync_cells(grid, [swing], heights, _mirror.floor_row_of(heights))
 	_assert_mask_matches(grid, "after sync_cells() painted it back to land")
+	grid.free()
+
+
+# A water tile of a stated DEPTH, read off the tileset -- the cases below need a wadeable one and a
+# drowning one specifically, which _a_tile_of(true) cannot promise.
+func _a_water_tile_of(walkable: bool) -> Dictionary:
+	var tiles := load(TILESET_PATH) as TileSet
+	for s in tiles.get_source_count():
+		var source_id := tiles.get_source_id(s)
+		var atlas := tiles.get_source(source_id) as TileSetAtlasSource
+		if atlas == null:
+			continue
+		for i in atlas.get_tiles_count():
+			var coords := atlas.get_tile_id(i)
+			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
+				continue
+			var data := atlas.get_tile_data(coords, 0)
+			if GridUtils.terrain_kind_of(data) != Terrain.Kind.WATER:
+				continue
+			if GridUtils.walkable_of(data) == walkable:
+				return {"tileset": tiles, "source": source_id, "coords": coords}
+	return {}
+
+
+func _texel(image: Image, rect: Vector4, cell: Vector2i) -> Color:
+	return image.get_pixel(cell.x - int(rect.x), cell.y - int(rect.y))
+
+
+# THE property slice 2b bought, and the one a BITMAP cannot have: R is a real DISTANCE, so it keeps
+# rising as you move away from the shore instead of saturating at the first cell.
+#
+# That is not a cosmetic difference. Thresholding a binary mask gives a foam band whose width
+# follows the interpolation GRADIENT -- steep across a straight edge, shallow near a corner -- which
+# is why an L-shaped patch grew a fat mushy corner while its straight runs stayed crisp. A field
+# with a constant gradient gives a band with a constant width.
+#
+# No encoded VALUE is pinned, only the ordering: the encoding is free to move.
+func test_the_shore_field_deepens_with_distance_from_land() -> void:
+	var wet := _a_water_tile_of(false)
+	var dry := _a_tile_of(false)
+	var grid := TileMapLayer.new()
+	grid.tile_set = wet["tileset"]
+	# A 4x4 lake ringed by land, so there is a cell two clear cells in from every shore.
+	for y in 6:
+		for x in 6:
+			var inside: bool = x >= 1 and x <= 4 and y >= 1 and y <= 4
+			var tile: Dictionary = wet if inside else dry
+			grid.set_cell(Vector2i(x, y), tile["source"], tile["coords"])
+	_mirror._rebuild_water_mask(grid)
+	var image := _pushed_mask_image()
+	if image != null:
+		var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+		var shore_side := _texel(image, rect, Vector2i(1, 1)).r
+		var two_in := _texel(image, rect, Vector2i(2, 2)).r
+		var on_land := _texel(image, rect, Vector2i(0, 1)).r
+		assert_bool(shore_side > 0.5).override_failure_message(
+				"water touching land reads %f, on the LAND side of the shoreline" % shore_side) \
+				.is_true()
+		assert_bool(on_land < 0.5).override_failure_message(
+				"land touching water reads %f, on the WATER side of the shoreline" % on_land) \
+				.is_true()
+		assert_bool(two_in > shore_side).override_failure_message(
+				"a cell two in from the shore reads %f and one touching it reads %f -- the mask " \
+				% [two_in, shore_side] + "is still a BITMAP, so the foam band's width will " \
+				+ "follow the interpolation gradient and corners will read rough").is_true()
+	grid.free()
+
+
+# The DILATE, and it is the difference between a blend and a bug. Bilinear from a deep cell's centre
+# reaches into its LAND neighbours, so a land texel carrying 0 would drag deep water toward shallow
+# along every cliff rim and fade the bed in where no bottom should show.
+#
+# Asserted as a PAIR, because "land next to water reads deep" would pass on a dilate that just wrote
+# 1 everywhere. What has to be true is that the land carries the deepness of the water beside IT.
+func test_land_carries_the_deepness_of_the_water_beside_it() -> void:
+	var deep := _a_water_tile_of(false)
+	var shallow := _a_water_tile_of(true)
+	var dry := _a_tile_of(false)
+	assert_bool(deep.is_empty() or shallow.is_empty()).override_failure_message(
+			"the tileset lacks a wadeable or a drowning water tile; the case is vacuous").is_false()
+	if deep.is_empty() or shallow.is_empty():
+		return
+	var grid := TileMapLayer.new()
+	grid.tile_set = deep["tileset"]
+	# Deep on the left, shallow on the right, a land column between them touching only one each.
+	grid.set_cell(Vector2i(0, 0), deep["source"], deep["coords"])
+	grid.set_cell(Vector2i(1, 0), dry["source"], dry["coords"])
+	grid.set_cell(Vector2i(3, 0), shallow["source"], shallow["coords"])
+	grid.set_cell(Vector2i(2, 0), dry["source"], dry["coords"])
+	_mirror._rebuild_water_mask(grid)
+	var image := _pushed_mask_image()
+	if image != null:
+		var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+		assert_bool(_texel(image, rect, Vector2i(1, 0)).g > 0.5).override_failure_message(
+				"the land cell beside DEEP water reads shallow -- every cliff rim will drag its " \
+				+ "own water toward shallow and fade the bed in against the wall").is_true()
+		assert_bool(_texel(image, rect, Vector2i(2, 0)).g < 0.5).override_failure_message(
+				"the land cell beside SHALLOW water reads deep -- the dilate is writing a " \
+				+ "constant rather than carrying the neighbouring water's own depth").is_true()
 	grid.free()
