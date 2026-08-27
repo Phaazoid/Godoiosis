@@ -261,11 +261,19 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Water", "node": "BoardMirror", "prop": "water_specular", "label": "Specular", "min": 0.0, "max": 1.0, "step": 0.01,
 		"tip": "How strong the highlight is once Roughness lets there be one. Roughness sets how TIGHT the highlight is, this sets how BRIGHT -- a broad dim sheen and a small fierce glint are the two ends."},
 	{"group": "Water", "node": "BoardMirror", "prop": "water_bed", "label": "Shallow bed", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How strongly SHALLOW water shows the bottom through it, as a static mottle that does not move with the waves. Deep water never gets it -- that asymmetry is half of how a wadeable tile is told apart from one that drowns you."},
+		"tip": "How much of the BOTTOM shows through SHALLOW water. 0 is opaque water, 1 is clear. Deep water never gets it, and that asymmetry is most of how a wadeable tile is told apart from one that drowns you -- seeing the bed is also the difference between water and ICE, which is what the first version of this failed to say when it was only a faint mottle of the water's own colour."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_bed_color", "label": "Bed colour",
+		"tip": "What the bottom is made of. Warm and desaturated is the point -- sand or silt under a cool surface is what reads as shallow WATER; a cool bed under a cool surface reads as a frozen pane. The water tints it on the way through, so this is the bed's own colour and not what you end up seeing."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_bed_grain", "label": "Bed grain", "min": 1.0, "max": 12.0, "step": 0.5,
+		"tip": "Pebble size on the bottom, in art pixels. 1 is per-pixel silt, which at a playing camera distance averages out to nothing -- that is exactly why the first Shallow bed knob appeared to do nothing at all. 3 or 4 reads as coarse sand; higher goes to gravel."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_caustics", "label": "Caustics", "min": 0.0, "max": 1.5, "step": 0.01,
+		"tip": "The rippling net of light on the bottom. It MOVES while the bed under it stays nailed to the board, and that contrast is the whole depth cue -- ice moves all of itself or none of it, so this is the one thing a frozen surface structurally cannot fake. Its speed follows Wave speed rather than taking a dial of its own."},
+	{"group": "Water", "node": "BoardMirror", "prop": "water_caustics_scale", "label": "Caustics scale", "min": 1.0, "max": 30.0, "step": 0.5,
+		"tip": "How tightly the light net is woven, in radians per cell. Low is a few broad shifting patches; high is a fine mesh. Worth keeping clearly different from Wave scale -- if the two agree, the bottom and the surface stop reading as separate layers."},
 	{"group": "Water", "node": "BoardMirror", "prop": "water_seam", "label": "Cell seam", "min": 0.0, "max": 0.6, "step": 0.005,
 		"tip": "How darkly the surface draws its own cell boundaries. The waves run off world position so a lake is one continuous body, which erases the grid -- and on water the hover bracket is then the only thing showing where a tile ends. Zero hands that job back to the bracket alone."},
 	{"group": "Water", "node": "BoardMirror", "prop": "water_body_shade", "label": "Body shade", "min": 0.0, "max": 1.0, "step": 0.01,
-		"tip": "How much darker a water block's SIDES and its top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge."},
+		"tip": "How much darker a water block's WALLS and its top rim read than its surface -- the body of the water rather than the face of it. Only visible where water meets a lower cell or the board's edge. It reached the 0.004-unit rim ALONE until the shader was put on both of a block's surfaces, which is why it used to move nothing you could see."},
 
 ]
 

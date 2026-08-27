@@ -101,6 +101,7 @@ func test_only_water_wears_the_water_shader() -> void:
 	# per-tile item would otherwise sit still in the middle of a moving lake.
 	water_items[_library.get_item_name(BoardMirror.KIND_TO_ITEM[Terrain.Kind.WATER])] = true
 
+	var shaded_surfaces: Dictionary[String, int] = {}
 	var shader := load(SHADER_PATH) as Shader
 	for id: int in _library.get_item_list():
 		var item_name := _library.get_item_name(id)
@@ -114,9 +115,21 @@ func test_only_water_wears_the_water_shader() -> void:
 					% [item_name, surface]).is_true()
 			assert_bool(water_items.has(item_name)).override_failure_message(
 					"'%s' is not a water item but wears the water shader" % item_name).is_true()
-			assert_int(surface).override_failure_message(
-					"'%s' wears the water shader on surface %d -- the shader is the SURFACE, and " \
-					% [item_name, surface] + "a block's sides are the water's BODY").is_equal(0)
+			shaded_surfaces[item_name] = shaded_surfaces.get(item_name, 0) + 1
+
+	# And the other direction: a water BLOCK wears it on both of its surfaces. The rule is not
+	# "surface 0 only" any more -- it was, until the Body shade knob turned out to be driving the
+	# 0.004-unit rim in surface 0 and nothing else, while the walls in surface 1 wore a plain
+	# material the shader never saw. The shader answers both questions and forks on the world
+	# normal: the up-facing quad is the water's FACE, the walls and the rim are its BODY.
+	for tile: Dictionary in _water_tiles():
+		var block := BoardMirror.tile_item_name(tile["source"], tile["coords"])
+		var mesh := _library.get_item_mesh(_by_name[block])
+		assert_int(shaded_surfaces.get(block, 0)).override_failure_message(
+				"'%s' wears the water shader on %d of its %d surfaces -- a block's WALLS are the " \
+				% [block, shaded_surfaces.get(block, 0), mesh.get_surface_count()] \
+				+ "water's body, and a knob that shades them can only reach them here") \
+				.is_equal(mesh.get_surface_count())
 
 
 # The other half of the read, and the half that reaches BOTH views: shallow water is lighter than
@@ -206,7 +219,7 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	assert_bool(names.is_empty()).override_failure_message(
 			"the water shader exposes no uniforms at all -- it failed to parse, and every water " \
 			+ "surface will render as an error").is_false()
-	for wanted in ["atlas", "deep"]:
+	for wanted in ["atlas", "body_tex", "deep"]:
 		assert_bool(names.has(wanted)).override_failure_message(
 				"gen_lookdev_assets sets shader parameter '%s' and the shader declares no such " \
 				% wanted + "uniform -- the value is dropped in silence").is_true()
@@ -238,3 +251,33 @@ func test_every_water_knob_is_spelled_the_same_in_all_three_places() -> void:
 		assert_bool(ProjectSettings.has_setting("shader_globals/%s" % name)) \
 				.override_failure_message("the shader declares global '%s' and project.godot " \
 				% name + "does not -- the shader will refuse to compile").is_true()
+
+
+# A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider
+# that moves nothing. Aimed at the bug class #552 shipped twice: Shallow bed and Body shade both
+# went min-to-max with no visible change.
+#
+# Worth saying what this does NOT catch, because a law that oversells its reach is worse than no
+# law. Neither of those two would have reddened here -- both were read; one drove the 0.004-unit
+# rim, which #559 built to be invisible, and the other was per-art-pixel noise below what the eye
+# resolves at a playing distance. Whether a knob's effect is VISIBLE is not a question any headless
+# test can ask. This catches the next one along: a uniform nothing samples at all.
+func test_every_global_the_shader_declares_is_actually_read() -> void:
+	var code := (load(SHADER_PATH) as Shader).code
+	var checked := 0
+	for line in code.split("\n"):
+		var text := line.strip_edges()
+		if not text.begins_with("global uniform "):
+			continue
+		var words := text.trim_suffix(";").split(" ")
+		var name := words[words.size() - 1]
+		# Count every mention and subtract the declaration itself; a comment naming it is close
+		# enough to a read for this purpose, and being generous here is the right side to err on --
+		# the finding worth having is ZERO.
+		var mentions := code.count(name)
+		assert_int(mentions).override_failure_message(
+				"the shader declares global '%s' and never reads it -- its knob, its row and its " \
+				% name + "project.godot entry all exist and the slider moves nothing").is_greater(1)
+		checked += 1
+	assert_int(checked).override_failure_message(
+			"the shader declares no globals; the case is vacuous").is_greater(0)

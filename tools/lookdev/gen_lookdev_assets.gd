@@ -357,7 +357,8 @@ func _gen_meshlib() -> int:
 	# The declared WATER fallback wears the shader too (#552): a cell the meshlib has no per-tile
 	# item for would otherwise sit dead still in the middle of a moving lake. DEEP, because a
 	# fallback cell has no tile to declare itself walkable.
-	_add_item(ml, 5, "water_block", _block_mesh(_water_mat(water_top, true), _mat(water_side)))
+	var fallback_water := _water_mat(water_top, water_side, true)
+	_add_item(ml, 5, "water_block", _block_mesh(fallback_water, fallback_water))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
 	# Ids 0-6 are the hand-picked fallbacks and Scenes/LookDev/LookDev.tscn's diorama references them
 	# BY ID, so #427 slice 2's additions append rather than renumber. The gentle fallback wedge is the
@@ -386,7 +387,7 @@ func _gen_meshlib() -> int:
 		Terrain.Kind.WATER: water_top,
 		Terrain.Kind.DIRT: dirt_top,
 	}
-	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), _mat(water_side), bases,
+	if _add_tileset_items(ml, _mat(dirt_side), _mat(stone_side), water_side, bases,
 			dirt_top) < 0:
 		return 1
 
@@ -416,7 +417,7 @@ func _gen_meshlib() -> int:
 # The multi-cell ones are all props, so their art DOES reach the board -- on a billboard,
 # which has no 1x1 constraint. This loop only decides what the GROUND under them looks like.
 func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Material,
-		water_side: Material, bases: Dictionary[Terrain.Kind, Texture2D],
+		water_side_tex: Texture2D, bases: Dictionary[Terrain.Kind, Texture2D],
 		default_base: Texture2D) -> int:
 	var ts := load(TILESET_PATH) as TileSet
 	if ts == null:
@@ -483,8 +484,8 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# deep is the only thing one water tile may differ from another about, so `deep` keys these
 		# rather than the coords keying one material per tile.
 		var water_mats: Dictionary[bool, ShaderMaterial] = {
-			true: _water_mat(null, true),
-			false: _water_mat(null, false),
+			true: _water_mat(null, water_side_tex, true),
+			false: _water_mat(null, water_side_tex, false),
 		}
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
@@ -520,18 +521,23 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			var top_uv := _uv_rect(region, atlas_size)
 			var top: Material = atlas_mat
 			var side: Material = stone_side if kind == Terrain.Kind.ROCK else dirt_side
-			# Water is the one surface that MOVES, and the one whose sides stopped wearing it
-			# (#552). Which of the two surfaces it gets is the tile's own walkability -- deep is
-			# water you cannot stand on, the same reading RulesService.drowns_in and the hover card
-			# already make, so the tile and the rules cannot drift apart about it.
+			# Water is the one surface that MOVES, and its BODY is a different question from its
+			# face -- so ONE shader material wears both surfaces and forks on the world normal
+			# (#552). Which of the two it gets is the tile's own walkability: deep is water you
+			# cannot stand on, the same reading RulesService.drowns_in and the hover card already
+			# make, so the tile and the rules cannot drift apart about it.
+			#
+			# The shader reaching surface 1 is what makes the Body shade knob DO anything. It used
+			# to run only on the four rim quads in surface 0, and BoardSpace.SIDE_RIM is 0.004 --
+			# a rim #559 built to be invisible -- so it was a slider driving nothing.
 			if kind == Terrain.Kind.WATER:
 				top = water_mats[not GridUtils.walkable_of(data)]
-				side = water_side
-			# side_uv stays the whole texture: dirt, stone and water side are each their own sheet,
-			# not a region of the atlas. It was top_uv for water until #552, which is the trap the
+				side = top
+			# side_uv stays the whole texture: dirt and stone side are each their own sheet, not a
+			# region of the atlas, and water's body samples a WORLD-derived uv inside the shader
+			# rather than the mesh's. It was top_uv for water until #552, which is the trap the
 			# _block_mesh comment warns about -- an unpassed side_uv put the ENTIRE tilesheet on a
-			# water slope, and the fix was passing the water's atlas rect rather than taking water
-			# off the atlas.
+			# water slope.
 			_add_item(ml, next_id, BoardMirror.tile_item_name(source_id, coords),
 					_block_mesh(top, side, top_uv))
 			next_id += 1
@@ -758,10 +764,11 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 # answer to which water drowns you, and a water tile authored tomorrow gets its look from its
 # walkability without touching this file. Every TUNING value is a global uniform instead, because a
 # per-material one would mean BoardMirror writing into the generated meshlib at runtime.
-func _water_mat(tex: Texture2D, deep: bool) -> ShaderMaterial:
+func _water_mat(tex: Texture2D, body: Texture2D, deep: bool) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(WATER_SHADER_PATH)
 	mat.set_shader_parameter("atlas", tex)
+	mat.set_shader_parameter("body_tex", body)
 	mat.set_shader_parameter("deep", 1.0 if deep else 0.0)
 	return mat
 

@@ -190,16 +190,30 @@ const FLAME_FRAMES := 8
 # specular response at all. Low roughness is what lets the sun sit on it.
 @export var water_roughness := 0.41: set = _set_water_roughness
 @export var water_specular := 0.51: set = _set_water_specular
-# The SHALLOW half of the shallow/deep read: a static mottle of the bed showing through, which deep
-# water does not get. The base colours are the tiles' own authored modulate, not a knob — those
-# reach the flat view too, and this one cannot.
+# The SHALLOW half of the shallow/deep read, and the thing that stops shallow water reading as ICE:
+# you see the BOTTOM through it, and the bottom is warm. Deep water never gets it. The bed is
+# composited UNDER the surface bands rather than over them — bands are a surface phenomenon, and
+# multiplying them by the bed is what made this read as grain instead of as depth.
+#
+# The base colours are the tiles' own authored modulate, not a knob — those reach the flat view too,
+# and these cannot.
 @export var water_bed := 0.39: set = _set_water_bed
+@export var water_bed_color := Color(0.60, 0.52, 0.38): set = _set_water_bed_color
+# Pebble size, in art pixels. 1 is per-pixel silt — which is below what the eye resolves at a
+# playing camera distance, and is why the first version of this knob appeared to do nothing.
+@export var water_bed_grain := 3.0: set = _set_water_bed_grain
+# The light net on the bottom. It MOVES while the bed under it stays nailed to the board, and that
+# contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
+# one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
+@export var water_caustics := 0.22: set = _set_water_caustics
+@export var water_caustics_scale := 9.0: set = _set_water_caustics_scale
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket.
 @export var water_seam := 0.095: set = _set_water_seam
-# How much darker a water block's SIDE and top rim read than its surface — the body rather than the
-# face of it.
+# How much darker a water block's WALLS and top rim read than its surface — the body rather than the
+# face of it. The shader wears both of a water block's surfaces so this reaches the real walls; it
+# drove the 0.004-unit rim alone until then, which is a slider that moves nothing.
 @export var water_body_shade := 0.3: set = _set_water_body_shade
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
@@ -974,7 +988,7 @@ func _rebuild_fires() -> void:
 # than a fourth way to reach RenderingServer. Names match the shader's `global uniform` lines and
 # project.godot's [shader_globals] section exactly — a typo here is silent in GLSL, which is what
 # test_the_water_shader_declares_every_knob_board_mirror_pushes exists to catch.
-func _push_water(uniform: StringName, value: float) -> void:
+func _push_water(uniform: StringName, value: Variant) -> void:
 	RenderingServer.global_shader_parameter_set(uniform, value)
 
 
@@ -989,6 +1003,10 @@ func _push_all_water() -> void:
 	_push_water(&"water_roughness", water_roughness)
 	_push_water(&"water_specular", water_specular)
 	_push_water(&"water_bed", water_bed)
+	_push_water(&"water_bed_color", water_bed_color)
+	_push_water(&"water_bed_grain", water_bed_grain)
+	_push_water(&"water_caustics", water_caustics)
+	_push_water(&"water_caustics_scale", water_caustics_scale)
 	_push_water(&"water_seam", water_seam)
 	_push_water(&"water_body_shade", water_body_shade)
 
@@ -1026,6 +1044,26 @@ func _set_water_specular(value: float) -> void:
 func _set_water_bed(value: float) -> void:
 	water_bed = value
 	_push_water(&"water_bed", value)
+
+
+func _set_water_bed_color(value: Color) -> void:
+	water_bed_color = value
+	_push_water(&"water_bed_color", value)
+
+
+func _set_water_bed_grain(value: float) -> void:
+	water_bed_grain = value
+	_push_water(&"water_bed_grain", value)
+
+
+func _set_water_caustics(value: float) -> void:
+	water_caustics = value
+	_push_water(&"water_caustics", value)
+
+
+func _set_water_caustics_scale(value: float) -> void:
+	water_caustics_scale = value
+	_push_water(&"water_caustics_scale", value)
 
 
 func _set_water_seam(value: float) -> void:

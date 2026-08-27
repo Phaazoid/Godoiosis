@@ -152,3 +152,19 @@ water_body_shade={
 "type": "float",
 "value": 0.45
 }
+water_bed_color={
+"type": "color",
+"value": Color(0.6, 0.52, 0.38, 1)
+}
+water_bed_grain={
+"type": "float",
+"value": 3.0
+}
+water_caustics={
+"type": "float",
+"value": 0.22
+}
+water_caustics_scale={
+"type": "float",
+"value": 9.0
+}

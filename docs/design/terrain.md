@@ -126,7 +126,9 @@ multiplies natively and the meshlib generator bakes into the composed atlas so *
 both views**; and, in 3D only, a surface shader whose `deep` uniform the generator bakes from **the
 tile's own `walkable` flag**, so the render asks the same question `drowns_in` does and a third water
 tile authored tomorrow gets its look from its walkability for free. Its deep half is opaque and slow;
-its shallow half is quicker and shows a static mottle of the bed through it.
+its shallow half is quicker and **shows its lakebed through it** — a warm bed under a cool surface,
+with caustics travelling over a bed that stays still. That last part is not decoration: seeing the
+bottom is what separates shallow water from ICE, which is what the first pass at it read as.
 
 - **WET is still inert** — `Elemental.State.WET` is an enum member with a Glossary term and an icon,
   and **no reaction resource references it**. "Shallow water sets WET" therefore means *authoring the
