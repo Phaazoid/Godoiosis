@@ -127,6 +127,10 @@ var _pointer_vertex := Vector2i.ZERO
 var _pip_native: Vector2 = Vector2(1280.0, 720.0)
 # Last frame's playback_locked, so the square-on realign fires once per AI turn, not per frame.
 var _playback_owned_camera := false
+# ...and last frame's framed span (#520), for the same reason: the widen is an EDGE, so the player's
+# wheel is theirs again the instant the shot is set up. Gated on the published span itself -- the
+# store the answer is drawn from -- rather than on a copy of what it resolves to (#308).
+var _framed_span: Array[Vector2i] = []
 
 
 func _ready() -> void:
@@ -606,19 +610,36 @@ func _mirror_camera() -> void:
 			_rig.set_zoom(_rig.playback_distance)
 		else:
 			_rig.restore_view()
+	# ABOVE the early return, deliberately: how far the ground has been torn out is a fact about the
+	# BOARD, not about who owns the camera (#521). The tiles thud back into their sockets INSIDE
+	# execute_orders and the lock is put back in the same synchronous stretch, so a poll below the
+	# return would never see a frame with the staging cleared and the rig would stay in the sky for
+	# ever. The whole stage, never the cell under the camera: the diorama is one thing at one height,
+	# and asking per cell would dip the camera every time a pan crossed unstaged ground.
+	_rig.lift_to(BoardSpace.stage_offset())
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
 	# _rig.position.y, i.e. whatever the opening shot had left there — see _aim_over. Continuous
 	# rather than per cell because this is a GLIDING pan: stepping the height at cell boundaries
 	# would jolt the whole diorama mid-beat.
+	#
+	# HELD rather than glided (#520): the 2D camera this mirrors already tweens its own travel, so
+	# easing on top of that ease is lag between the action and the frame it is in.
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
-	_rig.position = _aim_over(flat.x, flat.z)
+	_rig.hold_at(_aim_over(flat.x, flat.z))
 	# ...and the 2D camera answers WHERE, while the beat answers FROM WHICH SIDE (#520). Polled
 	# beside the position for the same reason it is: this is the one block that already runs every
 	# frame under playback. Below the early return deliberately -- the release edge above restores
 	# the player's own yaw, and re-aiming after it would undo the return in the same frame.
 	_rig.aim_along(cam.directed_line)
+	# ...and HOW WIDE, the third of the same three questions (#520). An EDGE, never a per-frame
+	# apply: the same rule the playback-distance reset above follows, so the shot is set up once and
+	# the wheel is the player's again for the rest of it.
+	if cam.framed_span != _framed_span:
+		_framed_span = cam.framed_span.duplicate()
+		if _framed_span.size() == 2:
+			_rig.widen_to_fit(_span_volume(_framed_span))
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -917,15 +938,23 @@ func _center_on_pointer() -> void:
 
 
 # THE recentre, and the one answer to "put the rig over this cell": SPACE above, and #471's return
-# to the acting unit, which arrives as game.view_focus_requested. Snap rather than glide: this node
-# has always written position outright, and the rig smooths yaw and distance but not position.
+# to the acting unit, which arrives as game.view_focus_requested. A GLIDE since #520 -- both are
+# board play, which is exactly the scope the dev put the never-teleport rule at (2026-08-27: "that
+# only applies while we're on the map"). It snapped until then because the rig smoothed yaw and
+# distance but not position; now it smooths all three.
 #
 # The HEIGHT comes from the cell, and that is the whole of the fix the dev's Level_1 report forced
 # (2026-08-23). surface_point is the cell-shaped door onto the same surface plane _aim_over
 # evaluates continuously — one authority, two entry points BoardSpace already ships (#273 / #259),
 # and it is the seam UnitMirror places the sprite with, so the camera looks where the unit IS.
+#
+# surface_point carries the STAGED offset while _aim_over does not, so a call here while the board
+# is torn out would lift the rig twice -- once through the point and once through the rig's own lift
+# channel. Structurally unreachable rather than guarded: both callers are refused while playback
+# owns the board (SPACE by _unhandled_input's lock check, an order commit by there being no pass
+# running to commit during), and playback is the only thing that stages anything.
 func _center_rig_on(cell: Vector2i) -> void:
-	_rig.position = BoardSpace.surface_point(cell, game.board_heights)
+	_rig.glide_to(BoardSpace.surface_point(cell, game.board_heights))
 
 
 # THE aim point for a continuous world x/z — the AI pan's twin of _center_rig_on, which has a cell.
@@ -939,6 +968,16 @@ func _center_rig_on(cell: Vector2i) -> void:
 func _aim_over(x: float, z: float) -> Vector3:
 	var cell := Vector2i(floori(x), floori(z))
 	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
+
+
+# The box a framed span (#520) must fit inside: the two cells' own surface points, through the same
+# seam UnitMirror stands a sprite with, so a walk that climbs is framed on the height it really
+# ends at. The rig grows it by its own fit margin -- only this scene knows the cells, only the rig
+# knows fov, aspect and pitch (Law #4: pass, don't look up).
+func _span_volume(span: Array[Vector2i]) -> AABB:
+	var heights: BoardHeights = game.board_heights
+	return AABB(BoardSpace.surface_point(span[0], heights), Vector3.ZERO) \
+			.expand(BoardSpace.surface_point(span[1], heights))
 
 
 func _update_pointer(screen_pos: Vector2) -> void:

@@ -244,11 +244,14 @@ yank the camera too, and that is a knob to turn in play rather than a rule to gu
   `battle3d` already had a **player-initiated** rig recentre that never touches the mirror — SPACE —
   so this is a second caller of `_center_rig_on(cell)`, and the two guard cases in
   `test_camera_follow.gd` keep saying exactly what they said before.
-- **SNAP, not glide** (dev call). Two reasons beyond the feel: the rig smooths yaw and distance but
-  **not position** — every writer, WASD included, assigns it outright — so a glide is a mechanism to
-  invent, not a duration to pick; and the 2D twin's `center_on_position` sets `lock_manual_input`,
-  refusing the player's own camera on the way in, which is the wrong answer for someone who just
-  gave an order.
+- **SNAP, not glide** (dev call) — **SUPERSEDED 2026-08-27, and by the same person.** The original
+  reasoning was that the rig smoothed yaw and distance but **not position**, so a glide was a
+  mechanism to invent rather than a duration to pick. #520 diff 2b slice 1 invented it, on his own
+  ruling that a camera on the board must never teleport, and this recentre is one of the four
+  callers that changed. What did **not** change is the other half of the bullet, and it is still
+  load-bearing: the 2D twin's `center_on_position` sets `lock_manual_input`, refusing the player's
+  own camera on the way in, which is the wrong answer for someone who just gave an order — so the
+  glide is the **rig's** own channel (`CameraRig3D.glide_to`) and never a hop through that door.
 - **`game.focus_view_on(unit)` derives the cell ONCE and emits it.** The **projected** destination,
   which is already what every gate and pick layer means by "where this unit acts from" ([#126](https://github.com/Phaazoid/Godoiosis/issues/126)),
   so a queued move is followed rather than second-guessed. The 2D camera is written there and the 3D

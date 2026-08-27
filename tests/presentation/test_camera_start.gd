@@ -23,7 +23,7 @@ const AUTHORED_DISTANCE := 15.5
 
 var _scene: Node3D
 var _game: Node2D
-var _rig: Node3D
+var _rig: CameraRig3D
 var _camera3d: Camera3D
 
 
@@ -35,7 +35,7 @@ func before_test() -> void:
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 	_game = _scene.game
-	_rig = _scene.get_node("CameraRig") as Node3D
+	_rig = _scene.get_node("CameraRig") as CameraRig3D
 	_camera3d = _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
 	_scene.load_mission(PROLOG)
 	await await_idle_frame()
@@ -156,7 +156,7 @@ func test_clearing_the_board_forgets_the_last_missions_start() -> void:
 func test_capture_reads_the_live_rig_rather_than_where_it_is_heading() -> void:
 	# You are storing the shot you are LOOKING at. Set the targets away from the live values and
 	# the captured pose must follow the live ones — the same rule _describe_view (#240) follows.
-	_rig.position = Vector3(7.0, 1.0, 5.0)
+	_rig.hold_at(Vector3(7.0, 1.0, 5.0))
 	_rig.rotation_degrees.y = 20.0
 	_camera3d.position.z = 11.0
 	_rig._target_yaw_degrees = 200.0
@@ -176,7 +176,7 @@ func test_a_captured_pose_reloads_as_the_shot_it_was_captured_from() -> void:
 	# The authoring loop end to end: fly the camera, press Capture, save, load, and be back where
 	# you were. This is the one case that would catch a capture and an apply that each work but
 	# disagree about what the three numbers MEAN.
-	_rig.position = Vector3(9.0, 1.0, 6.0)
+	_rig.hold_at(Vector3(9.0, 1.0, 6.0))
 	_rig.rotation_degrees.y = 63.0
 	_camera3d.position.z = 13.0
 

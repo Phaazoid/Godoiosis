@@ -165,6 +165,8 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far one notch of the mouse wheel moves the camera."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "smoothing", "label": "Camera smoothing", "min": 1.0, "max": 24.0, "step": 0.1,
 		"tip": "How fast the camera catches up to where it has been told to go. Higher is snappier and more responsive; lower glides, which reads as cinematic until you are trying to play."},
+	{"group": "Camera handling", "node": "CameraRig", "prop": "glide_smoothing", "label": "Pan glide speed", "min": 1.0, "max": 24.0, "step": 0.1,
+		"tip": "How fast the camera TRAVELS when something other than your hand moves it -- the flight back to your own view after a pass, the return to a unit you just gave an order to, R, and the rise into the torn-out diorama. Higher lands sooner, lower drifts. This is where to look if the end of every Execute reads as slow: the return is the most visible of them by far. Separate from Camera smoothing above, which is how the yaw and the zoom catch up under your own input."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_speed", "label": "Pan speed", "min": 1.0, "max": 30.0, "step": 0.5,
 		"tip": "How fast WASD slides the camera across the board, in world units per second."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "orbit_sensitivity", "label": "Orbit sensitivity", "min": 0.02, "max": 1.0, "step": 0.01,
