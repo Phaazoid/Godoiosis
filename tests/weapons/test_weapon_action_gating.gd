@@ -68,6 +68,10 @@ func test_bare_weapon_with_nothing_extra_has_no_weapon_actions() -> void:
 # #413 made Overwatch a WEAPON action, so the gate has a third clause -- and it follows the same
 # rule as the other two: a watchable attack the unit could fire RIGHT NOW opens the row, one it
 # cannot does not open it alone. Both halves, because the fireability filter IS the rule.
+#
+# The watchable attack is an EXTRA, never the main: since #590 a can_overwatch attack is watch-ONLY,
+# so a main authored that way leaves the weapon nothing to attack with and WeaponTemplateLint
+# refuses it. Authoring the invalid shape here would pin it as legal.
 func test_a_watchable_attack_opens_the_weapon_row_only_when_it_can_fire() -> void:
 	var unit := H.spawn_unit(self, Team.Faction.PLAYER, Vector2i(0, 0), {}, false)
 	var template := WeaponData.new()
@@ -76,7 +80,10 @@ func test_a_watchable_attack_opens_the_weapon_row_only_when_it_can_fire() -> voi
 	unit.equipped_weapon = WeaponInstance.make(template)
 	assert_bool(unit.has_weapon_actions()).is_false()   # the baseline: nothing to do in the slice
 
-	template.main_attack.can_overwatch = true
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Overwatch"
+	watch.can_overwatch = true
+	template.extra_attacks = [watch]
 	assert_bool(unit.has_weapon_actions()).is_true()
 
 	# The unfireable half: Blowback is the only watchable attack and the mace has no charge, so the

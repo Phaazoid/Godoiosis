@@ -216,6 +216,11 @@ func _mods_for(wielder: Unit, attack: WeaponAttackData) -> Array[WeaponModData]:
 # --- Attack-source surface (EquippableData) ---
 
 func selectable_attacks(wielder: Unit) -> Array[AttackData]:
+	return fireable_only(wielder, repertoire(wielder))
+
+# The repertoire in the base's own terms (#590). available_attacks answers the same question in
+# WeaponAttackData terms and stays the family-facing one; both views come off THIS.
+func repertoire(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	for a in available_attacks(wielder):
 		result.append(a)
@@ -223,7 +228,7 @@ func selectable_attacks(wielder: Unit) -> Array[AttackData]:
 
 # What this weapon's main attack ACTUALLY is: the template's, unless a proficiency-active mod
 # replaces it (#529). FOUR surfaces read it -- default aim, counters, the secondary filter and
-# the repertoire below -- and they have to agree, which is why it is a seam rather than a clause
+# available_attacks below -- and they have to agree, which is why it is a seam rather than a clause
 # each of them repeats. #529 named only the counter; secondary_attacks is the sharper one,
 # because filtering by the OLD main lists the replacement in the submenu as well as firing it
 # from Attack, so the same swing shows up twice.
@@ -247,13 +252,15 @@ func default_attack(wielder: Unit) -> AttackData:
 func counter_attack(wielder: Unit) -> AttackData:
 	return effective_main(wielder)
 
-# available_attacks minus main — what the Weapon Action submenu lists.
+# The FIREABLE set minus main -- what the Weapon Action submenu lists. Was available_attacks minus
+# main until #590: a watch-only attack must never be offered as something to fire, and
+# selectable_attacks is the one place that clause is spelled.
 func secondary_attacks(wielder: Unit) -> Array[AttackData]:
 	var result: Array[AttackData] = []
 	if template == null:
 		return result
 	var main := effective_main(wielder)
-	for a in available_attacks(wielder):
+	for a in selectable_attacks(wielder):
 		if a != main:
 			result.append(a)
 	return result

@@ -293,22 +293,30 @@ func _sprung_springspear() -> WeaponInstance:
 	var spear := WeaponInstance.make(template) as SpringspearWeaponInstance
 	spear.ready = false   # spent: the secondary is gated, the family has words for it
 	return spear
-
-
 # Overwatch is a WEAPON ACTION and ONE ROW (dev, 2026-08-26: "Overwatch should be a weapon action,
 # not it's own top rung on the menu" / "The Carbine will get 1 Overwatch action as a special weapon
-# action. That's it. There will be no sub menu."), so it sits in the kit slice beside Reload, named
-# for the VERB, and clicking it picks the attack.
+# action. That's it. There will be no sub menu."), so it sits in the kit slice beside Reload and
+# clicking it picks the attack.
+#
+# The watch attack is a NON-MAIN one, which is #590's whole shape: the row was labelled with the
+# attack's display_name whenever it was not the weapon's default, i.e. with the same name its own
+# fire row already wore, so build_tree's duplicate-name guard silently dropped one of the two and
+# the fire row -- listed first -- is the one that survived. Authoring it on the main hid that
+# entirely, which is how the case that used to live here passed over the bug for a fortnight.
 #
 # The case DRIVES the path instead of reading the tree, because both ends can be right while nothing
 # joins them: the row exists, `enter_overwatch_mode` works, and the leaf's own pick is the wire. It
-# pins three things a reshuffle would break silently -- the top ring staying clear (a rung of its own
-# is what this replaced), the row opening NO submenu, and the attack it chooses.
-func test_overwatch_is_one_weapon_action_row_that_picks_its_attack() -> void:
+# pins four things a reshuffle would break silently -- the top ring staying clear (a rung of its own
+# is what this replaced), the row opening NO submenu, the attack it chooses, and the absence of a
+# fire row for a watch-only attack.
+func test_a_watch_attack_gets_one_reachable_row_and_no_fire_row() -> void:
 	var watcher := _spawn(Vector2i(2, 0))
 	var weapon := H.make_weapon(4)
 	weapon.template.main_attack.display_name = "Shot"
-	weapon.template.main_attack.can_overwatch = true
+	var watch := WeaponAttackData.new()
+	watch.display_name = "Overwatch"
+	watch.can_overwatch = true
+	weapon.template.extra_attacks = [watch]
 	watcher.equipped_weapon = weapon
 
 	game.main_action_menu.show_main_menu(watcher, Vector2i(400, 300))
@@ -318,12 +326,23 @@ func test_overwatch_is_one_weapon_action_row_that_picks_its_attack() -> void:
 			"Overwatch took a top rung of its own -- it is a weapon action").is_true()
 
 	_drill(controller, MD.kit_category(game, watcher))
-	var row := _row_named(controller.level_nodes(), "Overwatch")
+	var rows: Array = controller.level_nodes()
+	var row := _row_named(rows, "Overwatch")
 	assert_bool(row.is_empty()).override_failure_message(
 			"the kit slice drew no Overwatch row").is_false()
 	var children: Array = row.get("children", [])
 	assert_bool(children.is_empty()).override_failure_message(
 			"the Overwatch row opened a submenu -- it is one row that picks its own attack").is_true()
+
+	# #590: exactly ONE row wears that name. Two would mean the watch attack kept a firing twin,
+	# which is the collision the exclusivity rule exists to make impossible -- and which the menu
+	# resolves by DROPPING one, so the count is the only place it is visible.
+	var named := 0
+	for node: Dictionary in rows:
+		if String(node.get("name", "")) == "Overwatch":
+			named += 1
+	assert_int(named).override_failure_message(
+			"the watch attack was offered twice -- it kept a fire row, so one of the two is eaten").is_equal(1)
 
 	# The WIRE, not the two ends.
 	_aim_and_click(controller, "Overwatch")
@@ -337,4 +356,4 @@ func test_overwatch_is_one_weapon_action_row_that_picks_its_attack() -> void:
 	assert_int(intent).override_failure_message(
 			"the row opened an ordinary shot's aim, not a watch").is_equal(watching)
 	assert_object(watcher.active_attack).override_failure_message(
-			"the row aimed no attack -- clicking Overwatch is what chooses it").is_same(weapon.template.main_attack)
+			"the row aimed no attack -- clicking Overwatch is what chooses it").is_same(watch)
