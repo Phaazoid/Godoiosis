@@ -805,6 +805,11 @@ func _rebuild_watch_sprites() -> void:
 		sprite.texture = WATCH_MARK_TEXTURE
 		sprite.modulate = WATCH_MARK_COLOR
 		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+		# The ward mark's band: above terrain state and the squad rings, below units. Left at the
+		# default 0 this drew UNDER a frost icon and under a membership ring, i.e. the one marker
+		# you must not miss yielding to ambient markup — #346's rule inverted. The 3D says the same
+		# thing with its own sort, one layer above the ward's (a layer there is a plane).
+		sprite.z_index = RING_Z_INDEX + 1
 		sprite.position = board_tilemap.map_to_local(cell)
 		icon_overlay.add_child(sprite)
 		_watch_sprites.append(sprite)
