@@ -840,7 +840,9 @@ func _update_help() -> void:
 	# "spawn" for every dev page while only the Spawn one could, which is the bug it was describing.
 	var space := "SPACE spawn" if game.dev_controller.spawn_armed() else "SPACE centre"
 	var wheel := "wheel level  |  Ctrl+wheel zoom" if game.dev_controller.elevation_brush_live() else "wheel zoom"
-	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
+	# The drag turns AND tilts since #586, so the line says both -- a readout that names a gesture has
+	# to name what the gesture actually does, or it goes stale against the control it describes.
+	_help.text = "Battle3D  |  LMB act  |  %s  |  %s-drag orbit/tilt  |  Q/E realign  |  %s  |  WASD pan  |  %s  |  R reset  |  F4 flat 2D  |  Shift+F4 corner" % [right, orbit, wheel, space]
 	_fit_help_plate()
 
 

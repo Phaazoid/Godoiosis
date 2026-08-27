@@ -122,8 +122,11 @@ const KNOBS: Array[Dictionary] = [
 	# camera DRAGS -- zoom limits, pan speed, smoothing, orbit sensitivity -- left for GameKnobs
 	# with the rest of the game settings (#373), which is what makes "a mission may not re-teach
 	# the controls" structural rather than a name on an exclusion list.
-	{"group": "Camera framing", "node": "CameraRig/Pitch", "prop": "rotation_degrees:x", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
-		"tip": "How far the camera looks DOWN at the board. Shallow shows more of the sprites' faces and more sky; steep reads like a map. Press Re-fit camera after moving it -- the framing maths only re-runs on a board load."},
+	# Addresses the RIG's own property since #586, not the Pitch node's rotation: the player can tilt
+	# now, so _process eases that rotation every frame and a knob naming it would be the slider that
+	# moves and silently reverts. This is the baseline the tilt deviates FROM, and R returns to.
+	{"group": "Camera framing", "node": "CameraRig", "prop": "board_pitch_degrees", "label": "Board pitch", "min": -85.0, "max": -10.0, "step": 0.5,
+		"tip": "How far the camera looks DOWN at the board when a mission OPENS. Shallow shows more of the sprites' faces and more sky; steep reads like a map. Press Re-fit camera after moving it -- the framing maths only re-runs on a board load.\n\nThe player may tilt away from this with the orbit drag and R brings them back to it, so this is the angle the board is COMPOSED at rather than the only one it is ever seen at. How far their hand may take it is two Game-tab knobs, not a mood."},
 	{"group": "Camera framing", "node": "CameraRig/Pitch/Camera", "prop": "fov", "label": "FOV", "min": 12.0, "max": 70.0, "step": 0.5,
 		"tip": "Field of view. Low values flatten perspective toward an orthographic, model-railway look (the HD-2D diorama trick); high values exaggerate depth and bend the board's edges. Press Re-fit camera after moving it."},
 	{"group": "Camera framing", "node": ".", "prop": "opening_view_cells", "label": "Opening shot (cells)", "min": 6.0, "max": 64.0, "step": 1.0,

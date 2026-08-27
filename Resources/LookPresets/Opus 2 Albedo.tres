@@ -13,7 +13,7 @@ values = {
 "CameraRig/Pitch/Camera|attributes:dof_blur_near_enabled": true,
 "CameraRig/Pitch/Camera|attributes:dof_blur_near_transition": 4.0,
 "CameraRig/Pitch/Camera|fov": 30.0,
-"CameraRig/Pitch|rotation_degrees:x": -39.999992,
+"CameraRig|board_pitch_degrees": -39.999992,
 "CameraRig|fit_margin_cells": 1.0,
 "CameraRig|focus_band_far": 4.0,
 "CameraRig|focus_band_near": 5.0,
