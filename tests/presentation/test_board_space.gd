@@ -263,3 +263,50 @@ func test_a_corner_cell_gets_no_tilt_because_no_transform_could_carry_one() -> v
 		assert_that(BoardSpace.surface_transform(cell, heights).basis).override_failure_message(
 				"%s: a corner form was handed a tilt it cannot honour" % corners) \
 			.is_equal(Basis.IDENTITY)
+
+
+# --- the side-on camera yaw (#520 diff 2a) ----------------------------------------------------
+
+# The property, not the number: from the yaw the rig would be at, the camera's own offset direction
+# must be PERPENDICULAR to the pair's line -- that is what "side-on" means, and it is what stays
+# true if the rig's parking axis is ever re-authored. The rig orbits about Y with the camera at
+# local +Z, so yaw t puts it at (sin t, cos t).
+func test_the_side_on_yaw_looks_across_the_pair_not_along_it() -> void:
+	var pairs := [
+		[Vector2i(0, 0), Vector2i(3, 0)],    # along +x
+		[Vector2i(0, 0), Vector2i(0, 3)],    # along +z
+		[Vector2i(4, 1), Vector2i(1, 4)],    # a diagonal
+		[Vector2i(2, 5), Vector2i(7, 3)],    # something off both axes
+	]
+	for pair: Array in pairs:
+		var from: Vector2i = pair[0]
+		var to: Vector2i = pair[1]
+		var yaw := BoardSpace.side_on_yaw(from, to, 0.0)
+		var offset := Vector2(sin(deg_to_rad(yaw)), cos(deg_to_rad(yaw)))
+		var along := Vector2(to.x - from.x, to.y - from.y).normalized()
+		assert_float(offset.dot(along)).override_failure_message(
+				"%s -> %s: yaw %.2f looks along the pair, not across it" % [from, to, yaw]) \
+			.is_equal_approx(0.0, 0.001)
+
+
+# TWO yaws see a pair side-on, 180 apart. Which one is returned is what makes the shot a SPIN
+# rather than a lurch: from either baseline the answer is the near one, so the camera always takes
+# the short way round. Driven from both sides of the same pair, since one baseline could pass by
+# the function simply always returning the same yaw.
+func test_the_side_on_yaw_takes_the_near_side() -> void:
+	var from := Vector2i(0, 0)
+	var to := Vector2i(3, 0)
+	for baseline: float in [0.0, 90.0, 180.0, 270.0, -45.0, 400.0]:
+		var yaw := BoardSpace.side_on_yaw(from, to, baseline)
+		var near := absf(rad_to_deg(angle_difference(deg_to_rad(baseline), deg_to_rad(yaw))))
+		var far := absf(rad_to_deg(angle_difference(deg_to_rad(baseline), deg_to_rad(yaw + 180.0))))
+		assert_bool(near <= far).override_failure_message(
+				"baseline %.0f took the far side: %.1f away vs %.1f" % [baseline, near, far]) \
+			.is_true()
+
+
+# A pair with no direction cannot be seen side-on, and NAN is the one float that cannot be mistaken
+# for a legal yaw -- every real angle is one, so a numeric sentinel would be a shot the camera could
+# actually take.
+func test_a_pair_on_one_cell_has_no_side_to_be_seen_from() -> void:
+	assert_bool(is_nan(BoardSpace.side_on_yaw(Vector2i(2, 2), Vector2i(2, 2), 0.0))).is_true()

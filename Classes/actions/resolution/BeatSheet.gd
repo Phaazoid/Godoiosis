@@ -71,6 +71,26 @@ class Beat:
 				return who
 		return actor if actor != null and is_instance_valid(actor) else null
 
+	# The line the camera frames this beat ACROSS (#520): [from, to] in sim cells, empty when the
+	# beat has no direction to be seen from. Only a VOLLEY has one -- the ticket's profile shot and
+	# "the next pair's natural profile angle" are both about an attacker and what they are aimed at,
+	# and moves, punctuation and the side-channel tail have no pair. Empty is the answer for those,
+	# which is already this sheet's idiom for "the camera does not move" (see subject()).
+	#
+	# The cells come off the ATTACK, not off the two units: origin_cell/target_cell are the
+	# resolver's own aim, so a swing at open ground (#47, target null) still has a direction, and a
+	# victim freed mid-pass cannot take the angle down with them. An aim at your own cell has no
+	# direction and is skipped rather than answered.
+	func aim_line() -> Array[Vector2i]:
+		for action in actions:
+			var attack := action as AttackAction
+			if attack == null:
+				continue
+			if attack.origin_cell == attack.target_cell:
+				continue
+			return [attack.origin_cell, attack.target_cell]
+		return []
+
 	# Drop this volley's no-op members and read the surviving facts off their outcomes. R7 skips a
 	# counter-er, not a volley, so this runs AFTER grouping -- dropping a skipped LEAD any earlier
 	# would orphan its own secondaries into a beat of their own.

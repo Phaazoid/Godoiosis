@@ -34,6 +34,11 @@ var was_moving := false
 # throughout (dev, 2026-08-26), which is why battle3d gates zoom on the menu half alone.
 var playback_locked := false
 var follow_unit: Unit = null  # while set, target_position tracks this unit every frame
+# The line the current beat is framed ACROSS, in sim cells (#520) -- [from, to], empty for a beat
+# with no direction. THIS camera never rotates and never will; it carries the value because it is
+# already what the 3D rig mirrors, and OrderExecutor has no path to the rig (the same reason the pan
+# goes through here). The rig turns it into a yaw, since only the rig knows what to measure from.
+var directed_line: Array[Vector2i] = []
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
@@ -163,6 +168,10 @@ func _input_delegated() -> bool:
 
 func set_playback_locked(locked: bool) -> void:
 	playback_locked = locked
+	# Cleared on BOTH edges, not just the release (#520). Claiming is a fresh pass, and the 3D rig
+	# re-solves this line against the detent it squares up to at that moment -- so a line left over
+	# from the previous squad would swing the camera off the new baseline before any beat ran.
+	directed_line = []
 	if not locked:
 		follow_unit = null
 

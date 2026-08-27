@@ -239,3 +239,33 @@ static func of_cell(cell: Vector2i, row: int) -> Vector3i:
 static func of_pixels(px: Vector2, y: float) -> Vector3:
 	var per_cell := float(GridUtils.TILE_SIZE)
 	return Vector3(px.x / per_cell, y, px.y / per_cell)
+
+
+# The camera yaw that sees a cell pair SIDE-ON (#520): looking perpendicular to the line from
+# `from` to `to`, so an attacker and what they are swinging at both sit across the frame instead
+# of one hiding behind the other. Cells rather than units because the RESOLVER already owns the
+# aim (origin_cell -> target_cell) and re-deriving it off live node positions would be a second
+# answer to where the blow is pointed (Law #2).
+#
+# Yaw convention, and it is the whole of the arithmetic: CameraRig3D orbits about Y with the
+# camera parked at local +Z, so yaw t puts it at direction (sin t, cos t) from the aim. Side-on
+# means that direction is perpendicular to the pair's, which atan2(-dz, dx) solves directly.
+#
+# TWO yaws satisfy it, 180 apart -- the same shot from either side. Returning the one nearer
+# `baseline` is what makes it a SPIN rather than a lurch: the camera always takes the short way
+# round from where playback squared it up.
+#
+# NAN for a pair with no direction (a self-verb, an aim at your own cell). A float sentinel is
+# unavoidable here since every real angle is a legal yaw, and NAN is the one value that cannot be
+# mistaken for one; is_nan() at the single call site is what keeps it from travelling.
+static func side_on_yaw(from: Vector2i, to: Vector2i, baseline: float) -> float:
+	var dx := float(to.x - from.x)
+	var dz := float(to.y - from.y)   # a sim cell's y IS the world z -- see of_cell above
+	if is_zero_approx(dx) and is_zero_approx(dz):
+		return NAN
+	var side_on := rad_to_deg(atan2(-dz, dx))
+	var opposite := side_on + 180.0
+	if absf(angle_difference(deg_to_rad(baseline), deg_to_rad(opposite))) \
+			< absf(angle_difference(deg_to_rad(baseline), deg_to_rad(side_on))):
+		return opposite
+	return side_on

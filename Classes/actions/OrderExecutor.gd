@@ -110,13 +110,13 @@ func execute_orders(unit):
 		await game.camera_controller.pan_to(walker, Pacing.PLAYBACK_PAN)
 	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
-			_beat_subjects(sheet.volleys(false)))
+			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of.
 	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
 	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
-			_beat_subjects(sheet.volleys(true)))
+			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)))
 	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
@@ -223,7 +223,8 @@ func _retire_move_markup(action: BaseAction) -> void:
 # (the parallel move phase, then each side-channel batch) with no separate between-phases pause, and
 # leaves no trailing pause before the squad's turn ends. An empty batch returns above, so a phase
 # with nothing in it costs nothing.
-func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {}):
+func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
+		lines: Dictionary = {}):
 	if actions.is_empty():
 		return
 
@@ -237,6 +238,11 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 		# the pan is one seam and one duration; headless it lands instantly like every other beat.
 		# Only a beat's OPENING action carries a subject, so a volley pans once and then plays.
 		if subjects.has(action):
+			# The ANGLE is published BEFORE the pan and never awaited (#520): the rig eases its yaw
+			# in _process while pan_to tweens the travel, so the spin and the approach are one
+			# movement rather than a turn followed by a walk.
+			if lines.has(action):
+				game.camera_controller.directed_line = lines[action]
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
 		await Pacing.beat(self, hold)
 		action.begin_execution()
@@ -267,6 +273,19 @@ func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
 		if who != null and not beat.actions.is_empty():
 			subjects[beat.actions[0]] = who
 	return subjects
+
+
+# ...and from which SIDE, keyed identically (#520). A third schedule rather than one map to the Beat
+# itself, because what this hands the executor is plain data: three questions (how long, who, from
+# where), each answered before the pass starts. A beat with no direction is simply left out, the
+# same way a subjectless one is -- absence means the camera keeps the angle it has.
+func _beat_lines(beats: Array[BeatSheet.Beat]) -> Dictionary:
+	var lines: Dictionary = {}
+	for beat in beats:
+		var line := beat.aim_line()
+		if not line.is_empty() and not beat.actions.is_empty():
+			lines[beat.actions[0]] = line
+	return lines
 
 # Play the resolved terrain deposits into the live store, then redraw the board (#50). Runs after
 # the attack phase that produced them.
