@@ -85,6 +85,51 @@ func test_it_sees_a_tuning_static_left_moved() -> void:
 		"a moved class knob went unnoticed").contains("SQUAD_RING_ALPHA")
 
 
+func test_it_sees_a_player_setting_left_flipped() -> void:
+	# The leak that shipped: test_board_mirror turns PHOTOSENSITIVITY on to prove the fire holds
+	# still, and never turns it off. Harmless while every before_test called reset_for_test(), a
+	# real leak the moment that reset became once-per-suite -- and invisible, because nothing here
+	# sampled the store. PlayerSettings._state is a static; no scene owns it.
+	var was := PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+	var before := _take()
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, not was)
+	var diff := BoardFingerprint.differences(before, _take())
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, was)
+
+	assert_str(", ".join(diff)).override_failure_message(
+		"a flipped player setting went unnoticed").contains("PHOTOSENSITIVITY")
+
+
+func test_it_sees_an_experiment_flag_left_on() -> void:
+	# Experiments._state has the identical shape and the identical exposure (test_staging sets
+	# DIORAMA_BYSTANDERS). Two stores, one rule -- both derived from their own DEFS, so a flag added
+	# later is covered with no edit to the fingerprint.
+	var flag: Experiments.Flag = Experiments.DEFS.keys()[0]
+	var was := Experiments.is_on(flag)
+	var before := _take()
+	Experiments.set_on(flag, not was)
+	var diff := BoardFingerprint.differences(before, _take())
+	Experiments.set_on(flag, was)
+
+	assert_str(", ".join(diff)).override_failure_message(
+		"a flipped experiment flag went unnoticed").contains(str(Experiments.Flag.keys()[flag]))
+
+
+func test_it_sees_the_hosting_view_left_swapped() -> void:
+	# Not board state and not a knob -- the third kind: who owns board INPUT. FLAT_2D stands the 3D
+	# picker down and uninstalls the pointer source, so a case that swaps and does not swap back
+	# leaves every later case hovering off the real mouse. Found by conversion, not by reasoning:
+	# test_overlay_mirror does exactly this, and the two crown cases after it drew nothing.
+	var was: Variant = _scene.view
+	var before := _take()
+	_scene.view = _scene.View.FLAT_2D if was != _scene.View.FLAT_2D else _scene.View.HD_2D
+	var diff := BoardFingerprint.differences(before, _take())
+	_scene.view = was
+
+	assert_str(", ".join(diff)).override_failure_message(
+		"a swapped hosting view went unnoticed").contains("hosting view")
+
+
 func test_it_sees_staging_left_lifted() -> void:
 	# The one piece of board-scoped state that lives in a static (#622); clear_board clears it, and
 	# this is what would catch the day it stops.

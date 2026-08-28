@@ -89,3 +89,35 @@ func test_and_the_next_case_still_sees_full_health() -> void:
 		assert_int(unit.get_current_hp()).override_failure_message(
 			"%s arrived damaged -- the previous case leaked through the reset" % unit.get_unit_name()
 			).is_equal(unit.get_max_hp())
+
+
+# ==============================================================================
+#  ...and neither does a setting it flipped
+# ==============================================================================
+
+# The board half above is apply_scenario's; this half is nobody's until the fixture claims it.
+# PlayerSettings._state and Experiments._state are STATICS -- no scene owns them, so freeing the
+# scene does not touch them and apply_scenario has no reach into them. The hand-written fixtures
+# called reset_for_test() per case, which is precisely the call that became once-per-suite the
+# moment a suite started sharing: test_board_mirror turns PHOTOSENSITIVITY on and never turns it
+# off, and every case after it inherited that, green and unremarked.
+#
+# So this pair is the WIRE test for _apply's own reset -- the class that ships green because both
+# ends are correct and nothing connects them (#103). Falsified by deleting the two reset_for_test
+# lines from SharedBoard._apply: the second case reds, and only the second.
+
+func test_a_case_may_flip_a_setting_or_a_flag_freely() -> void:
+	PlayerSettings.set_on(PlayerSettings.Setting.PHOTOSENSITIVITY, true)
+	Experiments.set_on(Experiments.DEFS.keys()[0], true)
+	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)).override_failure_message(
+		"the flip did not take, so the case below proves nothing").is_true()
+
+
+func test_and_the_next_case_sees_the_authored_defaults_again() -> void:
+	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)).override_failure_message(
+		"PHOTOSENSITIVITY arrived on -- the previous case's setting leaked through the reset"
+		).is_equal(PlayerSettings.default_of(PlayerSettings.Setting.PHOTOSENSITIVITY))
+	var flag: Experiments.Flag = Experiments.DEFS.keys()[0]
+	assert_bool(Experiments.is_on(flag)).override_failure_message(
+		"%s arrived on -- the previous case's flag leaked through the reset"
+		% Experiments.Flag.keys()[flag]).is_equal(Experiments.default_of(flag))

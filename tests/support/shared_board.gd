@@ -30,7 +30,9 @@ var game: Node2D
 
 var _scene_path: String
 var _mission_path: String
+var _prepare: Callable
 var _pristine: ScenarioData
+var _pristine_shot: CameraPose
 var _baseline: Dictionary
 
 
@@ -45,7 +47,20 @@ static func fresh_mode() -> bool:
 
 # --- the four hooks ------------------------------------------------------------------------------
 
-func open(suite: GdUnitTestSuite) -> void:
+# `prepare` is an optional recipe for a pristine state the scene does not come up in -- it runs
+# after the build (and after the mission, if one was named) and BEFORE the baseline is captured, so
+# whatever it does becomes the state every case starts from. Stored rather than called here, because
+# fresh mode has to run it per case too.
+#
+# Its one shipped caller is "an empty board": six suites open with clear_board(), and the naive read
+# of that -- the scene comes up empty anyway, so drop it -- is WRONG and was measured wrong. Emptying
+# is not what those fixtures were buying. clear_board() emits board_loaded, which is what drives
+# battle3d._on_board_loaded -> rebuild()/fit_camera()/pointer reset, and without that first load the
+# 3D hover wire is never built: test_overlay_mirror's crown case fails, in BOTH modes, which is what
+# proved it is a missing recipe rather than a leak. A suite that names a mission gets the same
+# emission from load_mission and needs nothing.
+func open(suite: GdUnitTestSuite, prepare := Callable()) -> void:
+	_prepare = prepare
 	if fresh_mode():
 		return   # nothing is shared; reset() builds a scene of its own per case
 	await _build(suite)
@@ -55,6 +70,7 @@ func open(suite: GdUnitTestSuite) -> void:
 	# a leak that is really a representation change, and the check would be worthless on day one.
 	_pristine = game.scenario_manager.capture_scenario("__shared_pristine")
 	await _apply(suite)
+	_pristine_shot = scene.capture_camera_start()
 	_baseline = BoardFingerprint.take(scene, game.scenario_manager)
 
 
@@ -110,7 +126,8 @@ func _build(suite: GdUnitTestSuite) -> void:
 	# The project window size: headless defaults can be tiny, and several presentation reads
 	# (picking, the PiP) are resolution-dependent.
 	suite.get_tree().root.size = Vector2i(1280, 720)
-	PlayerSettings.reset_for_test()
+	PlayerSettings.reset_for_test()   # also cleared per case by _apply; this is fresh mode's copy
+	Experiments.reset_for_test()
 	scene = (load(_scene_path) as PackedScene).instantiate() as Node3D
 	scene.auto_play = false   # the board is loaded explicitly below, if at all
 	suite.get_tree().root.add_child(scene)
@@ -118,6 +135,9 @@ func _build(suite: GdUnitTestSuite) -> void:
 	game = scene.game
 	if _mission_path != "":
 		scene.load_mission(_mission_path)
+		await suite.await_idle_frame()
+	if _prepare.is_valid():
+		_prepare.call()
 		await suite.await_idle_frame()
 
 
@@ -132,6 +152,14 @@ func _apply(suite: GdUnitTestSuite) -> void:
 	if _pristine != null:
 		game.scenario_manager.apply_scenario(_pristine)
 	_restore_tuning()
+	# The two settings stores, for the same reason as the knobs and with a bug of their own to show
+	# for it. Both keep a static _state that no scene owns, so the per-case reset_for_test() the
+	# hand-written fixtures called is exactly what moved to once-per-suite when a suite converted --
+	# and test_board_mirror's photosensitivity case had been relying on it. Clearing them here puts
+	# that back where it belongs: the fixture, not thirteen before_test bodies.
+	PlayerSettings.reset_for_test()
+	Experiments.reset_for_test()
+	_restore_session()
 	await DialogFixtures.end_all_dialog(suite)
 	await suite.await_idle_frame()
 
@@ -159,6 +187,62 @@ func _restore_tuning() -> void:
 			continue   # a knob with no READ arm; test_game_knobs owns that finding, never write null
 		if not LookKnobs.same_value(GameKnobs.read_class(scene, GameKnobs.CLASS_KNOBS[i]), classes[i]):
 			GameKnobs.write_class(scene, GameKnobs.CLASS_KNOBS[i], classes[i])
+
+
+# The SESSION state a case can move: the hosting view, dev mode, and where the pointer is.
+# None of it is board content, so apply_scenario has no reach into any of it -- and all of it
+# decides what the next case sees. Put back the same way a knob is.
+#
+# The hosting view first. It is not board state and apply_scenario has
+# no reach into it, but it decides WHO OWNS BOARD INPUT: FLAT_2D stands the 3D picker down and
+# uninstalls the pointer source HoverPresenter reads, so a case that swaps view and does not swap
+# back leaves every later case hovering off the real mouse. test_overlay_mirror does exactly that
+# (its FLAT_2D case is asserting that the 2D layer comes back), and the two crown cases after it
+# went dark -- a hover that drew nothing, with every individual piece behaving correctly.
+#
+# Restored through _apply_hosting(), the same door the game's own F4 uses, because assigning the
+# property alone changes nothing: the ownership swap is what that call does.
+func _restore_session() -> void:
+	if _baseline.is_empty() or scene == null:
+		return
+	var want: Variant = _baseline.get("view")
+	if want != null and scene.get("view") != want:
+		scene.set("view", want)
+		scene._apply_hosting()
+	# Dev mode is the same shape one level in, and it is what test_input_bridge's brush cases move.
+	# Through set_dev_mode(), not the flag, because the flag alone leaves game_state resting on the
+	# old base -- and it goes AFTER apply_scenario rather than before, since set_dev_mode ends in
+	# exit_current_mode() and that is what settles game_state onto the right base.
+	var dev: Variant = _baseline.get("dev_mode")
+	if dev != null and game.get("dev_mode_enabled") != dev:
+		game.set_dev_mode(dev)
+	# WHERE THE POINTER IS, which is stored twice and reset once. battle3d._pointer_cell is put back
+	# to NO_CELL by _on_board_loaded, and HoverPresenter.last_hovered_cell -- its own copy, kept so
+	# the poll only works on a CHANGE -- is not, so after a board reload the two disagree. In the
+	# game that costs one spurious hover event and nothing notices. Under a shared fixture it is
+	# fatal in the other direction: a case that points at the cell the previous case pointed at sees
+	# NO CHANGE, so the hover never fires and the crown, the card and the snap simply never happen.
+	#
+	# Both are zeroed here, and it must be BOTH: setting only the presenter's copy leaves the two
+	# disagreeing the other way, and the next frame fires a hover the case never asked for. That is
+	# a real asymmetry in the production reset rather than a fixture quirk -- filed, not fixed here,
+	# because a board reload is not a mouse move and which of the two should own the answer is a
+	# design call.
+	if scene.get("_pointer_cell") != null:
+		scene.set("_pointer_cell", BoardSpace.NO_CELL)
+	var presenter: Variant = game.get("hover_presenter")
+	if presenter != null:
+		presenter.last_hovered_cell = GridUtils.NO_CELL
+	# THE SHOT. board_loaded already calls fit_camera, and that is not enough on purpose: with no
+	# authored start it falls through to frame(), which "deliberately never touches yaw" (#234), so
+	# a case that orbits the rig leaves the next one looking from somewhere else. pose() is the door
+	# that does adopt all three -- the same one an authored camera_start goes through -- and it sets
+	# the target yaw as well as the live one, without which the rig eases straight back.
+	if _pristine_shot != null:
+		var rig: CameraRig3D = scene.get_node_or_null("CameraRig")
+		if rig != null:
+			rig.pose(_pristine_shot.aim, _pristine_shot.yaw_degrees, _pristine_shot.distance,
+					scene._board_volume())
 
 
 func _teardown() -> void:

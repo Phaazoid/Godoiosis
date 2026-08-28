@@ -35,6 +35,14 @@ static func take(host: Node3D, scenario_manager) -> Dictionary:
 		"node_knobs": node_knob_values(host),
 		"staged_cells": _sorted_cells(BoardSpace.staged_cells()),
 		"dialog_running": Dialogic.current_timeline != null,
+		# The two settings stores. Both keep a static _state Dictionary that outlives any scene, so a
+		# case that flips one hands it to every case after it -- which is exactly what happened the
+		# first time a suite was shared: test_board_mirror turns PHOTOSENSITIVITY on to prove the
+		# fire holds still and never turns it back off, harmless while a per-case reset_for_test()
+		# wiped it and a real leak the moment that reset moved to once-per-suite. Nothing here could
+		# see it, which is the argument for sampling them rather than trusting the recipe.
+		"settings": _settings_state(),
+		"experiments": _experiments_state(),
 		# The camera is re-framed by apply_scenario (board_loaded -> fit_camera), so this is not
 		# expected to move -- which is exactly why it is sampled. "The reset probably covers it"
 		# is an argument; a diff is a guarantee, and camera suites are the ones most likely to
@@ -43,6 +51,19 @@ static func take(host: Node3D, scenario_manager) -> Dictionary:
 		# A case that exits leaving ATTACK_TARGETING or a selection live hands the next case a
 		# board mid-gesture. game_state is the one flag that says so.
 		"game_state": _game_state(host),
+		# The HOSTING VIEW, which is the same class of fact one layer out: not "what is on the
+		# board" but "who is being shown it, and who owns the input". A case that swaps to FLAT_2D
+		# stands the 3D picker down -- pointer_source is uninstalled, so HoverPresenter falls back
+		# to the real mouse and every later case hovers wherever the headless cursor happens to sit.
+		# Measured, not imagined: that is exactly what test_overlay_mirror's FLAT_2D case did to the
+		# two crown cases after it, and the symptom was a hover that drew nothing at all.
+		"view": null if host == null else host.get("view"),
+		# ...and its sibling one level in: DEV MODE. Also not board state -- a session toggle -- but
+		# it decides what _base_state() rests on, so a case that switches it on leaves every later
+		# case's game_state at DEV_MODE however cleanly the board itself was restored. Sampled
+		# separately from game_state because the two answer different questions and only this one
+		# says WHY: "game_state: 0 -> 6" names the symptom, this names the cause.
+		"dev_mode": _dev_mode(host),
 	}
 
 
@@ -59,6 +80,29 @@ static func _game_state(host: Node3D) -> Variant:
 	return null if game == null else game.get("game_state")
 
 
+# Derived from each store's own DEFS rather than listed, so a setting added later is covered with
+# no edit here -- the same reason the tuning half reads the knob tables (Law #4).
+static func _settings_state() -> Dictionary:
+	var out := {}
+	for setting: PlayerSettings.Setting in PlayerSettings.DEFS:
+		out[PlayerSettings.Setting.keys()[setting]] = PlayerSettings.is_on(setting)
+	return out
+
+
+static func _experiments_state() -> Dictionary:
+	var out := {}
+	for flag: Experiments.Flag in Experiments.DEFS:
+		out[Experiments.Flag.keys()[flag]] = Experiments.is_on(flag)
+	return out
+
+
+static func _dev_mode(host: Node3D) -> Variant:
+	if host == null:
+		return null
+	var game: Variant = host.get("game")
+	return null if game == null else game.get("dev_mode_enabled")
+
+
 static func differences(before: Dictionary, after: Dictionary) -> PackedStringArray:
 	var out := PackedStringArray()
 	_diff_value("board", before.get("board"), after.get("board"), out, 0)
@@ -68,12 +112,18 @@ static func differences(before: Dictionary, after: Dictionary) -> PackedStringAr
 			after.get("node_knobs", []), out)
 	if str(before.get("staged_cells")) != str(after.get("staged_cells")):
 		out.append("BoardSpace staging: %s -> %s" % [before.get("staged_cells"), after.get("staged_cells")])
+	_diff_flags("setting", before.get("settings", {}), after.get("settings", {}), out)
+	_diff_flags("experiment", before.get("experiments", {}), after.get("experiments", {}), out)
 	if before.get("dialog_running") != after.get("dialog_running"):
 		out.append("Dialogic timeline running: %s -> %s"
 				% [before.get("dialog_running"), after.get("dialog_running")])
 	_diff_value("camera", before.get("camera"), after.get("camera"), out, 0)
 	if before.get("game_state") != after.get("game_state"):
 		out.append("game_state: %s -> %s" % [before.get("game_state"), after.get("game_state")])
+	if before.get("view") != after.get("view"):
+		out.append("hosting view: %s -> %s" % [before.get("view"), after.get("view")])
+	if before.get("dev_mode") != after.get("dev_mode"):
+		out.append("dev mode: %s -> %s" % [before.get("dev_mode"), after.get("dev_mode")])
 	return out
 
 
@@ -171,6 +221,13 @@ static func _diff_indexed(label: String, table: Array, before: Array, after: Arr
 		var knob: Dictionary = table[i] if i < table.size() else {}
 		var name: String = str(knob.get("static", knob.get("prop", "#%d" % i)))
 		out.append("%s %s: %s -> %s" % [label, name, before[i], after[i]])
+
+
+static func _diff_flags(label: String, before: Dictionary, after: Dictionary,
+		out: PackedStringArray) -> void:
+	for key: String in before:
+		if before[key] != after.get(key, before[key]):
+			out.append("%s %s: %s -> %s" % [label, key, before[key], after[key]])
 
 
 static func _diff_value(path: String, before: Variant, after: Variant, out: PackedStringArray,
