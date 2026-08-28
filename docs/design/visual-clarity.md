@@ -1881,8 +1881,63 @@ context. A session-scoped dev toggle — one of the two gets deleted once it has
 **The camera goes up with it** — built in #520 diff 2b slice 1 above, not here. Slice A shipped
 without it, and the section above says why that gap was invisible from inside this one.
 
-Still open on #521: the transition both ways (rise, white-out, the one-by-one slam in queue order,
-the exit thud and its dust shockwave), and strata on the cut edges, which is art-pass work.
+### ...and it TRAVELS there ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice B, BUILT 2026-08-28)
+
+Slice A moved the tiles instantly. Slice B gives them the journey: they leave their sockets, a
+white-out covers the swap, and they slam into the diorama **one at a time in the order their owners
+act** — which cost nothing to get, because `BeatSheet._gather_cells` already appends in playback
+order. The ticket's "quietly foreshadowing who acts first" was a property of the set all along.
+
+**`StagingFlight` is the schedule, and the schedule is the contract.** Pure and static — cells and
+knobs in, times out. `OrderExecutor` awaits its total while the 3D host renders its progress, so the
+two sides read *one artifact* rather than each deriving its own from the same knobs; that is the
+difference between agreeing and agreeing until one is edited. It is also the only part a headless
+test can watch, so the cases pin the schedule and the decisions and the travel is a play-check.
+
+**Flight is an OVERLAY, never the stored state.** `stage()` still writes the landed board and the
+flight is a transient delta on top of it, so a run with no driver — headless, the plain board, a bare
+fixture — never populates it and reads exactly what it read before slice B existed. Every slice-A
+assertion passes untouched, which is the property that had to hold. The executor ends the flight the
+moment its await returns, because headless nothing ever advanced it and the fight would otherwise
+play out over a board still sitting in its sockets.
+
+**The stagger is DERIVED, not authored.** A fixed per-tile gap reads well on a four-cell skirmish and
+costs seconds on a twenty-cell brawl, and this plays on *every* Execute — so the arrival is given a
+window it must fit inside and the gap is whatever fits, capped so a small fight still gets a punchy
+one-two-three.
+
+**A tile in the air gets its own GridMap.** A cell is a *column*, and a node transform is the only
+thing that carries a whole stack; one map is one offset, so tiles arriving at different moments
+cannot share the landed lattice the way the settled ones do. `_other_map` became `_maps_besides` in
+the same breath — a name that quietly stopped being true the moment a column could be in three
+places, where the failure would have been a tile drawn twice.
+
+**The version bumps on LANDINGS only.** `OverlayMirror` rebuilds every standing prop when
+`staging_version` moves, so bumping per frame would rebuild the board on every frame of the
+transition. Landings are discrete and travel is not — so a tile flies **bare** and is dressed the
+instant it is home. Units ride, because they are per-frame reconciles and read the offset already,
+and fighters arriving standing on their own ground is the shot.
+
+**The camera's height became its own published fact.** `camera_lift()` equals the diorama at rest and
+differs during exactly one window — the one that needs them apart, since the cut treatment puts the
+camera over empty sky *before a single tile is there*. A third field beside the angle, the fit and
+the weight; one field answering two questions is what spins a camera side-on to a walk.
+
+**The white-out reads [#217](https://github.com/Phaazoid/Godoiosis/issues/217).** The timing is
+identical either way — deliberately, since the schedule is shared with the executor — and what
+changes is the **curve and the peak**: eased and muted instead of linear and white. That cap is a
+`const` and not a knob, alone among this slice's feel values: a slider that could return it to full
+would repeal the accessibility promise it exists to keep.
+
+**One Experiments flag, and it gates the SHOT alone.** The travel is identical in both arms — a tile
+always runs between its socket and the diorama — so `DIORAMA_CAMERA_CUTS_AHEAD` decides only where
+you watch from: cut ahead to the empty sky and watch the fight assemble, or travel up with the
+tear-out and watch the board come apart. Everything else is knobs, which reach both arms and every
+blend between them. The cut is sanctioned rather than a violation: #520's never-teleport rule is
+about the map, and the dev carved this transition out of it by name (2026-08-27).
+
+Still open on #521: the **dust shockwave** on the exit thud — which would be the project's first
+particle system — and strata on the cut edges, which is art-pass work.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
