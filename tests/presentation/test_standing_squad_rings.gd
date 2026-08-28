@@ -14,36 +14,39 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 
+var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var game: Node2D
 var _overlays: BoardOverlays
 
 
+func before() -> void:
+	await _board.open(self, _clear_the_board)
+
+
+func _clear_the_board() -> void:
+	_board.game.scenario_manager.clear_board()
+	_board.game.game_state = _board.game.GameState.IDLE
+
+
 func before_test() -> void:
-	get_tree().root.size = Vector2i(1280, 720)
+	await _board.reset(self)
+	_scene = _board.scene
+	game = _board.scene.game
 	# This suite SWITCHES the setting on, and _state is a static that outlives a case -- so the
 	# wipe is what stops the ON branch leaking into whatever runs next. (Reading the dev's own
 	# cfg stopped being possible in #449: a headless process honours nobody's preferences.)
-	PlayerSettings.reset_for_test()
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	game = _scene.game
 	_overlays = _scene.get_node("BoardOverlays") as BoardOverlays
-	game.scenario_manager.clear_board()
-	game.game_state = game.GameState.IDLE
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	PlayerSettings.reset_for_test()
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _board.check(self)
 
 
-# process_frame resumes coroutines BEFORE node _process, so one frame is stale.
+func after() -> void:
+	_board.close()
+
+
 func _settle() -> void:
 	await await_idle_frame()
 	await await_idle_frame()

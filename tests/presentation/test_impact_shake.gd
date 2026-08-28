@@ -22,6 +22,7 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
+var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var game: Node2D
 var _unit_mirror: UnitMirror
@@ -31,29 +32,31 @@ var _rig: CameraRig3D
 var _reported: Array = []
 
 
+func before() -> void:
+	await _board.open(self, _clear_the_board)
+
+
+func _clear_the_board() -> void:
+	_board.game.scenario_manager.clear_board()
+	_board.game.game_state = _board.game.GameState.IDLE
+
+
 func before_test() -> void:
-	PlayerSettings.reset_for_test()
-	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	game = _scene.game
+	await _board.reset(self)
+	_scene = _board.scene
+	game = _board.scene.game
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
 	_rig = _scene.get_node("CameraRig") as CameraRig3D
-	game.scenario_manager.clear_board()
-	game.game_state = game.GameState.IDLE
 	_unit_mirror.hovered_unit_source = Callable()
 	_reported = []
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	PlayerSettings.reset_for_test()
-	get_tree().root.remove_child(_scene)
-	_scene.free()
-	await await_idle_frame()
+	await _board.check(self)
+
+
+func after() -> void:
+	_board.close()
 
 
 func _settle() -> void:

@@ -193,12 +193,11 @@ func _restore_tuning() -> void:
 # None of it is board content, so apply_scenario has no reach into any of it -- and all of it
 # decides what the next case sees. Put back the same way a knob is.
 #
-# The hosting view first. It is not board state and apply_scenario has
-# no reach into it, but it decides WHO OWNS BOARD INPUT: FLAT_2D stands the 3D picker down and
-# uninstalls the pointer source HoverPresenter reads, so a case that swaps view and does not swap
-# back leaves every later case hovering off the real mouse. test_overlay_mirror does exactly that
-# (its FLAT_2D case is asserting that the 2D layer comes back), and the two crown cases after it
-# went dark -- a hover that drew nothing, with every individual piece behaving correctly.
+# THE HOSTING VIEW decides WHO OWNS BOARD INPUT: FLAT_2D stands the 3D picker down and uninstalls
+# the pointer source HoverPresenter reads, so a case that swaps and does not swap back leaves every
+# later case hovering off the real mouse. test_overlay_mirror does exactly that -- its FLAT_2D case
+# is asserting that the 2D layer comes back -- and the two crown cases after it went dark, a hover
+# that drew nothing with every individual piece behaving correctly.
 #
 # Restored through _apply_hosting(), the same door the game's own F4 uses, because assigning the
 # property alone changes nothing: the ownership swap is what that call does.
@@ -209,10 +208,11 @@ func _restore_session() -> void:
 	if want != null and scene.get("view") != want:
 		scene.set("view", want)
 		scene._apply_hosting()
-	# Dev mode is the same shape one level in, and it is what test_input_bridge's brush cases move.
-	# Through set_dev_mode(), not the flag, because the flag alone leaves game_state resting on the
-	# old base -- and it goes AFTER apply_scenario rather than before, since set_dev_mode ends in
-	# exit_current_mode() and that is what settles game_state onto the right base.
+	# DEV MODE is the same shape one level in: any case that arms the tile brush sets it, and it
+	# decides what _base_state() rests on, so the next case's game_state is DEV_MODE however cleanly
+	# the board came back. Through set_dev_mode() rather than the flag, because the flag alone
+	# leaves game_state on the old base -- set_dev_mode ends in exit_current_mode(), which is what
+	# settles it -- and after apply_scenario for the same reason.
 	var dev: Variant = _baseline.get("dev_mode")
 	if dev != null and game.get("dev_mode_enabled") != dev:
 		game.set_dev_mode(dev)

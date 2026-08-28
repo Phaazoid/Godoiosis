@@ -16,6 +16,27 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
+# ONE Battle3D for the whole suite (#622), the shape test_board_mirror carries. The cases are
+# untouched -- game, _scene and the three mirror refs still mean what they always did, they are just
+# re-pointed at the shared scene each case rather than at a freshly built one.
+#
+# The old before_test's clear_board() is now the fixture's `prepare` recipe -- it runs once, before
+# the baseline is captured, and every reset restores what it produced. Keeping it was not optional
+# and the reason is worth recording, because the obvious read is that it is redundant: game._ready
+# spawns no sandbox and game_state initialises to IDLE, so the scene is already empty and already
+# idle. What clear_board actually buys here is the board_loaded EMISSION -- battle3d._on_board_loaded
+# is what rebuilds the mirror, frames the camera and resets the pointer, and with no first load the
+# 3D hover wire is never built. Dropping it reddened the crown case in BOTH modes, which is how a
+# missing recipe tells itself apart from a leak.
+#
+# Its hand-rolled SQUAD_RING_ALPHA / KNOCKBACK_MODULATE
+# cache-and-restore is gone for a different reason -- SharedBoard restores every knob the tables
+# name, and a second answer beside it is Law #4. Its PlayerSettings.reset_for_test() is gone for
+# the same reason again; the fixture clears both settings stores per case now. What that comment
+# DECLARED is still true and still worth saying: this suite asserts on the board a player who has
+# changed nothing sees, and the ALWAYS_SHOW_SQUAD_RINGS branch is pinned next door in
+# test_standing_squad_rings (#449).
+var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var game: Node2D
 var _overlays: BoardOverlays
@@ -23,38 +44,30 @@ var _unit_mirror: UnitMirror
 var _mirror: OverlayMirror
 
 
-var _ring_alpha_was: float
-var _shove_colour_was: Color
+func before() -> void:
+	await _board.open(self, _clear_the_board)
+
+
+func _clear_the_board() -> void:
+	_board.game.scenario_manager.clear_board()
+	_board.game.game_state = _board.game.GameState.IDLE
 
 
 func before_test() -> void:
-	get_tree().root.size = Vector2i(1280, 720)
-	# Statics outlive a test; cache rather than restore-to-a-literal, per the tuning razor.
-	_ring_alpha_was = OverlayManager.SQUAD_RING_ALPHA
-	_shove_colour_was = OverlayManager.KNOCKBACK_MODULATE
-	# DECLARES which board this suite asserts on: the one a player who has changed nothing sees.
-	# The icon channel forks on ALWAYS_SHOW_SQUAD_RINGS, and the ON branch is a real player-facing
-	# state, not a stray -- it is pinned next door in test_standing_squad_rings (#449).
-	PlayerSettings.reset_for_test()
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	game = _scene.game
+	await _board.reset(self)
+	_scene = _board.scene
+	game = _board.game
 	_overlays = _scene.get_node("BoardOverlays") as BoardOverlays
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
 	_mirror = _scene.get_node("OverlayMirror") as OverlayMirror
-	game.scenario_manager.clear_board()
-	game.game_state = game.GameState.IDLE
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	OverlayManager.SQUAD_RING_ALPHA = _ring_alpha_was
-	OverlayManager.KNOCKBACK_MODULATE = _shove_colour_was
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _board.check(self)
+
+
+func after() -> void:
+	_board.close()
 
 
 func _settle() -> void:

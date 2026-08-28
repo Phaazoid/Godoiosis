@@ -15,38 +15,33 @@ const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
 
+var _board := SharedBoard.new(SCENE_PATH, PROLOG)
 var _scene: Node3D
 var _game: Node2D
 var _rig: CameraRig3D
 var _camera3d: Camera3D
 
 
+func before() -> void:
+	await _board.open(self)
+
+
 func before_test() -> void:
-	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	_game = _scene.game
+	await _board.reset(self)
+	_scene = _board.scene
+	_game = _board.scene.game
 	_rig = _scene.get_node("CameraRig") as CameraRig3D
 	_camera3d = _scene.get_node("CameraRig/Pitch/Camera") as Camera3D
-	_scene.load_mission(PROLOG)
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _board.check(self)
 
 
-# --- who owns the camera, and what the player keeps (#520) ------------------------------------
+func after() -> void:
+	_board.close()
 
-# The #484 exclusion as a LAW over the flag rather than a scenario: whenever the mirror's gate is
-# open, _update_pointer's WRITE gate is shut. They read each other's target (the mirror READS the 2D
-# camera, the pointer WRITES it), so a frame running both marches the view to the pan limit. #520
-# widened the flag to cover a player's own pass, which is exactly when this could have broken.
+
 func test_the_mirror_gate_and_the_pointer_gate_are_never_open_together() -> void:
 	for locked in [false, true]:
 		_cam().set_playback_locked(locked)

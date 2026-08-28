@@ -13,6 +13,9 @@ extends GdUnitTestSuite
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 
+# Named _shared rather than _board because this suite's _board is already the ground GridMap --
+# the one place the pattern's usual name is taken.
+var _shared := SharedBoard.new(SCENE_PATH, PROLOG)
 var _scene: Node3D
 var _game: Node2D
 var _board: GridMap
@@ -20,38 +23,27 @@ var _staged: GridMap
 var _unit_mirror: UnitMirror
 
 
+func before() -> void:
+	await _shared.open(self)
+
+
 func before_test() -> void:
-	# A static outlives a suite (#449). Cleared at BOTH ends: a case that leaves the board in the
-	# sky poisons every case after it, and the poll that draws it is per-frame.
-	BoardSpace.reset_for_test()
-	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	_game = _scene.game
+	await _shared.reset(self)
+	_scene = _shared.scene
+	_game = _shared.scene.game
 	_board = _scene.get_node("Board") as GridMap
 	_staged = _scene.get_node("StagedBoard") as GridMap
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
-	_scene.load_mission(PROLOG)
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	BoardSpace.reset_for_test()
-	PlayerSettings.reset_for_test()
-	Experiments.reset_for_test()   # a flag a case SET is a static that outlives it (#449)
-	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _shared.check(self)
 
 
-# --- the question itself -----------------------------------------------------------------------
+func after() -> void:
+	_shared.close()
 
-# ZERO displacement IS the board, and that is what makes every reader safe on a board that has
-# never staged. Asked of every painted cell rather than a sample: the seam has to be inert
-# everywhere, not on average.
+
 func test_an_unstaged_board_displaces_nothing() -> void:
 	var painted: Array[Vector2i] = _painted_cells()
 	assert_array(painted).override_failure_message(
