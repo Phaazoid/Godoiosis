@@ -700,6 +700,12 @@ static func refuse_existing_file(path: String, noun: String, status_label: Label
 # cache hit still holding the orphan, so only a relaunch cleared it), and the path-less orphan
 # re-saved INLINE as a sub_resource instead of an ext_resource, forking the content silently.
 static func save_over(resource: Resource, path: String, status_label: Label = null) -> bool:
+	var degraded := _degraded_block_reason(resource, path)
+	if degraded != "":
+		push_error(degraded)
+		if status_label != null:
+			status_label.text = degraded
+		return false
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var target := _live_target(resource, path)
 	var prior_uids := uid_map_in_file(path)   # a committed file's uids must survive an overwrite (#481)
@@ -732,6 +738,40 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 # A SCRIPT mismatch falls back rather than refusing: save_over is not the surface that polices what
 # kind of content belongs at a path, and adopting across scripts would set properties the target
 # does not have.
+
+
+# A resource that loaded DEGRADED must not be written back over the file it was degraded from:
+# ContentRepair took a dangling reference OUT to get it to parse at all (#608), and saving now makes
+# that loss permanent -- the silent class this whole arc is about, arriving by a new door.
+#
+# Refused only while the gap is STILL THERE. Fill the property in the editor and the save goes
+# through, which is how the repair is meant to end: the dev opens the degraded unit, assigns a real
+# weapon, saves, and the dangling reference is gone because he replaced it rather than because we
+# quietly dropped it.
+static func _degraded_block_reason(resource: Resource, path: String) -> String:
+	var lost := ContentRepair.dropped_properties(path)
+	if lost.is_empty():
+		return ""
+	var unfilled: Array[String] = []
+	for name: String in lost:
+		if _is_unset(resource.get(name)):
+			unfilled.append(name)
+	if unfilled.is_empty():
+		return ""
+	return "%s loaded without %s, because %s could not be found. Set it before saving, or restore that file -- saving now writes the loss into %s." % [
+		path.get_file(), ", ".join(unfilled),
+		", ".join(ContentRepair.missing_targets(path)), path.get_file()]
+
+
+static func _is_unset(value: Variant) -> bool:
+	if value == null:
+		return true
+	if value is Array:
+		return (value as Array).is_empty()
+	if value is Dictionary:
+		return (value as Dictionary).is_empty()
+	return false
+
 static func _live_target(edited: Resource, path: String) -> Resource:
 	if not ResourceLoader.has_cached(path):
 		return edited
