@@ -10,9 +10,10 @@
 // and every markup quad assume a flat top face at a known Y. And it stays OPAQUE, so it owes none
 // of the depth-sorting checks presentation-effects.md catalogues for a new transparent surface.
 //
-// SHALLOW vs DEEP is `deep`, baked per material by gen_lookdev_assets from the tile's own
-// `walkable` flag -- the flag the rules read -- so the tile cannot disagree with the hover card
-// about which water drowns you.
+// SHALLOW vs DEEP arrives per CELL, in the board mask's green channel, derived by BoardMirror from
+// the tile's own `walkable` flag -- the flag the rules read -- so the tile cannot disagree with the
+// hover card about which water drowns you. It was baked per MATERIAL until #552 slice 2b; this
+// header still said so until #646.
 //
 // It wears BOTH surfaces of a water block and forks on the world normal: the up-facing quad is the
 // SURFACE, the walls and the top rim are the BODY. Those are different questions, not one question
