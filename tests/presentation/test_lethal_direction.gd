@@ -52,7 +52,13 @@ func after_test() -> void:
 
 
 func _rig() -> CameraRig3D:
-	return _scene.get_node("CameraRig") as CameraRig3D
+	# UNDER THE CINEMATIC unless a case says otherwise (#647). Before the profile was published per
+	# beat, PlayerSettings shipped the zoom ON, so every case here ran cinematic by default -- the
+	# rig now rests at BOARD, and without this each of them would quietly assert against a channel
+	# scaled to zero rather than against the shape it is about.
+	var rig := _scene.get_node("CameraRig") as CameraRig3D
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	return rig
 
 
 # A beat carrying one lethality rung. Built by hand rather than resolved off a board: this file is
@@ -206,12 +212,24 @@ func test_the_plain_board_is_never_pushed_in() -> void:
 	# shots at all is one question with one answer.
 	var rig := _rig()
 	Pacing.BOARD_DIRECTION = 0.0
+	Pacing.CINEMATIC_DIRECTION = 1.0
 	Pacing.DOLLY_IN = 3.0
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
 	rig.stash_view()
 	rig.set_zoom(14.0)
+	# THE PUBLISHED PROFILE, not the setting (#647): the rig mirrors what playback published. Written
+	# as a FORK rather than one side, or the BOARD half passes against a rig that reads no profile at
+	# all -- which is what a case writing the setting here would silently have become.
+	rig.beat_profile = Pacing.Profile.BOARD
 	rig.dolly_to(1.0)
 	assert_float(rig._dollied_distance()).is_equal_approx(14.0, 0.0001)
+
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	rig.dolly_to(1.0)
+	# CLOSER than the player's own zoom, which is the direction a push-in goes -- a relationship
+	# rather than a number, so DOLLY_IN stays tunable.
+	assert_float(rig._dollied_distance()).override_failure_message(
+			"the push-in is identical under both profiles -- the published profile reaches nothing") \
+		.is_less(14.0)
 
 
 func test_the_push_in_dies_with_the_borrowed_view() -> void:

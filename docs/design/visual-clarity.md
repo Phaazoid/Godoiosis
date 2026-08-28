@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #635 (2026-08-28).**
+**Canon checked through #647 (2026-08-28).**
 
 ## Principles
 
@@ -1542,12 +1542,31 @@ it) and `_add_heading` already fires per group, so a section is a group name —
 / Outcomes / Camera travel / The tear-out / Motion — and the only requirement is that a group's rows
 stay contiguous in the table, since that order *is* the section order.
 
-**A battle-zoom toggle sits at the top and writes the real `PlayerSettings` value.** The first dev
+**A battle-zoom picker sits at the top and writes the real `PlayerSettings` value.** The first dev
 tool to write one. It is not a knob row and cannot be: a `PlayerSettings` value has none of
 `KnobSource`'s three save shapes and needs no Save, the store being its own persistence. Writing the
 real setting is what stops the panel drifting from what the player gets — and it doubles as the
 page's profile filter, which is what kills the born-dead slider: **you always tune the mode you are
 watching**, and a row that would move nothing is not in front of you.
+
+**A THREE-WAY PICKER since [#647](https://github.com/Phaazoid/Godoiosis/issues/647), and its labels
+are the store's own** (`PlayerSettings.options_of`), never a copy typed into the panel — the settings
+page projects the same list, so the two surfaces cannot disagree about what the modes are called any
+more than about which one is picked. The filter asks the MODE rather than a beat: `COMBAT_ONLY` runs
+the cinematic over blows and counters, so its rows are the ones worth tuning and only `OFF` puts the
+plain board's numbers in front of you.
+
+**...and the picker FOLLOWS the store, it does not merely write to it** (dev ruling, 2026-08-28:
+*"if there is a setting in both dev and player controls, I don't want them to ever disagree. If one
+knob is changed and the option exists elsewhere, I want that knob changed too."*). This was a live
+bug, not a precaution: `_build_playback_header` ran once at build time and nothing refreshed it, so
+changing the setting from the pause menu — a **second OS window**, on screen at the same time — left
+the panel showing the old mode **and the wrong column of knobs**, i.e. tuning `CINEMATIC_*` rows
+while the game ran `BOARD`. A poll, not a changed signal, which is the store's own doctrine
+(*"callers poll it"*) and needs no new seam; `SettingsScreen` reconciles its own controls the same
+way, with `set_pressed_no_signal` so the page never becomes a second writer. The general rule is
+under *Where a presentation value is authored* in `presentation-effects.md`: **one value, one store,
+however many surfaces show it.**
 
 **The `zoom off` / `zoom on` pairs were never a binary.** They are one dial measured under each of
 two live play modes, and showing both branches of a fork at once is what made them unreadable. The
@@ -1744,6 +1763,54 @@ and `pose()` stayed the authored-shot door it was.
 
 Eight knob rows joining the Camera flourish section.
 
+## The profile is a fact about a BEAT ([#647](https://github.com/Phaazoid/Godoiosis/issues/647), BUILT 2026-08-28)
+
+The battle zoom gained a third setting — **off / combat only / every action** — and the third one is
+what forced the shape. *"Combat only"* is the dev's own wording: *"actions where a unit is actively
+dealing or taking damage."*
+
+**Which beats count is a ruling, not a derivation** (dev, 2026-08-28). `VOLLEY` and `TURNOVER` are
+combat; `MOVES`, `CODA` and `CELL_EFFECTS` are not. The turnover is the case his wording did not
+settle and it lands on the combat side, because the act break where the defending line raises weapons
+is punctuation *inside* a fight — dropping to plain for it cuts the exchange in half between an attack
+and its counter. `CELL_EFFECTS` is the edge that could have gone the other way (a unit standing in
+fire *is* taking damage) and stays plain rather than reversing a standing call: the environment pass
+forks on neither profile nor faction, because the board acts there.
+
+**`Pacing.active_profile()` is DELETED, and that is the load-bearing half.** It answered for a whole
+pass, and once `COMBAT_ONLY` exists there is no such answer — a move and the volley after it run
+under different profiles. Left in place it would have been a seam that quietly *mis-answers* rather
+than one that fails, which is Law #4's late failure. `Pacing.profile_for(beat)` replaces it: the one
+collapse from (mode, beat) to a profile, `duration_for`'s shape one question over.
+
+**The gate lives in the SCHEDULE BUILDERS, not the executor.** `OrderExecutor` already built per-beat
+dictionaries keyed on each beat's opening action, so the profile is computed there and published as
+**`CameraController.beat_profile`** — the fourth field of the trio #520 established (an angle, a fit,
+a weight… and now the cause). `_execute_action_sequence` needed no change at all.
+
+**The rig has no beat in hand, which is what the published field is for.** `CameraRig3D` mirrors it
+and every flourish channel scales through it. **The sway is why the field exists**: the angle and the
+weight are published per beat and could in principle have been filtered at source, but a sway is a
+*resting* behaviour polled every frame while the view is borrowed — nothing else about a quiet beat
+would ever tell the camera to stop drifting.
+
+**The lines and weights beside it are deliberately NOT filtered.** All four `BOARD_*` values ship at
+`0.0`, so a plain beat publishes its angle and its weight and they land at zero strength. That keeps
+the fork in one place *and* keeps the BOARD knobs reachable — dial `BOARD_SWAY` up and a plain beat
+sways, which is the *"the shape exists but is dialled out rather than absent"* rule `Pacing` already
+states. Filtering the schedules instead would have made those four sliders move nothing, i.e.
+manufactured the born-dead slider the Playback page's own filter exists to prevent.
+
+**The conversion had a silent failure mode, and the fix was a rename.** `is_on` is
+`bool(value_of(...))`, so a caller left behind by the boolean-to-choice change would compile and read
+`COMBAT_ONLY` as full cinematic; `set_on` would write a *bool* into a choice row, which `choice_of`
+reads back as `int(true)` = 1 and `load_state` re-reads the same way, so the wrong value survives a
+relaunch consistently wrong. `BATTLE_ZOOM` → **`BATTLE_ZOOM_MODE`** makes every stale caller a parse
+error instead — #418's own trick, which was doing that conversion's safety work without saying so.
+The general guard landed with it: **the typed façades now refuse the other kind's row**, so the next
+conversion does not depend on remembering the trick, and the writers refuse outright rather than
+degrade (a bad read is one wrong frame; a bad write is a cfg the player carries between sessions).
+
 ## The fight TEARS OUT of the board ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice A, BUILT 2026-08-26)
 
 The ground a fight happens on lifts off the board into a diorama and thuds back when the pass ends.
@@ -1801,7 +1868,11 @@ where you move; the diorama is where you fight.
 
 **Staged on the profile too, so #521's law is a property rather than a promise** — nothing stages
 under `BOARD`, and `tests/presentation/test_staging.gd` asserts zero displacement for **every
-painted cell** after a plain-board pass, read off the seam directly.
+painted cell** after a plain-board pass, read off the seam directly. Since
+[#647](https://github.com/Phaazoid/Godoiosis/issues/647) `_stage_the_fight` asks the **sheet** rather
+than taking a profile: the tear-out is once per pass, so the question is whether this pass has a fight
+in it at all — which under *combat only* is the same question as "does any beat run cinematic", and a
+pass of nothing but walking stays on the board.
 
 **The feels-test fork is one bool**, `Experiments.Flag.DIORAMA_BYSTANDERS`: off stages the cells the
 fight touches, on adds the ground every other unit stands on so the diorama keeps its spatial
