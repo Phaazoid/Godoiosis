@@ -370,6 +370,15 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"min": 0.25, "max": 2.0, "step": 0.05,
 		"tip": "How big the watch mark draws relative to its cell. 1.0 is one cell exactly, which is what the art is authored at; smaller reads as a tick in the middle of the tile."},
 
+	# AIMING a watch (#591), which is a different job from the mark above: these are on screen only
+	# while the player is declaring, and what they have to say is "this is not an ordinary shot".
+	# Tune them as a PAIR and against the reach fills -- the wash carries the glance and the footprint
+	# has to stay legible on top of it, which is what the yellow-on-red pair does for a shot.
+	{"group": "Board markup colours", "label": "Watch aim reach (2D+3D)", "static": "WATCH_REACH_MODULATE",
+		"tip": "The reach fill while DECLARING an overwatch rather than firing. It replaces the red/green heal fork outright, on the grounds that you already know what you picked and cannot otherwise tell you are aiming a watch."},
+	{"group": "Board markup colours", "label": "Watch aim footprint (2D+3D)", "static": "WATCH_HOVER_MODULATE",
+		"tip": "The cells a watch aim would actually cover, drawn over the reach fill above -- the watch's answer to the yellow an ordinary aim uses. Its pulsed low point is derived from this, so there is no third colour to chase."},
+
 	# The shove trail (2026-08-21). A predicted shove and an authored move drew identically -- both
 	# plain white -- so this is what separates "what is about to be done to this unit" from "what it
 	# chose". Tune it AGAINST the arrow palette, not just away from white: red already means a
@@ -839,6 +848,8 @@ static func read_static(name: String) -> Variant:
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
 		"WATCH_MARK_COLOR": return OverlayManager.WATCH_MARK_COLOR
 		"WATCH_MARK_SCALE": return OverlayManager.WATCH_MARK_SCALE
+		"WATCH_REACH_MODULATE": return OverlayManager.WATCH_REACH_MODULATE
+		"WATCH_HOVER_MODULATE": return OverlayManager.WATCH_HOVER_MODULATE
 		"MOVE_ARROW_MODULATE": return OverlayManager.MOVE_ARROW_MODULATE
 		"INVALID_ARROW_MODULATE": return OverlayManager.INVALID_ARROW_MODULATE
 		"TRAILING_ARROW_MODULATE": return OverlayManager.TRAILING_ARROW_MODULATE
@@ -936,6 +947,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
 		"WATCH_MARK_COLOR": OverlayManager.WATCH_MARK_COLOR = value
 		"WATCH_MARK_SCALE": OverlayManager.WATCH_MARK_SCALE = value
+		"WATCH_REACH_MODULATE": OverlayManager.WATCH_REACH_MODULATE = value
+		"WATCH_HOVER_MODULATE": OverlayManager.WATCH_HOVER_MODULATE = value
 		"MOVE_ARROW_MODULATE": OverlayManager.MOVE_ARROW_MODULATE = value
 		"INVALID_ARROW_MODULATE": OverlayManager.INVALID_ARROW_MODULATE = value
 		"TRAILING_ARROW_MODULATE": OverlayManager.TRAILING_ARROW_MODULATE = value
@@ -1203,7 +1216,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":
 			manager.redraw_planned_paths()
-		_: manager.refresh_attack_reach_color()
+		_: manager.refresh_aim_colors()
 
 
 # The mission-status HUD's re-apply. Its one door is game.refresh_mission_status (#134), which is

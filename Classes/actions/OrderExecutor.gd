@@ -85,6 +85,7 @@ func execute_orders(unit):
 	# down; headless, Pacing collapses every beat to zero frames and execute_orders runs start to
 	# finish synchronously, so that stretch does not exist to assert on (measured, #450).
 	game.overlay_manager.clear_guard_preview()
+	game.overlay_manager.clear_watch_preview()   # #591's ghosted footprint, same reason, same stretch
 	for action in squad.action_queue.duplicate():
 		action.actor.visuals.set_projected(false)
 		if action.action_type == BaseAction.ActionType.MOVE:
