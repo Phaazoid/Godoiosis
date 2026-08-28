@@ -10,9 +10,10 @@
 // and every markup quad assume a flat top face at a known Y. And it stays OPAQUE, so it owes none
 // of the depth-sorting checks presentation-effects.md catalogues for a new transparent surface.
 //
-// SHALLOW vs DEEP is `deep`, baked per material by gen_lookdev_assets from the tile's own
-// `walkable` flag -- the flag the rules read -- so the tile cannot disagree with the hover card
-// about which water drowns you.
+// SHALLOW vs DEEP arrives per CELL, in the board mask's green channel, derived by BoardMirror from
+// the tile's own `walkable` flag -- the flag the rules read -- so the tile cannot disagree with the
+// hover card about which water drowns you. It was baked per MATERIAL until #552 slice 2b; this
+// header still said so until #646.
 //
 // It wears BOTH surfaces of a water block and forks on the world normal: the up-facing quad is the
 // SURFACE, the walls and the top rim are the BODY. Those are different questions, not one question
@@ -154,6 +155,24 @@ float wave(vec2 p, float t, float scale) {
 }
 
 
+// The surface at p, crossfaded between the two water types by `d`.
+//
+// A PHASE PARAMETER CANNOT BE INTERPOLATED ACROSS SPACE; AN AMPLITUDE ONE CAN. Slice 2b made every
+// knob pair mix() on `d` so the seam would glide, which is right for the amplitudes and wrong for
+// these two: a sinusoid's frequency and phase RATE do not lerp. A spatially varying `scale` makes
+// the surface a CHIRP -- phase is (p.x + p.y) * scale, so at board (20, 10) a glide of 1.4 crams
+// ~6.7 extra periods into the one-cell transition, and worse the further the lake sits from the
+// world origin -- while a spatially varying speed makes the phase gap grow as TIME * 0.94, without
+// bound. It ringed the bands, the shoreline and the specular at once, because all three read `w`.
+//
+// So evaluate BOTH fields and interpolate the RESULT, which is an amplitude. Costs one extra
+// wave() per sample; the alternative, branching on 0 < d < 1 to skip the second field away from a
+// seam, buys nothing measurable here and trades it for divergence.
+float wave_at(vec2 p, float ts, float td, float d) {
+	return mix(wave(p, ts, water_shallow_wave_scale), wave(p, td, water_deep_wave_scale), d);
+}
+
+
 // The light net on the bottom -- two ridged sine fields crossed. RIDGED (1 - abs) rather than
 // plain sines because what reads as caustics is thin bright lines between wide dark cells, which is
 // the opposite of what a sine gives you.
@@ -199,8 +218,6 @@ void fragment() {
 		ROUGHNESS = 1.0;
 		SPECULAR = 0.0;
 	} else {
-		float wave_speed = mix(water_shallow_wave_speed, water_deep_wave_speed, d);
-		float wave_scale = mix(water_shallow_wave_scale, water_deep_wave_scale, d);
 		float band_contrast = mix(water_shallow_band_contrast, water_deep_band_contrast, d);
 		float ripple = mix(water_shallow_ripple, water_deep_ripple, d);
 
@@ -208,7 +225,9 @@ void fragment() {
 		float px = 1.0 / PIXELS_PER_CELL;
 		vec2 cell_px = floor(world_pos.xz * PIXELS_PER_CELL);
 		vec2 p = cell_px * px;
-		float t = TIME * wave_speed;
+		// Each type's own clock, never a blend of the two -- see wave_at.
+		float ts = TIME * water_shallow_wave_speed;
+		float td = TIME * water_deep_wave_speed;
 
 		// --- What is UNDER the water -------------------------------------------------------
 		// The bed is hashed off the STATIC art-pixel index, so it stays nailed to the board while
@@ -216,7 +235,10 @@ void fragment() {
 		// ice sheet cannot fake -- a frozen pane moves all of itself or none of it.
 		vec2 grain = floor(world_pos.xz * (PIXELS_PER_CELL / max(water_shallow_bed_grain, 1.0)));
 		vec3 bed = water_shallow_bed_color.rgb * mix(0.72, 1.28, speckle(grain));
-		bed += vec3(caustic(p, t * CAUSTIC_SPEED, water_shallow_caustics_scale)
+		// SHALLOW's clock, not a blended one. The bed is a shallow-only layer, gated on (1.0 - d)
+		// two lines down, so it has no business reading deep's speed -- and a blended one chirps
+		// the caustic net across the seam exactly as it did the bands.
+		bed += vec3(caustic(p, ts * CAUSTIC_SPEED, water_shallow_caustics_scale)
 				* water_shallow_caustics);
 		// Seen THROUGH the water, so the water tints it. Without this the bed reads as painted on
 		// the surface rather than lying beneath it.
@@ -229,7 +251,7 @@ void fragment() {
 		// Bands are a SURFACE phenomenon and go on top, additively -- they must ride over the bed,
 		// never modulate it, or the bed reads as noise painted across the highlights. Two hard
 		// thresholds rather than a gradient, which is how pixel water reads.
-		float w = wave(p, t, wave_scale);
+		float w = wave_at(p, ts, td, d);
 		float tone = step(0.20, w) * 0.45 + step(0.72, w) * 0.55;
 		col += base * tone * band_contrast;
 
@@ -278,9 +300,9 @@ void fragment() {
 		// same quantised field, carried into view space by hand: a NORMAL_MAP would want tangents
 		// the block mesh does not generate.
 		vec3 bent = normalize(vec3(
-				-(wave(p + vec2(px, 0.0), t, wave_scale) - w) * ripple,
+				-(wave_at(p + vec2(px, 0.0), ts, td, d) - w) * ripple,
 				1.0,
-				-(wave(p + vec2(0.0, px), t, wave_scale) - w) * ripple));
+				-(wave_at(p + vec2(0.0, px), ts, td, d) - w) * ripple));
 		NORMAL = normalize((VIEW_MATRIX * vec4(bent, 0.0)).xyz);
 	}
 }
