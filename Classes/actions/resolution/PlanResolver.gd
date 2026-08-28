@@ -157,7 +157,10 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 	# fired, and the shot's landing cell when one shoved them.
 	for i in range(1, walk.size()):
 		_hypo_for(mover, hypo).position = walk[i]
-		fire_watch_entries([mover], plan, hypo, reactions, board, terrain_reactions)
+		# ...and THIS step is the moment the shot plays back at (#567): the walk halts here, the
+		# shot fires, the walk resumes. The moment is stamped where the shots are made because
+		# nothing downstream can recover it — a crosser who walks on leaves no trace of the step.
+		fire_watch_entries([mover], plan, hypo, reactions, board, terrain_reactions, action, i)
 		# A crosser the shot DOWNS stops where it was hit — lifecycle, not a new rule. So does one
 		# the shot THREW: you cannot resume a path you were knocked off (the doc's "involuntary
 		# displacement ends a move").
@@ -173,8 +176,14 @@ static func resolve_move(action: MoveAction, plan: ResolvedPlan, hypo: Dictionar
 # Watch-to-watch pinball is legal and deterministic (the doc): a shot's knockback throwing someone
 # into a second watch is an entry like any other. Bounded — each watch absorbs exactly one trigger,
 # so the cascade cannot outlive the list.
+#
+# `during`/`at_step` are the PLAYBACK moment (#567), required rather than defaulted so a third
+# entry point has to answer "when does this play" instead of inheriting somebody else's answer.
+# The whole cascade wears the moment the FIRST entry happened at: a shove that throws a bystander
+# into a second watch is one beat with the shot that threw them, not a beat of its own.
 static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictionary,
-		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction]) -> void:
+		reactions: Array[ElementalReaction], board: BoardContext, terrain_reactions: Array[TerrainReaction],
+		during: BaseAction, at_step: int) -> void:
 	if plan.watches.is_empty() or board == null:
 		return
 	var pending: Array = entrants.duplicate()
@@ -188,6 +197,9 @@ static func fire_watch_entries(entrants: Array, plan: ResolvedPlan, hypo: Dictio
 		watch.spent = true
 		var before := _positions_snapshot(board, hypo)
 		var group := _derive_watch_shot(watch, entrant, board, hypo)
+		for shot in group:
+			shot.triggered_during = during
+			shot.triggered_at_step = at_step
 		plan.watch_shots.append_array(group)
 		resolve_attack_group(group, plan, hypo, reactions, board, terrain_reactions)
 		# Whoever the shot MOVED has entered wherever they landed — including the crosser.

@@ -198,11 +198,12 @@ One case in `test_ai_turn_terminates.gd`, `test_ai_turn_from_a_jam_terminates_ev
 
 ## Testing the presentation stack (`LookDev.tscn` is a FIXTURE, not a scratch scene)
 
-`res://Scenes/LookDev/LookDev.tscn` is the fixture five suites stand on — `test_board_overlays`,
-`test_board_picker`, `test_camera_rig`, `test_look_dev`, `test_walk_demo`. Its folder name says
+`res://Scenes/LookDev/LookDev.tscn` is the fixture seven suites stand on — `test_board_overlays`,
+`test_board_picker`, `test_camera_flourish`, `test_camera_rig`, `test_lethal_direction`,
+`test_look_dev`, `test_walk_demo`. Its folder name says
 scratch and its header used to agree; both were wrong, and [#393](https://github.com/Phaazoid/Godoiosis/issues/393)
 (2026-08-19) said so in canon rather than moving the scene. **Renaming a node in it, deleting a prop,
-or re-parenting the camera rig reds those five suites**, and the game as well: `Battle3D.tscn` loads
+or re-parenting the camera rig reds those seven suites**, and the game as well: `Battle3D.tscn` loads
 its `lookdev_meshlib.tres`, `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, and
 the rig itself is now `Classes/presentation/CameraRig3D.gd` — shipping code that merely used to live
 in that folder.
@@ -213,6 +214,18 @@ constant — and `_ready` applies `Day`, so the scene's live post-stack values c
 `Resources/LookPresets/Day.tres` rather than from what `LookDev.tscn` authors. Its **help label** is a
 full-rect `CanvasLayer` over the viewport, which is why `test_camera_rig` drives the rig's own
 `_unhandled_input` rather than parsing events into the tree.
+
+**PRELOAD it, never `load()` it per test ([#621](https://github.com/Phaazoid/Godoiosis/issues/621),
+2026-08-28).** `LookDev.tscn` and `Battle3D.tscn` both hang off `lookdev_meshlib.tres`, which #427's
+corner forms grew to 5 MB / 2089 `ArrayMesh` sub-resources. A suite that `load()`s the scene in
+`before_test` and frees it in `after_test` drops the library's last reference every case, so it
+reloads for the next one — `test_camera_rig` was paying 19.7s where it now pays 6.0s, and thirty
+suites were doing it. Hold the scene instead: `const SCENE: PackedScene = preload("res://…")`.
+`tests/law/test_heavy_scenes_are_preloaded.gd` is the guard, because the failure is INVISIBLE —
+reverting a preload reds nothing, the suite is just slower, which is how this went unnoticed for two
+weeks. It is a spelling check on purpose: the direct property test (is the library still
+`ResourceLoader.has_cached()` after a free?) depends on what ran before it, and [#620](https://github.com/Phaazoid/Godoiosis/issues/620)
+made test order vary by shard.
 
 ## The shared Battle3D fixture (`support/shared_board.gd`)
 
@@ -253,7 +266,9 @@ fixture restores does not share.* `test_input_bridge` tests the input session �
 hosting view, dev mode — and `test_game_knobs`/`test_moods_tool` test the knob machinery, so a fixture
 quietly restoring knobs between their cases would be marking its own homework. `test_health_block_debris`
 is a different reason: its debris pool has no clear door and cubes outlive a headless case, so the next
-case starts with the last one's still in the air.
+case starts with the last one's still in the air. Those suites still PRELOAD their scene rather
+than `load()`ing it: sharing and preloading answer different halves of the same cost, and the #621
+law above governs every suite that keeps its own scene.
 
 ## Install (already done; recorded for reproducibility)
 

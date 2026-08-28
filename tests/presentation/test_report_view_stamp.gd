@@ -11,7 +11,8 @@
 # tests/ui/test_report_flow.gd, and whether the resulting PNG looks right is the dev's, by playing.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 
 var _scene: Node3D
 var _game: Node2D
@@ -20,7 +21,7 @@ var _written: Array[String] = []
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)

@@ -10,14 +10,15 @@
 # into FLAT_2D; whether it is legible at that position is the dev's, by playing.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 
 var _scene: Node3D
 
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)
@@ -61,7 +62,7 @@ func test_a_demo_mode_launch_still_says_which_build_it_is() -> void:
 	get_tree().root.remove_child(_scene)
 	_scene.free()
 
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	_scene.demo_mode = true

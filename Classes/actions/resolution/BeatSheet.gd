@@ -64,8 +64,17 @@ class Beat:
 	#
 	# NOT read off `victims`: that list is aligned with `lethalities` for #519's table, and a beat
 	# with no victims (MOVES, CODA) still has a subject.
+	#
+	# A TRIGGERED SHOT frames the CROSSER instead (#413's ruling, moved here by #567): the moment is
+	# somebody walking into a line, not the watcher standing still. It is not the same unit as the
+	# victim — splash is gathered cell-first over the footprint, so the lead victim can be a
+	# bystander who never moved, and a shot that shoved the crosser out first has no victim at all.
 	func subject() -> Unit:
 		for action in actions:
+			var shot := action as AttackAction
+			if shot != null and shot.is_watch_shot and shot.triggered_by != null \
+					and is_instance_valid(shot.triggered_by):
+				return shot.triggered_by
 			var who := action.aimed_at()
 			if who != null and is_instance_valid(who):
 				return who
@@ -212,7 +221,15 @@ static func read(squad: Squad, plan: ResolvedPlan) -> BeatSheet:
 		moves.actor = walks[0].actor
 		sheet.beats.append(moves)
 
-	sheet.beats.append_array(_group(plan.attacks, false))
+	# The shots those walks walked INTO (#567), which the move phase now plays mid-step. Beats of
+	# their own rather than a tail of the MOVES beat: one blast is one moment, and each is panned to,
+	# held for and lingered on exactly as an authored volley is. `_group` needs no new rule — a
+	# triggered shot's lead is never is_secondary_hit, so its splash joins it like any other volley's.
+	sheet.beats.append_array(_group(plan.mid_walk_shots(), false))
+
+	# ...and the shots a SHOVE set off play inside the attack phase, after the volley that threw
+	# somebody into them. attack_playback() is that order; mirroring it is this sheet's whole job.
+	sheet.beats.append_array(_group(plan.attack_playback(), false))
 
 	if not plan.cell_effects.is_empty():
 		var deposits := Beat.new()
@@ -303,9 +320,14 @@ func _enlist(squad: Squad, seen: Dictionary) -> void:
 		cast.append(unit)
 
 
+# The stage set is what the DIORAMA plays, which is why this reads attack_playback() rather than
+# `attacks` (#567): a shove-triggered shot now fires after the tear-out has lifted the board, and the
+# watcher's anchor cell is nobody's attacker origin — unswept, it would fire standing on a hole.
+# Mid-walk shots are deliberately absent: they play on the BOARD, before the tear-out, and movement
+# contributes nothing to the stage set by the dev's own rule.
 func _gather_cells(plan: ResolvedPlan) -> void:
 	var seen: Dictionary = {}
-	for list in [plan.attacks, plan.counters]:
+	for list in [plan.attack_playback(), plan.counters]:
 		for action in list:
 			var attack := action as AttackAction
 			if attack == null:

@@ -16,6 +16,14 @@ var is_trailing := false
 # stops at the crossing cell, and so does one it throws.
 var resolved_stop_index := -1
 
+# PLAYBACK ONLY (#567): the steps of `path` this walk HALTS at while a triggered shot plays, in
+# ascending order. Written by OrderExecutor before execute(), off the moments the resolve stamped on
+# the shots — never by the resolver, and never read by anything that decides an outcome. Nothing
+# here moves where the walk ends; `resolved_stop_index` stays the one authority on that, and this is
+# only how the same walk is animated.
+var interrupt_steps: Array[int] = []
+var _parked_at := -1
+
 const GENERIC_TILE := preload("res://Art/Icons/BoardIcons/GenericTileIcon.png")
 const MOVE_ICON := preload("res://Art/Icons/ActionIcons/MoveActionIcon.png")
 const HOLD_ICON := preload("res://Art/Icons/ArrowIcons/nomove.png")
@@ -58,13 +66,62 @@ func execute():
 	# lifecycle"). The arrow stays up while the unit walks it and goes on ARRIVAL, with the ghost.
 	# The old clear was also only durable by luck: redraw_planned_paths rebuilds every arrow from
 	# planned_move_by_unit, which still named this unit, so any redraw during a pass put it back.
-	actor.movement.move_along_path(walked_path())
-	
+	#
+	# One leg per stretch between interrupts (#567). With none it is the single move_along_path this
+	# always was — the legs SHARE their boundary cell, which is the cell the unit is already standing
+	# on when the next one starts, and move_along_path pops exactly that.
+	_parked_at = -1
+	var walk := walked_path()
+	var start := 0
+	for step in _pause_steps():
+		await _walk_leg(walk.slice(start, step + 1))
+		start = step
+		# Parked: the executor sees it, plays the shot this step fired, and releases. Polled rather
+		# than awaited on a signal, so a release that lands before this line cannot hang the walk.
+		_parked_at = step
+		while _parked_at >= 0 and is_instance_valid(actor):
+			await actor.get_tree().process_frame
+	await _walk_leg(walk.slice(start))
+
+	finish_execution()
+
+
+# One stretch of the walk. Guarded because the walk can now outlive its own mover: a shot fired at
+# an interrupt may down or remove the crosser, and a halted walk's remaining leg is the one cell it
+# is already standing on.
+func _walk_leg(leg: Array[Vector2i]) -> void:
+	if actor == null or not is_instance_valid(actor) or actor.is_queued_for_deletion():
+		return
+	actor.movement.move_along_path(leg)
+
 	if actor.movement.moving:
 		await actor.movement.movement_finished
-		
-	finish_execution()
-		
+
+
+# Which of `interrupt_steps` this walk can actually stop at: ascending, de-duplicated, and inside
+# the stretch actually walked. A shot that fires ON the last cell still parks — the walk is over,
+# but the shot has not played yet, and the leg after it is the single cell it stands on.
+func _pause_steps() -> Array[int]:
+	var last_cell := walked_path().size() - 1
+	var steps: Array[int] = []
+	var previous := 0
+	for step in interrupt_steps:
+		if step <= previous or step > last_cell:
+			continue
+		steps.append(step)
+		previous = step
+	return steps
+
+
+# Halted at an interrupt, or -1. The executor's poll asks this; release() answers it.
+func parked_at() -> int:
+	return _parked_at
+
+
+func release() -> void:
+	_parked_at = -1
+
+
 func get_action_icon() -> Texture2D:
 	if is_hold_position:
 		return HOLD_ICON

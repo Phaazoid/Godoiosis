@@ -713,8 +713,14 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 		# A shove is an ENTRY (#413): mace them into your squadmate's watched line and it fires.
 		# The intended combo, and the reason arming happens at a queue slot — sequence the shove
 		# after the watch and it connects, before it and it does not.
+		#
+		# Its playback moment is AFTER this volley (#567), which is why the group's last member is
+		# the moment rather than a step of one: nothing is interrupted here, the blow has already
+		# landed and the shot answers it. Before #567 every triggered shot played in one batch ahead
+		# of the attacks, so this one fired before the blow that threw them into it.
 		if not shoved.is_empty():
-			PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions)
+			PlanResolver.fire_watch_entries(shoved, plan, hypo, reactions, board, terrain_reactions,
+					group[-1], -1)
 
 	# Reactions are derived as single-target "aims" (who reacts to whom, strike or heal). Expand
 	# each into its own volley from the reactor's projected cell — the same AoE + friendly-fire

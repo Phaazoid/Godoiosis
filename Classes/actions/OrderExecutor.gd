@@ -111,43 +111,25 @@ func execute_orders(unit):
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
 
-	# The camera goes to the walk and the walk WAITS for it (#520, dev 2026-08-26). Moves are
-	# parallel, so one subject is framed -- the leader when the leader is walking. No hold here: the
-	# pan IS the beat, and a pause would be dead air between pressing Execute and anything happening.
-	#
-	# Framed across BOTH ENDS of that walk rather than centred on the walker (dev, scratchpad
-	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
-	# end position in the initial shot"). Two halves, both already-eased channels: the 2D camera
-	# travels to the MIDPOINT, and the span is published for the 3D rig to widen its distance to.
-	# The span goes out BEFORE the travel and is never awaited, exactly as a beat's angle is -- the
-	# rig widens on its own edge while the pan tweens, so the two are one movement.
-	var walk := sheet.moves()
-	var walker: Unit = walk.subject() if walk != null else null
-	if walker != null:
-		var from: Vector2i = walker.movement.cell
-		var to: Vector2i = walker.get_projected_destination()
-		# A hold-position order has no span to frame; the midpoint below is then the walker's own
-		# cell, i.e. exactly the shot this always took. Absence means "the camera keeps its zoom",
-		# which is already the idiom every other schedule here uses.
-		if to != from:
-			var span: Array[Vector2i] = [from, to]
-			game.camera_controller.framed_span = span
-		var grid: TileMapLayer = game.grid
-		await game.camera_controller.pan_to_position(
-				(GridUtils.cell_world(grid, from) + GridUtils.cell_world(grid, to)) * 0.5,
-				Pacing.PLAYBACK_PAN)
-	await _execute_action_phase_parallel(move_actions, _retire_move_markup)
-	# The shots the walk walked into (#413), in trigger order, and BEFORE the tear-out below: a
-	# watch fires at a crossing CELL, which the diorama's stage set does not hold (it holds what MAIN
-	# ACTIONS touch), so lifting the ground first would play the shot over a hole. The board is where
-	# you move, and a watch shot is the tail of moving.
-	#
-	# DECLARED v1 CUT: the damage lands at the crossing moment in the RESOLVE -- that is where every
-	# number comes from -- but it plays back after the walk instead of interrupting it. A crosser the
-	# shot downed has already stopped at the crossing cell (MoveAction.walked_path), so what trails
-	# the fiction is the ORDER OF THE VISUALS, never the outcome. Interrupting the walk is #567.
-	await _execute_action_sequence(plan.watch_shots, beat, {}, _watch_subjects(plan), {},
-			_watch_lingers(plan))
+	# The four schedules the volley phases read (#520), hoisted because sheet.volleys(false) is one
+	# array and this asked for it five times. It now covers the TRIGGERED shots as well as the
+	# authored attacks (#567), which is what retired the pair of hand-built watch schedules that used
+	# to sit further down: a triggered shot gets its rung-aware hold, its linger and its push-in off
+	# the same Pacing tables everything else does, instead of a flat attack's wait and no emphasis.
+	var volleys := sheet.volleys(false)
+	var holds := _beat_holds(volleys, profile, is_ai)
+	var subjects := _beat_subjects(volleys)
+	var lines := _beat_lines(volleys)
+	var lingers := _beat_lingers(volleys)
+	var emphases := _beat_emphases(volleys)
+
+	# The walk, and the shots it walks INTO -- which now play AT the crossing moment rather than
+	# after the whole phase (#567): the mover halts on the crossing cell, the shot fires, the walk
+	# resumes, while its siblings keep walking. Still BEFORE the tear-out below, because a watch
+	# fires at a crossing CELL, which the diorama's stage set does not hold -- lifting the ground
+	# first would play the shot over a hole. The board is where you move, and a watch shot is the
+	# tail of moving.
+	await _execute_move_phase(move_actions, plan, sheet, profile, is_ai, beat)
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -162,9 +144,11 @@ func execute_orders(unit):
 	# off" a property rather than a promise.
 	_stage_the_fight(sheet, profile)
 
-	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
-			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)),
-			_beat_lingers(sheet.volleys(false)), _beat_emphases(sheet.volleys(false)))
+	# attack_playback(), not plan.attacks: a shot a SHOVE set off plays right after the volley that
+	# threw somebody into it (#567), where the whole batch of them used to play ahead of the attacks
+	# -- so the answering shot came before the blow it answered. The spliced list is built for
+	# playback and never written back: a triggered shot inside plan.attacks would be counter-bait.
+	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases)
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of.
@@ -239,14 +223,43 @@ func _invalid_plan_summary(squad: Squad) -> String:
 			lines.append("%s: %s" % [action.actor.get_unit_name(), ", ".join(action.validation_errors)])
 	return " | ".join(lines)
 
-# on_settled, when given, fires ONCE per action at the first poll after its execution_complete
-# flips -- the PER-UNIT arrival moment (#558). It is why the poll below now visits every action
-# instead of breaking on the first unfinished one: this phase ends with the SLOWEST walker, so a
-# phase-level hook would leave a short hop standing under its own ghost while a long one finished.
-# Generic on purpose -- the phase runner still does not know what a move is.
-func _execute_action_phase_parallel(actions: Array, on_settled := Callable()):
+# The move phase: every walk starts at once and they are awaited together, which is the whole of
+# "units are still shown moving together" (standing-reactions.md's presentation rule for #412).
+#
+# Since #567 a walk can HALT mid-path while the shot it walked into plays, and only that walk halts
+# -- its siblings keep going. The shots play in the order the RESOLVE fired them, never in the order
+# the crossers happen to reach their cells: which of your units crosses first is a row you dragged,
+# and a playback that re-sorted by wall clock would lie about it. So only the HEAD of the pending
+# list is ever looked at, and a crosser that arrives early simply stands there until its turn.
+#
+# The markup goes ONCE per action at the first poll after its execution_complete flips -- the
+# PER-UNIT arrival moment (#558). It is why the poll visits every action instead of breaking on the
+# first unfinished one: this phase ends with the SLOWEST walker, so a phase-level hook would leave a
+# short hop standing under its own ghost while a long one finished. A PARKED walk is not complete,
+# so its ghost and arrow correctly stay up through the interrupt.
+func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet, profile: Pacing.Profile,
+		is_ai: bool, beat: float):
+	# Framed across BOTH ENDS of the walk rather than centred on the walker (dev, scratchpad
+	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
+	# end position in the initial shot"). Computed ONCE and returned to after every interrupt (#567,
+	# dev 2026-08-28) -- re-reading the walker's cell mid-walk would re-frame what is LEFT of the
+	# walk, so the shot would creep tighter with every shot fired.
+	var walk := sheet.moves()
+	var walker: Unit = walk.subject() if walk != null else null
+	var span: Array[Vector2i] = []
+	if walker != null:
+		span = [walker.movement.cell, walker.get_projected_destination()]
+	await _frame_the_walk(span)
 	if actions.is_empty():
 		return
+
+	var pending := _walk_interrupts(plan, actions)
+	var volleys := sheet.volleys(false)
+	var holds := _beat_holds(volleys, profile, is_ai)
+	var subjects := _beat_subjects(volleys)
+	var lines := _beat_lines(volleys)
+	var lingers := _beat_lingers(volleys)
+	var emphases := _beat_emphases(volleys)
 
 	for action in actions:
 		action.begin_execution()
@@ -262,13 +275,90 @@ func _execute_action_phase_parallel(actions: Array, on_settled := Callable()):
 			if not action.execution_complete:
 				all_complete = false
 				continue
-			if on_settled.is_valid() and not settled.has(action):
+			if not settled.has(action):
 				settled[action] = true
-				on_settled.call(action)
-		if all_complete:
+				_retire_move_markup(action)
+
+		if not pending.is_empty():
+			var next: Dictionary = pending[0]
+			var mover: MoveAction = next["move"]
+			# all_complete is the ONLY way past a moment nobody parked for -- a walk that ended
+			# without its pause because its mover was removed mid-shot. Unreachable by design, and
+			# it plays the shot late rather than dropping it.
+			if mover.parked_at() == int(next["step"]) or all_complete:
+				await _execute_action_sequence(next["shots"], beat, holds, subjects, lines,
+						lingers, emphases)
+				mover.release()
+				pending.pop_front()
+				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
+				# once nothing is left to watch, where the next phase's own pan takes over.
+				if not all_complete:
+					await _frame_the_walk(span)
+				continue
+
+		if all_complete and pending.is_empty():
 			return
 
 		await get_tree().process_frame
+
+
+# Where the camera sits for the walk (#520): the MIDPOINT of the walk's span in 2D, with the span
+# itself published for the 3D rig to widen its distance to. The span goes out BEFORE the travel and
+# is never awaited, exactly as a beat's angle is -- the rig widens on its own edge while the pan
+# tweens, so the two are one movement. No hold: the pan IS the beat.
+#
+# One spelling, two call sites (#567) -- the top of the move phase, and again after each interrupt.
+# An EMPTY span is "nothing walks", which is a hold-position queue or none at all.
+func _frame_the_walk(span: Array[Vector2i]) -> void:
+	if span.is_empty():
+		return
+	# A hold-position order has no span to frame; the midpoint below is then the walker's own cell,
+	# i.e. exactly the shot this always took. Absence means "the camera keeps its zoom", which is
+	# already the idiom every other schedule here uses.
+	if span[1] != span[0]:
+		game.camera_controller.framed_span = span
+	# ...and the walk publishes its own ZERO weight (#520's rule: every beat that frames something
+	# publishes one, including zero). On the way back from an interrupt that is what pulls the camera
+	# out of a kill's push-in -- absence would leave it leaning in for the rest of the walk.
+	game.camera_controller.beat_emphasis = 0.0
+	var grid: TileMapLayer = game.grid
+	await game.camera_controller.pan_to_position(
+			(GridUtils.cell_world(grid, span[0]) + GridUtils.cell_world(grid, span[1])) * 0.5,
+			Pacing.PLAYBACK_PAN)
+
+
+# The pass's mid-walk interrupts, in the order the resolve fired them (#567): one entry per moment,
+# each carrying the walk to halt, the step to halt at, and every shot that one entry set off --
+# a pinball chain included, since the cascade shares the moment that started it.
+#
+# The steps are handed to the walks here rather than stamped by the resolver: where a walk PAUSES is
+# playback's question, and the resolve already answered the only one it owns (when the shot fired).
+# Assigned to every mover, empty list included, so last pass's pauses can never survive into this one.
+func _walk_interrupts(plan: ResolvedPlan, actions: Array) -> Array[Dictionary]:
+	var moments: Array[Dictionary] = []
+	var by_move: Dictionary[MoveAction, Array] = {}
+	for shot in plan.mid_walk_shots():
+		var mover := shot.triggered_during as MoveAction
+		if mover == null or not actions.has(mover):
+			continue
+		var step: int = shot.triggered_at_step
+		if not moments.is_empty() and moments[-1]["move"] == mover and int(moments[-1]["step"]) == step:
+			(moments[-1]["shots"] as Array).append(shot)
+			continue
+		moments.append({"move": mover, "step": step, "shots": [shot]})
+		if not by_move.has(mover):
+			by_move[mover] = []
+		(by_move[mover] as Array).append(step)
+
+	for action in actions:
+		var mover := action as MoveAction
+		if mover == null:
+			continue
+		var steps: Array[int] = []
+		if by_move.has(mover):
+			steps.assign(by_move[mover])
+		mover.interrupt_steps = steps
+	return moments
 
 # A move's markup goes when ITS OWN unit arrives, not when the squad's pass ends (#558, dev
 # 2026-08-26: "the AI ghost unit stays around for a bit after the unit already reaches its move
@@ -375,25 +465,6 @@ func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: b
 			holds[beat.actions[0]] = Pacing.duration_for(beat, profile, is_ai)
 	return holds
 
-# Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
-# that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
-# means "don't move", which is the right answer when there is nothing left to look at.
-# Who the camera frames for a triggered watch shot (#413) — the CROSSER, because the moment is
-# somebody walking into a line, not the watcher standing still. Built here rather than in BeatSheet:
-# a watch shot is not part of the plan the player authored, so it has no beat to read a subject off,
-# and one line of data beats teaching the sheet about a list it does not own. Keyed the way every
-# other schedule is — the volley's lead member — so a splashing shot still pans once.
-func _watch_subjects(plan: ResolvedPlan) -> Dictionary:
-	var subjects: Dictionary = {}
-	for shot in plan.watch_shots:
-		if shot.is_secondary_hit:
-			continue
-		var who: Unit = shot.triggered_by
-		if who != null and is_instance_valid(who):
-			subjects[shot] = who
-	return subjects
-
-
 # ...and how long to STAY once it has played (#520, dev 2026-08-27). A fourth schedule beside the
 # three above, built the same way and read the same way -- but keyed on the beat's LAST surviving
 # member where they key on its FIRST, and that difference is the whole of "one blast is one moment
@@ -410,21 +481,14 @@ func _beat_lingers(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	return lingers
 
 
-# The watch shots' own linger, built off the plan for the same reason _watch_subjects is: a triggered
-# shot is not part of the authored plan, so it has no BeatSheet beat to read a rung off.
+# Who the camera frames for each beat, keyed the same way the hold schedule is (#520): the action
+# that OPENS the beat. A beat whose subject has already been freed is simply left out -- absence
+# means "don't move", which is the right answer when there is nothing left to look at.
 #
-# DECLARED CUT: every lead shot lingers as a plain attack, so a watch shot that DOWNS someone gets
-# the shorter wait a chip does. Reading the rung would mean re-deriving here what BeatSheet derives
-# everywhere else, and #567 is rewriting this playback into the walk anyway.
-func _watch_lingers(plan: ResolvedPlan) -> Dictionary:
-	var lingers: Dictionary = {}
-	for shot in plan.watch_shots:
-		if shot.is_secondary_hit:
-			continue
-		lingers[shot] = Pacing.LINGER_ATTACK
-	return lingers
-
-
+# A triggered shot's own subject is the CROSSER, and that rule now lives in BeatSheet.Beat.subject()
+# with every other one (#567). It used to be a hand-built dictionary here, beside a hand-built
+# linger that could only ever say LINGER_ATTACK -- both retired the moment the sheet learned to
+# read the watch shots.
 func _beat_subjects(beats: Array[BeatSheet.Beat]) -> Dictionary:
 	var subjects: Dictionary = {}
 	for beat in beats:
