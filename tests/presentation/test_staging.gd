@@ -281,6 +281,47 @@ func test_the_tear_out_set_is_the_fights_ground_and_not_the_whole_board() -> voi
 # in the board at the end of every move.
 #
 # The cinematic is deliberately ON, so this cannot pass for the profile gate's reason.
+# THE PUBLISH SIDE OF THE CAMERA CHANNEL (#647), which nothing in the suite had ever pinned: every
+# case that touches directed_line / beat_emphasis / beat_profile asserts where the RIG reads them,
+# so a mutant deleting the executor's write passed the lot. #103's shape exactly -- both ends
+# correct, nothing testing the wire -- and the new field would have inherited it.
+#
+# Driven end to end and asserted on the CONTROLLER, because that is the seam: OrderExecutor has no
+# path to the rig, so what it publishes here is the whole of what the 3D camera can ever know.
+func test_a_pass_publishes_each_beats_profile_to_the_camera() -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.COMBAT_ONLY)
+	var unit := _a_unit()
+	_swing_at_open_ground(unit)
+	assert_int(unit.squad.action_queue.size()).override_failure_message(
+			"fixture drifted: nothing was queued, so this case cannot fail").is_greater(0)
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	# The pass ends on its volley, so the last thing published is the blow's own profile.
+	assert_int(_game.camera_controller.beat_profile).override_failure_message(
+			"a blow published no cinematic profile -- the camera cannot tell a fight from a walk") \
+		.is_equal(Pacing.Profile.CINEMATIC)
+
+
+func test_a_walk_only_pass_leaves_the_camera_on_the_plain_profile() -> void:
+	# The other side of the fork, and the one COMBAT_ONLY exists for: the same board, the same door,
+	# a pass with no blow in it.
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.COMBAT_ONLY)
+	var unit := _a_unit()
+	_queue_a_move(unit)
+	assert_int(unit.squad.action_queue.size()).override_failure_message(
+			"fixture drifted: no move was queued, so this case cannot fail").is_greater(0)
+	_game.camera_controller.beat_profile = Pacing.Profile.CINEMATIC   # a stale value to overwrite
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_int(_game.camera_controller.beat_profile).override_failure_message(
+			"a walk left the cinematic profile standing -- the camera sways through a plain move") \
+		.is_equal(Pacing.Profile.BOARD)
+
+
 func test_walking_tears_out_nothing() -> void:
 	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
 	var unit := _a_unit()
