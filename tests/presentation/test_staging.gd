@@ -509,21 +509,33 @@ func test_the_camera_asks_where_IT_should_be_not_where_the_diorama_is() -> void:
 	assert_vector(BoardSpace.camera_lift()).is_equal(lift)
 
 
-func test_a_pass_leaves_nothing_in_the_air_even_though_no_frame_ever_drew_it() -> void:
-	# The property every existing staging assertion rests on. Headless the transition's await returns
-	# without a single frame, so nothing ever advanced the flight -- the executor ends it explicitly
-	# rather than trusting a driver that, in this run, does not exist.
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+# THE ENTRY must leave the board AT the diorama, and this has to be asked of the entry ALONE.
+#
+# A mutant proved the obvious version worthless: asserting after a whole pass passes whatever the
+# entry did, because the EXIT's clear_staging() puts everything down anyway. What is actually at
+# risk is the fight itself -- headless the transition's await returns without a single frame, so
+# nothing ever advanced the flight, and without the executor ending it explicitly every cell of the
+# fight would answer its SOCKET for the entire combat that follows. Same trap as the cinematic-off
+# case below, one case over, and only a mutant found the second one.
+func test_the_entry_leaves_the_board_at_the_diorama_though_no_frame_ever_drew_it() -> void:
 	var unit := _a_unit()
 	_swing_at_open_ground(unit)
+	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
+	var sheet := BeatSheet.read(unit.squad, plan)
+	assert_array(sheet.cells).override_failure_message(
+			"fixture drifted: this pass touches no cells").is_not_empty()
 
-	await _game.order_executor.execute_orders(unit)
-	await _settle()
+	await _game.order_executor._stage_the_fight(sheet, Pacing.Profile.CINEMATIC)
 
 	assert_bool(BoardSpace.flight_active()).override_failure_message(
-			"the pass returned with tiles still in the air").is_false()
-	assert_vector(BoardSpace.camera_lift()).override_failure_message(
-			"the pass returned still driving the camera's height").is_equal(BoardSpace.stage_offset())
+			"the entry returned with tiles still in the air, so the fight plays over a moving board"
+			).is_false()
+	var lift := BoardSpace.stage_offset()
+	assert_bool(lift.length() > 1.0).override_failure_message(
+			"the stage lift is zero; this case cannot fail").is_true()
+	for cell: Vector2i in sheet.cells:
+		assert_vector(BoardSpace.staged_offset(cell)).override_failure_message(
+				"%s is still in its socket after the entry finished" % cell).is_equal(lift)
 
 
 func test_with_the_cinematic_off_nothing_ever_flies() -> void:
