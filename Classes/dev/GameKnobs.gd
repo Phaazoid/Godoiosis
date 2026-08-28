@@ -601,6 +601,39 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Camera travel", "label": "Hold: a unit burns", "static": "ENVIRONMENT_HOLD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.05,
 		"tip": "How long the camera stays on a burning unit AFTER its damage lands, in seconds. This is the pause that shows the health drop, so it is the dial for how legible the pass is. Does not fork on the battle zoom -- the board acts here, not a faction."},
+	# What the camera does once it has ARRIVED (#520 diff 2b) -- the impact jolt and the resting
+	# drift. The two split on the profile question and NOT the same way, which is the thing to know
+	# before tuning: a jolt is matched to the health cubes bursting on their own real-time clock, so
+	# it is flat and applies with the battle zoom off too; a sway is anticipation, so it dials out
+	# with everything else on the plain board.
+	{"group": "Camera flourish", "label": "Jolt: a hit lands", "static": "SHAKE_HIT",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How hard the camera is knocked when a blow takes health off someone, in cells. Fires on the health-cube burst itself, so the jolt and the cubes always agree about when the hit landed. Applies in BOTH profiles -- it is matched to an animation, not to the drama. Zero is no shake."},
+	{"group": "Camera flourish", "label": "Jolt: a unit goes down", "static": "SHAKE_DOWN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 2.0, "step": 0.01,
+		"tip": "How hard the camera is knocked when a unit is killed or removed, in cells. A killing hit fires ONLY this one, never the hit jolt above -- so this is the whole of what a death feels like, not an extra on top."},
+	{"group": "Camera flourish", "label": "Jolt: how fast it dies", "static": "SHAKE_DECAY",
+		"script": PACING_SCRIPT, "min": 1.0, "max": 40.0, "step": 0.5,
+		"tip": "How quickly a jolt fades out. Higher is snappier -- a sharp rap rather than a wobble. Shared by both jolts above, so they read as one camera with one weight."},
+	{"group": "Camera flourish", "label": "Jolt: how fast it shakes", "static": "SHAKE_FREQUENCY",
+		"script": PACING_SCRIPT, "min": 4.0, "max": 90.0, "step": 1.0,
+		"tip": "How fast the jolt oscillates. Low reads as a heave, high as a rattle. With the decay above, these two are the whole character of an impact."},
+	{"group": "Camera flourish", "label": "Sway: how far", "static": "SWAY_AMPLITUDE",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How far the camera drifts while it is resting on a shot, in cells -- the hand-held breath that keeps a held frame from reading as a screenshot. Zero is a locked-off camera."},
+	{"group": "Camera flourish", "label": "Sway: how fast", "static": "SWAY_SPEED",
+		"script": PACING_SCRIPT, "min": 0.1, "max": 5.0, "step": 0.05,
+		"tip": "How fast that drift breathes. It is two waves at an irrational ratio rather than one, so the bob never quite repeats -- this sets the slower of them."},
+	{"group": "Camera flourish", "label": "Sway strength (zoom off)", "static": "BOARD_SWAY",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of the sway applies on the plain board. Ships at 0 -- the board is as still as it has always been -- so wanting some breath down here later is this one number rather than a restructure."},
+	{"group": "Camera flourish", "label": "Sway strength (zoom on)", "static": "CINEMATIC_SWAY",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of the sway applies with the battle zoom on."},
+	{"group": "Camera flourish", "label": "Shot: how far the camera stoops", "static": "PITCH_DIVE",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 40.0, "step": 0.5,
+		"tip": "How many degrees SHALLOWER than the board's own angle a directed shot sits, so the fight looms instead of being read from overhead. Clamped by the same tilt band the player's drag uses. Scaled by the directed-shot strength, so it is dead on the plain board for the same reason the side-on angle is."},
+
 	# The tear-out is its own section because it is CINEMATIC-ONLY by construction: _stage_the_fight
 	# returns early on BOARD, so this slider is dead in the other column rather than merely unused.
 	{"group": "The tear-out", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
@@ -756,6 +789,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Actions": "Playback",
 	"Outcomes": "Playback",
 	"Camera travel": "Playback",
+	# ...and a SEVENTH since #520 diff 2b. Its own group rather than more rows under the travel one
+	# because they answer different questions: that section is how long the camera takes to GET
+	# somewhere, this is what it does once it is there.
+	"Camera flourish": "Playback",
 	"The tear-out": "Playback",
 	"Motion": "Playback",
 	"Action ring": "Action ring",
@@ -821,6 +858,15 @@ static func read_static(name: String) -> Variant:
 		"CINEMATIC_DRAMA": return Pacing.CINEMATIC_DRAMA
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
 		"CINEMATIC_DIRECTION": return Pacing.CINEMATIC_DIRECTION
+		"PITCH_DIVE": return Pacing.PITCH_DIVE
+		"SHAKE_HIT": return Pacing.SHAKE_HIT
+		"SHAKE_DOWN": return Pacing.SHAKE_DOWN
+		"SHAKE_DECAY": return Pacing.SHAKE_DECAY
+		"SHAKE_FREQUENCY": return Pacing.SHAKE_FREQUENCY
+		"SWAY_AMPLITUDE": return Pacing.SWAY_AMPLITUDE
+		"SWAY_SPEED": return Pacing.SWAY_SPEED
+		"BOARD_SWAY": return Pacing.BOARD_SWAY
+		"CINEMATIC_SWAY": return Pacing.CINEMATIC_SWAY
 		"HOLD_ATTACK": return Pacing.HOLD_ATTACK
 		"HOLD_DOWN": return Pacing.HOLD_DOWN
 		"HOLD_CRISIS": return Pacing.HOLD_CRISIS
@@ -934,6 +980,33 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"CINEMATIC_DIRECTION":
 			Pacing.CINEMATIC_DIRECTION = value
+			return
+		"PITCH_DIVE":
+			Pacing.PITCH_DIVE = value
+			return
+		"SHAKE_HIT":
+			Pacing.SHAKE_HIT = value
+			return
+		"SHAKE_DOWN":
+			Pacing.SHAKE_DOWN = value
+			return
+		"SHAKE_DECAY":
+			Pacing.SHAKE_DECAY = value
+			return
+		"SHAKE_FREQUENCY":
+			Pacing.SHAKE_FREQUENCY = value
+			return
+		"SWAY_AMPLITUDE":
+			Pacing.SWAY_AMPLITUDE = value
+			return
+		"SWAY_SPEED":
+			Pacing.SWAY_SPEED = value
+			return
+		"BOARD_SWAY":
+			Pacing.BOARD_SWAY = value
+			return
+		"CINEMATIC_SWAY":
+			Pacing.CINEMATIC_SWAY = value
 			return
 		"HOLD_ATTACK":
 			Pacing.HOLD_ATTACK = value

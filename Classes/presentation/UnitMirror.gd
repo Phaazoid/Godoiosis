@@ -211,6 +211,13 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
+# Where an IMPACT is reported, injected by battle3d beside the three sources above (#520 diff 2b).
+# A verb rather than a `*_source` noun because it PUSHES: this node is the only thing that observes
+# the instant a blow lands (the HP poll below, and unit_died for a killing one), and the camera is
+# the only thing that wants to know. Unset -- a bare Main.tscn launch, a headless fixture -- simply
+# means nobody is watching, the same graceful absence the sources have.
+var report_impact: Callable
+
 var units_root: Node2D
 
 # The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
@@ -574,6 +581,14 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 	var current := unit.get_current_hp()
 	var previous: int = _last_hp.get(id, current)
 	_last_hp[id] = current
+	# THE IMPACT IS READ ABOVE THE VISIBILITY GATE, and that placement is the whole point (#520 diff
+	# 2b). The cubes are a health READOUT and rightly go when the readout is hidden; a camera jolt is
+	# not a readout, and ALWAYS_SHOW_HEALTH ships FALSE -- so reporting it below would make the
+	# DEFAULT settings the ones with no impact in them at all, which is exactly the hole #534 shipped
+	# and the dev found in play. Sharing the diff with the burst is also what keeps the two in step:
+	# one observation, so the jolt and the cubes can never disagree about when the blow landed.
+	if current < previous and report_impact.is_valid():
+		report_impact.call(Pacing.SHAKE_HIT)
 	if previous == current or not bar.visible:
 		return
 	if current > previous:
@@ -587,6 +602,13 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 # connect site in reconcile. The standing/lost split comes off the RENDERED count, so each cube
 # leaves wearing what it was showing rather than what an HP number says it should have been.
 func _on_unit_died(_unit: Unit, id: int) -> void:
+	# Above the same gate, for the same reason, and this one is NOT redundant with the poll's report
+	# (#520 diff 2b): die() emits and queue_frees in ONE frame and the loop above skips a unit already
+	# queued for deletion, so the poll NEVER observes a unit at 0 HP. A killing blow therefore reaches
+	# the death rung ONLY -- the two cannot double-fire, and without this line the loudest moment in a
+	# pass would be the one with no jolt in it at all.
+	if report_impact.is_valid():
+		report_impact.call(Pacing.SHAKE_DOWN)
 	var bar: UnitHealthBar = _bars.get(id)
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return
