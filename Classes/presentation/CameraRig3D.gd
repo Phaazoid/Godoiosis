@@ -589,11 +589,14 @@ func align_to_detent() -> void:
 	# live at aim_along below, because a live read would compound: beat two would lerp from where
 	# beat one landed, so a partial strength would give the fifth beat more angle than the first.
 	_squared_up_yaw = _target_yaw_degrees
-	# ...and the tilt goes back to what the BOARD authored -- the third of the same three squarings
-	# this edge already does (the yaw detent, the playback zoom). It is what makes a dive MEASURABLE:
-	# a player parked at max_pitch_degrees would leave the shot nowhere to go, and their own tilt is
-	# already stashed by the time this runs, so restore_view hands it back untouched.
-	_target_pitch_degrees = board_pitch_degrees
+	# THE TILT IS DELIBERATELY NOT SQUARED UP HERE, and it was for one run of this suite (#520 diff
+	# 2b). It looked like the third of the same three squarings -- the yaw detent, the playback zoom
+	# reset -- and the argument for it was that a player parked at max_pitch_degrees leaves a stoop
+	# nowhere to go. Both halves are wrong. aim_along writes an ABSOLUTE target off
+	# board_pitch_degrees and never reads the live angle, so wherever the player left the tilt the
+	# stoop lands in the same place; and #586's rule is that a tilt survives everything but R, which
+	# test_a_realign_keeps_the_tilt pins over this very function. A beat with no aim line therefore
+	# keeps whatever tilt it found, which is already aim_along's stated idiom for the yaw.
 
 
 # The camera DIRECTOR's door, and deliberately not pose() (#520): pose() snaps the yaw, adopts the
@@ -619,10 +622,11 @@ func aim_along(line: Array[Vector2i]) -> void:
 	# published as a second field: a directed beat IS the shot that earns both, so one fact answers
 	# for two channels and there is nothing to keep in step.
 	#
-	# Measured from board_pitch_degrees -- the board's AUTHORED angle, which align_to_detent re-seeds
-	# on the claim edge -- so re-solving every frame lands on the same place. Measuring from the LIVE
-	# pitch would creep to full over a few frames and the strength would stop meaning anything, which
-	# is the idempotence failure the yaw's own mutant proved.
+	# Measured from board_pitch_degrees -- the board's own AUTHORED angle, a value nothing in a pass
+	# moves -- so re-solving every frame lands in the same place however the player had tilted.
+	# Measuring from the LIVE pitch instead would creep to full over a few frames and the strength
+	# would stop meaning anything, which is the idempotence failure the yaw's own mutant proved.
+	# It is also why the claim edge does NOT square the tilt up: see align_to_detent.
 	_target_pitch_degrees = clampf(board_pitch_degrees + Pacing.PITCH_DIVE * strength,
 			min_pitch_degrees, max_pitch_degrees)
 

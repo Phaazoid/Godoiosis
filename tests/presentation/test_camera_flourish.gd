@@ -241,16 +241,41 @@ func test_the_plain_board_is_never_stooped() -> void:
 	assert_float(rig._target_pitch_degrees).is_equal_approx(-40.0, 0.001)
 
 
-func test_the_claim_edge_squares_the_tilt_up_the_way_it_squares_the_yaw() -> void:
-	# What makes a stoop measurable at all: a player parked at the shallow end leaves the shot
-	# nowhere to go. Their own tilt is already stashed by the time this runs, so it comes back.
+func test_the_stoop_lands_in_the_same_place_however_the_player_had_tilted() -> void:
+	# The claim edge does NOT square the tilt up -- #586's rule is that a tilt survives everything
+	# but R, and test_camera_rig's own test_a_realign_keeps_the_tilt pins that over align_to_detent.
+	# Squaring up was in this slice for one run, on the theory that a player parked at the shallow
+	# end leaves the stoop nowhere to go. This is the case that says it does not: the stoop is
+	# ABSOLUTE off the board's authored angle, so where the hand left the camera cannot reach it.
+	var rig := _rig()
+	Pacing.CINEMATIC_DIRECTION = 1.0
+	Pacing.PITCH_DIVE = 10.0
+	rig.board_pitch_degrees = -40.0
+	var line := _line(Vector2i(2, 2), Vector2i(5, 4))
+
+	rig._target_pitch_degrees = -75.0       # a player who had tilted steeply down
+	rig.align_to_detent()
+	rig.aim_along(line)
+	var from_steep := rig._target_pitch_degrees
+
+	rig._target_pitch_degrees = -21.0       # ...and one parked near the shallow end
+	rig.align_to_detent()
+	rig.aim_along(line)
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the stoop depended on where the player had left the tilt, so it is not absolute"
+	).is_equal_approx(from_steep, 0.001)
+	assert_float(from_steep).is_equal_approx(-30.0, 0.001)
+
+
+func test_a_beat_with_no_direction_leaves_the_players_tilt_alone() -> void:
+	# Absence means "the camera does not move" -- aim_along's own idiom for the yaw, and the reason
+	# the claim edge may safely leave the tilt exactly where it found it.
 	var rig := _rig()
 	rig.board_pitch_degrees = -40.0
-	rig._target_pitch_degrees = -22.0       # where the player had dragged to
+	rig._target_pitch_degrees = -66.0
 	rig.stash_view()
 	rig.align_to_detent()
-	assert_float(rig._target_pitch_degrees).is_equal_approx(-40.0, 0.001)
-	rig.restore_view()
+	rig.aim_along([] as Array[Vector2i])
 	assert_float(rig._target_pitch_degrees).override_failure_message(
-			"squaring the tilt up ate the player's own drag instead of borrowing it"
-	).is_equal_approx(-22.0, 0.001)
+			"a beat with nobody to frame levelled the camera the player had tilted"
+	).is_equal_approx(-66.0, 0.001)
