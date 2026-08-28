@@ -118,6 +118,8 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": BoardView.render_result(r.get("events", [])) + "\n\n" + BoardView.render_overview(_session)}
 		"endturn":
 			var r = _session.end_turn()
+			if not r.ok:
+				return {"ok": false, "text": "> " + str(r.error) + "\n\n" + BoardView.render_overview(_session)}
 			return {"ok": true, "text": "Turn -> %s\n\n%s" % [str(r.faction), BoardView.render_overview(_session)]}
 		_:
 			return {"ok": false, "text": "unknown cmd: " + cmd}
