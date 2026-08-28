@@ -700,3 +700,109 @@ func test_every_beat_publishes_an_emphasis_INCLUDING_zero() -> void:
 	).is_equal(beats.size())
 	assert_float(float(emphases[beats[0].actions[0]])).override_failure_message(
 			"an ordinary hit was scheduled as a big moment").is_equal(0.0)
+
+
+# --- triggered shots are beats too (#567) --------------------------------------------------------
+
+# A watch over one cell (no pattern means the footprint is the aimed cell alone), armed on a unit
+# standing off the walked row. The FACTION matters: a watch only fires on the other side, so the
+# shove-combo case below arms a squadmate of the shover rather than another enemy.
+func _watcher_over(cell: Vector2i, at := Vector2i(3, 4), faction := ENEMY) -> Unit:
+	var unit := H.spawn_solo(self, _sm, faction, at, {Stats.Stat.STR: 4}, true, 5)
+	var footprint: Array[Vector2i] = [cell]
+	unit.arm_watch(at, cell, footprint, (unit.get_equipped_weapon() as WeaponInstance).template.main_attack)
+	return unit
+
+
+# The shot the walk walks into is its own VOLLEY beat, sitting after the MOVES beat -- which is
+# where the move phase now plays it. Before #567 it was on no sheet at all, and the executor
+# hand-built a subject and a flat linger for it.
+func test_a_mid_walk_shot_is_a_volley_beat_of_its_own_after_the_moves_beat() -> void:
+	var watcher := _watcher_over(Vector2i(2, 0))
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
+	var path: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0), Vector2i(3, 0)]
+	var move := MoveAction.new()
+	move.init(crosser, path, null)
+	crosser.squad._queue_action(move)
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the walk crossed no watch -- the fixture is not exercising the rule").is_equal(1)
+	var sheet := BeatSheet.read(crosser.squad, plan)
+
+	var volleys := sheet.volleys(false)
+	assert_int(volleys.size()).is_equal(1)
+	assert_object(volleys[0].actions[0]).is_same(plan.watch_shots[0])
+	assert_int(_index_of_kind(sheet, BeatSheet.Kind.VOLLEY)).override_failure_message(
+			"the triggered shot's beat does not follow the walk it interrupts") \
+		.is_greater(_index_of_kind(sheet, BeatSheet.Kind.MOVES))
+	# The camera goes to the CROSSER: the moment is somebody walking into a line. Here they are the
+	# same unit; test_a_splashed_bystander_does_not_steal_the_shot_s_subject is where they differ.
+	assert_object(volleys[0].subject()).is_same(crosser)
+	_break_shots(plan)
+
+
+# ...and the subject rule is not "the first victim". Splash is gathered CELL-FIRST over the
+# footprint, so a bystander standing on an earlier cell leads the volley while the crosser is the
+# one the moment is about.
+func test_a_splashed_bystander_does_not_steal_the_shot_s_subject() -> void:
+	var watched: Array[Vector2i] = [Vector2i(1, 0), Vector2i(2, 0)]
+	var watcher := H.spawn_solo(self, _sm, ENEMY, Vector2i(3, 4), {Stats.Stat.STR: 4}, true, 5)
+	var attack := (watcher.get_equipped_weapon() as WeaponInstance).template.main_attack
+	watcher.arm_watch(Vector2i(3, 4), watched[0], watched, attack)
+	var bystander := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 1), {Stats.Stat.MHP: 60}, false)
+	_sm.join_squad(bystander, crosser.squad)
+	var path: Array[Vector2i] = [Vector2i(2, 1), Vector2i(2, 0)]
+	var move := MoveAction.new()
+	move.init(crosser, path, null)
+	crosser.squad._queue_action(move)
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, bystander, crosser]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the shot did not splash both cells -- the fixture proves nothing").is_equal(2)
+	var sheet := BeatSheet.read(crosser.squad, plan)
+
+	var volleys := sheet.volleys(false)
+	assert_int(volleys.size()).is_equal(1)
+	assert_object(volleys[0].actions[0].aimed_at()).override_failure_message(
+			"fixture: the crosser leads the volley, so the subject rule is not under test") \
+		.is_same(bystander)
+	assert_object(volleys[0].subject()).override_failure_message(
+			"the camera framed the splashed bystander instead of the unit that walked into the line") \
+		.is_same(crosser)
+	_break_shots(plan)
+
+
+# The other half (#567): a shove-triggered shot follows the volley that threw somebody into it, and
+# its cells are ON STAGE -- it fires inside the tear-out diorama, and the watcher's anchor cell is
+# nobody's attacker origin, so unswept it would fire standing on a hole.
+func test_a_shove_triggered_shot_follows_its_volley_and_is_staged() -> void:
+	var watcher := _watcher_over(Vector2i(2, 0), Vector2i(2, 4), PLAYER)
+	var shover := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.STR: 4}, true, 4)
+	var victim := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
+	(shover.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	_sm.active_squad = shover.squad
+	shover.squad._queue_action(H.stamped_attack(shover, victim))
+
+	var plan := _sm.resolve_plan(shover.squad, _board_with([watcher, shover, victim]))
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the shove did not land the victim in the watched cell -- fixture, not mechanic").is_equal(1)
+	var sheet := BeatSheet.read(shover.squad, plan)
+
+	var volleys := sheet.volleys(false)
+	assert_int(volleys.size()).is_equal(2)
+	assert_object(volleys[0].actions[0]).is_same(plan.attacks[0])
+	assert_object(volleys[1].actions[0]).override_failure_message(
+			"the triggered shot's beat does not follow the blow that caused it").is_same(plan.watch_shots[0])
+	assert_array(sheet.cells).override_failure_message(
+			"the watcher's ground is not on stage, so the shot fires standing on a hole") \
+		.contains([watcher.movement.cell])
+	_break_shots(plan)
+
+
+func _break_shots(plan: ResolvedPlan) -> void:
+	_break_volleys(plan)
+	var empty: Array[AttackAction] = []
+	for shot in plan.watch_shots:
+		shot.volley = empty
