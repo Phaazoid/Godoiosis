@@ -187,12 +187,18 @@ func _make_row(list: VBoxContainer, action: BaseAction, indent_level: int, dragg
 	_wire_row(row)
 	return row
 
+# The wrapper carries the INDENT (a MarginContainer), the column carries the row plus whatever
+# annotation lines it grows (#592). Two nodes rather than one because a row is an HBoxContainer and
+# an annotation sits UNDER it, and because the indent has to apply to both.
 func _new_row(list: VBoxContainer, indent_level: int) -> ActionQueueRow:
 	var wrapper := MarginContainer.new()
 	wrapper.add_theme_constant_override("margin_left", indent_level * 18)
 	list.add_child(wrapper)
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 0)
+	wrapper.add_child(column)
 	var row: ActionQueueRow = ACTION_ROW_SCENE.instantiate()
-	wrapper.add_child(row)
+	column.add_child(row)
 	return row
 
 func _wire_row(row: ActionQueueRow) -> void:
@@ -211,11 +217,21 @@ func _clear_sections():
 	for child in sections_box.get_children():
 		child.queue_free()
 
+# The MarginContainer the panel wraps a row in -- the node a drag MOVES, because it carries the row
+# AND its annotation lines as one block. Walked UP to the first MarginContainer rather than a fixed
+# number of hops: #592 put a column between wrapper and row, and the two hardcoded hops here then
+# aimed the drag at the wrong nodes entirely -- silently, since every cast still returned something.
+func _wrapper_of(row: Node) -> Control:
+	var node: Node = row
+	while node != null and not (node is MarginContainer):
+		node = node.get_parent()
+	return node as Control
+
 func _on_row_drag_requested(row: ActionQueueRow) -> void:
 	if not is_instance_valid(row):
 		return
 	_drag_row = row
-	_drag_section = row.get_parent().get_parent() as VBoxContainer   # row -> MarginContainer wrapper -> section VBox
+	_drag_section = _wrapper_of(row).get_parent() as VBoxContainer
 	_drag_dirty = false
 	row.modulate = Color(1, 1, 1, 0.6)                               # lift cue
 	set_process(true)
@@ -234,7 +250,7 @@ func _process(_delta: float) -> void:
 func _update_drag() -> void:
 	if not _drag_row.draggable:
 		return
-	var wrapper: Control = _drag_row.get_parent()
+	var wrapper: Control = _wrapper_of(_drag_row)
 	if wrapper == null:
 		return
 	var mouse_y := wrapper.get_global_mouse_position().y
@@ -286,7 +302,17 @@ func _cancel_drag() -> void:
 	_drag_dirty = false
 	set_process(false)
 
+# The row inside one of the panel's wrappers -- the drag logic's map from a hit-tested wrapper back
+# to the row it holds. Searches DOWN rather than taking child 0: since #592 a wrapper holds a
+# COLUMN (row + its annotation lines), and a fixed depth here silently returned null for every row,
+# which reads as "the queue is not draggable any more" rather than as a broken path.
 func _row_in(wrapper: Node) -> ActionQueueRow:
-	if wrapper == null or wrapper.get_child_count() == 0:
+	if wrapper == null:
 		return null
-	return wrapper.get_child(0) as ActionQueueRow
+	if wrapper is ActionQueueRow:
+		return wrapper as ActionQueueRow
+	for child in wrapper.get_children():
+		var found := _row_in(child)
+		if found != null:
+			return found
+	return null

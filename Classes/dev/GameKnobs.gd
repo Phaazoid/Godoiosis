@@ -337,6 +337,7 @@ const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
+const QUEUE_ROW_SCRIPT := "res://Classes/ui/queue/ActionQueueRow.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
@@ -429,6 +430,16 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Mission HUD", "label": "Clock urgency tint", "static": "URGENT_COLOR",
 		"script": MISSION_STATUS_SCRIPT,
 		"tip": "What the countdown turns once it is inside the threshold above. Reads against the plain white of an objective still pending, so it has to say urgent without reading as the red that means a mission cannot be won at all."},
+
+	# The queue annotation (#592) -- the line under a move row saying what that walk walks into.
+	# Statics on ActionQueueRow, 2D UI under the game's own ui_layer, so a class row for the same
+	# structural reason the mission clock above needs one.
+	{"group": "Mission HUD", "label": "Queue note size", "static": "ANNOTATION_FONT_SIZE",
+		"script": QUEUE_ROW_SCRIPT, "min": 6.0, "max": 20.0, "step": 1.0,
+		"tip": "Point size of the line under a queued move that says what it walks into. The queue panel is narrow, so this trades legibility against how many lines one note wraps to -- and a note that wraps past two or three lines pushes the rest of the plan out of view."},
+	{"group": "Mission HUD", "label": "Queue note tint", "static": "ANNOTATION_MODULATE",
+		"script": QUEUE_ROW_SCRIPT,
+		"tip": "What the note under a move row is tinted. It has to read as subordinate to the row it hangs off while still catching the eye, since it is the only warning that a queued walk takes a hit."},
 
 	# --- PLAYBACK, in six sections (dev, 2026-08-27) ------------------------------------------
 	#
@@ -873,6 +884,8 @@ static func read_static(name: String) -> Variant:
 		"SLICE_DISABLED_COLOR": return ActionMenuController.SLICE_DISABLED_COLOR
 		"URGENT_ROUNDS": return MissionStatusPanel.URGENT_ROUNDS
 		"URGENT_COLOR": return MissionStatusPanel.URGENT_COLOR
+		"ANNOTATION_FONT_SIZE": return ActionQueueRow.ANNOTATION_FONT_SIZE
+		"ANNOTATION_MODULATE": return ActionQueueRow.ANNOTATION_MODULATE
 	push_error("GameKnobs: unknown static '%s'" % name)
 	return null
 
@@ -1104,6 +1117,16 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			MissionStatusPanel.URGENT_COLOR = value
 			_refresh_mission_status(host)
 			return
+		# The queue annotation (#592). Same re-apply reason: the panel is push-refreshed when the plan
+		# changes, and nothing is changing while the dev drags this slider.
+		"ANNOTATION_FONT_SIZE":
+			ActionQueueRow.ANNOTATION_FONT_SIZE = int(value)   # a stepped slider hands a float
+			_refresh_action_queue(host)
+			return
+		"ANNOTATION_MODULATE":
+			ActionQueueRow.ANNOTATION_MODULATE = value
+			_refresh_action_queue(host)
+			return
 		_:
 			push_error("GameKnobs: unknown static '%s'" % name)
 			return
@@ -1142,6 +1165,18 @@ static func _refresh_mission_status(host: Node3D) -> void:
 	if game_2d == null:
 		return
 	game_2d.refresh_mission_status()
+
+
+# The queue panel's re-apply (#592), the mission-status one's twin: rows are rebuilt from scratch on
+# every refresh, so re-running one is all a restyle needs. A null active squad clears the panel,
+# which is what it already shows when nothing is planned.
+static func _refresh_action_queue(host: Node3D) -> void:
+	if host == null:
+		return
+	var game_2d: Node2D = host.game
+	if game_2d == null:
+		return
+	game_2d.refresh_action_queue(game_2d.squad_manager.active_squad)
 
 
 # The armed-Guard pair's re-apply, for the one knob that MOVES a marker instead of re-tinting it
