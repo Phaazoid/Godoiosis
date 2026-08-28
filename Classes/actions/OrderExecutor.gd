@@ -164,14 +164,14 @@ func execute_orders(unit):
 
 	await _execute_action_sequence(plan.attacks, beat, _beat_holds(sheet.volleys(false), profile, is_ai),
 			_beat_subjects(sheet.volleys(false)), _beat_lines(sheet.volleys(false)),
-			_beat_lingers(sheet.volleys(false)))
+			_beat_lingers(sheet.volleys(false)), _beat_emphases(sheet.volleys(false)))
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
 	# a turnover the counters then pace on top of, not instead of.
 	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
 	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
 			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)),
-			_beat_lingers(sheet.volleys(true)))
+			_beat_lingers(sheet.volleys(true)), _beat_emphases(sheet.volleys(true)))
 	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
@@ -179,7 +179,7 @@ func execute_orders(unit):
 		var batch: Array = side_channel.get(type, [])
 		var codas := sheet.codas(type)
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai),
-				_beat_subjects(codas), {}, _beat_lingers(codas))
+				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas))
 	BoardSpace.clear_staging()   # the tiles thud back into their sockets (#521)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
@@ -287,7 +287,7 @@ func _retire_move_markup(action: BaseAction) -> void:
 # watching on the way out; health-cube debris is what made the trailing pause a feature rather than
 # dead air.
 func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
-		lines: Dictionary = {}, lingers: Dictionary = {}):
+		lines: Dictionary = {}, lingers: Dictionary = {}, emphases: Dictionary = {}):
 	if actions.is_empty():
 		return
 
@@ -306,6 +306,13 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# movement rather than a turn followed by a walk.
 			if lines.has(action):
 				game.camera_controller.directed_line = lines[action]
+			# ...and how big the moment is, published BEFORE the pan for the reason the angle is
+			# (#520 diff 2c): the rig eases the push-in in _process while pan_to tweens the travel,
+			# so the camera arrives already leaning in rather than lurching once it lands.
+			#
+			# Assigned unconditionally rather than only when non-zero -- a quiet beat publishing its
+			# own 0 is what pulls the camera back out after a kill.
+			game.camera_controller.beat_emphasis = float(emphases.get(action, 0.0))
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
 		await Pacing.beat(self, hold)
 		action.begin_execution()
@@ -530,3 +537,18 @@ func _process_downed_pending() -> void:
 			unit.squad.has_acted = true
 	_downed_pending.clear()
 	game.refresh_action_queue(game.squad_manager.active_squad)
+
+
+# How big each beat is, keyed on its OPENING action like the holds and the subjects (#520 diff 2c).
+# One blast is one moment however many it hits, so the weight belongs to the action that opens the
+# beat -- the same key the pan and the hold use, and deliberately not [-1] like the linger, which
+# lands after the last hit rather than framing the first.
+#
+# Built for every beat with actions, INCLUDING the ones that weigh nothing: publishing a 0 is what
+# lets the camera relax between kills. See CameraController.beat_emphasis.
+func _beat_emphases(beats: Array[BeatSheet.Beat]) -> Dictionary:
+	var emphases: Dictionary = {}
+	for beat in beats:
+		if not beat.actions.is_empty():
+			emphases[beat.actions[0]] = Pacing.emphasis_for(beat)
+	return emphases

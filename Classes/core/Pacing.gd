@@ -167,6 +167,47 @@ static var SWAY_SPEED := 0.9       # radians per second of the primary bob
 static var BOARD_SWAY := 0.0
 static var CINEMATIC_SWAY := 1.0
 
+# --- lethality-aware direction (#520 diff 2c) ---------------------------------------------------
+#
+# The director knows the ending before it shoots the scene: every ResolvedOutcome carries its rung
+# before playback starts, so a beat that is about to kill someone can be SHOT differently rather
+# than merely held longer. The wind-up was already built -- hold_for's HOLD_DOWN rung is a killing
+# blow holding three times as long as a scratch -- so what is here is the push-in and the freeze.
+
+# How far the camera pushes IN on the loudest beat, in world units of camera distance. Subtracted
+# from wherever the player has left the zoom, never assigned over it: the wheel stays theirs through
+# a pass (#520, dev 2026-08-26) and a per-beat set_zoom is exactly the leash that ruling refuses.
+#
+# Scaled by direction_of, the same fork the side-on angle and the pitch stoop use -- whether the
+# plain board gets DIRECTED shots at all is one question and it already has an answer.
+static var DOLLY_IN := 2.5
+# ...and the floor the dolly's OWN CONTRIBUTION respects. There is no zoom-in floor on this rig by
+# dev ruling (asked twice, "please remove it entirely"), and scrolling past the aim point takes the
+# camera through its target to look back -- his call, for HIS hand. A director inheriting that hole
+# would fly the camera through a unit on the exact beat it most wants to be looking at one.
+#
+# So this floors what the DOLLY adds, never the total: a player already closer than this keeps their
+# distance untouched and simply gets no push-in, which is why it cannot re-introduce the floor the
+# ruling removed.
+static var DOLLY_FLOOR := 4.0
+
+# The RUNGS, 0..1, and they are the holds' ladder asked a different question -- how big is this
+# moment, rather than how long to wait before it. Their own numbers because the two rankings may
+# legitimately disagree: a held breath (iron will) is worth a long PAUSE and not much of a push-in,
+# while a death wants both. An ordinary blast earns 0 and is the baseline the rest are read against.
+static var EMPHASIS_DOWN := 1.0
+static var EMPHASIS_CRISIS := 0.8
+static var EMPHASIS_IRON_WILL := 0.5
+
+# How long everything stops when a killing blow lands, in REAL seconds. A freeze creates time rather
+# than matching an animation that is already running, so unlike the linger it is DRAMA and forks on
+# profile -- BOARD ships 0.0, both because the plain board has never had one and because zoom-off
+# pacing is already the standing question from the linger slice; it should not gain a time-freeze
+# unasked.
+static var HITSTOP_DOWN := 0.09
+static var BOARD_HITSTOP := 0.0
+static var CINEMATIC_HITSTOP := 1.0
+
 
 # Which profile playback is running under. ONE answer, so a caller never re-reads the setting.
 static func active_profile() -> Profile:
@@ -198,6 +239,67 @@ static func direction_of(profile: Profile) -> float:
 # ...and the sway's, the third of the same shape. Shake has no such fork on purpose -- see its rows.
 static func sway_of(profile: Profile) -> float:
 	return CINEMATIC_SWAY if profile == Profile.CINEMATIC else BOARD_SWAY
+
+
+# ...and the hitstop's, the fourth of the same shape.
+static func hitstop_of(profile: Profile) -> float:
+	return CINEMATIC_HITSTOP if profile == Profile.CINEMATIC else BOARD_HITSTOP
+
+
+# HOW BIG A MOMENT THIS IS, 0..1 (#520 diff 2c) -- hold_for's twin, and deliberately its own answer
+# rather than a rescaling of it. That one returns SECONDS, and a number meaning two things is the
+# duplicate seam Law #4 refuses; this is the same beat's facts collapsed for the CAMERA instead.
+#
+# Same structure as the holds: seeded from nothing, LOUDEST SINGLE ONE WINS BY VALUE, so the ranking
+# between rungs is tunable rather than written into the code. A beat that only does damage earns
+# nothing at all -- an ordinary blast is the baseline the rest are read against, exactly as
+# HOLD_ATTACK is the floor over there.
+static func emphasis_for(beat: BeatSheet.Beat) -> float:
+	if beat == null or beat.kind != BeatSheet.Kind.VOLLEY:
+		return 0.0
+	var emphasis := 0.0
+	if beat.has_removal \
+			or beat.has_lethality(ResolvedOutcome.Lethality.DOWNED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.KILLED) \
+			or beat.has_lethality(ResolvedOutcome.Lethality.MAIMED):
+		emphasis = maxf(emphasis, EMPHASIS_DOWN)
+	if beat.has_lethality(ResolvedOutcome.Lethality.CRISIS):
+		emphasis = maxf(emphasis, EMPHASIS_CRISIS)
+	if beat.iron_will_held:
+		emphasis = maxf(emphasis, EMPHASIS_IRON_WILL)
+	return emphasis
+
+
+# The FREEZE (#520 diff 2c), beside beat() because it is a playback pause and this file is the one
+# declared table of those -- it just spends its time by stopping the world rather than by waiting.
+#
+# Engine.time_scale is a GLOBAL, so three things are load-bearing. The unfreeze timer is created with
+# ignore_time_scale TRUE, or it would be frozen by the very freeze it exists to end and hang the game
+# outright. Re-entry is counted rather than ignored: a volley that kills two fires twice, and without
+# the count the first restore would end the second freeze early and the two would race. And the
+# restore writes 1.0 literally, which is correct only while nothing else in the project writes
+# time_scale -- true today (grepped), and this comment is where to look the day it stops being.
+#
+# Headless returns immediately, the escape beat() carries and for the same reason: nobody is watching,
+# and a real freeze would put wall clock on every suite that resolves a lethal plan.
+static var _frozen_count := 0
+
+static func hitstop(host: Node, seconds: float) -> void:
+	if seconds <= 0.0 or DisplayServer.get_name() == "headless":
+		return
+	_frozen_count += 1
+	Engine.time_scale = 0.0
+	await host.get_tree().create_timer(seconds, true, false, true).timeout
+	_frozen_count -= 1
+	if _frozen_count <= 0:
+		_frozen_count = 0
+		Engine.time_scale = 1.0
+
+
+# Whether the world is stopped right now. Nothing in the game reads it; it exists so a test can ask
+# without reaching for Engine.time_scale, which is global state a case must not leave dirty.
+static func is_frozen() -> bool:
+	return _frozen_count > 0
 
 
 # The loudest hold this beat earns, by VALUE rather than by rung order (see the holds above).

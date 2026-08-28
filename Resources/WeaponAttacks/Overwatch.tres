@@ -1,13 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponAttackData" format=3]
+[gd_resource type="Resource" script_class="WeaponAttackData" format=3 uid="uid://b82qw8n45g5o2"]
 
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="1_pat"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="1_wrrfn"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_wad"]
 
-[sub_resource type="Resource" id="Resource_ow"]
-script = ExtResource("1_pat")
-max_range = 2
-min_range = 2
-metadata/_custom_type_script = "uid://dsxc14gee2d01"
+[sub_resource type="Resource" id="Resource_hdsxh"]
+script = ExtResource("1_wrrfn")
+length = 4
 
 [resource]
 script = ExtResource("2_wad")
@@ -19,6 +17,6 @@ requires_readiness = true
 consumes_readiness = true
 display_name = "Overwatch"
 power = 4
-attack_pattern = SubResource("Resource_ow")
+attack_pattern = SubResource("Resource_hdsxh")
 can_overwatch = true
 metadata/_custom_type_script = "uid://ddqeee7njjjq2"

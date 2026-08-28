@@ -216,6 +216,12 @@ var effect_subjects_source: Callable
 # the instant a blow lands (the HP poll below, and unit_died for a killing one), and the camera is
 # the only thing that wants to know. Unset -- a bare Main.tscn launch, a headless fixture -- simply
 # means nobody is watching, the same graceful absence the sources have.
+#
+# It reports a KIND rather than a number (#520 diff 2c): what this node observes is that a blow
+# landed and how final it was, and how much that is WORTH -- a jolt amplitude, a freeze, both -- is
+# the consumer's question. Handing over Pacing's shake numbers had this node knowing the camera's
+# tuning table, which is one layer too many.
+enum Impact { HIT, DOWN }
 var report_impact: Callable
 
 var units_root: Node2D
@@ -588,7 +594,7 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 	# and the dev found in play. Sharing the diff with the burst is also what keeps the two in step:
 	# one observation, so the jolt and the cubes can never disagree about when the blow landed.
 	if current < previous and report_impact.is_valid():
-		report_impact.call(Pacing.SHAKE_HIT)
+		report_impact.call(Impact.HIT)
 	if previous == current or not bar.visible:
 		return
 	if current > previous:
@@ -608,7 +614,7 @@ func _on_unit_died(_unit: Unit, id: int) -> void:
 	# the death rung ONLY -- the two cannot double-fire, and without this line the loudest moment in a
 	# pass would be the one with no jolt in it at all.
 	if report_impact.is_valid():
-		report_impact.call(Pacing.SHAKE_DOWN)
+		report_impact.call(Impact.DOWN)
 	var bar: UnitHealthBar = _bars.get(id)
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return

@@ -643,3 +643,60 @@ func _break_volleys(plan: ResolvedPlan) -> void:
 		atk.volley = empty
 	for ctr in plan.counters:
 		ctr.volley = empty
+
+
+# --- the emphasis schedule (#520 diff 2c) --------------------------------------------------------
+
+func test_the_emphasis_schedule_keys_on_the_action_that_OPENS_a_beat() -> void:
+	# The pan and the hold key there too, and for the same reason: the camera leans in as the shot
+	# is SET UP, not after the last hit lands. Deliberately not the linger's [-1] key.
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var a := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	var b := H.spawn_solo(self, _sm, ENEMY, Vector2i(2, 0), {Stats.Stat.LDR: 3})
+	var plan := ResolvedPlan.new()
+	var victims: Array[Unit] = [a, b]
+	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
+			victims, attacker.get_equipped_weapon().template.main_attack))
+
+	var sheet := BeatSheet.read(attacker.squad, plan)
+	var executor := OrderExecutor.new()
+	auto_free(executor)
+	var beats := sheet.volleys(false)
+	# Marked lethal by hand, so this case is about WHERE the emphasis is keyed and nothing else.
+	# Left as an ordinary hit it would earn 0 and die alongside the publish-zero case below, which
+	# is two cases pinning one property -- and a mutant reddening both tells you nothing about
+	# either. Shaping the beat is fair here: the ladder that reads this field has its own suite.
+	beats[0].has_removal = true
+	var emphases: Dictionary = executor._beat_emphases(beats)
+
+	assert_int(beats[0].actions.size()).override_failure_message(
+			"the volley collapsed to one member; the case cannot tell the two ends apart").is_greater(1)
+	assert_bool(emphases.has(beats[0].actions[0])).override_failure_message(
+			"the emphasis is not on the action that OPENS the volley").is_true()
+	assert_bool(emphases.has(beats[0].actions[-1])).override_failure_message(
+			"the emphasis sits on the CLOSING action -- the camera would lean in after the blow"
+	).is_false()
+
+
+func test_every_beat_publishes_an_emphasis_INCLUDING_zero() -> void:
+	# Absence would mean "hold what you had" -- directed_line's idiom, and wrong here: the camera
+	# would stay pushed in from a kill through every quiet beat after it and the pass would never
+	# breathe. A beat worth nothing must say so out loud.
+	var attacker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.LDR: 3})
+	var victim := H.spawn_solo(self, _sm, ENEMY, Vector2i(1, 0), {Stats.Stat.LDR: 3})
+	var plan := ResolvedPlan.new()
+	var victims: Array[Unit] = [victim]
+	plan.attacks.assign(AttackAction.create_volley(attacker, Vector2i(0, 0), Vector2i(1, 0),
+			victims, attacker.get_equipped_weapon().template.main_attack))
+
+	var sheet := BeatSheet.read(attacker.squad, plan)
+	var executor := OrderExecutor.new()
+	auto_free(executor)
+	var beats := sheet.volleys(false)
+	var emphases: Dictionary = executor._beat_emphases(beats)
+
+	assert_int(emphases.size()).override_failure_message(
+			"an ordinary beat published nothing at all, so the camera would never relax"
+	).is_equal(beats.size())
+	assert_float(float(emphases[beats[0].actions[0]])).override_failure_message(
+			"an ordinary hit was scheduled as a big moment").is_equal(0.0)
