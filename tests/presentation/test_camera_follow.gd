@@ -11,7 +11,8 @@
 # covers MENU, where Mission Select opts out of the modal lock.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
 
@@ -23,7 +24,7 @@ var _camera3d: Camera3D
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)

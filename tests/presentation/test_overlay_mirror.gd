@@ -10,7 +10,8 @@
 # (process_frame resumes coroutines BEFORE node _process — one frame is stale).
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -36,7 +37,7 @@ func before_test() -> void:
 	# The icon channel forks on ALWAYS_SHOW_SQUAD_RINGS, and the ON branch is a real player-facing
 	# state, not a stray -- it is pinned next door in test_standing_squad_rings (#449).
 	PlayerSettings.reset_for_test()
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)

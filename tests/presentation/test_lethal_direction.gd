@@ -11,7 +11,8 @@
 # exact beat it most wants to be looking at one.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/LookDev/LookDev.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/LookDev/LookDev.tscn")
 
 var _scene: Node3D
 # Pacing's rows are `static var` and outlive a suite (#449). Saved around every case, not at the end
@@ -31,7 +32,7 @@ func before_test() -> void:
 	}
 	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
-	_scene = (load(SCENE_PATH) as PackedScene).instantiate() as Node3D
+	_scene = SCENE.instantiate() as Node3D
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 

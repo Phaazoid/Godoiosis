@@ -12,7 +12,8 @@
 # which test_the_delegation_gate_stops_the_2d_board_acting_twice pins.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 const LEVEL_1 := "res://Scenarios/missions/Level_1.tres"
 
@@ -26,7 +27,7 @@ var _container: SubViewportContainer
 
 func before_test() -> void:
 	get_tree().root.size = Vector2i(1280, 720)   # the project window; headless defaults can be tiny
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no _start: the board loads explicitly below
 	get_tree().root.add_child(_scene)
@@ -707,7 +708,7 @@ func test_demo_mode_forces_both_factions_ai_and_playable_does_not() -> void:
 func test_demo_mode_boots_watch_only() -> void:
 	# demo_mode must be set BEFORE the scene enters the tree — _ready is where the
 	# fork lives, which the shared fixture (playable) can never exercise.
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	var demo := packed.instantiate() as Node3D
 	demo.auto_play = false
 	demo.demo_mode = true
@@ -732,7 +733,7 @@ func test_demo_mode_keeps_the_rig_alive_behind_a_frozen_game() -> void:
 	# mode (it is invisible and unclickable there), and the diorama's camera must
 	# survive it. The freeze is simulated at its real seam — ModalLock's whole
 	# mechanism IS game.process_mode = DISABLED.
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	var demo := packed.instantiate() as Node3D
 	demo.auto_play = false
 	demo.demo_mode = true

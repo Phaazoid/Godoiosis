@@ -7,13 +7,14 @@
 # (perspective projection, pitched down, narrow FOV) stand in for them.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/LookDev/LookDev.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/LookDev/LookDev.tscn")
 
 var _scene: Node3D
 
 
 func before_test() -> void:
-	_scene = (load(SCENE_PATH) as PackedScene).instantiate() as Node3D
+	_scene = SCENE.instantiate() as Node3D
 	get_tree().root.add_child(_scene)
 	await await_idle_frame()
 

@@ -9,7 +9,8 @@
 # Fixture is test_overlay_mirror's: the Battle3D scene with the boot board cleared.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -25,7 +26,7 @@ func before_test() -> void:
 	# wipe is what stops the ON branch leaking into whatever runs next. (Reading the dev's own
 	# cfg stopped being possible in #449: a headless process honours nobody's preferences.)
 	PlayerSettings.reset_for_test()
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)

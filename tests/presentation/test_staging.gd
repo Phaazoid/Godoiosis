@@ -10,7 +10,8 @@
 # lift stays a knob the dev can move without reddening a line here.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 
 var _scene: Node3D
@@ -25,7 +26,7 @@ func before_test() -> void:
 	# sky poisons every case after it, and the poll that draws it is per-frame.
 	BoardSpace.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)
