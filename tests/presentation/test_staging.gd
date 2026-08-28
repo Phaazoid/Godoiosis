@@ -545,6 +545,11 @@ func test_with_the_cinematic_off_nothing_ever_flies() -> void:
 	# version is the one thing a transition cannot run without moving, since begin_flight bumps it.
 	# That is also what separates this from slice A's displacement law, which a flight that tidied
 	# up after itself would satisfy.
+	#
+	# HONEST LIMIT: this case rides slice A's profile gate and cannot be killed on its own -- the
+	# only mutant that reaches it (removing that gate) reds slice A's own case first and truncates
+	# the file. Its job is to say the FLIGHT is inside the gate's promise too, so a later slice that
+	# moved the transition out from behind it would have this to answer. Measured, not assumed.
 	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
 	var unit := _a_unit()
 	_swing_at_open_ground(unit)
