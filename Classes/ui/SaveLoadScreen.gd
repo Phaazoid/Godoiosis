@@ -94,10 +94,11 @@ func _on_slot_pressed(slot: int, filled: bool, mode: Mode, confirm_load: bool,
 			return
 	finished.emit(slot)
 
-# Esc backs out, the ReportPanel shape -- safe because game._input ignores ui_cancel while
-# anything is in the modal group. The _busy guard is belt-and-braces beside ConfirmCard's own
-# accept_event: backing out while a confirm is up would strand the child card mid-await.
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel") and not _busy:
-		accept_event()
-		finished.emit(-1)
+# Esc backs out, through ModalCard's one handler. The _busy guard STAYS: backing out while a
+# confirm is up would strand the child card mid-await, and returning false here is what lets the
+# stacked ConfirmCard have the key instead.
+func _on_cancel() -> bool:
+	if _busy:
+		return false
+	finished.emit(-1)
+	return true

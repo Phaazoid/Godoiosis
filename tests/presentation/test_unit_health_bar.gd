@@ -376,13 +376,24 @@ func test_the_readout_sorts_above_every_unit_and_every_overlay() -> void:
 		assert_int(BoardOverlays.UNIT_HUD_RENDER_PRIORITY).is_greater(spec["sort"])
 
 
-# --- The always-show setting (#350) -----------------------------------------------------------
+# --- The health-bar preference (#350, three-valued since #418) ---------------------------------
 # The third reason a readout is up, and the only one that is a PREFERENCE rather than a derivation.
 # Driven through PlayerSettings, never by poking UnitMirror, because the store is what the settings
 # page writes and the gate is what reads it — the wire is the whole point.
+#
+# THIS SUITE DECLARES ITS BRANCH (#449): every case below names the mode it is in, because a
+# setting that forks which units wear a bar forks the cases that pin them.
 
-func _set_always_on(on: bool) -> void:
-	PlayerSettings.set_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH, on)
+func _set_bars(mode: PlayerSettings.HealthBars) -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.HEALTH_BARS, mode)
+
+
+# set_current_hp is Unit's one door for WRITING hp, so this is the honest fixture rather than a
+# shortcut: what is under test is the gate READING the number, not how the number got there.
+func _wound(unit: Unit) -> Unit:
+	unit.set_current_hp(unit.get_max_hp() - 1)
+	assert_int(unit.get_current_hp()).is_less(unit.get_max_hp())   # fixture setup, not the claim
+	return unit
 
 
 func test_the_setting_puts_a_readout_over_every_unit_at_once() -> void:
@@ -390,7 +401,7 @@ func test_the_setting_puts_a_readout_over_every_unit_at_once() -> void:
 	var second := _spawn(PLAYER, Vector2i(6, 2))
 	var third := _spawn(PLAYER, Vector2i(9, 5))
 	_point_at(Vector2i(20, 20))   # empty ground: nothing is hovered, nothing is planned
-	_set_always_on(true)
+	_set_bars(PlayerSettings.HealthBars.EVERY)
 	await _settle()
 
 	# The inverse of the hover case's exclusivity claim: every unit, not one.
@@ -404,7 +415,7 @@ func test_an_always_on_readout_keeps_its_digits_for_hover_alone() -> void:
 	# that is up for a non-hover reason is bar-only, and pointing at it reveals the number.
 	var pointed := _spawn(PLAYER, Vector2i(2, 2))
 	var other := _spawn(PLAYER, Vector2i(6, 2))
-	_set_always_on(true)
+	_set_bars(PlayerSettings.HealthBars.EVERY)
 	_point_at(pointed.movement.cell)
 	await _settle()
 
@@ -420,15 +431,75 @@ func test_turning_the_setting_off_returns_the_board_to_hover_only() -> void:
 	# The off state is #229's behaviour, not "bars we forgot to clear" — a stale bar left standing
 	# would look identical to the feature working right up until you moved the mouse.
 	var unit := _spawn(PLAYER, Vector2i(2, 2))
-	_set_always_on(true)
+	_set_bars(PlayerSettings.HealthBars.EVERY)
 	_point_at(Vector2i(20, 20))
 	await _settle()
 	assert_bool(_unit_mirror.bar_for(unit).visible).is_true()   # precondition, via the real path
 
-	_set_always_on(false)
+	_set_bars(PlayerSettings.HealthBars.HOVERED)
 	await _settle()
 
 	assert_array(_shown_bars()).is_empty()
+
+
+func test_damaged_only_thins_the_board_down_to_the_hurt() -> void:
+	# #418's whole ask. The claim is a PARTITION and needs both sides in one case: a mode that shows
+	# everybody and a mode that shows nobody each satisfy half of it.
+	var hurt := _wound(_spawn(PLAYER, Vector2i(2, 2)))
+	var whole := _spawn(PLAYER, Vector2i(6, 2))
+	_point_at(Vector2i(20, 20))   # empty ground: nothing is hovered, nothing is planned
+	_set_bars(PlayerSettings.HealthBars.DAMAGED)
+	await _settle()
+
+	assert_array(_shown_bars()).contains_exactly([hurt])
+	assert_bool(_unit_mirror.bar_for(whole).visible).override_failure_message(
+			"a unit at full HP wore a bar under 'damaged only'").is_false()
+
+
+func test_damaged_only_still_answers_the_cursor() -> void:
+	# The mode narrows the PREFERENCE disjunct and must not touch the hover one — "damaged only"
+	# that also stopped answering the cursor would have taken #229 away.
+	var whole := _spawn(PLAYER, Vector2i(2, 2))
+	_set_bars(PlayerSettings.HealthBars.DAMAGED)
+	_point_at(whole.movement.cell)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(whole).visible).override_failure_message(
+			"pointing at a full-HP unit no longer shows its readout").is_true()
+
+
+func test_a_body_keeps_its_readout_under_damaged_only() -> void:
+	# _go_downed clings at 1 HP, so a body is damaged by the ordinary rule rather than by a clause
+	# of its own — which is what keeps #322's glyph and rescue clock up in this mode.
+	var body := _spawn(PLAYER, Vector2i(2, 2))
+	body._go_downed(false)   # the dev-bypass form: down it without the Will spend or a maim
+	assert_bool(body.is_downed()).is_true()   # fixture setup, not the claim
+	_point_at(Vector2i(20, 20))
+	_set_bars(PlayerSettings.HealthBars.DAMAGED)
+	await _settle()
+
+	assert_array(_shown_bars()).contains([body])
+
+
+func test_a_queued_order_keeps_a_full_health_units_readout_under_damaged_only() -> void:
+	# THE CLAUSE #418 MAY NOT TOUCH. Law #2 says the queue never lies and #354 ruled a prediction
+	# survives to the end of its pass, so a preference that could hide what the queue is promising
+	# would undo both. Its own case under the NEW mode, because the always-on cases above cannot
+	# see it: with EVERY set, every bar is up for the preference anyway.
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon = H.make_weapon()   # pattern-less: Reach falls back to adjacency
+	var target := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	assert_int(target.get_current_hp()).is_equal(target.get_max_hp())   # fixture: NOT damaged
+
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._on_left_click(target.movement.cell)   # the dispatcher idiom: declare, gate, resolve
+	_point_at(Vector2i(20, 20))                 # nothing hovered, so only the plan can hold it up
+	_set_bars(PlayerSettings.HealthBars.DAMAGED)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(target).visible).override_failure_message(
+			"a preference hid a unit the queue is about to change -- Law #2").is_true()
 
 
 # --- The element-state row (#357) --------------------------------------------------------------
@@ -540,7 +611,7 @@ func test_the_row_rides_the_bars_own_visibility_and_not_a_rule_of_its_own() -> v
 	var bar: UnitHealthBar = _unit_mirror.bar_for(unit)
 	assert_bool(bar.visible).is_false()
 
-	_set_always_on(true)
+	_set_bars(PlayerSettings.HealthBars.EVERY)
 	await _settle()
 
 	assert_bool(bar.visible).is_true()
@@ -565,7 +636,7 @@ func test_a_body_and_a_living_unit_at_one_hp_read_differently() -> void:
 	var clinging := _spawn(PLAYER, Vector2i(6, 2))
 	clinging.set_current_hp(1)
 	_point_at(Vector2i(20, 20))   # neither is hovered; the SETTING puts both bars up
-	_set_always_on(true)
+	_set_bars(PlayerSettings.HealthBars.EVERY)
 	await _settle()
 
 	var body_bar: UnitHealthBar = _unit_mirror.bar_for(body)

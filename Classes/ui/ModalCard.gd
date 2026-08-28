@@ -32,6 +32,27 @@ class_name ModalCard
 # and a Game left DISABLED behind it would never run the mission picked next.
 var claims_modal_lock: bool = true
 
+# --- Backing out ---------------------------------------------------------------------------------
+
+# ESC BELONGS TO THE CARD, and it has nowhere else it could live: game.gd's _input ignores
+# ui_cancel while anything is in the `modal` group (#131), so a card that does not answer here
+# SWALLOWS the key. That is not a missing nicety, it is a card with no door -- #418's settings page
+# grew past the viewport and stranded the player behind a Close button off the bottom edge.
+#
+# MECHANISM here, POLICY in the override: return true for "I took the key". Three cards spelled
+# this themselves before and each had a real reason to differ -- ReportPanel swallows it mid-send
+# without acting, SaveLoadScreen yields to a stacked ConfirmCard, ConfirmCard reads it as No -- so
+# a shared BEHAVIOUR would have had to grow their differences back as flags.
+#
+# The default takes NOTHING, which is the right answer for a card that must be answered:
+# MissionEndBanner and MissionSelectScreen both keep it.
+func _on_cancel() -> bool:
+	return false
+
+func _input(event: InputEvent) -> void:
+	if event.is_action_pressed("ui_cancel") and _on_cancel():
+		accept_event()
+
 # --- Styling ------------------------------------------------------------------------------------
 
 var card_z_index: int = UiLayers.MODAL_CARD

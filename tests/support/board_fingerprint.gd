@@ -85,7 +85,7 @@ static func _game_state(host: Node3D) -> Variant:
 static func _settings_state() -> Dictionary:
 	var out := {}
 	for setting: PlayerSettings.Setting in PlayerSettings.DEFS:
-		out[PlayerSettings.Setting.keys()[setting]] = PlayerSettings.is_on(setting)
+		out[PlayerSettings.Setting.keys()[setting]] = PlayerSettings.value_of(setting)
 	return out
 
 

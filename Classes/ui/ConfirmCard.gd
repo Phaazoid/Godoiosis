@@ -24,8 +24,8 @@ func _build(question: String, yes_label: String, no_label: String, game_node: No
 	_add_button(row, yes_label, func(): answered.emit(true))
 	_add_button(row, no_label, func(): answered.emit(false))
 
-# Esc is No. accept_event stops the card underneath from also reading it as its own back-out.
-func _input(event: InputEvent) -> void:
-	if event.is_action_pressed("ui_cancel"):
-		accept_event()
-		answered.emit(false)
+# Esc is No. Taking the key is what stops the card underneath from also reading it as its own
+# back-out -- see SaveLoadScreen._busy, which guards the same seam from the other side.
+func _on_cancel() -> bool:
+	answered.emit(false)
+	return true

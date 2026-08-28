@@ -155,15 +155,14 @@ func show_outcome(report_dir: String, sent: bool) -> void:
 
 	_add_button(_actions, "Close", func() -> void: dismissed.emit())
 
-# Esc backs out of the card. game._input ignores ui_cancel while anything is in the "modal" group,
-# so this is the only handler that sees it and there is no ordering question between the two.
-func _input(event: InputEvent) -> void:
-	if not event.is_action_pressed("ui_cancel"):
-		return
-	get_viewport().set_input_as_handled()
+# Esc backs out of the card, through ModalCard's one handler. Note the mid-send arm returns TRUE
+# while doing nothing: the key is TAKEN rather than acted on, so it cannot fall through to whatever
+# is underneath while an upload is in flight.
+func _on_cancel() -> bool:
 	if _actions.get_child_count() == 0:
-		return   # mid-send: nothing to back out to
+		return true   # mid-send: nothing to back out to, and nobody else may have it either
 	if _status.visible:
 		dismissed.emit()
 	else:
 		finished.emit(false)
+	return true
