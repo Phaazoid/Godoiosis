@@ -662,6 +662,11 @@ func test_the_emphasis_schedule_keys_on_the_action_that_OPENS_a_beat() -> void:
 	var executor := OrderExecutor.new()
 	auto_free(executor)
 	var beats := sheet.volleys(false)
+	# Marked lethal by hand, so this case is about WHERE the emphasis is keyed and nothing else.
+	# Left as an ordinary hit it would earn 0 and die alongside the publish-zero case below, which
+	# is two cases pinning one property -- and a mutant reddening both tells you nothing about
+	# either. Shaping the beat is fair here: the ladder that reads this field has its own suite.
+	beats[0].has_removal = true
 	var emphases: Dictionary = executor._beat_emphases(beats)
 
 	assert_int(beats[0].actions.size()).override_failure_message(
