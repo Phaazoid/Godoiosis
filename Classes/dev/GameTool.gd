@@ -24,6 +24,7 @@ class_name GameTool
 # reports "no 3D host" instead of failing.
 
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
+const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
 
 var _host: Node3D
 var _baseline: Array = []         # per KNOBS index: what is currently ON DISK, i.e. Reset's target
@@ -48,6 +49,7 @@ var _dirty := false
 # about visibility, so building on demand would fail them for every row not currently showing.
 # TileBrushTool._set_paint_mode is the same idiom one panel over.
 var _action_picker: OptionButton
+var _zoom_picker: OptionButton   # the battle-zoom mode, polled against the store (see _process)
 var _shown_action: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 # Every control each row put on the page, by its row's tags. Kept because a row is not one node --
 # a colour row is several -- so hiding one means hiding the span DevWidgets.add_knob_row returned.
@@ -234,20 +236,44 @@ func tip_for(knob: Dictionary) -> String:
 # shapes (it is neither an @export default, nor a static var, nor a table entry) and needs no Save
 # at all -- the store is its own persistence. This is the first dev tool to write one.
 #
-# It writes the REAL setting, the same one Pacing.active_profile reads and the same one the pause
-# menu's Settings page shows, so the panel cannot drift from what the player gets -- and flipping it
-# here really does change your preference. That is the point: the fastest A/B for a pacing value is
-# the one that moves the game and the page together.
+# It writes the REAL setting, the same one Pacing.profile_for reads and the same one the pause menu's
+# Settings page shows, so the panel cannot drift from what the player gets -- and flipping it here
+# really does change your preference. That is the point: the fastest A/B for a pacing value is the one
+# that moves the game and the page together.
+#
+# A THREE-WAY PICKER SINCE #647, and its LABELS ARE THE STORE'S OWN (PlayerSettings.options_of) --
+# never a copy typed here. The settings page projects the same list, so the two surfaces cannot
+# disagree about what the modes are called any more than about which one is picked.
 func _build_playback_header() -> void:
 	var rows: VBoxContainer = _tab_rows.get(GameKnobs.PROFILE_TAB)
 	if rows == null:
 		return
-	DevWidgets.add_checkbox(rows, "Battle zoom",
-		PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM),
-		func(on: bool) -> void:
-			PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, on)
-			_apply_playback_filter(),
-		"THE REAL PLAYER SETTING, not a preview -- the same one the Settings page shows and the one Pacing reads to pick a profile. It also chooses which column of this page you are looking at, so you always tune the mode you are watching.")
+	var labels: Array = PlayerSettings.options_of(ZOOM_SETTING)
+	var row := DevWidgets.add_option(rows, "Battle zoom", labels,
+		str(labels[PlayerSettings.choice_of(ZOOM_SETTING)]),
+		func(picked: String) -> void:
+			PlayerSettings.set_choice(ZOOM_SETTING, labels.find(picked))
+			_apply_playback_filter())
+	_zoom_picker = row.get_child(1) as OptionButton
+	DevWidgets.apply_tooltip(row, DevWidgets.wrap_tooltip("THE REAL PLAYER SETTING, not a preview -- the same one the Settings page shows and the one Pacing reads to pick each beat's profile. It also chooses which column of this page you are looking at, so you always tune the mode you are watching. Combat only runs the cinematic over blows and counters alone, so this page shows the cinematic column for it too."))
+
+
+# DEV CONTROLS AND PLAYER CONTROLS MAY NEVER DISAGREE (dev, 2026-08-28) -- so the picker follows the
+# store rather than only writing to it. The pause menu's Settings page is reachable while this window
+# is up (they are two OS windows, both on screen), and before #647 changing the setting there left
+# this control showing the old value AND the wrong column of knobs: you would be tuning CINEMATIC_*
+# rows while the game ran BOARD, which is the born-dead slider the filter exists to prevent.
+#
+# A POLL rather than a changed signal, which is the store's own doctrine ("callers poll it") and needs
+# no new seam. It is one int per frame, and it re-runs the filter only on an actual move.
+func _process(_delta: float) -> void:
+	if _zoom_picker == null:
+		return
+	var live := PlayerSettings.choice_of(ZOOM_SETTING)
+	if _zoom_picker.selected == live:
+		return
+	_zoom_picker.select(live)
+	_apply_playback_filter()
 
 
 # A section's own control, drawn under its heading. Only Actions has one: the picker that decides
@@ -281,7 +307,10 @@ func _remember_filter(knob: Dictionary, controls: Array[Node]) -> void:
 # Show the column the live setting names, and the verb the picker names. Sets `visible` and nothing
 # else: every row stays in the tree (see the note on _filtered).
 func _apply_playback_filter() -> void:
-	var cinematic := Pacing.active_profile() == Pacing.Profile.CINEMATIC
+	# WHICH COLUMN you are looking at. Asked of the MODE, not of a beat (#647): COMBAT_ONLY runs the
+	# cinematic over blows and counters, so its rows are the ones worth tuning -- only OFF puts the
+	# plain board's numbers in front of you.
+	var cinematic := Pacing.zoom_mode() != PlayerSettings.BattleZoom.OFF
 	for entry: Dictionary in _filtered:
 		var profile: String = entry["profile"]
 		var action: int = entry["action"]

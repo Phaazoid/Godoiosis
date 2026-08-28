@@ -400,6 +400,18 @@ func _clock_row_color(game_2d: Node2D) -> Color:
 # knob and never ask about visibility, so a filter that skipped building would fail them for every
 # row not currently showing. These cases pin BOTH halves: hidden, and still there.
 
+# The battle-zoom mode picker, asserted into existence rather than assumed: add_option builds an
+# HBox of [Label, OptionButton], so the row lookup finds it by its label like every knob row.
+func _zoom_picker() -> OptionButton:
+	var row := _row_for("Battle zoom")
+	assert_object(row).override_failure_message(
+			"the Playback page has no battle-zoom row at all").is_not_null()
+	var picker := row.get_child(1) as OptionButton
+	assert_object(picker).override_failure_message(
+			"the battle-zoom row is not a picker -- a three-way setting cannot be a checkbox").is_not_null()
+	return picker
+
+
 func _checkbox_for(text: String) -> CheckBox:
 	return _find_checkbox(_game, text)
 
@@ -422,36 +434,58 @@ func _row_visible(label_text: String) -> bool:
 	return row.visible
 
 
-func test_the_zoom_toggle_writes_the_real_player_setting() -> void:
-	# Not a preview and not a panel-local copy: the same store Pacing.active_profile reads, so the
+func test_the_zoom_picker_writes_the_real_player_setting() -> void:
+	# Not a preview and not a panel-local copy: the same store Pacing.profile_for reads, so the
 	# page cannot drift from what the player gets.
-	var was := PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM)
-	# A checkbox is a bare CheckBox carrying its own text, NOT an HBox-with-label -- which is the
-	# same asymmetry test_every_knob_has_a_row_somewhere_in_the_panel skips bools for.
-	var box := _checkbox_for("Battle zoom")
-	assert_object(box).override_failure_message(
-			"the Playback page has no battle-zoom toggle").is_not_null()
+	var was := PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE)
+	var picker := _zoom_picker()
+	# The COUNT rather than the labels: the list is the store's, and asserting the words here would
+	# be the copy the panel deliberately does not keep.
+	assert_int(picker.item_count).override_failure_message(
+			"the picker does not offer every mode the store declares").is_equal(
+			PlayerSettings.options_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE).size())
 
-	box.button_pressed = not was
-	box.toggled.emit(not was)
-	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM)).override_failure_message(
-			"flipping the toggle did not move the setting the game reads").is_equal(not was)
+	var target: int = PlayerSettings.BattleZoom.COMBAT_ONLY
+	picker.select(target)
+	picker.item_selected.emit(target)
+	assert_int(PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE)).override_failure_message(
+			"picking a mode did not move the setting the game reads").is_equal(target)
 
-	box.button_pressed = was
-	box.toggled.emit(was)
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, was)
+
+
+# THE WIRE, not the two ends (#647, dev ruling 2026-08-28): the pause menu's Settings page and this
+# panel are two OS windows showing one value, and before this the panel latched its control at build
+# time. The COLUMN half is the one that bites -- a stale picker is cosmetic, a stale filter has you
+# tuning CINEMATIC_* rows while the game runs BOARD.
+func test_the_dev_picker_follows_a_change_made_anywhere_else() -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
+	await await_idle_frame()
+
+	# Written straight to the store, exactly as the settings page writes it -- nothing here touches
+	# the panel, which is the whole point.
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.OFF)
+	await await_idle_frame()
+
+	assert_int(_zoom_picker().selected).override_failure_message(
+			"the dev picker still shows the old mode after the setting moved elsewhere").is_equal(
+			PlayerSettings.BattleZoom.OFF)
+	assert_bool(_row_visible("Base beat: your own Execute")).override_failure_message(
+			"the picker followed but the COLUMN did not -- the panel is showing rows that move nothing") \
+		.is_true()
 
 
 func test_the_profile_filter_shows_one_column_and_hides_the_other() -> void:
 	# Named rows on purpose: these two are the same dial under each profile, which is the pair the
 	# dev could not read as a pair. Both must EXIST either way; only one is on screen.
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.OFF)
 	_game._apply_playback_filter()
 	assert_bool(_row_visible("Base beat: your own Execute")).override_failure_message(
 			"the board column is hidden while the board profile is live").is_true()
 	assert_bool(_row_visible("Base beat")).override_failure_message(
 			"the cinematic base beat is on screen while the zoom is off -- it moves nothing there").is_false()
 
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
 	_game._apply_playback_filter()
 	assert_bool(_row_visible("Base beat")).is_true()
 	assert_bool(_row_visible("Base beat: your own Execute")).override_failure_message(
@@ -486,8 +520,9 @@ func test_a_filtered_out_row_still_exists_in_the_panel() -> void:
 
 # An UNTAGGED row belongs to no column and no verb, so no filter may ever touch it.
 func test_an_untagged_playback_row_is_never_hidden() -> void:
-	for shown in [false, true]:
-		PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, shown)
+	for mode in [PlayerSettings.BattleZoom.OFF, PlayerSettings.BattleZoom.COMBAT_ONLY,
+			PlayerSettings.BattleZoom.ALWAYS]:
+		PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, mode)
 		_game._shown_action = BaseAction.ActionType.REV
 		_game._apply_playback_filter()
 		assert_bool(_row_visible("Hold: a unit goes down")).override_failure_message(

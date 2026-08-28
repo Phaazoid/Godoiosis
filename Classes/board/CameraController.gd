@@ -57,6 +57,18 @@ var framed_span: Array[Vector2i] = []
 # what you had", which is directed_line's idiom and would be wrong here: the camera would stay
 # pushed in from a kill through every quiet beat after it, and the pass would never breathe.
 var beat_emphasis := 0.0
+# WHICH PACING PROFILE the beat now playing runs under (#647), from Pacing.profile_for. The FOURTH
+# question of the same set and the fourth field: that one is an ANGLE, that one a FIT, that one a
+# WEIGHT, and this is the CAUSE the other three are shaped by.
+#
+# It exists because COMBAT_ONLY made the profile a fact about a BEAT rather than about the pass, and
+# the 3D rig has no beat in hand -- it polls. Publishing the cause is more honest than inferring it
+# from whether a line or a weight arrived, and it is the only channel the SWAY has at all: a sway is
+# a RESTING behaviour, so nothing else about a quiet beat would ever tell the rig to stop drifting.
+#
+# Held rather than cleared, directed_line's idiom: between passes the last beat's profile stands, and
+# nothing reads it while the view is unborrowed.
+var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14

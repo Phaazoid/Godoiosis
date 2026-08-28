@@ -209,9 +209,42 @@ static var BOARD_HITSTOP := 0.0
 static var CINEMATIC_HITSTOP := 1.0
 
 
-# Which profile playback is running under. ONE answer, so a caller never re-reads the setting.
-static func active_profile() -> Profile:
-	return Profile.CINEMATIC if PlayerSettings.is_on(PlayerSettings.Setting.BATTLE_ZOOM) else Profile.BOARD
+# What mode the player has the zoom in. ONE read of the setting, so nothing else names it.
+static func zoom_mode() -> PlayerSettings.BattleZoom:
+	return PlayerSettings.choice_of(PlayerSettings.Setting.BATTLE_ZOOM_MODE) as PlayerSettings.BattleZoom
+
+
+# WHICH PROFILE THIS BEAT RUNS UNDER (#647) -- the one collapse from (mode, beat) to a profile, and
+# duration_for's shape one question over: that one collapses a beat's facts to a LENGTH, this one to
+# the pacing it is played at.
+#
+# It replaced `active_profile()`, which answered for the whole pass. Once COMBAT_ONLY exists there is
+# no such answer -- a move and the volley after it run under different profiles -- so a global would
+# be a seam that quietly mis-answers rather than one that fails (Law #4). Every caller now names the
+# beat it is asking about, and the ones with no beat in hand read CameraController.beat_profile,
+# which is this answer PUBLISHED (#520's channel, one field further).
+static func profile_for(beat: BeatSheet.Beat) -> Profile:
+	match zoom_mode():
+		PlayerSettings.BattleZoom.OFF:
+			return Profile.BOARD
+		PlayerSettings.BattleZoom.COMBAT_ONLY:
+			return Profile.CINEMATIC if is_combat_beat(beat) else Profile.BOARD
+	return Profile.CINEMATIC
+
+
+# Is a unit dealing or taking damage in this beat (dev, 2026-08-28)? The VOLLEY is the blow itself;
+# the TURNOVER is the act break where the defending line raises weapons, and it is cinematic because
+# it is punctuation INSIDE a fight -- dropping to plain for it would cut the exchange in half between
+# an attack and its counter.
+#
+# MOVES and CODA are the walk and the side-channel verbs, neither of which is a blow. CELL_EFFECTS is
+# the edge the wording could have reached -- a unit standing in fire IS taking damage -- and it stays
+# plain rather than reversing a standing call: the environment pass forks on neither profile nor
+# faction, because the board acts there and the zoom has no drama to add to bookkeeping.
+static func is_combat_beat(beat: BeatSheet.Beat) -> bool:
+	if beat == null:
+		return false
+	return beat.kind == BeatSheet.Kind.VOLLEY or beat.kind == BeatSheet.Kind.TURNOVER
 
 
 # How long to hold before this beat. The one collapse from a beat's FACTS to a length -- BeatSheet

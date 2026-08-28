@@ -638,6 +638,10 @@ func _mirror_camera() -> void:
 	# easing on top of that ease is lag between the action and the frame it is in.
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
 	_rig.hold_at(_aim_over(flat.x, flat.z))
+	# ...and WHICH PROFILE the beat runs under (#647), mirrored FIRST because all three channels below
+	# scale through it. It is what carries COMBAT_ONLY to a rig that has no beat in hand: a plain walk
+	# publishes BOARD and the sway, the push-in and the yaw all land at zero strength.
+	_rig.beat_profile = cam.beat_profile
 	# ...and the 2D camera answers WHERE, while the beat answers FROM WHICH SIDE (#520). Polled
 	# beside the position for the same reason it is: this is the one block that already runs every
 	# frame under playback. Below the early return deliberately -- the release edge above restores
@@ -1140,6 +1144,9 @@ func _on_impact(kind: int) -> void:
 		_rig.shake(Pacing.SHAKE_DOWN)
 		# Fire-and-forget: the freeze runs on real time and ends itself, and awaiting it here would
 		# stall the mirror's own reconcile inside a frozen frame.
-		Pacing.hitstop(self, Pacing.HITSTOP_DOWN * Pacing.hitstop_of(Pacing.active_profile()))
+		# The beat's OWN profile (#647), read off the published channel rather than a global -- an
+		# impact is by definition a combat beat, so COMBAT_ONLY freezes here exactly as ALWAYS does,
+		# but saying so through the publish keeps one answer instead of a second rule that agrees.
+		Pacing.hitstop(self, Pacing.HITSTOP_DOWN * Pacing.hitstop_of(game.camera_controller.beat_profile))
 		return
 	_rig.shake(Pacing.SHAKE_HIT)

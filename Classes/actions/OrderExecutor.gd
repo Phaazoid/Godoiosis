@@ -98,12 +98,15 @@ func execute_orders(unit):
 	# The pass's own reading of itself (#524), consulted for PAUSES ONLY -- every action below still
 	# executes in this function's phase order, so nothing here can reorder playback (Law #2).
 	var sheet := BeatSheet.read(squad, plan)
-	var profile := Pacing.active_profile()
 	# Keyed on the SAME is_ai_faction read the concede above makes, so a hotseat faction with AI off
 	# is a human and paces like one: an AI plan is being read for the first time, a player's was
 	# authored by the person watching it. CINEMATIC ignores the fork (#410); BOARD keeps it.
 	var is_ai: bool = game.ai_controller.is_ai_faction(squad.leader.get_faction())
-	var beat: float = Pacing.base_for(profile, is_ai)
+	# THE FALLBACK BASE, for an action the sheet has no beat for (#647). There is no pass-wide profile
+	# any more -- COMBAT_ONLY gives a move and the volley after it different ones -- so this asks the
+	# one collapse about NO beat rather than inventing a second rule: unclassifiable is not combat, so
+	# OFF and COMBAT_ONLY both land on BOARD and ALWAYS still lands on CINEMATIC.
+	var beat: float = Pacing.base_for(Pacing.profile_for(null), is_ai)
 
 	# Playback owns where the camera looks for the rest of this pass (#520). SAVED and RESTORED, never
 	# cleared: an AI turn claims it for the whole turn and this runs inside one, so a blind release
@@ -117,11 +120,12 @@ func execute_orders(unit):
 	# to sit further down: a triggered shot gets its rung-aware hold, its linger and its push-in off
 	# the same Pacing tables everything else does, instead of a flat attack's wait and no emphasis.
 	var volleys := sheet.volleys(false)
-	var holds := _beat_holds(volleys, profile, is_ai)
+	var holds := _beat_holds(volleys, is_ai)
 	var subjects := _beat_subjects(volleys)
 	var lines := _beat_lines(volleys)
 	var lingers := _beat_lingers(volleys)
 	var emphases := _beat_emphases(volleys)
+	var profiles := _beat_profiles(volleys)
 
 	# The walk, and the shots it walks INTO -- which now play AT the crossing moment rather than
 	# after the whole phase (#567): the mover halts on the crossing cell, the shot fires, the walk
@@ -129,7 +133,7 @@ func execute_orders(unit):
 	# fires at a crossing CELL, which the diorama's stage set does not hold -- lifting the ground
 	# first would play the shot over a hole. The board is where you move, and a watch shot is the
 	# tail of moving.
-	await _execute_move_phase(move_actions, plan, sheet, profile, is_ai, beat)
+	await _execute_move_phase(move_actions, plan, sheet, is_ai, beat)
 
 	# THE TEAR-OUT (#521): the ground the FIGHT happens on lifts off the board into a diorama, and
 	# thuds back at the end. The cell set is the sheet's own -- computed once from the plan, so there
@@ -142,28 +146,34 @@ func execute_orders(unit):
 	#
 	# Gated on the PROFILE too, which is what makes "displacement is provably zero with the cinematic
 	# off" a property rather than a promise.
-	_stage_the_fight(sheet, profile)
+	_stage_the_fight(sheet)
 
 	# attack_playback(), not plan.attacks: a shot a SHOVE set off plays right after the volley that
 	# threw somebody into it (#567), where the whole batch of them used to play ahead of the attacks
 	# -- so the answering shot came before the blow it answered. The spliced list is built for
 	# playback and never written back: a triggered shot inside plan.attacks would be counter-bait.
-	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases)
+	await _execute_action_sequence(plan.attack_playback(), beat, holds, subjects, lines, lingers, emphases,
+			profiles)
 	_apply_cell_effects(plan.cell_effects)
 	# The act break, held once between the two montages rather than folded into the first counter --
-	# a turnover the counters then pace on top of, not instead of.
-	await Pacing.beat(self, Pacing.duration_for(sheet.turnover(), profile, is_ai) if sheet.turnover() != null else 0.0)
-	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), profile, is_ai),
+	# a turnover the counters then pace on top of, not instead of. It is a COMBAT beat under
+	# COMBAT_ONLY (dev, 2026-08-28), so it keeps the cinematic's hold there.
+	var turnover := sheet.turnover()
+	await Pacing.beat(self, Pacing.duration_for(turnover, Pacing.profile_for(turnover), is_ai) \
+			if turnover != null else 0.0)
+	await _execute_action_sequence(plan.counters, beat, _beat_holds(sheet.volleys(true), is_ai),
 			_beat_subjects(sheet.volleys(true)), _beat_lines(sheet.volleys(true)),
-			_beat_lingers(sheet.volleys(true)), _beat_emphases(sheet.volleys(true)))
+			_beat_lingers(sheet.volleys(true)), _beat_emphases(sheet.volleys(true)),
+			_beat_profiles(sheet.volleys(true)))
 	# The tail gets the same treatment the volleys do (dev 2026-08-26): a CODA beat per ORDER, so
 	# each rescue pans to the body it lifts and holds for it instead of the whole batch sharing one
 	# flat beat and one camera position.
 	for type in BaseAction.SIDE_CHANNEL_ORDER:
 		var batch: Array = side_channel.get(type, [])
 		var codas := sheet.codas(type)
-		await _execute_action_sequence(batch, beat, _beat_holds(codas, profile, is_ai),
-				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas))
+		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai),
+				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas),
+				_beat_profiles(codas))
 	BoardSpace.clear_staging()   # the tiles thud back into their sockets (#521)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
@@ -237,7 +247,7 @@ func _invalid_plan_summary(squad: Squad) -> String:
 # first unfinished one: this phase ends with the SLOWEST walker, so a phase-level hook would leave a
 # short hop standing under its own ghost while a long one finished. A PARKED walk is not complete,
 # so its ghost and arrow correctly stay up through the interrupt.
-func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet, profile: Pacing.Profile,
+func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 		is_ai: bool, beat: float):
 	# Framed across BOTH ENDS of the walk rather than centred on the walker (dev, scratchpad
 	# 2026-08-26: "instead of just centering on the unit, it should try to show both their start and
@@ -249,17 +259,22 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet, p
 	var span: Array[Vector2i] = []
 	if walker != null:
 		span = [walker.movement.cell, walker.get_projected_destination()]
-	await _frame_the_walk(span)
+	# The walk's OWN profile (#647), so the rig knows a plain move from a fought-over one. A walk is
+	# not a combat beat, so COMBAT_ONLY plays it under BOARD -- which is what stops the camera swaying
+	# and leaning through somebody crossing the field.
+	var walk_profile := Pacing.profile_for(walk)
+	await _frame_the_walk(span, walk_profile)
 	if actions.is_empty():
 		return
 
 	var pending := _walk_interrupts(plan, actions)
 	var volleys := sheet.volleys(false)
-	var holds := _beat_holds(volleys, profile, is_ai)
+	var holds := _beat_holds(volleys, is_ai)
 	var subjects := _beat_subjects(volleys)
 	var lines := _beat_lines(volleys)
 	var lingers := _beat_lingers(volleys)
 	var emphases := _beat_emphases(volleys)
+	var profiles := _beat_profiles(volleys)
 
 	for action in actions:
 		action.begin_execution()
@@ -287,13 +302,14 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet, p
 			# it plays the shot late rather than dropping it.
 			if mover.parked_at() == int(next["step"]) or all_complete:
 				await _execute_action_sequence(next["shots"], beat, holds, subjects, lines,
-						lingers, emphases)
+						lingers, emphases, profiles)
 				mover.release()
 				pending.pop_front()
 				# The walk is still running, so the camera goes back to it (dev 2026-08-28). Skipped
-				# once nothing is left to watch, where the next phase's own pan takes over.
+				# once nothing is left to watch, where the next phase's own pan takes over. It restores
+				# the walk's profile too, or the shot's cinematic would ride on through the rest of it.
 				if not all_complete:
-					await _frame_the_walk(span)
+					await _frame_the_walk(span, walk_profile)
 				continue
 
 		if all_complete and pending.is_empty():
@@ -309,18 +325,22 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet, p
 #
 # One spelling, two call sites (#567) -- the top of the move phase, and again after each interrupt.
 # An EMPTY span is "nothing walks", which is a hold-position queue or none at all.
-func _frame_the_walk(span: Array[Vector2i]) -> void:
+func _frame_the_walk(span: Array[Vector2i], profile: Pacing.Profile) -> void:
 	if span.is_empty():
 		return
 	# A hold-position order has no span to frame; the midpoint below is then the walker's own cell,
 	# i.e. exactly the shot this always took. Absence means "the camera keeps its zoom", which is
 	# already the idiom every other schedule here uses.
+	#
+	# NOT profile-gated, deliberately: framing both ends of a walk is legibility rather than drama,
+	# and it has published with the zoom off since #520.
 	if span[1] != span[0]:
 		game.camera_controller.framed_span = span
 	# ...and the walk publishes its own ZERO weight (#520's rule: every beat that frames something
 	# publishes one, including zero). On the way back from an interrupt that is what pulls the camera
 	# out of a kill's push-in -- absence would leave it leaning in for the rest of the walk.
 	game.camera_controller.beat_emphasis = 0.0
+	game.camera_controller.beat_profile = profile
 	var grid: TileMapLayer = game.grid
 	await game.camera_controller.pan_to_position(
 			(GridUtils.cell_world(grid, span[0]) + GridUtils.cell_world(grid, span[1])) * 0.5,
@@ -377,7 +397,8 @@ func _retire_move_markup(action: BaseAction) -> void:
 # watching on the way out; health-cube debris is what made the trailing pause a feature rather than
 # dead air.
 func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictionary = {}, subjects: Dictionary = {},
-		lines: Dictionary = {}, lingers: Dictionary = {}, emphases: Dictionary = {}):
+		lines: Dictionary = {}, lingers: Dictionary = {}, emphases: Dictionary = {},
+		profiles: Dictionary = {}):
 	if actions.is_empty():
 		return
 
@@ -403,6 +424,11 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 			# Assigned unconditionally rather than only when non-zero -- a quiet beat publishing its
 			# own 0 is what pulls the camera back out after a kill.
 			game.camera_controller.beat_emphasis = float(emphases.get(action, 0.0))
+			# ...and the PROFILE this beat plays under (#647), published beside them for the same
+			# reason and read by every rig channel that has no beat of its own. Defaulted to BOARD
+			# rather than held: a beat that reached this line and named no profile is not one the
+			# cinematic claimed, and the sway would otherwise ride in from whatever came before.
+			game.camera_controller.beat_profile = profiles.get(action, Pacing.Profile.BOARD)
 			await game.camera_controller.pan_to(subjects[action], Pacing.PLAYBACK_PAN)
 		await Pacing.beat(self, hold)
 		action.begin_execution()
@@ -429,8 +455,12 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 # BYSTANDERS is the feels-test fork the ticket asks for, and it is one bool because the sheet has
 # already decided who is in the fight: OFF stages the cells the fight touches, ON adds the ground
 # every OTHER unit is standing on, so the diorama keeps its spatial context.
-func _stage_the_fight(sheet: BeatSheet, profile: Pacing.Profile) -> void:
-	if profile != Pacing.Profile.CINEMATIC:
+#
+# Asked of the SHEET rather than of one beat (#647): the tear-out is once per pass, so what it wants
+# to know is whether this pass has a fight in it at all. Under COMBAT_ONLY that is the same question
+# as "does any beat run cinematic" -- a pass of nothing but walking stays on the board.
+func _stage_the_fight(sheet: BeatSheet) -> void:
+	if not _any_cinematic(sheet):
 		return
 	# THE GATE, and it is asked of the FIGHT's cells BEFORE any bystander is added -- an empty sheet
 	# means no main actions, which is the whole rule. Asking after would let the feels-test flag put
@@ -458,12 +488,46 @@ func _stage_the_fight(sheet: BeatSheet, profile: Pacing.Profile) -> void:
 # counter-er) still pauses before the member that actually swings. Every action is executed either
 # way -- a skipped one is already a no-op inside AttackAction.execute; this decides only WHEN.
 # Serves the side-channel tail unchanged, where a beat holds exactly one order.
-func _beat_holds(beats: Array[BeatSheet.Beat], profile: Pacing.Profile, is_ai: bool) -> Dictionary:
+#
+# THE PROFILE IS PER BEAT SINCE #647, asked here rather than threaded in: under COMBAT_ONLY a volley
+# and the walk before it are paced differently, so there is nothing pass-wide left to pass down.
+func _beat_holds(beats: Array[BeatSheet.Beat], is_ai: bool) -> Dictionary:
 	var holds: Dictionary = {}
 	for beat in beats:
 		if not beat.actions.is_empty():
-			holds[beat.actions[0]] = Pacing.duration_for(beat, profile, is_ai)
+			holds[beat.actions[0]] = Pacing.duration_for(beat, Pacing.profile_for(beat), is_ai)
 	return holds
+
+
+# ...and which profile each beat plays under, keyed identically -- the FIFTH schedule (#647), and the
+# one the 3D rig reads for every channel that has no beat of its own: the sway, the push-in's scale
+# and the directed yaw's strength.
+#
+# It is a schedule rather than a read at the publish site for the reason all four of its siblings are:
+# every question this phase will ask is answered before the pass starts, so playback only spends the
+# answers. See CameraController.beat_profile.
+#
+# THIS IS THE WHOLE GATE, and the lines and weights beside it are deliberately NOT filtered. Every
+# rig channel already scales through Pacing's own *_of(profile) pair, and all four BOARD values ship
+# at 0.0 -- so a plain beat publishes its angle and its weight and they land at zero strength. That
+# keeps the fork in ONE place, and it keeps the BOARD knobs reachable: dial BOARD_SWAY up and a plain
+# beat sways, which is the "the shape exists but is dialled out rather than absent" rule Pacing
+# already states. Filtering the schedules instead would make those four sliders move nothing.
+func _beat_profiles(beats: Array[BeatSheet.Beat]) -> Dictionary:
+	var profiles: Dictionary = {}
+	for beat in beats:
+		if not beat.actions.is_empty():
+			profiles[beat.actions[0]] = Pacing.profile_for(beat)
+	return profiles
+
+
+# Does anything in this pass run cinematic? The tear-out's gate, and the only question about a whole
+# sheet the profile fork raises -- everything else is per beat.
+func _any_cinematic(sheet: BeatSheet) -> bool:
+	for beat in sheet.beats:
+		if Pacing.profile_for(beat) == Pacing.Profile.CINEMATIC:
+			return true
+	return false
 
 # ...and how long to STAY once it has played (#520, dev 2026-08-27). A fourth schedule beside the
 # three above, built the same way and read the same way -- but keyed on the beat's LAST surviving
