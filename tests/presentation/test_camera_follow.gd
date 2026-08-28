@@ -1038,3 +1038,45 @@ func test_the_ai_pan_aims_at_the_surface_too() -> void:
 			"the AI pan kept the rig's inherited aim height").is_equal_approx(wanted.y, 0.01)
 	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
+
+
+# --- the knockback follow (#520 diff 2b) --------------------------------------------------------
+#
+# THIS BEHAVIOUR WAS ALREADY BUILT and the ticket lists it as work: pan_to closes with follow(unit),
+# _process re-reads follow_unit.global_position every frame, and a shove slides that very position --
+# so the camera has ridden launched bodies since #118 without anyone claiming it. What was missing is
+# a LAW, and that absence is the same one #103 cost thirteen months: three correct pieces, no case
+# over the join, so any of them could be rewritten in good faith and nothing would go red.
+#
+# It is pinned at the DECISION -- who the camera is following when the pan lands -- rather than by
+# watching a body fly, because the slide's own animation is headless-escaped like everything else in
+# this file's neighbourhood, so a mid-flight sample reads frame timing rather than the wire.
+func test_the_camera_rides_the_body_a_blow_sends_flying() -> void:
+	var attacker := _player_unit()
+	assert_object(attacker).is_not_null()
+	var victim: Unit = null
+	for child in _game.units_root.get_children():
+		var unit := child as Unit
+		if unit != null and unit.get_faction() == Team.Faction.ENEMY:
+			victim = unit
+			break
+	assert_object(victim).is_not_null()
+
+	_cam().set_playback_locked(true)
+	_cam().follow_unit = attacker            # somebody ELSE, so "it ended up there" cannot pass by
+	await _cam().pan_to(victim)              # ...the camera never having changed who it watches
+	await _settle()
+
+	assert_object(_cam().follow_unit).override_failure_message(
+			"the camera stopped following at the pan's end, so a shove would leave the body behind"
+	).is_same(victim)
+
+	# ...and the follow is LIVE, not a latched position: move the body and the camera's target must
+	# come with it. That is the whole of the knockback follow, since a shove is exactly this write.
+	var flew_to := victim.global_position + Vector2(64.0, 0.0)
+	victim.global_position = flew_to
+	await _settle()
+	assert_vector(_cam().target_position).override_failure_message(
+			"the camera held its old target while the body moved -- the follow is latched, not tracking"
+	).is_equal_approx(flew_to, Vector2(0.01, 0.01))
+	_cam().set_playback_locked(false)

@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — five presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #586 (2026-08-27).**
+**Canon checked through #603 (2026-08-27).**
 
 ---
 
@@ -51,7 +51,8 @@ tilts, so `_process` eases `CameraRig/Pitch.rotation_degrees.x` every frame — 
 property the game writes back per frame is exactly the slider that moves and silently reverts, which
 is the one failure a tuning panel cannot survive. So the Look knob was **re-keyed off the node onto
 the rig's own export** (13 preset files migrated with it), and the node became the sum the way
-`position` became `_aim + _lift` in #520. The baseline is authored, the deviation is the player's, and
+`position` became `_aim + _lift` in #520 (a flourish addend joined them in diff 2b, on the same rule).
+The baseline is authored, the deviation is the player's, and
 R is the one gesture that puts the deviation back — Q/E stays a yaw realign, so tilting to read a hole
 and then turning to see its other side keeps the angle (dev, 2026-08-27).
 

@@ -170,6 +170,10 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
+	# The impact wire (#520 diff 2b): the mirror sees the blow land, the rig is what jolts. Bound
+	# straight to the rig's own door -- there is no decision to make in between, and a method here
+	# would only be a second name for shake().
+	_unit_mirror.report_impact = _rig.shake
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror

@@ -128,6 +128,45 @@ static var CINEMATIC_DRAMA := 0.65
 static var BOARD_DIRECTION := 0.0
 static var CINEMATIC_DIRECTION := 1.0
 
+# --- the flourish channels: what the camera does BESIDES going somewhere (#520 diff 2b) ---------
+#
+# Three effects that are not "where the camera looks" but a displacement laid over it. They share
+# one gate (the rig only flourishes while playback has BORROWED the view) and split on one axis:
+# whether the effect is anticipation, which the profile dials, or a match to an animation that runs
+# in real time either way, which it must not.
+
+# How many degrees SHALLOWER than the board's authored pitch a directed beat takes the shot -- the
+# camera comes down toward the fight's own eye level so the blow looms, instead of being read from
+# the strategist's overhead angle. Its own magnitude, but it shares direction_of's profile fork with
+# the yaw: whether the plain board gets directed shots at all is ONE question, and it already has an
+# answer. How far each axis swings under that answer is two.
+#
+# The shallow end is also where a billboard is being looked at from the angle its art IS drawn for,
+# so the drama and the HD-2D conceit want the same direction here. Clamped into the same band the
+# player's own drag is (min/max_pitch_degrees): that band is an ART limit, so it binds every writer.
+static var PITCH_DIVE := 10.0
+
+# The impact jolt, in world units of camera displacement. FLAT across profiles, and that follows the
+# LINGER's reasoning rather than the hold's: the health cubes burst on their own real-time clock in
+# both profiles, and an impact matched to them must too. Drama-scaling would give the plain board
+# none at all (BOARD_DRAMA ships 0.0), which is the same instant-cut hole the linger exists to close.
+#
+# Two rungs, not a damage curve. A hit and a death are categorically different moments -- and they
+# cannot double-fire, because UnitMirror's HP poll never observes a unit at 0 HP (die() emits and
+# queue_frees in one frame), so a killing blow reaches the death rung ONLY.
+static var SHAKE_HIT := 0.16
+static var SHAKE_DOWN := 0.4
+static var SHAKE_DECAY := 11.0     # how fast the jolt dies, e-folds per second
+static var SHAKE_FREQUENCY := 32.0 # how fast it oscillates, radians per second
+
+# The resting hand-held drift, in world units. ANTICIPATION rather than a match, so unlike the shake
+# it forks on profile exactly as drama and direction do -- BOARD ships 0.0 and the plain board is
+# bit-for-bit as still as it has always been.
+static var SWAY_AMPLITUDE := 0.05
+static var SWAY_SPEED := 0.9       # radians per second of the primary bob
+static var BOARD_SWAY := 0.0
+static var CINEMATIC_SWAY := 1.0
+
 
 # Which profile playback is running under. ONE answer, so a caller never re-reads the setting.
 static func active_profile() -> Profile:
@@ -154,6 +193,11 @@ static func drama_of(profile: Profile) -> float:
 
 static func direction_of(profile: Profile) -> float:
 	return CINEMATIC_DIRECTION if profile == Profile.CINEMATIC else BOARD_DIRECTION
+
+
+# ...and the sway's, the third of the same shape. Shake has no such fork on purpose -- see its rows.
+static func sway_of(profile: Profile) -> float:
+	return CINEMATIC_SWAY if profile == Profile.CINEMATIC else BOARD_SWAY
 
 
 # The loudest hold this beat earns, by VALUE rather than by rung order (see the holds above).

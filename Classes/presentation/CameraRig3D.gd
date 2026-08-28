@@ -50,6 +50,12 @@ class_name CameraRig3D
 # write `position` directly; hold_at (the snap) and glide_to (the pan) are the doors, and a stray
 # assignment is simply overwritten on the next frame rather than half-honoured.
 #
+# A THIRD addend joins them (#520 diff 2b): the FLOURISH, the impact shake plus the resting sway.
+# It is summed last and is not one of the two above precisely because it is not where the camera
+# LOOKS -- it is a displacement laid over that, so it sits outside pan_limit's clamp (a blow at the
+# board's edge jolts as hard as one in the middle) and outside stash_view (the view handed back is
+# the one the player left, never one caught mid-shake). It lives only while the view is BORROWED.
+#
 # glide_to exists because the dev's rule is that the camera never teleports (scratchpad, 2026-08-26:
 # "the camera still has a few cases where it teleports - this should never happen, it should always
 # be a pan"). Its scope is the BOARD -- his own narrowing, 2026-08-27: "that only applies while we're
@@ -174,6 +180,16 @@ var _view_borrowed := false
 # A third yaw beside the two above, and a third question -- _home_ is where the BOARD starts,
 # _borrowed_ where the PLAYER was standing, and this is where THIS PASS started.
 var _squared_up_yaw := 0.0
+
+# The FLOURISH: a third position addend beside _aim and _lift (#520 diff 2b), and the same law --
+# `position` is the sum and nothing writes it directly. Kept apart from the other two because these
+# are not WHERE THE CAMERA LOOKS but a displacement laid over it, which has two consequences worth
+# stating: they are summed AFTER pan_limit's clamp, so a blow at the board's edge jolts exactly as
+# hard as one in the middle, and they are never stashed, so the view the player gets back is the one
+# they left rather than one caught mid-shake.
+var _shake_amplitude := 0.0
+var _shake_elapsed := 0.0
+var _sway_elapsed := 0.0
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
@@ -387,9 +403,60 @@ func lift_to(lift: Vector3) -> void:
 	_target_lift = lift
 
 
-# The ONE place the node's position is written. Both channels, summed -- see the header.
+# The ONE place the node's position is written. All three channels, summed -- see the header.
 func _apply_position() -> void:
-	position = _aim + _lift
+	position = _aim + _lift + flourish()
+
+
+# The shake and the sway, summed, and ZERO unless playback has BORROWED the view. That flag is the
+# gate because it already answers exactly this question for all three claimants -- a player pass, an
+# AI turn and the burn phase each stash on the way in and restore on the way out -- and because the
+# look-dev scene never stashes, so it never flourishes. A sway under the player's own hand is motion
+# sickness rather than mood, and a jolt surviving the release would ride into the view just handed
+# back.
+func flourish() -> Vector3:
+	if not _view_borrowed:
+		return Vector3.ZERO
+	var lift := shake_offset(_shake_amplitude, _shake_elapsed) \
+			+ sway_offset(Pacing.sway_of(Pacing.active_profile()), _sway_elapsed)
+	return Vector3(0.0, lift, 0.0)
+
+
+# A damped oscillation, and PURE -- deterministic in its two arguments, so one blow reads the same
+# every time it is replayed (Law #1: a curve over time, never a noise roll) and a case can pin the
+# shape with no scene at all. WORLD Y only, no camera basis: a vertical jolt is the GBA-era hit this
+# is being mocked against, it cannot fight pan_limit (which bounds X and Z), and it needs no
+# re-derivation when the yaw turns under it.
+static func shake_offset(amplitude: float, elapsed: float) -> float:
+	if amplitude <= 0.0:
+		return 0.0
+	return amplitude * exp(-Pacing.SHAKE_DECAY * elapsed) * sin(Pacing.SHAKE_FREQUENCY * elapsed)
+
+
+# ...and the resting drift, pure the same way. TWO sines at an irrational ratio, so the bob never
+# repeats itself into a metronome -- still a curve over time, still no roll.
+static func sway_offset(strength: float, elapsed: float) -> float:
+	if strength <= 0.0:
+		return 0.0
+	var bob := sin(Pacing.SWAY_SPEED * elapsed) + 0.5 * sin(Pacing.SWAY_SPEED * 1.618 * elapsed)
+	return Pacing.SWAY_AMPLITUDE * strength * bob / 1.5
+
+
+# The impact door. STRONGEST WINS, measured against what is LEFT of a jolt in flight rather than
+# against what it started at -- the holds' own rule ("the loudest single one wins, by value"),
+# applied to an impulse. Summing would make a three-victim volley hit three times as hard as a duel,
+# which is the opposite of "one blast is one moment".
+func shake(amplitude: float) -> void:
+	if amplitude <= _live_shake_amplitude():
+		return
+	_shake_amplitude = amplitude
+	_shake_elapsed = 0.0
+
+
+# The envelope, not the offset: the offset crosses zero twice a cycle, so comparing against it would
+# let any scratch win at a zero crossing.
+func _live_shake_amplitude() -> float:
+	return _shake_amplitude * exp(-Pacing.SHAKE_DECAY * _shake_elapsed)
 
 
 # Frame `volume` (in cells/world units): aim at it, sit far enough back that all of it
@@ -522,6 +589,14 @@ func align_to_detent() -> void:
 	# live at aim_along below, because a live read would compound: beat two would lerp from where
 	# beat one landed, so a partial strength would give the fifth beat more angle than the first.
 	_squared_up_yaw = _target_yaw_degrees
+	# THE TILT IS DELIBERATELY NOT SQUARED UP HERE, and it was for one run of this suite (#520 diff
+	# 2b). It looked like the third of the same three squarings -- the yaw detent, the playback zoom
+	# reset -- and the argument for it was that a player parked at max_pitch_degrees leaves a stoop
+	# nowhere to go. Both halves are wrong. aim_along writes an ABSOLUTE target off
+	# board_pitch_degrees and never reads the live angle, so wherever the player left the tilt the
+	# stoop lands in the same place; and #586's rule is that a tilt survives everything but R, which
+	# test_a_realign_keeps_the_tilt pins over this very function. A beat with no aim line therefore
+	# keeps whatever tilt it found, which is already aim_along's stated idiom for the yaw.
 
 
 # The camera DIRECTOR's door, and deliberately not pose() (#520): pose() snaps the yaw, adopts the
@@ -543,6 +618,17 @@ func aim_along(line: Array[Vector2i]) -> void:
 	var strength := Pacing.direction_of(Pacing.active_profile())
 	_target_yaw_degrees = _squared_up_yaw + rad_to_deg(
 			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength
+	# ...and the same published line drives the PITCH (#520 diff 2b). DERIVED here rather than
+	# published as a second field: a directed beat IS the shot that earns both, so one fact answers
+	# for two channels and there is nothing to keep in step.
+	#
+	# Measured from board_pitch_degrees -- the board's own AUTHORED angle, a value nothing in a pass
+	# moves -- so re-solving every frame lands in the same place however the player had tilted.
+	# Measuring from the LIVE pitch instead would creep to full over a few frames and the strength
+	# would stop meaning anything, which is the idempotence failure the yaw's own mutant proved.
+	# It is also why the claim edge does NOT square the tilt up: see align_to_detent.
+	_target_pitch_degrees = clampf(board_pitch_degrees + Pacing.PITCH_DIVE * strength,
+			min_pitch_degrees, max_pitch_degrees)
 
 
 # --- the view playback borrows (#520 follow-up) ------------------------------------------------
@@ -559,6 +645,11 @@ func stash_view() -> void:
 	_borrowed_distance = _target_distance
 	_borrowed_pitch_degrees = _target_pitch_degrees
 	_view_borrowed = true
+	# A pass opens STILL. The flourish gate below already zeroes the offset while nothing is
+	# borrowed, so this is belt-and-braces only in the frame sense -- what it actually buys is that a
+	# claim landing moments after a big hit does not inherit the tail of that hit's jolt.
+	_shake_amplitude = 0.0
+	_shake_elapsed = 0.0
 
 
 # ...and on the edge back out. A no-op unless something is actually borrowed, so a release with no
@@ -638,6 +729,16 @@ func _process(delta: float):
 	var glide := 1.0 if DisplayServer.get_name() == "headless" else 1.0 - exp(-glide_smoothing * delta)
 	_aim = _aim.lerp(_target_aim, glide)
 	_lift = _lift.lerp(_target_lift, glide)
+
+	# The flourish clocks (#520 diff 2b). The headless escape is HERE, on the clock, rather than on
+	# the offsets -- both curves are naturally zero at t = 0 (a sine of nothing), so a headless run
+	# leaves `position` bit-identical to what it was before this channel existed, and no case that
+	# asserts a coordinate can be moved by a jolt it was never meant to see. Headless refuses to
+	# SPEND time, exactly as Pacing.beat does; a case that wants to watch a curve supplies the
+	# elapsed time itself and reads flourish().
+	if DisplayServer.get_name() != "headless":
+		_shake_elapsed += delta
+		_sway_elapsed += delta
 
 	# Clamped unconditionally, not inside the pan branch: a host driving the aim (the Battle3D camera
 	# mirror) writes it earlier in the same frame and must be bounded too. On the AIM rather than on
