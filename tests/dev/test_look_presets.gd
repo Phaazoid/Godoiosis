@@ -13,14 +13,15 @@
 # his own tidying red -- and so, it turned out, would demanding that any preset exist at all.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 
 var _scene: Node3D
 var _moods: MoodsTool
 
 
 func before_test() -> void:
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property
 	get_tree().root.add_child(_scene)

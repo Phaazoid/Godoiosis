@@ -21,7 +21,10 @@
 # and lets battle3d._ready push it, rather than calling attach_host itself.
 extends GdUnitTestSuite
 
+# SCENE_PATH stays a STRING: the knob-coverage law below reads the .tscn as TEXT. The scene is
+# preloaded separately because a per-test load() reloads the 5 MB mesh library every case (#621).
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")   # the guard-link sweep case needs units
 
 var _scene: Node3D
@@ -49,7 +52,7 @@ func before_test() -> void:
 		if typeof(current) == TYPE_NIL:
 			continue   # a missing READ arm is test_every_class_knob_resolves' finding; never write null back
 		_static_snapshot[knob["static"]] = current
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false   # no board needed: every knob is a scene property or a class value
 	get_tree().root.add_child(_scene)

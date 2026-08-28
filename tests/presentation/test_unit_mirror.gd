@@ -4,7 +4,8 @@
 # reconciliation. The 2D game is the authority throughout; the mirror only reads.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 
 var _scene: Node3D
@@ -13,7 +14,7 @@ var _mirror: UnitMirror
 
 
 func before_test() -> void:
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)

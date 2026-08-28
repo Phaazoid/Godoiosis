@@ -16,7 +16,8 @@
 # spawned by hand, so no content commit can redden it.
 extends GdUnitTestSuite
 
-const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
+# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
+const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
@@ -34,7 +35,7 @@ var _reported: Array = []
 func before_test() -> void:
 	PlayerSettings.reset_for_test()
 	get_tree().root.size = Vector2i(1280, 720)
-	var packed := load(SCENE_PATH) as PackedScene
+	var packed := SCENE
 	_scene = packed.instantiate() as Node3D
 	_scene.auto_play = false
 	get_tree().root.add_child(_scene)
