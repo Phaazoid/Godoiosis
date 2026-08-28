@@ -146,7 +146,7 @@ func execute_orders(unit):
 	#
 	# Gated on the PROFILE too, which is what makes "displacement is provably zero with the cinematic
 	# off" a property rather than a promise.
-	_stage_the_fight(sheet)
+	await _stage_the_fight(sheet)
 
 	# attack_playback(), not plan.attacks: a shot a SHOVE set off plays right after the volley that
 	# threw somebody into it (#567), where the whole batch of them used to play ahead of the attacks
@@ -174,7 +174,7 @@ func execute_orders(unit):
 		await _execute_action_sequence(batch, beat, _beat_holds(codas, is_ai),
 				_beat_subjects(codas), {}, _beat_lingers(codas), _beat_emphases(codas),
 				_beat_profiles(codas))
-	BoardSpace.clear_staging()   # the tiles thud back into their sockets (#521)
+	await _bring_the_board_home()   # the tiles travel back into their sockets (#521 slice B)
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	# The last await has returned, so the pass is played out: released HERE rather than beside
 	# _end_squad_turn because everything below is synchronous (no frame renders between them) and
@@ -481,6 +481,41 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 				on_stage[cell] = true
 				cells.append(cell)
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
+	await _play_transition(cells, true)
+
+
+# The transition itself (#521 slice B): the tiles TRAVEL between their sockets and the diorama
+# instead of appearing there. One spine both treatments share -- depart, white-out, arrive -- with
+# the Experiments flag deciding only where the camera watches it from.
+#
+# THE SCHEDULE IS THE CONTRACT. This awaits StagingFlight.total() while the 3D host renders the very
+# same plan, so a pass cannot resume with a tile still in the air, and the two sides cannot drift:
+# they read ONE artifact rather than each deriving its own from the same knobs.
+#
+# The cell order is the sheet's own, which is already playback order -- so tiles arrive in the order
+# their owners act. That is the ticket's quiet foreshadowing, and it cost nothing.
+func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
+	var plan := StagingFlight.schedule(cells)
+	if plan.is_empty():
+		return
+	var socket := -BoardSpace.lift_offset()
+	BoardSpace.begin_flight(plan, socket if entering else Vector3.ZERO,
+			Vector3.ZERO if entering else socket, entering)
+	await Pacing.beat(self, StagingFlight.total(plan))
+	# Ended HERE rather than left to the driver, and that is what makes the property hold in every
+	# run: headless the await returns without a single frame, so nothing ever advanced the flight
+	# and the tiles would still be sitting at their opening offsets. Every existing staging
+	# assertion rests on the board being settled when this returns.
+	BoardSpace.end_flight_now()
+
+
+# The exit: the same travel, reversed, and THEN the staging is dropped. Dropping it first would
+# teleport the board home and leave a transition animating cells nothing was displacing any more.
+func _bring_the_board_home() -> void:
+	var staged := BoardSpace.staged_cells()
+	if not staged.is_empty():
+		await _play_transition(staged, false)
+	BoardSpace.clear_staging()
 
 
 # Pause schedule for one phase: the action that OPENS each beat -> how long to hold before it.

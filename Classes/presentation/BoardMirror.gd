@@ -311,6 +311,11 @@ var board: GridMap
 # cleared from `board`, leaving the socket the exit will thud back into. Null outside Battle3D --
 # the look-dev scene has one board and never stages.
 var staged_board: GridMap
+# A column IN THE AIR, keyed by cell (#521 slice B). One GridMap per flying tile, because a cell is
+# a COLUMN and a node transform is the only thing that carries a whole stack -- and because one map
+# is one offset, so tiles arriving at different moments cannot share a lattice the way the landed
+# ones do. The 3D host owns the nodes and their lifetime; this map only ROUTES to them.
+var flight_maps: Dictionary[Vector2i, GridMap] = {}
 
 # How many terrain diffs have run. Read by the test that pins COALESCING — a drag
 # crossing N cells inside one frame must cost one pass, not N.
@@ -495,7 +500,9 @@ func sync(grid: TileMapLayer, heights: BoardHeights) -> void:
 	_free_props_except(live)
 	# get_used_cells returns a copy, so erasing inside the walk is safe. BOTH maps: a torn-out cell
 	# whose ground the 2D no longer paints is over on the staged lattice (#521).
-	for map: GridMap in [board, staged_board]:
+	var sweeping: Array[GridMap] = [board, staged_board]
+	sweeping.append_array(_flight_maps_list())
+	for map: GridMap in sweeping:
 		if map == null:
 			continue
 		for cell: Vector3i in map.get_used_cells():
@@ -555,6 +562,16 @@ func reconcile_cell(grid: TileMapLayer, cell: Vector2i, heights: BoardHeights,
 func _clear_column(cell: Vector2i, floor_row: int) -> void:
 	_clear_column_on(board, cell, floor_row)
 	_clear_column_on(staged_board, cell, floor_row)
+	var flying: GridMap = flight_maps.get(cell)
+	_clear_column_on(flying, cell, floor_row)
+
+
+func _flight_maps_list() -> Array[GridMap]:
+	var maps: Array[GridMap] = []
+	for map: GridMap in flight_maps.values():
+		if map != null:
+			maps.append(map)
+	return maps
 
 
 func _clear_column_on(map: GridMap, cell: Vector2i, floor_row: int) -> void:
@@ -573,13 +590,26 @@ func _clear_column_on(map: GridMap, cell: Vector2i, floor_row: int) -> void:
 #
 # Null staged_board (the look-dev scene, a bare fixture) simply never stages.
 func _map_for(cell: Vector2i) -> GridMap:
+	# In the air first: a flying cell is staged too, so asking about staging first would land its
+	# column in the diorama the moment anything re-wrote it mid-flight.
+	var flying: GridMap = flight_maps.get(cell)
+	if flying != null:
+		return flying
 	if staged_board != null and BoardSpace.is_staged(cell):
 		return staged_board
 	return board
 
 
-func _other_map(map: GridMap) -> GridMap:
-	return board if map == staged_board else staged_board
+# Every lattice this cell is NOT in. Was `_other_map`, singular, when there were two -- a name that
+# quietly stopped being true the moment a column could also be in the air, and the failure would
+# have been a tile drawn in two places at once.
+func _maps_besides(cell: Vector2i, keep: GridMap) -> Array[GridMap]:
+	var others: Array[GridMap] = []
+	var flying: GridMap = flight_maps.get(cell)
+	for map: GridMap in [board, staged_board, flying]:
+		if map != null and map != keep:
+			others.append(map)
+	return others
 
 
 # The lowest ROW any column has to reach down to. A dip must have a bottom rather than a hole,
@@ -616,7 +646,8 @@ func _write_column(cell: Vector2i, grid: TileMapLayer, item: int, heights: Board
 	# Routed, and the OTHER map's column cleared first (#521): a cell that just staged (or just came
 	# home) still holds its old column over there, and nothing else would ever come back for it.
 	var map := _map_for(cell)
-	_clear_column_on(_other_map(map), cell, floor_row)
+	for other: GridMap in _maps_besides(cell, map):
+		_clear_column_on(other, cell, floor_row)
 	var corners := heights.corners_at(cell)
 	var top_row := BoardSpace.top_row_of(Terrain.low_of_corners(corners))   # units -> drawn row
 	# The block at top_row is LOAD-BEARING under a cap, not just filler: its top face sits exactly at

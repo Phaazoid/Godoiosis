@@ -45,6 +45,29 @@ static var ENVIRONMENT_HOLD := 0.45   # the look AFTER the damage lands -- the w
 # 2026-08-26: "small pauses everywhere", because a pass with no gap at all is what made the health
 # readouts flash in and out (#475, subsumed) and battles read "way too fast".
 
+# THE TEAR-OUT TRANSITION (#521 slice B) -- how long the board takes to come apart and reassemble
+# as a diorama. CINEMATIC-only by construction: _stage_the_fight returns early on BOARD, so nothing
+# here is reachable with the battle zoom off.
+#
+# These are DURATIONS, so they live here rather than beside STAGE_LIFT -- that one is geometry, and
+# one home per kind of fact. The slam exponent is the odd one and is here deliberately: it is a
+# shape over time, and the drama multipliers above already establish that this table holds more
+# than seconds.
+#
+# BUDGETED SMALL ON PURPOSE. This plays on EVERY Execute, both profiles' worth of fights, so the
+# whole entry is a beat and not an interlude -- TEAR_OUT_ARRIVAL is a ceiling the stagger is
+# derived to fit rather than a per-tile gap that grows with the fight.
+static var TEAR_OUT_FLIGHT := 0.32        # one tile's travel between its socket and the diorama
+static var TEAR_OUT_ARRIVAL := 0.5        # total window every tile's departure must start within
+static var TEAR_OUT_STAGGER_MAX := 0.07   # cap on the gap between two tiles, so small fights punch
+static var TEAR_OUT_SLAM := 2.5           # 1 = constant speed; higher accelerates into the landing
+static var TEAR_OUT_WHITEOUT := 0.18      # the flash ramping up, and again coming down
+static var TEAR_OUT_HOLD := 0.12          # how long it sits at full before the diorama is revealed
+# How long the camera stays with the board before it rises. 0 puts it at the diorama immediately,
+# which is what the cut treatment wants; larger values let the tiles visibly leave without it.
+static var TEAR_OUT_CAMERA_HOLD := 0.15
+
+
 # --- the beat shape (#519, umbrella #410) ----------------------------------------------------
 
 # CINEMATIC does not fork on whose plan it is: #410 rules the zoom fires for all combats, AI-vs-AI

@@ -33,6 +33,16 @@ const BOARD_SCOPED := {
 	"_staged": "BoardSpace.clear_staging(",
 	"_stage_offset": "BoardSpace.clear_staging(",
 	"staging_version": "BoardSpace.clear_staging(",
+	# The transition (#521 slice B). All of it dies inside clear_staging() itself rather than beside
+	# its callers, which is what stops a board swapped mid-flight leaving a column in the sky.
+	"_flight": "BoardSpace.clear_staging(",
+	"_flight_plan": "BoardSpace.clear_staging(",
+	"_flight_elapsed": "BoardSpace.clear_staging(",
+	"_flight_from": "BoardSpace.clear_staging(",
+	"_flight_to": "BoardSpace.clear_staging(",
+	"_flight_entering": "BoardSpace.clear_staging(",
+	"_camera_lift": "BoardSpace.clear_staging(",
+	"_camera_lift_driven": "BoardSpace.clear_staging(",
 }
 
 # Process-scoped and therefore safe to survive a board reset, but NOT named by a knob table.

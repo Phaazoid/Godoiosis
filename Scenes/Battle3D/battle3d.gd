@@ -116,6 +116,10 @@ var _pointer_cell: Vector3i = BoardSpace.NO_CELL
 # The staging this poll last drew (#521) -- its own last-drawn key, the _help_* fields' shape.
 var _staged_version := 0
 var _staged_drawn: Array[Vector2i] = []
+# One GridMap per tile currently in the air (#521 slice B), and the white-out that covers the swap.
+# Both are created on demand: a board that never stages pays nothing for either.
+var _flight_drawn: Dictionary[Vector2i, GridMap] = {}
+var _whiteout: ColorRect = null
 # Which grid VERTEX the pointer is nearest (#427 slice 4). Stored beside the cell rather than derived
 # from it: it changes as the cursor crosses the MIDDLE of a cell, so the cell early-out below would
 # freeze it for the whole tile.
@@ -283,6 +287,142 @@ func _refresh_tops() -> void:
 # change as one going up and neither set alone names it. Gated on a monotonic version rather than a
 # diff, DirtyCells.version's shape -- and the previously-staged set is remembered here rather than
 # on BoardSpace, because it is this poll's own last-drawn key, not a fact about the board.
+# The tear-out transition, driven (#521 slice B). The executor publishes a schedule and awaits its
+# total; this advances it and draws the result. Neither side computes a timing the other cannot see.
+#
+# The whole function is dead unless a flight is running, which is what keeps every other frame -- and
+# every headless run, where a flight can never start because the await returns instantly -- exactly
+# as it was.
+func _drive_transition(delta: float) -> void:
+	if not BoardSpace.flight_active():
+		if not _flight_drawn.is_empty():
+			_clear_flight_maps()
+		if _whiteout != null and _whiteout.visible:
+			_apply_whiteout(0.0)
+		return
+	var landed := BoardSpace.advance_flight(delta)
+	_sync_flight_maps()
+	_drive_transition_camera()
+	_drive_whiteout()
+	if landed:
+		return   # advance_flight bumped the version; _sync_staging re-seats the landed columns
+
+
+# WHERE THE CAMERA WATCHES FROM, and the only thing the Experiments flag decides. The travel itself
+# is identical either way -- a tile always runs between its socket and the diorama -- so this is a
+# fork about the SHOT, not about the geometry, which is why knobs can tune within either arm.
+#
+# The cut is sanctioned: #520's "the camera should always pan, never teleport" is a rule about the
+# map, and the dev carved this transition out of it by name (2026-08-27) -- "we can make an exception
+# for the transition from the map view to the battle view".
+func _drive_transition_camera() -> void:
+	if Experiments.is_on(Experiments.Flag.DIORAMA_CAMERA_CUTS_AHEAD):
+		# Already up there, over empty sky, before a single tile arrives.
+		BoardSpace.drive_camera_lift(BoardSpace.stage_offset())
+		return
+	# Travelling with the tear-out: hold with the board long enough to see the tiles leave, then
+	# rise. The hold is a knob whose 0 is exactly the cut's starting position, so the two treatments
+	# meet in the middle rather than being separate code.
+	var hold := maxf(Pacing.TEAR_OUT_CAMERA_HOLD, 0.0)
+	var elapsed := BoardSpace.flight_elapsed()
+	var lift := BoardSpace.stage_offset()
+	if not BoardSpace.flight_entering():
+		BoardSpace.drive_camera_lift(lift)
+		return
+	if elapsed <= hold:
+		BoardSpace.drive_camera_lift(Vector3.ZERO)
+		return
+	BoardSpace.release_camera_lift()   # hand the height back; the rig eases the rest of the way
+
+
+# One GridMap per tile in the air. Created on demand and freed the moment it lands, because a cell is
+# a COLUMN and only a node transform carries a whole stack -- and because one map is one offset, so
+# tiles arriving at different moments cannot share the landed lattice.
+func _sync_flight_maps() -> void:
+	var flying := BoardSpace.flying_cells()
+	var wanted: Dictionary[Vector2i, bool] = {}
+	for cell in flying:
+		wanted[cell] = true
+		if not _flight_drawn.has(cell):
+			var map := GridMap.new()
+			map.mesh_library = $StagedBoard.mesh_library
+			map.cell_size = $StagedBoard.cell_size
+			map.collision_layer = 0
+			map.collision_mask = 0
+			add_child(map)
+			_flight_drawn[cell] = map
+			_board_mirror.flight_maps[cell] = map
+	for cell: Vector2i in _flight_drawn.keys():
+		if not wanted.has(cell):
+			_drop_flight_map(cell)
+	# The transform is the whole point: the column sits at the diorama's cell coordinates and this
+	# is what holds it short of them.
+	for cell: Vector2i in _flight_drawn:
+		var map: GridMap = _flight_drawn[cell]
+		map.position = BoardSpace.stage_offset() + BoardSpace.flight_offset(cell)
+
+
+# The flash that covers the swap. Ramp up, hold, ramp down -- and it STARTS where the treatment
+# needs it to: at zero for the cut (it has to hide a camera teleport) and after the camera's hold for
+# the travel arm (there is nothing to hide until you have watched the tiles leave).
+func _drive_whiteout() -> void:
+	var cuts: bool = Experiments.is_on(Experiments.Flag.DIORAMA_CAMERA_CUTS_AHEAD)
+	var since := BoardSpace.flight_elapsed() - (0.0 if cuts else maxf(Pacing.TEAR_OUT_CAMERA_HOLD, 0.0))
+	var ramp := maxf(Pacing.TEAR_OUT_WHITEOUT, 0.001)
+	var hold := maxf(Pacing.TEAR_OUT_HOLD, 0.0)
+	var level := 0.0
+	if since >= 0.0:
+		if since < ramp:
+			level = since / ramp
+		elif since < ramp + hold:
+			level = 1.0
+		elif since < ramp + hold + ramp:
+			level = 1.0 - (since - ramp - hold) / ramp
+	_apply_whiteout(level)
+
+
+# #217's photosensitivity switch, which every white-out in this arc owes a reading of. The TIMING is
+# identical either way, deliberately -- the transition's schedule is shared with the executor, so a
+# shorter flash would desync the two -- and what changes is the CURVE and the PEAK: eased instead of
+# linear, muted instead of white, and capped well below full.
+#
+# The cap is a const rather than a knob on purpose. Every other feel value in this slice is tunable,
+# but a dev slider that could return this to 1.0 would quietly repeal the accessibility promise it
+# exists to keep.
+const WHITEOUT_SAFE_PEAK := 0.35
+const WHITEOUT_SAFE_TINT := Color(0.72, 0.74, 0.80)
+
+
+func _apply_whiteout(level: float) -> void:
+	if level <= 0.0 and _whiteout == null:
+		return
+	if _whiteout == null:
+		# Built in code rather than authored into the scene: it is a playback EFFECT owned by the
+		# transition, not a UI control, and nothing else may address it.
+		_whiteout = ColorRect.new()
+		_whiteout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_whiteout.set_anchors_preset(Control.PRESET_FULL_RECT)
+		$UI.add_child(_whiteout)
+	var safe: bool = PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)
+	var shown := smoothstep(0.0, 1.0, level) * WHITEOUT_SAFE_PEAK if safe else level
+	var tint := WHITEOUT_SAFE_TINT if safe else Color.WHITE
+	_whiteout.color = Color(tint.r, tint.g, tint.b, clampf(shown, 0.0, 1.0))
+	_whiteout.visible = shown > 0.001
+
+
+func _drop_flight_map(cell: Vector2i) -> void:
+	var map: GridMap = _flight_drawn.get(cell)
+	_flight_drawn.erase(cell)
+	_board_mirror.flight_maps.erase(cell)
+	if map != null:
+		map.queue_free()
+
+
+func _clear_flight_maps() -> void:
+	for cell: Vector2i in _flight_drawn.keys():
+		_drop_flight_map(cell)
+
+
 func _sync_staging() -> void:
 	if BoardSpace.staging_version == _staged_version:
 		return
@@ -568,6 +708,7 @@ func _process(_delta: float) -> void:
 	_rig.set_process(live)
 	_rig.set_process_unhandled_input(live)
 	_sync_terrain_while_authoring()
+	_drive_transition(_delta)
 	_sync_staging()
 	# Separate from `live`, and deliberately so: while the AI acts or a menu is up the
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
@@ -626,7 +767,10 @@ func _mirror_camera() -> void:
 	# return would never see a frame with the staging cleared and the rig would stay in the sky for
 	# ever. The whole stage, never the cell under the camera: the diorama is one thing at one height,
 	# and asking per cell would dip the camera every time a pan crossed unstaged ground.
-	_rig.lift_to(BoardSpace.stage_offset())
+	# ...and it asks where the CAMERA should be, which is the diorama's height at rest and something
+	# the transition drives while one is running (#521 slice B). Equal whenever nothing is driving
+	# it, so with the battle zoom off, or the flag off, this is bit-for-bit the old poll.
+	_rig.lift_to(BoardSpace.camera_lift())
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
