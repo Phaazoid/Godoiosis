@@ -80,3 +80,51 @@ func test_restore_uids_corrects_a_minted_uid() -> void:
 	var text := FileAccess.get_file_as_string(TEMP_PATH)
 	assert_str(text).contains('uid="%s"' % original)
 	assert_str(text).not_contains('uid="%s"' % minted)
+
+
+func _stage_without_uid() -> void:
+	_write('[gd_resource type="Resource" format=3]\n\n[resource]\n')
+
+
+# The gap #598 closes. restore_uids puts back only what the PRIOR file held, and the header has no
+# other source -- so a .tres born through a dev tool started uid-less and stayed that way forever,
+# while the editor stamps one on everything IT writes. Nine of ten authored weapon .tres were in
+# that state when this landed, which is what makes a rename break every holder (#596, one layer up).
+#
+# The uid is read back through uid_map_in_file rather than a second parser here: one answer to
+# "what uid does this file carry".
+func test_save_over_mints_a_uid_for_a_file_that_never_had_one() -> void:
+	_stage_without_uid()
+	assert_str(FileAccess.get_file_as_string(TEMP_PATH)).not_contains("uid=")   # precondition
+	var res := load(TEMP_PATH)
+	assert_object(res).is_not_null()
+
+	assert_bool(DevWidgets.save_over(res, TEMP_PATH, null)).is_true()
+
+	var minted: String = DevWidgets.uid_map_in_file(TEMP_PATH).get("_header", "")
+	assert_str(minted).is_not_empty()
+
+	# ...and REGISTERED, not merely written. A uid nothing claims is exactly what
+	# tests/law/test_resource_uid_references.gd exists to catch, so minting one would be a new way
+	# to redden that law rather than a fix.
+	_staged_id = ResourceUID.text_to_id(minted)   # so after_test releases it
+	assert_bool(ResourceUID.has_id(_staged_id)).is_true()
+	assert_str(ResourceUID.get_id_path(_staged_id)).is_equal(TEMP_PATH)
+
+
+# Minting must happen ONCE. A fresh id per save would rewrite the header on every Update and put the
+# file permanently in `git status` -- the dirty-tree rule's acceptance half, and the failure mode
+# #540 and #111 both were.
+func test_a_minted_uid_does_not_change_on_the_next_save() -> void:
+	_stage_without_uid()
+	var res := load(TEMP_PATH)
+	assert_bool(DevWidgets.save_over(res, TEMP_PATH, null)).is_true()
+	var first: String = DevWidgets.uid_map_in_file(TEMP_PATH).get("_header", "")
+	assert_str(first).is_not_empty()
+	_staged_id = ResourceUID.text_to_id(first)
+
+	var text_after_first := FileAccess.get_file_as_string(TEMP_PATH)
+	assert_bool(DevWidgets.save_over(res, TEMP_PATH, null)).is_true()
+
+	assert_str(DevWidgets.uid_map_in_file(TEMP_PATH).get("_header", "")).is_equal(first)
+	assert_str(FileAccess.get_file_as_string(TEMP_PATH)).is_equal(text_after_first)   # byte-stable
