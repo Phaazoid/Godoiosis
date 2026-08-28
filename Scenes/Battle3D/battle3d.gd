@@ -238,6 +238,12 @@ func rebuild_props() -> void:
 	rebuild()
 
 
+# The 3D sprite standing in for a unit. A named door rather than letting a caller walk to the
+# mirror by node path, since #629's dev key has to reach one from outside this scene entirely.
+func sprite_for(unit: Unit) -> UnitSprite3D:
+	return _unit_mirror.sprite_for(unit)
+
+
 func rebuild() -> void:
 	var states: TerrainStateManager = game.terrain_states
 	var heights: BoardHeights = game.board_heights
