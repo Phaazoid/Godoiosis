@@ -246,6 +246,13 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 # while a named category with a fixed membership is a category.
 const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_board_shore_range"]
 
+# PHASE globals: the ones that set WHERE a wave is rather than how strong it is. Interpolating one
+# across the depth seam is #646, and the closed list is the BOARD_GLOBALS shape for the same reason
+# -- the suffix check below catches a renamed or duplicated wave knob, but a NEW kind of phase knob
+# (a flow direction, a second octave's rate) can only be caught by a human putting it here.
+const PHASE_GLOBALS := ["water_deep_wave_speed", "water_shallow_wave_speed",
+		"water_deep_wave_scale", "water_shallow_wave_scale"]
+
 
 # What the shader declares, in one place. Three cases used to parse this line for themselves with
 # the same one-liner, and the sampler #552 slice 2 added broke all three at once: a sampler carries
@@ -362,3 +369,85 @@ func test_every_global_the_shader_declares_is_actually_read() -> void:
 		checked += 1
 	assert_int(checked).override_failure_message(
 			"the shader declares no globals; the case is vacuous").is_greater(0)
+
+
+# The shader with every `//` comment removed, so a law may scan CODE without a prose example of the
+# very thing it forbids reddening it.
+func _shader_code_without_comments() -> String:
+	var out := ""
+	for line in (load(SHADER_PATH) as Shader).code.split("\n"):
+		var at := line.find("//")
+		out += (line if at < 0 else line.substr(0, at)) + "\n"
+	return out
+
+
+# Every mix() call's DIRECT arguments, with nested calls stripped to their name. So
+# `mix(wave(p, ts, water_shallow_wave_scale), ..., d)` yields "wave", not the global inside it --
+# passing a phase knob DOWN into a wave field is the fix, while passing it to mix() is the bug, and
+# a line-level text match cannot tell those two apart.
+func _mix_arguments(code: String) -> PackedStringArray:
+	var out := PackedStringArray()
+	var from := 0
+	while true:
+		var at := code.find("mix(", from)
+		if at < 0:
+			break
+		from = at + 4
+		var depth := 0
+		var arg := ""
+		var i := from
+		while i < code.length():
+			var c := code[i]
+			if c == ")":
+				if depth == 0:
+					break
+				depth -= 1
+			elif c == "(":
+				depth += 1
+			elif c == "," and depth == 0:
+				out.append(arg)
+				arg = ""
+			elif depth == 0:
+				arg += c
+			i += 1
+		out.append(arg)
+	return out
+
+
+# #646. A PARAMETER THAT SETS PHASE CANNOT BE INTERPOLATED ACROSS SPACE; ONE THAT SETS AMPLITUDE CAN.
+#
+# Slice 2b made every knob pair mix() on the mask's depth value so the shallow/deep boundary would
+# glide rather than snap, and that is right for the amplitudes. For wave scale and wave speed it made
+# the surface a CHIRP: a sinusoid's frequency and phase rate do not lerp, so the transition cell got
+# ~7 extra periods of phase crammed into it, growing with distance from the world origin and growing
+# again with TIME without bound. The bands, the shoreline and the specular all ringed at once,
+# because all three read the same wave value.
+#
+# What this does NOT catch, said out loud rather than left to be discovered: it pins the mix()
+# SPELLING, so a hand-rolled `a * (1.0 - d) + b * d` would chirp exactly the same way and pass here.
+# That blind spot is confirmed by a mutant rather than asserted -- see the PR.
+func test_no_phase_knob_is_interpolated_across_a_seam() -> void:
+	# The category holds exactly what it says it holds, both directions -- a renamed wave knob goes
+	# missing, and a member the shader no longer declares is a law pointing at nothing.
+	var phase_side: Array[String] = []
+	for name in _declared_globals():
+		if name.ends_with("_wave_speed") or name.ends_with("_wave_scale"):
+			phase_side.append(name)
+	assert_array(phase_side).override_failure_message(
+			"the phase-knob category is declared as %s and the shader's is %s" \
+			% [PHASE_GLOBALS, phase_side]).contains_exactly_in_any_order(PHASE_GLOBALS)
+
+	var args := _mix_arguments(_shader_code_without_comments())
+	assert_int(args.size()).override_failure_message(
+			"the shader contains no mix() calls at all; the case is vacuous").is_greater(0)
+
+	var offenders: Array[String] = []
+	for arg in args:
+		for name: String in PHASE_GLOBALS:
+			if arg.contains(name):
+				offenders.append("%s, in mix(... %s ...)" % [name, arg.strip_edges()])
+	assert_array(offenders).override_failure_message(
+			"a phase knob is being interpolated across the depth seam (%s) -- that varies a " \
+			% ", ".join(offenders) + "sinusoid's frequency and phase rate per fragment, which " \
+			+ "chirps the surface into rings along the boundary and tightens them as TIME runs. " \
+			+ "Evaluate both wave fields and mix the RESULT instead").is_empty()
