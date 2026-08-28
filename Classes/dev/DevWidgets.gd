@@ -703,6 +703,7 @@ static func save_over(resource: Resource, path: String, status_label: Label = nu
 	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
 	var target := _live_target(resource, path)
 	var prior_uids := uid_map_in_file(path)   # a committed file's uids must survive an overwrite (#481)
+	_ensure_header_uid(path, prior_uids)   # ...and a file that never had one gets it minted (#598)
 	target.take_over_path(path)
 	var err := ResourceSaver.save(target, path)
 	if err != OK:
@@ -820,6 +821,35 @@ static func _set_uid(line: String, uid: String) -> String:
 # have stamped it on its next save, which is the churn that ticket exists to stop. Registry rather
 # than the target's own header: tests/law/test_resource_uid_references.gd asks ResourceUID, so this
 # is the same answer the law will grade the line against.
+
+
+# A resource BORN through the dev tools carries no uid, and never gains one. ResourceSaver.save()
+# writes none at runtime (#481), and restore_uids can only put back what the PRIOR file held -- so
+# the header uid has no source at all on a file that never had one, while the editor stamps one on
+# everything IT writes. Nine of ten authored weapon .tres were uid-less when this landed (#598).
+#
+# Why it matters: a `path=`-only ext_resource is a reference to a FILENAME. Move the target and
+# every holder dangles, which is #596's failure one layer down -- Godot can follow a uid across a
+# move and cannot follow a path.
+#
+# Registry BEFORE minting: if ResourceUID already claims this path, that id IS this file's uid and
+# a fresh one would be a second uid for one file. Only a path nothing claims gets a new id.
+#
+# Scoped to save_over deliberately, NOT to restore_uids: the other caller of that pair is the
+# lookdev meshlib generator, whose artifact already carries a uid stamped earlier (#540), so it has
+# nothing to mint and no reason to grow the behaviour.
+static func _ensure_header_uid(path: String, uids: Dictionary) -> void:
+	if uids.get("_header", "") != "":
+		return
+	var claimed := _registered_uid(path)
+	if claimed != "":
+		uids["_header"] = claimed
+		return
+	var id := ResourceUID.create_id()
+	ResourceUID.add_id(id, path)
+	uids["_header"] = ResourceUID.id_to_text(id)
+
+
 static func _registered_uid(target_path: String) -> String:
 	if target_path == "":
 		return ""
