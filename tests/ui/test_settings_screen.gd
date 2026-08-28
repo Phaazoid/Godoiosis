@@ -75,6 +75,18 @@ func _row_title_shown(root: Node, text: String) -> bool:
 	return _button_with_text(root, text) != null or _label_with_text(root, text) != null
 
 
+# The OTHER half of "the page fits", and it is not optional: a body squashed to nothing fits every
+# viewport there is, so "Close is on screen" alone is satisfied by a settings page showing NOTHING.
+# Found by falsifying -- the first version of these cases passed against exactly that.
+func _assert_the_body_is_not_collapsed(screen: Node) -> void:
+	var scroll: ScrollContainer = _first_of(screen, ScrollContainer)
+	assert_object(scroll).override_failure_message(
+		"the settings page has no scroll region, so nothing bounds its body").is_not_null()
+	assert_float(scroll.size.y).override_failure_message(
+		"the settings body is %.1f tall -- the page fits by showing nothing" % scroll.size.y
+		).is_greater_equal(SettingsScreen.MIN_BODY_HEIGHT)
+
+
 func _first_of(root: Node, type) -> Node:
 	if is_instance_of(root, type):
 		return root
@@ -281,6 +293,7 @@ func test_the_close_button_is_somewhere_a_player_can_actually_reach() -> void:
 	# Non-vacuity: a zero-sized button sits inside every rect there is.
 	assert_float(close.size.y).override_failure_message(
 		"the Close button has no height, so the bounds check below proves nothing").is_greater(0.0)
+	_assert_the_body_is_not_collapsed(screen)
 
 	var view: Vector2 = screen.get_viewport_rect().size
 	var bottom := close.global_position.y + close.size.y
@@ -309,6 +322,7 @@ func test_the_page_still_fits_when_the_body_is_far_taller_than_the_screen() -> v
 		rows.add_child(filler)
 	await _frames(4)
 
+	_assert_the_body_is_not_collapsed(screen)
 	var close: Button = _button_with_text(screen, "Close")
 	assert_float(close.global_position.y + close.size.y).override_failure_message(
 		"forty extra rows pushed Close off the screen -- the body is not actually bounded"

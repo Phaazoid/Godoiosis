@@ -497,6 +497,20 @@ which one is picked is readable, without a click. Three toggle `Button`s in one 
 board out, which is a *workaround* for overlapping bars as much as a preference. Collapsing the
 remaining labels onto one priority is still the fix if the dev's eye says it is needed.
 
+**What the row EXPOSED, found in play the same day: the settings card had no ceiling.** The choice
+row is taller than the checkbox it replaced, which pushed the page past the 1280×720 viewport and
+left Close off the bottom edge — and since the card swallowed Esc, opening settings locked the game.
+Neither half was new: the card was one row from overflowing before #418, and `PauseMenu` and
+`GlossaryScreen` ate Esc exactly the same way. Both are fixed at the scaffold — see `CLAUDE.md`'s
+`ModalCard` entry for the cancel mechanism and the bound-your-own-body rule.
+
+Two things worth carrying out of it. **A card that fits by showing NOTHING satisfies "the exit is on
+screen"** — the first version of the regression case passed against a body collapsed to zero height,
+and only a mutant found it; the case now asserts the body is real as well as the exit reachable.
+And **the existing round-trip case pressed Close by calling it**, so it stayed green against a button
+at y=2145 on a 720-tall screen — #131's *a button nobody can press*, one level up: a test that
+reaches a control by reference cannot tell you a player could have reached it.
+
 ## Health is a grid of CUBES that fall away ([#314](https://github.com/Phaazoid/Godoiosis/issues/314), BUILT 2026-08-22)
 
 Dev idea from #229's own feel-check: *"In fire emblem, health bars are denoted by a green bar with
