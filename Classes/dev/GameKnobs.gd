@@ -630,6 +630,32 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Camera flourish", "label": "Sway strength (zoom on)", "static": "CINEMATIC_SWAY",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How much of the sway applies with the battle zoom on."},
+	# Lethality-aware direction (#520 diff 2c). The push-in leans on the player's own zoom rather
+	# than replacing it, so these move how far the director may lean -- never where the wheel sits.
+	{"group": "Camera flourish", "label": "Shot: push-in on the loudest beat", "static": "DOLLY_IN",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 10.0, "step": 0.1,
+		"tip": "How much closer the camera sits on a killing blow, in world units, at full emphasis. SUBTRACTED from wherever you have left the zoom, so the wheel keeps working underneath and the push-in comes off when the beat ends. Scaled by the directed-shot strength, so it is dead on the plain board."},
+	{"group": "Camera flourish", "label": "Shot: how close the push-in may get", "static": "DOLLY_FLOOR",
+		"script": PACING_SCRIPT, "min": 0.5, "max": 20.0, "step": 0.5,
+		"tip": "The nearest the PUSH-IN alone may bring the camera. It never overrides your own zoom: if you are already closer than this, the push-in simply does nothing rather than pulling you back out. There is no floor on the wheel itself, by design -- this only stops the director flying through a unit."},
+	{"group": "Camera flourish", "label": "Emphasis: a unit goes down", "static": "EMPHASIS_DOWN",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How big a moment a death is, 0 to 1 -- the weight that drives the push-in. Loudest rung wins, so this is the top of the ladder. An ordinary hit earns 0 and is the baseline the rest are read against."},
+	{"group": "Camera flourish", "label": "Emphasis: someone stands up surged", "static": "EMPHASIS_CRISIS",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How big a Crisis is. Its own number rather than a share of the death rung: the two rankings may legitimately disagree, since a hold and a kill want different shots."},
+	{"group": "Camera flourish", "label": "Emphasis: that should have killed them", "static": "EMPHASIS_IRON_WILL",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How big a capped hit is -- the blow that should have been lethal and was not. It earns a long PAUSE from the holds table already; this is separately how much of a push-in it earns."},
+	{"group": "Camera flourish", "label": "Freeze: a killing blow", "static": "HITSTOP_DOWN",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 0.5, "step": 0.01,
+		"tip": "How long EVERYTHING stops when a unit is killed, in real seconds -- the whole world, not just the camera. Zero is no freeze. The health cubes stop with it and resume with it, so the pause after a death still covers the burst exactly."},
+	{"group": "Camera flourish", "label": "Freeze strength (zoom off)", "static": "BOARD_HITSTOP",
+		"profile": "board", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of that freeze the plain board gets. Ships at 0 -- a freeze CREATES time rather than matching an animation, so unlike the jolt it is drama and dials out with everything else down here."},
+	{"group": "Camera flourish", "label": "Freeze strength (zoom on)", "static": "CINEMATIC_HITSTOP",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How much of that freeze applies with the battle zoom on."},
 	{"group": "Camera flourish", "label": "Shot: how far the camera stoops", "static": "PITCH_DIVE",
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 40.0, "step": 0.5,
 		"tip": "How many degrees SHALLOWER than the board's own angle a directed shot sits, so the fight looms instead of being read from overhead. Clamped by the same tilt band the player's drag uses. Scaled by the directed-shot strength, so it is dead on the plain board for the same reason the side-on angle is."},
@@ -859,6 +885,14 @@ static func read_static(name: String) -> Variant:
 		"BOARD_DIRECTION": return Pacing.BOARD_DIRECTION
 		"CINEMATIC_DIRECTION": return Pacing.CINEMATIC_DIRECTION
 		"PITCH_DIVE": return Pacing.PITCH_DIVE
+		"DOLLY_IN": return Pacing.DOLLY_IN
+		"DOLLY_FLOOR": return Pacing.DOLLY_FLOOR
+		"EMPHASIS_DOWN": return Pacing.EMPHASIS_DOWN
+		"EMPHASIS_CRISIS": return Pacing.EMPHASIS_CRISIS
+		"EMPHASIS_IRON_WILL": return Pacing.EMPHASIS_IRON_WILL
+		"HITSTOP_DOWN": return Pacing.HITSTOP_DOWN
+		"BOARD_HITSTOP": return Pacing.BOARD_HITSTOP
+		"CINEMATIC_HITSTOP": return Pacing.CINEMATIC_HITSTOP
 		"SHAKE_HIT": return Pacing.SHAKE_HIT
 		"SHAKE_DOWN": return Pacing.SHAKE_DOWN
 		"SHAKE_DECAY": return Pacing.SHAKE_DECAY
@@ -980,6 +1014,30 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			return
 		"CINEMATIC_DIRECTION":
 			Pacing.CINEMATIC_DIRECTION = value
+			return
+		"DOLLY_IN":
+			Pacing.DOLLY_IN = value
+			return
+		"DOLLY_FLOOR":
+			Pacing.DOLLY_FLOOR = value
+			return
+		"EMPHASIS_DOWN":
+			Pacing.EMPHASIS_DOWN = value
+			return
+		"EMPHASIS_CRISIS":
+			Pacing.EMPHASIS_CRISIS = value
+			return
+		"EMPHASIS_IRON_WILL":
+			Pacing.EMPHASIS_IRON_WILL = value
+			return
+		"HITSTOP_DOWN":
+			Pacing.HITSTOP_DOWN = value
+			return
+		"BOARD_HITSTOP":
+			Pacing.BOARD_HITSTOP = value
+			return
+		"CINEMATIC_HITSTOP":
+			Pacing.CINEMATIC_HITSTOP = value
 			return
 		"PITCH_DIVE":
 			Pacing.PITCH_DIVE = value

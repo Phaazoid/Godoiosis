@@ -48,6 +48,15 @@ var directed_line: Array[Vector2i] = []
 # never be folded together -- directed_line is an ANGLE and this is a FIT, so one field answering
 # both would spin the camera side-on to every walk.
 var framed_span: Array[Vector2i] = []
+# How BIG the beat now playing is, 0..1 (#520 diff 2c) -- the collapse of its lethality rungs, from
+# Pacing.emphasis_for. The THIRD question this trio answers and the third field, for the reason the
+# other two are separate: that one is an ANGLE, that one a FIT, and this is a WEIGHT. The rig turns
+# it into a push-in, since only the rig knows distances.
+#
+# Every beat that frames anything publishes its own, INCLUDING ZERO -- absence does not mean "hold
+# what you had", which is directed_line's idiom and would be wrong here: the camera would stay
+# pushed in from a kill through every quiet beat after it, and the pass would never breathe.
+var beat_emphasis := 0.0
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
@@ -185,6 +194,10 @@ func set_playback_locked(locked: bool) -> void:
 	# widens on the CHANGE, so a span surviving a claim would be the same value the mirror already
 	# has and the next squad's walk would open at whatever zoom the last one left.
 	framed_span = []
+	# ...and the weight, which needs it for the SAME reason the span does: the rig re-solves the
+	# push-in every frame from this value, so one surviving a claim would push the next squad's opening
+	# shot in on a beat that has not earned it.
+	beat_emphasis = 0.0
 	if not locked:
 		follow_unit = null
 

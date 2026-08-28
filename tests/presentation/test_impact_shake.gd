@@ -76,9 +76,9 @@ func _tap() -> void:
 			"battle3d never bound report_impact -- the wire is missing, which is the whole bug this file exists for"
 	).is_true()
 	var seen := _reported
-	_unit_mirror.report_impact = func(amount: float) -> void:
-		seen.append(amount)
-		production.call(amount)
+	_unit_mirror.report_impact = func(kind: int) -> void:
+		seen.append(kind)
+		production.call(kind)
 
 
 func test_a_blow_that_takes_health_off_someone_jolts_the_camera() -> void:
@@ -95,7 +95,9 @@ func test_a_blow_that_takes_health_off_someone_jolts_the_camera() -> void:
 	assert_int(_reported.size()).override_failure_message(
 			"the mirror saw the HP drop and nothing reached the camera"
 	).is_greater(0)
-	assert_float(_reported[0]).is_equal_approx(Pacing.SHAKE_HIT, 0.0001)
+	# A KIND since #520 diff 2c, not an amplitude: what the mirror observes is that a blow landed
+	# and how final it was. What that is WORTH is battle3d's to decide.
+	assert_int(_reported[0]).is_equal(UnitMirror.Impact.HIT)
 
 
 func test_a_hit_still_jolts_the_camera_when_health_bars_are_hidden() -> void:
@@ -151,7 +153,7 @@ func test_a_killing_blow_jolts_harder_and_only_once() -> void:
 	assert_int(_reported.size()).override_failure_message(
 			"a death reported nothing -- the loudest beat in a pass would have no jolt in it"
 	).is_equal(1)
-	assert_float(_reported[0]).is_equal_approx(Pacing.SHAKE_DOWN, 0.0001)
+	assert_int(_reported[0]).is_equal(UnitMirror.Impact.DOWN)
 
 
 func test_the_jolt_reaches_the_rig_and_not_just_the_mirror() -> void:
@@ -159,7 +161,11 @@ func test_the_jolt_reaches_the_rig_and_not_just_the_mirror() -> void:
 	# bound to anything at all; this reads the rig's own channel.
 	var victim := _spawn(ENEMY, Vector2i(3, 3))
 	await _settle()
-	_rig.stash_view()                       # a flourish lives only while playback holds the view
+	# Claim the lock, not just the view: since 2c the impact handler is GATED on playback owning
+	# the camera, because a killing blow now freezes the world and an ungated die() from any source
+	# would stop the game dead. stash_view alone is the production edge's SECOND half.
+	game.camera_controller.set_playback_locked(true)
+	_rig.stash_view()
 	assert_float(_rig._shake_amplitude).is_equal_approx(0.0, 0.0001)
 
 	victim.take_damage(3)
@@ -167,3 +173,40 @@ func test_the_jolt_reaches_the_rig_and_not_just_the_mirror() -> void:
 	assert_float(_rig._shake_amplitude).override_failure_message(
 			"the mirror reported an impact and the rig's shake channel never moved"
 	).is_greater(0.0)
+
+
+# --- the freeze gate (#520 diff 2c) --------------------------------------------------------------
+
+func test_a_death_outside_playback_does_not_reach_the_director_at_all() -> void:
+	# THE GATE, and the freeze is why it exists. A jolt is safe on its own -- the rig's flourish
+	# channel is dead unless the view is borrowed -- but a hitstop is GLOBAL, so an ungated die()
+	# from any source (a dev-tool kill, a board teardown) would stop the whole game with nobody
+	# watching a pass. Asserted through the jolt because both consequences sit behind one gate, and
+	# because the freeze itself no-ops headless by design.
+	var victim := _spawn(ENEMY, Vector2i(3, 3))
+	await _settle()
+	_rig.stash_view()
+	game.camera_controller.set_playback_locked(false)   # nobody is playing anything back
+	assert_float(_rig._shake_amplitude).is_equal_approx(0.0, 0.0001)
+
+	victim.die()
+	await _settle()
+	assert_float(_rig._shake_amplitude).override_failure_message(
+			"a death outside playback reached the director -- so it would also have frozen the world"
+	).is_equal_approx(0.0, 0.0001)
+	assert_bool(Pacing.is_frozen()).is_false()
+
+
+func test_the_world_is_never_left_frozen_by_a_pass() -> void:
+	# The consequence worth guarding rather than the freeze itself, which headless is a no-op: a
+	# time_scale stuck at 0 would stall every case after this one, so the invariant is asserted
+	# whatever path got here.
+	var victim := _spawn(ENEMY, Vector2i(3, 3))
+	await _settle()
+	game.camera_controller.set_playback_locked(true)
+	_rig.stash_view()
+	victim.die()
+	await _settle()
+	assert_float(Engine.time_scale).override_failure_message(
+			"the world was left running at a scale other than 1 -- every later case pays for this"
+	).is_equal_approx(1.0, 0.0001)

@@ -190,6 +190,12 @@ var _squared_up_yaw := 0.0
 var _shake_amplitude := 0.0
 var _shake_elapsed := 0.0
 var _sway_elapsed := 0.0
+# How far the director has pushed the camera IN for the beat now playing (#520 diff 2c), in world
+# units of distance. The flourish's shape on the ZOOM axis, and an ADDEND for the same reason: the
+# wheel stays the player's through a pass, so a director may lean on their distance but must never
+# assign over it. Re-solved from the published emphasis every frame, so the mirror's poll is
+# idempotent and there is nothing to unwind when the beat ends.
+var _dolly := 0.0
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
@@ -453,6 +459,30 @@ func shake(amplitude: float) -> void:
 	_shake_elapsed = 0.0
 
 
+# The director's push-in for the beat now playing (#520 diff 2c), taking the published 0..1 weight.
+# Re-solves rather than accumulating, so the mirror's per-frame poll lands on the same distance every
+# time and a beat ending simply publishes 0 -- nothing to unwind, the same shape aim_along has.
+func dolly_to(emphasis: float) -> void:
+	_dolly = maxf(0.0, emphasis) * Pacing.DOLLY_IN * Pacing.direction_of(Pacing.active_profile())
+
+
+# Where the zoom actually eases to: the player's distance, less whatever the director is leaning in.
+#
+# THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that is the whole care here.
+# This rig has no zoom-in floor by dev ruling (asked twice) -- scrolling in past the aim point takes
+# the camera through its target to look back, which is his call for HIS hand. A director subtracting
+# from an already-close player would inherit that hole and fly the camera through a unit on the exact
+# beat it most wants to be looking at one.
+#
+# So the effective floor is the lower of DOLLY_FLOOR and where the player already is: closer than the
+# floor, and the push-in contributes nothing at all rather than the floor yanking them back OUT --
+# which would be a leash on the wheel, the thing #520 refused.
+func _dollied_distance() -> float:
+	if _dolly <= 0.0 or not _view_borrowed:
+		return _target_distance
+	return maxf(_target_distance - _dolly, minf(_target_distance, Pacing.DOLLY_FLOOR))
+
+
 # The envelope, not the offset: the offset crosses zero twice a cycle, so comparing against it would
 # let any scratch win at a zero crossing.
 func _live_shake_amplitude() -> float:
@@ -681,7 +711,10 @@ func drop_stashed_view() -> void:
 func _process(delta: float):
 	var blend := 1.0 - exp(-smoothing * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
-	_camera.position.z = lerpf(_camera.position.z, _target_distance, blend)
+	# ...toward the DOLLIED distance (#520 diff 2c), which is _target_distance untouched unless the
+	# director is leaning in. The player's own value is never written, so the wheel keeps working
+	# under a push-in and the view handed back at the release is the distance they chose.
+	_camera.position.z = lerpf(_camera.position.z, _dollied_distance(), blend)
 	# The third eased channel (#586), on the SAME rate as the yaw: they are two axes of one drag, and
 	# a pitch that settled at a different speed would make a diagonal drag curve. Plain lerpf rather
 	# than the angle helper -- pitch is a bounded band, never a circle, so there is no short way round.

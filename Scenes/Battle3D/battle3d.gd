@@ -170,10 +170,10 @@ func _ready() -> void:
 	_unit_mirror.hovered_unit_source = _hovered_unit
 	_unit_mirror.plan_source = _previewed_plan
 	_unit_mirror.effect_subjects_source = _effect_pass_subjects
-	# The impact wire (#520 diff 2b): the mirror sees the blow land, the rig is what jolts. Bound
-	# straight to the rig's own door -- there is no decision to make in between, and a method here
-	# would only be a second name for shake().
-	_unit_mirror.report_impact = _rig.shake
+	# The impact wire (#520 diff 2b): the mirror sees the blow land, and this decides what it is
+	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
+	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.
+	_unit_mirror.report_impact = _on_impact
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -637,6 +637,10 @@ func _mirror_camera() -> void:
 	# frame under playback. Below the early return deliberately -- the release edge above restores
 	# the player's own yaw, and re-aiming after it would undo the return in the same frame.
 	_rig.aim_along(cam.directed_line)
+	# ...and HOW BIG the beat is, the fourth of the same questions (#520 diff 2c). Polled beside the
+	# angle rather than edged like the widen below, because it must relax as well as push: a quiet
+	# beat publishes 0 and the camera eases back out on its own, with nothing to remember to undo.
+	_rig.dolly_to(cam.beat_emphasis)
 	# ...and HOW WIDE, the third of the same three questions (#520). An EDGE, never a per-frame
 	# apply: the same rule the playback-distance reset above follows, so the shot is set up once and
 	# the wheel is the player's again for the rest of it.
@@ -1113,3 +1117,23 @@ func _vertex_under(screen_pos: Vector2, cell: Vector3i) -> Vector2i:
 # board outward the way the 2D view allows.
 func _paint_plane() -> Rect2i:
 	return _board_rect.grow(paint_apron_cells)
+
+
+# What a landed blow is worth (#520 diff 2b jolt, 2c freeze). The mirror observes the instant and
+# names its KIND; the amplitudes and the freeze length are Pacing's, and choosing between them is
+# this node's, because the rig owns one of the two consequences and the world owns the other.
+#
+# GATED ON PLAYBACK OWNING THE CAMERA, and the freeze is why. A jolt is already safe on its own --
+# the rig's flourish channel is dead unless the view is borrowed -- but a time freeze is global, so
+# ungated a die() from any source (a dev-tool kill, a board teardown) would stop the game dead. Same
+# question the flourish gate asks, asked one layer up because the answer has to reach further.
+func _on_impact(kind: int) -> void:
+	if not game.camera_controller.playback_locked:
+		return
+	if kind == UnitMirror.Impact.DOWN:
+		_rig.shake(Pacing.SHAKE_DOWN)
+		# Fire-and-forget: the freeze runs on real time and ends itself, and awaiting it here would
+		# stall the mirror's own reconcile inside a frozen frame.
+		Pacing.hitstop(self, Pacing.HITSTOP_DOWN * Pacing.hitstop_of(Pacing.active_profile()))
+		return
+	_rig.shake(Pacing.SHAKE_HIT)
