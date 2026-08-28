@@ -251,3 +251,56 @@ func test_join_and_leave_squad() -> void:
 	var left: Dictionary = sess.leave(mate_h)
 	assert_bool(left.ok).is_true()
 	assert_bool(mate.has_squad()).is_false()
+
+# #612: Scenario objectives, zones and lose conditions are retained and surfaced in the overview.
+func test_scenario_objectives_and_zones_surface_in_overview() -> void:
+	var src: Dictionary = BoardBuilder.build(self, "MissionRoot")
+	auto_free(src.root)
+	BoardBuilder.paint_rect(src.grid, Rect2i(0, 0, 8, 8))
+	var scenario := ScenarioData.new()
+	scenario.tile_data = src.grid.tile_map_data
+	scenario.active_faction = PLAYER
+	scenario.scenario_name = "test_mission"
+	scenario.objectives.assign([MissionRules.Objective.EXTRACT, MissionRules.Objective.CAPTURE])
+	scenario.zones = {
+		"CapPoint": {
+			"kind": ZoneManager.Kind.CAPTURE,
+			"cells": [Vector2i(2, 2), Vector2i(2, 3)],
+		},
+		"ExitPoint": {
+			"kind": ZoneManager.Kind.EXTRACTION,
+			"cells": [Vector2i(5, 5)],
+		},
+	}
+	scenario.round_limit = 8
+	scenario.lose_conditions.assign([MissionRules.LoseCondition.ROUND_LIMIT])
+	var entry := ScenarioUnitEntry.new()
+	entry.unit_data = _data("Runner", PLAYER)
+	entry.cell = Vector2i(1, 1)
+	scenario.unit_entries.append(entry)
+
+	var dst: Dictionary = BoardBuilder.build(self, "MissionDst")
+	auto_free(dst.root)
+	var spawned: Array = await BoardBuilder.apply_scenario(dst, scenario)
+	assert_int(spawned.size()).is_equal(1)
+
+	var sess = PlaySession.new(dst)
+	assert_object(sess.scenario_data).is_same(scenario)
+	assert_int(sess.objectives().size()).is_equal(2)
+	assert_int(sess.round_limit()).is_equal(8)
+	assert_int(sess.lose_conditions().size()).is_equal(1)
+	assert_bool(sess.zones().has("CapPoint")).is_true()
+
+	var text: String = BoardView.render_overview(sess)
+	assert_str(text).contains("Mission: EXTRACT + CAPTURE")
+	assert_str(text).contains("limit: 8 rounds")
+	assert_str(text).contains("CAPTURE  \"CapPoint\"  (2,2) (2,3)")
+	assert_str(text).contains("EXTRACT  \"ExitPoint\"  (5,5)")
+	assert_str(text).contains("FAIL IF  Time ran out.")
+	assert_str(text).contains("progress: not scored headlessly (#46)")
+	# Grid overlay marks capture 'C' and extraction 'E'
+	assert_str(text).contains(".C")
+	assert_str(text).contains(".E")
+	assert_str(text).contains("C = capture zone")
+	assert_str(text).contains("E = extract zone")
+

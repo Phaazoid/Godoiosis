@@ -14,6 +14,7 @@ var turn_manager: TurnManager
 var overlay_manager: OverlayManager
 var terrain_states: TerrainStateManager   # twin of game.terrain_states; null on a board built without one
 var board_heights: BoardHeights           # twin of game.board_heights (#257); null board reads flat
+var scenario_data: ScenarioData           # authored scenario metadata (#612); null on fresh new boards
 
 var _handle_by_unit := {}      # Unit -> String (stable display handle)
 var _next_player := 0
@@ -32,6 +33,9 @@ func _init(board: Dictionary) -> void:
 	overlay_manager = board.overlay_manager
 	terrain_states = board.get("terrain_states")
 	board_heights = board.get("board_heights")
+	scenario_data = board.get("scenario")
+	if scenario_data != null and scenario_data.contested:
+		_mission_contested = true
 	for unit in live_units():
 		_register(unit)
 
@@ -565,7 +569,25 @@ func _apply_attack(atk: AttackAction, events: Array[String]) -> void:
 		if weapon != null:
 			weapon.consume_readiness_for(atk.fired_attack as WeaponAttackData)
 
-# ---- mission outcome (#96) ----
+# ---- mission metadata & outcome (#96, #612) ----
+
+func objectives() -> Array[MissionRules.Objective]:
+	var result: Array[MissionRules.Objective] = []
+	if scenario_data != null:
+		result.assign(scenario_data.objectives)
+	return result
+
+func zones() -> Dictionary:
+	return scenario_data.zones if scenario_data != null else {}
+
+func round_limit() -> int:
+	return scenario_data.round_limit if scenario_data != null else 0
+
+func lose_conditions() -> Array[MissionRules.LoseCondition]:
+	var result: Array[MissionRules.LoseCondition] = []
+	if scenario_data != null:
+		result.assign(scenario_data.lose_conditions)
+	return result
 
 # The headless twin of MissionController: the SAME MissionRules call the game makes, with the
 # same caller-held `contested` latch (see MissionRules.evaluate -- a live read could never end a
