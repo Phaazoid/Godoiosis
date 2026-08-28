@@ -12,11 +12,6 @@ class_name ActionQueueRow
 @onready var description_label: Label = $DescriptionLabel
 @onready var cancel_button: Button = $CancelButton
 
-# The annotation line's look (#592). Statics rather than consts because they are a matter of taste
-# and the Game tab tunes them -- 2D UI, so a CLASS_KNOBS row is the only form available.
-static var ANNOTATION_FONT_SIZE := 11
-static var ANNOTATION_MODULATE := Color(1, 0.78, 0.5)
-
 const CROWN_ICON := preload("res://Art/Icons/BoardIcons/CrownIcon.png")
 
 var action: BaseAction
@@ -49,9 +44,11 @@ func setup(action_ref: BaseAction):
 	action_icon.modulate = action.get_ui_modulate()
 
 	# The X keeps its slot on every row (so content stays aligned) but is inert on rows that
-	# can't be cancelled: hold-position moves and derived counters (counters are computed, not
-	# player orders — Law #2).
-	var hide_cancel: bool = (action is MoveAction and action.is_hold_position) or action is CounterAttackAction
+	# can't be cancelled: hold-position moves, derived counters, and the watch shot a walk takes
+	# (#592) — all three are computed rather than player orders, Law #2.
+	var hide_cancel: bool = (action is MoveAction and action.is_hold_position) \
+			or action is CounterAttackAction \
+			or (action is AttackAction and (action as AttackAction).is_watch_shot)
 	if hide_cancel:
 		cancel_button.modulate.a = 0.0
 		cancel_button.disabled = true
@@ -146,29 +143,6 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	hp_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	hp_label.offset_top = -12   # ride the bottom ~12px of the 32px icon, row height unchanged
 	
-# Extra lines under the row (#413) — what this walk walks into. On the ROW rather than in a section
-# of their own, deliberately: the payoff of a draggable move row is watching the shot it eats change
-# as you drag it, so the feedback has to be on the thing being dragged.
-#
-# Its own visible Label per note, added to the column the panel wraps every row in. It used to append
-# to `description_label`, which has been `visible = false` since the panel's first version (#592) --
-# so every hop was correct and the last one wrote into a node nobody can see. The bug report showed
-# the text (it projects the entries, not the label) while the screen never did.
-func add_annotations(notes: Array[String]) -> void:
-	if notes.is_empty():
-		return
-	var column := get_parent()
-	if column == null:
-		push_error("ActionQueueRow.add_annotations: no column to grow into (#592)")
-		return
-	for note: String in notes:
-		var line := Label.new()
-		line.text = "  ↳ %s" % note
-		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-		line.add_theme_font_size_override("font_size", ANNOTATION_FONT_SIZE)
-		line.modulate = ANNOTATION_MODULATE
-		column.add_child(line)
-
 
 func is_reorderable_row() -> bool:
 	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a

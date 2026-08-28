@@ -49,21 +49,34 @@ func _spawn(faction: Team.Faction, cell: Vector2i) -> Unit:
 	return unit
 
 
-# Every Label the panel is actually SHOWING, by its text. Visibility walked up the whole ancestor
-# chain, not read off the one node: #592 was a note written into a Label that has been
-# `visible = false` since the panel's first version, so an assertion on `.text` alone was blind to
-# the entire bug -- and both of this suite's cases passed against it before that was understood.
-func _row_texts() -> Array[String]:
-	var out: Array[String] = []
-	_collect_visible_text(game.squad_action_queue_control, out)
+# Every ActionQueueRow the panel is actually SHOWING, with visibility walked up the whole ancestor
+# chain rather than read off the one node. That distinction IS #592: the first fix wrote the note
+# into a Label that has been `visible = false` since the panel's first version, and a suite
+# asserting on `.text` passed against the live bug in this very fixture.
+func _visible_rows() -> Array[ActionQueueRow]:
+	var out: Array[ActionQueueRow] = []
+	_collect_rows(game.squad_action_queue_control, out)
 	return out
 
 
-func _collect_visible_text(node: Node, out: Array[String]) -> void:
-	if node is Label and (node as Label).is_visible_in_tree():
-		out.append((node as Label).text)
+func _collect_rows(node: Node, out: Array[ActionQueueRow]) -> void:
+	if node is ActionQueueRow:
+		if (node as Control).is_visible_in_tree():
+			out.append(node as ActionQueueRow)
+		return
 	for child in node.get_children():
-		_collect_visible_text(child, out)
+		_collect_rows(child, out)
+
+
+# The rows standing for a watch shot -- the derived ones, which is what the player sees appear under
+# a move that walks into a watch.
+func _watch_rows() -> Array[ActionQueueRow]:
+	var out: Array[ActionQueueRow] = []
+	for row: ActionQueueRow in _visible_rows():
+		var atk := row.action as AttackAction
+		if atk != null and atk.is_watch_shot:
+			out.append(row)
+	return out
 
 
 # THE case. A player walk that crosses an armed enemy watch, planned the way the player plans it,
@@ -94,18 +107,19 @@ func test_the_crossing_move_row_says_what_it_walks_into() -> void:
 	assert_int(plan.watch_shots.size()).override_failure_message(
 			"the walk crossed no watch -- the fixture is not exercising the rule").is_greater(0)
 
-	var texts := _row_texts()
-	assert_array(texts).override_failure_message("the panel drew no rows at all").is_not_empty()
+	assert_array(_visible_rows()).override_failure_message("the panel drew no rows at all").is_not_empty()
 
-	var said := false
-	for text: String in texts:
-		if text.contains("watch"):
-			said = true
-	assert_bool(said).override_failure_message(
-			"nothing VISIBLE on the panel mentions the watch -- the note exists in the entries but the
-"
-			+ "player cannot see it (#592). Visible text: %s" % str(texts)).is_true()
-
+	var shots := _watch_rows()
+	assert_int(shots.size()).override_failure_message(
+			"no VISIBLE row on the panel stands for the watch shot -- the plan resolved a hit the "
+			+ "player is never shown (#592). Visible rows: %d" % _visible_rows().size()).is_equal(1)
+	# The three faces the dev asked for, read off the row itself.
+	assert_object(shots[0].action.actor).override_failure_message(
+			"the row draws the wrong unit as the one firing").is_same(watcher)
+	assert_object((shots[0].action as AttackAction).target).override_failure_message(
+			"the row draws the wrong unit as the one hit").is_same(crosser)
+	assert_bool(shots[0].draggable).override_failure_message(
+			"the derived shot row is draggable -- it is not an order anybody gave").is_false()
 
 # The same question with the watch armed the way the GAME arms it -- declared, queued, executed --
 # and a turn handoff in between, which is the sequence a hotseat player actually performs. The case
@@ -150,12 +164,6 @@ func test_the_note_appears_when_the_watch_was_armed_through_the_real_path() -> v
 	assert_int(plan.watch_shots.size()).override_failure_message(
 			"the walk crossed no watch -- the fixture is not exercising the rule").is_greater(0)
 
-	var texts := _row_texts()
-	var said := false
-	for text: String in texts:
-		if text.contains("watch"):
-			said = true
-	assert_bool(said).override_failure_message(
-			"nothing VISIBLE on the panel mentions the watch -- the note exists in the entries but the
-"
-			+ "player cannot see it (#592). Visible text: %s" % str(texts)).is_true()
+	assert_int(_watch_rows().size()).override_failure_message(
+			"no VISIBLE row stands for the watch shot when the watch was armed the real way "
+			+ "(#592). Visible rows: %d" % _visible_rows().size()).is_equal(1)

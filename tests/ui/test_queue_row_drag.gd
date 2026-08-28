@@ -86,23 +86,14 @@ func _move_section() -> VBoxContainer:
 	return null
 
 
-# Every row in a section, found by SEARCHING rather than by a fixed child index -- deliberately its
-# own traversal and not the panel's `_row_in`, so this suite can still catch a regression in that.
-# Since #592 a wrapper holds a column (row + annotation lines), and the old `get_child(0)` cast
-# silently yielded null for every row, i.e. "nothing is draggable".
 func _rows_of(section: VBoxContainer) -> Array[ActionQueueRow]:
 	var rows: Array[ActionQueueRow] = []
 	for wrapper in section.get_children():
-		_collect_rows(wrapper, rows)
+		if wrapper.get_child_count() > 0:
+			var row := wrapper.get_child(0) as ActionQueueRow
+			if row != null:
+				rows.append(row)
 	return rows
-
-
-func _collect_rows(node: Node, out: Array[ActionQueueRow]) -> void:
-	if node is ActionQueueRow:
-		out.append(node as ActionQueueRow)
-		return
-	for child in node.get_children():
-		_collect_rows(child, out)
 
 
 func test_a_move_row_is_draggable_and_a_hold_row_is_not() -> void:
@@ -145,9 +136,7 @@ func test_finishing_a_drag_on_the_move_section_reorders_the_queue() -> void:
 
 	# Press, drop it past its sibling, release — what a real drag leaves behind.
 	panel._on_row_drag_requested(dragged)
-	# The wrapper, not the row's immediate parent: since #592 a column sits between them, and the
-	# panel moves the WRAPPER because it carries the row and its annotation lines as one block.
-	var wrapper: Control = panel._wrapper_of(dragged)
+	var wrapper: Control = dragged.get_parent()
 	section.move_child(wrapper, section.get_child_count() - 1)
 	panel._drag_dirty = true
 	panel._end_drag()

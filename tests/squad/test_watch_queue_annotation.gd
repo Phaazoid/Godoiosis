@@ -1,15 +1,10 @@
-# A queued walk that crosses an armed watch says so ON ITS OWN ROW (#413/#592,
-# docs/design/standing-reactions.md): "triggers Bern's watch — takes 12 from Overwatch", stacking
-# when one route crosses several.
-#
-# Law #2 is what makes this a defect rather than a polish item: the shot resolves, lands, and moves
-# HP, so a queue that does not mention it is previewing less than execution delivers. And #412's
-# whole payoff is dragging a move row and watching who eats the shot change -- feedback that has to
-# be on the row being dragged.
+# A queued walk that crosses an armed watch grows a ROW for the shot (#413/#592), indented under the
+# move that took it — the same shape an expanded volley's hits already use (dev, 2026-08-27: "we
+# already draw indented rows for aoe attacks, please match that style").
 #
 # The hop under test is the one nothing covered: test_move_order_is_the_clock.gd proves
-# plan.watch_shots is POPULATED, and the render end appends whatever it is handed. Between them sits
-# ActionQueueDisplayEntry.build_for, and it was never asked whether the note reaches the row.
+# plan.watch_shots is POPULATED, and the panel draws whatever entries it is handed. Between them
+# sits ActionQueueDisplayEntry.build_for, and it was never asked whether the shot reaches a row.
 extends GdUnitTestSuite
 
 const H := preload("res://tests/support/squad_fixtures.gd")
@@ -17,7 +12,6 @@ const H := preload("res://tests/support/squad_fixtures.gd")
 const PLAYER := Team.Faction.PLAYER
 const ENEMY := Team.Faction.ENEMY
 
-# The watched column, and the row the crosser walks along.
 const WATCHED: Array[Vector2i] = [Vector2i(2, 0), Vector2i(2, 1)]
 
 var _sm: SquadManager
@@ -31,7 +25,6 @@ func _main_of(unit: Unit) -> WeaponAttackData:
 	return (unit.get_equipped_weapon() as WeaponInstance).template.main_attack
 
 
-# An enemy standing off to the side with a live watch over WATCHED. Its own cell is the anchor.
 func _watcher(cell := Vector2i(2, 5), power := 6) -> Unit:
 	var unit := H.spawn_solo(self, _sm, ENEMY, cell, {Stats.Stat.STR: 4}, true, power)
 	unit.arm_watch(cell, WATCHED[0], WATCHED, _main_of(unit))
@@ -53,7 +46,6 @@ func _board_with(units_in: Array) -> BoardContext:
 	return BoardContext.new(_sm.grid, units, _sm)
 
 
-# The resolver hands back live volley arrays; the suite's teardown is happier without the cycles.
 func _break_volleys(plan: ResolvedPlan) -> void:
 	var empty: Array[AttackAction] = []
 	for atk in plan.attacks:
@@ -62,17 +54,7 @@ func _break_volleys(plan: ResolvedPlan) -> void:
 		shot.volley = empty
 
 
-# Every annotation the panel would draw, across every row, flattened -- the question is "does the
-# player read this anywhere", not which row index it lands on.
-func _annotations(entries: Array) -> Array[String]:
-	var out: Array[String] = []
-	for entry: ActionQueueDisplayEntry in entries:
-		for note: String in entry.annotations:
-			out.append(note)
-	return out
-
-
-func _rows_for(squad: Squad, plan: ResolvedPlan) -> Array:
+func _entries(squad: Squad, plan: ResolvedPlan) -> Array:
 	return ActionQueueDisplayEntry.build_for(squad, plan)
 
 
@@ -80,7 +62,9 @@ func _rows_for(squad: Squad, plan: ResolvedPlan) -> Array:
 #  The headline
 # ==============================================================================
 
-func test_a_walk_into_a_watch_annotates_its_own_move_row() -> void:
+# The row exists, it is INDENTED under the move, and it carries the shot itself -- which is what
+# lets it draw the firing unit, the attack icon and the unit getting hit with no new display code.
+func test_a_walk_into_a_watch_grows_an_indented_row_for_the_shot() -> void:
 	var watcher := _watcher()
 	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
 	crosser.squad._queue_action(_walk(crosser))
@@ -89,19 +73,44 @@ func test_a_walk_into_a_watch_annotates_its_own_move_row() -> void:
 	assert_int(plan.watch_shots.size()).override_failure_message(
 			"the watch never fired -- the fixture is not exercising the rule").is_equal(1)
 
-	var entries := _rows_for(crosser.squad, plan)
-	var notes := _annotations(entries)
+	var nested: Array[ActionQueueDisplayEntry] = []
+	for entry: ActionQueueDisplayEntry in _entries(crosser.squad, plan):
+		if entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION and entry.indent_level > 0:
+			nested.append(entry)
 
-	assert_array(notes).override_failure_message(
-			"the queue drew no annotation for a walk that takes a watch shot -- the player is not "
-			+ "told about a hit the plan already resolved (Law #2)").is_not_empty()
-	assert_str(notes[0]).contains("watch")
+	assert_int(nested.size()).override_failure_message(
+			"the queue grew no row for a walk that takes a watch shot -- the player is not told "
+			+ "about a hit the plan already resolved (Law #2)").is_equal(1)
+	assert_object(nested[0].action).override_failure_message(
+			"the row carries something other than the derived shot").is_same(plan.watch_shots[0])
 	_break_volleys(plan)
 
 
-# The note rides the CROSSER's own row, not some other row in the section: #412's payoff is watching
-# it move as you drag that row, so landing it on a squadmate's would be worse than nothing.
-func test_the_note_lands_on_the_crossers_row_and_not_a_squadmates() -> void:
+# The row's THREE faces, which is what the dev asked for: the firing unit, the attack, the unit
+# getting hit. Asked of the action rather than of a built row, because the action is what the row
+# reads -- and it is the same surface every other queue row uses.
+func test_the_row_names_the_watcher_the_attack_and_the_victim() -> void:
+	var watcher := _watcher()
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
+	crosser.squad._queue_action(_walk(crosser))
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+	var shot: AttackAction = plan.watch_shots[0]
+
+	assert_object(shot.actor).override_failure_message(
+			"the row would draw the wrong unit as the one firing").is_same(watcher)
+	assert_object(shot.target).override_failure_message(
+			"the row would draw the wrong unit as the one hit").is_same(crosser)
+	assert_object(shot.get_actor_texture()).is_not_null()
+	assert_object(shot.get_action_icon()).override_failure_message(
+			"the row has no icon for the attack").is_not_null()
+	assert_object(shot.get_target_texture()).is_not_null()
+	_break_volleys(plan)
+
+
+# It sits UNDER its own move, not loose in the section: the association is positional, exactly as an
+# expanded volley's hits sit under their header.
+func test_the_row_follows_the_crossers_move_and_not_a_squadmates() -> void:
 	var watcher := _watcher()
 	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
 	var bystander := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 3), {Stats.Stat.MHP: 60}, false)
@@ -110,14 +119,30 @@ func test_the_note_lands_on_the_crossers_row_and_not_a_squadmates() -> void:
 	crosser.squad._queue_action(_walk(bystander))
 
 	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser, bystander]))
+	var entries := _entries(crosser.squad, plan)
 
-	var carried: Array[Unit] = []
-	for entry: ActionQueueDisplayEntry in _rows_for(crosser.squad, plan):
-		if not entry.annotations.is_empty() and entry.action != null:
-			carried.append(entry.action.actor)
+	var preceding: Unit = null
+	for i in range(entries.size()):
+		var entry: ActionQueueDisplayEntry = entries[i]
+		if entry.entry_type != ActionQueueDisplayEntry.EntryType.ACTION:
+			continue
+		if entry.indent_level == 0:
+			preceding = entry.action.actor
+		else:
+			assert_object(preceding).override_failure_message(
+					"the shot row hangs off the wrong move").is_same(crosser)
+	_break_volleys(plan)
 
-	assert_array(carried).override_failure_message(
-			"no row carried the note at all").is_not_empty()
-	assert_object(carried[0]).override_failure_message(
-			"the note landed on a row whose walk crosses nothing").is_same(crosser)
+
+# A derived row is nobody's order: it must not be draggable, or the player could sequence a
+# consequence. BaseAction says yes by default, so this is a real answer AttackAction has to give.
+func test_the_shot_row_is_not_reorderable() -> void:
+	var watcher := _watcher()
+	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
+	crosser.squad._queue_action(_walk(crosser))
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+
+	assert_bool(plan.watch_shots[0].is_reorderable()).override_failure_message(
+			"a watch shot is draggable -- it is derived, not an order anybody gave").is_false()
 	_break_volleys(plan)

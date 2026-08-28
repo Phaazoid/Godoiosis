@@ -170,6 +170,13 @@ func get_target_texture() -> Texture2D:
 
 	return target_texture  #OR UNIT SPRITE IF ATTACKING SOMEONE I GUESS
 
+# A watch shot is DERIVED (#592): the resolver makes it from a standing watch, nobody queued it, and
+# it is not in action_queue at all -- so it cannot be sequenced. BaseAction answers yes by default,
+# and an ordinary derived attack row IS draggable (it maps back to the aim the player authored,
+# via source_aim); a watch shot has no such aim, which is what makes this its own answer.
+func is_reorderable() -> bool:
+	return not is_watch_shot
+
 func actor_can_perform() -> bool:
 	# Verb lock (will-and-death.md limb model) + readiness gate (#73) — an unfireable pick
 	# (a sprung Spring, or Stab too if the family locks the whole weapon) can't be queued even

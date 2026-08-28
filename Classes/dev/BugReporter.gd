@@ -279,12 +279,11 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 					out += "\n**%s**\n" % entry.label
 				ActionQueueDisplayEntry.EntryType.ACTION:
 					var flag: String = "" if entry.action.is_valid else "   **[INVALID]**"
-					out += "- %s%s%s\n" % [entry.action.get_description(),
+					# An indented entry is a DERIVED row — an expanded volley's hits, or the watch
+					# shot a walk takes (#592). It nests in the text the way it nests on the panel.
+					var pad := "  ".repeat(entry.indent_level)
+					out += "%s- %s%s%s\n" % [pad, entry.action.get_description(),
 						_outcome_note(entry.action), flag]
-					# The row's own extra lines (#413) — a projection of the panel, so what the
-					# panel says a move walks into has to reach the report too.
-					for annotation: String in entry.annotations:
-						out += "  - %s\n" % annotation
 				ActionQueueDisplayEntry.EntryType.DIVIDER:
 					pass
 

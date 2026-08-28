@@ -20,11 +20,6 @@ var label := ""
 var action: BaseAction = null
 var indent_level = 0
 
-# Extra lines the row carries UNDER its own description (#413). A deliberate divergence from how
-# counters display, which get their own section: #412's whole payoff is dragging a move row and
-# watching who eats the shot change, so the feedback has to live on the row being dragged.
-var annotations: Array[String] = []
-
 static func header(text: String) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
 	entry.entry_type = EntryType.HEADER
@@ -36,12 +31,13 @@ static func divider() -> ActionQueueDisplayEntry:
 	entry.entry_type = EntryType.DIVIDER
 	return entry
 
-static func action_row(action_ref: BaseAction, indent := 0, notes: Array[String] = []) -> ActionQueueDisplayEntry:
+# An INDENTED row is a DERIVED one -- an expanded volley's hits, or the watch shot a walk takes
+# (#592). It is not an order anybody gave, so the panel draws it undraggable and with no X.
+static func action_row(action_ref: BaseAction, indent := 0) -> ActionQueueDisplayEntry:
 	var entry := ActionQueueDisplayEntry.new()
 	entry.entry_type = EntryType.ACTION
 	entry.action = action_ref
 	entry.indent_level = indent
-	entry.annotations = notes
 	return entry
 
 # Section order: MOVE -> ATTACK -> each side-channel verb in registry order -> REACTION.
@@ -79,6 +75,8 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the
 # panel. An empty batch contributes nothing at all — no header, no divider.
+#
+# A MOVE row is followed by a row per watch shot the walk takes (#413/#592) — see _watch_shots_for.
 static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String, batch: Array,
 		plan: ResolvedPlan = null) -> void:
 	if batch.is_empty():
@@ -87,31 +85,28 @@ static func _add_section(entries: Array[ActionQueueDisplayEntry], title: String,
 		entries.append(divider())
 	entries.append(header(title))
 	for action in batch:
-		entries.append(action_row(action, 0, _watch_notes(plan, action)))
+		entries.append(action_row(action, 0))
+		for shot: AttackAction in _watch_shots_for(plan, action):
+			entries.append(action_row(shot, 1))
 
-# What a queued walk WALKS INTO (#413), one line per hit, stacking when one route crosses several
+
+# What a queued walk WALKS INTO (#413), one row per hit, stacking when one route crosses several
 # watches. Read off the resolve like every other row — plan.watch_shots already holds the derived
 # shots with their outcomes, so nothing is recomputed here (R3/R8).
 #
-# COMPACT since #592, because the note is now DRAWN and the panel is ~128px wide: the old
-# "triggers X's watch — takes N from Y" wrapped to four lines per row. The attack's own name went
-# rather than the watcher's or the number — since #590 a watch attack is watch-only, so naming the
-# watcher already says which watch fired, while who eats it and for how much is the thing the
-# player re-orders around. report.md projects these same strings, so there is one wording.
-static func _watch_notes(plan: ResolvedPlan, action: BaseAction) -> Array[String]:
-	var notes: Array[String] = []
+# They are ROWS rather than text (dev, 2026-08-27: "I'd like them to mirror the general action queue
+# setup by just being another action queue row with the firing unit, the weapon icon, and the unit
+# getting hit"). A watch shot IS an AttackAction, so it already answers every question a row asks --
+# actor sprite, action icon, target sprite, the lethality rung -- and inherits the panel's own look,
+# which is what the first attempt could not do: it appended text to `description_label`, hidden in
+# ActionQueueRow.tscn since the panel's first version, and a visible label of its own then clashed
+# with everything around it.
+static func _watch_shots_for(plan: ResolvedPlan, action: BaseAction) -> Array[AttackAction]:
+	var shots: Array[AttackAction] = []
 	if plan == null or action == null or action.action_type != BaseAction.ActionType.MOVE:
-		return notes
+		return shots
 	for shot in plan.watch_shots:
 		if shot.triggered_by != action.actor or shot.resolved == null or shot.resolved.skipped:
 			continue
-		var watcher := "someone" if shot.actor == null or not is_instance_valid(shot.actor) else shot.actor.get_unit_name()
-		# Who actually eats it: the crosser normally, an ally caught in the splash otherwise.
-		if shot.target == null or not is_instance_valid(shot.target):
-			notes.append("%s's watch fires" % watcher)
-		elif shot.target == action.actor:
-			notes.append("-%d from %s's watch" % [shot.resolved.damage, watcher])
-		else:
-			notes.append("%s: -%d from %s's watch"
-					% [shot.target.get_unit_name(), shot.resolved.damage, watcher])
-	return notes
+		shots.append(shot)
+	return shots
