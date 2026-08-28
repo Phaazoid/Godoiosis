@@ -122,13 +122,36 @@ func close() -> void:
 
 # --- internals -----------------------------------------------------------------------------------
 
+# HOLD the heavy scene for the life of the PROCESS, which is what a suite's own
+# `const SCENE := preload(...)` does for the suites that keep their own fixture (#621).
+#
+# It matters here for FRESH MODE, and only there: sharing already reads the scene once per suite,
+# but IOSIS_FRESH_FIXTURE=1 rebuilds per case, so a plain load() would drop the last reference to
+# lookdev_meshlib.tres -- 5 MB, 2089 ArrayMesh sub-resources -- and reload it for the next case.
+# That is exactly the regression #621 measured and fixed, re-entered through the back door: this
+# file loads a path held in a VARIABLE, so test_heavy_scenes_are_preloaded's scanner, which looks
+# for a literal load("res://..."), structurally cannot see it. Measured before the cache:
+# board_mirror fresh 63.9s +/- 0.6 against 12.5s +/- 0.05 shared, and the fresh number had not
+# moved at all across #621.
+#
+# The cache is never evicted, which is the point -- a PackedScene is what preload keeps too, and
+# releasing it would put the reload straight back.
+static var _packed_scenes: Dictionary[String, PackedScene] = {}
+
+
+static func _packed(path: String) -> PackedScene:
+	if not _packed_scenes.has(path):
+		_packed_scenes[path] = load(path) as PackedScene
+	return _packed_scenes[path]
+
+
 func _build(suite: GdUnitTestSuite) -> void:
 	# The project window size: headless defaults can be tiny, and several presentation reads
 	# (picking, the PiP) are resolution-dependent.
 	suite.get_tree().root.size = Vector2i(1280, 720)
 	PlayerSettings.reset_for_test()   # also cleared per case by _apply; this is fresh mode's copy
 	Experiments.reset_for_test()
-	scene = (load(_scene_path) as PackedScene).instantiate() as Node3D
+	scene = _packed(_scene_path).instantiate() as Node3D
 	scene.auto_play = false   # the board is loaded explicitly below, if at all
 	suite.get_tree().root.add_child(scene)
 	await suite.await_idle_frame()
