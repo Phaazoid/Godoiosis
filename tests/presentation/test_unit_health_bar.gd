@@ -14,37 +14,41 @@
 # spawned by hand, so nothing here can be reddened by a content commit repainting a mission.
 extends GdUnitTestSuite
 
-# preload, never load(): a per-test load() reloads the 5 MB mesh library every case (#621).
-const SCENE: PackedScene = preload("res://Scenes/Battle3D/Battle3D.tscn")
+const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const H := preload("res://tests/support/squad_fixtures.gd")
 
 const PLAYER := Team.Faction.PLAYER
 
+var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var game: Node2D
 var _unit_mirror: UnitMirror
 
 
+func before() -> void:
+	await _board.open(self, _clear_the_board)
+
+
+func _clear_the_board() -> void:
+	_board.game.scenario_manager.clear_board()
+	_board.game.game_state = _board.game.GameState.IDLE
+
+
 func before_test() -> void:
+	await _board.reset(self)
+	_scene = _board.scene
+	game = _board.scene.game
 	# Hermetic, and NOT optional (#350): is_on() falls through to user://settings.cfg, so without
 	# this a suite asserting which units wear a bar reads the developer's own saved preference.
-	PlayerSettings.reset_for_test()
-	get_tree().root.size = Vector2i(1280, 720)
-	var packed := SCENE
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	game = _scene.game
 	_unit_mirror = _scene.get_node("UnitMirror") as UnitMirror
-	game.scenario_manager.clear_board()
-	game.game_state = game.GameState.IDLE
-	await await_idle_frame()
 
 
 func after_test() -> void:
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _board.check(self)
+
+
+func after() -> void:
+	_board.close()
 
 
 func _settle() -> void:

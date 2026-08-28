@@ -227,6 +227,49 @@ weeks. It is a spelling check on purpose: the direct property test (is the libra
 `ResourceLoader.has_cached()` after a free?) depends on what ran before it, and [#620](https://github.com/Phaazoid/Godoiosis/issues/620)
 made test order vary by shard.
 
+## The shared Battle3D fixture (`support/shared_board.gd`)
+
+A `Battle3D` costs roughly a second to build and tear down, and a suite that does it per case pays
+that per case — `test_board_mirror` alone was 63s of CI. `SharedBoard` builds **one per suite** and
+resets the board between cases instead. Eight suites use it; converting one is four one-liners:
+
+```gdscript
+var _board := SharedBoard.new(SCENE_PATH)          # or (SCENE_PATH, PROLOG)
+func before():      await _board.open(self)
+func before_test(): await _board.reset(self); _scene = _board.scene; game = _board.game
+func after_test():  await _board.check(self)       # resets, THEN diffs
+func after():       _board.close()
+```
+
+**Two shapes cover every suite converted so far**: an EMPTY board, and PROLOG LOADED. The empty one
+passes a `prepare` recipe that calls `clear_board()` — and that call is **not** redundant even though
+the scene comes up empty anyway, which is the trap: what it buys is the `board_loaded` EMISSION, and
+without that `battle3d._on_board_loaded` never runs and the 3D hover wire is never built.
+
+**`check()` is the safety, and it is not optional.** It resets and then diffs the whole board against
+the baseline (`support/board_fingerprint.gd`), so a leak fails **at the case that caused it**, every
+run, naming the field — rather than as a flake in whatever unlucky case reads it later.
+
+**`IOSIS_FRESH_FIXTURE=1` restores the old per-case rebuild**, at no cost but time. It is the oracle:
+a case that fails shared and passes fresh is a LEAK, and one that fails in both is a fixture that is
+missing something. Run it before concluding anything about a converted suite.
+
+**What the fixture puts back, beyond the board.** `apply_scenario` restores board content and nothing
+else, so the fixture also restores every knob in both tables, both settings stores
+(`PlayerSettings`/`Experiments` keep static `_state`), the hosting view, dev mode, where the pointer
+is (stored twice — `battle3d._pointer_cell` and `HoverPresenter.last_hovered_cell` — and reset once),
+and the camera shot (`board_loaded` calls `fit_camera`, which falls through to `frame()`, which never
+touches yaw). Each of those was found by a case going red after a suite was converted.
+
+**Some suites keep their own scene, deliberately.** The rule: *a suite whose subject IS the state the
+fixture restores does not share.* `test_input_bridge` tests the input session — pointer, camera snap,
+hosting view, dev mode — and `test_game_knobs`/`test_moods_tool` test the knob machinery, so a fixture
+quietly restoring knobs between their cases would be marking its own homework. `test_health_block_debris`
+is a different reason: its debris pool has no clear door and cubes outlive a headless case, so the next
+case starts with the last one's still in the air. Those suites still PRELOAD their scene rather
+than `load()`ing it: sharing and preloading answer different halves of the same cost, and the #621
+law above governs every suite that keeps its own scene.
+
 ## Install (already done; recorded for reproducibility)
 
 gdUnit4 was vendored from `github.com/MikeSchulze/gdUnit4` into `addons/gdUnit4/` (its own `test/` folder dropped to keep it lean) and enabled in `project.godot` `[editor_plugins]` next to AsepriteWizard. In a headless run gdUnit4 detects the CI environment and skips its editor plugin automatically. `reports/` (generated) is gitignored.
