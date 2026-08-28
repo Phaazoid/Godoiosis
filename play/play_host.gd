@@ -21,8 +21,8 @@ func _run() -> void:
 	# so unit_instance is built, movement is wired to the grid, and inventory is sized.
 	await process_frame
 
-	_arm(p1, 6)
-	_arm(e1, 4)
+	BoardBuilder.arm(p1, 6)
+	BoardBuilder.arm(e1, 4)
 
 	var session := PlaySession.new(board)
 
@@ -53,11 +53,6 @@ func _run() -> void:
 func _data(name: String, faction: Team.Faction) -> UnitData:
 	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), name, faction)
 
-func _arm(unit: Unit, power: int) -> void:
-	var template := WeaponData.new()
-	template.main_attack = WeaponAttackData.new()
-	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
-	unit.add_item(WeaponInstance.make(template))   # add_item auto-equips the first weapon
 
 func _section(title: String) -> void:
 	print("\n========== %s ==========" % title)

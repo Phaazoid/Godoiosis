@@ -42,3 +42,8 @@ tools/report-worker/.wrangler/
 # Content fixtures a test AUTHORS into the scanned content tree and removes again (#604). Ignored
 # rather than merely cleaned up, so a run that dies before after_test still cannot dirty the tree.
 /Resources/**/__test_*.tres
+
+# agy (Antigravity CLI) session state — a local agent harness's own cache, not project output.
+# Ignored so that driving a playtest through that harness doesn't leave untracked noise in
+# `git status` (dev, 2026-08-27). The Play API's own runtime files are /playrun/ above.
+/.antigravitycli/

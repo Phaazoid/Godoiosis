@@ -129,8 +129,8 @@ func _cmd_new() -> String:
 	var p := BoardBuilder.spawn(_board, _mk("Vanguard", Team.Faction.PLAYER), Vector2i(0, 0))
 	var e := BoardBuilder.spawn(_board, _mk("Raider", Team.Faction.ENEMY), Vector2i(5, 0))
 	await process_frame
-	_arm(p, 6)
-	_arm(e, 4)
+	BoardBuilder.arm(p, 6)
+	BoardBuilder.arm(e, 4)
 	_session = PlaySession.new(_board)
 	return "New board (2 units)\n\n" + BoardView.render_overview(_session)
 
@@ -182,8 +182,3 @@ func _ack(r: Dictionary) -> String:
 func _mk(name: String, faction: Team.Faction) -> UnitData:
 	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), name, faction)
 
-func _arm(unit: Unit, power: int) -> void:
-	var template := WeaponData.new()
-	template.main_attack = WeaponAttackData.new()
-	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
-	unit.add_item(WeaponInstance.make(template))

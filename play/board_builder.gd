@@ -105,6 +105,17 @@ static func spawn(board: Dictionary, data: UnitData, cell: Vector2i) -> Unit:
 	board.squad_manager.create_squad(unit)
 	return unit
 
+# Give a unit a plain working weapon. The ONE answer (#617): this lived as three byte-similar
+# copies (bridge, host, tests/play), and the two production ones never set weapon_type — so
+# WeaponInstance.make() refused the unmapped NONE family (#82), returned null, and the bridge's
+# own `new` board spawned everybody unarmed. Any mapped family works; the point is that it IS one.
+static func arm(unit: Unit, power: int) -> void:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
+	unit.add_item(WeaponInstance.make(template))   # add_item auto-equips the first weapon
+
 # Load a saved scenario (.tres) onto an already-built board. COROUTINE — await it.
 static func load_scenario(board: Dictionary, path: String) -> Array[Unit]:
 	var scenario: ScenarioData = load(path)
