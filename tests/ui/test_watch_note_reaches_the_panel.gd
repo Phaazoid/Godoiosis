@@ -113,13 +113,16 @@ func test_the_crossing_move_row_says_what_it_walks_into() -> void:
 	assert_int(shots.size()).override_failure_message(
 			"no VISIBLE row on the panel stands for the watch shot -- the plan resolved a hit the "
 			+ "player is never shown (#592). Visible rows: %d" % _visible_rows().size()).is_equal(1)
-	# The three faces the dev asked for, read off the row itself.
-	assert_object(shots[0].action.actor).override_failure_message(
-			"the row draws the wrong unit as the one firing").is_same(watcher)
-	assert_object((shots[0].action as AttackAction).target).override_failure_message(
-			"the row draws the wrong unit as the one hit").is_same(crosser)
-	assert_bool(shots[0].draggable).override_failure_message(
-			"the derived shot row is draggable -- it is not an order anybody gave").is_false()
+	# The three faces the dev asked for, read off the row itself. Guarded, because gdUnit4 does not
+	# halt on a failed assertion -- indexing an empty array here buries the message above under a
+	# runtime error, which is exactly what the mutant run showed.
+	if shots.size() == 1:
+		assert_object(shots[0].action.actor).override_failure_message(
+				"the row draws the wrong unit as the one firing").is_same(watcher)
+		assert_object((shots[0].action as AttackAction).target).override_failure_message(
+				"the row draws the wrong unit as the one hit").is_same(crosser)
+		assert_bool(shots[0].draggable).override_failure_message(
+				"the derived shot row is draggable -- it is not an order anybody gave").is_false()
 
 # The same question with the watch armed the way the GAME arms it -- declared, queued, executed --
 # and a turn handoff in between, which is the sequence a hotseat player actually performs. The case
