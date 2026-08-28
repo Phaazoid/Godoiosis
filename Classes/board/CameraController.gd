@@ -61,6 +61,9 @@ var beat_emphasis := 0.0
 # question of the same set and the fourth field: that one is an ANGLE, that one a FIT, that one a
 # WEIGHT, and this is the CAUSE the other three are shaped by.
 #
+# A READER THAT NEEDS "is a zoom happening RIGHT NOW" MUST NOT USE THIS -- see playback_cinematic
+# below; held-not-cleared makes this say CINEMATIC for ever after the first clash.
+#
 # It exists because COMBAT_ONLY made the profile a fact about a BEAT rather than about the pass, and
 # the 3D rig has no beat in hand -- it polls. Publishing the cause is more honest than inferring it
 # from whether a line or a weight arrived, and it is the only channel the SWAY has at all: a sway is
