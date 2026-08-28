@@ -172,16 +172,20 @@ static var GUARD_LINK_HEAD_INSET := 0.4
 # range layer (dev: "they shouldn't just be filled in squares") — a watch is a threat, not a reach
 # readout, and it has to read as one from across the board while every other range overlay is off.
 #
-# The dev's pick (#591, 2026-08-27), replacing #413's placeholder — which was literally the DEFAULT
-# CURSOR's own file, so a footprint tiled into plus-shapes at the shared corners and swallowed the
-# cursor standing on a watched cell. Neither art pack in the repo has a crosshair, so this was drawn:
-# white ink plus a 1px black halo (SquadRingIcon's trick — black survives the hue modulate, so one
-# texture serves whatever WATCH_MARK_COLOR is tuned to).
+# The dev's pick (#591, 2026-08-27): a RETICLE — a broken circle with four inward ticks and a centre
+# dot, the most literal "something is aimed at you". It replaces #413's placeholder, which was
+# literally the DEFAULT CURSOR's own file, so a footprint tiled into plus-shapes at the shared
+# corners and swallowed the cursor standing on a watched cell. Neither art pack in the repo has a
+# crosshair, so this was drawn: white ink plus a 1px black halo (SquadRingIcon's trick — black
+# survives the hue modulate, so one texture serves whatever WATCH_MARK_COLOR is tuned to).
 #
 # Authored at ONE cell (16px) like every other board icon — a 32px cut is a four-cell decal, which is
-# how #414's ward mark first shipped and read as "the marker isn't showing up" — and INSET from the
-# cell edge, which is the rule the four candidates were judged by: a mark touching its edge tiles
-# into a lattice across a contiguous footprint and reads as a net rather than as per-cell threat.
+# how #414's ward mark first shipped and read as "the marker isn't showing up".
+#
+# KNOWN and accepted: the ticks are straight bars running perpendicular to the cell edge, so on a
+# contiguous footprint each lines up with its neighbour's and the pair reads as ONE bar bridging the
+# two cells. That is the rule the candidates were judged by and this one was taken in spite of, not
+# in ignorance of it — shortening the ticks by a pixel is the fix if it ever reads badly in play.
 const WATCH_MARK_TEXTURE := preload("res://Art/Icons/BoardIcons/WatchMarkIcon.png")
 static var WATCH_MARK_COLOR := Color(1.0, 0.35, 0.25, 0.9)
 static var WATCH_MARK_SCALE := 1.0
