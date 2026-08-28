@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #583 (2026-08-27).**
+**Canon checked through #603 (2026-08-27).**
 
 ## Principles
 
@@ -1356,7 +1356,8 @@ creating now. We can start with a pan, but I reserve the right to change the cal
 is not a global invariant: three writers still cut on purpose, and the transition is a declared
 exception rather than an instance of the rule.
 
-**`position` is now DERIVED from two channels**, `_aim + _lift`, written in exactly one place.
+**`position` became DERIVED from two channels** in this slice, `_aim + _lift`, written in exactly one
+place. (Diff 2b adds a third, the flourish -- see *The camera JOLTS, SWAYS and STOOPS* below.)
 - `_aim` is the point on the board. `hold_at()` snaps it, `glide_to()` pans it. A raw
   `rig.position = …` is *overwritten* on the next frame rather than half-honoured — which is a
   loud failure, and it invalidated five test fixtures that had been shoving the rig that way.
@@ -1464,7 +1465,7 @@ deliberately its "undeclared" example (`test_an_undeclared_verb_never_shortens_t
 an entry of the panel's Actions list; in the code its numbers live in the volley branch. Different
 lookups, same page.
 
-### The Playback page, in six sections
+### The Playback page, in six sections (seven since diff 2b added Camera flourish)
 
 Thirty flat rows, of which fifteen said `Hold:` and were really two different questions — six
 *outcomes* of an attack, nine per-*verb* numbers — and half of which did nothing depending on a
@@ -1502,8 +1503,99 @@ proves a verb has a *number*; it cannot prove the dev can *reach* it, and ATTACK
 that gap. So every `MAIN_ACTION_TYPES` member must now have a hold row, a linger row, and a place in
 the Action picker.
 
-Still open on #520: the impact layer (pitch driver, shake, micro-sway) and the follows (knockback,
-cliff) — the rest of diff 2b — and lethality-aware direction (diff 2c).
+Still open on #520 at the time of that slice: the impact layer (pitch driver, shake, micro-sway) and
+the follows — the rest of diff 2b, landed in the next section — plus lethality-aware direction (2c).
+
+## The camera JOLTS, SWAYS and STOOPS ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2b, the impact layer, BUILT 2026-08-27)
+
+The camera had learned where to go, which way to face, and how long to stay. This is what it does
+*while it is there*: it is knocked when a blow lands, it breathes while it holds a shot, and it comes
+down toward eye level for a directed blast so the fight looms instead of being read from overhead.
+
+**The FLOURISH is a third position addend, and its separateness is the design.** `position` was
+`_aim + _lift`; it is now `_aim + _lift + flourish()`. The first two are *where the camera looks*.
+The third is not — it is a displacement laid over that, and two consequences fall straight out of
+saying so. It is summed **after** `pan_limit`'s clamp, so a blow at the board's edge jolts exactly as
+hard as one in the middle; and it is **never stashed**, so the view handed back at the end of a pass
+is the one the player left rather than one caught mid-shake.
+
+**One gate, and it already existed.** All three effects live only while `_view_borrowed` is true —
+the flag `stash_view` sets on the claim edge and `restore_view`/`drop_stashed_view` clear. That flag
+already answers exactly this question for all three claimants (a player pass, an AI turn, the burn
+phase), and the look-dev scene never stashes so it never flourishes. A sway under the player's own
+hand is motion sickness rather than mood; no second flag was needed to say so.
+
+**The impact is read ABOVE the health bar's visibility gate, and that placement is the whole point.**
+The instant a blow lands is `take_damage` inside `AttackAction.execute`, which `OrderExecutor` cannot
+see — it awaits the whole action. The only thing that observes it is `UnitMirror`'s HP poll, which
+computes its diff and then returns early on `previous == current or not bar.visible`. The cubes are a
+*readout* and rightly go when the readout is hidden; a camera jolt is not a readout, and
+`ALWAYS_SHOW_HEALTH` ships **false** — so reporting below that line would leave the default settings
+with no impact in them anywhere, which is [#534](https://github.com/Phaazoid/Godoiosis/issues/534)'s
+bug verbatim. Sharing one observation with the burst is also what keeps them in step: the jolt and
+the cubes cannot disagree about when the hit landed.
+
+**A death fires the down rung ALONE.** `die()` emits and `queue_free`s in one frame and the reconcile
+skips a unit already queued for deletion, so the poll **never** observes a unit at 0 HP. Without a
+second report on `_on_unit_died` the loudest moment in a pass would be the one with no jolt at all —
+and because the poll structurally cannot see it, the two can never double-fire.
+
+**Strongest wins, measured against what is LEFT of a jolt in flight** rather than against what it
+started at — the holds' own rule (*the loudest single one wins, by value*) applied to an impulse.
+Summing would make a three-victim volley hit three times as hard as a duel, the opposite of *one
+blast is one moment*. The comparison reads the decaying **envelope**, not the instantaneous offset,
+which crosses zero twice a cycle and would let any scratch win at a crossing.
+
+**Both curves are pure and deterministic** — a damped `amp·e^(−t·decay)·sin(t·freq)` for the jolt,
+two sines at an irrational ratio for the sway so the bob never settles into a metronome. Law #1 at
+the smallest scale it can be asked: the same blow reads the same on every replay. World-Y only, no
+camera basis — a vertical jolt is the GBA-era hit being mocked against, it cannot fight the XZ pan
+clamp, and it needs no re-derivation when the yaw turns.
+
+**The two split on the profile question, and NOT the same way.** A jolt is matched to the health
+cubes bursting on their own real-time clock, so it is **flat** and applies with the battle zoom off
+too — the linger's reasoning, not the hold's, since drama-scaling would give the plain board none at
+all. A sway is anticipation, so it forks like drama and direction do, and `BOARD_SWAY` ships at 0.
+
+**The pitch driver is `aim_along`'s twin and cost no new seam.** #586 had already made pitch a third
+eased channel and `restore_view` already stashed and restored `_target_pitch_degrees` exactly as it
+does yaw — so a directed shot writes one target through the door that exists, and the view return
+undoes it. The stoop is **derived inside `aim_along` from the line already published**: one fact, two
+channels, nothing to keep in step. It is measured from `board_pitch_degrees`, the board's authored
+angle, which nothing in a pass moves — measuring from the *live* pitch creeps to full over a few
+frames because the mirror re-solves every frame, and the strength knob then stops meaning anything.
+That is diff 2a's mutant one axis over, and only a **partial** strength can separate the two.
+
+**The claim edge deliberately does NOT square the tilt up.** It was in this slice for one run, on the
+theory that a player parked at the shallow end leaves the stoop nowhere to go. Both halves are wrong:
+the stoop is absolute off the authored angle, so where the hand left the camera cannot reach it — and
+#586's rule is that a tilt survives everything but R, which `test_a_realign_keeps_the_tilt` pins over
+`align_to_detent` itself. A beat with no aim line keeps whatever tilt it found, which is already
+`aim_along`'s stated idiom for the yaw.
+
+**The knockback follow was already built and had no law.** `pan_to(unit)` has closed with
+`follow(unit)` since [#118](https://github.com/Phaazoid/Godoiosis/issues/118), `_process` re-reads
+`follow_unit.global_position` every frame, and an attack beat's subject *is* its victim — so the
+camera has ridden shoved bodies all along without anyone claiming it. Three correct pieces and no
+case over the join is [#103](https://github.com/Phaazoid/Godoiosis/issues/103)'s shape exactly; it is
+pinned now, at the decision (who is being followed when the pan lands) rather than by watching a body
+fly, since the slide is headless-escaped like everything around it.
+
+**The headless escape is on the CLOCK, not on the offsets.** Both curves are naturally zero at t = 0,
+so a headless run leaves `position` bit-identical to one without this channel — which matters because
+the rig suites assert coordinates, and #520 slice 1 already paid once for making a value easable
+under tests whose names claim it lands. Headless refuses to *spend* time, exactly as `Pacing.beat`
+does; a case that wants to watch a curve supplies the elapsed time itself.
+
+Nine knob rows under a new **Camera flourish** section on the Playback page — its own group rather
+than more rows under Camera travel, because that section is how long the camera takes to *get*
+somewhere and this is what it does once it is there.
+
+Still open on #520: the **cliff follow**, spun out as
+[#602](https://github.com/Phaazoid/Godoiosis/issues/602) because it is the one piece that is a build
+rather than a composition — both fall animations are mirror-side Y offsets, so a unit's board
+position never descends and following one down needs a 3D vertical authority nothing has. Then
+lethality-aware direction (diff 2c).
 
 ## The fight TEARS OUT of the board ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice A, BUILT 2026-08-26)
 
