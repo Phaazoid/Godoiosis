@@ -126,6 +126,58 @@ func test_an_idle_sprite_spends_no_frame_time() -> void:
 	sprite.stop_animation()
 	assert_bool(sprite.is_processing()).is_false()
 
+# --- where a frame hangs from (#634) --------------------------------------------------------------
+
+
+func test_a_frame_hangs_from_the_stand_point_its_set_carries() -> void:
+	# A 20x12 card whose character stands at (6, 11) -- left of centre and one row off the bottom,
+	# the shape a card sheet actually has. The origin must land THERE, which means offset
+	# (20/2 - 6, 11 - 12/2) = (4, 5). Both components differ from the still pivot and from each
+	# other, so a swapped axis or a missed correction cannot pass.
+	var sprite := _sprite()
+	assert_vector(sprite.offset).is_equal(UnitSprite3D.STILL_PIVOT)
+	sprite.play_animation(_carded_sheet(Vector2(6, 11)), &"swing")
+	assert_vector(sprite.offset).is_equal(Vector2(4, 5))
+
+
+func test_a_left_facing_unit_hangs_from_the_mirrored_stand_point() -> void:
+	# flip_h leaves the QUAD where it is and mirrors only the UVs, so the ink that stood at column 6
+	# now stands at column 14 and the correction has to invert with it. Without this a fixed
+	# correction is right in one facing and nearly a full cell out in the other -- worse than the
+	# symmetric error it replaced.
+	var sprite := _sprite()
+	sprite.flip_h = true
+	sprite.play_animation(_carded_sheet(Vector2(6, 11)), &"swing")
+	assert_vector(sprite.offset).is_equal(Vector2(-4, 5))
+
+
+func test_the_pivot_comes_back_when_a_gesture_is_stopped() -> void:
+	var sprite := _sprite()
+	sprite.play_animation(_carded_sheet(Vector2(6, 11)), &"swing")
+	assert_vector(sprite.offset).is_not_equal(UnitSprite3D.STILL_PIVOT)
+	sprite.stop_animation()
+	assert_vector(sprite.offset).is_equal(UnitSprite3D.STILL_PIVOT)
+
+
+func test_the_pivot_comes_back_when_a_gesture_runs_off_its_own_end() -> void:
+	# The restore lives in _apply_state_texture, the one door, rather than beside stop_animation --
+	# so a gesture nobody stopped gets it too. A restore written per call site passes the case above
+	# and leaves a unit that finished swinging hanging from a card pivot forever.
+	var sprite := _sprite()
+	sprite.play_animation(_carded_sheet(Vector2(6, 11)), &"swing")
+	sprite._process(2.0)   # past the 1s the fixture lasts
+	assert_bool(sprite.is_animating()).is_false()
+	assert_vector(sprite.offset).is_equal(UnitSprite3D.STILL_PIVOT)
+
+
+func test_a_set_that_carries_no_stand_point_hangs_from_the_still_pivot() -> void:
+	# Loud, not silent: the warning is the point. A set generated before #634 keeps working and says
+	# it needs regenerating, rather than quietly reproducing the bug.
+	var sprite := _sprite()
+	sprite.play_animation(_sheet(false), &"swing")
+	assert_bool(sprite.is_animating()).is_true()
+	assert_vector(sprite.offset).is_equal(UnitSprite3D.STILL_PIVOT)
+
 
 # --- helpers -------------------------------------------------------------------------------------
 
@@ -156,3 +208,20 @@ func _texture() -> ImageTexture:
 	var img := Image.create(4, 4, false, Image.FORMAT_RGBA8)
 	img.fill(Color.WHITE)
 	return ImageTexture.create_from_image(img)
+
+
+# A sheet whose frames are a real card SIZE and that says where its character stands, which the
+# 4x4 fixture above deliberately does not -- the two answer different questions and sharing one
+# would make the no-measurement case untestable.
+func _carded_sheet(ground: Vector2) -> SpriteFrames:
+	var sheet := SpriteFrames.new()
+	sheet.remove_animation(&"default")
+	sheet.add_animation(&"swing")
+	sheet.set_animation_speed(&"swing", 60.0)
+	sheet.set_animation_loop(&"swing", false)
+	for held: float in HELD:
+		var img := Image.create(20, 12, false, Image.FORMAT_RGBA8)
+		img.fill(Color.WHITE)
+		sheet.add_frame(&"swing", ImageTexture.create_from_image(img), held)
+	sheet.set_meta(&"ground_point", ground)
+	return sheet

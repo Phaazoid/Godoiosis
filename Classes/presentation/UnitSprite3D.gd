@@ -19,6 +19,15 @@ signal walk_finished
 const ART_FACES_SCREEN_RIGHT := false
 const FALLBACK_SPRITE := "res://Art/Units/MapSprites/Recruit.png"
 
+# Where an authored STILL hangs from, in texture pixels: 16 is half of 32, so on the 32x32 map art
+# -- whose ink runs to the texture's bottom edge -- the origin lands on the feet. A frame animation
+# overrides it per frame and _apply_state_texture puts it back (#634).
+#
+# NOT to be confused with `art_offset` below. This is `Sprite3D.offset`: a Vector2 in TEXTURE PIXELS
+# that moves the picture against its own origin. `art_offset` is a Vector3 in WORLD UNITS that moves
+# the whole sprite against the board. Same word, two channels, and only one of them is a pivot.
+const STILL_PIVOT := Vector2(0, 16)
+
 # Matches the 2D game's cadence: 120 px/s over 32 px cells = 3.75 cells per second.
 @export var move_speed := 3.75
 
@@ -64,6 +73,9 @@ var _walk_art := false
 # gate, not the assignment, is what makes a borrow safe -- without it the walk swap and the swing
 # would fight over one property every frame.
 var _animator := SpriteAnimator.new()
+# Where the playing set says its character stands inside a card, in card-local texels (#634).
+# Vector2(-1, -1) = the set does not say, and the still pivot is used unchanged.
+var _animation_ground := Vector2(-1, -1)
 
 
 func _init() -> void:
@@ -73,7 +85,7 @@ func _init() -> void:
 	shaded = true
 	cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	pixel_size = 1.0 / texels_per_unit  # the one-density convention; see the static above
-	offset = Vector2(0, 16)  # pivot at the feet
+	offset = STILL_PIVOT
 	layers = BoardOverlays.UNIT_RENDER_LAYER  # overlay fills never paint sprites (#213 mask contract)
 	# Board markup never draws OVER a unit — the mask above stops fills painting onto the
 	# sprite, this stops them sorting in front of it. An OPAQUE sprite is actually held there by
@@ -195,6 +207,7 @@ func set_walking_visual(walking: bool) -> void:
 func play_animation(sheet: SpriteFrames, anim: StringName) -> bool:
 	if not _animator.play(sheet, anim):
 		return false
+	_animation_ground = _ground_point_of(sheet)
 	set_process(true)
 	_show_animation_frame()
 	return true
@@ -225,8 +238,53 @@ func _process(delta: float) -> void:
 
 func _show_animation_frame() -> void:
 	var frame := _animator.texture_now()
-	if frame != null:
-		texture = frame
+	if frame == null:
+		return
+	texture = frame
+	# Re-derived per frame rather than set once at play(): `flip_h` is written from OUTSIDE this
+	# class -- by the walk below and by UnitMirror re-facing every sprite on a camera turn -- so a
+	# pivot cached at play time is a diff key that goes stale silently the moment a unit turns.
+	var wanted := _pivot_for(frame)
+	if offset != wanted:
+		offset = wanted
+
+
+# Where THIS frame hangs from. The card is a fixed viewport, so the character's own place inside it
+# is the animation's footwork and must survive untouched; only the reference point moves.
+#
+# Both signs measured against the engine rather than reasoned about (Godot 4.7.1, a sprite in the
+# tree -- get_aabb() reports nothing until it is): the origin sits at column `w/2 - offset.x` from
+# the texture's left and row `h/2 + offset.y` from its top. Inverting those gives the two lines below.
+#
+# THE FLIP IS THE PART THAT IS NOT OBVIOUS: `flip_h` leaves the QUAD exactly where it is and mirrors
+# only the UVs, so the ink that sat at column `ground.x` now sits at `w - ground.x` and the
+# correction has to invert with it. Measured, because an engine that mirrored the quad instead would
+# make this line double-negate and hang a left-facing unit a full cell out.
+func _pivot_for(frame: Texture2D) -> Vector2:
+	if _animation_ground.x < 0.0:
+		return STILL_PIVOT
+	var size := frame.get_size()
+	var from_centre := size.x / 2.0 - _animation_ground.x
+	return Vector2(-from_centre if flip_h else from_centre, _animation_ground.y - size.y / 2.0)
+
+
+# One warning per set, not one per gesture: #603 fires these off beats, and a set missing its
+# measurement would otherwise say so on every blow of every battle.
+static var _warned_sets: Dictionary[String, bool] = {}
+
+
+# A set that carries no measurement hangs from the still pivot and SAYS SO. Silently falling back is
+# what this ticket exists to fix -- a 66x42 card on a pivot cut for 32x32 art is exactly the bug.
+static func _ground_point_of(sheet: SpriteFrames) -> Vector2:
+	# has_meta first, and never get_meta(name, null): the default argument is ignored and the call
+	# raises instead of returning it.
+	if sheet.has_meta(&"ground_point"):
+		return sheet.get_meta(&"ground_point")
+	var key := sheet.resource_path if not sheet.resource_path.is_empty() else str(sheet.get_instance_id())
+	if not _warned_sets.has(key):
+		_warned_sets[key] = true
+		push_warning("UnitSprite3D: '%s' carries no ground_point; frames will hang from the still pivot (#634). Regenerate it with tools/zoomanim." % key)
+	return Vector2(-1, -1)
 
 
 # Which authored still this unit shows: downed beats walking beats standing.
@@ -246,6 +304,12 @@ func _state_texture() -> Texture2D:
 func _apply_state_texture() -> void:
 	if _animator.is_playing():
 		return   # borrowed; stop_animation() or running out is what gives it back
+	# The pivot comes back HERE rather than beside each caller, so all three ways an animation ends
+	# -- stop_animation(), running off the last frame, and set_downed() interrupting a swing --
+	# inherit it, and so does any fourth. A restore per call site is the five-writers shape this
+	# function was written to cure.
+	if offset != STILL_PIVOT:
+		offset = STILL_PIVOT
 	var wanted := _state_texture()
 	if texture != wanted:
 		texture = wanted
