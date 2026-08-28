@@ -22,24 +22,35 @@ extends GdUnitTestSuite
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
 const PROLOG := "res://Scenarios/missions/Prolog.tres"
 
+# ONE Battle3D for the whole suite (#622). The cases below are untouched: _scene and _game still
+# mean what they always did, they are just re-pointed at the shared scene each case instead of a
+# freshly built one. The pristine board is EMPTY, matching what the old before_test produced -- the
+# cases that want terrain load a mission themselves, and the reset puts the board back afterwards.
+#
+# after_test's check() resets and then verifies the board came back, so a case that loads Prolog or
+# calls clear_board is doing its job rather than leaking; anything the reset door CANNOT undo fails
+# here, at the case that did it. IOSIS_FRESH_FIXTURE=1 restores the old per-case rebuild exactly.
+var _board := SharedBoard.new(SCENE_PATH)
 var _scene: Node3D
 var _game: Node2D
 
 
+func before() -> void:
+	await _board.open(self)
+
+
 func before_test() -> void:
-	PlayerSettings.reset_for_test()   # hermetic: never read the developer's own settings.cfg
-	var packed := load(SCENE_PATH) as PackedScene
-	_scene = packed.instantiate() as Node3D
-	_scene.auto_play = false
-	get_tree().root.add_child(_scene)
-	await await_idle_frame()
-	_game = _scene.game
+	await _board.reset(self)
+	_scene = _board.scene
+	_game = _board.game
 
 
 func after_test() -> void:
-	await DialogFixtures.end_all_dialog(self)   # the mission door arms #182 dialog; end it or it leaks
-	get_tree().root.remove_child(_scene)
-	_scene.free()
+	await _board.check(self)
+
+
+func after() -> void:
+	_board.close()
 
 
 func test_every_kind_is_mapped_or_declared_skip() -> void:
