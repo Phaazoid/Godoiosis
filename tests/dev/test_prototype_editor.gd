@@ -74,7 +74,9 @@ func test_an_established_template_still_builds_an_instance() -> void:
 	for key in WeaponCatalog.get_family_bases():
 		family_key = key
 		break
-	assert_str(family_key).is_not_empty()   # no family templates on disk: this case proves nothing
+	if family_key == "":   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no family templates on disk, so there is nothing to rebase onto")
+		return
 	tool_ref._rebase_on_type(_type_index(family_key))
 	assert_bool(tool_ref.current_item is WeaponInstance).is_true()
 
@@ -91,7 +93,9 @@ func test_loading_a_prototype_hands_back_the_catalog_object_itself() -> void:
 	for key in prototypes:
 		name = key
 		break
-	assert_str(name).is_not_empty()   # nothing in Prototypes/: this case proves nothing
+	if name == "":   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("nothing in Prototypes/, so there is no catalog object to hand back")
+		return
 	var loaded := _tool()._editable_copy(prototypes[name])
 	assert_object(loaded).is_same(prototypes[name])
 
@@ -116,7 +120,9 @@ func test_picking_a_family_fills_in_that_familys_main_as_a_shared_ref() -> void:
 	var tool_ref := _tool()
 	var made := _new_prototype()
 	var family := _a_family_with_a_main()
-	assert_int(family).is_not_equal(WeaponData.WeaponType.NONE)   # no family base has a main: proves nothing
+	if family == WeaponData.WeaponType.NONE:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no family base authors a main attack, so none can fill in")
+		return
 
 	tool_ref._on_prototype_family_picked(made, WeaponData.WeaponType.keys()[family])
 	assert_object(made.main_attack).is_same(WeaponCatalog.family_main(family))

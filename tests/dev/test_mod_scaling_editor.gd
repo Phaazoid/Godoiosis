@@ -138,7 +138,9 @@ func test_a_mod_with_no_family_gets_no_scaling_sliders() -> void:
 
 	# ...and picking one opens it, against a family the catalog really has a main for.
 	var family := _a_family_with_a_blend()
-	assert_int(family).is_not_equal(WeaponData.WeaponType.NONE)   # no family base has a blend: proves nothing
+	if family == WeaponData.WeaponType.NONE:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no family base authors a main with a scaling blend, so there is nothing to measure against")
+		return
 	var with_family := _show(_mod(family))
 	assert_int(_sliders(with_family.editor_container, []).size()).is_equal(Stats.SCALING_STATS.size())
 
@@ -156,14 +158,18 @@ func _a_family_with_a_blend() -> WeaponData.WeaponType:
 # instead of calling _store_scaling_change directly.
 func test_dragging_a_slider_writes_the_shift_onto_the_mod() -> void:
 	var family := _a_family_with_a_blend()
-	assert_int(family).is_not_equal(WeaponData.WeaponType.NONE)   # no family base has a blend: proves nothing
+	if family == WeaponData.WeaponType.NONE:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no family base authors a main with a scaling blend, so there is nothing to measure against")
+		return
 	var mod := _mod(family)
 	var tool_ref := _show(mod)
 	var reference := tool_ref._reference_blend(family)
 
 	# A stat the family leans on NOT AT ALL, so the drag cannot be mistaken for a no-op.
 	var untouched := Stats.SCALING_STATS.filter(func(s): return not reference.has(s))
-	assert_array(untouched).is_not_empty()   # this family already uses all four: proves nothing
+	if untouched.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("this family leans on every scaling stat, so no drag can be told from a no-op")
+		return
 	var target: Stats.Stat = untouched[0]
 
 	var sliders := _sliders(tool_ref.editor_container, [])

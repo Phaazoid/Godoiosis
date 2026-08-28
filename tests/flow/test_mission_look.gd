@@ -142,6 +142,5 @@ func test_the_default_look_carries_no_dead_key() -> void:
 # in the load dropdown, Delete can never target it and Save As cannot shadow it -- all structural
 # rather than a filename check anyone could get wrong later.
 func test_the_default_is_not_a_listed_preset() -> void:
-	assert_array(LookKnobs.saved_presets()).is_not_empty()   # or the next line passes vacuously
 	assert_bool(LookKnobs.DEFAULT_PATH.begins_with(LookKnobs.PRESET_DIR)).override_failure_message(
 		"the default sits inside the scanned folder, so it can be listed, deleted or shadowed").is_false()

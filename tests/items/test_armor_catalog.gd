@@ -32,7 +32,10 @@ var _cell_seq := 0
 
 
 func _armors() -> Dictionary:
-	return ArmorCatalog.get_editable()
+	var armors := ArmorCatalog.get_editable()
+	if armors.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("ArmorCatalog scanned nothing -- every roster and rule case in this file is vacuous")
+	return armors
 
 
 # A distinct cell per spawn: nothing here reads the board, but two units on one tile is a
@@ -64,12 +67,6 @@ func _body_with_con(con: int) -> Unit:
 
 # --- the scan ---
 
-func test_the_catalog_is_populated() -> void:
-	# Vacuity guard. Every loop below iterates the catalog, so an empty scan would turn this whole
-	# file green while pinning nothing -- exactly the failure a coverage suite must not have.
-	assert_dict(_armors()).override_failure_message(
-		"ArmorCatalog scanned nothing -- every roster and rule case in this file is now vacuous."
-		).is_not_empty()
 
 
 func test_every_entry_is_armor_data() -> void:

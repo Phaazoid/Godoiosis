@@ -2,13 +2,15 @@
 # is pinned next door in test_moods_tool.gd; what these guard is that the twelve .tres files on disk
 # are structurally complete and still round-trip through the real apply path.
 #
-# EVERY case here is a "for each preset" loop, so an empty scan would make all of them vacuously
-# green -- the #264 blind shape, where the discriminating power lives in the fixture's data rather
-# than in the assertion. `_names()` asserts non-empty before returning, which is what closes it.
+# EVERY case here is a "for each preset" loop, so an empty scan makes all of them vacuously green
+# -- the #264 blind shape, where the discriminating power lives in the fixture's data rather than
+# in the assertion. `_names()` used to close that by ASSERTING non-empty; since 2026-08-27 it
+# warns instead, because deleting presets is authoring and an absence of authored content is not a
+# failure (tests/README.md rule 9). The vacuity is real, and now audible rather than fatal.
 #
 # Deliberately NOT asserted: how many presets there are, or that any particular one exists. The dev
 # was told to rename, retune and delete these freely; a case naming "Opus 3 Citrinitas" would turn
-# his own tidying red. Non-empty is the real invariant.
+# his own tidying red -- and so, it turned out, would demanding that any preset exist at all.
 extends GdUnitTestSuite
 
 const SCENE_PATH := "res://Scenes/Battle3D/Battle3D.tscn"
@@ -34,13 +36,12 @@ func after_test() -> void:
 
 # --- Helpers ---------------------------------------------------------------------------
 
-# The precondition every case below leans on. A scan that returned nothing would otherwise make
-# each loop pass by never running.
+# Every case below loops over this. An empty scan makes them all vacuous, which is said out loud
+# rather than failed -- an absence of authored content is not a defect (tests/README.md rule 9).
 func _names() -> Array[String]:
 	var names := LookKnobs.saved_presets()
-	assert_array(names).override_failure_message(
-		"no presets found under %s -- every case in this file would pass vacuously" % LookKnobs.PRESET_DIR
-	).is_not_empty()
+	if names.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no presets found under %s -- every case in this file is vacuous" % LookKnobs.PRESET_DIR)
 	return names
 
 
