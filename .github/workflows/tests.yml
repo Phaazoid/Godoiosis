@@ -24,10 +24,14 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', '**.md']
 
-# THE TWO HAND-MAINTAINED SHARD LISTS, AND THE ONLY PLACE THEY ARE WRITTEN. The pres-rest
-# shard subtracts exactly these, so "pres-rest runs what pres-a and pres-b do not" is true by
-# CONSTRUCTION, not by remembering to edit two places. Balance only: moving a suite between
-# pres-a, pres-b and pres-rest changes wall clock, never coverage.
+# THE ONE HAND-MAINTAINED SHARD LIST, AND THE ONLY PLACE IT IS WRITTEN. pres-rest subtracts
+# exactly these, so "pres-rest runs what pres-a does not" is true by CONSTRUCTION rather than by
+# remembering to edit two places. Balance only: moving a suite between pres-a and pres-rest
+# changes wall clock, never coverage.
+#
+# Re-measured 2026-08-28 after #621/#622 halved the suite. presentation fell 294s -> 136s, so
+# three presentation shards became two, and the tree's OTHER areas -- one shard carrying 94s --
+# became the critical path instead. ui+flow got their own shard out of it.
 #
 # ALWAYS FULL res:// PATHS ENDING IN .gd. gdUnit4's -i does a SUBSTRING match on the test's
 # source_file (GdUnitTestCIRunner.is_skipped), so a bare name like `test_camera` would
@@ -35,15 +39,10 @@ on:
 # terminator is what makes an entry unable to match a longer sibling filename.
 env:
   PRES_A: >-
-    res://tests/presentation/test_board_mirror.gd
-    res://tests/presentation/test_camera_rig.gd
-    res://tests/presentation/test_unit_mirror.gd
-    res://tests/presentation/test_camera_start.gd
-  PRES_B: >-
-    res://tests/presentation/test_overlay_mirror.gd
+    res://tests/presentation/test_camera_follow.gd
     res://tests/presentation/test_input_bridge.gd
-    res://tests/presentation/test_board_overlays.gd
-    res://tests/presentation/test_board_picker.gd
+    res://tests/presentation/test_overlay_mirror.gd
+    res://tests/presentation/test_board_mirror.gd
 
 jobs:
   test:
@@ -55,7 +54,7 @@ jobs:
       # to the first failure turns one debugging pass into several.
       fail-fast: false
       matrix:
-        shard: [pres-a, pres-b, pres-rest, dev, rest]
+        shard: [pres-a, pres-rest, dev, ui-flow, rest]
 
     steps:
       - uses: actions/checkout@v4
@@ -112,18 +111,24 @@ jobs:
           set +e
 
           targets=""
-          # WHICH SUITES THIS SHARD OWNS. pres-a and pres-b name their suites; every other
-          # shard is defined by SUBTRACTION, so a file nobody assigned still runs somewhere:
-          # a new presentation suite lands in pres-rest, a new dev suite in dev, and an
-          # entirely new AREA FOLDER in rest. A RENAMED suite drops out of both the -a list
-          # and the matching -i, so it reappears in pres-rest rather than vanishing.
+          # WHICH SUITES THIS SHARD OWNS. pres-a names its suites; every other shard is defined
+          # by SUBTRACTION, so a file nobody assigned still runs somewhere: a new presentation
+          # suite lands in pres-rest, a new dev suite in dev, a new ui/flow suite in ui-flow, and
+          # an entirely new AREA FOLDER in rest. A RENAMED suite drops out of both the -a list and
+          # the matching -i, so it reappears in pres-rest rather than vanishing.
+          #
+          # rest EXCLUDES four areas now rather than two. That list is the only thing to keep in
+          # step with the matrix: an area given its own shard must also be subtracted here, or it
+          # runs twice -- which is slow, not silent, and the case-count sum in the step summary is
+          # what shows it.
           case "${{ matrix.shard }}" in
             pres-a)    for s in $PRES_A; do targets="$targets -a $s"; done ;;
-            pres-b)    for s in $PRES_B; do targets="$targets -a $s"; done ;;
             pres-rest) targets="-a res://tests/presentation"
-                       for s in $PRES_A $PRES_B; do targets="$targets -i $s"; done ;;
+                       for s in $PRES_A; do targets="$targets -i $s"; done ;;
             dev)       targets="-a res://tests/dev" ;;
-            rest)      targets="-a res://tests -i res://tests/presentation/ -i res://tests/dev/" ;;
+            ui-flow)   targets="-a res://tests/ui -a res://tests/flow" ;;
+            rest)      targets="-a res://tests"
+                       for d in presentation dev ui flow; do targets="$targets -i res://tests/$d/"; done ;;
             *)         echo "::error::Unknown shard '${{ matrix.shard }}'"; exit 1 ;;
           esac
 
