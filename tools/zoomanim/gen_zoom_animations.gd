@@ -26,7 +26,11 @@ const SHEETS := {
 		"source": "res://Art/Units/ZoomAnimations/Sage.png",
 		"atlas": "res://Art/Units/ZoomAnimations/Sage_Frames.png",
 		"output": "res://Resources/ZoomAnimations/Sage.tres",
-		"region": Rect2i(0, 0, 960, 700),
+		# The FEMALE sage. This sheet carries the class three times over -- male at the top (its
+		# palettes are named Erk / Pent / Aion), then two female blocks below (Sonia / Limstella,
+		# then Nino) -- and `MapSprites/Sage.png` is the female, so the male block was the wrong one.
+		# Which block a unit needs is not derivable from the sheet; it is a content call, made here.
+		"region": Rect2i(0, 700, 1000, 666),
 		"animations": ["attack", "crit", "dodge", "staff", "staff_dodge"],
 		"backdrop": Color8(0x09, 0x95, 0x4F),
 	},

@@ -31,6 +31,12 @@ than the credit living in a filename:
 So each unit has a download and a working copy of the same pixels. That duplication is deliberate —
 the download is the archive, the short name is the one anything reads.
 
+**A sheet may carry the class more than once.** The Sage sheet has it three times: a **male** block at
+the top (its palette strips are named Erk / Pent / Aion) and two **female** blocks below (Sonia /
+Limstella, then Nino). `MapSprites/Sage.png` is the female, so the generator's `region` picks a
+female block. Which one a unit needs is a **content call** — it is not derivable from the sheet — and
+it is made in the manifest, one line.
+
 ## The three GIFs needed PNG copies, and that was not cosmetic
 
 **Godot cannot load GIF at all** — `Image.load()` returns error 15, `File unrecognized` — so the
