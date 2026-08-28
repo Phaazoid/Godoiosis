@@ -172,10 +172,17 @@ static var GUARD_LINK_HEAD_INSET := 0.4
 # range layer (dev: "they shouldn't just be filled in squares") — a watch is a threat, not a reach
 # readout, and it has to read as one from across the board while every other range overlay is off.
 #
-# PLACEHOLDER ART: the board cursor's corner brackets, standing in for a crosshair cut nobody has
-# picked yet. Authored at ONE cell (16px) like every other board icon — a 32px cut is a four-cell
-# decal, which is how #414's ward mark first shipped and read as "the marker isn't showing up".
-const WATCH_MARK_TEXTURE := preload("res://Art/Icons/BoardIcons/CursorIcon.png")
+# The dev's pick (#591, 2026-08-27), replacing #413's placeholder — which was literally the DEFAULT
+# CURSOR's own file, so a footprint tiled into plus-shapes at the shared corners and swallowed the
+# cursor standing on a watched cell. Neither art pack in the repo has a crosshair, so this was drawn:
+# white ink plus a 1px black halo (SquadRingIcon's trick — black survives the hue modulate, so one
+# texture serves whatever WATCH_MARK_COLOR is tuned to).
+#
+# Authored at ONE cell (16px) like every other board icon — a 32px cut is a four-cell decal, which is
+# how #414's ward mark first shipped and read as "the marker isn't showing up" — and INSET from the
+# cell edge, which is the rule the four candidates were judged by: a mark touching its edge tiles
+# into a lattice across a contiguous footprint and reads as a net rather than as per-cell threat.
+const WATCH_MARK_TEXTURE := preload("res://Art/Icons/BoardIcons/WatchMarkIcon.png")
 static var WATCH_MARK_COLOR := Color(1.0, 0.35, 0.25, 0.9)
 static var WATCH_MARK_SCALE := 1.0
 

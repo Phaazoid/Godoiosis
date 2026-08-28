@@ -11,10 +11,11 @@ class_name OverwatchAction
 # to the resolver (PlanResolver / SquadManager.resolve_plan), exactly as GuardAction only arms a
 # ward and the substitution is entirely the resolver's.
 
-# Placeholder art: the board cursor's corner brackets, standing in until the dev picks a cut. The
-# doc asks for crosshair/flash-shaped threat marks with their own vocabulary; that is one pick, not
-# a guess to make here.
-const OVERWATCH_ICON := preload("res://Art/Icons/BoardIcons/CursorIcon.png")
+# The queue row wears the same mark the BOARD does (#591, the dev's pick) — one texture, one answer
+# to what a watch looks like, exactly as Guard's row wears the ward shield. It replaces #413's
+# placeholder, which was the default cursor's own file; see OverlayManager.WATCH_MARK_TEXTURE for
+# what was wrong with that and the rule the replacement was picked by.
+const OVERWATCH_ICON := OverlayManager.WATCH_MARK_TEXTURE
 
 var target_cell: Vector2i         # the aim, frozen at declare (Law #2 provenance)
 var fired_attack: AttackData = null   # what will fire, stamped at declare — never re-picked
