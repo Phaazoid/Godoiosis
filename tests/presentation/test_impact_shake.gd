@@ -7,7 +7,7 @@
 #
 # THE CASE THAT MATTERS MOST is the hidden-bar one. The impact is read ABOVE
 # `_settle_health_change`'s `not bar.visible` guard on purpose: the health cubes are a readout and
-# rightly vanish with it, but ALWAYS_SHOW_HEALTH ships FALSE, so an impact reported below that line
+# rightly vanish with it, but HEALTH_BARS ships HOVERED, so an impact reported below that line
 # would leave the DEFAULT settings with no jolt in them anywhere. That is #534's bug verbatim — a
 # whole phase that showed nothing until the dev's own cfg was taken out of the picture — and this
 # file is what refuses it a second time.
@@ -88,7 +88,7 @@ func test_a_blow_that_takes_health_off_someone_jolts_the_camera() -> void:
 	# Bars ON here, deliberately. This is the ORDINARY path, and keeping it distinct from the hidden
 	# case below is what makes the two separable: a mutant that moves the impact under the visibility
 	# guard has to leave THIS one green and red only the other, or neither case proves the placement.
-	PlayerSettings.set_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH, true)
+	PlayerSettings.set_choice(PlayerSettings.Setting.HEALTH_BARS, PlayerSettings.HealthBars.EVERY)
 	_tap()
 	var victim := _spawn(ENEMY, Vector2i(3, 3))
 	await _settle()              # the poll seeds _last_hp at full health
@@ -104,7 +104,7 @@ func test_a_blow_that_takes_health_off_someone_jolts_the_camera() -> void:
 
 
 func test_a_hit_still_jolts_the_camera_when_health_bars_are_hidden() -> void:
-	# THE DEFAULT SETTINGS CASE. ALWAYS_SHOW_HEALTH is false out of the box and this fixture cuts the
+	# THE DEFAULT SETTINGS CASE. HEALTH_BARS ships HOVERED and this fixture cuts the
 	# hover leg, so no bar is visible here — which is precisely the state a jolt reported below the
 	# visibility guard would be silent in. Moving the report under that guard turns this red and
 	# leaves every other case in the file green, which is the point of writing it separately.

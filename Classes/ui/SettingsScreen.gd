@@ -10,12 +10,17 @@ class_name SettingsScreen
 # makes #217's photosensitivity toggle a one-line diff in the store rather than UI work — the
 # ruling in docs/design/presentation-effects.md that a settings surface DRIVES that switch rather
 # than a second one growing beside it only holds if this page never learns a setting's name.
+#
+# TWO ROW KINDS since #418, and the projection survives it: the page learns that a row is a toggle
+# or a choice — which the store answers — never WHICH setting it is looking at.
 
 signal closed
 
 const BODY_WIDTH := 520
 const DESC_COLOR := Color(0.78, 0.78, 0.84)
 const DESC_INDENT := 8
+const SEGMENT_GAP := 6
+const SEGMENT_HEIGHT := 32
 
 func _init() -> void:
 	button_size = Vector2(150, 36)
@@ -43,9 +48,16 @@ func _build(game_node: Node) -> void:
 	var close_row := _build_button_row(content, false, content_separation)
 	_add_button(close_row, "Close", func(): closed.emit())
 
+func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+	if PlayerSettings.is_choice(setting):
+		_add_choice_row(parent, setting)
+	else:
+		_add_toggle_row(parent, setting)
+	_add_desc(parent, setting)
+
 # A CheckButton rather than a Button: this page's rows have a STATE the player is reading back,
 # which is the one thing every other ModalCard row does not (they emit a choice and close).
-func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+func _add_toggle_row(parent: Container, setting: PlayerSettings.Setting) -> void:
 	var toggle := CheckButton.new()
 	toggle.text = PlayerSettings.title_of(setting)
 	toggle.button_pressed = PlayerSettings.is_on(setting)
@@ -54,6 +66,38 @@ func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
 	toggle.toggled.connect(func(on: bool): PlayerSettings.set_on(setting, on))
 	parent.add_child(toggle)
 
+# A segmented strip, NOT an OptionButton: a dropdown opens an embedded PopupMenu, and those do not
+# dismiss on outside-click inside GameView (CLAUDE.md's SubViewport gotcha 2 — the #26 reason the
+# action menu is Control-based). ReportPanel's kind row is the same shape and states the other half
+# of the reason: every choice is readable, and which one is picked is readable, without a click.
+func _add_choice_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+	var title := Label.new()
+	title.text = PlayerSettings.title_of(setting)
+	parent.add_child(title)
+
+	var strip := HBoxContainer.new()
+	strip.add_theme_constant_override("separation", SEGMENT_GAP)
+	var group := ButtonGroup.new()
+	var options: Array = PlayerSettings.options_of(setting)
+	var current := PlayerSettings.choice_of(setting)
+	for i in options.size():
+		var segment := Button.new()
+		segment.text = str(options[i])
+		segment.toggle_mode = true
+		segment.button_group = group
+		segment.button_pressed = i == current
+		segment.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		segment.custom_minimum_size = Vector2(0, SEGMENT_HEIGHT)
+		# Straight through to the store, same as a toggle row — no Apply, no local copy. `toggled`
+		# rather than `pressed` because what the store mirrors is the segment's STATE, exactly as on
+		# the rows above; the group un-presses the outgoing one, and that false is not a choice.
+		segment.toggled.connect(func(on: bool):
+			if on:
+				PlayerSettings.set_choice(setting, i))
+		strip.add_child(segment)
+	parent.add_child(strip)
+
+func _add_desc(parent: Container, setting: PlayerSettings.Setting) -> void:
 	# Autowrap against a real width, the way GlossaryScreen's body text does — UiText.wrap is for
 	# tooltip_text, which has no width to wrap into.
 	var desc := Label.new()

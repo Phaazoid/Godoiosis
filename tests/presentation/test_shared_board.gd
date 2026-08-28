@@ -116,7 +116,7 @@ func test_a_case_may_flip_a_setting_or_a_flag_freely() -> void:
 func test_and_the_next_case_sees_the_authored_defaults_again() -> void:
 	assert_bool(PlayerSettings.is_on(PlayerSettings.Setting.PHOTOSENSITIVITY)).override_failure_message(
 		"PHOTOSENSITIVITY arrived on -- the previous case's setting leaked through the reset"
-		).is_equal(PlayerSettings.default_of(PlayerSettings.Setting.PHOTOSENSITIVITY))
+		).is_equal(bool(PlayerSettings.default_value(PlayerSettings.Setting.PHOTOSENSITIVITY)))
 	var flag: Experiments.Flag = Experiments.DEFS.keys()[0]
 	assert_bool(Experiments.is_on(flag)).override_failure_message(
 		"%s arrived on -- the previous case's flag leaked through the reset"

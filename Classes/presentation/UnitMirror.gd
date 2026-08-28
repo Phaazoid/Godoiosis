@@ -284,9 +284,10 @@ func reconcile() -> void:
 	# ...and who the end-of-turn effect pass is about, asked once for the same reason (#534). Empty
 	# whenever no pass is running, which is nearly always.
 	var marked: Dictionary[int, bool] = _effect_subjects()
-	# The player's standing preference (#350), asked once for the same reason: it cannot change
-	# mid-frame, and a static read per unit would be N reads answering one question.
-	var always_on := PlayerSettings.is_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH)
+	# The player's standing preference (#350, three-valued since #418), asked once for the same
+	# reason: it cannot change mid-frame, and a static read per unit would be N reads answering one
+	# question. WHICH units it names is per-unit and belongs to _sync_bar.
+	var bars := PlayerSettings.choice_of(PlayerSettings.Setting.HEALTH_BARS) as PlayerSettings.HealthBars
 	_push_debris_knobs()
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
@@ -310,7 +311,7 @@ func reconcile() -> void:
 			# dying. Nothing else here needs a wire; this cannot be answered without one.
 			unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), always_on)
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars)
 		_settle_health_change(unit, id, _bars[id])
 	for id: int in _mirrored.keys():
 		if not live.has(id):
@@ -496,7 +497,7 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
-		plan: ResolvedPlan, marked: bool, always_on: bool) -> void:
+		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -511,9 +512,15 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	# `marked` is the second reason again, from the other direction (#534): the end-of-turn effect
 	# pass is also a thing about to happen to a unit, but it has no plan to be read out of. Without
 	# it the pass panned to a unit, damaged it, and showed nothing at all for anyone who had not
-	# turned "always show health bars" on — _settle_health_change skips a hidden bar, so even the
+	# turned the health-bar preference up — _settle_health_change skips a hidden bar, so even the
 	# cubes stayed put.
-	var shown := hovered or foretold or marked or always_on
+	#
+	# The preference is THREE-valued since #418 and still ONE term: which units it names is the only
+	# per-unit part, and DAMAGED is HP alone (dev call) — a body clings at 1 HP, so it qualifies and
+	# keeps #322's glyph and clock.
+	var preferred := bars == PlayerSettings.HealthBars.EVERY \
+			or (bars == PlayerSettings.HealthBars.DAMAGED and unit.get_current_hp() < unit.get_max_hp())
+	var shown := hovered or foretold or marked or preferred
 	bar.set_shown(shown)
 	if not shown:
 		return
@@ -589,7 +596,7 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 	_last_hp[id] = current
 	# THE IMPACT IS READ ABOVE THE VISIBILITY GATE, and that placement is the whole point (#520 diff
 	# 2b). The cubes are a health READOUT and rightly go when the readout is hidden; a camera jolt is
-	# not a readout, and ALWAYS_SHOW_HEALTH ships FALSE -- so reporting it below would make the
+	# not a readout, and HEALTH_BARS ships HOVERED -- so reporting it below would make the
 	# DEFAULT settings the ones with no impact in them at all, which is exactly the hole #534 shipped
 	# and the dev found in play. Sharing the diff with the burst is also what keeps the two in step:
 	# one observation, so the jolt and the cubes can never disagree about when the blow landed.
