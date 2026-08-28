@@ -20,19 +20,13 @@ func before_test() -> void:
 	BoardBuilder.paint_rect(_board.grid, Rect2i(-2, -2, 12, 12))
 	var p := BoardBuilder.spawn(_board, _data("P1", PLAYER), Vector2i(0, 0))   # -> handle A
 	var e := BoardBuilder.spawn(_board, _data("E1", ENEMY), Vector2i(2, 0))    # -> handle a
-	_arm(p, 6)
-	_arm(e, 4)
+	BoardBuilder.arm(p, 6)
+	BoardBuilder.arm(e, 4)
 	_session = PlaySession.new(_board)
 
 func _data(name: String, fac: Team.Faction) -> UnitData:
 	return UnitFactory.create_unit_data(Stats.STAT_DEFAULTS.duplicate(), name, fac)
 
-func _arm(unit: Unit, power: int) -> void:
-	var template := WeaponData.new()
-	template.weapon_type = WeaponData.WeaponType.CHAINSWORD   # any mapped family works (#82); pass-through
-	template.main_attack = WeaponAttackData.new()
-	template.main_attack.power = power   # scaling_blend defaults to pure STR — nothing else to set
-	unit.add_item(WeaponInstance.make(template))
 
 # Law #2: the HP the preview promises is exactly what execution leaves behind.
 func test_preview_equals_execution() -> void:
@@ -140,7 +134,7 @@ func test_rescue_revives_adjacent_downed_ally() -> void:
 	BoardBuilder.paint_rect(b.grid, Rect2i(-2, -2, 8, 8))
 	var hero: Unit = BoardBuilder.spawn(b, _data("Hero", PLAYER), Vector2i(0, 0))
 	var ally: Unit = BoardBuilder.spawn(b, _data("Ally", PLAYER), Vector2i(1, 0))
-	_arm(hero, 3)
+	BoardBuilder.arm(hero, 3)
 	var sess = PlaySession.new(b)
 	ally.take_damage(ally.get_current_hp())   # damage == HP: overkill 0 <= ceiling -> DOWNED at 1 hp
 	assert_bool(ally.is_downed()).is_true()
