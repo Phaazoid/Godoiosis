@@ -410,3 +410,72 @@ func test_land_carries_the_deepness_of_the_water_beside_it() -> void:
 				"the land cell beside SHALLOW water reads deep -- the dilate is writing a " \
 				+ "constant rather than carrying the neighbouring water's own depth").is_true()
 	grid.free()
+
+
+# G IS A DISTANCE NOW, not a flag (#578), and this is the case that can tell the difference. It is
+# R's property one boundary along: a cell keeps getting deeper as it leaves the shallows instead of
+# saturating the moment it is not adjacent to them.
+#
+# Why it needs its own case rather than riding the dilate one above: a BINARY G still satisfies both
+# assertions there (a deep cell reads 1, a shallow one 0), and the shader would then step at the
+# cell edge exactly as it did before the ticket -- the width knob would be wired to a field with
+# nothing to widen. Ordering only; the encode range is free to move.
+func test_the_depth_field_deepens_with_distance_from_the_shallows() -> void:
+	var deep := _a_water_tile_of(false)
+	var shallow := _a_water_tile_of(true)
+	assert_bool(deep.is_empty() or shallow.is_empty()).override_failure_message(
+			"the tileset lacks a wadeable or a drowning water tile; the case is vacuous").is_false()
+	if deep.is_empty() or shallow.is_empty():
+		return
+	var grid := TileMapLayer.new()
+	grid.tile_set = deep["tileset"]
+	# One shallow cell, then a run of deep leading away from it.
+	grid.set_cell(Vector2i(0, 0), shallow["source"], shallow["coords"])
+	for x in range(1, 6):
+		grid.set_cell(Vector2i(x, 0), deep["source"], deep["coords"])
+	_mirror._rebuild_water_mask(grid)
+	var image := _pushed_mask_image()
+	if image != null:
+		var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+		var beside := _texel(image, rect, Vector2i(1, 0)).g
+		var further := _texel(image, rect, Vector2i(4, 0)).g
+		assert_bool(beside > 0.5).override_failure_message(
+				"deep water touching shallow reads %f, on the SHALLOW side of the seam" % beside) \
+				.is_true()
+		assert_bool(further > beside).override_failure_message(
+				"deep water four cells from the shallows reads %f and deep water touching them " \
+				% further + "reads %f -- G is still a FLAG rather than a distance, so the depth " \
+				% beside + "ramp has nothing to widen and the seam steps at the cell edge " \
+				+ "whatever the knob is set to").is_true()
+	grid.free()
+
+
+# B, the channel the shore darkening reads. It cannot come off R: R is encoded over two cells so the
+# foam band keeps sub-art-pixel precision, and stretching it far enough to carry a depth cue would
+# quantise the surf into steps you can see. Same shape of assertion as R's, on the wider field.
+func test_the_open_water_field_grows_with_distance_from_land() -> void:
+	var wet := _a_water_tile_of(false)
+	var dry := _a_tile_of(false)
+	var grid := TileMapLayer.new()
+	grid.tile_set = wet["tileset"]
+	# A 4x4 lake ringed by land, so there is a cell two clear cells in from every shore.
+	for y in 6:
+		for x in 6:
+			var inside: bool = x >= 1 and x <= 4 and y >= 1 and y <= 4
+			var tile: Dictionary = wet if inside else dry
+			grid.set_cell(Vector2i(x, y), tile["source"], tile["coords"])
+	_mirror._rebuild_water_mask(grid)
+	var image := _pushed_mask_image()
+	if image != null:
+		var rect: Vector4 = _mirror.pushed["water_board_mask_rect"]
+		var shore_side := _texel(image, rect, Vector2i(1, 1)).b
+		var two_in := _texel(image, rect, Vector2i(2, 2)).b
+		var on_land := _texel(image, rect, Vector2i(0, 1)).b
+		assert_bool(two_in > shore_side).override_failure_message(
+				"a cell two in from the shore reads %f and one touching it reads %f -- water " \
+				% [two_in, shore_side] + "does not get further from land, so the darkening has " \
+				+ "no gradient to ride and every cell dims by the same amount").is_true()
+		assert_bool(on_land <= shore_side).override_failure_message(
+				"land reads %f, further out to sea than the water beside it at %f" \
+				% [on_land, shore_side]).is_true()
+	grid.free()
