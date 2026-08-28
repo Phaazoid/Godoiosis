@@ -460,16 +460,17 @@ func execute() -> Dictionary:
 			mv.actor.movement.set_cell(mv.get_destination())
 			events.append("%s moves to %s" % [handle_for(mv.actor), str(mv.get_destination())])
 
-	# 1b) the watches those walks walked into (#413), in trigger order — the twin of
-	# OrderExecutor's own post-move sequence, and the same declared v1 cut: the damage was resolved
-	# at the crossing moment, this only plays it.
-	for shot in plan.watch_shots:
+	# 1b) the watches those walks walked into (#413), in trigger order — the twin of the move phase's
+	# own interrupts. Only the MID-WALK ones: a shot a shove set off belongs after the volley that
+	# threw somebody into it, and attack_playback() below is where it lands (#567). Headless there is
+	# no walk to halt, so this is the event log's order and nothing else.
+	for shot in plan.mid_walk_shots():
 		_apply_attack(shot, events)
 
 	# 2) attacks, then the terrain deposits they (and any Burrow order) produced, then 3) counters.
 	# Same order as OrderExecutor.execute_orders — a tile deposited this pass is live for the counters that
 	# follow it, and for every later pass.
-	for atk in plan.attacks:
+	for atk in plan.attack_playback():
 		_apply_attack(atk, events)
 	_apply_cell_effects(plan.cell_effects, events)
 	for ctr in plan.counters:

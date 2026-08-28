@@ -35,6 +35,49 @@ var watches: Array[Watch] = []
 # triggered shot draws no counter" holds structurally instead of by a filter somebody must remember.
 var watch_shots: Array[AttackAction] = []
 
+
+# WHEN each of those shots plays (#567), answered once for the two surfaces that ask —
+# OrderExecutor, which plays them, and BeatSheet, which mirrors it. The two partitions are total:
+# every shot carries a moment, so every shot plays exactly once.
+
+# The shots a WALK walked into: each halts its mover mid-path while it plays.
+func mid_walk_shots() -> Array[AttackAction]:
+	var shots: Array[AttackAction] = []
+	for shot in watch_shots:
+		if shot.triggered_at_step >= 0:
+			shots.append(shot)
+	return shots
+
+
+# ...and the attack phase's own playback: `attacks` with every remaining shot spliced in after the
+# volley member whose shove set it off. A FRESH array each call and never written back — a triggered
+# shot in `attacks` would be counter-bait, which is the whole reason watch_shots is its own list.
+#
+# Spliced on the ACTION OBJECT rather than on an index into `attacks`: an index is a copy of a
+# position and goes stale silently. A shot whose moment is not in this list falls to the end, so a
+# moment nobody could honour still plays instead of vanishing.
+func attack_playback() -> Array[AttackAction]:
+	var trailing: Array[AttackAction] = []
+	var following: Dictionary[AttackAction, Array] = {}
+	for shot in watch_shots:
+		if shot.triggered_at_step >= 0:
+			continue
+		var after := shot.triggered_during as AttackAction
+		if after == null or not attacks.has(after):
+			trailing.append(shot)
+			continue
+		if not following.has(after):
+			following[after] = []
+		following[after].append(shot)
+
+	var played: Array[AttackAction] = []
+	for attack in attacks:
+		played.append(attack)
+		for shot: AttackAction in following.get(attack, []):
+			played.append(shot)
+	played.append_array(trailing)
+	return played
+
 # The threaded hypothetical the pass resolved through (Unit -> PlanResolver._Hypo), kept on the
 # plan instead of dying as a resolver local (#124): "what state does this pass LEAVE a unit in?"
 # is a question the resolver already answered, and re-deriving it from outcomes would be a second

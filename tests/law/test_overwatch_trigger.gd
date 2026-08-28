@@ -250,3 +250,76 @@ func test_a_triggered_shot_draws_no_counter() -> void:
 	assert_array(plan.attacks).is_empty()
 	assert_array(plan.counters).is_empty()
 	_break_volleys(plan)
+
+
+# --- WHEN the shot plays (#567) ------------------------------------------------------------
+#
+# The resolve records the MOMENT as well as the outcome, because playback cannot recover it: a
+# crosser who walks on leaves no trace of where it was hit, and resolved_stop_index only answers
+# the case where the shot STOPPED them. Everything below is about that one recorded fact.
+
+func test_a_triggered_shot_records_the_walk_and_the_step_it_fired_at() -> void:
+	var watcher := _watcher()
+	var crosser := _walker(PLAYER)
+	var move := _walk(crosser)
+	crosser.squad._queue_action(move)
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+
+	assert_int(plan.watch_shots.size()).is_equal(1)
+	var shot: AttackAction = plan.watch_shots[0]
+	assert_object(shot.triggered_during).override_failure_message(
+			"the shot does not name the walk it interrupts, so playback has no walk to halt") \
+		.is_same(move)
+	assert_vector(move.path[shot.triggered_at_step]).override_failure_message(
+			"the recorded step is not the cell the shot was fired at") \
+		.is_equal(WATCHED[0])
+	# ...and the crosser walked ON, so the step is the only record of the moment there is.
+	assert_bool(move.was_halted()).is_false()
+	_break_volleys(plan)
+
+
+# The SHOVE combo's shot has no step to halt: the blow has already landed, and the answer follows
+# it. Before #567 every triggered shot played in one batch ahead of the attacks, so this one fired
+# before the mace that threw them into it.
+func test_a_shove_triggered_shot_plays_after_the_volley_that_threw_them() -> void:
+	var watcher := _watcher()
+	var shover := H.spawn_solo(self, _sm, ENEMY, Vector2i(0, 0), {Stats.Stat.STR: 4}, true, 4)
+	var victim := H.spawn_solo(self, _sm, PLAYER, Vector2i(1, 0), {Stats.Stat.MHP: 60}, false)
+	(shover.get_equipped_weapon() as WeaponInstance).template.main_attack.knockback = 1
+	shover.squad._queue_action(H.stamped_attack(shover, victim))
+
+	var plan := _sm.resolve_plan(shover.squad, _board_with([watcher, shover, victim]))
+
+	assert_int(plan.attacks.size()).is_equal(1)
+	assert_int(plan.watch_shots.size()).override_failure_message(
+			"the shove did not land the victim in the watched cell -- fixture, not mechanic") \
+		.is_equal(1)
+	var shot: AttackAction = plan.watch_shots[0]
+	assert_object(shot.triggered_during).is_same(plan.attacks[0])
+	assert_int(shot.triggered_at_step).override_failure_message(
+			"a shove landing has no walk step -- it follows the volley, it does not interrupt one") \
+		.is_equal(-1)
+	# ...and that is what the attack phase plays: the blow, THEN the answer.
+	assert_array(plan.attack_playback()).is_equal([plan.attacks[0], shot])
+	assert_array(plan.mid_walk_shots()).is_empty()
+	_break_volleys(plan)
+
+
+# The two partitions are TOTAL and disjoint -- every shot plays exactly once. A shot that fell out
+# of both would simply never be seen, and nothing else in the pass would notice.
+func test_every_triggered_shot_plays_exactly_once() -> void:
+	var watcher := _watcher()
+	var crosser := _walker(PLAYER)
+	crosser.squad._queue_action(_walk(crosser))
+
+	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
+
+	var played: Array[AttackAction] = plan.mid_walk_shots()
+	for action in plan.attack_playback():
+		if (action as AttackAction).is_watch_shot:
+			played.append(action)
+	assert_array(played).override_failure_message(
+			"the mid-walk and attack-phase partitions do not add up to every shot fired") \
+		.contains_exactly_in_any_order(plan.watch_shots)
+	_break_volleys(plan)

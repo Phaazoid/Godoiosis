@@ -35,6 +35,17 @@ var is_watch_shot := false
 # victim: a triggered shot is the attack, full stop, so its splash reaches bystanders too. Read by
 # the queue panel, which hangs every line of one shot on the crossing move's own row.
 var triggered_by: Unit = null
+# WHEN this shot fired, where triggered_by says WHO set it off (#567). The order that was playing at
+# the moment of the entry — the walk being stepped, or the volley whose shove threw somebody — and
+# how far into it. A walk's step is an index into its `path`; -1 means "after that order finishes",
+# which is what a shove landing is. Stamped over the WHOLE cascade one entry sets off, so a pinball
+# chain plays at the moment that started it rather than at three moments of its own.
+#
+# Playback's only question, and the one thing the resolve did not already record:
+# MoveAction.resolved_stop_index answers where a walk STOPPED and exists only when the shot halted
+# it, so a shot the crosser walks away from has its moment nowhere else.
+var triggered_during: BaseAction = null
+var triggered_at_step := -1
 
 var preview_sprites: Array[Node2D] = []
 
