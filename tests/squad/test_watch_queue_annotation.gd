@@ -57,34 +57,12 @@ func _break_volleys(plan: ResolvedPlan) -> void:
 func _entries(squad: Squad, plan: ResolvedPlan) -> Array:
 	return ActionQueueDisplayEntry.build_for(squad, plan)
 
-
 # ==============================================================================
-#  The headline
+#  What the row is made of
 # ==============================================================================
-
-# The row exists, it is INDENTED under the move, and it carries the shot itself -- which is what
-# lets it draw the firing unit, the attack icon and the unit getting hit with no new display code.
-func test_a_walk_into_a_watch_grows_an_indented_row_for_the_shot() -> void:
-	var watcher := _watcher()
-	var crosser := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), {Stats.Stat.MHP: 60}, false)
-	crosser.squad._queue_action(_walk(crosser))
-
-	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
-	assert_int(plan.watch_shots.size()).override_failure_message(
-			"the watch never fired -- the fixture is not exercising the rule").is_equal(1)
-
-	var nested: Array[ActionQueueDisplayEntry] = []
-	for entry: ActionQueueDisplayEntry in _entries(crosser.squad, plan):
-		if entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION and entry.indent_level > 0:
-			nested.append(entry)
-
-	assert_int(nested.size()).override_failure_message(
-			"the queue grew no row for a walk that takes a watch shot -- the player is not told "
-			+ "about a hit the plan already resolved (Law #2)").is_equal(1)
-	assert_object(nested[0].action).override_failure_message(
-			"the row carries something other than the derived shot").is_same(plan.watch_shots[0])
-	_break_volleys(plan)
-
+# THAT the row exists is tests/law/test_overwatch_trigger.gd's claim, where #413 already put it.
+# What is here is everything that case does not ask: what the row draws, which move it hangs off,
+# and that nobody can drag it.
 
 # The row's THREE faces, which is what the dev asked for: the firing unit, the attack, the unit
 # getting hit. Asked of the action rather than of a built row, because the action is what the row

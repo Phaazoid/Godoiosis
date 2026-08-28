@@ -208,8 +208,15 @@ func test_a_crosser_the_shot_downs_stops_at_the_crossing_cell() -> void:
 
 # Law #2's half of the mechanic, and it lives in this suite because it is the same claim from the
 # other side: a queued move that would cross a standing watch shows the shot it triggers IMMEDIATELY,
-# on its own row. Deliberately the crossing MOVE's row rather than a section of its own — dragging
-# that row is what changes who eats the shot, so the feedback has to be on the thing being dragged.
+# on a row of its own indented under that move. Deliberately hung off the crossing MOVE rather than
+# given a section — dragging that row is what changes who eats the shot, so the feedback has to be
+# on the thing being dragged.
+#
+# It asserted on `entry.annotations` until #592 and PASSED for the mechanic's whole life, while the
+# note was being written into a Label that has been `visible = false` since the panel's first
+# version. The data was always right; nobody asked whether it was DRAWN. That question is
+# tests/ui/test_watch_note_reaches_the_panel.gd's, on the real scene — this one stays the
+# data-layer claim it always was, now in the shape the panel actually renders.
 func test_the_crossing_move_row_says_what_it_walks_into() -> void:
 	var watcher := _watcher()
 	var crosser := _walker(PLAYER)
@@ -218,16 +225,14 @@ func test_the_crossing_move_row_says_what_it_walks_into() -> void:
 	var plan := _sm.resolve_plan(crosser.squad, _board_with([watcher, crosser]))
 	var entries := ActionQueueDisplayEntry.build_for(crosser.squad, plan)
 
-	var move_notes: Array[String] = []
+	var derived: Array[BaseAction] = []
 	for entry in entries:
-		if entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION \
-				and entry.action.action_type == BaseAction.ActionType.MOVE:
-			move_notes.append_array(entry.annotations)
-	assert_int(move_notes.size()).is_equal(1)
-	# The number is the resolve's, not a re-derivation -- what the row says and what the pass does
-	# are one answer (R3/R8).
-	assert_str(move_notes[0]).contains(str(plan.watch_shots[0].resolved.damage))
-	assert_str(move_notes[0]).contains(watcher.get_unit_name())
+		if entry.entry_type == ActionQueueDisplayEntry.EntryType.ACTION and entry.indent_level > 0:
+			derived.append(entry.action)
+	assert_int(derived.size()).is_equal(1)
+	# The row carries the resolve's own shot, not a re-derivation -- what the row shows and what the
+	# pass does are one answer (R3/R8), which is also what lets it draw the watcher and the victim.
+	assert_object(derived[0]).is_same(plan.watch_shots[0])
 	_break_volleys(plan)
 
 
