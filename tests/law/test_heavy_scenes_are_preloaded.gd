@@ -38,6 +38,17 @@ const SELF := "res://tests/law/test_heavy_scenes_are_preloaded.gd"
 # of once per case, so the rule -- do not re-read a heavy scene per case -- is satisfied. Sharing
 # also kills the _ready cascade this law cannot touch, so it is the STRONGER fix where a suite has
 # been converted; preloading is the floor for the ones that have not.
+#
+# THAT ARGUMENT HAS A HOLE THIS SCANNER CANNOT SEE, and SharedBoard closes it at its own end rather
+# than here. It holds the path in a VARIABLE, so the literal-load check below never looks at it --
+# and IOSIS_FRESH_FIXTURE=1 makes the same file rebuild PER CASE, which is exactly the pattern this
+# law exists to forbid. Measured: board_mirror fresh 63.9s +/- 0.6, i.e. unmoved by #621, against
+# 12.5s shared. SharedBoard now keeps a process-lifetime PackedScene cache (its `_packed`), which
+# is what a preload does, and fresh fell to 19.4s +/- 0.1. Two consequences worth carrying: the
+# TRUE cost of sharing over preloading is 1.56x rather than the 5.11x the uncached comparison
+# showed, and a load() whose argument is not a literal is a blind spot of this check by
+# construction -- widening the match to catch it would flag every legitimate dynamic load in the
+# suite, so the guard is the reviewer knowing this paragraph exists.
 
 
 func test_no_suite_load_s_a_heavy_scene_per_test() -> void:
