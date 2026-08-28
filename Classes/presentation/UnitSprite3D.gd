@@ -56,6 +56,14 @@ var _downed_texture: Texture2D
 var _walk_path: Array[Vector3i] = []
 var _walking := false
 var _downed := false
+# Which authored still to show, as against `_walking` -- which means "my own tween is running" and
+# is what is_walking() reports. #215's mirror drives the visual from outside without a tween, so one
+# flag cannot answer both.
+var _walk_art := false
+# Set while a frame animation BORROWS `texture` (#629). CameraRig3D's `_view_borrowed` shape: the
+# gate, not the assignment, is what makes a borrow safe -- without it the walk swap and the swing
+# would fight over one property every frame.
+var _animator := SpriteAnimator.new()
 
 
 func _init() -> void:
@@ -72,6 +80,8 @@ func _init() -> void:
 	# the prepass depth above; the priority is what carries a TRANSLUCENT one, which writes no
 	# depth — see UnitMirror.set_ghosts (#317).
 	render_priority = BoardOverlays.UNIT_RENDER_PRIORITY
+	# Only a sprite mid-animation needs a frame clock; a board of standing units should cost nothing.
+	set_process(false)
 
 
 # How high this sprite's VISIBLE art reaches above its stand point, in world units (#229). Not the
@@ -125,7 +135,7 @@ static func for_unit_data(data: UnitData) -> UnitSprite3D:
 	if sprite._map_texture == null:
 		push_warning("UnitSprite3D: '%s' has no map_sprite authored; using the fallback." % data.display_name)
 		sprite._map_texture = load(FALLBACK_SPRITE) as Texture2D
-	sprite.texture = sprite._map_texture
+	sprite._apply_state_texture()
 	sprite.name = data.display_name
 	return sprite
 
@@ -145,8 +155,8 @@ func walk_path(cells: Array[Vector3i]) -> void:
 	_walk_path = cells.duplicate()
 	_walk_path.pop_front()
 	_walking = true
-	if _move_texture != null and not _downed:
-		texture = _move_texture
+	_walk_art = true
+	_apply_state_texture()
 	_step_to_next_cell()
 
 
@@ -156,10 +166,11 @@ func is_walking() -> bool:
 
 func set_downed(down: bool) -> void:
 	_downed = down
-	if down and _downed_texture != null:
-		texture = _downed_texture
-	elif not down:
-		texture = _map_texture
+	# Going down INTERRUPTS a swing. The borrow gate below would otherwise hold the animation's
+	# frame until it ran out, so a unit killed mid-gesture would finish the gesture before falling.
+	if down:
+		stop_animation()
+	_apply_state_texture()
 
 
 func is_downed() -> bool:
@@ -171,7 +182,71 @@ func is_downed() -> bool:
 func set_walking_visual(walking: bool) -> void:
 	if _downed:
 		return
-	var wanted := _move_texture if (walking and _move_texture != null) else _map_texture
+	_walk_art = walking
+	_apply_state_texture()
+
+
+# --- frame animation (#629) --------------------------------------------------------------------
+
+
+# Play a frame animation over this unit's authored still. Returns false and changes nothing if the
+# set does not carry that animation -- a gesture that silently played the wrong thing would be worse
+# than one that visibly did not play.
+func play_animation(sheet: SpriteFrames, anim: StringName) -> bool:
+	if not _animator.play(sheet, anim):
+		return false
+	set_process(true)
+	_show_animation_frame()
+	return true
+
+
+func stop_animation() -> void:
+	if not _animator.is_playing():
+		return
+	_animator.stop()
+	set_process(false)
+	_apply_state_texture()
+
+
+func is_animating() -> bool:
+	return _animator.is_playing()
+
+
+# The delta arrives already scaled by Engine.time_scale, so #520's hitstop freezes the swing with
+# the world rather than needing to be told about it.
+func _process(delta: float) -> void:
+	_animator.advance(delta)
+	if _animator.is_playing():
+		_show_animation_frame()
+		return
+	set_process(false)
+	_apply_state_texture()   # ran off the end: hand `texture` back to the unit's own state
+
+
+func _show_animation_frame() -> void:
+	var frame := _animator.texture_now()
+	if frame != null:
+		texture = frame
+
+
+# Which authored still this unit shows: downed beats walking beats standing.
+func _state_texture() -> Texture2D:
+	if _downed:
+		# An unauthored downed sprite leaves whatever was showing, which is exactly what set_downed
+		# did before this consolidated it. Faithful rather than improved -- a refactor that quietly
+		# changes one case is the kind that gets blamed for something else later.
+		return _downed_texture if _downed_texture != null else texture
+	if _walk_art and _move_texture != null:
+		return _move_texture
+	return _map_texture
+
+
+# THE one door to `texture`. Five places spelled this decision before #629, which is what made an
+# animator a sixth writer with nothing to arbitrate between them.
+func _apply_state_texture() -> void:
+	if _animator.is_playing():
+		return   # borrowed; stop_animation() or running out is what gives it back
+	var wanted := _state_texture()
 	if texture != wanted:
 		texture = wanted
 
@@ -179,8 +254,8 @@ func set_walking_visual(walking: bool) -> void:
 func _step_to_next_cell() -> void:
 	if _walk_path.is_empty():
 		_walking = false
-		if not _downed:
-			texture = _map_texture
+		_walk_art = false
+		_apply_state_texture()
 		walk_finished.emit()
 		return
 	var next_cell: Vector3i = _walk_path.pop_front()
