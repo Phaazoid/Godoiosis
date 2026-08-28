@@ -8,6 +8,14 @@ name: Tests
 # AND code still runs; only an all-docs change is skipped. If a docs lint ever lands (a
 # canon-marker check, a link checker), it needs its OWN workflow with the inverse filter
 # (paths: ['docs/**']) -- this one would skip exactly the change it exists to catch.
+
+# A SUPERSEDED PR RUN HAS NO VALUE, and sharding multiplied the cost of one push by five.
+# Keyed on the ref, so a PR yields its older run to its newer one. main NEVER cancels:
+# every commit that lands must keep its own verdict, and a cancelled run has none.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 on:
   push:
     branches: [main]
@@ -16,10 +24,38 @@ on:
     branches: [main]
     paths-ignore: ['docs/**', '**.md']
 
+# THE TWO HAND-MAINTAINED SHARD LISTS, AND THE ONLY PLACE THEY ARE WRITTEN. The pres-rest
+# shard subtracts exactly these, so "pres-rest runs what pres-a and pres-b do not" is true by
+# CONSTRUCTION, not by remembering to edit two places. Balance only: moving a suite between
+# pres-a, pres-b and pres-rest changes wall clock, never coverage.
+#
+# ALWAYS FULL res:// PATHS ENDING IN .gd. gdUnit4's -i does a SUBSTRING match on the test's
+# source_file (GdUnitTestCIRunner.is_skipped), so a bare name like `test_camera` would
+# silently swallow test_camera_rig, test_camera_follow AND test_camera_start. The .gd
+# terminator is what makes an entry unable to match a longer sibling filename.
+env:
+  PRES_A: >-
+    res://tests/presentation/test_board_mirror.gd
+    res://tests/presentation/test_camera_rig.gd
+    res://tests/presentation/test_unit_mirror.gd
+    res://tests/presentation/test_camera_start.gd
+  PRES_B: >-
+    res://tests/presentation/test_overlay_mirror.gd
+    res://tests/presentation/test_input_bridge.gd
+    res://tests/presentation/test_board_overlays.gd
+    res://tests/presentation/test_board_picker.gd
+
 jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    strategy:
+      # EVERY SHARD REPORTS. One red shard must not cancel the other four: a failing case
+      # already truncates the rest of its own suite FILE (#582), so surrendering four verdicts
+      # to the first failure turns one debugging pass into several.
+      fail-fast: false
+      matrix:
+        shard: [pres-a, pres-b, pres-rest, dev, rest]
 
     steps:
       - uses: actions/checkout@v4
@@ -74,9 +110,27 @@ jobs:
       - name: Run tests
         run: |
           set +e
+
+          targets=""
+          # WHICH SUITES THIS SHARD OWNS. pres-a and pres-b name their suites; every other
+          # shard is defined by SUBTRACTION, so a file nobody assigned still runs somewhere:
+          # a new presentation suite lands in pres-rest, a new dev suite in dev, and an
+          # entirely new AREA FOLDER in rest. A RENAMED suite drops out of both the -a list
+          # and the matching -i, so it reappears in pres-rest rather than vanishing.
+          case "${{ matrix.shard }}" in
+            pres-a)    for s in $PRES_A; do targets="$targets -a $s"; done ;;
+            pres-b)    for s in $PRES_B; do targets="$targets -a $s"; done ;;
+            pres-rest) targets="-a res://tests/presentation"
+                       for s in $PRES_A $PRES_B; do targets="$targets -i $s"; done ;;
+            dev)       targets="-a res://tests/dev" ;;
+            rest)      targets="-a res://tests -i res://tests/presentation/ -i res://tests/dev/" ;;
+            *)         echo "::error::Unknown shard '${{ matrix.shard }}'"; exit 1 ;;
+          esac
+
+          # $targets is deliberately UNQUOTED -- it must word-split into separate CLI flags.
           godot-bin/godot --headless --path . \
             -s res://addons/gdUnit4/bin/GdUnitCmdTool.gd \
-            -a res://tests \
+            $targets \
             --ignoreHeadlessMode 2>&1 | tee gdunit.log
           proc=${PIPESTATUS[0]}
           set -e
@@ -103,6 +157,12 @@ jobs:
             exit "$proc"
           fi
 
+          # THE SHARD COUNTS MUST SUM TO THE UNSHARDED TOTAL. A shard that quietly stops
+          # covering something is GREEN -- lost coverage cannot fail a test, so this count is
+          # the only thing that can catch it. Published here so the five numbers are addable
+          # from the PR page without opening five logs.
+          echo "- \`${{ matrix.shard }}\`: **$cases** cases" >> "$GITHUB_STEP_SUMMARY"
+
           if [ "$proc" -ne "$verdict" ]; then
             echo "::warning::Engine crashed during shutdown after all tests ran and were counted (issue #93). Results are unaffected; reporting gdUnit4's verdict ($verdict), not the process exit ($proc)."
           fi
@@ -112,5 +172,5 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports-${{ github.run_number }}
+          name: test-reports-${{ github.run_number }}-${{ matrix.shard }}
           path: reports/
