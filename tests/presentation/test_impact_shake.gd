@@ -82,6 +82,10 @@ func _tap() -> void:
 
 
 func test_a_blow_that_takes_health_off_someone_jolts_the_camera() -> void:
+	# Bars ON here, deliberately. This is the ORDINARY path, and keeping it distinct from the hidden
+	# case below is what makes the two separable: a mutant that moves the impact under the visibility
+	# guard has to leave THIS one green and red only the other, or neither case proves the placement.
+	PlayerSettings.set_on(PlayerSettings.Setting.ALWAYS_SHOW_HEALTH, true)
 	_tap()
 	var victim := _spawn(ENEMY, Vector2i(3, 3))
 	await _settle()              # the poll seeds _last_hp at full health
