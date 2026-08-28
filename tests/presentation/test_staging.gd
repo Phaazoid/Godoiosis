@@ -527,18 +527,23 @@ func test_a_pass_leaves_nothing_in_the_air_even_though_no_frame_ever_drew_it() -
 
 
 func test_with_the_cinematic_off_nothing_ever_flies() -> void:
-	# The tear-out is the zoom's, so the transition is too -- read off the seam rather than promised,
-	# the same way slice A's own displacement law is.
+	# The tear-out is the zoom's, so the transition is too. ASSERTED ON THE VERSION, not on the
+	# aftermath: the executor ends every flight when its await returns, so "nothing is flying
+	# afterwards" is true even of a board that flew the whole pass -- it would prove nothing. The
+	# version is the one thing a transition cannot run without moving, since begin_flight bumps it.
+	# That is also what separates this from slice A's displacement law, which a flight that tidied
+	# up after itself would satisfy.
 	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
 	var unit := _a_unit()
 	_swing_at_open_ground(unit)
+	var before := BoardSpace.staging_version
 
 	await _game.order_executor.execute_orders(unit)
 	await _settle()
 
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"something staged or flew on a pass with the battle zoom off").is_equal(before)
 	assert_bool(BoardSpace.flight_active()).is_false()
-	for cell in _painted_cells():
-		assert_vector(BoardSpace.staged_offset(cell)).is_equal(Vector3.ZERO)
 
 
 # --- helpers ------------------------------------------------------------------------------------
