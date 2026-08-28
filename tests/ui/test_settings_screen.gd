@@ -75,6 +75,16 @@ func _row_title_shown(root: Node, text: String) -> bool:
 	return _button_with_text(root, text) != null or _label_with_text(root, text) != null
 
 
+func _first_of(root: Node, type) -> Node:
+	if is_instance_of(root, type):
+		return root
+	for child: Node in root.get_children():
+		var found: Node = _first_of(child, type)
+		if found != null:
+			return found
+	return null
+
+
 # One segment of the health-bar strip, found by the label the STORE declares for that mode — so a
 # renamed option moves the test with it rather than reddening it.
 func _health_segment(screen: Node, mode: PlayerSettings.HealthBars) -> Button:
@@ -234,3 +244,87 @@ func test_every_option_of_a_choice_row_is_reachable() -> void:
 			assert_object(_button_with_text(screen, str(label))) \
 				.override_failure_message("%s has no segment for '%s'" % [name, label]) \
 				.is_not_null()
+
+
+# ==============================================================================
+#  The page has to FIT, and it has to have a second door
+# ==============================================================================
+
+# Esc through the OS-driver entry, test_input_bridge's idiom -- the real pipeline, so what is under
+# test is the whole chain root viewport -> SubViewportContainer -> ui_layer -> ModalCard._input.
+func _press_escape() -> void:
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	Input.parse_input_event(esc)
+	await _frames(2)
+	var up := InputEventKey.new()
+	up.keycode = KEY_ESCAPE
+	up.physical_keycode = KEY_ESCAPE
+	up.pressed = false
+	Input.parse_input_event(up)
+	await _frames(2)
+
+
+func test_the_close_button_is_somewhere_a_player_can_actually_reach() -> void:
+	# THE CASE THAT WOULD HAVE CAUGHT #418's LOCK. Every other case here presses Close by calling
+	# it, which works perfectly on a button hanging off the bottom of the screen -- so the whole
+	# suite stayed green while the page was a room with no door. #131's shape: a button nobody can
+	# press. The claim is GEOMETRY, and nothing else here makes one.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var close: Button = _button_with_text(screen, "Close")
+	assert_object(close).is_not_null()
+
+	# Non-vacuity: a zero-sized button sits inside every rect there is.
+	assert_float(close.size.y).override_failure_message(
+		"the Close button has no height, so the bounds check below proves nothing").is_greater(0.0)
+
+	var view: Vector2 = screen.get_viewport_rect().size
+	var bottom := close.global_position.y + close.size.y
+	assert_float(bottom).override_failure_message(
+		"the Close button's bottom edge is at %.1f on a %.1f-tall viewport -- the page cannot be left"
+		% [bottom, view.y]).is_less_equal(view.y)
+	assert_float(close.global_position.y).override_failure_message(
+		"the Close button is off the TOP of the screen").is_greater_equal(0.0)
+
+
+func test_the_page_still_fits_when_the_body_is_far_taller_than_the_screen() -> void:
+	# The property, not the arithmetic: the fit above could be true by luck at five settings. Here
+	# the body is grown past any viewport, so only the scroll region can keep Close on screen --
+	# which is what makes a SIXTH setting safe rather than a coin flip.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var scroll: ScrollContainer = _first_of(screen, ScrollContainer)
+	assert_object(scroll).override_failure_message(
+		"the settings page has no scroll region, so nothing bounds its body").is_not_null()
+
+	var rows: Control = scroll.get_child(0)
+	for i in 40:
+		var filler := Label.new()
+		filler.text = "filler row %d" % i
+		rows.add_child(filler)
+	await _frames(4)
+
+	var close: Button = _button_with_text(screen, "Close")
+	assert_float(close.global_position.y + close.size.y).override_failure_message(
+		"forty extra rows pushed Close off the screen -- the body is not actually bounded"
+		).is_less_equal(float(screen.get_viewport_rect().size.y))
+
+
+func test_escape_backs_out_of_the_settings_page() -> void:
+	# The second door, and the one that cannot leave the screen. game.gd stands down on ui_cancel
+	# while any modal is open, so before #418's follow-up this key reached nothing at all.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	assert_object(_first_modal_of(SettingsScreen)).override_failure_message(
+		"the page never opened, so its closing proves nothing").is_not_null()
+
+	await _press_escape()
+	await _frames(4)
+
+	assert_object(_first_modal_of(SettingsScreen)).override_failure_message(
+		"Esc did not close the settings page").is_null()

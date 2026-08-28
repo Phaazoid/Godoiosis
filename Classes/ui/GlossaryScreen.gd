@@ -101,3 +101,10 @@ func _body_label(text: String) -> Label:
 	label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	label.modulate = BODY_COLOR
 	return label
+
+
+# Esc closes the page, the same door the Close button is. Without it this page swallowed the key
+# outright, because game._input stands down while any modal is up.
+func _on_cancel() -> bool:
+	closed.emit()
+	return true

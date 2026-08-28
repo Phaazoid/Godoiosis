@@ -64,3 +64,11 @@ func _build(can_restart: bool, can_load: bool, game_node: Node) -> void:
 	_add_button(row, "Report a Bug / Feedback", func(): chosen.emit(Choice.REPORT))
 
 	_add_button(row, "Quit Game", func(): chosen.emit(Choice.QUIT), Color(0.85, 0.6, 0.6))
+
+
+# Esc RESUMES -- the key that opened the card closes it, which is the one binding a player tries
+# without being told. It was dead here for the same reason it was dead on the settings page: this
+# card never answered ui_cancel, and game._input stands down while any modal is up.
+func _on_cancel() -> bool:
+	chosen.emit(Choice.RESUME)
+	return true

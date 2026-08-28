@@ -21,6 +21,10 @@ const DESC_COLOR := Color(0.78, 0.78, 0.84)
 const DESC_INDENT := 8
 const SEGMENT_GAP := 6
 const SEGMENT_HEIGHT := 32
+const ROW_SEPARATION := 14
+# A floor, not a look: on a viewport too short to hold the chrome the subtraction below goes
+# negative, and a card with no body at all is the bug this whole file is fixing.
+const MIN_BODY_HEIGHT := 120.0
 
 func _init() -> void:
 	button_size = Vector2(150, 36)
@@ -37,16 +41,43 @@ func _build(game_node: Node) -> void:
 	var content := _build_chrome(game_node)
 	_build_title(content, "SETTINGS")
 
+	# GlossaryScreen's shape: a bounded scroll between the title and Close, horizontal disabled so
+	# the descriptions wrap rather than run off the side. Built at ZERO height and given its real
+	# ceiling below, once the chrome around it can be measured.
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(BODY_WIDTH, 0)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	content.add_child(scroll)
+
 	var rows := VBoxContainer.new()
 	rows.custom_minimum_size = Vector2(BODY_WIDTH, 0)
-	rows.add_theme_constant_override("separation", 14)
-	content.add_child(rows)
+	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	rows.add_theme_constant_override("separation", ROW_SEPARATION)
+	scroll.add_child(rows)
 
 	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
 		_add_row(rows, setting)
 
 	var close_row := _build_button_row(content, false, content_separation)
 	_add_button(close_row, "Close", func(): closed.emit())
+
+	# THE BODY'S CEILING IS WHATEVER THE VIEWPORT LEAVES, and the chrome is MEASURED rather than
+	# added up -- no fudge constant, and a sixth setting cannot do what the fifth did.
+	scroll.custom_minimum_size.y = maxf(
+			MIN_BODY_HEIGHT, get_viewport_rect().size.y - _chrome_height(content))
+
+# Everything the card needs around its body: title, separations, the Close row, the margins and the
+# panel's own padding, whatever those have been restyled to.
+#
+# ASK THE OUTERMOST CONTAINER, never `self`: a plain Control aggregates nothing (measured -- this
+# node's combined minimum is (0, 0) with the whole page built under it), because only a Container
+# rolls its children's minimums up. Read with the scroll still at ZERO, so what comes back is the
+# chrome alone; minimums are computed on demand, so no layout pass is needed.
+func _chrome_height(content: Control) -> float:
+	var outer: Control = content
+	while outer.get_parent() is Control and outer.get_parent() != self:
+		outer = outer.get_parent()
+	return outer.get_combined_minimum_size().y
 
 func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
 	if PlayerSettings.is_choice(setting):
@@ -109,3 +140,11 @@ func _add_desc(parent: Container, setting: PlayerSettings.Setting) -> void:
 	indent.add_theme_constant_override("margin_left", DESC_INDENT)
 	indent.add_child(desc)
 	parent.add_child(indent)
+
+
+# Esc closes the page, the same door the Close button is -- and the reason this file grew a scroll
+# region in the same pass: a card whose only exit can leave the screen needs a second one that
+# cannot.
+func _on_cancel() -> bool:
+	closed.emit()
+	return true

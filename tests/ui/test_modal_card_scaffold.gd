@@ -208,3 +208,98 @@ func test_a_card_outranks_the_menu_screen_it_can_open_over() -> void:
 	assert_bool(UiLayers.MODAL_CARD > UiLayers.MENU_SCREEN).is_true()
 	assert_bool(UiLayers.MENU_SCREEN > UiLayers.INVENTORY_POPUP).is_true()
 	assert_bool(UiLayers.INVENTORY_POPUP > UiLayers.HOVER_PANEL).is_true()
+
+
+# ==============================================================================
+#  Backing out (#418 follow-up)
+# ==============================================================================
+# ESC BELONGS TO THE CARD and has nowhere else it could live: game.gd's _input stands down on
+# ui_cancel while anything is in the `modal` group (#131), so a card that does not answer swallows
+# the key. Three cards spelled the handler themselves and NONE of it was tested -- `ui_cancel`
+# appeared nowhere under tests/ before this section -- which is why the mechanism they now share
+# gets its own cases rather than inheriting a safety net that never existed.
+
+# The OS-driver entry, test_input_bridge's idiom: what is under test is the whole chain from the
+# root viewport through the SubViewportContainer to ModalCard._input, not a signal emit.
+func _press_escape() -> void:
+	var esc := InputEventKey.new()
+	esc.keycode = KEY_ESCAPE
+	esc.physical_keycode = KEY_ESCAPE
+	esc.pressed = true
+	Input.parse_input_event(esc)
+	await _frames(2)
+	var up := InputEventKey.new()
+	up.keycode = KEY_ESCAPE
+	up.physical_keycode = KEY_ESCAPE
+	up.pressed = false
+	Input.parse_input_event(up)
+	await _frames(2)
+
+
+func _modal_of(script_class) -> Node:
+	for node: Node in get_tree().get_nodes_in_group("modal"):
+		if is_instance_of(node, script_class):
+			return node
+	return null
+
+
+func test_escape_resumes_from_the_pause_menu() -> void:
+	# The key that opened the card closes it -- the one binding a player tries without being told,
+	# and dead here until this ticket for the same reason it was dead on the settings page.
+	game._open_pause_menu()
+	await _frames(4)
+	assert_object(_modal_of(PauseMenu)).override_failure_message(
+		"the pause menu never opened, so its closing proves nothing").is_not_null()
+
+	await _press_escape()
+	await _frames(4)
+
+	assert_object(_modal_of(PauseMenu)).override_failure_message(
+		"Esc did not leave the pause menu").is_null()
+	assert_bool(game._board_locked_for_player()).override_failure_message(
+		"Esc closed the card but left the board locked").is_false()
+
+
+func test_a_card_that_must_be_answered_ignores_escape() -> void:
+	# The default takes NOTHING, and that is a decision rather than an omission: an ending is chosen,
+	# not dismissed. A shared handler that backed every card out would delete this property silently.
+	MissionEndBanner.show_banner(game, true, false)
+	await _frames(4)
+	var banner: Node = _modal_of(MissionEndBanner)
+	assert_object(banner).is_not_null()
+
+	await _press_escape()
+	await _frames(4)
+
+	assert_object(_modal_of(MissionEndBanner)).override_failure_message(
+		"Esc dismissed the mission-end banner, which has to be answered").is_not_null()
+	banner.chosen.emit(MissionEndBanner.Choice.MISSION_SELECT)   # leave nothing standing for the next case
+	await _frames(4)
+
+
+func test_escape_answers_the_TOP_card_when_two_are_stacked() -> void:
+	# MEASURED, NOT ASSUMED. SaveLoadScreen._busy exists precisely because "a ConfirmCard is stacked
+	# on top; Esc belongs to it, not to this screen" -- a policy that was carried by two hand-written
+	# handlers and is now carried by one shared one. Nothing pinned it, and Godot's _input order for
+	# stacked siblings is not something to take on faith.
+	SaveLoadScreen.show_screen(game, SaveLoadScreen.Mode.LOAD, true)
+	await _frames(4)
+	var screen: Node = _modal_of(SaveLoadScreen)
+	assert_object(screen).is_not_null()
+
+	ConfirmCard.ask(game, "Overwrite?")
+	await _frames(4)
+	assert_object(_modal_of(ConfirmCard)).override_failure_message(
+		"no confirm card stacked, so this case is not testing a stack").is_not_null()
+
+	await _press_escape()
+	await _frames(4)
+
+	assert_object(_modal_of(ConfirmCard)).override_failure_message(
+		"Esc did not answer the stacked confirm card").is_null()
+	assert_object(_modal_of(SaveLoadScreen)).override_failure_message(
+		"Esc went THROUGH the confirm card and closed the screen underneath as well"
+		).is_not_null()
+
+	screen.finished.emit(-1)   # leave nothing standing for the next case
+	await _frames(4)
