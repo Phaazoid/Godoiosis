@@ -44,9 +44,11 @@ func setup(action_ref: BaseAction):
 	action_icon.modulate = action.get_ui_modulate()
 
 	# The X keeps its slot on every row (so content stays aligned) but is inert on rows that
-	# can't be cancelled: hold-position moves and derived counters (counters are computed, not
-	# player orders — Law #2).
-	var hide_cancel: bool = (action is MoveAction and action.is_hold_position) or action is CounterAttackAction
+	# can't be cancelled: hold-position moves, derived counters, and the watch shot a walk takes
+	# (#592) — all three are computed rather than player orders, Law #2.
+	var hide_cancel: bool = (action is MoveAction and action.is_hold_position) \
+			or action is CounterAttackAction \
+			or (action is AttackAction and (action as AttackAction).is_watch_shot)
 	if hide_cancel:
 		cancel_button.modulate.a = 0.0
 		cancel_button.disabled = true
@@ -141,16 +143,6 @@ func _show_hp_delta(atk: AttackAction) -> void:
 	hp_label.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
 	hp_label.offset_top = -12   # ride the bottom ~12px of the 32px icon, row height unchanged
 	
-# Extra lines under the row's own description (#413) — what this walk walks into. On the ROW rather
-# than in a section of their own, deliberately: the payoff of a draggable move row is watching the
-# shot it eats change as you drag it, so the feedback has to be on the thing being dragged.
-func add_annotations(notes: Array[String]) -> void:
-	if notes.is_empty():
-		return
-	description_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	for note: String in notes:
-		description_label.text += "\n  ↳ %s" % note
-
 
 func is_reorderable_row() -> bool:
 	# The order answers for itself (BaseAction.is_reorderable) -- a derived counter and a

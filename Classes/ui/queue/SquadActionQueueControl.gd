@@ -82,7 +82,13 @@ func _render() -> void:
 			ActionQueueDisplayEntry.EntryType.ACTION:
 				if current_list == null:
 					current_list = _start_section("")
-				if _is_attack_action(entry.action):
+				# An INDENTED entry is a DERIVED row (#592): a watch shot hanging off the walk that
+				# took it. Asked FIRST, because a watch shot is an AttackAction and would otherwise
+				# be volley-grouped and made draggable -- it is nobody's order to sequence.
+				if entry.indent_level > 0:
+					_make_row(current_list, entry.action, entry.indent_level, false)
+					i += 1
+				elif _is_attack_action(entry.action):
 					var group := _collect_volley_group(i)
 					if group.size() > 1:
 						_add_volley_group(current_list, group)
@@ -91,8 +97,7 @@ func _render() -> void:
 					i += group.size()
 				else:
 					# Moves and the side-channel verbs drag too (#412) -- the order decides.
-					var row := _make_row(current_list, entry.action, entry.indent_level, entry.action.is_reorderable())
-					row.add_annotations(entry.annotations)
+					_make_row(current_list, entry.action, entry.indent_level, entry.action.is_reorderable())
 					i += 1
 			_:
 				i += 1
