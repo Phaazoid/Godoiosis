@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #607 (2026-08-27).**
+**Canon checked through #635 (2026-08-28).**
 
 ## Principles
 
@@ -358,8 +358,9 @@ derivation: the player asked for all of them. #229 was hover, #313 was the plan;
 the board at a glance*, and the dev asked for it at #313's merge.
 
 The model half is one more disjunct in the same expression — today `hovered or foretold or marked or
-always_on` — with no new per-unit state and nothing computed. **What made it a ticket is that the
-toggle had nowhere to live**, which is the part worth keeping.
+preferred` — with no new per-unit state and nothing computed. **What made it a ticket is that the
+toggle had nowhere to live**, which is the part worth keeping. (`preferred` was the bare `always_on`
+bool until #418 made the preference three-valued; the expression's shape is unchanged.)
 
 `marked` is the fourth, added by [#534](https://github.com/Phaazoid/Godoiosis/issues/534): the
 end-of-turn effect pass raises a readout over everyone it is about to burn. It is the *same* reason
@@ -383,10 +384,11 @@ The rulings, all dev calls, all made before building:
   member's NAME — `Experiments`'s shape, minus its cull-the-flags doctrine, because a setting is a
   promise to the player rather than an experiment. A static class, not an autoload; this project
   has none, and `Stats` / `Elemental` / `Experiments` are all class-level statics.
-- **Two states, and the toggle governs the HOVER reason only.** A bar that is up because a queued
+- **The preference governs the HOVER reason only.** A bar that is up because a queued
   plan is about to change that unit stays up either way. Law #2 says the queue never lies, and #354
   had just finished ruling that a prediction survives to the end of its pass; a preference that can
-  hide what the queue is promising would undo both. "Off" is #229's behaviour, not "no readouts".
+  hide what the queue is promising would undo both. The quietest setting is #229's behaviour, not
+  "no readouts". (Two states at #350; three since #418 below, which did not touch this clause.)
 - **Bars only; the digits stay a hover reward.** Reused rather than re-decided — `ghost_shows_number`
   had already answered this one level down for prediction bars, so the knob simply **widened**
   (renamed `unhovered_shows_number`, since the question is *how crowded may this volume get* and
@@ -433,6 +435,67 @@ badly is a question only play answers.
 
 **3D only, inherited** — the flat view still has no health readout of any kind to toggle, which is
 #229's gap under [#292](https://github.com/Phaazoid/Godoiosis/issues/292) and not a new one.
+
+### ...and a third value: DAMAGED ONLY ([#418](https://github.com/Phaazoid/Godoiosis/issues/418), BUILT 2026-08-28)
+
+The player picks between three now — **under the cursor** (#229, still the shipped default),
+**damaged units**, **every unit** (#350). Nothing about what a player who never opens settings sees
+has changed.
+
+The model half is what the section above promised it would be: **one more value of the same
+preference, not a second visibility rule.** `_sync_bar`'s gate is still `hovered or foretold or
+marked or preferred` — four disjuncts, one named expression — and only the last one moved, from a
+bool to a three-valued read. #357's icon row therefore rides the new mode with nothing to keep in
+step, exactly as the ruling above intended.
+
+The rulings, all dev calls, all made before building:
+
+- **DAMAGED is HP BELOW MAX, full stop.** The alternative on the table was "anything to report" —
+  HP loss *or* a held element state — because #357's row rides the bar's gate, so a full-HP unit
+  that is SOAKED wears no icons in this mode until you hover it. Reachable (heal a burned unit to
+  full and it keeps the state), and ruled acceptable: the mode's job is to thin the board out.
+- **A body needs no clause of its own.** `_go_downed` clings the unit at 1 HP, so it is damaged by
+  the ordinary rule and #322's DOWNED glyph and rescue clock stay up. Worth stating because the
+  obvious reading of "damaged" would have added a lifecycle term nothing needs.
+- **`foretold` is untouched, and gets its own case under the new mode.** The clause the ticket said
+  it may not touch. It has its own test rather than resting on the always-on cases, which cannot
+  see it: with EVERY set, every bar is up for the preference anyway.
+- **No cfg migration.** `ALWAYS_SHOW_HEALTH` became `HEALTH_BARS`, so a saved "always on" resets to
+  hovered-only once. That is this store's already-declared behaviour — a deleted member leaves a
+  dead cfg key — and the project bans legacy shims. Named because a play-check runs under the dev's
+  own `settings.cfg`.
+
+**The real cost was the settings TABLE, and it is paid once.** `DEFS` described booleans and
+`SettingsScreen` is a pure projection of it, so this is the first non-checkbox row the page has ever
+had. What landed:
+
+- **A row's KIND is derived from the table, not stated in a second field** — a row with `options` is
+  a choice. `is_choice` asks that question and there is nothing to keep in step.
+- **A generic core with typed façades**: `value_of` / `set_value` / `default_value` are what a
+  caller walking `DEFS` uses (`board_fingerprint` is the one such caller), and `is_on`/`set_on` plus
+  `choice_of`/`set_choice` sit over them for callers that know their row's kind. `default_of` folded
+  into `default_value`. The five production `is_on` readers are untouched.
+- **The projection property survives**, which is the whole reason (a) was chosen over two bools: the
+  page learns that a row is a toggle or a choice, never *which setting* it is looking at. The test
+  that pins "every declared setting gets a row" asks about both kinds — narrowing it to the toggles
+  would have retired the property for exactly the rows that needed it.
+- **`PlayerSettings.HealthBars`'s values ARE the option indices** — a declared duplicate per Law #4,
+  with the enum authoritative and a test holding the two in step. Nothing else could notice them
+  drifting: a list one label short leaves EVERY unpickable, silently, with the strip looking right.
+- **An out-of-range cfg value falls back to the default.** The cfg is a text file the player can
+  open, so an index past the options list is reachable *input*, not a bug.
+
+**The widget is a SEGMENTED STRIP, and an `OptionButton` was structurally out.** A dropdown opens an
+embedded `PopupMenu`, and `CLAUDE.md`'s SubViewport gotcha (2) records that those do not dismiss on
+outside-click inside `GameView` — the #26 reason the action menu has been Control-based ever since
+and "must not go back to a `Popup`". `ReportPanel._build_kind_row` is the same shape already
+shipped, and its own comment states the other half of the reason: every choice is readable, and
+which one is picked is readable, without a click. Three toggle `Button`s in one `ButtonGroup`, so
+"two modes chosen at once" is unrepresentable rather than merely avoided.
+
+**The crowding note above is why this was asked for**, and it stays open: "damaged only" thins the
+board out, which is a *workaround* for overlapping bars as much as a preference. Collapsing the
+remaining labels onto one priority is still the fix if the dev's eye says it is needed.
 
 ## Health is a grid of CUBES that fall away ([#314](https://github.com/Phaazoid/Godoiosis/issues/314), BUILT 2026-08-22)
 
@@ -1134,22 +1197,9 @@ reddened earlier and truncated the file. The store claim moved to the redraw cas
 can reach it.
 
 
-Six inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in
-every case something does.
-
-**A third health-bar state: *damaged only*.** Show every unit's bar except full-health ones (the
-hovered unit keeps its bar and its digits either way). Structurally this is a **third value for a
-choice that already exists** — `PlayerSettings.ALWAYS_SHOW_HEALTH` (#350 above) is today hovered-only
-vs always-on, and the gate is deliberately **one named expression** (`hovered or foretold or marked
-or always_on`), so this is one more disjunct there and **not** a second visibility rule. The real cost is
-UI, not model: `SettingsScreen` is a pure projection of `PlayerSettings.DEFS` and `DEFS` describes
-**booleans** — a three-way setting is the first non-checkbox row the table has ever had, so it either
-grows a widget kind or the question is re-cut as two independent bools. Worth noting *why* it was
-asked for: #350's own open note flags that always-on bars can **crowd** (`render_priority` sorts
-globally, and a bar is 1.63 cells wide, so adjacent units overlap) — "damaged only" is a *crowding*
-answer as much as a preference, which is an argument for it and also a hint that the crowding fix
-may be the better ticket. **The `foretold` disjunct must survive any cut** — Law #2 says a bar the
-queue is promising to change cannot be hidden by a preference.
+Five inbox ideas that this doc owns. Each is recorded with what already answers part of it, because in
+every case something does. (*A third health-bar state: damaged only* was the sixth — **BUILT as
+[#418](https://github.com/Phaazoid/Godoiosis/issues/418)**, recorded in its own section above.)
 
 **Unit sprites should LOOK hurt.** Art reflecting health, so a nearly-dead unit reads as nearly dead
 without a bar at all. This is **the same thread as the Crisis-sprite item below** — sprite-as-status,
@@ -1530,7 +1580,7 @@ The instant a blow lands is `take_damage` inside `AttackAction.execute`, which `
 see — it awaits the whole action. The only thing that observes it is `UnitMirror`'s HP poll, which
 computes its diff and then returns early on `previous == current or not bar.visible`. The cubes are a
 *readout* and rightly go when the readout is hidden; a camera jolt is not a readout, and
-`ALWAYS_SHOW_HEALTH` ships **false** — so reporting below that line would leave the default settings
+`HEALTH_BARS` ships **HOVERED** — so reporting below that line would leave the default settings
 with no impact in them anywhere, which is [#534](https://github.com/Phaazoid/Godoiosis/issues/534)'s
 bug verbatim. Sharing one observation with the burst is also what keeps them in step: the jolt and
 the cubes cannot disagree about when the hit landed.
