@@ -219,7 +219,7 @@ func capture_scenario(scenario_name: String, authored := false) -> ScenarioData:
 	return scenario
 
 func load_scenario(path: String):
-	var scenario: ScenarioData = load(path)
+	var scenario: ScenarioData = ContentRepair.load_tolerant(path)
 	if scenario == null:
 		push_error("Could not load scenario at %s" % path)
 		return

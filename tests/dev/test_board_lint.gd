@@ -354,3 +354,34 @@ func test_the_name_check_stays_quiet_past_the_opening_turn() -> void:
 	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_true()
 	game.turn_manager.turn_started.emit(Team.Faction.PLAYER)   # turn 2: battle underway
 	assert_bool(_mentions(BoardLint.Severity.BLOCKS, "Torv")).is_false()
+
+
+# ==============================================================================
+#  Content that only loaded because a reference was taken out of it (#608)
+# ==============================================================================
+
+# The one finding here that is not about the board's own authoring: it says the board is a DEGRADED
+# copy of what was authored, which nothing else on screen would tell you. Driven through the real
+# ContentRepair door rather than by poking its record, because the wire is what this pins -- the
+# repair and the report were both correct in isolation while nothing connected them.
+func test_a_board_holding_repaired_content_says_so() -> void:
+	_spawn(Team.Faction.PLAYER, 0)
+	var path := "user://__test_lint_degraded.tres"
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	f.store_string('[gd_resource type="Resource" script_class="WeaponModData" format=3]\n\n'
+		+ '[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="1_m"]\n'
+		+ '[ext_resource type="Script" path="res://Classes/weapons/WeaponAttackData.gd" id="2_w"]\n'
+		+ '[ext_resource type="Resource" path="res://Resources/WeaponAttacks/__test_gone.tres" id="3_g"]\n\n'
+		+ '[resource]\nscript = ExtResource("1_m")\ndisplay_name = "Degraded"\n'
+		+ 'granted_attacks = Array[ExtResource("2_w")]([ExtResource("3_g")])\n')
+	f.close()
+	assert_object(ContentRepair.load_tolerant(path)).override_failure_message(
+		"precondition: the fixture did not load degraded, so the finding below proves nothing"
+	).is_not_null()
+
+	_assert_reports(BoardLint.Severity.DEGRADES, "__test_lint_degraded")
+
+	# Non-vacuous twin: with nothing degraded the finding goes, so it is not simply always on.
+	ContentRepair.forget(path)
+	_assert_silent(BoardLint.Severity.DEGRADES, "__test_lint_degraded")
+	DirAccess.remove_absolute(path)

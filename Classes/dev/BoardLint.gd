@@ -48,6 +48,7 @@ static func check(game) -> Array[Dictionary]:
 	_check_cohesion(game, found)
 	_check_look_preset(game, found)
 	_check_dialog(game, board, found)
+	_check_repaired_content(found)
 
 	# Ordered by severity here, not at the panel: a second reader would otherwise have to re-derive
 	# the running order, and the order IS part of what the report says. Grouping by a pass over the
@@ -59,6 +60,23 @@ static func check(game) -> Array[Dictionary]:
 				ordered.append(finding)
 	return ordered
 
+
+
+
+# Content that only loaded because ContentRepair took a dangling reference OUT of it (#608). It is
+# the one finding here that is not about the board's own authoring -- it is about the board being a
+# DEGRADED copy of what was authored, which nothing else on screen would say. DEGRADES rather than
+# BLOCKS on purpose: the mission is playable and, more to the point, reachable, which is the entire
+# reason the repair exists. Fixing it means restoring the missing file or setting the property.
+static func _check_repaired_content(found: Array[Dictionary]) -> void:
+	for path: String in ContentRepair.repaired_paths():
+		var lost := ContentRepair.dropped_properties(path)
+		var missing := ContentRepair.missing_targets(path)
+		if lost.is_empty() and missing.is_empty():
+			continue
+		_add(found, Severity.DEGRADES,
+			"%s loaded WITHOUT %s -- %s could not be found. Saving it now writes that loss into the file."
+			% [path.get_file(), ", ".join(lost), ", ".join(missing)])
 
 static func _add(found: Array[Dictionary], severity: Severity, text: String) -> void:
 	found.append({"severity": severity, "text": text})

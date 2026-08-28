@@ -9,7 +9,7 @@ const RESOURCE_EXT := ".tres"
 static func load_all(dir: String, type) -> Array:
 	var found := []
 	for file in ResourceDir.files_with_extension(dir, RESOURCE_EXT):
-		var res = load(dir + file)
+		var res = ContentRepair.load_tolerant(dir + file)
 		if is_instance_of(res, type):
 			found.append(res)
 	return found
@@ -19,7 +19,7 @@ static func load_all(dir: String, type) -> Array:
 static func by_name(dir: String, type) -> Dictionary:
 	var found := {}
 	for file in ResourceDir.files_with_extension(dir, RESOURCE_EXT):
-		var res = load(dir + file)
+		var res = ContentRepair.load_tolerant(dir + file)
 		if is_instance_of(res, type):
 			found[_key_for(res, file)] = res
 	return found
