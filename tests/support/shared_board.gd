@@ -79,6 +79,11 @@ func reset(suite: GdUnitTestSuite) -> void:
 # Returns the leak list as well as asserting on it, so a suite that wants to inspect it can.
 func check(suite: GdUnitTestSuite) -> PackedStringArray:
 	if fresh_mode():
+		# End dialog BEFORE the scene dies, exactly as the hand-written fixtures did. Dialogic's
+		# layout is parented to the tree ROOT, so it outlives scene.free() and shows up as orphans
+		# rather than as a failure -- 142 of them the first time this path ran, against 0 shared,
+		# because the shared path ends dialog on every reset and this one had skipped it.
+		await DialogFixtures.end_all_dialog(suite)
 		_teardown()
 		return PackedStringArray()
 	await _apply(suite)
@@ -126,8 +131,34 @@ func _build(suite: GdUnitTestSuite) -> void:
 func _apply(suite: GdUnitTestSuite) -> void:
 	if _pristine != null:
 		game.scenario_manager.apply_scenario(_pristine)
+	_restore_tuning()
 	await DialogFixtures.end_all_dialog(suite)
 	await suite.await_idle_frame()
+
+
+# apply_scenario restores the BOARD; a knob is a node property or a class value and it does not
+# reach them. That mattered the moment a real suite was converted: test_board_mirror doubles
+# BoardMirror.cover_scale to prove the knob reaches bumps already standing, and never puts it back --
+# correct in a world where the node was rebuilt per case, a leak the moment one is shared.
+#
+# Restoring it here rather than editing the case is the deliberate choice: writing a knob in a test
+# is a reasonable thing to do, and the fixture is what should make it safe. Only what MOVED is
+# written, because write_static runs each knob's re-apply sweep and doing 98 of those per case would
+# hand back much of what sharing saves.
+func _restore_tuning() -> void:
+	if _baseline.is_empty():
+		return   # open() has not taken the baseline yet; the first _apply IS the warm-up
+	var nodes: Array = _baseline.get("node_knobs", [])
+	var table := BoardFingerprint.node_knob_table()
+	for i in mini(table.size(), nodes.size()):
+		if not LookKnobs.same_value(LookKnobs.read(scene, table[i]), nodes[i]):
+			LookKnobs.write(scene, table[i], nodes[i])
+	var classes: Array = _baseline.get("class_knobs", [])
+	for i in mini(GameKnobs.CLASS_KNOBS.size(), classes.size()):
+		if typeof(classes[i]) == TYPE_NIL:
+			continue   # a knob with no READ arm; test_game_knobs owns that finding, never write null
+		if not LookKnobs.same_value(GameKnobs.read_class(scene, GameKnobs.CLASS_KNOBS[i]), classes[i]):
+			GameKnobs.write_class(scene, GameKnobs.CLASS_KNOBS[i], classes[i])
 
 
 func _teardown() -> void:

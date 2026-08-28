@@ -32,7 +32,7 @@ static func take(host: Node3D, scenario_manager) -> Dictionary:
 	return {
 		"board": _board_state(scenario_manager),
 		"class_knobs": GameKnobs.capture_class_baseline(host),
-		"node_knobs": _node_knobs(host),
+		"node_knobs": node_knob_values(host),
 		"staged_cells": _sorted_cells(BoardSpace.staged_cells()),
 		"dialog_running": Dialogic.current_timeline != null,
 		# The camera is re-framed by apply_scenario (board_loaded -> fit_camera), so this is not
@@ -64,7 +64,7 @@ static func differences(before: Dictionary, after: Dictionary) -> PackedStringAr
 	_diff_value("board", before.get("board"), after.get("board"), out, 0)
 	_diff_indexed("class knob", GameKnobs.CLASS_KNOBS, before.get("class_knobs", []),
 			after.get("class_knobs", []), out)
-	_diff_indexed("look knob", _node_knob_table(), before.get("node_knobs", []),
+	_diff_indexed("look knob", node_knob_table(), before.get("node_knobs", []),
 			after.get("node_knobs", []), out)
 	if str(before.get("staged_cells")) != str(after.get("staged_cells")):
 		out.append("BoardSpace staging: %s -> %s" % [before.get("staged_cells"), after.get("staged_cells")])
@@ -85,7 +85,27 @@ static func differences(before: Dictionary, after: Dictionary) -> PackedStringAr
 # is exactly why they are not leak candidates.
 static func _board_state(scenario_manager) -> Dictionary:
 	var scenario: ScenarioData = scenario_manager.capture_scenario("__fingerprint")
-	return _resource_state(scenario, 0)
+	var state: Dictionary = _resource_state(scenario, 0)
+	# tile_data is a PackedByteArray whose ORDER follows insertion, so a board that is cleared and
+	# rewritten with identical contents serializes to different bytes. Comparing it raw reports a
+	# leak on every case that repaints -- the same trap as ResourceSaver's sub_resource ids, found
+	# the same way (converting test_board_mirror, #622). Replaced with a canonical description read
+	# from the grid: what the board IS, rather than the order it was written in.
+	state.erase("tile_data")
+	state["cells"] = _cells_of(scenario_manager)
+	return state
+
+
+static func _cells_of(scenario_manager) -> Array:
+	var grid: Variant = scenario_manager.get("grid")
+	if grid == null:
+		return []
+	var rows: Array = []
+	for cell: Vector2i in grid.get_used_cells():
+		rows.append("%d,%d=%d/%s/%d" % [cell.x, cell.y, grid.get_cell_source_id(cell),
+				grid.get_cell_atlas_coords(cell), grid.get_cell_alternative_tile(cell)])
+	rows.sort()
+	return rows
 
 
 static func _resource_state(res: Resource, depth: int) -> Variant:
@@ -127,16 +147,16 @@ static func _plain(value: Variant, depth: int) -> Variant:
 
 # --- the tuning half -----------------------------------------------------------------------------
 
-static func _node_knob_table() -> Array[Dictionary]:
+static func node_knob_table() -> Array[Dictionary]:
 	var table: Array[Dictionary] = []
 	table.append_array(LookKnobs.KNOBS)
 	table.append_array(GameKnobs.KNOBS)
 	return table
 
 
-static func _node_knobs(host: Node3D) -> Array:
+static func node_knob_values(host: Node3D) -> Array:
 	var values := []
-	for knob: Dictionary in _node_knob_table():
+	for knob: Dictionary in node_knob_table():
 		values.append(LookKnobs.read(host, knob))
 	return values
 
