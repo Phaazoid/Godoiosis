@@ -176,8 +176,9 @@ func test_a_look_preset_that_no_longer_exists_degrades_the_board() -> void:
 
 	# Non-vacuous against a preset that DOES resolve — otherwise this case passes on any non-empty name.
 	var real: Array[String] = LookKnobs.saved_presets()
-	assert_array(real).override_failure_message(
-		"precondition: no look presets are shipped, so the twin below proves nothing").is_not_empty()
+	if real.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no look presets are shipped, so the resolving twin cannot be shown")
+		return
 	game.scenario_manager.current_look_preset = real[0]
 	_assert_silent(BoardLint.Severity.DEGRADES, "no longer exists")
 

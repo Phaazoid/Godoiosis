@@ -44,7 +44,9 @@ func _tool() -> CharacterEditorTool:
 
 func test_update_refuses_an_unloaded_character() -> void:
 	var tool := _tool()
-	assert_int(tool.load_dropdown.item_count).is_greater(0)   # empty catalog would make this vacuous
+	if tool.load_dropdown.item_count == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the character catalog is empty, so there is nothing to load and refuse")
+		return
 	tool.load_dropdown.select(0)
 
 	tool.update_button.pressed.emit()
@@ -56,7 +58,9 @@ func test_update_refuses_an_unloaded_character() -> void:
 func test_update_allows_the_loaded_character_at_reason_level() -> void:
 	# Reason level only -- an actual allowed press would re-save a tracked cast file.
 	var tool := _tool()
-	assert_int(tool.load_dropdown.item_count).is_greater(0)
+	if tool.load_dropdown.item_count == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the character catalog is empty, so there is nothing to load")
+		return
 	tool.load_dropdown.select(0)
 	tool._on_load_pressed()
 
@@ -65,7 +69,9 @@ func test_update_allows_the_loaded_character_at_reason_level() -> void:
 
 func test_new_clears_the_loaded_identity() -> void:
 	var tool := _tool()
-	assert_int(tool.load_dropdown.item_count).is_greater(0)
+	if tool.load_dropdown.item_count == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the character catalog is empty, so there is nothing to load")
+		return
 	tool.load_dropdown.select(0)
 	tool._on_load_pressed()
 	assert_str(tool._loaded_name).is_not_empty()
@@ -105,7 +111,9 @@ func test_slot_pick_stages_the_catalog_file_itself() -> void:
 	# catalog FILE resource, so a save writes an ExtResource reference, never an embedded copy.
 	var tool := _tool()
 	var catalog := tool._equippable_catalog()
-	assert_int(catalog.size()).is_greater(0)
+	if catalog.is_empty():   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the equippable catalog is empty, so no slot pick can stage a file")
+		return
 	tool._on_new_pressed()
 
 	tool._on_slot_picked(0, 1)   # first catalog entry

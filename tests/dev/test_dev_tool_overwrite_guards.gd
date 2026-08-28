@@ -88,7 +88,9 @@ func test_a_cleared_board_has_no_loaded_scenario() -> void:
 
 func test_item_editor_refuses_an_unloaded_target() -> void:
 	var tool: ItemEditorTool = overlay.get_node("%Item Editor")
-	assert_int(tool.load_dropdown.item_count).is_greater(0)   # empty catalog would make this vacuous
+	if tool.load_dropdown.item_count == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the item catalog is empty, so there is nothing to load and refuse")
+		return
 	tool.load_dropdown.select(0)
 
 	tool.update_button.pressed.emit()
@@ -218,7 +220,9 @@ func test_the_helper_confirm_wire_fires_the_callable() -> void:
 
 func test_character_update_asks_before_overwriting() -> void:
 	var tool: CharacterEditorTool = overlay.get_node("%Character")
-	assert_int(tool.load_dropdown.item_count).is_greater(0)   # empty cast would make this vacuous
+	if tool.load_dropdown.item_count == 0:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("the cast is empty, so there is nothing to load and overwrite")
+		return
 	tool.load_dropdown.select(0)
 	tool._on_load_pressed()
 
