@@ -59,7 +59,9 @@ The other three are older rips with **none** of it, and no tool recovers what is
 - **No registration.** A card is a fixed viewport, so where the sprite sits inside it *is* the
   per-frame offset — the animation's own footwork. Those three have no cards, so the best any
   splitter can do is a tight bounding box, which throws that away; played back it jitters instead of
-  stepping.
+  stepping. Registration buys a second thing besides the footwork: because the idle card holds the
+  pose at a known place, the character's **stand point** can be measured off it once and stored with
+  the set (#634). A sheet with no cards has nowhere to measure that from either.
 - **They also merge.** Connected regions of the Soldier's first attack row come back as one 257px
   blob, its crit row as 377 + 285, because the spear and shield sweeps cross into the neighbouring
   frame.

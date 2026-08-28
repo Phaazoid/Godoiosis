@@ -228,6 +228,8 @@ func test_the_shipped_set_carries_a_stand_point_inside_its_own_idle_card() -> vo
 	assert_bool(frames.has_meta(&"ground_point")).override_failure_message(
 			"the shipped set carries no ground_point -- regenerate it with tools/zoomanim (#634)"
 			).is_true()
+	if not frames.has_meta(&"ground_point"):
+		return   # the assertion above has already failed; reading it anyway only adds noise
 	var point: Vector2 = frames.get_meta(&"ground_point")
 	var names := frames.get_animation_names()
 	assert_int(names.size()).is_greater(0)
