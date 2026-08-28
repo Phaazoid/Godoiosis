@@ -14,6 +14,12 @@ const MAIN_SCENE := "res://Scenes/Main.tscn"
 const GRASS_SOURCE := 0
 const GRASS_ATLAS := Vector2i(5, 0)
 
+# A family-locked mod this suite AUTHORS, because none is shipped and #597 forbids demanding one
+# (see #604). It lands in the real scanned directory so the catalog finds it the way it finds
+# content; the name is gitignored, so a run that dies before after_test still cannot dirty the tree.
+const FIXTURE_NAME := "__test Family Locked"
+const FIXTURE_PATH := "res://Resources/WeaponMods/__test_family_locked.tres"
+
 var _main: Node
 var game: Node2D
 var overlay: DevOverlay
@@ -35,6 +41,8 @@ func after_test() -> void:
 	await await_idle_frame()
 	get_tree().root.remove_child(_main)
 	_main.free()
+	if FileAccess.file_exists(FIXTURE_PATH):
+		DirAccess.remove_absolute(FIXTURE_PATH)
 
 func _tool() -> ItemEditorTool:
 	return overlay.get_node("%Item Editor")
@@ -45,6 +53,33 @@ func _weapon() -> WeaponInstance:
 		if base.weapon_type != WeaponData.WeaponType.NONE and not base.mod_spaces.is_empty():
 			return WeaponInstance.make(base)
 	return null
+
+# A weapon of a NAMED family, so the case can ask the picker about both sides of a lock.
+func _weapon_of(family: WeaponData.WeaponType) -> WeaponInstance:
+	for base: WeaponData in WeaponCatalog.get_family_bases().values():
+		if base.weapon_type == family and not base.mod_spaces.is_empty():
+			return WeaponInstance.make(base)
+	return null
+
+
+# Any moddable family that is not this one. NONE means the shipped set has only one, which the
+# caller says out loud rather than failing.
+func _a_family_other_than(family: WeaponData.WeaponType) -> WeaponData.WeaponType:
+	for base: WeaponData in WeaponCatalog.get_family_bases().values():
+		if base.weapon_type == WeaponData.WeaponType.NONE or base.mod_spaces.is_empty():
+			continue
+		if base.weapon_type != family:
+			return base.weapon_type
+	return WeaponData.WeaponType.NONE
+
+
+# Built and saved through the REAL writer rather than hand-authored text: the catalog then loads it
+# exactly as it loads shipped content, and nothing here pins the .tres format.
+func _write_family_locked_fixture(family: WeaponData.WeaponType) -> void:
+	var mod := WeaponModData.new()
+	mod.display_name = FIXTURE_NAME
+	mod.family = family
+	assert_int(ResourceSaver.save(mod, FIXTURE_PATH)).is_equal(OK)
 
 func _show(weapon: WeaponInstance) -> ItemEditorTool:
 	var tool_ref := _tool()
@@ -76,13 +111,10 @@ func _picker_entries(tool_ref: ItemEditorTool) -> Array[String]:
 # everything it allows" by one that offers EVERYTHING. Derived from the same seam the panel reads,
 # so authoring a new mod cannot break it.
 #
-# What this can no longer do is guarantee its own teeth. The refusal half bites only while some
-# shipped mod is family-locked -- the first draft asked this of whatever family sorted first, the
-# only family-locked mod on disk was a Carbine one, and a mutant deleting the filter outright
-# passed. The old case answered that by hunting for a weapon the catalog could refuse something
-# for and FAILING when it found none, which made deleting that one mod a test failure (#596), and
-# a lack of authored content is not a failure. Teeth without the content dependency need a fixture
-# mod this case owns; that is filed, not faked here.
+# What this cannot do is supply its own teeth. The refusal half bites only while some shipped mod is
+# family-locked, and none is; the case BELOW owns that job now, authoring the lock it needs (#604)
+# rather than demanding the dev ship one -- which is what made deleting a mod redden this suite
+# (#596/#597), and a lack of authored content is not a failure.
 func test_the_picker_offers_exactly_what_the_family_allows() -> void:
 	var weapon := _weapon()
 	if weapon == null:
@@ -102,6 +134,41 @@ func test_the_picker_offers_exactly_what_the_family_allows() -> void:
 			wrong.append(name)
 	assert_array(missing).is_empty()
 	assert_array(wrong).is_empty()
+
+# The TEETH the equality above cannot supply on its own (#604). Its refusal direction bites only
+# while some shipped mod is family-locked, and none is -- deleting `Super Scope.tres` (#596) took
+# the last one, and a mutant deleting the family filter outright would sail through. The first draft
+# of that case was measured doing exactly this and PASSING.
+#
+# The old answer was to hunt the catalog for a weapon it could refuse something for and FAIL when it
+# found none, which is what made deleting one mod redden this suite (#597). So the case authors the
+# lock it needs instead of demanding the dev ship one, and asserts BOTH sides of it: refused for the
+# family it is locked away from, offered for the family it names. One without the other passes on a
+# picker that offers nothing, or on one that ignores the lock entirely.
+func test_the_picker_refuses_a_mod_locked_to_another_family() -> void:
+	var mine := _weapon()
+	if mine == null:   # content-absent: warn, never fail (tests/README.md rule 9)
+		push_warning("no family base carries a mod space, so the picker cannot be drawn at all")
+		return
+	var other := _a_family_other_than(mine.template.weapon_type)
+	if other == WeaponData.WeaponType.NONE:
+		push_warning("only one weapon family has mod spaces, so nothing can be locked away from it")
+		return
+
+	_write_family_locked_fixture(other)
+
+	# Refused where it does not belong...
+	assert_bool(_picker_entries(_show(mine)).has(FIXTURE_NAME)).override_failure_message(
+		"the picker offered a mod locked to %s on a %s weapon, so the family filter is not running"
+		% [WeaponData.WeaponType.keys()[other], WeaponData.WeaponType.keys()[mine.template.weapon_type]]
+	).is_false()
+
+	# ...and offered where it does, or the line above passes on a picker that offers NOTHING.
+	var theirs := _weapon_of(other)
+	assert_object(theirs).is_not_null()
+	assert_bool(_picker_entries(_show(theirs)).has(FIXTURE_NAME)).override_failure_message(
+		"the picker withheld a mod locked to the very family it was asked about"
+	).is_true()
 
 # ==============================================================================
 #  A refusal reaches the panel with its reason

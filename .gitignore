@@ -38,3 +38,7 @@ Thumbs.db
 # carries the Cloudflare account id + owner email, which a public repo should not publish.
 tools/report-worker/.wrangler/
 /git flow.txt
+
+# Content fixtures a test AUTHORS into the scanned content tree and removes again (#604). Ignored
+# rather than merely cleaned up, so a run that dies before after_test still cannot dirty the tree.
+/Resources/**/__test_*.tres
