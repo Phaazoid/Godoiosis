@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #603 (2026-08-27).**
+**Canon checked through #629 (2026-08-28).**
 
 ---
 
@@ -551,6 +551,24 @@ Two rules worth keeping:
 **This is the project's normal pipeline, not a compromise** — every look-dev ground texture is RNG-generated too, and that is the art that passed Stage 0's gate. The honest ceiling is coherent greybox: a generated rock reads as a faceted lump, not as a rock someone drew. **When an artist arrives the textures swap and the meshes stay**, so the commission line below still holds — it is now a quality upgrade rather than a prerequisite.
 
 **Consequence for the commission**: the sprite sheet must say, per prop, which form it is — and blocky props are best ordered as a top + side pair rather than as a single 3/4 view. That is cheap to specify up front and expensive to retrofit, which is exactly the bar the two conventions above are held to.
+
+### A unit sprite can play FRAMES ([#629](https://github.com/Phaazoid/Godoiosis/issues/629), 2026-08-28)
+
+Until this, a unit's visual was **one still `Texture2D` swapped between three authored stills** — map, move, downed. There was no frame animation anywhere in the project: no `AnimatedSprite2D`, no `SpriteFrames`, no `AnimationPlayer`, no `AnimationTree`. Three tickets named that missing layer and none owned it — [#603](https://github.com/Phaazoid/Godoiosis/issues/603) (the sprite half of the battle zoom), [#358](https://github.com/Phaazoid/Godoiosis/issues/358) (the status-effect stack), and [#414](https://github.com/Phaazoid/Godoiosis/issues/414)'s deferral, which sits in shipped code at `AttackAction.gd:89-92`.
+
+**What a frame is: a rect into one sheet, never a cut-out file.** `Sprite3D` honours an `AtlasTexture`'s region (only `StandardMaterial3D` quads do not — the note at `BoardOverlays.gd:516`), so 55 frames cost one texture and 55 rects. A wrong frame is then a **number to fix rather than a file to re-cut**, and the sheet stays the authority.
+
+**`SpriteAnimator` is the clock and the frame choice, and knows nothing about the node it drives.** The caller asks `texture_now()` and assigns. That is what lets `frame_at` be static and pure, so the frame maths is exercised with no scene, no viewport and no waiting on real frames — a case states an elapsed time and an expected frame instead of sleeping through 277 GBA frames of Attack.
+
+**Time arrives as a PARAMETER, and that is load-bearing.** The caller passes its own `_process` delta, which Godot has already scaled by `Engine.time_scale` — so **#520's hitstop freezes a swing along with the world, for free and by construction.** An animator holding its own `Timer` or `Tween` would have had to learn about the freeze separately, and would have drifted from it.
+
+**`UnitSprite3D.texture` is ONE door now.** Five places used to spell the same decision out of the sprite triple plus `_downed`/`_walking` (`for_unit_data`, `walk_path`, `set_downed`, `set_walking_visual`, `_step_to_next_cell`), which is what made an animation a *sixth* writer with nothing arbitrating between them. `_apply_state_texture()` holds the decision and an animation **borrows** the property against it — `CameraRig3D.stash_view()`'s shape, and its lesson: the **gate**, not the assignment, is what makes a borrow safe. Going down interrupts a swing, or a unit killed mid-gesture finishes the gesture before falling.
+
+**Reading a card-format sheet is `CardSheet`'s, separate from the tool that writes the artifacts** — `AttackLint`'s split, for `AttackLint`'s reason. Three rules there are measured rather than chosen, and each is written up at the source: cards are found by **card colour** (a not-the-page scan welds neighbours wherever a sprite overhangs its gutter), a row that **starts** an animation has its name printed to the left of it (which is what reads an animation wrapping three rows correctly, where a gap-size heuristic cannot), and a duration that cannot be glyph-matched **exactly** is a hard failure — a wrong duration is invisible in the output and surfaces only as bad feel.
+
+**Not every sheet can be read this way, and no tool fixes that.** Of the four GBA rips in `Art/Units/ZoomAnimations/`, only the Sage is card-format. The other three carry neither **timing** (not on the sheet) nor **registration** — a card is a fixed *viewport*, so where the sprite sits inside it **is** the per-frame offset, and a sheet without cards yields only tight bounding boxes, which play back as a jitter rather than a step. Dev ruling, 2026-08-28: *"All of these are very old uploads, there doesn't exist others as clean as the sage's."* See that folder's `README.md`.
+
+**Still open, and deliberately:** *which* gesture plays *when*, and off what — #603 entire, five forks unpicked. This layer answers only how a frame reaches the screen.
 
 ---
 

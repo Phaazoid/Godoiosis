@@ -32,6 +32,8 @@ var _brush_ghost: TileMapLayer = null
 # OS window. The panel is a reader.
 var history := BoardHistory.new()
 var _stroke_open := false
+# Which zoom animation K plays next (#629). Starts before the first so one press plays the first.
+var _zoom_animation := -1
 
 # Fires whenever the history moved -- a step recorded, an undo, a redo, a board load. The panel's
 # Undo/Redo row greys off this rather than polling, since every writer is right here.
@@ -82,6 +84,7 @@ func handle_dev_key(event: InputEvent) -> void:
 		var reporter: BugReporter = game.bug_reporter
 		reporter.report(state_name, BugReporter.Kind.BUG, "", null)
 	_handle_selector_key(event)
+	_handle_zoom_animation_key(event)
 	_handle_brush_keys(event)
 	_handle_undo_keys(event)
 
@@ -111,6 +114,50 @@ func _handle_selector_key(event: InputEvent) -> void:
 	overlays.selector_depth = BoardOverlays.SelectorDepth.LEVEL \
 			if overlays.selector_depth == BoardOverlays.SelectorDepth.HALF \
 			else BoardOverlays.SelectorDepth.HALF
+
+# K plays the selected unit's zoom animations, one per press (#629). It exists for the one question
+# no test can answer: whether a 66x42 combat sprite READS at the board's texel density, which was
+# tuned for 32px map art. A dev key rather than a panel because there is nothing here to tune yet --
+# the values are all on the sheet.
+#
+# The set is found BY NAME, `Resources/ZoomAnimations/<unit>.tres`, and NOT off a field on UnitData.
+# Where a unit's animations are authored is #603's fork 3 and is deliberately unpicked (per weapon
+# family? per unit? one shared vocabulary?), so adding the field now would be pre-building a seam
+# whose shape is still an open question. A convention costs nothing to delete.
+#
+# Here rather than in battle3d for the two-windows rule: this entry is forwarded from BOTH OS
+# windows, and a key handled in the 3D scene alone is dead whenever the dev-tools window has focus.
+func _handle_zoom_animation_key(event: InputEvent) -> void:
+	var key := event as InputEventKey
+	if key == null or not key.pressed or key.echo or key.ctrl_pressed:
+		return
+	if key.physical_keycode != KEY_K:
+		return
+	var unit: Unit = game.selected_unit
+	if unit == null:
+		return
+	var overlay: DevOverlay = game.dev_overlay
+	var host: Node3D = null if overlay == null else overlay.host_3d
+	if host == null or not host.has_method("sprite_for"):
+		return   # a flat Main.tscn launch has no 3D sprite to animate
+	var sprite: UnitSprite3D = host.call("sprite_for", unit)
+	if sprite == null:
+		return
+
+	var path := "res://Resources/ZoomAnimations/%s.tres" % sprite.display_name
+	if not ResourceLoader.exists(path):
+		push_warning("No zoom animation set for '%s' (looked for %s)" % [sprite.display_name, path])
+		return
+	var frames: SpriteFrames = load(path)
+	var names := frames.get_animation_names()
+	if names.is_empty():
+		return
+	_zoom_animation = (_zoom_animation + 1) % names.size()
+	var chosen := StringName(names[_zoom_animation])
+	if sprite.play_animation(frames, chosen):
+		print("[#629] %s plays '%s' (%.2fs)"
+				% [sprite.display_name, chosen, SpriteAnimator.length_of(frames, chosen)])
+
 
 # Every key the brush's SHAPE answers to. Z / C turn its ramp rise (#260 follow-up) and X cycles
 # how far that rise climbs (#427 slice 2) -- so it was named _handle_rise_keys until X made that
