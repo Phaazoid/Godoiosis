@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #603 (2026-08-27).**
+**Canon checked through #607 (2026-08-27).**
 
 ## Principles
 
@@ -1465,7 +1465,7 @@ deliberately its "undeclared" example (`test_an_undeclared_verb_never_shortens_t
 an entry of the panel's Actions list; in the code its numbers live in the volley branch. Different
 lookups, same page.
 
-### The Playback page, in six sections (seven since diff 2b added Camera flourish)
+### The Playback page, in six sections (seven since diff 2b added Camera flourish, which diff 2c then filled out)
 
 Thirty flat rows, of which fifteen said `Hold:` and were really two different questions — six
 *outcomes* of an attack, nine per-*verb* numbers — and half of which did nothing depending on a
@@ -1595,7 +1595,90 @@ Still open on #520: the **cliff follow**, spun out as
 [#602](https://github.com/Phaazoid/Godoiosis/issues/602) because it is the one piece that is a build
 rather than a composition — both fall animations are mirror-side Y offsets, so a unit's board
 position never descends and following one down needs a 3D vertical authority nothing has. Then
-lethality-aware direction (diff 2c).
+lethality-aware direction, which is the next section.
+
+## The director knows the ENDING ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2c, BUILT 2026-08-27)
+
+Every `ResolvedOutcome` carries its lethality rung *before* playback starts, so the camera is not
+discovering a kill as it happens — it can shoot the beat knowing how it ends. The ticket names three
+gestures: *wind up, freeze mid-swing, dolly in*.
+
+**The wind-up was already built and needed nothing.** `Pacing.hold_for` seeds at `HOLD_ATTACK` 0.25
+and takes `HOLD_DOWN` 0.9 for a downed/killed/maimed beat, drama-scaled per profile — a killing blow
+has held roughly three times as long as a scratch since #519. Worth stating because reading the
+ticket's list literally would have built it twice.
+
+**`Pacing.emphasis_for` is `hold_for`'s TWIN, not a rescaling of it.** That one collapses a beat's
+facts to *seconds*; this collapses the same facts to a 0–1 *weight* for the camera. One number
+meaning two things is the duplicate seam Law #4 refuses, and the two rankings may legitimately
+disagree — a held breath earns a long pause and not much of a push-in. Same structure either way:
+seeded from nothing, **loudest single rung wins by value**, so which rung outranks which is a knob
+rather than a line of code. An ordinary blast earns 0 and is the baseline the rest are read against.
+
+**Published per beat on `CameraController` beside `directed_line` and `framed_span` — a third
+question, so a third field.** That one is an ANGLE, that one a FIT, this is a WEIGHT; the rig turns
+it into a distance, since only the rig knows distances. Cleared on both lock edges for the reason
+its neighbours are.
+
+**Every subject-carrying beat publishes its own emphasis INCLUDING ZERO.** Absence-means-hold is
+`directed_line`'s idiom and would be exactly wrong here: the camera would stay pushed in from a kill
+through every quiet beat after it, and the pass would never breathe.
+
+**The push-in is an ADDEND over the player's distance, never a `set_zoom`.** The wheel stays theirs
+through a pass (#520's own ruling — reset once on the claim edge, then *"leave the wheel alone"*), so
+a per-beat assign is precisely the leash that ruling refuses. It re-solves from the published weight
+every frame rather than accumulating, so the mirror's poll is idempotent and a beat ending needs
+nothing unwound — the same shape `aim_along` has, one axis across.
+
+**THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that distinction is the
+whole care in this slice.** This rig has **no zoom-in floor** by dev ruling (asked twice, *"please
+remove it entirely"*) — scrolling in past the aim point takes the camera through its target to look
+back, which is his call for *his hand*. A director subtracting from an already-close player inherits
+that hole and flies the camera through a unit on the exact beat it most wants to be looking at one.
+So the effective floor is the lower of `DOLLY_FLOOR` and where the player already is: closer than the
+floor, and the push-in contributes **nothing** rather than the floor yanking them back out — which
+would be the wheel floor, restored, under another name. Two cases pin the two halves separately, and
+the naive version (floor the total) passes one and fails the other.
+
+**`Pacing.hitstop` sits beside `beat()`** because it is a playback pause like any other — it just
+spends its time by stopping the world. Three things are load-bearing: the unfreeze timer is created
+with `ignore_time_scale`, or it would be frozen by the freeze it exists to end and hang the game;
+re-entry is **counted**, so a volley killing two cannot have the first restore end the second freeze
+and race; and the restore writes `1.0` literally, which is correct only while nothing else writes
+`time_scale` — true today, and the comment says where to look when it stops being.
+
+**It fires from the death path and needed no new plumbing.** A killing blow already reaches
+`UnitMirror._on_unit_died` alone — the HP poll structurally never observes 0 HP — and that is already
+where the death jolt fires. The freeze and the jolt are the same instant.
+
+**It is GATED on playback owning the camera**, which the jolt did not need: the rig's flourish channel
+is already dead unless the view is borrowed, but a time freeze is *global*, so ungated a `die()` from
+any source — a dev-tool kill, a teardown — would stop the whole game with nobody watching a pass.
+
+**The freeze and the death linger are additive, and that is the design.** `die()` runs synchronously
+inside `take_damage`, so the freeze starts and the executor's `LINGER_DOWN` timer then begins while
+frozen — and `Pacing.beat`'s timer respects time scale. It is correct because `HealthBlockDebris`
+runs on `_process(delta)`: the cubes freeze with the timer and resume with it, so the linger still
+covers the burst exactly. Deliberately **not** "fixed" with an ignore-time-scale linger, which would
+desync the two.
+
+**`report_impact` carries a KIND now, not an amplitude.** What the mirror observes is that a blow
+landed and how final it was; what that is *worth* — a jolt, a freeze, both — belongs to the consumer.
+Handing over `Pacing`'s shake numbers had the mirror knowing the camera's tuning table, and it is
+what lets one observation drive two consequences.
+
+**Declared cut: "freeze mid-swing" cannot literally exist yet.** `play_attack_lunge` completes both
+halves of its tween and is *awaited* before `take_damage` runs, so the sprite is back at rest by the
+instant the death signal fires — there is no swing to freeze mid-. What 2c ships is the **impact
+freeze**; the anticipation freeze needs frames to freeze between, which is
+[#603](https://github.com/Phaazoid/Godoiosis/issues/603).
+
+**Superseded, not forgotten:** #520's original scope named a *keyframe/segment layer over `pose()`*.
+It was never built and is not owed — the published-fact channels (`directed_line` / `framed_span` /
+emphasis) are what a director turned out to need, each one fact the rig derives its own answer from,
+and `pose()` stayed the authored-shot door it was.
+
+Eight knob rows joining the Camera flourish section.
 
 ## The fight TEARS OUT of the board ([#521](https://github.com/Phaazoid/Godoiosis/issues/521) slice A, BUILT 2026-08-26)
 
