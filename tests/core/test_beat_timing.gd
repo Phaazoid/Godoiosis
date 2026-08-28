@@ -178,13 +178,60 @@ func test_an_undeclared_verb_never_shortens_the_beat() -> void:
 		.is_equal_approx(Pacing.base_for(CINEMATIC, false), 0.0001)
 
 
-# --- which profile is live --------------------------------------------------------------------
+# --- which profile a BEAT runs under (#647) ----------------------------------------------------
+#
+# The fork moved: it used to be between settings, and since COMBAT_ONLY it is between BEATS. Every
+# case here pins WHICH SIDE a beat lands on, never a duration -- the durations are the tables above,
+# and asserting that a volley and a walk take different lengths would pin CINEMATIC_ACTION apart from
+# PLAYER_ACTION, i.e. exactly the tuned values this suite refuses to touch.
 
-func test_the_profile_follows_the_battle_zoom_setting() -> void:
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, true)
-	assert_int(Pacing.active_profile()).is_equal(CINEMATIC)
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
-	assert_int(Pacing.active_profile()).is_equal(BOARD)
+func _every_kind() -> Array[BeatSheet.Beat]:
+	return [_chip(), _turnover(), _walk(), _cell_effects(), _coda(BaseAction.ActionType.RESCUE)]
+
+
+func test_every_beat_runs_cinematic_when_the_zoom_is_on_for_everything() -> void:
+	_set_zoom(PlayerSettings.BattleZoom.ALWAYS)
+	for beat in _every_kind():
+		assert_int(Pacing.profile_for(beat)).override_failure_message(
+				"kind %d is not cinematic with the zoom on for everything" % beat.kind).is_equal(CINEMATIC)
+
+
+func test_no_beat_runs_cinematic_when_the_zoom_is_off() -> void:
+	_set_zoom(PlayerSettings.BattleZoom.OFF)
+	for beat in _every_kind():
+		assert_int(Pacing.profile_for(beat)).override_failure_message(
+				"kind %d survived into the cinematic with the zoom off" % beat.kind).is_equal(BOARD)
+
+
+# THE THIRD MODE, and the whole of #647. The dev's line was "actions where a unit is actively dealing
+# or taking damage"; the TURNOVER is the case that wording did not settle and his ruling puts it on
+# the combat side, because the act break is punctuation inside a fight.
+func test_combat_only_splits_the_blow_from_everything_around_it() -> void:
+	_set_zoom(PlayerSettings.BattleZoom.COMBAT_ONLY)
+	assert_int(Pacing.profile_for(_chip())).override_failure_message(
+			"a volley is not the blow -- combat only has nothing left to be about").is_equal(CINEMATIC)
+	assert_int(Pacing.profile_for(_turnover())).override_failure_message(
+			"the act break dropped to plain, so the exchange cuts in half between attack and counter") \
+		.is_equal(CINEMATIC)
+	assert_int(Pacing.profile_for(_walk())).override_failure_message(
+			"a walk is being played as combat").is_equal(BOARD)
+	assert_int(Pacing.profile_for(_coda(BaseAction.ActionType.RESCUE))).override_failure_message(
+			"a side-channel verb is being played as combat").is_equal(BOARD)
+	assert_int(Pacing.profile_for(_cell_effects())).override_failure_message(
+			"the environment pass gained drama it has no faction to owe it to").is_equal(BOARD)
+
+
+# The fallback the executor leans on for an action the sheet has no beat for: unclassifiable is not
+# combat, so it must never be the loud answer under COMBAT_ONLY.
+func test_a_beat_that_is_not_there_is_never_combat() -> void:
+	_set_zoom(PlayerSettings.BattleZoom.COMBAT_ONLY)
+	assert_int(Pacing.profile_for(null)).is_equal(BOARD)
+	_set_zoom(PlayerSettings.BattleZoom.ALWAYS)
+	assert_int(Pacing.profile_for(null)).is_equal(CINEMATIC)
+
+
+func _set_zoom(mode: PlayerSettings.BattleZoom) -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, mode)
 
 
 # --- the safety property, on the new path -----------------------------------------------------
@@ -313,6 +360,18 @@ func _turnover() -> BeatSheet.Beat:
 	var beat := BeatSheet.Beat.new()
 	beat.kind = BeatSheet.Kind.TURNOVER
 	beat.is_counter = true
+	return beat
+
+
+func _walk() -> BeatSheet.Beat:
+	var beat := BeatSheet.Beat.new()
+	beat.kind = BeatSheet.Kind.MOVES
+	return beat
+
+
+func _cell_effects() -> BeatSheet.Beat:
+	var beat := BeatSheet.Beat.new()
+	beat.kind = BeatSheet.Kind.CELL_EFFECTS
 	return beat
 
 

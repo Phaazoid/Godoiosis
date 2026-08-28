@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #646 (2026-08-28).**
+**Canon checked through #647 (2026-08-28).**
 
 ---
 
@@ -59,6 +59,36 @@ and then turning to see its other side keeps the angle (dev, 2026-08-27).
 **The generalizable rule: before giving the player a hand on a tuned value, check whether a knob
 addresses the property directly — and if it does, split it into an authored baseline and a derived
 live value rather than letting two writers share one field.**
+
+### One value, one store, however many surfaces show it ([#422](https://github.com/Phaazoid/Godoiosis/issues/422) core, ruled 2026-08-28)
+
+The section above is a value the player moves *along a different axis* from the dev. This is the
+other case: a value they move **the same way**, shown in both a dev control and a player one. The dev's
+ruling, in his words: *"if there is a setting in both dev and player controls, I don't want them to
+ever disagree. If one knob is changed and the option exists elsewhere, I want that knob changed too."*
+
+**A control that appears on both surfaces does not own its value.** It reads and writes the one store,
+and every other surface showing it follows. There is no dev copy and no player copy.
+
+**This REPLACES what #422's own body proposed**, which was *the dev's value is the DEFAULT, the
+player's is an OVERRIDE layered on top* — an `INHERIT`-style two-level read modelled on `ObjectKnobs`.
+Two levels is exactly how the two come to disagree, so the ruling refuses the layering rather than
+specifying it.
+
+Battle zoom was already right, which is why this generalizes an existing precedent rather than
+inventing one: the Game tab's picker writes the real `PlayerSettings` value, and `visual-clarity.md`
+had already stated the reason — *writing the real setting is what stops the panel drifting from what
+the player gets*. What the ruling adds is that **the surfaces must RE-READ**, which was a live bug:
+the dev panel built its control once and nothing refreshed it, so changing the setting from the pause
+menu left it stale *and showing the wrong column of knobs*. Both surfaces poll now — the store's own
+doctrine (*"callers poll it; there is no changed signal"*), so no new seam.
+
+**One refinement the wording does not itself reach**, recorded here rather than improvised later: for
+a value with *both* a source declaration and a per-player cfg — #422's reticule colour, when it is
+built — "never disagree" cannot mean one storage location, because the dev's lives in source and the
+player's in `user://`. It means **one live runtime value**, and **eligibility moves the value's home**:
+the moment a knob becomes player-facing, `PlayerSettings` owns it and the dev panel writes *that*, with
+the authored default being the `DEFS` literal saved to source. Nothing exercises it yet.
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source

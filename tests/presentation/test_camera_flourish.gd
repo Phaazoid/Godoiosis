@@ -46,7 +46,13 @@ func after_test() -> void:
 
 
 func _rig() -> CameraRig3D:
-	return _scene.get_node("CameraRig") as CameraRig3D
+	# UNDER THE CINEMATIC unless a case says otherwise (#647). Before the profile was published per
+	# beat, PlayerSettings shipped the zoom ON, so every case here ran cinematic by default -- the
+	# rig now rests at BOARD, and without this each of them would quietly assert against a channel
+	# scaled to zero rather than against the shape it is about.
+	var rig := _scene.get_node("CameraRig") as CameraRig3D
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	return rig
 
 
 # --- the curves, as properties -----------------------------------------------------------------
@@ -237,9 +243,42 @@ func test_the_plain_board_is_never_stooped() -> void:
 	Pacing.PITCH_DIVE = 10.0
 	rig.board_pitch_degrees = -40.0
 	rig.align_to_detent()
-	PlayerSettings.set_on(PlayerSettings.Setting.BATTLE_ZOOM, false)
+	# THE PUBLISHED PROFILE, not the setting (#647): the rig mirrors what playback published, so a
+	# case that wrote the setting here would be asserting against the rig's own DEFAULT and would
+	# pass whatever the rig did with it.
+	rig.beat_profile = Pacing.Profile.BOARD
 	rig.aim_along(_line(Vector2i(2, 2), Vector2i(5, 4)))
 	assert_float(rig._target_pitch_degrees).is_equal_approx(-40.0, 0.001)
+
+	# ...and the other side of the fork, or the case above passes on a rig that ignores the channel.
+	Pacing.CINEMATIC_DIRECTION = 1.0
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	rig.aim_along(_line(Vector2i(2, 2), Vector2i(5, 4)))
+	# SHALLOWER than the board's own angle, which is the direction the stoop goes -- a relationship
+	# rather than a number, so PITCH_DIVE stays tunable.
+	assert_float(rig._target_pitch_degrees).override_failure_message(
+			"the stoop is flat under both profiles -- the published profile reaches nothing").is_greater(-40.0)
+
+
+# THE SWAY IS THE CHANNEL WITH NO OTHER ROUTE (#647). The angle and the push-in are published per
+# beat and could in principle be filtered at the source; a sway is a RESTING behaviour, polled every
+# frame while the view is borrowed, so without the profile reaching the rig the camera would go on
+# drifting through a plain walk under COMBAT_ONLY.
+func test_the_published_profile_is_what_stops_the_sway_on_a_plain_beat() -> void:
+	var rig := _rig()
+	Pacing.CINEMATIC_SWAY = 1.0
+	Pacing.BOARD_SWAY = 0.0
+	rig.stash_view()
+	rig._sway_elapsed = (PI / 2.0) / Pacing.SWAY_SPEED   # headless spends no time; supply it
+
+	rig.beat_profile = Pacing.Profile.CINEMATIC
+	assert_float(absf(rig.flourish().y)).override_failure_message(
+			"the camera does not sway even on a cinematic beat -- this case can prove nothing").is_greater(0.0)
+
+	rig.beat_profile = Pacing.Profile.BOARD
+	assert_that(rig.flourish()).override_failure_message(
+			"the camera swayed through a plain beat -- the profile never reached the rest channel") \
+		.is_equal(Vector3.ZERO)
 
 
 func test_the_stoop_lands_in_the_same_place_however_the_player_had_tilted() -> void:

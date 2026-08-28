@@ -15,7 +15,8 @@ class_name PlayerSettings
 ## CHOICE the player picks a value from. The kind is derived from the table rather than stated in a
 ## second field, so there is nothing to keep in step. The generic three — value_of / set_value /
 ## default_value — are what a caller walking DEFS uses; is_on and choice_of are typed façades over
-## them for the callers that know which kind they are reading.
+## them for the callers that know which kind they are reading, and since #647 each REFUSES the other
+## kind's row rather than coercing it silently (see the note above them).
 ##
 ## A static class, not an autoload: this project has none, and Stats / Elemental / Experiments are
 ## all class-level statics for the same reason. Callers poll it; there is no changed signal, because
@@ -30,7 +31,7 @@ enum Setting {
 	ALWAYS_SHOW_SQUAD_RINGS,
 	SHOW_DIALOG,
 	PHOTOSENSITIVITY,
-	BATTLE_ZOOM,
+	BATTLE_ZOOM_MODE,
 }
 
 ## When a unit wears its readout (#418). A DECLARED duplicate: these values ARE the indices into the
@@ -40,6 +41,19 @@ enum HealthBars {
 	HOVERED,   # #229's behaviour, and still what a player who never opens the menu gets
 	DAMAGED,   # every unit below full HP; a body clings at 1 HP, so it qualifies
 	EVERY,     # #350's behaviour
+}
+
+## Which beats the cinematic plays over (#647). Same DECLARED-duplicate rule as HealthBars: these
+## values ARE the indices into the row's `options`.
+##
+## RENAMED from BATTLE_ZOOM, and that is the conversion's safety net rather than tidying: is_on is
+## `bool(value_of(...))`, so a caller left behind by the boolean-to-choice change would COMPILE and
+## read COMBAT_ONLY as full cinematic. The rename makes every one a parse error instead — #418's own
+## trick, for the same reason. The dead cfg key resets a saved "off" once; no shim.
+enum BattleZoom {
+	OFF,           # the plain board everywhere -- Pacing's BOARD profile, which still paces (#519)
+	COMBAT_ONLY,   # volleys and the turnover; moves, side channels and cell effects play plain
+	ALWAYS,        # every beat, the shipped default
 }
 
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
@@ -70,10 +84,11 @@ const DEFS := {
 		"desc": "Hold flickering and strobing effects (like fire) at a steady brightness instead of animating them. For players sensitive to flashing lights.",
 		"default": false,
 	},
-	Setting.BATTLE_ZOOM: {
+	Setting.BATTLE_ZOOM_MODE: {
 		"title": "Battle zoom",
-		"desc": "Play out each clash with dramatic timing -- a killing blow, a Crisis or a last-gasp survival get held on. Turn off for a plainer, quicker pass.",
-		"default": true,
+		"desc": "Which moments get the camera treatment -- a killing blow, a Crisis or a last-gasp survival held on and leaned into. Combat only keeps the drama for blows and counters, and lets walking, reloading and rescues play plain. Off paces the whole pass plainly.",
+		"options": ["Off", "Combat only", "Every action"],
+		"default": BattleZoom.ALWAYS,
 	},
 }
 
@@ -113,18 +128,44 @@ static func default_value(setting: Setting) -> Variant:
 	return DEFS[setting]["default"]
 
 # --- typed façades, for callers that know their row's kind ---
+#
+# EACH ONE REFUSES THE OTHER KIND'S ROW (#647), because the coercions underneath are silent and the
+# damage is not. `bool(1)` and `bool(2)` are both true, so a caller left on is_on after a row became
+# a choice reads every non-zero option as ON; set_on writes a BOOL into a choice row, which
+# choice_of then reads back as `int(true)` = 1 and load_state re-reads the same way, so the wrong
+# value survives a relaunch consistently wrong. #418's conversion escaped that only by RENAMING its
+# setting, i.e. by remembering to; this makes the next one refuse on its own.
+#
+# The WRITERS refuse outright rather than degrade -- a bad read is one wrong frame, a bad write is a
+# cfg the player carries between sessions.
 
 static func is_on(setting: Setting) -> bool:
+	if is_choice(setting):
+		push_error("PlayerSettings: %s is a choice row -- read it with choice_of" % _name_of(setting))
+		return false
 	return bool(value_of(setting))
 
 static func set_on(setting: Setting, value: bool) -> void:
+	if is_choice(setting):
+		push_error("PlayerSettings: %s is a choice row -- write it with set_choice" % _name_of(setting))
+		return
 	set_value(setting, value)
 
 static func choice_of(setting: Setting) -> int:
+	if not is_choice(setting):
+		push_error("PlayerSettings: %s is a toggle row -- read it with is_on" % _name_of(setting))
+		return 0
 	return int(value_of(setting))
 
 static func set_choice(setting: Setting, value: int) -> void:
+	if not is_choice(setting):
+		push_error("PlayerSettings: %s is a toggle row -- write it with set_on" % _name_of(setting))
+		return
 	set_value(setting, value)
+
+# The enum member's own name, for an error a reader can act on. Same spelling the cfg keys use.
+static func _name_of(setting: Setting) -> String:
+	return Setting.keys()[setting]
 
 # --- registry introspection (used by SettingsScreen) ---
 

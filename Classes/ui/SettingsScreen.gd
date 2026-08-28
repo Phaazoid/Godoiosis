@@ -13,6 +13,12 @@ class_name SettingsScreen
 #
 # TWO ROW KINDS since #418, and the projection survives it: the page learns that a row is a toggle
 # or a choice — which the store answers — never WHICH setting it is looking at.
+#
+# ITS CONTROLS FOLLOW THE STORE, they do not merely write to it (#647, dev ruling 2026-08-28: *"if
+# there is a setting in both dev and player controls, I don't want them to ever disagree"*). The
+# dev-tools window is a SECOND OS WINDOW and its Game tab writes the real battle-zoom setting, so
+# both surfaces can be on screen at once — a control built from a snapshot goes stale the moment the
+# other one is touched. A poll rather than a changed signal, which is the store's own doctrine.
 
 signal closed
 
@@ -25,6 +31,11 @@ const ROW_SEPARATION := 14
 # A floor, not a look: on a viewport too short to hold the chrome the subtraction below goes
 # negative, and a card with no body at all is the bug this whole file is fixing.
 const MIN_BODY_HEIGHT := 120.0
+
+# Every control this page built, by the setting it shows: a CheckButton for a toggle row, the ordered
+# segment Buttons for a choice row. Kept only so _process can reconcile them against the store.
+var _toggles: Dictionary[PlayerSettings.Setting, CheckButton] = {}
+var _segments: Dictionary[PlayerSettings.Setting, Array] = {}
 
 func _init() -> void:
 	button_size = Vector2(150, 36)
@@ -96,6 +107,7 @@ func _add_toggle_row(parent: Container, setting: PlayerSettings.Setting) -> void
 	# no local copy that could disagree with what the board is already drawing.
 	toggle.toggled.connect(func(on: bool): PlayerSettings.set_on(setting, on))
 	parent.add_child(toggle)
+	_toggles[setting] = toggle
 
 # A segmented strip, NOT an OptionButton: a dropdown opens an embedded PopupMenu, and those do not
 # dismiss on outside-click inside GameView (CLAUDE.md's SubViewport gotcha 2 — the #26 reason the
@@ -111,6 +123,7 @@ func _add_choice_row(parent: Container, setting: PlayerSettings.Setting) -> void
 	var group := ButtonGroup.new()
 	var options: Array = PlayerSettings.options_of(setting)
 	var current := PlayerSettings.choice_of(setting)
+	var built: Array[Button] = []
 	for i in options.size():
 		var segment := Button.new()
 		segment.text = str(options[i])
@@ -126,7 +139,30 @@ func _add_choice_row(parent: Container, setting: PlayerSettings.Setting) -> void
 			if on:
 				PlayerSettings.set_choice(setting, i))
 		strip.add_child(segment)
+		built.append(segment)
 	parent.add_child(strip)
+	_segments[setting] = built
+
+
+# Reconcile every control against the store, so a change made anywhere else lands here (#647 — see
+# the header). Each write is `no_signal`, or setting the control would fire its own handler back into
+# the store; the value would agree, but the page would be writing on a frame the player did not touch
+# it, which is exactly the second writer the ruling refuses.
+func _process(_delta: float) -> void:
+	for setting: PlayerSettings.Setting in _toggles:
+		var toggle: CheckButton = _toggles[setting]
+		var on := PlayerSettings.is_on(setting)
+		if toggle.button_pressed != on:
+			toggle.set_pressed_no_signal(on)
+	for setting: PlayerSettings.Setting in _segments:
+		var picked := PlayerSettings.choice_of(setting)
+		var strip: Array = _segments[setting]
+		for i in strip.size():
+			var segment: Button = strip[i]
+			# Set every segment rather than only the live one: a ButtonGroup un-presses the outgoing
+			# button through the SIGNAL path, which is the path this is deliberately not using.
+			if segment.button_pressed != (i == picked):
+				segment.set_pressed_no_signal(i == picked)
 
 func _add_desc(parent: Container, setting: PlayerSettings.Setting) -> void:
 	# Autowrap against a real width, the way GlossaryScreen's body text does — UiText.wrap is for

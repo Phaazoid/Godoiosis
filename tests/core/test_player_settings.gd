@@ -13,9 +13,19 @@ extends GdUnitTestSuite
 
 const BOOL_SETTING := PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS
 const CHOICE_SETTING := PlayerSettings.Setting.HEALTH_BARS
+const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
 
 func before_test() -> void:
 	PlayerSettings.reset_for_test()
+
+# Every choice row's own enum size, by setting. A DECLARED list, and the law below refuses a choice
+# row that is missing from it -- so the NEXT tenant cannot ship without its pin either. A function
+# rather than a const because an enum's .size() is a call, not a constant expression.
+func _choice_enum_sizes() -> Dictionary:
+	return {
+		PlayerSettings.Setting.HEALTH_BARS: PlayerSettings.HealthBars.size(),
+		PlayerSettings.Setting.BATTLE_ZOOM_MODE: PlayerSettings.BattleZoom.size(),
+	}
 
 func test_every_setting_has_metadata() -> void:
 	# Catches "added a Setting but forgot its DEFS entry" — the failure mode that would ship a
@@ -39,13 +49,57 @@ func test_every_choice_row_can_actually_be_rendered() -> void:
 		assert_int(fallback).override_failure_message(
 				"%s defaults outside its own options list" % name).is_between(0, labels.size() - 1)
 
-func test_the_health_options_and_the_enum_stay_in_step() -> void:
-	# A DECLARED duplicate (Law #4): HealthBars' values ARE the indices into the options list, and
+func test_every_choice_rows_options_and_enum_stay_in_step() -> void:
+	# A DECLARED duplicate (Law #4): a row's enum values ARE the indices into its options list, and
 	# the enum is authoritative. Nothing else can notice them drifting — a list one label short
-	# leaves EVERY unreachable, silently, with the strip looking right.
-	assert_int(PlayerSettings.options_of(CHOICE_SETTING).size()).override_failure_message(
-			"the health-bar labels no longer cover PlayerSettings.HealthBars"
-			).is_equal(PlayerSettings.HealthBars.size())
+	# leaves the last mode unreachable, silently, with the strip looking right.
+	#
+	# GENERALIZED from the health row alone by #647's second tenant: the case used to name one
+	# setting, so a new choice row inherited none of this guard.
+	var pinned := _choice_enum_sizes()
+	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
+		if not PlayerSettings.is_choice(setting):
+			continue
+		var name: String = PlayerSettings.Setting.keys()[setting]
+		assert_bool(pinned.has(setting)).override_failure_message(
+				"%s is a choice row with no enum pinned here — add it to _choice_enum_sizes" % name).is_true()
+		if not pinned.has(setting):
+			continue
+		assert_int(PlayerSettings.options_of(setting).size()).override_failure_message(
+				"%s's labels no longer cover its own enum" % name).is_equal(pinned[setting])
+
+
+# --- the façades refuse the other kind's row (#647) ---------------------------------------------
+#
+# The WRITERS are the half worth pinning: a bad read is one wrong frame, a bad write is a cfg the
+# player carries between sessions. Each case asserts the store is UNMOVED, which is the observable
+# consequence — the push_error beside it is for whoever is reading the log.
+
+func test_writing_a_choice_row_through_the_toggle_facade_is_refused() -> void:
+	# Unguarded, set_on writes a BOOL into a choice row; choice_of then reads it back as int(true) = 1
+	# and load_state re-reads it the same way, so the wrong mode survives a relaunch consistently
+	# wrong. That is the exact shape a caller left behind by a boolean-to-choice conversion has.
+	PlayerSettings.set_choice(CHOICE_SETTING, PlayerSettings.HealthBars.EVERY)
+	PlayerSettings.set_on(CHOICE_SETTING, true)
+	assert_int(PlayerSettings.choice_of(CHOICE_SETTING)).override_failure_message(
+			"set_on wrote a bool into a choice row — the mode is now whatever int(true) happens to mean") \
+		.is_equal(PlayerSettings.HealthBars.EVERY)
+
+
+func test_writing_a_toggle_row_through_the_choice_facade_is_refused() -> void:
+	PlayerSettings.set_on(BOOL_SETTING, true)
+	PlayerSettings.set_choice(BOOL_SETTING, 0)
+	assert_bool(PlayerSettings.is_on(BOOL_SETTING)).override_failure_message(
+			"set_choice wrote an index into a toggle row").is_true()
+
+
+func test_the_battle_zoom_still_ships_on_for_everything() -> void:
+	# #418's rule applied again: gaining a third option must not move what a player who never opens
+	# the menu sees.
+	assert_int(PlayerSettings.default_value(ZOOM_SETTING)) \
+		.is_equal(PlayerSettings.BattleZoom.ALWAYS)
+	assert_int(PlayerSettings.choice_of(ZOOM_SETTING)) \
+		.is_equal(PlayerSettings.BattleZoom.ALWAYS)
 
 func test_health_bars_are_hover_only_until_asked_otherwise() -> void:
 	# The ticket's own default, unchanged by #418 adding a third value: #229's hover-only behaviour

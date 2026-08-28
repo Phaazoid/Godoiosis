@@ -196,6 +196,15 @@ var _sway_elapsed := 0.0
 # assign over it. Re-solved from the published emphasis every frame, so the mirror's poll is
 # idempotent and there is nothing to unwind when the beat ends.
 var _dolly := 0.0
+# WHICH PACING PROFILE the beat now playing runs under (#647), mirrored from
+# CameraController.beat_profile by the same per-frame poll that feeds the aim, the angle and the
+# weight. Every flourish channel scales through it -- the sway, the push-in and the directed yaw's
+# strength -- which is how COMBAT_ONLY reaches a rig that has no beat in hand.
+#
+# MIRRORED, never authored (Law #2): playback decides, this only spends the answer. BOARD is the
+# resting value, so the look-dev scene -- which no pass ever drives -- flourishes at whatever the
+# BOARD knobs say, i.e. nothing until they are dialled up.
+var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
 # Empty = unbounded (the look-dev scene never frames, so it keeps free roam).
 var pan_limit := Rect2()
 
@@ -424,7 +433,7 @@ func flourish() -> Vector3:
 	if not _view_borrowed:
 		return Vector3.ZERO
 	var lift := shake_offset(_shake_amplitude, _shake_elapsed) \
-			+ sway_offset(Pacing.sway_of(Pacing.active_profile()), _sway_elapsed)
+			+ sway_offset(Pacing.sway_of(beat_profile), _sway_elapsed)
 	return Vector3(0.0, lift, 0.0)
 
 
@@ -463,7 +472,7 @@ func shake(amplitude: float) -> void:
 # Re-solves rather than accumulating, so the mirror's per-frame poll lands on the same distance every
 # time and a beat ending simply publishes 0 -- nothing to unwind, the same shape aim_along has.
 func dolly_to(emphasis: float) -> void:
-	_dolly = maxf(0.0, emphasis) * Pacing.DOLLY_IN * Pacing.direction_of(Pacing.active_profile())
+	_dolly = maxf(0.0, emphasis) * Pacing.DOLLY_IN * Pacing.direction_of(beat_profile)
 
 
 # Where the zoom actually eases to: the player's distance, less whatever the director is leaning in.
@@ -645,7 +654,7 @@ func aim_along(line: Array[Vector2i]) -> void:
 	var side_on := BoardSpace.side_on_yaw(line[0], line[1], _squared_up_yaw)
 	if is_nan(side_on):
 		return
-	var strength := Pacing.direction_of(Pacing.active_profile())
+	var strength := Pacing.direction_of(beat_profile)
 	_target_yaw_degrees = _squared_up_yaw + rad_to_deg(
 			angle_difference(deg_to_rad(_squared_up_yaw), deg_to_rad(side_on))) * strength
 	# ...and the same published line drives the PITCH (#520 diff 2b). DERIVED here rather than

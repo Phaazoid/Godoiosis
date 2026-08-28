@@ -387,15 +387,20 @@ func test_a_volley_gets_ONE_hold_on_the_action_that_opens_it() -> void:
 	var sheet := BeatSheet.read(attacker.squad, plan)
 	var executor := OrderExecutor.new()
 	auto_free(executor)
-	var holds: Dictionary = executor._beat_holds(sheet.volleys(false), Pacing.Profile.BOARD, false)
+	# No profile handed in since #647 -- _beat_holds asks Pacing.profile_for per beat, because under
+	# COMBAT_ONLY a volley and the walk before it are paced differently.
+	var holds: Dictionary = executor._beat_holds(sheet.volleys(false), false)
 
 	# One entry for three hits: the blast is one moment, not three.
 	assert_int(holds.size()).override_failure_message(
 			"three hits took three pauses -- a volley is one moment (#410)").is_equal(1)
 	assert_bool(holds.has(plan.attacks[0])).override_failure_message(
 			"the hold is not on the action that OPENS the volley").is_true()
+	# Asked through profile_for rather than against a named profile, so this case pins the WIRE (the
+	# schedule uses the one collapse) and stays silent about which mode the run happens to be in.
+	var volley := sheet.volleys(false)[0]
 	assert_float(holds[plan.attacks[0]]).is_equal_approx(
-			Pacing.duration_for(sheet.volleys(false)[0], Pacing.Profile.BOARD, false), 0.0001)
+			Pacing.duration_for(volley, Pacing.profile_for(volley), false), 0.0001)
 	_break_volleys(plan)
 
 
