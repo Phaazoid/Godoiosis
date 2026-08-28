@@ -14,21 +14,32 @@ than the credit living in a filename:
 | `Brigand.png` | Bonzai — http://unp.cjb.net | Enemy Units - Brigand |
 | `Sniper.png` | Grim — http://unp.cjb.net | Generic Units - Sniper (Female) |
 
-## Sources vs generated
+## Three kinds of file live here
 
-- **`<Unit>.png` is a SOURCE sheet** — the rip, untouched, and the authority.
+- **`Game Boy Advance - ...` are the DOWNLOADS, kept as archive.** Exactly as they arrived, original
+  filenames and all. Nothing reads them; they are here so the pipeline can always be re-derived from
+  an untouched rip rather than from something already processed.
+- **`<Unit>.png` is what the pipeline READS** — named to pair with `../MapSprites/<Unit>.png`, so the
+  combat art for a unit is found under the same name as its map art. Verified **pixel-identical** to
+  the download it came from (`Sage.png` is byte-identical; the other three are the same pixels in a
+  container Godot can actually open — see below).
 - **`<Unit>_Frames.png` is GENERATED** by `tools/zoomanim/gen_zoom_animations.gd`. Do not hand-edit
   it; edit the manifest in that tool and re-run. It is one palette block of the source with every
   background keyed to transparent, so a frame's rect is a coordinate you can find on the source
   sheet by eye.
 
-## The three GIFs became PNGs, and that was not cosmetic
+So each unit has a download and a working copy of the same pixels. That duplication is deliberate —
+the download is the archive, the short name is the one anything reads.
+
+## The three GIFs needed PNG copies, and that was not cosmetic
 
 **Godot cannot load GIF at all** — `Image.load()` returns error 15, `File unrecognized` — so the
-originals could not be imported, previewed or read by any tool in the project. They were converted
-to PNG (both formats are lossless; verified **zero differing pixels** and no alpha in any source),
-and the `.gif` originals dropped rather than committed, since a file the engine cannot open has no
-business in `Art/`.
+three `.gif` downloads cannot be imported, previewed or read by any tool in the project. That is why
+they have PNG working copies rather than just shorter names. Both formats are lossless and the
+conversion was verified **zero differing pixels**, with no alpha anywhere in the sources.
+
+The `.gif` files themselves are inert: nothing imports them, and no catalog scans this folder
+(`SpawnTool`'s sprite scan is `Art/Units/MapSprites/` only).
 
 ## Only the Sage is machine-readable, and this is why
 
