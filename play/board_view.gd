@@ -171,7 +171,7 @@ static func _unit_line(session, unit: Unit) -> String:
 		squad_tag = "sq%d%s" % [session._squad_id(unit.squad), "(lead)" if unit.is_leader() else ""]
 	var wep := "(unarmed)"
 	if unit.has_equipped_weapon():
-		wep = _weapon_str(unit.get_equipped_weapon())
+		wep = _weapon_str(unit.get_equipped_weapon(), unit)
 	var state := "  [DOWNED]" if unit.is_downed() else ""
 	# Whose watch the "!" cells belong to, and what it fires (#413). Named on the unit line rather
 	# than in a second block: the footprint is on the board, this says who is behind it.
@@ -184,10 +184,10 @@ static func _unit_line(session, unit: Unit) -> String:
 		squad_tag, wep, state,
 	]
 
-static func _weapon_str(e: EquippableData) -> String:
+static func _weapon_str(e: EquippableData, wielder: Unit) -> String:
 	var rune := e as RuneData
 	if rune != null:
-		return "rune[%s x%d]" % [RuneData.Size.keys()[rune.size], rune.inscriptions.size()]
+		return _rune_str(rune, wielder)
 	var inst := e as WeaponInstance
 	if inst == null or inst.template == null:
 		return "(equip)"
@@ -207,6 +207,47 @@ static func _weapon_str(e: EquippableData) -> String:
 		s += "/ctr"
 	if main != null and main.hits_allies:
 		s += "/ff"   # friendly-fire: its blast hits allies in range too
+	return s
+
+# A rune gets the same treatment the weapon branch above gets, for the reason stated there (#614):
+# a line naming only the rune's SIZE hides power, reach and who can counter, which is most of what
+# a carving is. Lists the CATALOGUE (choice_attacks) rather than the channelable subset, and marks
+# what cannot fire with its own reason — the law RuneData.choice_attacks states for the menu.
+static func _rune_str(rune: RuneData, wielder: Unit) -> String:
+	var head := "rune[%s x%d]" % [RuneData.Size.keys()[rune.size], rune.inscriptions.size()]
+	if wielder == null:
+		return head
+	var parts: Array[String] = []
+	for attack in rune.choice_attacks(wielder):
+		parts.append(_carving_str(rune, wielder, attack))
+	if parts.is_empty():
+		return head
+	return head + "  " + "; ".join(parts)
+
+static func _carving_str(rune: RuneData, wielder: Unit, attack: AttackData) -> String:
+	var s := "%s pow%d %s" % [attack.display_name, attack.power, _pattern_str(attack.attack_pattern)]
+	# A carving's element is its SIGILS (repeats = weight, so dedupe). elemental_damage_type is
+	# WeaponAttackData-only — reading it on a TransmutationData is a runtime error, not a blank.
+	var carving := attack as TransmutationData
+	if carving != null:
+		var seen: Array[Elemental.Element] = []
+		for sigil in carving.sigils:
+			if sigil == Elemental.Element.NONE or seen.has(sigil):
+				continue
+			seen.append(sigil)
+			s += "/" + Elemental.Element.keys()[sigil]
+	# heals/deals_no_damage reinterpret the power printed above, so a line without them misreads.
+	if attack.heals:
+		s += "/heal"
+	if attack.deals_no_damage:
+		s += "/nodmg"
+	if attack.can_counter:
+		s += "/ctr"
+	if attack.hits_allies:
+		s += "/ff"
+	var reason := rune.attack_block_reason(wielder, attack)
+	if reason != "":
+		s += " (blocked: %s)" % reason
 	return s
 
 static func _pattern_str(p: AttackPattern) -> String:
