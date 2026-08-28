@@ -1,0 +1,11 @@
+[gd_resource type="Resource" script_class="WeaponModData" format=3 uid="uid://cxan7cw300g5h"]
+
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="1_r4xgn"]
+[ext_resource type="Script" uid="uid://ddqeee7njjjq2" path="res://Classes/weapons/WeaponAttackData.gd" id="2_e7g6e"]
+[ext_resource type="Resource" path="res://Resources/WeaponAttacks/Super Gun.tres" id="3_s7gn7"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="4_grumn"]
+
+[resource]
+script = ExtResource("4_grumn")
+display_name = "Super Scope"
+granted_attacks = Array[ExtResource("2_e7g6e")]([ExtResource("3_s7gn7")])

@@ -1,10 +1,12 @@
-[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3]
+[gd_resource type="Resource" script_class="CarbineWeaponInstance" format=3 uid="uid://btm56w7w6aims"]
 
-[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_4n163"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="2_ym0bg"]
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="1_4n163"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="2_ym0bg"]
+[ext_resource type="Resource" uid="uid://cxan7cw300g5h" path="res://Resources/WeaponMods/Super Scope.tres" id="3_2xt2p"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="3_ym0bg"]
 
 [resource]
 script = ExtResource("1_4n163")
 template = ExtResource("3_ym0bg")
+spaces = Array[Array]([Array[ExtResource("2_ym0bg")]([ExtResource("3_2xt2p")]), Array[ExtResource("2_ym0bg")]([]), Array[ExtResource("2_ym0bg")]([])])
 display_name = "Gun"
