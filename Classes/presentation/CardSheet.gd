@@ -312,3 +312,34 @@ static func paint(source: Image, region: Rect2i, animations: Array, card: int,
 						continue
 					atlas.set_pixelv(Vector2i(x, y) - clipped.position, col)
 	return report
+
+
+# Where the character STANDS inside a card, in card-local texels: the bottom-centre of the ink
+# (#634). `Vector2(-1, -1)` for a card with nothing drawn on it, which callers must treat as a hard
+# failure -- opaque_bounds falls back to the whole region when it finds no ink, so a silent answer
+# here would hand the generator the card's own centre and ship a confidently wrong anchor.
+#
+# THE CARD IS A VIEWPORT, so this is asked of ONE card -- the idle pose every animation opens on --
+# and never per frame. A frame's own ink moves within its card by design; that is the registration,
+# and correcting it per frame would delete the footwork the card format exists to carry. Measured on
+# the Sage: the ink's bottom sits at row 41 of 42 on all 58 frames, while its centre sweeps columns
+# 16 to 46 across an attack.
+#
+# Bounds come from BoardMirror.opaque_bounds -- the project's one answer to where visible art starts,
+# already read by the crown lift and the meshlib generator. A second scan here would put a unit's
+# feet and its head on subtly different alpha thresholds for no reason anyone could reconstruct.
+static func ground_point(image: Image, card: Rect2i) -> Vector2:
+	if not _has_ink(image, card):
+		return Vector2(-1, -1)
+	var bounds := BoardMirror.opaque_bounds(image, card)
+	return Vector2(bounds.position.x + bounds.size.x / 2.0, bounds.end.y)
+
+
+# Whether anything at all is drawn in `card`. Its own scan rather than an opaque_bounds result,
+# because that function answers "the whole region" for an empty one and for a full one alike.
+static func _has_ink(image: Image, card: Rect2i) -> bool:
+	for y in range(card.position.y, card.end.y):
+		for x in range(card.position.x, card.end.x):
+			if image.get_pixel(x, y).a >= 0.5:
+				return true
+	return false

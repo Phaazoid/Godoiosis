@@ -188,6 +188,56 @@ func test_the_shipped_sheet_reads_in_reading_order() -> void:
 			previous = c.position
 
 
+# --- where the character stands (#634) ------------------------------------------------------------
+
+
+func test_the_stand_point_is_the_inks_bottom_centre_and_not_the_cards() -> void:
+	# The Sage's own shape, in miniature: a card far wider than the pose needs, with the character
+	# standing LEFT of centre and clear of the bottom edge, because the space is lunge room. Hanging
+	# such a card from its own centre is exactly the bug -- so the card's centre is asserted to be a
+	# DIFFERENT answer, or this case would pass on an implementation that never measured anything.
+	var img := Image.create(40, 20, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	img.fill_rect(Rect2i(6, 4, 8, 10), INK)   # ink spans x 6..13, y 4..13
+
+	var point := CardSheet.ground_point(img, Rect2i(Vector2i.ZERO, Vector2i(40, 20)))
+	assert_float(point.x).is_equal_approx(10.0, 0.001)   # 6 + 8/2, the ink's centre
+	assert_float(point.y).is_equal_approx(14.0, 0.001)   # one past the last ink row
+	assert_vector(point).override_failure_message(
+			"the stand point came back as the CARD's centre, which is the thing being measured away"
+			).is_not_equal(Vector2(20.0, 10.0))
+
+
+func test_a_card_with_nothing_drawn_on_it_is_refused_rather_than_answered() -> void:
+	# opaque_bounds falls back to the whole region when it finds no ink, so an unguarded measurement
+	# would confidently return the card's centre for a blank card. A wrong anchor is invisible in the
+	# output and shows up as art hanging off its tile, which is the same class of silent error the
+	# duration matcher refuses rather than guesses at.
+	var img := Image.create(40, 20, false, Image.FORMAT_RGBA8)
+	img.fill(Color(0, 0, 0, 0))
+	assert_vector(CardSheet.ground_point(img, Rect2i(Vector2i.ZERO, Vector2i(40, 20)))
+			).is_equal(Vector2(-1, -1))
+
+
+func test_the_shipped_set_carries_a_stand_point_inside_its_own_idle_card() -> void:
+	# A PROPERTY of the generated artifact, never its value: what the Sage measures to is content the
+	# dev may replace. What must hold is that the set carries a measurement at all -- a regeneration
+	# that dropped it would put every frame back on the 32px map pivot with nothing saying so.
+	var frames: SpriteFrames = load("res://Resources/ZoomAnimations/Sage.tres")
+	assert_object(frames).is_not_null()
+	assert_bool(frames.has_meta(&"ground_point")).override_failure_message(
+			"the shipped set carries no ground_point -- regenerate it with tools/zoomanim (#634)"
+			).is_true()
+	var point: Vector2 = frames.get_meta(&"ground_point")
+	var names := frames.get_animation_names()
+	assert_int(names.size()).is_greater(0)
+	for anim_name: String in names:
+		var card := frames.get_frame_texture(anim_name, 0).get_size()
+		assert_bool(Rect2(Vector2.ZERO, card).has_point(point)).override_failure_message(
+				"%s: stand point %s falls outside its own %s card" % [anim_name, point, card]
+				).is_true()
+
+
 # --- helpers -------------------------------------------------------------------------------------
 
 

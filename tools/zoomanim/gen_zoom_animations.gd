@@ -116,8 +116,16 @@ func _write_frames(spec: Dictionary, animations: Array) -> void:
 		return
 
 	var origin: Vector2i = (spec["region"] as Rect2i).position
+	var ground := _ground_point(sheet, animations, origin)
+	if ground.x < 0.0:
+		return   # _ground_point already said why
+
 	var frames := SpriteFrames.new()
 	frames.remove_animation(&"default")
+	# Where the character stands inside a card (#634). Stored WITH the set because it is a fact about
+	# this art that only the sheet can answer, and the sprite that plays it has no way to re-derive it
+	# without scanning pixels every time a frame changes.
+	frames.set_meta(&"ground_point", ground)
 	for anim: Dictionary in animations:
 		var name := StringName(anim["name"] as String)
 		frames.add_animation(name)
@@ -150,6 +158,51 @@ func _write_frames(spec: Dictionary, animations: Array) -> void:
 		return
 	print("  wrote %s" % out)
 
+
+# Where the character stands, measured off the IDLE pose -- frame 0 of every animation, which on an
+# FE card sheet is the stance each gesture returns to. Measured on the PAINTED atlas and not the
+# source: on the source a card is a flat opaque rectangle of card colour, so its ink bounds would be
+# the whole card. paint() is what keys that colour and the backdrop away.
+#
+# Every animation's frame 0 must agree, and a disagreement REFUSES rather than picking one. If the
+# five idle poses are not the same pose then "the idle frame" is not a thing this sheet has, and one
+# anchor for the set would silently hang four of them wrong -- the same class of error as a duration
+# that does not glyph-match, which this tool already treats as fatal.
+func _ground_point(sheet: Texture2D, animations: Array, origin: Vector2i) -> Vector2:
+	var image := sheet.get_image()
+	if image == null:
+		_fail("could not read pixels back from the imported atlas")
+		return Vector2(-1, -1)
+	if image.is_compressed():
+		image = image.duplicate()
+		image.decompress()
+
+	var agreed := Vector2(-1, -1)
+	var agreed_by := ""
+	for anim: Dictionary in animations:
+		var cards: Array = anim["cards"]
+		if cards.is_empty():
+			continue
+		var first: Rect2i = cards[0]
+		var card := Rect2i(first.position - origin, first.size)
+		var point := CardSheet.ground_point(image, card)
+		if point.x < 0.0:
+			_fail("%s frame 0 has nothing drawn on it, so there is no stand point to measure"
+					% anim["name"])
+			return Vector2(-1, -1)
+		if agreed.x < 0.0:
+			agreed = point
+			agreed_by = anim["name"] as String
+		elif not point.is_equal_approx(agreed):
+			_fail("idle poses disagree: %s stands at %s but %s stands at %s -- this sheet has no one idle frame"
+					% [agreed_by, agreed, anim["name"], point])
+			return Vector2(-1, -1)
+	if agreed.x < 0.0:
+		_fail("no animation carried a frame to measure a stand point from")
+		return Vector2(-1, -1)
+	print("  stand point %s (idle ink bottom-centre, agreed by all %d animations)"
+			% [agreed, animations.size()])
+	return agreed
 
 func _sum(values: Array) -> int:
 	var total := 0

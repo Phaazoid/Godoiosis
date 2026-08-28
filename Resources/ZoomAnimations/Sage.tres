@@ -435,3 +435,4 @@ animations = [{
 "name": &"staff_dodge",
 "speed": 60.0
 }]
+metadata/ground_point = Vector2(18.5, 41)
