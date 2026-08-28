@@ -725,3 +725,124 @@ func test_the_clock_is_never_smaller_than_the_hp_digits() -> void:
 	assert_float(bar.downed_count_glyph_height()).override_failure_message(
 			"the rescue clock is drawn smaller than the HP digits — the dev's legibility floor") \
 			.is_greater_equal(bar.number_glyph_height())
+
+
+# --- The zoom overrides the preference (2026-08-28) ---------------------------------------------
+# Found in play once #418 shipped: during a battle zoom the clash read ONE-SIDED, because the
+# target already wore a bar through `foretold` while the attacker wore nothing. The rule the dev
+# asked for is that the setting stops applying while a fight is being played out.
+#
+# THESE CASES DECLARE THEIR BRANCH (#449) and it is HOVERED -- the shipped default, and the only
+# branch where the override is observable at all: under EVERY every bar is up regardless, so a case
+# written there would pass without any of this.
+#
+# The BYSTANDER is the subject on purpose. The attacker and target are both reachable through the
+# gate's existing disjuncts, so a case that looked at them would go green with the override deleted.
+
+# The real pass, started but deliberately NOT awaited, so a case can read the board WHILE it runs --
+# test_predicted_health's idiom, and the state under test exists only mid-pass.
+func _run_pass(leader: Unit, done: Array) -> void:
+	await game.order_executor.execute_orders(leader)
+	done[0] = true
+
+
+# Queue a real swing through the dispatcher, the way the #418 foretold case does.
+func _aim_at(attacker: Unit, cell: Vector2i) -> void:
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game._on_left_click(cell)
+
+
+func test_a_zoomed_fight_puts_a_bar_over_everyone_whatever_the_setting() -> void:
+	_set_bars(PlayerSettings.HealthBars.HOVERED)
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon = H.make_weapon()   # pattern-less: Reach falls back to adjacency
+	var target := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	var bystander := _spawn(PLAYER, Vector2i(9, 5))   # not in the plan, not hovered, full HP
+	_aim_at(attacker, target.movement.cell)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(bystander).visible).override_failure_message(
+			"the bystander already wore a bar before the pass, so this case proves nothing").is_false()
+
+	var done := [false]
+	_run_pass(attacker, done)
+	var barred := false
+	var sampled := 0
+	for _frame in 600:
+		await await_idle_frame()
+		if done[0]:
+			break
+		sampled += 1
+		if _unit_mirror.bar_for(bystander).visible:
+			barred = true
+			break
+
+	assert_int(sampled).override_failure_message(
+			"the pass ended before a single frame could be sampled, so this case cannot see mid-pass"
+			).is_greater(0)
+	assert_bool(barred).override_failure_message(
+			"a full-HP bystander wore no bar while a fight played out -- the zoom did not override the setting"
+			).is_true()
+
+	while not done[0]:
+		await await_idle_frame()
+
+
+func test_the_forced_bars_leave_when_the_pass_does() -> void:
+	# The half that catches a flag which is SET and never cleared -- and the one the mirror's
+	# placement is designed for: beat_profile is held between passes, so a readout wired to that
+	# would keep every bar on the board up for ever after the first clash.
+	_set_bars(PlayerSettings.HealthBars.HOVERED)
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	attacker.equipped_weapon = H.make_weapon()
+	var target := _spawn(Team.Faction.ENEMY, Vector2i(3, 2))
+	var bystander := _spawn(PLAYER, Vector2i(9, 5))
+	_aim_at(attacker, target.movement.cell)
+	_point_at(Vector2i(20, 20))
+	await _settle()
+
+	await game.order_executor.execute_orders(attacker)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(bystander).visible).override_failure_message(
+			"the bystander kept its bar after the pass ended -- the override never released"
+			).is_false()
+
+
+func test_a_walk_only_pass_leaves_the_setting_alone() -> void:
+	# The borrowed half of the rule (_shows_a_fight): under ALWAYS every beat is cinematic, so
+	# "is this pass cinematic" alone would force bars on for a squad that did nothing but walk.
+	# An empty sheet means no main actions, which is the tear-out's rule and now this one's.
+	_set_bars(PlayerSettings.HealthBars.HOVERED)
+	var mover := _spawn(PLAYER, Vector2i(2, 2))
+	var bystander := _spawn(PLAYER, Vector2i(9, 5))
+	game.enter_move_mode(mover)
+	game.selected_unit = mover
+	game._on_left_click(Vector2i(4, 2))
+	_point_at(Vector2i(20, 20))
+	await _settle()
+
+	var done := [false]
+	_run_pass(mover, done)
+	var barred := false
+	var sampled := 0
+	for _frame in 600:
+		await await_idle_frame()
+		if done[0]:
+			break
+		sampled += 1
+		if _unit_mirror.bar_for(bystander).visible:
+			barred = true
+			break
+
+	assert_int(sampled).override_failure_message(
+			"the walk ended before a single frame could be sampled, so this case is vacuous"
+			).is_greater(0)
+	assert_bool(barred).override_failure_message(
+			"a pass of nothing but walking forced bars on -- the fight half of the rule is not applying"
+			).is_false()
+
+	while not done[0]:
+		await await_idle_frame()
