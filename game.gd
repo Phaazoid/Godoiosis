@@ -719,7 +719,9 @@ func enter_attack_mode(unit: Unit, intent: AimIntent = AimIntent.FIRE):
 	# change (#123 follow-up) -- green for a heal, red otherwise -- which is a paint choice, not a
 	# cell-membership one, so it doesn't touch that invariant. Neither does the vertically-BLOCKED
 	# state (#258): membership stays the full union, blocked cells just wear a distinct tile.
-	overlay_manager.set_attack_reach_color(aiming)
+	# Since #591 the fill also forks on the VERB -- a watch paints its own colour, so declaring and
+	# firing stop looking identical -- which is the intent's first reader before the click.
+	overlay_manager.set_aim_colors(aiming, intent == AimIntent.WATCH)
 	var reach_origin := unit.get_projected_destination()
 	overlay_manager.show_attack_reach(
 		Reach.get_all_attack_cells_from(unit, reach_origin, aiming),
@@ -770,6 +772,9 @@ func exit_current_mode():
 	if game_state == GameState.ATTACK_TARGETING:
 		_clear_aiming_pick()
 		aim_intent = AimIntent.FIRE   # the verb dies with the aim, same as the pick
+		# ...and so does its paint (#591). The HOVER layer is shared with PICKING_TARGET, so a watch
+		# aim left standing here would tint the next rescue's tile pick in the watch's colours.
+		overlay_manager.set_aim_colors(null, false)
 	overlay_manager.clear_target_pulse()
 	overlay_manager.clear_ring_pulse()
 	overlay_manager.set_pick_flash(false)   # #116's tile-pick flash; idempotent when none is running
@@ -933,6 +938,7 @@ func refresh_action_queue(squad: Squad):
 		overlay_manager.clear_terrain_preview()
 		overlay_manager.clear_knockback_preview()
 		overlay_manager.clear_guard_preview()
+		overlay_manager.clear_watch_preview()
 		squad_action_queue_control.set_execute_state(SquadActionQueueControl.ExecuteState.DISABLED)
 		return
 	# A running pass owns its plan (#361). Every order is still in the queue until _end_squad_turn,
@@ -1034,6 +1040,19 @@ func _preview_plan_effects(plan: ResolvedPlan) -> void:
 		if ward.sequence == 0 and ward.is_intact():
 			pending.append({"blocker": ward.blocker, "ward": ward.ward})
 	overlay_manager.show_guard_preview(pending)
+	# Watches this plan has QUEUED but not yet armed (#591), by the same predicate for the same
+	# reason: plan.watches holds the armed and the pending together, and Watch.make() leaves
+	# `sequence` 0 where arm() stamps 1 upward, so "is this only a plan?" needs no new field.
+	# A cell an ARMED watch already marks is skipped -- one mark per cell, and the solid one wins,
+	# since a standing threat outranks a promised one.
+	var promised: Array[Vector2i] = []
+	for watch: Watch in plan.watches:
+		if watch.sequence != 0 or not watch.is_intact():
+			continue
+		for cell in watch.footprint:
+			if not overlay_manager.watch_cells.has(cell) and not promised.has(cell):
+				promised.append(cell)
+	overlay_manager.show_watch_preview(promised)
 
 func _squad_all_committed(squad: Squad) -> bool:
 	# True when every member has locked in at least one REAL order — a main action, or a

@@ -78,6 +78,22 @@ const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
 # answer of its own, so there is no 3D-only value here to tune (dev call: acceptable).
 static var ATTACK_MODULATE := Color(1, 0, 0, .5)
 static var HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
+# Aiming a WATCH rather than a shot (#591). The two layers of the aim are repainted, because
+# declaring and firing were the same picture and the only tell was remembering which row you clicked.
+#
+# The WATCH TINT WINS OVER THE HEAL FORK, deliberately: while aiming a watch you already know whether
+# the attack heals -- you picked it off the ring -- and what you cannot tell is that you are DECLARING
+# rather than firing. No authored heal can overwatch today (#590 made the flag exclusive, and neither
+# `can_overwatch` attack heals); if one ever does and the read matters, the fork is one line in
+# attack_reach_color.
+#
+# Two values rather than one derived from the other: the reach is a translucent full-cell wash and
+# the footprint sits on top of it opaque, so they need their own hues to keep the contrast that makes
+# an aim legible -- the same reason GUARD_RING_COLOR and GUARD_LINK_MODULATE are two values for one
+# mechanic. Both ship at the watched footprint's own hue so the aim, the queued ghost and the armed
+# mark read as one vocabulary out of the box.
+static var WATCH_REACH_MODULATE := Color(1.0, 0.35, 0.25, 0.5)
+static var WATCH_HOVER_MODULATE := Color(1.0, 0.75, 0.4, 1.0)
 # How much darker a vertically-BLOCKED reach cell (#258) draws than the reach fill. The 2D says
 # "blocked" with the hatched tile under the same modulate; the 3D has no per-cell art, so its
 # ATTACK_BLOCKED layer derives its colour as the live reach modulate scaled by this. One factor,
@@ -222,6 +238,10 @@ var icons_by_unit := {} # { Unit : { IconType : OverlayIcon } }
 # FOLLOWS its unit, and a watch's footprint is frozen geometry that deliberately does not.
 var watch_cells: Array[Vector2i] = []
 var _watch_sprites: Array[Sprite2D] = []
+# The same mark GHOSTED, for a watch that is only QUEUED (#591) -- the Guard preview's shape one
+# channel over. Separate from the armed store because the LIFETIMES differ: these are plan-time and
+# die with the next re-plan, while an armed watch outlives the whole enemy phase.
+var watch_preview_sprites: Array[Sprite2D] = []
 
 # Puts the STANDING markers back after this manager clears the channel whole, injected by game (the
 # squad_manager.board_source idiom). A Callable that DRAWS rather than one that returns a squad
@@ -271,8 +291,11 @@ var _pulsing_rings: Array[Unit] = []
 var _tile_pulse: Tween = null
 var _pick_flash: Tween = null
 var _pick_flash_base: Color = ATTACK_MODULATE   # replaced by the live value when a flash starts
-# What the reach fill was last painted for, so refresh_attack_reach_color can re-derive it.
+# What the aim was last painted for, so refresh_aim_colors can re-derive it. `_aiming_watch` is THE
+# store for "is this aim a watch" on this side (#591) -- written only by set_aim_colors, read by both
+# layers' colour and by the tile pulse, so the three cannot disagree.
 var _reach_attack: AttackData = null
+var _aiming_watch := false
 
 # The hovered aim's sight trace (#258): computed ONCE by HoverPresenter via Reach.sight_trace and
 # stored here as DATA -- SightTrace2D draws it flat, OverlayMirror lifts the same points into the
@@ -349,20 +372,49 @@ func clear_sight_trace() -> void:
 	_sight_trace_2d.queue_redraw()
 
 # What color the reach layer should paint with for this attack -- red for damage, green for a
-# heal. A null attack (bare fists) reads as the default/damage color.
-static func attack_reach_color(attack: AttackData) -> Color:
+# heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own
+# colour whatever the attack does; see WATCH_REACH_MODULATE for why the verb outranks the heal fork.
+static func attack_reach_color(attack: AttackData, watch := false) -> Color:
+	if watch:
+		return WATCH_REACH_MODULATE
 	return HEAL_ATTACK_MODULATE if attack != null and attack.heals else ATTACK_MODULATE
 
-func set_attack_reach_color(attack: AttackData) -> void:
+# The aim FOOTPRINT's fill -- the layer HoverPresenter draws what the current aim would affect on.
+static func aim_fill_color(watch := false) -> Color:
+	return WATCH_HOVER_MODULATE if watch else HOVER_MODULATE
+
+# Its pulsed low point, DERIVED rather than authored: the same fill at the alpha the pulse has always
+# dropped to. One factor, never a third colour -- BLOCKED_REACH_DIM's precedent.
+static func aim_pulse_color(watch := false) -> Color:
+	var base := aim_fill_color(watch)
+	return Color(base.r, base.g, base.b, HOVER_PULSE_MODULATE.a)
+
+# Paint BOTH layers of an aim for this attack and this verb (#591). One door rather than two, since
+# the reach and the footprint are two halves of one picture and a caller that set only one would
+# leave the aim half-dressed.
+func set_aim_colors(attack: AttackData, watch := false) -> void:
 	_reach_attack = attack
-	attack_overlay.modulate = attack_reach_color(attack)
+	_aiming_watch = watch
+	attack_overlay.modulate = attack_reach_color(attack, watch)
+	_apply_aim_fill()
+
+# The footprint layer's paint in whichever state it is in -- solid, or breathing between the fork's
+# two ends. A LIVE pulse holds the endpoints it started with, so a colour change has to re-arm it or
+# the tween paints the old aim back on its next swing (#308's copied-key shape, in a tween).
+func _apply_aim_fill() -> void:
+	if _tile_pulse == null:
+		hover_overlay.modulate = aim_fill_color(_aiming_watch)
+		return
+	Pulse.stop(_tile_pulse, hover_overlay, &"modulate", aim_fill_color(_aiming_watch))
+	_tile_pulse = Pulse.start(self, hover_overlay, &"modulate",
+			aim_fill_color(_aiming_watch), aim_pulse_color(_aiming_watch))
 
 
-# Re-derive the reach fill from the attack it was last given. The Moods tab calls this after tuning
-# ATTACK_MODULATE: the 3D mirrors `attack_overlay.modulate` every frame rather than the constant,
-# so without this a tuned colour would not show until the player next entered targeting.
-func refresh_attack_reach_color() -> void:
-	set_attack_reach_color(_reach_attack)
+# Re-derive both fills from the aim they were last given. The Game tab calls this after tuning any of
+# the four colours: the 3D mirrors these modulates every frame rather than the constants, so without
+# this a tuned colour would not show until the player next entered targeting.
+func refresh_aim_colors() -> void:
+	set_aim_colors(_reach_attack, _aiming_watch)
 
 # The one door for the attack-reach draw (#258). Membership = the full union, drawn once on
 # entering the mode (the inviolable rule); `blocked` cells re-tile to the hatched fill in the same
@@ -444,18 +496,21 @@ func set_target_pulse(units: Array[Unit], pulse_tiles: bool) -> void:
 			unit.visuals.start_pulse()
 	_pulsing_units = units.duplicate()
 
+	# Both ends come off the live fork (#591), never the constants -- a watch aim that pulses its
+	# footprint would otherwise breathe back to the shot's yellow on every swing.
 	if pulse_tiles and _tile_pulse == null:
-		_tile_pulse = Pulse.start(self, hover_overlay, &"modulate", HOVER_MODULATE, HOVER_PULSE_MODULATE)
+		_tile_pulse = Pulse.start(self, hover_overlay, &"modulate",
+				aim_fill_color(_aiming_watch), aim_pulse_color(_aiming_watch))
 	elif not pulse_tiles and _tile_pulse != null:
-		Pulse.stop(_tile_pulse, hover_overlay, &"modulate", HOVER_MODULATE)
+		Pulse.stop(_tile_pulse, hover_overlay, &"modulate", aim_fill_color(_aiming_watch))
 		_tile_pulse = null
 
 # Flash the cells a CELL pick is offering (#116). It pulses the pick layer's own modulate rather than
 # adding a channel of its own: the 3D mirror reads that modulate every frame, so one tween moves both
-# stacks -- the same reason set_attack_reach_color needs no 3D twin.
+# stacks -- the same reason set_aim_colors needs no 3D twin.
 #
 # The base is CAPTURED at start rather than read off ATTACK_MODULATE, and that is load-bearing: this
-# layer's colour is DERIVED from the aimed attack (set_attack_reach_color forks heal-green), so
+# layer's colour is DERIVED from the aimed attack (set_aim_colors forks heal-green, and the watch verb), so
 # restoring a constant would repaint the reach the next time targeting opened. Idempotent, because
 # game.exit_current_mode clears every pulse unconditionally and a pick may end without one running.
 func set_pick_flash(on: bool) -> void:
@@ -961,6 +1016,45 @@ func restyle_watch_marks() -> void:
 			continue
 		sprite.modulate = WATCH_MARK_COLOR
 		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+	# The QUEUED ghosts derive from the same pair, so they restyle here too or the knob moves the
+	# armed marks and silently leaves the plan-time ones wearing the old colour (#264's born-dead
+	# slider, in half).
+	for sprite in watch_preview_sprites:
+		if not is_instance_valid(sprite):
+			continue
+		sprite.modulate = _ghosted(WATCH_MARK_COLOR)
+		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+
+# Plan-time preview of watches that are QUEUED but not yet armed (#591), the Guard preview's shape
+# one channel over (#450 part 2). Every other queued verb previews -- a move gets arrows and a ghost,
+# an ignite gets a ghosted icon, a Guard gets a ghosted pair -- and a declared watch was the odd one
+# out, visible only as a queue row until you pressed Execute.
+#
+# The SAME mark the armed footprint wears, at the ghost alpha the board already means "planned, not
+# yet real" by. Drawing them identically would be the board promising a threat that is not standing
+# yet, which is the question #450 left open and answered the same way.
+#
+# The caller decides which watches are still pending, since only a resolved plan knows; cells already
+# under an ARMED watch are skipped by the caller too, so an overlap draws one mark rather than two.
+func show_watch_preview(cells: Array[Vector2i]) -> void:
+	clear_watch_preview()
+	if board_tilemap == null or icon_overlay == null:
+		return
+	for cell in cells:
+		var sprite := Sprite2D.new()
+		sprite.texture = WATCH_MARK_TEXTURE
+		sprite.modulate = _ghosted(WATCH_MARK_COLOR)
+		sprite.scale = Vector2.ONE * WATCH_MARK_SCALE
+		sprite.z_index = RING_Z_INDEX + 1   # the armed mark's plane, so the two read as one mark
+		sprite.position = board_tilemap.map_to_local(cell)
+		icon_overlay.add_child(sprite)
+		watch_preview_sprites.append(sprite)
+
+func clear_watch_preview() -> void:
+	for sprite in watch_preview_sprites:
+		if is_instance_valid(sprite):
+			sprite.queue_free()
+	watch_preview_sprites.clear()
 
 func redraw_squad_unit_icons(squad: Squad):
 	clear_unit_icon_types([OverlayIcon.IconType.CROWN, OverlayIcon.IconType.SQUADMEMBER])

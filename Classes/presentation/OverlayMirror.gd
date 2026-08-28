@@ -503,6 +503,13 @@ func _icons(om: OverlayManager) -> void:
 	for cell: Vector2i in om.watch_cells:
 		watched.append(_marker(_anchor(cell), OverlayManager.WATCH_MARK_TEXTURE,
 				OverlayManager.WATCH_MARK_COLOR))
+	# The QUEUED watch's ghosted mark joins the armed ones on their own layer (#591) — same channel on
+	# purpose, it being the same mark saying "not yet", exactly as the ghosted Guard shield does above.
+	# Read off the SPRITES here rather than a cell store, because the ghost alpha is derived at draw
+	# time and copying that derivation is how the two views come to disagree about how faint it is.
+	for sprite in om.watch_preview_sprites:
+		if is_instance_valid(sprite) and sprite.texture != null:
+			watched.append(_marker(_anchor_px(sprite.global_position), sprite.texture, sprite.modulate))
 	_markers(BoardOverlays.Layer.WATCH_ICONS, watched)
 
 

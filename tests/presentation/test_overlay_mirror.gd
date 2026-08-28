@@ -1136,6 +1136,41 @@ func test_a_queued_guards_ghost_reaches_both_3d_channels() -> void:
 			"the ghosted link never reached 3D").is_equal(2)
 
 
+# The watch's twin of the case above (#591), and parity is MANDATORY here rather than nice:
+# standing-reactions.md rules the watched footprint gameplay information, both directions, no #292
+# asymmetry — and a plan-time watch is the same information one tense earlier. It rides the ARMED
+# mark's own layer for the same reason the ghosted shield rides the shield's.
+func test_a_queued_watchs_ghost_reaches_the_3d_watch_layer() -> void:
+	var cells: Array[Vector2i] = [Vector2i(2, 2), Vector2i(3, 2)]
+	game.overlay_manager.show_watch_preview(cells)
+	await _settle()
+
+	assert_int(game.overlay_manager.watch_preview_sprites.size()).override_failure_message(
+			"the 2D never drew the ghost, so this case cannot speak for the mirror").is_equal(2)
+	assert_int(_overlays.markers_of(BoardOverlays.Layer.WATCH_ICONS).size()).override_failure_message(
+			"a declared watch is invisible in the 3D view while the flat board shows it — the "
+			+ "#292 asymmetry standing-reactions.md forbids for exactly this markup").is_equal(2)
+
+
+# An armed watch and a queued one share the channel, so the mirror has to carry BOTH — and it reads
+# the ghost's alpha off the sprite rather than re-deriving it, which is what stops the two views
+# disagreeing about how faint "not yet" looks.
+func test_the_armed_marks_and_the_ghosts_share_the_watch_layer_without_evicting_each_other() -> void:
+	game.overlay_manager.watch_cells = [Vector2i(1, 1)] as Array[Vector2i]
+	game.overlay_manager.show_watch_preview([Vector2i(3, 3)] as Array[Vector2i])
+	await _settle()
+
+	var markers: Array = _overlays.markers_of(BoardOverlays.Layer.WATCH_ICONS)
+	assert_int(markers.size()).override_failure_message(
+			"one kind of watch mark evicted the other in 3D").is_equal(2)
+	var alphas: Array[float] = []
+	for marker: Dictionary in markers:
+		alphas.append((marker["modulate"] as Color).a)
+	alphas.sort()
+	assert_bool(alphas[0] < alphas[1]).override_failure_message(
+			"the promised mark reached 3D as loud as the standing one").is_true()
+
+
 func test_a_pair_further_than_one_step_keeps_its_shield_and_draws_no_link() -> void:
 	var pair := _squad_pair()   # three cells apart, which is exactly the case under test
 	pair[0].arm_guard(pair[1], pair[0].get_guard_range())
