@@ -411,6 +411,159 @@ func test_with_the_cinematic_off_a_pass_displaces_nothing_at_all() -> void:
 				"%s was displaced with the cinematic off" % cell).is_equal(Vector3.ZERO)
 
 
+# --- the transition: tiles TRAVEL between the board and the diorama (#521 slice B) ---------------
+#
+# Driven at BoardSpace rather than through a pass, for the reason slice A already recorded: the
+# staging is cleared before execute_orders returns, so nothing mid-transition survives to be looked
+# at afterwards. What is pinned here is the DECISION and the WIRE -- who is short of the diorama,
+# who has landed, and what the version says about it. The travel itself is invisible headless (the
+# await returns without a frame ever drawing) and is a play-check, which is what the flag is for.
+
+
+func test_a_flight_holds_its_tiles_short_of_the_diorama_until_their_turn_comes() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 3)
+	assert_bool(cells.size() == 3).override_failure_message(
+			"fixture: this board has fewer than three painted cells").is_true()
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+
+	# Nothing has moved yet: every tile is still in the socket it came from, which is the board.
+	for cell in cells:
+		assert_vector(BoardSpace.staged_offset(cell)).override_failure_message(
+				"%s started the transition already at the diorama" % cell).is_equal(Vector3.ZERO)
+
+	# Far enough for the FIRST to be home and not the last -- the one-by-one the ticket asks for.
+	BoardSpace.advance_flight(float(plan[0]["land"]) + 0.0001)
+	assert_vector(BoardSpace.staged_offset(cells[0])).override_failure_message(
+			"the first tile did not arrive when its flight ended").is_equal(lift)
+	assert_bool(BoardSpace.in_flight(cells[2])).override_failure_message(
+			"the last tile arrived with the first -- nothing is staggered").is_true()
+
+	BoardSpace.advance_flight(StagingFlight.total(plan))
+	assert_bool(BoardSpace.flight_active()).is_false()
+	for cell in cells:
+		assert_vector(BoardSpace.staged_offset(cell)).override_failure_message(
+				"%s never finished its flight" % cell).is_equal(lift)
+
+
+func test_a_landing_bumps_the_version_and_a_plain_frame_does_not() -> void:
+	# OverlayMirror rebuilds every standing prop when this number moves, so bumping it per frame
+	# would rebuild the board on every frame of the transition. Landings are discrete; travel is not.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 3)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+
+	var before := BoardSpace.staging_version
+	assert_bool(BoardSpace.advance_flight(0.0)).override_failure_message(
+			"a zero-length step reported a landing").is_false()
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"a frame with nothing landing still bumped the version").is_equal(before)
+
+	assert_bool(BoardSpace.advance_flight(StagingFlight.total(plan) + 1.0)).override_failure_message(
+			"every tile landed and no landing was reported").is_true()
+	assert_int(BoardSpace.staging_version).is_greater(before)
+
+
+func test_clearing_the_staging_takes_the_flight_with_it() -> void:
+	# The F2 case. clear_board() calls clear_staging(), and if the flight did not die INSIDE that
+	# door a board swapped mid-transition would hand the fresh board columns in the air with nothing
+	# left to bring them down -- slice A's own bug, one layer up.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 3)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	BoardSpace.begin_flight(StagingFlight.schedule(cells), -lift, Vector3.ZERO, true)
+	BoardSpace.drive_camera_lift(Vector3.ZERO)
+	assert_bool(BoardSpace.flight_active()).is_true()
+
+	_game.scenario_manager.clear_board()
+	await _settle()
+
+	assert_bool(BoardSpace.flight_active()).override_failure_message(
+			"a board swapped mid-transition left tiles still flying").is_false()
+	for cell in cells:
+		assert_vector(BoardSpace.staged_offset(cell)).is_equal(Vector3.ZERO)
+
+
+func test_the_camera_asks_where_IT_should_be_not_where_the_diorama_is() -> void:
+	# Equal at rest, which is what makes this invisible to every existing caller -- and different
+	# during exactly one window, which is the window that needs them apart: the cut treatment puts
+	# the camera at the diorama before a single tile is there.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	assert_vector(BoardSpace.camera_lift()).override_failure_message(
+			"with nothing driving it the camera should sit exactly where the diorama does"
+			).is_equal(BoardSpace.stage_offset())
+
+	BoardSpace.drive_camera_lift(Vector3.ZERO)
+	assert_vector(BoardSpace.camera_lift()).override_failure_message(
+			"a driven camera lift did not override the diorama's height").is_equal(Vector3.ZERO)
+	assert_vector(BoardSpace.stage_offset()).override_failure_message(
+			"driving the camera moved the DIORAMA, which is a different question").is_equal(lift)
+
+	BoardSpace.release_camera_lift()
+	assert_vector(BoardSpace.camera_lift()).is_equal(lift)
+
+
+# THE ENTRY must leave the board AT the diorama, and this has to be asked of the entry ALONE.
+#
+# A mutant proved the obvious version worthless: asserting after a whole pass passes whatever the
+# entry did, because the EXIT's clear_staging() puts everything down anyway. What is actually at
+# risk is the fight itself -- headless the transition's await returns without a single frame, so
+# nothing ever advanced the flight, and without the executor ending it explicitly every cell of the
+# fight would answer its SOCKET for the entire combat that follows. Same trap as the cinematic-off
+# case below, one case over, and only a mutant found the second one.
+func test_the_entry_leaves_the_board_at_the_diorama_though_no_frame_ever_drew_it() -> void:
+	var unit := _a_unit()
+	_swing_at_open_ground(unit)
+	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
+	var sheet := BeatSheet.read(unit.squad, plan)
+	assert_array(sheet.cells).override_failure_message(
+			"fixture drifted: this pass touches no cells").is_not_empty()
+
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
+	await _game.order_executor._stage_the_fight(sheet)
+
+	assert_bool(BoardSpace.flight_active()).override_failure_message(
+			"the entry returned with tiles still in the air, so the fight plays over a moving board"
+			).is_false()
+	var lift := BoardSpace.stage_offset()
+	assert_bool(lift.length() > 1.0).override_failure_message(
+			"the stage lift is zero; this case cannot fail").is_true()
+	for cell: Vector2i in sheet.cells:
+		assert_vector(BoardSpace.staged_offset(cell)).override_failure_message(
+				"%s is still in its socket after the entry finished" % cell).is_equal(lift)
+
+
+func test_with_the_cinematic_off_nothing_ever_flies() -> void:
+	# The tear-out is the zoom's, so the transition is too. ASSERTED ON THE VERSION, not on the
+	# aftermath: the executor ends every flight when its await returns, so "nothing is flying
+	# afterwards" is true even of a board that flew the whole pass -- it would prove nothing. The
+	# version is the one thing a transition cannot run without moving, since begin_flight bumps it.
+	# That is also what separates this from slice A's displacement law, which a flight that tidied
+	# up after itself would satisfy.
+	#
+	# HONEST LIMIT: this case rides slice A's profile gate and cannot be killed on its own -- the
+	# only mutant that reaches it (removing that gate) reds slice A's own case first and truncates
+	# the file. Its job is to say the FLIGHT is inside the gate's promise too, so a later slice that
+	# moved the transition out from behind it would have this to answer. Measured, not assumed.
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.OFF)
+	var unit := _a_unit()
+	_swing_at_open_ground(unit)
+	var before := BoardSpace.staging_version
+
+	await _game.order_executor.execute_orders(unit)
+	await _settle()
+
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"something staged or flew on a pass with the battle zoom off").is_equal(before)
+	assert_bool(BoardSpace.flight_active()).is_false()
+
+
 # --- helpers ------------------------------------------------------------------------------------
 
 func _painted_cells() -> Array[Vector2i]:

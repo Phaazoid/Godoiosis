@@ -669,6 +669,41 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 40.0, "step": 0.5,
 		"tip": "How many degrees SHALLOWER than the board's own angle a directed shot sits, so the fight looms instead of being read from overhead. Clamped by the same tilt band the player's drag uses. Scaled by the directed-shot strength, so it is dead on the plain board for the same reason the side-on angle is."},
 
+	{"group": "The tear-out", "label": "How long one tile flies", "static": "TEAR_OUT_FLIGHT",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.01,
+		"tip": "How long a single tile takes to travel between its socket on the board and its place in the diorama. At 0 tiles appear where they are going instead of flying there."},
+	{"group": "The tear-out", "label": "Window the tiles arrive within", "static": "TEAR_OUT_ARRIVAL",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 12.0, "step": 0.05,
+		"tip": "The total time every tile must have STARTED within. The gap between one tile and the next is derived to fit this, so a twenty-cell brawl does not cost five times what a four-cell skirmish does -- this plays on every Execute."},
+	{"group": "The tear-out", "label": "Longest gap between two tiles", "static": "TEAR_OUT_STAGGER_MAX",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.01,
+		"tip": "A ceiling on the derived gap, so a small fight still gets a punchy one-two-three instead of smearing three tiles across the whole window. At 0 every tile leaves at once."},
+	{"group": "The tear-out", "label": "How hard a tile slams in", "static": "TEAR_OUT_SLAM",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 1.0, "max": 16.0, "step": 0.1,
+		"tip": "The shape of a tile's travel. 1 is constant speed; higher makes it hang back and then accelerate into the landing, which is what reads as a slam rather than a drift."},
+	{"group": "The tear-out", "label": "White-out fade", "static": "TEAR_OUT_WHITEOUT",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.01,
+		"tip": "How long the flash takes to come up, and again to go down. With the photosensitivity setting on this timing is unchanged but the flash is muted and eased instead of white."},
+	{"group": "The tear-out", "label": "White-out hold", "static": "TEAR_OUT_HOLD",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 3.0, "step": 0.01,
+		"tip": "How long the flash sits at full before the diorama is revealed behind it. This is the window the camera cut hides in."},
+	{"group": "The tear-out", "label": "Camera holds with the board", "static": "TEAR_OUT_CAMERA_HOLD",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "How long the camera stays down with the board, watching the tiles leave, before it rises after them. Only read when the camera-cuts-ahead experiment is OFF -- with it on the camera is already up there waiting."},
+
+	{"group": "The tear-out", "label": "Hold: the board before it comes apart", "static": "TEAR_OUT_BRACE",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "A beat on the intact board once the walking is done, before the ground starts to lift. At 0 the tear-out begins the instant the last unit stops moving."},
+	{"group": "The tear-out", "label": "Hold: empty sky, before the first tile", "static": "TEAR_OUT_EMPTY_SKY",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "How long the camera looks at the space where the diorama WILL be, with nothing in it yet, before the first tile rises into frame. This is the beat the camera-hold slider gets reached for by mistake -- that one is dead while the camera cuts ahead, and this one is not."},
+	{"group": "The tear-out", "label": "Hold: the diorama, before the fight", "static": "TEAR_OUT_SETTLE",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "A beat on the finished diorama after the last tile lands, before the first blow. At 0 the action starts the moment the ground stops moving."},
+	{"group": "The tear-out", "label": "Hold: the diorama, after the fight", "static": "TEAR_OUT_AFTERMATH",
+		"profile": "cinematic", "script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "A beat on the diorama once the fighting is over, before the tiles drop back into their sockets -- so the aftermath is not immediately swept away by the board reassembling."},
+
 	# The tear-out is its own section because it is CINEMATIC-ONLY by construction: _stage_the_fight
 	# returns early on BOARD, so this slider is dead in the other column rather than merely unused.
 	{"group": "The tear-out", "label": "How high the fight lifts off the board", "static": "STAGE_LIFT",
@@ -885,6 +920,17 @@ static func read_static(name: String) -> Variant:
 		"PICK_FLASH_ALPHA": return OverlayManager.PICK_FLASH_ALPHA
 		"PICK_FLASH_PERIOD": return OverlayManager.PICK_FLASH_PERIOD
 		"PLAYBACK_PAN": return Pacing.PLAYBACK_PAN
+		"TEAR_OUT_BRACE": return Pacing.TEAR_OUT_BRACE
+		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
+		"TEAR_OUT_SETTLE": return Pacing.TEAR_OUT_SETTLE
+		"TEAR_OUT_AFTERMATH": return Pacing.TEAR_OUT_AFTERMATH
+		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
+		"TEAR_OUT_ARRIVAL": return Pacing.TEAR_OUT_ARRIVAL
+		"TEAR_OUT_STAGGER_MAX": return Pacing.TEAR_OUT_STAGGER_MAX
+		"TEAR_OUT_SLAM": return Pacing.TEAR_OUT_SLAM
+		"TEAR_OUT_WHITEOUT": return Pacing.TEAR_OUT_WHITEOUT
+		"TEAR_OUT_HOLD": return Pacing.TEAR_OUT_HOLD
+		"TEAR_OUT_CAMERA_HOLD": return Pacing.TEAR_OUT_CAMERA_HOLD
 		"ENVIRONMENT_PAN": return Pacing.ENVIRONMENT_PAN
 		"ENVIRONMENT_HOLD": return Pacing.ENVIRONMENT_HOLD
 		"PLAYER_ACTION": return Pacing.PLAYER_ACTION
@@ -998,6 +1044,28 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"PLAYBACK_PAN":
 			Pacing.PLAYBACK_PAN = value
 			return
+		"TEAR_OUT_BRACE":
+			Pacing.TEAR_OUT_BRACE = value
+		"TEAR_OUT_EMPTY_SKY":
+			Pacing.TEAR_OUT_EMPTY_SKY = value
+		"TEAR_OUT_SETTLE":
+			Pacing.TEAR_OUT_SETTLE = value
+		"TEAR_OUT_AFTERMATH":
+			Pacing.TEAR_OUT_AFTERMATH = value
+		"TEAR_OUT_FLIGHT":
+			Pacing.TEAR_OUT_FLIGHT = value
+		"TEAR_OUT_ARRIVAL":
+			Pacing.TEAR_OUT_ARRIVAL = value
+		"TEAR_OUT_STAGGER_MAX":
+			Pacing.TEAR_OUT_STAGGER_MAX = value
+		"TEAR_OUT_SLAM":
+			Pacing.TEAR_OUT_SLAM = value
+		"TEAR_OUT_WHITEOUT":
+			Pacing.TEAR_OUT_WHITEOUT = value
+		"TEAR_OUT_HOLD":
+			Pacing.TEAR_OUT_HOLD = value
+		"TEAR_OUT_CAMERA_HOLD":
+			Pacing.TEAR_OUT_CAMERA_HOLD = value
 		"ENVIRONMENT_PAN":
 			Pacing.ENVIRONMENT_PAN = value
 			return

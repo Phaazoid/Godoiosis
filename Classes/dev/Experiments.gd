@@ -16,6 +16,7 @@ class_name Experiments
 enum Flag {
 	EXAMPLE_FLAG,
 	DIORAMA_BYSTANDERS,
+	DIORAMA_CAMERA_CUTS_AHEAD,
 }
 
 # Per-flag metadata. Literal-only, so it can be a compile-time const (like STAT_DEFAULTS).
@@ -27,6 +28,11 @@ const DEFS := {
 		"title": "Example flag",
 		"desc": "Throwaway sample proving the harness end-to-end. Safe to delete.",
 		"default": false,
+	},
+	Flag.DIORAMA_CAMERA_CUTS_AHEAD: {
+		"title": "The camera cuts ahead to the diorama",
+		"desc": "On: behind the white-out the camera CUTS to the empty sky and waits there, so you watch the fight assemble tile by tile out of nothing. Off: it travels up with the tear-out, so you watch the board come apart instead. #521's feels test -- pick one and the loser gets deleted.",
+		"default": true,
 	},
 	Flag.DIORAMA_BYSTANDERS: {
 		"title": "Diorama keeps its bystanders",

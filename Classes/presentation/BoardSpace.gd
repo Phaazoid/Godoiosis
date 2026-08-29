@@ -296,6 +296,40 @@ static var STAGE_LIFT := 40.0
 # set. DirtyCells.version's shape, and for the same reason: any number of readers, none consuming.
 static var staging_version := 0
 
+# --- the transition: tiles in the AIR, and where the camera is while they are (#521 slice B) -----
+#
+# FLIGHT IS AN OVERLAY, NEVER THE STORED STATE, and that is what keeps every existing reader honest.
+# stage() still writes the LANDED board; this is a transient delta added on top. So a run with no
+# driver -- headless, the BOARD profile, a bare fixture -- never populates it and reads exactly what
+# it read before this slice existed. The alternative, storing in-flight positions as the truth,
+# would have made "where is this cell" depend on whether anything was animating.
+static var _flight: Dictionary[Vector2i, Vector3] = {}
+# The schedule being played, and how far into it we are. Held here rather than on the driver because
+# OrderExecutor publishes it and the 3D host polls it -- the same one-writer-many-readers shape as
+# executing_plan and staging_version.
+static var _flight_plan: Array[Dictionary] = []
+static var _flight_elapsed := 0.0
+# The path every tile walks, same for all of them and offset only in TIME. Entry runs socket ->
+# diorama, exit runs diorama -> socket; one pair of endpoints rather than an "is it reversed" flag
+# the geometry then has to interpret.
+static var _flight_from := Vector3.ZERO
+static var _flight_to := Vector3.ZERO
+# Which direction this transition is going, for the driver's sake -- the camera and the white-out
+# are not symmetric even though the travel is.
+static var _flight_entering := true
+
+# HOW HIGH THE CAMERA IS RIGHT NOW, which is NOT where the diorama is. They are the same at rest and
+# they differ during exactly one window -- the transition -- which is the window that needs them
+# apart: the cut treatment puts the camera at the diorama before a single tile is there, and the
+# travel treatment holds it on the board while they leave. _mirror_camera polls this every frame, so
+# with nothing driving it this returns stage_offset() and the camera behaves as it always has.
+#
+# A THIRD FIELD RATHER THAN A CLEVER READING OF THE OTHER TWO: directed_line is an angle,
+# framed_span is a fit, emphasis is a weight, and one field answering two questions is what spins a
+# camera side-on to a walk (#520).
+static var _camera_lift := Vector3.ZERO
+static var _camera_lift_driven := false
+
 
 static func stage(cells: Array[Vector2i], offset: Vector3) -> void:
 	_staged.clear()
@@ -306,6 +340,11 @@ static func stage(cells: Array[Vector2i], offset: Vector3) -> void:
 
 
 static func clear_staging() -> void:
+	# The flight goes FIRST and unconditionally, before the early-out: a transition abandoned by F2
+	# or Mission Select mid-flight has an overlay to drop even on a board whose staged set is
+	# already empty. Inside this function rather than beside its callers, because this is the door
+	# clear_board() calls and a second reset door is how a column gets left in the sky.
+	_end_flight()
 	if _staged.is_empty():
 		return
 	_staged.clear()
@@ -313,11 +352,127 @@ static func clear_staging() -> void:
 	staging_version += 1
 
 
+# --- driving the transition ---------------------------------------------------------------------
+
+
+# Start flying `plan` (a StagingFlight schedule). Every cell begins in its socket, which is `from`
+# below the diorama -- so the tiles are already logically staged and the overlay is what holds them
+# down until their turn comes.
+static func begin_flight(plan: Array[Dictionary], from: Vector3, to: Vector3, entering: bool) -> void:
+	_flight_plan = plan
+	_flight_elapsed = 0.0
+	_flight_from = from
+	_flight_to = to
+	_flight_entering = entering
+	_flight.clear()
+	for entry: Dictionary in plan:
+		_flight[entry["cell"]] = from
+	staging_version += 1
+
+
+# Advance the flight by `delta`. Returns true when a tile LANDED on this step, which is the caller's
+# cue to re-route its column and let the standing-state polls rebuild its props.
+#
+# THE VERSION BUMPS ON LANDINGS ONLY, and that is load-bearing rather than thrifty: OverlayMirror
+# gates its whole standing-state rebuild on staging_version, so bumping per frame would rebuild
+# every prop on every frame of the transition. Landings are discrete, so a tile flies BARE and gets
+# dressed the instant it is home -- which is also why props are dropped when the tear-out starts.
+static func advance_flight(delta: float) -> bool:
+	if _flight_plan.is_empty():
+		return false
+	_flight_elapsed += delta
+	var landed := false
+	for entry: Dictionary in _flight_plan:
+		var cell: Vector2i = entry["cell"]
+		var progress := StagingFlight.progress_at(entry, _flight_elapsed)
+		if progress >= 1.0:
+			if _flight.has(cell):
+				# Erased rather than set to the endpoint: absence IS the landed state, so a cell
+				# that is home costs nothing to ask about and cannot be left holding a stale delta.
+				_flight.erase(cell)
+				if _flight_to != Vector3.ZERO:
+					_flight[cell] = _flight_to
+				landed = true
+			continue
+		_flight[cell] = _flight_from.lerp(_flight_to, StagingFlight.slam(progress))
+	if _flight.is_empty():
+		_flight_plan.clear()
+	if landed:
+		staging_version += 1
+	return landed
+
+
+static func flight_active() -> bool:
+	return not _flight_plan.is_empty()
+
+
+static func flight_entering() -> bool:
+	return _flight_entering
+
+
+static func flight_elapsed() -> float:
+	return _flight_elapsed
+
+
+# This cell's displacement from the diorama right now. Zero once it is home, which is also what an
+# unstaged or unknown cell answers -- there is no third state to check for.
+static func flight_offset(cell: Vector2i) -> Vector3:
+	return _flight.get(cell, Vector3.ZERO)
+
+
+# Put every tile at the end of its path and stop. The executor calls this the moment its await
+# returns, so "the board is where the transition left it" holds in runs that never drew a frame --
+# headless, above all, where the await returns instantly and no driver ever ran.
+static func end_flight_now() -> void:
+	_end_flight()
+
+
+# Is this cell between its socket and its landing right now? The ground asks, because a column in
+# the air cannot live in either lattice -- one GridMap is one offset.
+static func in_flight(cell: Vector2i) -> bool:
+	return _flight.has(cell)
+
+
+static func flying_cells() -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	cells.assign(_flight.keys())
+	return cells
+
+
+static func _end_flight() -> void:
+	_flight.clear()
+	_flight_plan.clear()
+	_flight_elapsed = 0.0
+	_flight_from = Vector3.ZERO
+	_flight_to = Vector3.ZERO
+	_flight_entering = true
+	release_camera_lift()
+
+
+# Where the camera should sit right now. Equals the diorama at rest, so nothing changes for any
+# caller until a transition actually takes it.
+static func camera_lift() -> Vector3:
+	return _camera_lift if _camera_lift_driven else _stage_offset
+
+
+static func drive_camera_lift(lift: Vector3) -> void:
+	_camera_lift = lift
+	_camera_lift_driven = true
+
+
+static func release_camera_lift() -> void:
+	_camera_lift = Vector3.ZERO
+	_camera_lift_driven = false
+
+
 # Where this cell's contents render, relative to the board. THE placement question -- every mirror
 # adds it at its own placement site, and the ground GridMap honours it as a node transform because
 # a GridMap cell cannot be offset individually.
 static func staged_offset(cell: Vector2i) -> Vector3:
-	return _stage_offset if _staged.has(cell) else Vector3.ZERO
+	if not _staged.has(cell):
+		return Vector3.ZERO
+	# The overlay is empty whenever nothing is flying, so this is the plain stage offset at rest.
+	return _stage_offset + _flight.get(cell, Vector3.ZERO)
 
 
 static func is_staged(cell: Vector2i) -> bool:
@@ -346,3 +501,4 @@ static func reset_for_test() -> void:
 	_staged.clear()
 	_stage_offset = Vector3.ZERO
 	staging_version = 0
+	_end_flight()
