@@ -972,6 +972,7 @@ static func read_static(name: String) -> Variant:
 		"CLIFF_FOLLOW_MAX": return Pacing.CLIFF_FOLLOW_MAX
 		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
+		"PLUMMET_BURST_BELOW": return Pacing.PLUMMET_BURST_BELOW
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
 		"TEAR_OUT_ARRIVAL": return Pacing.TEAR_OUT_ARRIVAL
 		"TEAR_OUT_STAGGER_MAX": return Pacing.TEAR_OUT_STAGGER_MAX
@@ -1108,6 +1109,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.CLIFF_RECOVER = value
 		"PLUMMET_HOLD":
 			Pacing.PLUMMET_HOLD = value
+		"PLUMMET_BURST_BELOW":
+			Pacing.PLUMMET_BURST_BELOW = value
 		"TEAR_OUT_FLIGHT":
 			Pacing.TEAR_OUT_FLIGHT = value
 		"TEAR_OUT_ARRIVAL":

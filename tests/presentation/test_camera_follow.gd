@@ -1106,12 +1106,12 @@ func test_the_camera_rides_a_body_that_falls_off_the_board() -> void:
 	await _settle()
 	var on_the_lip: Vector3 = _rig.position
 
-	_hanging(victim, 3.0)
+	_hanging(victim, 2.0)
 	await _settle()
 
 	assert_float(_rig.position.y).override_failure_message(
-			"the body fell three cells and the camera stayed up on the lip watching an empty hole"
-	).is_equal_approx(on_the_lip.y - 3.0 * BoardSpace.CELL_SIZE, 0.001)
+			"the body fell two cells and the camera stayed up on the lip watching an empty hole"
+	).is_equal_approx(on_the_lip.y - 2.0 * BoardSpace.CELL_SIZE, 0.001)
 	# ...and it is a VERTICAL channel alone. A fall has one axis, and a drop that also slid the shot
 	# sideways would be reading the depth through something that carries a direction.
 	assert_float(_rig.position.x).is_equal_approx(on_the_lip.x, 0.001)
@@ -1183,7 +1183,7 @@ func test_the_camera_comes_back_up_when_the_fall_ends() -> void:
 	await _settle()
 	var on_the_lip: Vector3 = _rig.position
 
-	_hanging(victim, 3.0)
+	_hanging(victim, 2.0)
 	await _settle()
 	assert_bool(_rig.position.y < on_the_lip.y - 0.5).override_failure_message(
 			"the camera never went down; the case cannot say anything about coming back").is_true()
@@ -1209,7 +1209,7 @@ func test_giving_the_camera_back_climbs_it_out_of_whatever_pit_the_pass_left_it_
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(victim)
 	await _settle()
-	_hanging(victim, 3.0)
+	_hanging(victim, 2.0)
 	await _settle()
 
 	_cam().set_playback_locked(false)
@@ -1235,7 +1235,7 @@ func test_a_board_swap_mid_fall_puts_the_camera_back_on_the_new_board() -> void:
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(victim)
 	await _settle()
-	_hanging(victim, 3.0)
+	_hanging(victim, 2.0)
 	await _settle()
 	assert_bool(_rig._drop > 0.5).override_failure_message(
 			"the camera never went down; the case cannot say anything about the swap").is_true()
