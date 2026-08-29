@@ -1315,17 +1315,26 @@ func test_the_tiles_wait_for_the_camera_to_climb_out_before_they_go_home() -> vo
 	assert_float(_cam().fall_depth).override_failure_message(
 			"the rig is two cells under the board and playback was never told").is_greater(1.0)
 
+	# The real exit, not the helper: what is at risk is the WIRE, and a case calling the wait
+	# directly would pass with its one call site deleted (#103's shape).
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	BoardSpace.stage([unit.movement.cell], BoardSpace.lift_offset())
 	var done := [false]
-	var wait := func() -> void:
-		await _game.order_executor._wait_for_the_camera_to_come_home()
+	var exit := func() -> void:
+		await _game.order_executor._bring_the_board_home()
 		done[0] = true
-	wait.call()
+	exit.call()
 	await _settle()
 	assert_bool(done[0]).override_failure_message(
-			"the exit went ahead with the camera still two cells under the board").is_false()
+			"the tiles went home with the camera still two cells under the board").is_false()
+	assert_bool(BoardSpace.staging_active()).override_failure_message(
+			"the staging was already dropped while the camera was still climbing").is_true()
 
 	_rig.drop_to(0.0)
 	await _settle()
 	assert_bool(done[0]).override_failure_message(
 			"the camera came home and the exit never resumed -- the wait does not read the rig"
 	).is_true()
+	assert_bool(BoardSpace.staging_active()).override_failure_message(
+			"the exit finished without putting the board back").is_false()
