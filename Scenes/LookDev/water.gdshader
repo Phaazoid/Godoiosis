@@ -22,9 +22,13 @@
 shader_type spatial;
 render_mode cull_back;
 
-// The composed ground atlas. The tile's own art is the BASE colour, so the tileset stays the
-// authority on what colour this water is and the flat view agrees with this one.
-uniform sampler2D atlas : source_color, filter_nearest;
+// NO `atlas` SAMPLER, since #578. The composed ground atlas used to be water's BASE colour, via the
+// tile's own TileData.modulate baked in by the generator -- and that is exactly why the shallow/deep
+// boundary stepped in one texel while every knob glided across it: by the time fragment() runs the
+// two tints are two texels in one texture and no shader can unbake them. The colour is a knob pair
+// now, the generator no longer tints water, and this sampler had no reader left. The flat view still
+// reads the modulate, which is a DECLARED 2D/3D divergence (#292).
+//
 // The BODY's own sheet (water_side.png). A second sampler rather than reusing `atlas`, because the
 // two surfaces carry different UVs -- surface 1 spans (0,0,1,1) while surface 0 holds the tile's
 // atlas rect -- so one sampler would smear the whole tilesheet down every wall. That is the trap
@@ -84,6 +88,24 @@ global uniform float water_shallow_bed_grain;
 global uniform float water_shallow_caustics;
 global uniform float water_shallow_caustics_scale;
 
+// The BASE COLOUR of each water (#578), replacing the atlas read the note at the top describes.
+global uniform vec4 water_deep_color;
+global uniform vec4 water_shallow_color;
+// How much light water loses as it leaves the land. Reads the mask's B channel; 0 is off.
+global uniform float water_deep_shore_darken;
+global uniform float water_shallow_shore_darken;
+
+// SHARED tuning: neither names a water type, because both describe the TRANSITION between the two
+// rather than either one. test_no_water_uniform_is_ambiguous_about_its_type knows this category by
+// name (SHARED_GLOBALS) and its guest list is closed, exactly as the board-data one is -- a real
+// per-type knob still cannot slip in here unnamed.
+//
+// How wide the depth ramp reads, in CELLS. 0.5 is the pre-#578 hard step, since the mask puts a
+// boundary cell exactly half a cell from the seam.
+global uniform float water_depth_range;
+// How far from land the darkening takes to reach full, in cells.
+global uniform float water_shore_fade_range;
+
 // BOARD DATA, not tuning. These three name no water type because they describe the BOARD rather
 // than either water, and nobody tunes them -- BoardMirror rebuilds them whenever the terrain
 // changes. test_no_water_uniform_is_ambiguous_about_its_type knows this category by name and its
@@ -100,7 +122,14 @@ global uniform float water_shallow_caustics_scale;
 //         edge and shallow near a corner, so an L-shaped patch grew a fat mushy corner while its
 //         straight runs stayed crisp. A real distance field has a constant gradient, so the band
 //         has a constant width. The transform is a chamfer on the CPU, once per terrain edit.
-//   GREEN how deep, dilated one cell into land so a cliff shore stays deep. Exact at cell centres.
+//   GREEN a signed distance from the shallow/deep boundary, encoded over water_board_mask_range and
+//         decoded here by the water_depth_range KNOB -- so the ramp's width is tunable without
+//         rebuilding the mask, the way foam width already is. It was 0-or-1 until #578, which is
+//         why the depth ramp could only ever be one cell wide however it was tuned. Dilated into
+//         land (deepest wins) so a cliff shore does not drag its water toward shallow.
+//   BLUE  how far out from land, over that same range. It is what lets deep water lose light as it
+//         leaves the shore, and it cannot reuse RED: RED is encoded over two cells so the foam band
+//         keeps sub-art-pixel precision, and widening it that far would step the surf visibly.
 //
 // Clamped rather than repeated, so water running off the edge of the board meets its own value
 // there and does not foam against the void.
@@ -113,6 +142,10 @@ global uniform vec4 water_board_mask_rect;
 // into a distance. Pushed rather than spelled here as well: a const in each language is one edit
 // away from two different answers with nothing to catch it.
 global uniform float water_board_shore_range;
+// The encode scale for GREEN and BLUE, in cells. Pushed for the same reason as the one above -- a
+// const in each language is one edit from two answers. It is not a knob: how wide the ramp READS is
+// water_depth_range, applied after this decodes.
+global uniform float water_board_mask_range;
 
 // Art pixels per cell -- the quantiser that keeps everything here pixel art instead of a smooth
 // gradient. The sheet's own resolution (gen_lookdev_assets.TILE), so it is a const rather than a
@@ -199,9 +232,12 @@ void fragment() {
 	vec2 mask_uv = (world_pos.xz - water_board_mask_rect.xy)
 			/ max(water_board_mask_rect.zw, vec2(1.0));
 	vec4 board = texture(water_board_mask, mask_uv);
-	// Exactly 0 or 1 at a cell CENTRE, gliding only across a shallow/deep seam -- so this reads
-	// identically to the material-baked version everywhere except the boundary it exists to soften.
-	float d = board.g;
+	// Decode G back into CELLS from the shallow/deep seam, then apply the width knob (#578). A range
+	// of 0.5 puts a boundary cell at full depth and reproduces the old one-cell glide; wider spreads
+	// the whole per-type character -- every pair below, plus the bed's own fade -- over that many
+	// cells, which is what makes the two waters read as one body that deepens.
+	float depth_cells = (board.g - 0.5) * 2.0 * water_board_mask_range;
+	float d = clamp(0.5 + depth_cells / (2.0 * max(water_depth_range, 0.001)), 0.0, 1.0);
 
 	// Every one of these picks between the two dials. A mix rather than a branch is what lets a
 	// boundary GLIDE instead of snapping, which is the whole of slice 2b.
@@ -221,7 +257,15 @@ void fragment() {
 		float band_contrast = mix(water_shallow_band_contrast, water_deep_band_contrast, d);
 		float ripple = mix(water_shallow_ripple, water_deep_ripple, d);
 
-		vec3 base = texture(atlas, UV).rgb;
+		// The base colour is a KNOB PAIR now rather than the atlas (see the note at the top), and
+		// interpolating it is the whole of #578 -- the two authored tints used to meet in a single
+		// texel at the cell edge while every other channel glided across it.
+		vec3 base = mix(water_shallow_color.rgb, water_deep_color.rgb, d);
+		// ...and water loses light as it leaves the land. B is unsigned and land reads 0, so a cell
+		// against the shore is undarkened by construction and only open water dims.
+		float away = clamp(board.b * water_board_mask_range
+				/ max(water_shore_fade_range, 0.001), 0.0, 1.0);
+		base *= 1.0 - mix(water_shallow_shore_darken, water_deep_shore_darken, d) * away;
 		float px = 1.0 / PIXELS_PER_CELL;
 		vec2 cell_px = floor(world_pos.xz * PIXELS_PER_CELL);
 		vec2 p = cell_px * px;

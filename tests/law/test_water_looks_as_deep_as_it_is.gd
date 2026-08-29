@@ -6,10 +6,17 @@
 # colour in all 256 of its pixels and the shallow tile in 242 of them. A player could not see which
 # was which, and the hover card was already saying it in words.
 #
-# So there are two halves and each has its own case. The 3D SURFACE picks between two shader
-# materials on `deep`, baked from the tile's own `walkable` flag -- the flag the rules read, which
-# is what stops the render and the ruleset drifting apart. The BASE COLOUR is the tile's authored
-# modulate, because that half has to reach the flat view too and a shader cannot.
+# So there are two halves and each has its own case. HOW DEEP a cell is comes from the board mask,
+# derived from the tile's own `walkable` flag -- the flag the rules read, which is what stops the
+# render and the ruleset drifting apart. (It was two shader materials keyed on a baked `deep` until
+# #552 slice 2b; this header said so until #578.)
+#
+# The BASE COLOUR is a KNOB PAIR since #578, and used to be the tile's authored modulate on the
+# reading that it had to reach the flat view too. That held until the shallow/deep boundary had to
+# BLEND, which a per-tile bake structurally cannot do -- by fragment() the two tints are two texels
+# in one atlas. 3D takes knobs, the flat view keeps the modulate, and the divergence is DECLARED on
+# #292. Hence the atlas case below asserts water is composed UNTINTED, which is the inverse of what
+# it asserted for two days.
 #
 # The last case is a wire, not a look: a global uniform is spelled in THREE places (the shader, the
 # knob table, project.godot) and a misspelling in any of them is silent -- GLSL just reads zero.
@@ -172,17 +179,23 @@ func test_shallow_water_reads_lighter_than_deep() -> void:
 					+ "between wading and drowning").is_greater(dark.get_luminance())
 
 
-# The tint's OTHER end: the composed atlas is where the 3D board reads that same authored number
-# from, so the generator has to bake it in. Asserted per PIXEL against sheet-art x modulate, not as
-# "shallow looks lighter than deep" -- that comparison was the first draft and a mutant dropping the
-# tint entirely PASSED it, because the sheet gives the shallow tile eleven incidentally lighter
-# pixels and eleven pixels are enough to carry a mean. A rule about whether a multiply happened has
-# to compare against the multiply.
-func test_the_composed_atlas_carries_each_water_tile_s_authored_tint() -> void:
+# THE INVERSE OF WHAT THIS ASSERTED UNTIL #578, and the reason is worth having in one place.
+#
+# The generator used to bake each water tile's authored modulate into the composed atlas, because
+# the 3D board read its base colour from there. It cannot any more: a per-tile bake is two texels in
+# one texture by the time fragment() runs, so the shallow/deep boundary changed colour in a single
+# pixel however smoothly every other channel glided across it. 3D takes a knob pair instead, water's
+# top face stopped sampling the atlas at all, and a tint baked here would have no reader.
+#
+# So water is composed RAW, and the non-vacuity guard below is what gives the case teeth: it demands
+# that some water tile still AUTHORS a modulate, which is what makes "untinted" evidence that the
+# generator skipped one rather than evidence that there was nothing to skip. Every other kind still
+# bakes -- that half is the `stands_up` branch and is untouched.
+func test_the_composed_atlas_leaves_water_untinted() -> void:
 	var baked := (load(ATLAS_PATH) as Texture2D).get_image()
 	if baked.is_compressed():
 		baked.decompress()
-	var tinted := 0
+	var skipped := 0
 	for tile: Dictionary in _water_tiles():
 		var source: TileSetAtlasSource = tile["atlas"]
 		var modulate: Color = (tile["data"] as TileData).modulate
@@ -196,23 +209,20 @@ func test_the_composed_atlas_carries_each_water_tile_s_authored_tint() -> void:
 			for x in range(region.size.x):
 				var art := sheet.get_pixel(region.position.x + x, region.position.y + y)
 				# Water tiles are fully opaque -- measured -- so the kind base the generator blits
-				# underneath is covered and the composed pixel is the art alone, times its tint.
+				# underneath is covered and the composed pixel is the art alone.
 				assert_float(art.a).override_failure_message(
 						"tile %s is not opaque, so this comparison would be reading the kind " \
 						% tile["coords"] + "base through it").is_equal_approx(1.0, 0.01)
-				# CLAMPED, because the atlas is 8-bit and a modulate may brighten: shallow water's
-				# is above 1.0 on two channels, so its handful of already-light pixels saturate.
-				var want := Color(clampf(art.r * modulate.r, 0.0, 1.0),
-						clampf(art.g * modulate.g, 0.0, 1.0), clampf(art.b * modulate.b, 0.0, 1.0))
 				var got := baked.get_pixel(region.position.x + x, region.position.y + y)
-				assert_bool(_within(got, want, 2.0 / 255.0)).override_failure_message(
-						"the composed atlas draws %s at %s where the tile's art times its own " \
-						% [tile["coords"], got] + "modulate is %s -- the tileset carries the tint " \
-						% want + "and the generator is not baking it, so the two views disagree") \
+				assert_bool(_within(got, art, 2.0 / 255.0)).override_failure_message(
+						"the composed atlas draws water tile %s at %s where its raw sheet art is " \
+						% [tile["coords"], got] + "%s -- the generator is still baking the tile's " \
+						% art + "modulate, which the shader would then tint a second time") \
 						.is_true()
-		tinted += 1
-	assert_int(tinted).override_failure_message(
-			"no water tile authors a modulate; the case is vacuous").is_greater(0)
+		skipped += 1
+	assert_int(skipped).override_failure_message(
+			"no water tile authors a modulate, so an untinted atlas proves nothing about the " \
+			+ "generator skipping one").is_greater(0)
 
 
 func _within(a: Color, b: Color, tolerance: float) -> bool:
@@ -223,7 +233,8 @@ func _within(a: Color, b: Color, tolerance: float) -> bool:
 # The parse canary. Godot compiles its own shader language to GLSL, and a shader that fails that
 # parse still LOADS — it just exposes no uniforms — so nothing else in this file would notice: the
 # materials would carry their parameters, the meshlib would be identical, and the first sign would
-# be an error surface on the dev's screen. It also pins the two names the generator sets by hand.
+# be an error surface on the dev's screen. It also pins the name the generator sets by hand -- one
+# since #578, `atlas` having gone with the tile-art base colour it existed to carry.
 func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	var shader := load(SHADER_PATH) as Shader
 	assert_object(shader).is_not_null()
@@ -233,7 +244,7 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 	assert_bool(names.is_empty()).override_failure_message(
 			"the water shader exposes no uniforms at all -- it failed to parse, and every water " \
 			+ "surface will render as an error").is_false()
-	for wanted in ["atlas", "body_tex"]:
+	for wanted in ["body_tex"]:
 		assert_bool(names.has(wanted)).override_failure_message(
 				"gen_lookdev_assets sets shader parameter '%s' and the shader declares no such " \
 				% wanted + "uniform -- the value is dropped in silence").is_true()
@@ -244,7 +255,15 @@ func test_the_water_shader_parses_and_exposes_what_the_generator_sets() -> void:
 # knob row -- the mask is derived from the terrain, not tuned. Membership is asserted in BOTH
 # directions, because a hole a future knob could fall into unnamed is the law quietly deleted,
 # while a named category with a fixed membership is a category.
-const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_board_shore_range"]
+const BOARD_GLOBALS := ["water_board_mask", "water_board_mask_rect", "water_board_shore_range",
+		"water_board_mask_range"]
+
+# SHARED tuning: the SECOND declared exemption, and a different one from the board data above.
+# These ARE knobs -- they have rows, they are swept -- but each describes the TRANSITION between the
+# two waters rather than either one, so there is nothing a per-type pair could mean. A closed list
+# again, asserted in both directions, because the failure to design against is a genuinely per-type
+# knob landing here to dodge the naming rule.
+const SHARED_GLOBALS := ["water_depth_range", "water_shore_fade_range"]
 
 # PHASE globals: the ones that set WHERE a wave is rather than how strong it is. Interpolating one
 # across the depth seam is #646, and the closed list is the BOARD_GLOBALS shape for the same reason
@@ -317,9 +336,13 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	var deep_side: Dictionary[String, bool] = {}
 	var shallow_side: Dictionary[String, bool] = {}
 	var board_side: Array[String] = []
+	var shared_side: Array[String] = []
 	for name in _declared_globals():
 		if BOARD_GLOBALS.has(name):
 			board_side.append(name)
+			continue
+		if SHARED_GLOBALS.has(name):
+			shared_side.append(name)
 			continue
 		var deep := name.begins_with("water_deep_")
 		var shallow := name.begins_with("water_shallow_")
@@ -344,6 +367,10 @@ func test_no_water_uniform_is_ambiguous_about_its_type() -> void:
 	assert_array(board_side).override_failure_message(
 			"the board-data exemption is declared as %s and the shader's is %s" \
 			% [BOARD_GLOBALS, board_side]).contains_exactly_in_any_order(BOARD_GLOBALS)
+	assert_array(shared_side).override_failure_message(
+			"the shared-tuning exemption is declared as %s and the shader's is %s -- a knob that " \
+			% [SHARED_GLOBALS, shared_side] + "genuinely acts on one water type belongs in a " \
+			+ "deep/shallow pair, not in here").contains_exactly_in_any_order(SHARED_GLOBALS)
 
 
 # A DECLARED uniform is not a READ one, and a knob wired to a uniform nobody samples is a slider

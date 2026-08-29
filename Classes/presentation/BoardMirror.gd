@@ -187,34 +187,34 @@ const FLAME_FRAMES := 8
 # burying it made a feel value with no surface; the constants are deleted, not kept as a fallback.
 # The shallow defaults below are the old ratios already folded in, so the split landed as a VISUAL
 # no-op and only the panel changed.
-@export var water_deep_wave_speed := 2.32: set = _set_water_deep_wave_speed
+@export var water_deep_wave_speed := 3.64: set = _set_water_deep_wave_speed
 @export var water_shallow_wave_speed := 3.26: set = _set_water_shallow_wave_speed
-@export var water_deep_wave_scale := 4.4: set = _set_water_deep_wave_scale
+@export var water_deep_wave_scale := 4.8: set = _set_water_deep_wave_scale
 @export var water_shallow_wave_scale := 5.8: set = _set_water_shallow_wave_scale
 # How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
-@export var water_deep_band_contrast := 0.8: set = _set_water_deep_band_contrast
+@export var water_deep_band_contrast := 0.9: set = _set_water_deep_band_contrast
 @export var water_shallow_band_contrast := 0.8: set = _set_water_shallow_band_contrast
-@export var water_deep_ripple := 1.32: set = _set_water_deep_ripple
+@export var water_deep_ripple := 1.62: set = _set_water_deep_ripple
 @export var water_shallow_ripple := 1.86: set = _set_water_shallow_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
-@export var water_deep_roughness := 0.41: set = _set_water_deep_roughness
+@export var water_deep_roughness := 0.57: set = _set_water_deep_roughness
 @export var water_shallow_roughness := 0.37: set = _set_water_shallow_roughness
-@export var water_deep_specular := 0.51: set = _set_water_deep_specular
-@export var water_shallow_specular := 0.44: set = _set_water_shallow_specular
+@export var water_deep_specular := 0.58: set = _set_water_deep_specular
+@export var water_shallow_specular := 0.47: set = _set_water_shallow_specular
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket. Per type because the bed's mottle already breaks shallow water up
 # while a deep expanse has nothing else going on (dev's call, and a better one than shared).
 @export var water_deep_seam := 0.12: set = _set_water_deep_seam
-@export var water_shallow_seam := 0.12: set = _set_water_shallow_seam
+@export var water_shallow_seam := 0.155: set = _set_water_shallow_seam
 # How much darker a water block's WALLS and top rim read than its surface — the body rather than the
 # face of it. It drove the 0.004-unit rim alone until the shader reached surface 1, which is a
 # slider that moves nothing.
-@export var water_deep_body_shade := 0.22: set = _set_water_deep_body_shade
-@export var water_shallow_body_shade := 0.29: set = _set_water_shallow_body_shade
+@export var water_deep_body_shade := 0.35: set = _set_water_deep_body_shade
+@export var water_shallow_body_shade := 0.4: set = _set_water_shallow_body_shade
 
 # The bed and its caustics have no deep twin BY NATURE rather than by omission — they are what you
 # see THROUGH shallow water, and deep water is opaque. They still carry `shallow` in their names, so
@@ -234,7 +234,7 @@ const FLAME_FRAMES := 8
 # contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
 # one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
 @export var water_shallow_caustics := 0.37: set = _set_water_shallow_caustics
-@export var water_shallow_caustics_scale := 16.0: set = _set_water_shallow_caustics_scale
+@export var water_shallow_caustics_scale := 5.5: set = _set_water_shallow_caustics_scale
 
 # The SHORELINE (#552 slice 2) — foam where water meets land, which is the other half of what the
 # ticket says makes water read as water. Width is in HALF-CELLS, so 1.0 reaches from the shore to
@@ -246,10 +246,36 @@ const FLAME_FRAMES := 8
 # Deep and shallow start DIFFERENT rather than matched: a shallow shore laps, so it gets the wider
 # softer band, while deep water meeting a wall stops dead and gets a narrow hard one. A guess to
 # react to, not an answer — the whole point of it being a knob.
-@export var water_deep_foam_width := 0.15: set = _set_water_deep_foam_width
-@export var water_shallow_foam_width := 0.5: set = _set_water_shallow_foam_width
+@export var water_deep_foam_width := 0.19: set = _set_water_deep_foam_width
+@export var water_shallow_foam_width := 0.37: set = _set_water_shallow_foam_width
 @export var water_deep_foam_color := Color(0.2196, 0.6, 0.96, 0.7): set = _set_water_deep_foam_color
 @export var water_shallow_foam_color := Color(0.86, 0.93, 0.96, 0.5): set = _set_water_shallow_foam_color
+
+# The BASE COLOUR of each water, and in 3D the shader now owns it outright (#578). It used to be
+# the tile's own TileData.modulate, baked into the composed atlas by the generator -- which no
+# shader can unbake per fragment, so the two tints met in one texel at the cell edge however
+# smoothly every other knob glided across it. The defaults are what that bake produced, so this
+# ships as a visual no-op and only the ramp below changes the picture.
+#
+# DECLARED 2D/3D DIVERGENCE (#292): the flat view still reads TileData.modulate, so tuning these
+# moves the diorama alone and keeping the two in step means editing the tileset.
+@export var water_deep_color := Color(0.1490, 0.3608, 0.5843): set = _set_water_deep_color
+@export var water_shallow_color := Color(0.4667, 0.7804, 0.8431): set = _set_water_shallow_color
+
+# How much light water loses as it leaves the land -- the one depth cue that is DARK rather than
+# bright, which is the direction the dev's own #552 sweep moved every channel. Zero is off.
+@export var water_deep_shore_darken := 0.76: set = _set_water_deep_shore_darken
+@export var water_shallow_shore_darken := 0.26: set = _set_water_shallow_shore_darken
+
+# SHARED, and they name neither water on purpose: both describe the transition BETWEEN the two
+# rather than either one, so there is nothing for a per-type pair to mean. The water laws know this
+# category by name (SHARED_GLOBALS) exactly as they know the board-data one.
+#
+# How wide the depth ramp reads, in cells. 0.5 reproduces the pre-#578 hard-ish step, since the
+# encode puts a boundary cell at exactly half a cell from the seam.
+@export var water_depth_range := 0.5: set = _set_water_depth_range
+# How far from land the darkening above takes to reach full, in cells.
+@export var water_shore_fade_range := 1.0: set = _set_water_shore_fade_range
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
@@ -1133,6 +1159,12 @@ func _push_all_water() -> void:
 	_push_water(&"water_shallow_foam_width", water_shallow_foam_width)
 	_push_water(&"water_deep_foam_color", water_deep_foam_color)
 	_push_water(&"water_shallow_foam_color", water_shallow_foam_color)
+	_push_water(&"water_deep_color", water_deep_color)
+	_push_water(&"water_shallow_color", water_shallow_color)
+	_push_water(&"water_deep_shore_darken", water_deep_shore_darken)
+	_push_water(&"water_shallow_shore_darken", water_shallow_shore_darken)
+	_push_water(&"water_depth_range", water_depth_range)
+	_push_water(&"water_shore_fade_range", water_shore_fade_range)
 
 
 # The board's own water, as something the SHADER can read (#552 slice 2). One texel per cell, white
@@ -1163,6 +1195,15 @@ var _water_mask := ImageTexture.new()
 # each language is one edit away from two different answers with nothing to catch it.
 const SHORE_RANGE := 2.0
 
+# How far G and B reach before they saturate, in CELLS. Deliberately NOT SHORE_RANGE (#578): R is
+# encoded over two cells so the foam band keeps sub-art-pixel precision, and widening it far enough
+# to carry a depth cue would quantise the surf into visible steps. These two channels want reach
+# instead -- a quarter-cell per 8-bit step at this range, which nothing here reads finely.
+#
+# It is the ENCODE scale only. How wide the depth ramp actually READS is water_depth_range, a knob
+# the shader applies after decoding, so the dev can sweep the width without rebuilding the mask.
+const MASK_RANGE := 8.0
+
 # Chamfer weights: orthogonal, then diagonal. The standard two-sweep approximation to Euclidean --
 # a couple of percent out on long diagonals, which is invisible in a field that saturates at
 # SHORE_RANGE and is read through an 8-bit channel.
@@ -1178,7 +1219,7 @@ func _rebuild_water_mask(grid: TileMapLayer) -> void:
 	if rect.size.x <= 0 or rect.size.y <= 0:
 		# An empty board still owes the shader a DEFINED mask. An unset sampler reads as white,
 		# which would mean "every cell is water" -- and therefore no shore anywhere.
-		_push_mask(Image.create(1, 1, false, Image.FORMAT_RG8), Vector4(0.0, 0.0, 1.0, 1.0))
+		_push_mask(Image.create(1, 1, false, Image.FORMAT_RGB8), Vector4(0.0, 0.0, 1.0, 1.0))
 		return
 	var w := rect.size.x
 	var h := rect.size.y
@@ -1206,7 +1247,28 @@ func _rebuild_water_mask(grid: TileMapLayer) -> void:
 
 	var to_dry := _chamfer(dry, w, h)
 	var to_wet := _chamfer(wet, w, h)
-	var image := Image.create(w, h, false, Image.FORMAT_RG8)
+
+	# G is a signed distance from the shallow/deep boundary since #578 -- the same transform R uses
+	# for the shore, one boundary along. It was 0 or 1 with a one-cell bilinear glide, which is why
+	# the depth ramp could only ever be a cell wide however it was tuned.
+	var shallow_seed := PackedByteArray()
+	shallow_seed.resize(w * h)
+	for i in w * h:
+		shallow_seed[i] = 1 if (wet[i] == 1 and deep[i] == 0) else 0
+	var to_shallow := _chamfer(shallow_seed, w, h)
+	var to_deep := _chamfer(deep, w, h)
+	var depth := PackedFloat32Array()
+	depth.resize(w * h)
+	for i in w * h:
+		if wet[i] == 0:
+			continue
+		# The same half-cell offset R takes, for the same reason: a deep cell touching shallow sits
+		# at +0.5 and its neighbour at -0.5, so the shader's midpoint lands on the shared edge. A
+		# water_depth_range of 0.5 therefore reproduces the pre-#578 hard step exactly.
+		var toward := (to_shallow[i] - 0.5) if deep[i] == 1 else -(to_deep[i] - 0.5)
+		depth[i] = clampf(0.5 + toward / (2.0 * MASK_RANGE), 0.0, 1.0)
+
+	var image := Image.create(w, h, false, Image.FORMAT_RGB8)
 	for y in h:
 		for x in w:
 			var i := y * w + x
@@ -1216,26 +1278,31 @@ func _rebuild_water_mask(grid: TileMapLayer) -> void:
 			# where the binary mask had it. Straight shores are unchanged; corners are not.
 			var signed := (to_dry[i] - 0.5) if wet[i] == 1 else -(to_wet[i] - 0.5)
 			var r := clampf(0.5 + signed / (2.0 * SHORE_RANGE), 0.0, 1.0)
-			image.set_pixel(x, y, Color(r, _deepness_at(wet, deep, w, h, x, y), 0.0, 1.0))
+			# B: how far out to sea, unsigned and over the wide range. It is what lets water lose
+			# light as it leaves the land -- a DARK depth cue rather than another bright one. Land
+			# falls out at 0 for free, its own distance to dry being zero.
+			var b := clampf((to_dry[i] - 0.5) / MASK_RANGE, 0.0, 1.0)
+			image.set_pixel(x, y, Color(r, _deepness_at(wet, depth, w, h, x, y), b, 1.0))
 	# A 2D cell's y IS the world z (BoardSpace.flat), and a cell is one world unit across, so the
 	# used rect doubles as the world rect with no conversion.
 	_push_mask(image, Vector4(rect.position.x, rect.position.y, rect.size.x, rect.size.y))
 
 
-# G, and the DILATE that makes it usable. A water cell's own deepness is exact -- 0 or 1 -- so the
-# shader reads the same value at a cell centre that the material used to carry, and away from a
-# type boundary this whole slice is a visual no-op.
+# G, and the DILATE that makes it usable. A water cell carries its own encoded depth; a LAND cell
+# takes the DEEPEST value beside it, and without that the blend breaks at every cliff: bilinear from
+# a deep cell's centre reaches into its land neighbours, so a land 0 would drag deep water toward
+# shallow along the whole rim and fade the bed in where no bottom should show. Eight neighbours
+# because the sample can reach a cell's own corner, and the DEEPER wins a tie -- arbitrary where a
+# land cell touches both, and stated rather than discovered.
 #
-# A LAND cell takes the deepness of the water beside it, and without that the blend breaks at every
-# cliff: bilinear from a deep cell's centre reaches into its land neighbours, so a land 0 would drag
-# deep water toward shallow along the whole rim and fade the bed in where no bottom should show.
-# Eight neighbours because the sample can reach a cell's own corner, and the DEEPER wins a tie --
-# arbitrary where a land cell touches both, and stated rather than discovered.
-func _deepness_at(wet: PackedByteArray, deep: PackedByteArray, w: int, h: int,
+# It carries the neighbour's own RAMP value since #578 rather than a flat 1.0: a cliff beside water
+# three cells out from the shallows must read as three cells out, not as maximum depth.
+func _deepness_at(wet: PackedByteArray, depth: PackedFloat32Array, w: int, h: int,
 		x: int, y: int) -> float:
 	var i := y * w + x
 	if wet[i] == 1:
-		return float(deep[i])
+		return depth[i]
+	var best := 0.0
 	for dy in [-1, 0, 1]:
 		for dx in [-1, 0, 1]:
 			var nx: int = x + dx
@@ -1243,9 +1310,9 @@ func _deepness_at(wet: PackedByteArray, deep: PackedByteArray, w: int, h: int,
 			if nx < 0 or ny < 0 or nx >= w or ny >= h:
 				continue
 			var n := ny * w + nx
-			if wet[n] == 1 and deep[n] == 1:
-				return 1.0
-	return 0.0
+			if wet[n] == 1 and depth[n] > best:
+				best = depth[n]
+	return best
 
 
 # Distance from every cell to the nearest SET cell, in cells. Two sweeps, forward then backward,
@@ -1293,6 +1360,37 @@ func _push_mask(image: Image, rect: Vector4) -> void:
 	# Travels WITH the mask rather than from _push_all_water: it is how to decode this picture, and
 	# a mask pushed before its scale would be decoded through a zero.
 	_push_water(&"water_board_shore_range", SHORE_RANGE)
+	_push_water(&"water_board_mask_range", MASK_RANGE)
+
+
+func _set_water_deep_color(value: Color) -> void:
+	water_deep_color = value
+	_push_water(&"water_deep_color", value)
+
+
+func _set_water_shallow_color(value: Color) -> void:
+	water_shallow_color = value
+	_push_water(&"water_shallow_color", value)
+
+
+func _set_water_deep_shore_darken(value: float) -> void:
+	water_deep_shore_darken = value
+	_push_water(&"water_deep_shore_darken", value)
+
+
+func _set_water_shallow_shore_darken(value: float) -> void:
+	water_shallow_shore_darken = value
+	_push_water(&"water_shallow_shore_darken", value)
+
+
+func _set_water_depth_range(value: float) -> void:
+	water_depth_range = value
+	_push_water(&"water_depth_range", value)
+
+
+func _set_water_shore_fade_range(value: float) -> void:
+	water_shore_fade_range = value
+	_push_water(&"water_shore_fade_range", value)
 
 
 func _set_water_deep_wave_speed(value: float) -> void:

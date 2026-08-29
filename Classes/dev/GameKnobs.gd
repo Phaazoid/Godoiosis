@@ -256,9 +256,13 @@ const KNOBS: Array[Dictionary] = [
 	# EVERY value is PER TYPE (dev, 2026-08-27: "we need these dials separate for the different water
 	# types. Otherwise, I can't tune them separately."). It replaced a fixed RATIO living in the
 	# shader as constants -- a ratio between two authored things is itself an authored thing, so
-	# burying it made a feel value with no surface. What is NOT here: how much lighter shallow water
-	# is than deep. That is the two tiles' authored modulate, because it has to reach the flat view
-	# as well and a knob on this node structurally cannot.
+	# burying it made a feel value with no surface.
+	#
+	# How much lighter shallow water is than deep IS here since #578 -- it was the two tiles' authored
+	# modulate, on the reading that it had to reach the flat view too. That reading held right up
+	# until the boundary had to BLEND, which a per-tile bake structurally cannot do: by fragment()
+	# the two tints are two texels in one atlas. So 3D takes a knob pair and the flat view keeps the
+	# modulate, a divergence declared on #292 rather than discovered.
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_wave_speed", "label": "Wave speed", "min": 0.0, "max": 4.0, "step": 0.01,
 		"tip": "How fast the light bands travel across deep water. Zero holds it still without flattening it -- the bands, the highlight and the body all stay, they simply stop moving."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_wave_scale", "label": "Wave scale", "min": 0.5, "max": 24.0, "step": 0.1,
@@ -279,6 +283,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre. Deep water usually meets a wall rather than a beach, so a NARROWER band than shallow's reads better: water stopping dead, not running out."},
 	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_foam_color", "label": "Foam colour",
 		"tip": "The surf's own colour, and its ALPHA is how hard it lands. Deep water breaking against something wants the harder, brighter edge -- it is the one place on a deep expanse where a bright highlight is doing work rather than adding glare."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_color", "label": "Colour",
+		"tip": "What colour deep water IS. It was the tile's own modulate baked into the atlas until #578, which is why the shallow/deep boundary changed colour in a single texel while every other dial glided across it -- a shader cannot unbake a per-tile tint. 3D ONLY: the flat view still reads the tileset, so moving this makes the two views disagree until you edit the tile to match."},
+	{"group": "Water (deep)", "node": "BoardMirror", "prop": "water_deep_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much light deep water loses as it gets further from land. The one depth cue that is DARK rather than bright, which is the direction your #552 sweep moved everything -- 0 turns it off and leaves a flat colour out to the horizon."},
 
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_wave_speed", "label": "Wave speed", "min": 0.0, "max": 6.0, "step": 0.01,
 		"tip": "How fast shallow water's bands travel. It also carries the CAUSTICS, whose speed is derived from this rather than taking a dial of its own -- it is the same water moving."},
@@ -310,6 +318,18 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "How far in from the shore the surf reaches, in HALF-cells -- 1.0 arrives at the cell's own centre, which is as far as a one-texel-per-cell mask can see. 0 turns foam off entirely. A shallow shore laps, so it can afford a wider softer band than deep water does."},
 	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_foam_color", "label": "Foam colour",
 		"tip": "The surf's own colour, and its ALPHA is how hard it lands -- those are one decision, not two. Cool white is the safe read; pushing it warm makes shallow water read as a beach rather than a lake. Alpha 0 is the other way to turn foam off."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_color", "label": "Colour",
+		"tip": "What colour shallow water IS -- the base the bed and the bands are composited over. Same #578 story as deep's, and the same 3D-only caveat: the flat view keeps reading the tileset's modulate."},
+	{"group": "Water (shallow)", "node": "BoardMirror", "prop": "water_shallow_shore_darken", "label": "Shore darken", "min": 0.0, "max": 1.0, "step": 0.01,
+		"tip": "How much light shallow water loses with distance from land. Usually wants LESS than deep's -- shallow water that is far from any shore is a contradiction, so this mostly shows up on a wide shelf."},
+
+	# SHARED, and the reason they are a third group rather than a pair: both describe the TRANSITION
+	# between the two waters, so there is nothing for a per-type version to mean. The water laws know
+	# this category by name (SHARED_GLOBALS), the same way they know the board-data one.
+	{"group": "Water (shared)", "node": "BoardMirror", "prop": "water_depth_range", "label": "Depth ramp", "min": 0.5, "max": 8.0, "step": 0.1,
+		"tip": "How many CELLS the shallow-to-deep transition takes. 0.5 is the old hard-ish step at the cell edge; wider spreads EVERY per-type dial across that distance -- colour, waves, the bed and its caustics -- which is what makes the two read as one body that deepens rather than two kinds of water meeting. On a small pond a wide ramp means neither tile's own colour is ever seen pure."},
+	{"group": "Water (shared)", "node": "BoardMirror", "prop": "water_shore_fade_range", "label": "Shore fade", "min": 1.0, "max": 8.0, "step": 0.1,
+		"tip": "How far from land, in cells, the two Shore darken dials take to reach full. Longer is a gentler gradient out to sea; it does nothing at all while both of those are 0."},
 
 ]
 
@@ -846,6 +866,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# split needs no third table, only a second group name.
 	"Water (deep)": "Water",
 	"Water (shallow)": "Water",
+	"Water (shared)": "Water",
 	# Elemental VFX, not just fire (#420). Ice draws as a flat Layer.TERRAIN icon with no 3D effect
 	# and so has nothing to put here yet; Cover arrives with fire because #326 ruled it the same
 	# kind of thing -- a terrain STATE whose art draws objects. A new element is one line.

@@ -16,7 +16,7 @@
 >
 > **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset. What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
 
-**Canon checked through #581 (2026-08-27).**
+**Canon checked through #646 (2026-08-28).**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -122,10 +122,17 @@ sheet paints both water tiles the **identical** flat blue `(77, 155, 230)` — a
 deep tile and 242 of the shallow one — so the whole of *wading versus drowning* was carried by the
 hover card's words. Two halves now say it, and the second is what makes the first safe: an authored
 `TileData.modulate` per tile (lighter and tealer for shallow, darker for deep), which the flat view
-multiplies natively and the meshlib generator bakes into the composed atlas so **one number serves
-both views**; and, in 3D only, a surface shader that reads how deep a cell is out of `BoardMirror`'s board mask, whose green channel is baked from **the
-tile's own `walkable` flag**, so the render asks the same question `drowns_in` does and a third water
-tile authored tomorrow gets its look from its walkability for free. Its deep half is opaque and slow;
+multiplies natively. **That one number served BOTH views until [#578](https://github.com/Phaazoid/Godoiosis/issues/578) (2026-08-28), and now serves the
+flat one alone** — 3D water takes its colour from a knob pair, and the generator composes water into
+the atlas untinted. The reading held right up until the boundary had to BLEND, which a per-tile bake
+structurally cannot do: by the time `fragment()` runs the two tints are two texels in one texture, so
+the colour stepped in a single pixel at the cell edge however smoothly every other channel glided
+across it. A **declared** divergence on [#292](https://github.com/Phaazoid/Godoiosis/issues/292) rather than a drift, and its cost is real — tuning the
+diorama's water no longer moves the flat view, and keeping them in step means editing the tile.
+And, in 3D only, a surface shader that reads how deep a cell is out of `BoardMirror`'s board mask,
+whose green channel is derived from **the tile's own `walkable` flag**, so the render asks the same
+question `drowns_in` does and a third water tile authored tomorrow gets its look from its
+walkability for free. Its deep half is opaque and slow;
 its shallow half is quicker and **shows its lakebed through it** — a warm bed under a cool surface,
 with caustics travelling over a bed that stays still. That last part is not decoration: seeing the
 bottom is what separates shallow water from ICE, which is what the first pass at it read as.

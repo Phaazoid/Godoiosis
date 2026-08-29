@@ -359,7 +359,7 @@ func _gen_meshlib() -> int:
 	# DEEP because a fallback cell has no tile to declare itself walkable -- since slice 2b it does
 	# not have to guess, because deepness comes from the board mask per CELL and the cell under a
 	# fallback item is as real as any other.
-	var fallback_water := _water_mat(water_top, water_side)
+	var fallback_water := _water_mat(water_side)
 	_add_item(ml, 5, "water_block", _block_mesh(fallback_water, fallback_water))
 	_add_item(ml, 6, "tree_block", _block_mesh(_mat(tree_top), _mat(dirt_side)))
 	# Ids 0-6 are the hand-picked fallbacks and Scenes/LookDev/LookDev.tscn's diorama references them
@@ -485,7 +485,7 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 		# ONE water SURFACE material over that same texture (#552 slice 2b). Shallow versus deep is
 		# still the only thing one water tile may differ from another about -- but that difference
 		# now lives in the board mask BoardMirror rebuilds, per cell, where it can be interpolated.
-		var water_mat := _water_mat(null, water_side_tex)
+		var water_mat := _water_mat(water_side_tex)
 		var atlas_size := Vector2(ground.get_width(), ground.get_height())
 		for coords in _sorted_tile_coords(atlas):
 			if atlas.get_tile_size_in_atlas(coords) != Vector2i.ONE:
@@ -511,7 +511,12 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			var shape := GridUtils.prop_shape_of(data)
 			var stands_up := shape != GridUtils.PropShape.FLAT
 			if not stands_up:
-				var art := _tinted(source_image, region, data.modulate)
+				# WATER composes UNTINTED since #578: its colour is a knob pair the shader applies,
+				# so baking the tile's modulate here would be a tint with no reader -- the atlas is
+				# 3D-only and water's top face stopped sampling it. Every other kind still bakes,
+				# and _tinted's white early-out is what makes this a no-op rather than a branch.
+				var tint: Color = Color.WHITE if kind == Terrain.Kind.WATER else data.modulate
+				var art := _tinted(source_image, region, tint)
 				ground.blend_rect(art, Rect2i(Vector2i.ZERO, region.size), region.position)
 			elif shape == GridUtils.PropShape.TUFT:
 				ground.blit_rect(_tuft_ground(rng, source_image, region),
@@ -638,7 +643,6 @@ func _add_tileset_items(ml: MeshLibrary, dirt_side: Material, stone_side: Materi
 			return -1
 		atlas_mat.albedo_texture = composited
 		prop_mat.albedo_texture = composited
-		water_mat.set_shader_parameter("atlas", composited)
 
 	var added := next_id - FIRST_TILE_ITEM
 	print("Tileset items %d..%d (%d ground + %d prop) from %s" \
@@ -766,10 +770,13 @@ func _mat(tex: Texture2D) -> StandardMaterial3D:
 #
 # Every TUNING value is a global uniform for the same reason it always was: a per-material one would
 # mean BoardMirror writing into the generated meshlib at runtime.
-func _water_mat(tex: Texture2D, body: Texture2D) -> ShaderMaterial:
+#
+# It takes NO ground texture since #578: water's top face reads its colour from a knob pair rather
+# than from the composed atlas, so the `atlas` sampler is gone from the shader and there is nothing
+# to hand it. The BODY still needs its own sheet.
+func _water_mat(body: Texture2D) -> ShaderMaterial:
 	var mat := ShaderMaterial.new()
 	mat.shader = load(WATER_SHADER_PATH)
-	mat.set_shader_parameter("atlas", tex)
 	mat.set_shader_parameter("body_tex", body)
 	return mat
 
