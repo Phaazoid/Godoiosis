@@ -266,7 +266,7 @@ static var CLIFF_FOLLOW := 1.0
 # well under the board looking at sky and fog; this is where to stop it short and let the body fall
 # on out of frame instead. It caps the CONTRIBUTION and never the aim, so a board with deep terrain
 # is unaffected -- the same shape DOLLY_FLOOR has.
-static var CLIFF_FOLLOW_MAX := 8.0
+static var CLIFF_FOLLOW_MAX := 3.0
 # How fast the camera climbs back once the fall ends, in e-folds per second. Its own rate rather than
 # the rig's glide because the channel is asymmetric: down is instant (see CameraRig3D.recovered), and
 # a slow climb is what keeps the camera in the pit while the death jolt and the down-beat's linger
@@ -277,6 +277,23 @@ static var CLIFF_RECOVER := 1.6
 # is riding -- ending the tween and then waiting would have the rig climbing out during the pause,
 # which is the opposite of the shot. A void fall only; a cliff drop lands and the slide carries on.
 static var PLUMMET_HOLD := 0.7
+# ...and how far UNDER the stopped camera the health bricks burst, in cells (dev, 2026-08-29: the
+# camera follows a bit, stops, the body keeps falling off screen, and after a beat all you see is
+# the bricks exploding up from under the frame). Measured from where the follow STOPPED rather than
+# from the body, which by then is metres further down and out of every shot.
+static var PLUMMET_BURST_BELOW := 1.5
+
+
+# How much of a fall of `depth` world units the camera actually takes -- the strength and the ceiling
+# applied ONCE (#602 round 2). Two readers: the shot itself, and the health readout, which has to
+# know where the shot stopped so a plummet's debris can burst just underneath it. Two spellings would
+# put the cubes somewhere the camera is not.
+#
+# FLOORED at zero, and that is a declared cut rather than a guard: an airborne shove holds a body
+# ABOVE the ground it sails over, so the depth goes negative there. Riding that upward is a different
+# shot nobody has asked for; it is one maxf away if anybody does.
+static func followed_fall(depth: float) -> float:
+	return minf(maxf(depth, 0.0) * CLIFF_FOLLOW, CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
 
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.

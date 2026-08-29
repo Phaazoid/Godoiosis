@@ -436,6 +436,14 @@ func drop_to(depth: float) -> void:
 	_target_drop = depth
 
 
+# ...and how far down it actually IS, which is a different question from how far it was told to go:
+# the climb back is eased, so this is still positive for a second or two after the fall published
+# zero. Playback waits on it before dropping the tiles home (#602 round 2) -- the LIVE value, since
+# a target-based answer would say "home" while the shot was still deep in a pit.
+func drop_depth() -> float:
+	return _drop
+
+
 # The ONE place the node's position is written. All four channels, summed -- see the header.
 func _apply_position() -> void:
 	position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()

@@ -1249,3 +1249,83 @@ func test_a_board_swap_mid_fall_puts_the_camera_back_on_the_new_board() -> void:
 			"the live drop was cut but its target still points into the old board's hole") \
 		.is_equal(0.0)
 	_cam().set_playback_locked(false)
+
+
+# --- the tear-out's own height (2026-08-29, found in play) --------------------------------------
+
+# WHILE A FIGHT IS ON STAGE THE CAMERA'S HEIGHT IS THE STAGE'S, not the ground under the camera.
+#
+# The lift channel has always said this in its own comment; the AIM never applied it. On flat ground
+# the two agree by accident, which is why it shipped -- on a fight at the top of a tall column the
+# diorama sits at the column's surface plus the lift while the camera sat at the PLAIN's surface plus
+# the lift, and the frame was empty. It is also a jerk: a pan crossing the column's edge stepped the
+# camera by the column's whole height, mid-transition.
+#
+# The board is RAISED here rather than found that way -- authored content may not be asserted on, and
+# a flat fixture cannot tell the two answers apart. The fixture's reset restores it.
+func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	var stage_cell: Vector2i = unit.movement.cell
+	var heights: BoardHeights = _game.board_heights
+	heights.set_cell(stage_cell, 8)
+	var raised := BoardSpace.surface_point(stage_cell, heights).y
+
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)
+	# ...and then OFF it, which is what any pan across the board does anyway. The follow has to be
+	# dropped first or _process hauls the camera straight back onto the unit -- headless it lands
+	# exactly, so the park would be undone within the frame.
+	_cam().follow_unit = null
+	var away: Vector2 = _cam().global_position + Vector2(GridUtils.TILE_SIZE * 5.0, 0.0)
+	_cam().global_position = away
+	_cam().target_position = away
+	await _settle()
+	var over_the_plain: float = _rig.position.y
+	assert_bool(absf(raised - over_the_plain) > 1.0).override_failure_message(
+			"the raised cell is level with the ground under the camera; the case proves nothing"
+	).is_true()
+
+	BoardSpace.stage([stage_cell], BoardSpace.lift_offset())
+	await _settle()
+
+	assert_float(_rig.position.y).override_failure_message(
+			"the camera rode the lift up from the ground UNDER IT rather than from the diorama's own "
+			+ "surface, so it is looking at empty space beside the fight") \
+		.is_equal_approx(raised + BoardSpace.lift_offset().y, 0.01)
+	BoardSpace.clear_staging()
+	_cam().set_playback_locked(false)
+
+
+# --- the camera comes home BEFORE the tiles do (dev, 2026-08-29) --------------------------------
+
+# A pass whose last blow knocked somebody into a pit ends with the shot still deep below the board,
+# and the climb back is EASED -- longer than the aftermath hold -- so the tiles used to start
+# dropping while the camera was still on its way up.
+#
+# The wait reads the fact the RIG publishes rather than a beat of its own, which is what this pins:
+# it must still be waiting while the rig is down, and must resume once the rig is back.
+#
+# The RIG is driven, never the published field -- the mirror rewrites that every frame, so a case
+# that poked it would be asserting against its own write and would pass with the publish deleted.
+# The whole chain is under test: drop -> mirror -> CameraController.fall_depth -> the wait.
+func test_the_tiles_wait_for_the_camera_to_climb_out_before_they_go_home() -> void:
+	_rig.drop_to(2.0)
+	await _settle()
+	assert_float(_cam().fall_depth).override_failure_message(
+			"the rig is two cells under the board and playback was never told").is_greater(1.0)
+
+	var done := [false]
+	var wait := func() -> void:
+		await _game.order_executor._wait_for_the_camera_to_come_home()
+		done[0] = true
+	wait.call()
+	await _settle()
+	assert_bool(done[0]).override_failure_message(
+			"the exit went ahead with the camera still two cells under the board").is_false()
+
+	_rig.drop_to(0.0)
+	await _settle()
+	assert_bool(done[0]).override_failure_message(
+			"the camera came home and the exit never resumed -- the wait does not read the rig"
+	).is_true()

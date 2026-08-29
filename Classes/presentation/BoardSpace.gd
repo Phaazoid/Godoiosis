@@ -491,6 +491,13 @@ static func stage_offset() -> Vector3:
 	return _stage_offset
 
 
+# Is a fight on stage AT ALL -- asked by the camera per frame, so it must not build the cell array
+# staged_cells() does. Not derivable from stage_offset(), which is legitimately ZERO when the lift
+# knob is dialled to nothing.
+static func staging_active() -> bool:
+	return not _staged.is_empty()
+
+
 # Where the diorama sits for a tear-out starting now. Straight up: the tiles rise OUT of the board
 # (#521), and the exit drops them back into the sockets they left.
 static func lift_offset() -> Vector3:

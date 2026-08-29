@@ -662,7 +662,7 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 # the red blocks should fly away"). Reached by signal because nothing else can reach it: see the
 # connect site in reconcile. The standing/lost split comes off the RENDERED count, so each cube
 # leaves wearing what it was showing rather than what an HP number says it should have been.
-func _on_unit_died(_unit: Unit, id: int) -> void:
+func _on_unit_died(unit: Unit, id: int) -> void:
 	# Above the same gate, for the same reason, and this one is NOT redundant with the poll's report
 	# (#520 diff 2b): die() emits and queue_frees in ONE frame and the loop above skips a unit already
 	# queued for deletion, so the poll NEVER observes a unit at 0 HP. A killing blow therefore reaches
@@ -674,13 +674,35 @@ func _on_unit_died(_unit: Unit, id: int) -> void:
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return
 	var standing := bar.filled_block_count()
+	var lift := plummet_lift(unit)
 	var positions: Array[Vector3] = []
 	var colors := PackedColorArray()
 	for step in bar.block_count():
 		var index := bar.block_count() - 1 - step   # see _burst_lost: the march starts at the top right
-		positions.append(bar.block_world_position(index))
+		positions.append(bar.block_world_position(index) + Vector3(0.0, lift, 0.0))
 		colors.append(bar_fill_color if index < standing else bar_missing_color)
 	_throw(bar, positions, colors, block_death_power)
+
+
+# How far to RAISE a death burst that happened at the bottom of a void plummet (#602 round 2).
+#
+# The camera follows a fall only as far as Pacing.followed_fall and then stops while the body keeps
+# going, so by die() the readout is metres below anything on screen and its cubes would launch, arc
+# and land with nobody watching. Raised to a knobbed distance under where the camera STOPPED, so
+# they rise into the bottom of the frame -- which is what the beat at the bottom of the fall is for.
+#
+# Legitimate rather than a cheat: these cubes already leave the readout's SOCKETS rather than a body,
+# and they are a descriptor, not debris with mass. Zero for every other death, including headless,
+# where plummet() returns before it records any depth at all.
+#
+# Static and public because it is the arithmetic worth pinning and it needs no scene -- the burst
+# itself is a particle throw a suite cannot watch, so what a case can hold is WHERE it starts.
+static func plummet_lift(unit: Unit) -> float:
+	var fell := unit.movement.plummet_depth * BoardSpace.CELL_SIZE
+	if fell <= 0.0:
+		return 0.0
+	var burst_at := Pacing.followed_fall(fell) + Pacing.PLUMMET_BURST_BELOW * BoardSpace.CELL_SIZE
+	return maxf(fell - burst_at, 0.0)
 
 
 # The cubes between two HP readings, thrown from the sockets they were standing in. They leave in the

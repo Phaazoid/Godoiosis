@@ -153,18 +153,24 @@ func _slide_to_next_cell() -> void:
 
 	cell = next_cell
 
-	# A segment whose entry edge BREAKS is travelled in two halves with the fall between them
-	# (#472). The edge is exactly where the preview hangs its drop pointer (#431's "it starts
-	# falling AT THE EDGE"), so this is the playback finally taking the fall its own trail draws.
-	# Asked per EDGE rather than per landing, which is what lets a cliff-then-tumble-then-lip shove
-	# fall at BOTH breaks -- the thing the landing flag #431 deleted could never express.
+	# A segment whose entry edge BREAKS carries a fall (#472). The edge is exactly where the preview
+	# hangs its drop pointer (#431's "it starts falling AT THE EDGE"), so this is the playback taking
+	# the fall its own trail draws. Asked per EDGE rather than per landing, which is what lets a
+	# cliff-then-tumble-then-lip shove fall at BOTH breaks -- the thing the landing flag #431 deleted
+	# could never express.
+	#
+	# THE BODY STEPS CLEAR BEFORE IT DROPS (dev, 2026-08-29). It used to slide to the MIDPOINT of the
+	# shared edge and fall from there, which puts the sprite exactly in the boundary plane -- half
+	# inside the wall for the whole descent, invisible on a one-cell drop and grotesque down a ten-
+	# level pillar -- and left the remaining half-step to run afterwards, eight pixels in a
+	# sixteenth of a second, which reads as a snap to centre once a 2.5s fall has just played.
 	var unit := _unit()
 	var drop := _edge_drop(from_cell, next_cell)
 	if drop > 0.0:
-		await _slide_leg(unit, grid.map_to_local(from_cell).lerp(target_pos, 0.5))
-		await _fall(drop)
+		await _step_off(unit, target_pos, drop)
 		airborne = false   # the flight ENDED at that edge; the rest of this segment is ground
-	await _slide_leg(unit, target_pos)
+	else:
+		await _slide_leg(unit, target_pos)
 	_slide_to_next_cell()
 
 
@@ -221,17 +227,31 @@ func _edge_drop(from: Vector2i, to: Vector2i) -> float:
 	return top - here
 
 
-# The fall at a break -- 3D-ONLY spectacle on plummet()'s shape below, with the same headless
-# escape and for the same reason: a real timer here would put wall clock on every shove the suite
-# runs. UnitMirror is the one reader.
-func _fall(cells: float) -> void:
+# The step OFF an edge and the fall that follows it -- 3D-ONLY spectacle on plummet()'s shape below,
+# with the same headless escape and for the same reason: a real timer here would put wall clock on
+# every shove the suite runs. UnitMirror is the one reader.
+#
+# ONE function rather than a leg plus a fall, because the two are only correct together: the fall
+# flag has to be raised BEFORE the step so the height is OWNED at the lip's own level while the body
+# clears the wall. Without it the mirror falls through to its ground branch mid-step and the sprite
+# either sinks (a tumble, where surface_height_at steps at the boundary) or pops back up to the
+# launch surface (a flight, where the pixel midpoint still reads as the cell being LEFT -- floori
+# puts an exact boundary on the +side, so a shove north or west lands on the wrong cell and one
+# south or east does not, which is why this was invisible half the time).
+func _step_off(unit: Node2D, to: Vector2, cells: float) -> void:
 	# Headless (or at a zero rate) the drop is INSTANT rather than absent: the depth still records
 	# what fell, so a suite running the real slide can read the beat it has no way to watch.
+	#
+	# The STEP still runs first, and in that order deliberately -- the leg is a real tween in every
+	# run, so "the body had finished its step before it started to drop" stays observable when the
+	# fall itself is not. That is the whole property this function exists for.
 	if SHOVE_FALL_SPEED <= 0.0 or DisplayServer.get_name() == "headless":
+		await _slide_leg(unit, to)
 		landing_fall_depth = cells
 		return
 	landing_fall_depth = 0.0
 	landing_falling = true
+	await _slide_leg(unit, to)
 	var tween := create_tween()
 	tween.tween_property(self, "landing_fall_depth", cells, cells / SHOVE_FALL_SPEED)
 	await tween.finished

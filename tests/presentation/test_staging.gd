@@ -635,3 +635,50 @@ func _queue_a_move(unit: Unit) -> void:
 func _settle() -> void:
 	await await_idle_frame()
 	await await_idle_frame()
+
+
+# --- the tear-out LOOKS AT THE FIGHT (2026-08-29, found in play) --------------------------------
+
+# The tear-out is the first thing a pass plays and nothing before it had aimed the camera:
+# _frame_the_walk returns early on an EMPTY span, which is what a hold-position queue produces, so
+# the whole brace/flight/settle stretch played over wherever the view happened to be left. On the
+# dev's report that was fifteen cells away and the frame was simply empty for the entire transition.
+#
+# Driven at _stage_the_fight ALONE rather than through a whole pass, because the later beats pan to
+# their own subjects and would hide whichever answer this phase gave -- the phase that OWNS the
+# property is the phase to drive (#521 slice B's own lesson, one case over).
+func test_the_tear_out_looks_at_the_fight_before_the_ground_moves() -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
+	var unit := _a_unit()
+	_swing_at_open_ground(unit)
+	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
+	var sheet := BeatSheet.read(unit.squad, plan)
+	assert_bool(not sheet.cells.is_empty()).override_failure_message(
+			"fixture: this pass puts no fight on stage").is_true()
+
+	var grid: TileMapLayer = _game.grid
+	var stage := _world_box(sheet.cells, grid)
+	# Park the camera well outside the fight -- the state a hold-position queue leaves it in.
+	var away: Vector2 = stage.get_center() + Vector2(GridUtils.TILE_SIZE * 15, GridUtils.TILE_SIZE * 9)
+	_game.camera_controller.global_position = away
+	_game.camera_controller.target_position = away
+	assert_bool(stage.has_point(away)).override_failure_message(
+			"the camera was parked INSIDE the fight; the case proves nothing").is_false()
+
+	await _game.order_executor._stage_the_fight(sheet)
+	await _settle()
+
+	assert_bool(stage.has_point(_game.camera_controller.global_position)).override_failure_message(
+			"the ground tore out with the camera still at %s, outside the fight's own footprint %s"
+			% [_game.camera_controller.global_position, stage]).is_true()
+	BoardSpace.clear_staging()
+
+
+# The world-space box a cell set occupies, grown by a cell so the edge counts as inside. Derived
+# from the cells the sheet names rather than spelled as a midpoint, which would be the executor's
+# own arithmetic asserting against itself.
+func _world_box(cells: Array[Vector2i], grid: TileMapLayer) -> Rect2:
+	var box := Rect2(GridUtils.cell_world(grid, cells[0]), Vector2.ZERO)
+	for cell in cells:
+		box = box.expand(GridUtils.cell_world(grid, cell))
+	return box.grow(GridUtils.TILE_SIZE)

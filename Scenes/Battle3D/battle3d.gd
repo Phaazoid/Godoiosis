@@ -136,6 +136,11 @@ var _playback_owned_camera := false
 # store the answer is drawn from -- rather than on a copy of what it resolves to (#308).
 var _framed_span: Array[Vector2i] = []
 
+# The diorama's own surface height, and the staging_version it was solved at (#602). See
+# _staged_surface: a per-frame read that must not rebuild the staged cell list every frame.
+var _stage_height := 0.0
+var _stage_height_version := -1
+
 
 func _ready() -> void:
 	game = _main.get_node("GameContainer/GameView/Game")
@@ -771,6 +776,12 @@ func _mirror_camera() -> void:
 	# the transition drives while one is running (#521 slice B). Equal whenever nothing is driving
 	# it, so with the battle zoom off, or the flag off, this is bit-for-bit the old poll.
 	_rig.lift_to(BoardSpace.camera_lift())
+	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
+	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
+	# playback lets go, so a poll below the return would freeze on the last value it saw and the
+	# exit transition would wait for ever. The one fact that travels rig -> playback down this
+	# channel; see CameraController.fall_depth for why it has to.
+	cam.fall_depth = _rig.drop_depth()
 	# ABOVE the early return for the same reason, and it is the whole point of the field: the readout
 	# has to learn when a pass ENDS, and everything below here stops being polled the moment the lock
 	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
@@ -1140,8 +1151,42 @@ func _center_rig_on(cell: Vector2i) -> void:
 # authored start that froze aim.y = 5) the camera aimed four cells into the air above whatever it
 # had been pointed at. Invisible on a flat board, which is why Prolog never showed it.
 func _aim_over(x: float, z: float) -> Vector3:
+	# WHILE A FIGHT IS ON STAGE THE HEIGHT IS THE STAGE'S, NOT THE GROUND'S (2026-08-29, found in
+	# play). The lift channel has always said this -- "the whole stage, never the cell under the
+	# camera: the diorama is one thing at one height, and asking per cell would dip the camera every
+	# time a pan crossed unstaged ground" -- and the rule was written for one channel and never
+	# applied to the other. The rig adds the stage's LIFT to whatever this returns, so on flat ground
+	# the two agreed by accident; on a fight at the top of a ten-level pillar the diorama sits at the
+	# pillar's surface plus the lift while this handed back the PLAIN's surface plus the lift, ten
+	# levels low and looking at empty sky. It is also the second-order jerk: a pan crossing the
+	# pillar's edge stepped the camera by the pillar's whole height, mid-tear-out.
+	if BoardSpace.staging_active():
+		return Vector3(x, _staged_surface(), z)
 	var cell := Vector2i(floori(x), floori(z))
 	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
+
+
+# The one height the diorama sits at: the MEAN surface of the cells on stage. A mean rather than the
+# top, because the fight happens ON those cells and the shot should be level with where the units
+# are, not with the highest ground among them.
+#
+# Cached on `staging_version` -- the store's own "something moved" count (#308's shape) rather than a
+# copy of what it reads -- because staged_cells() rebuilds an Array from Dictionary keys and this is
+# a per-frame read.
+func _staged_surface() -> float:
+	if _stage_height_version == BoardSpace.staging_version:
+		return _stage_height
+	_stage_height_version = BoardSpace.staging_version
+	var staged := BoardSpace.staged_cells()
+	if staged.is_empty():
+		_stage_height = 0.0
+		return _stage_height
+	var heights: BoardHeights = game.board_heights
+	var total := 0.0
+	for cell in staged:
+		total += BoardSpace.surface_point(cell, heights).y
+	_stage_height = total / float(staged.size())
+	return _stage_height
 
 
 # ...and the vertical half the aim above cannot answer (#602): how far BELOW the board to take the
@@ -1156,9 +1201,9 @@ func _aim_over(x: float, z: float) -> Vector3:
 # a neighbouring cell mid-fall -- and this channel lands its DOWNWARD moves instantly, so a spurious
 # jump would be a visible snap rather than something the easing absorbs.
 #
-# FLOORED at zero, and that is a declared cut rather than a guard: an airborne shove holds a body
-# ABOVE the surface while it sails over a hole, so the same subtraction goes negative there. Riding
-# that upward is a different shot nobody has asked for; it is one maxf away if anybody does.
+# The STRENGTH and the CEILING are Pacing.followed_fall's, not spelled here: the health readout has
+# to know where the shot stopped so its debris can burst just under it (#602 round 2), and two
+# spellings of that would put the cubes somewhere the camera is not.
 #
 # The guard is is_instance_valid BEFORE the typed read (#149): a void plummet ends in die(), and a
 # freed Unit assigned into a typed slot dies on the type-check before any null test can run.
@@ -1167,8 +1212,7 @@ func _fall_below(cam: CameraController) -> float:
 		return 0.0
 	var watched: Unit = cam.follow_unit
 	var heights: BoardHeights = game.board_heights
-	var depth := maxf(UnitMirror.fall_depth(watched, heights), 0.0) * Pacing.CLIFF_FOLLOW
-	return minf(depth, Pacing.CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
+	return Pacing.followed_fall(UnitMirror.fall_depth(watched, heights))
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same

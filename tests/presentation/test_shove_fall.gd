@@ -201,3 +201,87 @@ func test_a_body_still_in_the_AIR_over_a_hole_reports_a_negative_depth() -> void
 	assert_float(UnitMirror.fall_depth(victim, heights)).override_failure_message(
 			"a body flying above the ground beneath it did not report a negative depth") \
 			.is_less(0.0)
+
+
+# --- the body steps CLEAR of the edge before it drops (dev, 2026-08-29) -------------------------
+
+# It used to slide to the MIDPOINT of the shared edge and fall from there, which puts the sprite
+# exactly in the boundary plane -- half inside the wall for the whole descent. Invisible on the
+# one-cell drops this suite was written for; down a ten-level pillar the dev watched a body sink
+# through the rock for two and a half seconds and then snap sideways to the cell centre, that snap
+# being the leftover half-step running in a sixteenth of a second after the fall had played.
+#
+# The FALL is headless-escaped, as everything in this neighbourhood is -- but the STEP is a real
+# tween in every run, so the ordering between them is observable even though the descent is not.
+# That is why _step_off does the step first in both branches.
+func test_a_body_finishes_its_step_before_it_starts_to_drop() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 10)
+	heights.set_cell(Vector2i(1, 0), 10)
+	heights.set_cell(Vector2i(2, 0), 10)
+	heights.set_cell(Vector2i(3, 0), 0)   # a sheer drop of five levels off the lip
+	heights.set_cell(Vector2i(4, 0), 0)
+	var s := _setup(heights, 2, Vector2i(0, 0), Vector2i(1, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_landing_index > 0).override_failure_message(
+			"the board is not the one this case is about -- nothing flew").is_true()
+
+	var victim: Unit = s.d
+	var caught := await _slide_watching_the_drop(victim, outcome)
+	assert_bool(caught.has("at")).override_failure_message(
+			"no fall was recorded at all -- this shove never left the lip").is_true()
+
+	var grid: TileMapLayer = s.grid
+	var at: Vector2 = caught["at"]
+	var centre: Vector2 = grid.map_to_local(caught["cell"])
+	assert_float(at.distance_to(centre)).override_failure_message(
+			"the body began to drop %.1f px from the centre of the cell it was entering -- it is "
+			% at.distance_to(centre) + "falling in the boundary plane, half inside the wall it left"
+	).is_less(0.5)
+
+
+# Run the real slide, recording where the body stood the first frame its fall was recorded.
+func _slide_watching_the_drop(unit: Unit, outcome: ResolvedOutcome) -> Dictionary:
+	var caught: Dictionary = {}
+	unit.movement.slide_along_path(outcome.knockback_path, outcome.knockback_landing_index)
+	for _frame in range(600):
+		if not caught.has("at") and unit.movement.landing_fall_depth > 0.0:
+			caught["at"] = unit.position
+			caught["cell"] = unit.movement.cell
+		if not unit.movement.sliding:
+			return caught
+		await await_idle_frame()
+	fail("the slide never finished -- 600 frames elapsed with sliding still true")
+	return caught
+
+
+# --- and where its bricks burst once it has fallen out of frame (dev, 2026-08-29) ---------------
+
+# The camera follows a plummet only as far as Pacing.followed_fall and then stops while the body
+# keeps going, so by die() the readout is metres below anything on screen. The burst is raised to a
+# knobbed distance under where the camera STOPPED -- which is the property worth pinning, because it
+# means the shot is the same however deep the pit is.
+func test_a_deeper_plummet_does_not_burst_further_from_the_camera() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 4)
+	heights.set_cell(Vector2i(1, 0), 4)
+	var s := _setup(heights, 1, Vector2i(0, 0), Vector2i(1, 0))
+	var victim: Unit = s.d
+
+	victim.movement.plummet_depth = 8.0
+	var deep := 8.0 * BoardSpace.CELL_SIZE - UnitMirror.plummet_lift(victim)
+	victim.movement.plummet_depth = 40.0
+	var deeper := 40.0 * BoardSpace.CELL_SIZE - UnitMirror.plummet_lift(victim)
+
+	assert_float(deeper).override_failure_message(
+			"a body that fell five times as far burst five times further from the camera -- the "
+			+ "cubes are launching somewhere nobody is looking").is_equal_approx(deep, 0.001)
+	# ...and it is UNDER the shot rather than inside it, which is what makes them rise into frame.
+	assert_float(deep).override_failure_message(
+			"the bricks burst level with or above where the camera stopped") \
+			.is_greater(Pacing.followed_fall(8.0))
+
+	# An ordinary death is not moved at all: nothing else in the game bursts anywhere but the body.
+	victim.movement.plummet_depth = 0.0
+	assert_float(UnitMirror.plummet_lift(victim)).override_failure_message(
+			"a body that never plummeted had its death burst relocated").is_equal(0.0)

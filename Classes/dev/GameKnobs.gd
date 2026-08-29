@@ -745,6 +745,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "The cliff follow", "label": "Hold: the bottom of a void fall", "static": "PLUMMET_HOLD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
 		"tip": "A beat down in the dark after a body stops falling, before it is removed from the board. At 0 it is taken away the instant it lands. Void falls only -- a drop off a cliff lands on ground and the shove carries on."},
+	{"group": "The cliff follow", "label": "Bricks burst this far below", "static": "PLUMMET_BURST_BELOW",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.25,
+		"tip": "How far under the stopped camera a dead body's health bricks explode, in cells, so they rise up into the bottom of the frame instead of bursting somewhere off screen with the corpse. Larger means they start lower and arrive later; at 0 they burst level with the bottom of the shot."},
 
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.

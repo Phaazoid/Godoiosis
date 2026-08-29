@@ -80,6 +80,19 @@ var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
 # CLEARED ON BOTH EDGES below, which is the whole of its lifetime: "the pass ended" and "this is
 # false" are the same event, so no reader needs a second fact to know when to stop.
 var playback_cinematic := false
+# How far BELOW the board the 3D rig currently is, in world units, written every frame by
+# battle3d._mirror_camera (#602 round 2).
+#
+# THE ONE FACT THAT TRAVELS THE OTHER WAY down this channel -- every field above is playback telling
+# the rig what to do, and this is the rig answering. It has to be, and that is worth stating: the
+# exit transition must not start dropping tiles while the camera is still climbing out of a pit
+# (dev, 2026-08-29), the climb is the rig's OWN eased channel, so nothing but the rig can say when
+# it is done. A beat of playback's own would be a second answer to how long the climb takes and
+# would disagree the moment the rate knob moved.
+#
+# Zero on a flat pass and in every headless run, where nothing publishes -- so the wait it feeds
+# returns on its first check rather than spending frames nobody is watching.
+var fall_depth := 0.0
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
