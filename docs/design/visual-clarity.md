@@ -2077,6 +2077,74 @@ It was found by `SharedBoard`'s leak fingerprint, not by reasoning: every fall c
 three cells into the next one. That is the fixture doing the job it was built for — a diff the reset
 door cannot reach is a channel with no reset door.
 
+### Round 2 — what a ten-level pillar found (2026-08-29)
+
+The first play-check of the battle zoom on genuinely tall terrain, and it broke two ways at once.
+The frame was **entirely empty for the whole tear-out**, and both causes were #521's.
+
+**Nothing aimed the camera at the fight before the ground moved.** `_stage_the_fight` is the first
+thing a pass plays, and `_frame_the_walk` returns early on an EMPTY span — which is exactly what a
+hold-position queue produces. So seven to twelve seconds of brace, flight and settle played over
+wherever the player had left the view; on the report, fifteen cells away. It pans to the fight's own
+bounding-box centre first, at `PLAYBACK_PAN`, before the brace.
+
+**And the aim took the height of the wrong ground — which is Law #4 with the two answers written a
+month apart.** The rig's height is `aim + lift`, and the *lift* channel has carried the rule in its
+own comment since #521: *"the whole stage, never the cell under the camera: the diorama is one thing
+at one height, and asking per cell would dip the camera every time a pan crossed unstaged ground."*
+The AIM never applied it — it read `surface_height_at` under the *camera*. On flat ground those
+agree by accident, which is why it shipped; on a fight at the top of a ten-level pillar the diorama
+sits at the pillar's surface plus the lift while the camera sat at the plain's surface plus the lift.
+**The rule existed, was correct, was written down, and governed one of the two channels that answer
+the question.** It is also the second-order jerk the dev reported: a pan crossing the pillar's edge
+stepped the camera by the pillar's whole height. `_staged_surface()` is the one answer now — the mean
+surface of the cells on stage, cached on `staging_version`.
+
+### ...and the fall stops hugging the wall
+
+The dev watched a shoved body **sink through the rock** for two and a half seconds and then snap
+sideways. `_slide_to_next_cell` travelled a dropping segment in two halves, stopping at the
+**midpoint of the shared edge** — i.e. exactly in the boundary plane, half inside the wall — falling
+from there, and running the leftover half-step afterwards: eight pixels in a sixteenth of a second,
+which is the "teleports into its centered position" he saw.
+
+The body **steps clear into the landing cell and then drops** (dev's call). `_step_off` is one
+function rather than a leg plus a fall because the two are only correct together: the fall flag has
+to be raised *before* the step so the height is owned at the lip's level while the body clears the
+wall. Without that the mirror falls through to its ground branch mid-step, and a *tumble* sinks
+while a *flight* pops back to the launch surface.
+
+**The sharp edge underneath it: the midpoint of two adjacent cell centres lands exactly on their
+shared boundary, and `floori` resolves an exact boundary to the `+` side.** So the cell under the
+sprite read as the cell being *left* for a shove north or west and the cell being *entered* for one
+south or east — a symmetric-looking operation that was direction-dependent, and therefore wrong half
+the time and invisible the other half.
+
+### The rest of the fall: follow a bit, stop, then the bricks come up
+
+The dev's shape for a death in a pit (2026-08-29): *the camera follows for a bit, then stops and the
+unit keeps falling off screen, and all we see after — after a beat — is the health bricks exploding
+from under the camera's view.*
+
+The follow ceiling ships at **3 cells** rather than the whole 8-cell plummet, so the body genuinely
+leaves frame; `PLUMMET_HOLD` is the beat; and the death burst is raised to a knobbed distance under
+**where the camera stopped** rather than wherever the corpse ended up, so the cubes rise into the
+bottom of the shot. Legitimate rather than a cheat — they already leave the readout's *sockets*
+rather than a body, and they are a descriptor, not debris with mass.
+
+`Pacing.followed_fall` is what makes that safe: the strength and the ceiling applied once, read by
+the shot **and** by the readout that has to know where the shot stopped. Two spellings would put the
+cubes somewhere the camera is not — which is this whole round's theme.
+
+### The camera comes home before the tiles do
+
+A pass whose last blow knocked somebody into a pit ends with the shot still deep below the board, and
+the climb is *eased* — longer than `TEAR_OUT_AFTERMATH` — so the board used to start reassembling
+mid-climb. The exit now waits on the rig's own published depth
+(`CameraController.fall_depth`, the one fact that travels rig → playback down that channel) rather
+than on a beat of its own, which would be a second answer to how long the climb takes and would
+disagree the moment the rate knob moved.
+
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;

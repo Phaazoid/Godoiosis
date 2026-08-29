@@ -700,6 +700,24 @@ flat board has no height to fall through), a declared [#292](https://github.com/
 asymmetry, and `play_session`'s hand-copied twin deliberately skips it. Both the depth and the
 duration are Game-tab knobs beside *Shove slide speed*.
 
+**THE BODY STEPS CLEAR OF THE EDGE BEFORE IT DROPS (dev, 2026-08-29).** #472 travelled a dropping
+segment in two halves and fell at the **midpoint of the shared edge** — the sprite descends exactly
+in the boundary plane, half inside the wall it just left, and the leftover half-step then runs in a
+sixteenth of a second after the fall. Invisible at a drop of one; down a ten-level pillar it is a
+body sinking through rock and then snapping sideways. `MovementComponent._step_off` completes the
+step into the landing cell first and drops from there. #431's *"it starts falling AT THE EDGE"* is
+untouched — that ruling is about **which edge along the path** the fall belongs to, not about the
+sprite being embedded in it — but note the drop POINTER still hangs at the edge while the body now
+falls half a cell further in.
+
+Two things it depends on. The fall flag is raised **before** the step, so the height is owned at the
+lip's own level while the body clears the wall; drop that and the mirror falls through to its ground
+branch mid-step, which makes a tumble *sink* and a flight *pop back to the launch surface*. And the
+reason the second half of that was direction-dependent: **the midpoint of two adjacent cell centres
+sits exactly on their shared boundary, and `floori` resolves an exact boundary to the `+` side** — so
+the cell under the sprite read as the one being LEFT for a shove north or west and the one being
+ENTERED for a shove south or east.
+
 **...and since [#602](https://github.com/Phaazoid/Godoiosis/issues/602) the fall has a THIRD reader:
 the camera rides it down.** That gives both fall states a consumer outside `UnitMirror`, which is why
 the placement rule was extracted to `UnitMirror.stand_height` / `fall_depth` — the shot and the
