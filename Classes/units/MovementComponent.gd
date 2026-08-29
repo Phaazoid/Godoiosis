@@ -254,6 +254,10 @@ func plummet() -> void:
 	# ...and it HOLDS down there before the body goes (#602, dev call). INSIDE the flag rather than at
 	# the caller: `plummeting` and `plummet_depth` are what the camera rides, so clearing them first
 	# and then waiting would have the rig climbing back out during the very pause the pause is for.
+	#
+	# DECLARED BLIND SPOT, the same one every beat in this arc has: the guard above returns headless,
+	# so no suite ever reaches this line, and Pacing.beat would spend nothing if one did. Deleting it
+	# turns nothing red. It is a play-check, like the rest of the pacing.
 	await Pacing.beat(self, Pacing.PLUMMET_HOLD)
 	plummeting = false
 
