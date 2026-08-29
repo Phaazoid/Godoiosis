@@ -15,6 +15,7 @@ var _arrival := 0.0
 var _cap := 0.0
 var _flight := 0.0
 var _slam := 0.0
+var _lead := 0.0
 
 
 func before_test() -> void:
@@ -23,6 +24,7 @@ func before_test() -> void:
 	_cap = Pacing.TEAR_OUT_STAGGER_MAX
 	_flight = Pacing.TEAR_OUT_FLIGHT
 	_slam = Pacing.TEAR_OUT_SLAM
+	_lead = Pacing.TEAR_OUT_EMPTY_SKY
 
 
 func after_test() -> void:
@@ -30,6 +32,7 @@ func after_test() -> void:
 	Pacing.TEAR_OUT_STAGGER_MAX = _cap
 	Pacing.TEAR_OUT_FLIGHT = _flight
 	Pacing.TEAR_OUT_SLAM = _slam
+	Pacing.TEAR_OUT_EMPTY_SKY = _lead
 
 
 func test_tiles_leave_in_the_order_their_owners_act() -> void:
@@ -100,3 +103,35 @@ func test_the_slam_bends_the_travel_without_moving_its_ends() -> void:
 	Pacing.TEAR_OUT_SLAM = 1.0
 	assert_float(StagingFlight.slam(0.5)).override_failure_message(
 			"at exponent 1 the travel should be constant speed").is_equal_approx(0.5, 0.0001)
+
+
+func test_a_lead_in_delays_every_tile_without_reordering_them() -> void:
+	# The empty-sky beat: the camera has cut ahead and the white-out is playing, and NOTHING has
+	# arrived yet. Expressed as a lead on the schedule rather than as a wait before it, because the
+	# white-out is drawn off this same clock -- stopping the clock would stop the flash with it.
+	Pacing.TEAR_OUT_ARRIVAL = 0.5
+	Pacing.TEAR_OUT_STAGGER_MAX = 0.1
+	Pacing.TEAR_OUT_FLIGHT = 0.2
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	var plain := StagingFlight.schedule(cells)
+	var led := StagingFlight.schedule(cells, 1.25)
+
+	assert_float(float(led[0]["start"])).override_failure_message(
+			"the first tile did not wait out the lead").is_equal_approx(1.25, 0.0001)
+	# Everything shifts by the same amount: a lead is a delay, not a re-stagger.
+	for i in cells.size():
+		assert_float(float(led[i]["start"]) - float(plain[i]["start"])).is_equal_approx(1.25, 0.0001)
+		assert_float(float(led[i]["land"]) - float(plain[i]["land"])).is_equal_approx(1.25, 0.0001)
+	assert_float(StagingFlight.total(led) - StagingFlight.total(plain)).override_failure_message(
+			"the lead did not reach the total the executor awaits, so the pass would resume early"
+			).is_equal_approx(1.25, 0.0001)
+
+
+func test_no_lead_is_asked_for_by_default() -> void:
+	# The exit passes none: the diorama is already there, and its own held beat is AFTERMATH. A
+	# default that silently read the knob would double up with it.
+	Pacing.TEAR_OUT_EMPTY_SKY = 99.0
+	var plan := StagingFlight.schedule([Vector2i(0, 0)] as Array[Vector2i])
+	assert_float(float(plan[0]["start"])).override_failure_message(
+			"schedule() read the empty-sky knob on its own instead of being handed a lead"
+			).is_equal(0.0)

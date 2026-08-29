@@ -28,7 +28,11 @@ extends Object
 # brawl, and this plays on EVERY Execute. So the arrival is given a total it must fit inside, and
 # the gap is whatever fits -- capped, so a small fight still gets a punchy one-two-three rather
 # than smearing three tiles over the whole window.
-static func schedule(cells: Array[Vector2i]) -> Array[Dictionary]:
+# `lead` delays every tile without stopping the clock, which is the difference between a pause and a
+# freeze: the white-out is drawn off this same elapsed time, so a lead-in plays the flash and the
+# camera cut over a sky with nothing in it yet. Passing it in rather than reading the knob here keeps
+# this function answering one question, and lets the exit ask for no lead at all.
+static func schedule(cells: Array[Vector2i], lead := 0.0) -> Array[Dictionary]:
 	var plan: Array[Dictionary] = []
 	if cells.is_empty():
 		return plan
@@ -36,8 +40,9 @@ static func schedule(cells: Array[Vector2i]) -> Array[Dictionary]:
 	if cells.size() > 1:
 		gap = minf(Pacing.TEAR_OUT_STAGGER_MAX, Pacing.TEAR_OUT_ARRIVAL / float(cells.size() - 1))
 	var flight := maxf(Pacing.TEAR_OUT_FLIGHT, 0.0)
+	var opening := maxf(lead, 0.0)
 	for i in cells.size():
-		var start := gap * float(i)
+		var start := opening + gap * float(i)
 		plan.append({"cell": cells[i], "start": start, "land": start + flight})
 	return plan
 

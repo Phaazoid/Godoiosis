@@ -480,8 +480,15 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 			if not on_stage.has(cell):
 				on_stage[cell] = true
 				cells.append(cell)
+	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
+	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
+	# in the sky rather than on the board.
+	await Pacing.beat(self, Pacing.TEAR_OUT_BRACE)
 	BoardSpace.stage(cells, BoardSpace.lift_offset())
 	await _play_transition(cells, true)
+	# ...and the assembled diorama holds before the first blow (dev, 2026-08-28: the action used to
+	# start the moment the last tile landed).
+	await Pacing.beat(self, Pacing.TEAR_OUT_SETTLE)
 
 
 # The transition itself (#521 slice B): the tiles TRAVEL between their sockets and the diorama
@@ -495,7 +502,9 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 # The cell order is the sheet's own, which is already playback order -- so tiles arrive in the order
 # their owners act. That is the ticket's quiet foreshadowing, and it cost nothing.
 func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
-	var plan := StagingFlight.schedule(cells)
+	# The entry opens on empty sky: the camera has cut ahead and nothing has arrived yet. The exit
+	# asks for no lead -- the diorama is already there, and its own held beat is AFTERMATH above.
+	var plan := StagingFlight.schedule(cells, Pacing.TEAR_OUT_EMPTY_SKY if entering else 0.0)
 	if plan.is_empty():
 		return
 	var socket := -BoardSpace.lift_offset()
@@ -514,6 +523,9 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 func _bring_the_board_home() -> void:
 	var staged := BoardSpace.staged_cells()
 	if not staged.is_empty():
+		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
+		# last blow is not immediately swept away by the tiles going home.
+		await Pacing.beat(self, Pacing.TEAR_OUT_AFTERMATH)
 		await _play_transition(staged, false)
 	BoardSpace.clear_staging()
 

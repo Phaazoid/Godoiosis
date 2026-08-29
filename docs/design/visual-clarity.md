@@ -1936,6 +1936,33 @@ tear-out and watch the board come apart. Everything else is knobs, which reach b
 blend between them. The cut is sanctioned rather than a violation: #520's never-teleport rule is
 about the map, and the dev carved this transition out of it by name (2026-08-27).
 
+**FOUR HELD BEATS, because the travel alone still cut straight from one thing to the next** (dev,
+2026-08-28, after playing it: *"the action starts the moment all the tiles slam up, I want a pause
+there too"*, and *"we love drama"*). The board **braces** intact before it comes apart; the camera
+holds on **empty sky** before the first tile rises into frame; the assembled diorama **settles**
+before the first blow; and it holds once more on the **aftermath** before the tiles go home. Each
+dials to 0 for the hard cut back.
+
+The empty-sky beat is a **lead on the schedule, not a wait before it** — the white-out is drawn off
+that same clock, so stopping the clock would stop the flash with it. The exit asks for no lead,
+because the diorama is already there and its own beat is the aftermath.
+
+**THE TIMINGS ARE THE DEV'S, MEASURED IN PLAY, AND THEY OVERRULED THE FIRST CUT BY ROUGHLY 5x.**
+Slice B shipped with values an order of magnitude smaller and a comment saying they were "budgeted
+small on purpose" because this plays on every Execute. He **maxed four of the seven sliders** and
+said it was still short. The reasoning was not wrong about the cost — it was wrong about what the
+cost buys: this is the moment a fight becomes a set piece. Ceilings were raised to leave headroom
+*above* where he landed rather than to bracket it. Measured at his settings, the non-fight
+transition runs **6.9s for a two-cell skirmish and saturates at 11.9s from eight cells up** — the
+derived stagger is what stops it growing past that.
+
+**A SLIDER CAN BE PERFECTLY WIRED AND STILL BE DEAD, and this arc found its own instance.** He moved
+"Camera holds with the board" from 0.15 to 0.95 and nothing happened: that knob is only read when
+the camera-cuts-ahead experiment is **off**, and it defaults **on** — which his `experiments.cfg`
+confirmed he had never changed. The beat he was reaching for did not exist, so it was built as its
+own row (empty sky) rather than by making one knob answer two questions. **When a dev moves a
+slider and reports no change, check the gate before checking the wire.**
+
 Still open on #521: the **dust shockwave** on the exit thud — which would be the project's first
 particle system — and strata on the cut edges, which is art-pass work.
 

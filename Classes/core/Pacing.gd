@@ -46,26 +46,42 @@ static var ENVIRONMENT_HOLD := 0.45   # the look AFTER the damage lands -- the w
 # readouts flash in and out (#475, subsumed) and battles read "way too fast".
 
 # THE TEAR-OUT TRANSITION (#521 slice B) -- how long the board takes to come apart and reassemble
-# as a diorama. CINEMATIC-only by construction: _stage_the_fight returns early on BOARD, so nothing
-# here is reachable with the battle zoom off.
+# as a diorama. CINEMATIC-only by construction: the tear-out is gated on the sheet having a fight
+# in it, so nothing here is reachable with the battle zoom off.
 #
 # These are DURATIONS, so they live here rather than beside STAGE_LIFT -- that one is geometry, and
 # one home per kind of fact. The slam exponent is the odd one and is here deliberately: it is a
 # shape over time, and the drama multipliers above already establish that this table holds more
 # than seconds.
 #
-# BUDGETED SMALL ON PURPOSE. This plays on EVERY Execute, both profiles' worth of fights, so the
-# whole entry is a beat and not an interlude -- TEAR_OUT_ARRIVAL is a ceiling the stagger is
-# derived to fit rather than a per-tile gap that grows with the fight.
-static var TEAR_OUT_FLIGHT := 0.32        # one tile's travel between its socket and the diorama
-static var TEAR_OUT_ARRIVAL := 0.5        # total window every tile's departure must start within
-static var TEAR_OUT_STAGGER_MAX := 0.07   # cap on the gap between two tiles, so small fights punch
-static var TEAR_OUT_SLAM := 2.5           # 1 = constant speed; higher accelerates into the landing
-static var TEAR_OUT_WHITEOUT := 0.18      # the flash ramping up, and again coming down
-static var TEAR_OUT_HOLD := 0.12          # how long it sits at full before the diorama is revealed
+# EVERY VALUE HERE IS THE DEV'S, MEASURED IN PLAY (2026-08-28). The first cut shipped these an order
+# of magnitude smaller with a comment claiming they were "budgeted small on purpose" because the
+# transition plays on every Execute -- he maxed four of the seven sliders and said it was STILL
+# short. The reasoning was not wrong about the cost, it was wrong about what the cost buys: this is
+# the moment the fight becomes a set piece, and he is spending real time on it deliberately. The
+# ceilings were raised to leave headroom above what he landed on, not to bracket it.
+static var TEAR_OUT_FLIGHT := 1.5         # one tile's travel between its socket and the diorama
+static var TEAR_OUT_ARRIVAL := 3.0        # total window every tile's departure must start within
+static var TEAR_OUT_STAGGER_MAX := 0.5    # cap on the gap between two tiles, so small fights punch
+static var TEAR_OUT_SLAM := 6.0           # 1 = constant speed; higher accelerates into the landing
+static var TEAR_OUT_WHITEOUT := 0.35      # the flash ramping up, and again coming down
+static var TEAR_OUT_HOLD := 0.4           # how long it sits at full before the diorama is revealed
 # How long the camera stays with the board before it rises. 0 puts it at the diorama immediately,
 # which is what the cut treatment wants; larger values let the tiles visibly leave without it.
-static var TEAR_OUT_CAMERA_HOLD := 0.15
+# DEAD while the cut experiment is on, which is its default -- see TEAR_OUT_EMPTY_SKY below, which
+# is the beat this one gets reached for by mistake.
+static var TEAR_OUT_CAMERA_HOLD := 0.95
+
+# WHERE THE TRANSITION BREATHES. Four held moments, because the travel alone still cut straight from
+# one thing to the next at both ends (dev, 2026-08-28: *"the action starts the moment all the tiles
+# slam up, I want a pause there too"* -- and *"we love drama"*).
+#
+# Each is a beat the transition would otherwise not have, and each can be dialled to 0 to get the
+# hard cut back. SETTLE is the one he asked for by name.
+static var TEAR_OUT_BRACE := 0.5        # the board holds still, intact, before it comes apart
+static var TEAR_OUT_EMPTY_SKY := 0.7    # the camera waits over empty space before the first tile
+static var TEAR_OUT_SETTLE := 0.9       # the assembled diorama holds before the first blow lands
+static var TEAR_OUT_AFTERMATH := 0.8    # ...and holds again after the last one, before it goes home
 
 
 # --- the beat shape (#519, umbrella #410) ----------------------------------------------------
