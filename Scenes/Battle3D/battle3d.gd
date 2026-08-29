@@ -787,6 +787,11 @@ func _mirror_camera() -> void:
 	# easing on top of that ease is lag between the action and the frame it is in.
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
 	_rig.hold_at(_aim_over(flat.x, flat.z))
+	# ...and how far the body it is watching has fallen BELOW that (#602). The aim above answers where
+	# on the board and derives its height from the SURFACE, which is exactly why a fall escapes it:
+	# both falls are mirror-side offsets, so the unit's own position never descends and the camera
+	# holds level at the lip while the sprite drops out of the bottom of the frame.
+	_rig.drop_to(_fall_below(cam))
 	# ...and WHICH PROFILE the beat runs under (#647), mirrored FIRST because all three channels below
 	# scale through it. It is what carries COMBAT_ONLY to a rig that has no beat in hand: a plain walk
 	# publishes BOARD and the sway, the push-in and the yaw all land at zero strength.
@@ -1137,6 +1142,33 @@ func _center_rig_on(cell: Vector2i) -> void:
 func _aim_over(x: float, z: float) -> Vector3:
 	var cell := Vector2i(floori(x), floori(z))
 	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
+
+
+# ...and the vertical half the aim above cannot answer (#602): how far BELOW the board to take the
+# shot so it rides the body the camera is following down a cliff or into a void, in world units.
+#
+# The depth is UnitMirror's own, never re-derived. That node places the sprite from the same
+# arithmetic, so the shot and the body cannot end up at different heights -- and a second spelling of
+# exactly this fall is what #472 was filed for.
+#
+# Measured from the surface under the UNIT rather than from the aim: the 2D camera lags its follow
+# target by a frame or two, so an aim-relative depth would jump whenever that lag put the camera over
+# a neighbouring cell mid-fall -- and this channel lands its DOWNWARD moves instantly, so a spurious
+# jump would be a visible snap rather than something the easing absorbs.
+#
+# FLOORED at zero, and that is a declared cut rather than a guard: an airborne shove holds a body
+# ABOVE the surface while it sails over a hole, so the same subtraction goes negative there. Riding
+# that upward is a different shot nobody has asked for; it is one maxf away if anybody does.
+#
+# The guard is is_instance_valid BEFORE the typed read (#149): a void plummet ends in die(), and a
+# freed Unit assigned into a typed slot dies on the type-check before any null test can run.
+func _fall_below(cam: CameraController) -> float:
+	if not is_instance_valid(cam.follow_unit):
+		return 0.0
+	var watched: Unit = cam.follow_unit
+	var heights: BoardHeights = game.board_heights
+	var depth := maxf(UnitMirror.fall_depth(watched, heights), 0.0) * Pacing.CLIFF_FOLLOW
+	return minf(depth, Pacing.CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same

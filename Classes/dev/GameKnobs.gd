@@ -730,6 +730,22 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"profile": "cinematic", "script": BOARD_SPACE_SCRIPT, "min": 0.0, "max": 60.0, "step": 0.5,
 		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from. Nothing stages at all with the battle zoom off."},
 
+	# The cliff follow (#602). NO profile tag on any of these, and that is the section's own rule: a
+	# fall is an animation running in real time in both profiles, so it is flat like the linger and the
+	# impact jolt rather than forked like the sway. The strength row is the dial-out.
+	{"group": "The cliff follow", "label": "How much of a fall the camera rides", "static": "CLIFF_FOLLOW",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
+		"tip": "How far the camera follows a body that has been shoved off a ledge or into a void, as a fraction of the drop. At 0 it watches from the lip exactly as it always did, and the body falls out of the bottom of the frame."},
+	{"group": "The cliff follow", "label": "How far down it will follow", "static": "CLIFF_FOLLOW_MAX",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 16.0, "step": 0.25,
+		"tip": "A ceiling on that, in cells, so a long void plummet does not take the camera right under the world. Below the board there is only sky and fog, so this is where to stop short and let the body drop on out of frame."},
+	{"group": "The cliff follow", "label": "How fast it climbs back", "static": "CLIFF_RECOVER",
+		"script": PACING_SCRIPT, "min": 0.2, "max": 8.0, "step": 0.1,
+		"tip": "How quickly the camera comes back up once the fall is over, in e-folds per second -- lower is slower. Going DOWN is always instant, because the camera is chasing a body in free fall; only the climb back is eased, and a slow one keeps the camera in the pit while the death beat plays."},
+	{"group": "The cliff follow", "label": "Hold: the bottom of a void fall", "static": "PLUMMET_HOLD",
+		"script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
+		"tip": "A beat down in the dark after a body stops falling, before it is removed from the board. At 0 it is taken away the instant it lands. Void falls only -- a drop off a cliff lands on ground and the shove carries on."},
+
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
 	{"group": "Motion", "label": "Shove slide speed", "static": "SHOVE_SLIDE_SPEED",
@@ -885,6 +901,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	# somewhere, this is what it does once it is there.
 	"Camera flourish": "Playback",
 	"The tear-out": "Playback",
+	# ...and an EIGHTH since #602. Beside the tear-out rather than in it: both take the camera off the
+	# board plane, but one is the fight being lifted OUT and the other is one body dropping out of it,
+	# and only the first is cinematic-only.
+	"The cliff follow": "Playback",
 	"Motion": "Playback",
 	"Action ring": "Action ring",
 }
@@ -945,6 +965,10 @@ static func read_static(name: String) -> Variant:
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
 		"TEAR_OUT_SETTLE": return Pacing.TEAR_OUT_SETTLE
 		"TEAR_OUT_AFTERMATH": return Pacing.TEAR_OUT_AFTERMATH
+		"CLIFF_FOLLOW": return Pacing.CLIFF_FOLLOW
+		"CLIFF_FOLLOW_MAX": return Pacing.CLIFF_FOLLOW_MAX
+		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
+		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
 		"TEAR_OUT_ARRIVAL": return Pacing.TEAR_OUT_ARRIVAL
 		"TEAR_OUT_STAGGER_MAX": return Pacing.TEAR_OUT_STAGGER_MAX
@@ -1073,6 +1097,14 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.TEAR_OUT_SETTLE = value
 		"TEAR_OUT_AFTERMATH":
 			Pacing.TEAR_OUT_AFTERMATH = value
+		"CLIFF_FOLLOW":
+			Pacing.CLIFF_FOLLOW = value
+		"CLIFF_FOLLOW_MAX":
+			Pacing.CLIFF_FOLLOW_MAX = value
+		"CLIFF_RECOVER":
+			Pacing.CLIFF_RECOVER = value
+		"PLUMMET_HOLD":
+			Pacing.PLUMMET_HOLD = value
 		"TEAR_OUT_FLIGHT":
 			Pacing.TEAR_OUT_FLIGHT = value
 		"TEAR_OUT_ARRIVAL":

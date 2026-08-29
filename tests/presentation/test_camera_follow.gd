@@ -35,6 +35,9 @@ func before_test() -> void:
 
 
 func after_test() -> void:
+	# NB the cliff-follow cases below write Pacing rows and never put them back: SharedBoard's own
+	# _restore_tuning is the door for that (any CLASS_KNOBS value that MOVED is rewritten on reset),
+	# and a second copy in here would be a hand-maintained duplicate of it.
 	await _board.check(self)
 
 
@@ -1074,4 +1077,175 @@ func test_the_camera_rides_the_body_a_blow_sends_flying() -> void:
 	assert_vector(_cam().target_position).override_failure_message(
 			"the camera held its old target while the body moved -- the follow is latched, not tracking"
 	).is_equal_approx(flew_to, Vector2(0.01, 0.01))
+	_cam().set_playback_locked(false)
+
+
+# --- the cliff follow (#602) --------------------------------------------------------------------
+#
+# The knockback follow above is FREE because a shove writes the unit's own position. A FALL does
+# not: both fall animations are mirror-side Y offsets, so the board thinks the body has already
+# arrived and follow_unit tracks it to the lip and then holds level while the sprite drops out of
+# the frame. What is pinned here is the DECISION -- where the rig sits given a published depth --
+# never the descent, which is headless-escaped like everything else in this neighbourhood.
+#
+# The fall itself is set DIRECTLY, and that is forced: plummet() returns before raising its flag
+# when DisplayServer is headless, so the real path cannot reach this state in a suite. The depth
+# ARITHMETIC has its own cases in tests/presentation/test_shove_fall.gd; these are about the wire.
+
+# Put a body `cells` down a hole, the way the mirror-side animation would.
+func _hanging(unit: Unit, cells: float) -> void:
+	unit.movement.plummeting = true
+	unit.movement.plummet_depth = cells
+
+
+func test_the_camera_rides_a_body_that_falls_off_the_board() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	var on_the_lip: Vector3 = _rig.position
+
+	_hanging(victim, 3.0)
+	await _settle()
+
+	assert_float(_rig.position.y).override_failure_message(
+			"the body fell three cells and the camera stayed up on the lip watching an empty hole"
+	).is_equal_approx(on_the_lip.y - 3.0 * BoardSpace.CELL_SIZE, 0.001)
+	# ...and it is a VERTICAL channel alone. A fall has one axis, and a drop that also slid the shot
+	# sideways would be reading the depth through something that carries a direction.
+	assert_float(_rig.position.x).is_equal_approx(on_the_lip.x, 0.001)
+	assert_float(_rig.position.z).is_equal_approx(on_the_lip.z, 0.001)
+	_cam().set_playback_locked(false)
+
+
+func test_the_follow_stops_short_rather_than_taking_the_camera_under_the_world() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	Pacing.CLIFF_FOLLOW_MAX = 2.0
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	var on_the_lip: Vector3 = _rig.position
+
+	_hanging(victim, 20.0)   # deeper than any authored plummet, and far past the ceiling
+	await _settle()
+
+	assert_float(on_the_lip.y - _rig.position.y).override_failure_message(
+			"the camera followed a twenty-cell drop all the way down, ceiling or no ceiling"
+	).is_equal_approx(2.0 * BoardSpace.CELL_SIZE, 0.001)
+	_cam().set_playback_locked(false)
+
+
+func test_dialling_the_follow_out_leaves_the_shot_exactly_where_it_was() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	Pacing.CLIFF_FOLLOW = 0.0
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	var on_the_lip: Vector3 = _rig.position
+
+	_hanging(victim, 5.0)
+	await _settle()
+
+	assert_that(_rig.position).override_failure_message(
+			"the strength is the off switch and it did not switch anything off") \
+		.is_equal(on_the_lip)
+	_cam().set_playback_locked(false)
+
+
+func test_a_body_nobody_is_watching_falls_without_moving_the_camera() -> void:
+	var watched := _player_unit()
+	assert_object(watched).is_not_null()
+	var faller := _any_unit_besides(watched)
+	assert_object(faller).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(watched)
+	await _settle()
+	var framed: Vector3 = _rig.position
+
+	_hanging(faller, 4.0)
+	await _settle()
+
+	assert_that(_rig.position).override_failure_message(
+			"a fall somewhere else on the board dragged the shot down -- the channel is reading the "
+			+ "wrong unit, or every unit") \
+		.is_equal(framed)
+	_cam().set_playback_locked(false)
+
+
+func test_the_camera_comes_back_up_when_the_fall_ends() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	var on_the_lip: Vector3 = _rig.position
+
+	_hanging(victim, 3.0)
+	await _settle()
+	assert_bool(_rig.position.y < on_the_lip.y - 0.5).override_failure_message(
+			"the camera never went down; the case cannot say anything about coming back").is_true()
+
+	# POLLED, never latched: the fall simply stops publishing a depth, and there is nothing for a
+	# caller to remember to undo -- which matters because a void fall ends in die(), so the unit that
+	# was publishing it is gone by the time anyone could.
+	victim.movement.plummeting = false
+	victim.movement.plummet_depth = 0.0
+	await _settle()
+	assert_float(_rig.position.y).override_failure_message(
+			"the camera stayed in the pit after the fall ended -- the drop is latched") \
+		.is_equal_approx(on_the_lip.y, 0.001)
+	_cam().set_playback_locked(false)
+
+
+func test_giving_the_camera_back_climbs_it_out_of_whatever_pit_the_pass_left_it_in() -> void:
+	# The drop is polled BELOW the playback gate -- unlike the tear-out's lift, which is a fact about
+	# the board rather than about a unit. So the release edge has to be the door that ends it, or a
+	# pass that finished mid-fall hands the player a rig hanging under the board for ever.
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	_hanging(victim, 3.0)
+	await _settle()
+
+	_cam().set_playback_locked(false)
+	await _settle()
+
+	assert_float(_rig.position.y - _rig._target_aim.y).override_failure_message(
+			"playback let go and the camera stayed below the board -- nothing closes the drop") \
+		.is_equal_approx(0.0, 0.001)
+
+
+func test_a_board_swap_mid_fall_puts_the_camera_back_on_the_new_board() -> void:
+	# The release edge above is the ORDINARY end of a fall; this is the one that skips it. A swap
+	# releases the playback lock and re-frames, and frame() drops the stashed view -- so restore_view
+	# early-returns and never runs. With the drop polled below the playback gate, that left nobody at
+	# all to close it and the rig sat under the new board for ever.
+	#
+	# Found by the shared-board fixture rather than by writing this case: EVERY fall case above
+	# leaked the same three cells into the next one, which is the fingerprint saying the reset door
+	# cannot reach something. It is named here so a future refactor reds on the rule and not on a
+	# leak report three cases away.
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	_hanging(victim, 3.0)
+	await _settle()
+	assert_bool(_rig._drop > 0.5).override_failure_message(
+			"the camera never went down; the case cannot say anything about the swap").is_true()
+
+	_rig.drop_stashed_view()
+
+	assert_float(_rig._drop).override_failure_message(
+			"a board swap left the camera in a pit on a board that no longer exists") \
+		.is_equal(0.0)
+	assert_float(_rig._target_drop).override_failure_message(
+			"the live drop was cut but its target still points into the old board's hole") \
+		.is_equal(0.0)
 	_cam().set_playback_locked(false)

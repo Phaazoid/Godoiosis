@@ -251,5 +251,9 @@ func plummet() -> void:
 	var tween := create_tween()
 	tween.tween_property(self, "plummet_depth", VOID_PLUMMET_CELLS, VOID_PLUMMET_SECONDS)
 	await tween.finished
+	# ...and it HOLDS down there before the body goes (#602, dev call). INSIDE the flag rather than at
+	# the caller: `plummeting` and `plummet_depth` are what the camera rides, so clearing them first
+	# and then waiting would have the rig climbing back out during the very pause the pause is for.
+	await Pacing.beat(self, Pacing.PLUMMET_HOLD)
 	plummeting = false
 

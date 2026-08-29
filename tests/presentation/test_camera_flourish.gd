@@ -98,6 +98,48 @@ func test_the_sway_does_not_repeat_on_its_own_period() -> void:
 	).is_greater(0.001)
 
 
+# --- the cliff follow's curve (#602) ------------------------------------------------------------
+#
+# The drop channel is not a curve over time like the two above; it is a curve over the GAP, and an
+# ASYMMETRIC one. Pinned here rather than in test_camera_follow because it needs no scene at all,
+# and because the asymmetry IS the design -- a symmetric ease is the obvious refactor and it would
+# quietly reintroduce the bug the channel exists to fix.
+
+func test_the_drop_lands_at_once_going_DOWN_so_a_falling_body_never_outruns_the_shot() -> void:
+	# A blend this small would leave an eased channel barely off zero. The camera is chasing a void
+	# plummet at nine cells a second: any lag at all and the body leaves the bottom of the frame,
+	# which is the whole defect #602 was filed for.
+	assert_float(CameraRig3D.recovered(0.0, 5.0, 0.01)).override_failure_message(
+			"the descent is eased, so the camera trails the body it is supposed to be riding"
+	).is_equal(5.0)
+
+
+func test_a_deeper_fall_arriving_mid_climb_is_taken_at_once_too() -> void:
+	# The rule is about the DIRECTION of the gap, not about starting from rest -- a second shove into
+	# a hole while the camera is still climbing out of the last one must snap down, not blend.
+	assert_float(CameraRig3D.recovered(2.0, 6.0, 0.01)).is_equal(6.0)
+
+
+func test_the_climb_back_UP_is_eased_so_the_camera_rises_rather_than_cutting() -> void:
+	var stepped := CameraRig3D.recovered(5.0, 0.0, 0.25)
+	assert_float(stepped).override_failure_message(
+			"the rise cut straight to the target -- the camera would leave the pit in one frame"
+	).is_greater(0.0)
+	assert_float(stepped).override_failure_message(
+			"the rise moved nothing, or moved the wrong way").is_less(5.0)
+
+
+func test_the_climb_actually_ARRIVES_rather_than_stalling_short_of_the_board() -> void:
+	# The other half of the ease, and the one a mutant returning `current` would survive: a camera
+	# that eases forever but never lands leaves the shot permanently below the board.
+	var depth := 5.0
+	for _step in range(200):
+		depth = CameraRig3D.recovered(depth, 0.0, 0.2)
+	assert_float(depth).override_failure_message(
+			"the climb never reached the board -- it is still %s cells down" % depth
+	).is_equal_approx(0.0, 0.001)
+
+
 # --- the gate ----------------------------------------------------------------------------------
 
 func test_the_camera_only_flourishes_while_playback_has_borrowed_the_view() -> void:

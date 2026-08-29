@@ -395,33 +395,42 @@ func ghost_count() -> int:
 	return visible_count
 
 
-func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
-	# The BOARD point, which is what every derivation below reads — never the written position,
-	# which since #321 also carries the effect offset.
-	var previous := sprite.position - sprite.art_offset
-	# The height comes from the cell the sprite is OVER, not from unit.movement.cell: mid-walk the
-	# pixel position is between cells, and reading the destination would pop the sprite to the new
-	# level before it arrives. Derived from the same pixels that place X and Z, so it steps up as
-	# the sprite crosses the edge.
-	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
+# --- where a unit stands, and how far it has fallen (#602) --------------------------------------
+#
+# EXTRACTED from _sync unchanged, because the CAMERA asks the same question and a second spelling of
+# it is exactly the disagreement #472 was filed for. Static and pure, so a case can pin the rule
+# with no scene at all; the two readers are the sprite placement below and battle3d._mirror_camera.
+
+# The cell a unit's PIXELS sit over, not unit.movement.cell: mid-walk the pixel position is between
+# cells, and reading the destination would pop the sprite to the new level before it arrives.
+# Derived from the same pixels that place X and Z, so it steps up as the sprite crosses the edge.
+static func cell_under(unit: Unit) -> Vector2i:
+	return Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
 			floori(unit.position.y / PIXELS_PER_CELL))
+
+
+# Where the unit is STANDING in world Y -- the surface under those pixels, unless one of the three
+# vertical animations owns the height outright.
+#
+# The airborne shove (#259 rework; the fall became a BEAT of the slide in #472). While sliding,
+# height is SLAVED to the horizontal motion, never rate-limited -- the slide runs many cells a
+# second, so an eased height cannot track a ramp and reads as floating (measured, dev report).
+# Airborne holds the launch height; ground contact follows the surface plane directly under the
+# sprite (surface_height_at -- ramp-aware and continuous, so a tumble STICKS to the slope).
+#
+# There is no ramp/flat LANDING fork here any more, and its absence is the #472 fix. This used
+# to begin ground contact on any ramp landing, on the theory that a ramp's high edge meets the
+# flight level -- true only at a drop of ONE down a matching slope, which is the sole case the
+# resolver calls a slide-on. Every other ramp landing therefore snapped by the difference, in
+# one frame, halfway through the final flight segment. MovementComponent now ends the flight at
+# the edge and FALLS there, so by the time `airborne` goes false the sprite is already on the
+# surface and there is nothing left to reconcile.
+#
+# Both falls are checked BEFORE the slide: each owns the height outright while it runs, and the
+# slide branch below would otherwise haul the sprite back to the lip it is dropping past.
+static func stand_height(unit: Unit, heights: BoardHeights) -> float:
+	var over := cell_under(unit)
 	var stand_y := BoardSpace.surface_point(over, heights).y
-	# The airborne shove (#259 rework; the fall became a BEAT of the slide in #472). While sliding,
-	# height is SLAVED to the horizontal motion, never rate-limited -- the slide runs many cells a
-	# second, so an eased height cannot track a ramp and reads as floating (measured, dev report).
-	# Airborne holds the launch height; ground contact follows the surface plane directly under the
-	# sprite (surface_height_at -- ramp-aware and continuous, so a tumble STICKS to the slope).
-	#
-	# There is no ramp/flat LANDING fork here any more, and its absence is the #472 fix. This used
-	# to begin ground contact on any ramp landing, on the theory that a ramp's high edge meets the
-	# flight level -- true only at a drop of ONE down a matching slope, which is the sole case the
-	# resolver calls a slide-on. Every other ramp landing therefore snapped by the difference, in
-	# one frame, halfway through the final flight segment. MovementComponent now ends the flight at
-	# the edge and FALLS there, so by the time `airborne` goes false the sprite is already on the
-	# surface and there is nothing left to reconcile.
-	#
-	# Both falls are checked BEFORE the slide: each owns the height outright while it runs, and the
-	# slide branch below would otherwise haul the sprite back to the lip it is dropping past.
 	if unit.movement.plummeting:
 		stand_y -= unit.movement.plummet_depth * BoardSpace.CELL_SIZE
 	elif unit.movement.landing_falling:
@@ -434,6 +443,24 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 		else:
 			stand_y = BoardSpace.surface_height_at(over, unit.position.x / PIXELS_PER_CELL,
 					unit.position.y / PIXELS_PER_CELL, heights)
+	return stand_y
+
+
+# ...and the SAME fact read from the other end (#602): how far below the surface it would otherwise
+# stand on the unit has got. Positive while it falls, zero standing, and NEGATIVE while a shove
+# holds it in the air over a hole -- the third animation above, and that sign is why the camera
+# floors this rather than the floor living here. A subtraction rather than a fourth branch, so the
+# two answers cannot drift: there is one arithmetic and this is its complement.
+static func fall_depth(unit: Unit, heights: BoardHeights) -> float:
+	return BoardSpace.surface_point(cell_under(unit), heights).y - stand_height(unit, heights)
+
+
+func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
+	# The BOARD point, which is what every derivation below reads — never the written position,
+	# which since #321 also carries the effect offset.
+	var previous := sprite.position - sprite.art_offset
+	var over := cell_under(unit)
+	var stand_y := stand_height(unit, heights)
 	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
 			stand_y, unit.position.y / PIXELS_PER_CELL)
 	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row

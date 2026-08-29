@@ -151,3 +151,53 @@ func test_an_edge_reads_the_same_height_from_both_of_its_sides() -> void:
 	assert_float(east_side).override_failure_message(
 			"two ramps continuing one slope do not meet at their shared edge") \
 			.is_equal_approx(west_side, 0.001)
+
+
+# --- the depth the CAMERA rides (#602) ----------------------------------------------------------
+#
+# UnitMirror.fall_depth is UnitMirror.stand_height read from the other end, and the cliff follow
+# takes the camera down by it. Both cases below drive the state DIRECTLY, which is forced rather
+# than lazy: plummet() and _fall both return before raising their flag when DisplayServer is
+# headless, so no run of the real path can ever reach the state these describe -- which is exactly
+# why the SIGN is worth a case. The camera floors this at zero, and only a case can say whether
+# that floor is guarding against something or is dead code.
+
+func test_a_falling_body_reports_the_depth_its_own_sprite_is_placed_by() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 4)
+	heights.set_cell(Vector2i(1, 0), 4)
+	var s := _setup(heights, 1, Vector2i(0, 0), Vector2i(1, 0))
+	var victim: Unit = s.d
+	var surface := BoardSpace.surface_point(Vector2i(1, 0), heights).y
+	victim.movement.plummeting = true
+	victim.movement.plummet_depth = 3.0
+
+	assert_float(UnitMirror.fall_depth(victim, heights)).override_failure_message(
+			"a body three cells down a hole does not report three cells of fall") \
+			.is_equal_approx(3.0 * BoardSpace.CELL_SIZE, 0.001)
+	# ...and the complement holds, which is what makes the shot and the sprite one answer: the
+	# camera drops by the depth, the sprite is placed at the height, and both come off this pair.
+	assert_float(UnitMirror.stand_height(victim, heights)).override_failure_message(
+			"the depth and the stand height disagree about where the body is") \
+			.is_equal_approx(surface - UnitMirror.fall_depth(victim, heights), 0.001)
+
+
+func test_a_body_still_in_the_AIR_over_a_hole_reports_a_negative_depth() -> void:
+	# The third vertical animation, and the one the cliff follow deliberately does not ride: an
+	# airborne shove holds the body at its LAUNCH height while it flies over lower ground, so the
+	# same subtraction comes out the other way. Without the camera's floor this would take the shot
+	# UP on every knockback across a pit, which is a different effect nobody has asked for.
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 8)
+	heights.set_cell(Vector2i(1, 0), 8)
+	heights.set_cell(Vector2i(2, 0), 2)   # the low ground it is flying over
+	var s := _setup(heights, 2, Vector2i(0, 0), Vector2i(1, 0))
+	var victim: Unit = s.d
+	victim.movement.set_cell(Vector2i(2, 0))
+	victim.movement.sliding = true
+	victim.movement.airborne = true
+	victim.movement.slide_origin = Vector2i(1, 0)
+
+	assert_float(UnitMirror.fall_depth(victim, heights)).override_failure_message(
+			"a body flying above the ground beneath it did not report a negative depth") \
+			.is_less(0.0)

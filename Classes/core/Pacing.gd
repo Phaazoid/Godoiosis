@@ -247,6 +247,37 @@ static var HITSTOP_DOWN := 0.09
 static var BOARD_HITSTOP := 0.0
 static var CINEMATIC_HITSTOP := 1.0
 
+# --- the cliff follow (#602) --------------------------------------------------------------------
+#
+# A unit shoved off a ledge or into a void FALLS, and until this the camera watched it go from the
+# lip: both falls are mirror-side Y offsets (MovementComponent's plummet_depth and
+# landing_fall_depth), so the unit's own board position never descends and follow_unit tracked a
+# body the board thinks has already arrived.
+#
+# FLAT ACROSS PROFILES, on the LINGER's reasoning rather than the sway's: a fall is an animation
+# running in real time whichever profile is up, and the body leaves the frame just as thoroughly
+# with the battle zoom off. Drama-scaling it would give the plain board none -- the same instant-cut
+# hole the linger exists to close. The dial-out is the strength below, not the profile.
+
+# How much of the body's descent the camera takes, 0..1. At 0 nothing here runs and the shot is
+# bit-for-bit what it was before this channel existed.
+static var CLIFF_FOLLOW := 1.0
+# ...and how far down it will go, in CELLS. A void plummet is eight of them, which puts the camera
+# well under the board looking at sky and fog; this is where to stop it short and let the body fall
+# on out of frame instead. It caps the CONTRIBUTION and never the aim, so a board with deep terrain
+# is unaffected -- the same shape DOLLY_FLOOR has.
+static var CLIFF_FOLLOW_MAX := 8.0
+# How fast the camera climbs back once the fall ends, in e-folds per second. Its own rate rather than
+# the rig's glide because the channel is asymmetric: down is instant (see CameraRig3D.recovered), and
+# a slow climb is what keeps the camera in the pit while the death jolt and the down-beat's linger
+# play out over it.
+static var CLIFF_RECOVER := 1.6
+# The beat at the BOTTOM: how long the fall holds at full depth before the body is removed, in
+# seconds. It lives inside plummet() rather than at a call site because the depth is what the camera
+# is riding -- ending the tween and then waiting would have the rig climbing out during the pause,
+# which is the opposite of the shot. A void fall only; a cliff drop lands and the slide carries on.
+static var PLUMMET_HOLD := 0.7
+
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.
 static func zoom_mode() -> PlayerSettings.BattleZoom:
