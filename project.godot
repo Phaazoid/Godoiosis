@@ -216,6 +216,18 @@ water_shallow_foam_color={
 "type": "color",
 "value": Color(0.86, 0.93, 0.96, 0.5)
 }
+water_board_mask={
+"type": "sampler2D",
+"value": ""
+}
+water_board_mask_rect={
+"type": "vec4",
+"value": Vector4(0, 0, 1, 1)
+}
+water_board_shore_range={
+"type": "float",
+"value": 2.0
+}
 water_deep_color={
 "type": "color",
 "value": Color(0.149, 0.3608, 0.5843, 1)
@@ -239,18 +251,6 @@ water_depth_range={
 water_shore_fade_range={
 "type": "float",
 "value": 6.0
-}
-water_board_mask={
-"type": "sampler2D",
-"value": ""
-}
-water_board_mask_rect={
-"type": "vec4",
-"value": Vector4(0, 0, 1, 1)
-}
-water_board_shore_range={
-"type": "float",
-"value": 2.0
 }
 water_board_mask_range={
 "type": "float",

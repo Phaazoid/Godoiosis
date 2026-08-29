@@ -187,34 +187,34 @@ const FLAME_FRAMES := 8
 # burying it made a feel value with no surface; the constants are deleted, not kept as a fallback.
 # The shallow defaults below are the old ratios already folded in, so the split landed as a VISUAL
 # no-op and only the panel changed.
-@export var water_deep_wave_speed := 2.32: set = _set_water_deep_wave_speed
+@export var water_deep_wave_speed := 3.64: set = _set_water_deep_wave_speed
 @export var water_shallow_wave_speed := 3.26: set = _set_water_shallow_wave_speed
-@export var water_deep_wave_scale := 4.4: set = _set_water_deep_wave_scale
+@export var water_deep_wave_scale := 4.8: set = _set_water_deep_wave_scale
 @export var water_shallow_wave_scale := 5.8: set = _set_water_shallow_wave_scale
 # How much the moving bands lighten the tile's own colour, and how hard the wave bends the surface
 # normal — colour and SPECULAR travel are two knobs because a still-but-glinting surface and a
 # banded-but-matte one are both wrong in different directions.
-@export var water_deep_band_contrast := 0.8: set = _set_water_deep_band_contrast
+@export var water_deep_band_contrast := 0.9: set = _set_water_deep_band_contrast
 @export var water_shallow_band_contrast := 0.8: set = _set_water_shallow_band_contrast
-@export var water_deep_ripple := 1.32: set = _set_water_deep_ripple
+@export var water_deep_ripple := 1.62: set = _set_water_deep_ripple
 @export var water_shallow_ripple := 1.86: set = _set_water_shallow_ripple
 # The one property #552 filed against: _mat() gives every ground roughness 1.0, so water had no
 # specular response at all. Low roughness is what lets the sun sit on it.
-@export var water_deep_roughness := 0.41: set = _set_water_deep_roughness
+@export var water_deep_roughness := 0.57: set = _set_water_deep_roughness
 @export var water_shallow_roughness := 0.37: set = _set_water_shallow_roughness
-@export var water_deep_specular := 0.51: set = _set_water_deep_specular
-@export var water_shallow_specular := 0.44: set = _set_water_shallow_specular
+@export var water_deep_specular := 0.58: set = _set_water_deep_specular
+@export var water_shallow_specular := 0.47: set = _set_water_shallow_specular
 # How hard the surface draws its own cell boundary. Water driven off world position is one
 # continuous lake, which erases the grid the hover bracket is otherwise alone in showing; 0 hands
 # the job back to the bracket. Per type because the bed's mottle already breaks shallow water up
 # while a deep expanse has nothing else going on (dev's call, and a better one than shared).
 @export var water_deep_seam := 0.12: set = _set_water_deep_seam
-@export var water_shallow_seam := 0.12: set = _set_water_shallow_seam
+@export var water_shallow_seam := 0.155: set = _set_water_shallow_seam
 # How much darker a water block's WALLS and top rim read than its surface — the body rather than the
 # face of it. It drove the 0.004-unit rim alone until the shader reached surface 1, which is a
 # slider that moves nothing.
-@export var water_deep_body_shade := 0.22: set = _set_water_deep_body_shade
-@export var water_shallow_body_shade := 0.29: set = _set_water_shallow_body_shade
+@export var water_deep_body_shade := 0.35: set = _set_water_deep_body_shade
+@export var water_shallow_body_shade := 0.4: set = _set_water_shallow_body_shade
 
 # The bed and its caustics have no deep twin BY NATURE rather than by omission — they are what you
 # see THROUGH shallow water, and deep water is opaque. They still carry `shallow` in their names, so
@@ -234,7 +234,7 @@ const FLAME_FRAMES := 8
 # contrast is the whole depth cue — a frozen pane moves all of itself or none of it, so this is the
 # one thing ice structurally cannot fake. Its speed is derived from the wave speed, not a knob.
 @export var water_shallow_caustics := 0.37: set = _set_water_shallow_caustics
-@export var water_shallow_caustics_scale := 16.0: set = _set_water_shallow_caustics_scale
+@export var water_shallow_caustics_scale := 5.5: set = _set_water_shallow_caustics_scale
 
 # The SHORELINE (#552 slice 2) — foam where water meets land, which is the other half of what the
 # ticket says makes water read as water. Width is in HALF-CELLS, so 1.0 reaches from the shore to
@@ -246,8 +246,8 @@ const FLAME_FRAMES := 8
 # Deep and shallow start DIFFERENT rather than matched: a shallow shore laps, so it gets the wider
 # softer band, while deep water meeting a wall stops dead and gets a narrow hard one. A guess to
 # react to, not an answer — the whole point of it being a knob.
-@export var water_deep_foam_width := 0.15: set = _set_water_deep_foam_width
-@export var water_shallow_foam_width := 0.5: set = _set_water_shallow_foam_width
+@export var water_deep_foam_width := 0.19: set = _set_water_deep_foam_width
+@export var water_shallow_foam_width := 0.37: set = _set_water_shallow_foam_width
 @export var water_deep_foam_color := Color(0.2196, 0.6, 0.96, 0.7): set = _set_water_deep_foam_color
 @export var water_shallow_foam_color := Color(0.86, 0.93, 0.96, 0.5): set = _set_water_shallow_foam_color
 
@@ -264,8 +264,8 @@ const FLAME_FRAMES := 8
 
 # How much light water loses as it leaves the land -- the one depth cue that is DARK rather than
 # bright, which is the direction the dev's own #552 sweep moved every channel. Zero is off.
-@export var water_deep_shore_darken := 0.45: set = _set_water_deep_shore_darken
-@export var water_shallow_shore_darken := 0.45: set = _set_water_shallow_shore_darken
+@export var water_deep_shore_darken := 0.76: set = _set_water_deep_shore_darken
+@export var water_shallow_shore_darken := 0.26: set = _set_water_shallow_shore_darken
 
 # SHARED, and they name neither water on purpose: both describe the transition BETWEEN the two
 # rather than either one, so there is nothing for a per-type pair to mean. The water laws know this
@@ -273,9 +273,9 @@ const FLAME_FRAMES := 8
 #
 # How wide the depth ramp reads, in cells. 0.5 reproduces the pre-#578 hard-ish step, since the
 # encode puts a boundary cell at exactly half a cell from the seam.
-@export var water_depth_range := 3.0: set = _set_water_depth_range
+@export var water_depth_range := 0.5: set = _set_water_depth_range
 # How far from land the darkening above takes to reach full, in cells.
-@export var water_shore_fade_range := 6.0: set = _set_water_shore_fade_range
+@export var water_shore_fade_range := 1.0: set = _set_water_shore_fade_range
 
 # How solid the brush preview reads. A knob, not a guess — it is a pure feel call (#231).
 @export var brush_ghost_alpha := 0.45
