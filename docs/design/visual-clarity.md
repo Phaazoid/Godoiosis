@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #654 (2026-08-28).**
+**Canon checked through #656 (2026-08-29).**
 
 ## Principles
 
@@ -1711,10 +1711,10 @@ Nine knob rows under a new **Camera flourish** section on the Playback page — 
 than more rows under Camera travel, because that section is how long the camera takes to *get*
 somewhere and this is what it does once it is there.
 
-Still open on #520: the **cliff follow**, spun out as
-[#602](https://github.com/Phaazoid/Godoiosis/issues/602) because it is the one piece that is a build
-rather than a composition — both fall animations are mirror-side Y offsets, so a unit's board
-position never descends and following one down needs a 3D vertical authority nothing has. Then
+Spun out of #520 here: the **cliff follow**, [#602](https://github.com/Phaazoid/Godoiosis/issues/602),
+because it is the one piece that is a build rather than a composition — both fall animations are
+mirror-side Y offsets, so a unit's board position never descends and following one down needs a
+vertical authority of its own. **BUILT 2026-08-29**; its own section at the end of this doc. Then
 lethality-aware direction, which is the next section.
 
 ## The director knows the ENDING ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2c, BUILT 2026-08-27)
@@ -2011,6 +2011,71 @@ slider and reports no change, check the gate before checking the wire.**
 
 Still open on #521: the **dust shockwave** on the exit thud — which would be the project's first
 particle system — and strata on the cut edges, which is art-pass work.
+
+## The camera RIDES A BODY DOWN ([#602](https://github.com/Phaazoid/Godoiosis/issues/602), BUILT 2026-08-29)
+
+A unit shoved off a ledge or into a void falls, and the camera used to watch it go from the lip. The
+sibling item this was spun out beside — knockback follow — cost nothing, because a shove writes the
+unit's own `position` and `CameraController._process` has re-read `follow_unit.global_position` every
+frame since #118. **A fall is invisible to exactly that mechanism**: both fall animations are
+mirror-side Y offsets (`MovementComponent.plummet_depth`, `landing_fall_depth`), folded into the
+sprite's stand height by `UnitMirror`, so the unit's board position never descends and the camera
+dutifully follows a body the board thinks has already arrived.
+
+**Two premises in the ticket were stale by the time it was built, and the shape reads differently
+against the code.** The aim is *not* Y-zeroed — `battle3d._aim_over` has re-derived it from
+`BoardSpace.surface_height_at` since 2026-08-23, so the aim already tracks board height; it tracks
+the **surface**, which is exactly why a fall escapes it. And vertical authority no longer has to be
+invented: `camera_lift()` is a driven channel since #521 slice B. The ticket's refusal to *reuse*
+that lift stands and is still right — it is per-**cell** staging, a GridMap's node transform, and a
+falling unit is not a cell — so this is a fourth addend beside it rather than a second tenant.
+
+### One arithmetic, two readers
+
+`UnitMirror.stand_height` / `fall_depth` / `cell_under` are lifted verbatim out of `_sync`. The
+camera reads the same numbers the sprite is placed by, because **a second spelling of this exact
+fall is what #472 was filed for** — that bug was the preview and the playback asking the same
+question two ways. `fall_depth` is `stand_height` read from the other end (surface minus stand), a
+subtraction rather than a fourth branch, so the two answers cannot drift.
+
+There are **three** vertical animations, not two: beside the void plummet and the cliff drop, an
+airborne shove holds a body *above* the ground it sails over. So the depth goes negative, and the
+camera floors it at zero — **a declared cut**, not a guard. Riding that upward is a different effect
+nobody asked for; it is one `maxf` away if anybody does.
+
+### The channel is asymmetric, and that is the design
+
+`CameraRig3D.recovered` is pure and static like the shake and the sway, but it is a curve over the
+**gap** rather than over time. **Down lands at once** — the camera is chasing a body at nine cells a
+second, and any easing at all is lag, which is the defect. **Up is eased**, on its own knob rather
+than the rig's glide, because the climb back is nobody's animation but the camera's own; a slow one
+is also what keeps the camera deep in the pit while the death jolt and the down-beat's linger play
+out over it. Polled and re-solved every frame like the dolly, so a fall that ends — including by the
+faller being freed — simply stops publishing and there is nothing to remember to undo.
+
+**A beat at the bottom** (dev call): `plummet()` holds at full depth before the body is removed,
+**inside** the flag rather than at the call site, because the depth is what the camera is riding —
+clearing it first and then waiting would have the rig climbing out during the very pause the pause is
+for. Void falls only; a cliff drop lands on ground and the shove carries on.
+
+Four knobs under a new **The cliff follow** section on the Playback page. **Flat across profiles**,
+on the linger's reasoning rather than the sway's: a fall is an animation running in real time
+whichever profile is up, and the body leaves the frame just as thoroughly with the battle zoom off.
+The dial-out is the strength row, not the profile.
+
+### The bug the fixture found, and the law in it
+
+**A board swap mid-fall left the rig under the new board for ever.** `frame()` calls
+`drop_stashed_view()`, so `restore_view` early-returns and never runs; the drop is polled *below*
+the playback gate, and a swap releases the lock — so nothing at all closed the channel. **A channel
+polled below a gate needs a door on every path that ends that gate, and the ordinary release door can
+early-return.** `drop_stashed_view` is that door, and it **cuts** where `restore_view` **climbs**:
+two doors for two meanings — a view handed back to someone who was watching, versus a pit on a board
+that no longer exists.
+
+It was found by `SharedBoard`'s leak fingerprint, not by reasoning: every fall case leaked the same
+three cells into the next one. That is the fixture doing the job it was built for — a diff the reset
+door cannot reach is a channel with no reset door.
 
 ## #44 board-side items (cross-referenced, not in this doc's running order)
 

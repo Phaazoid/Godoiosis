@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #581 (2026-08-27).**
+**Canon checked through #656 (2026-08-29).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -699,6 +699,17 @@ into a hole falls a long way instead of vanishing at the lip. It is 3D-ONLY by c
 flat board has no height to fall through), a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292)
 asymmetry, and `play_session`'s hand-copied twin deliberately skips it. Both the depth and the
 duration are Game-tab knobs beside *Shove slide speed*.
+
+**...and since [#602](https://github.com/Phaazoid/Godoiosis/issues/602) the fall has a THIRD reader:
+the camera rides it down.** That gives both fall states a consumer outside `UnitMirror`, which is why
+the placement rule was extracted to `UnitMirror.stand_height` / `fall_depth` — the shot and the
+sprite read one arithmetic, the thing this ticket's own bug (two spellings of one edge) exists to
+warn about. Two consequences here rather than in the camera's own canon. The plummet now **holds at
+full depth** before `die()` (`Pacing.PLUMMET_HOLD`, awaited inside `plummet()` so the flag is still
+raised while it waits), so the awaited stretch `AttackAction.execute` sits through is the fall plus
+that beat. And the third vertical animation — an airborne shove, which holds a body *above* the
+ground it sails over — reports a **negative** depth by the same subtraction; the camera floors it,
+deliberately, so a body blown over a chasm is not followed upward.
 
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the
