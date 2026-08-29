@@ -41,6 +41,10 @@ Then report a short per-idea summary: where each went, and anything that needs t
 
 Need some more dev tool control with tile brush - currently lacking in the ability to add/remove large swaths of ground at at time.  Perhaps a drag/select tool, able to select large areas with click/drag then fill with a tile type, or raise/lower, etc. 
 
+To include in the issue about damage types - where armor grants def that can mitigate some weapon damage, perhaps alchemic wards can be the mirror for elemental stuff.  I could see wards being inscriptions on equipment, or buffs that have to be channeled mid fight and last X turns.  
+
+
+
 ## 🗂 Dispersed (log)
 
 *Swept 2026-08-20 — twelve entries. Four were issue-shaped and are now **filed**: [#417](https://github.com/Phaazoid/Godoiosis/issues/417) move re-entry, [#418](https://github.com/Phaazoid/Godoiosis/issues/418) the health-bar third option, [#419](https://github.com/Phaazoid/Godoiosis/issues/419) the hazard warning, [#420](https://github.com/Phaazoid/Godoiosis/issues/420) the composed-view question behind the glow ask. The last two are filed `agent/human` because each waits on a design fork this sweep deliberately left unpicked.*
