@@ -136,10 +136,13 @@ var _playback_owned_camera := false
 # store the answer is drawn from -- rather than on a copy of what it resolves to (#308).
 var _framed_span: Array[Vector2i] = []
 
-# The diorama's own surface height, and the staging_version it was solved at (#602). See
-# _staged_surface: a per-frame read that must not rebuild the staged cell list every frame.
+# The diorama's own surface height, solved ONCE per tear-out (#602 round 3). See _staged_surface for
+# why it is latched rather than tracked: a live height would double-count a fall against the cliff
+# follow. `_was_staging` is the edge detector that clears the latch -- the shape _playback_owned_camera
+# already uses, and the only reliable one here, since nothing in this scene is told a pass has ended.
 var _stage_height := 0.0
-var _stage_height_version := -1
+var _stage_height_latched := false
+var _was_staging := false
 
 
 func _ready() -> void:
@@ -775,6 +778,13 @@ func _mirror_camera() -> void:
 	# ...and it asks where the CAMERA should be, which is the diorama's height at rest and something
 	# the transition drives while one is running (#521 slice B). Equal whenever nothing is driving
 	# it, so with the battle zoom off, or the flag off, this is bit-for-bit the old poll.
+	# The tear-out's own EDGE, polled beside the lift because it answers about the same fact: a fight
+	# arriving on stage is when the diorama's height is decided (#602 round 3). Above the playback
+	# gate for the same reason the lift is -- the staging outlives the lock at both ends.
+	var staging := BoardSpace.staging_active()
+	if staging != _was_staging:
+		_was_staging = staging
+		_stage_height_latched = false
 	_rig.lift_to(BoardSpace.camera_lift())
 	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
 	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
@@ -1166,27 +1176,54 @@ func _aim_over(x: float, z: float) -> Vector3:
 	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
 
 
-# The one height the diorama sits at: the MEAN surface of the cells on stage. A mean rather than the
-# top, because the fight happens ON those cells and the shot should be level with where the units
-# are, not with the highest ground among them.
+# The one height the diorama sits at: the ground under the UNITS ON STAGE, plus a knob (dev,
+# 2026-08-29: *"the units need to be at the center"*).
 #
-# Cached on `staging_version` -- the store's own "something moved" count (#308's shape) rather than a
-# copy of what it reads -- because staged_cells() rebuilds an Array from Dictionary keys and this is
-# a per-frame read.
+# It was the mean of every STAGED CELL for one round and that is wrong in a specific way.
+# BeatSheet._gather_cells puts the whole KNOCKBACK PATH on stage -- correct for the ground, since a
+# shoved body has to land on something -- so a shove off a pillar tears out the pillar top AND every
+# plain cell the body flew across, and averaging that ground drags the shot down between them. The
+# camera ended up staring at the pillar's wall with the fight above the frame, and the further a body
+# was thrown the worse it got. What the shot is about is where the PEOPLE are.
+#
+# LATCHED at the tear-out rather than tracked live (dev's pick: *stage height held, dip for a fall*).
+# Live tracking would double-count a fall -- the faller's own ground would pull the mean down while
+# the cliff-follow channel pulled the shot down again -- so the diorama's height is decided when the
+# ground leaves the board and only _drop moves the camera after that.
 func _staged_surface() -> float:
-	if _stage_height_version == BoardSpace.staging_version:
+	if _stage_height_latched:
 		return _stage_height
-	_stage_height_version = BoardSpace.staging_version
-	var staged := BoardSpace.staged_cells()
-	if staged.is_empty():
-		_stage_height = 0.0
-		return _stage_height
+	_stage_height_latched = true
+	_stage_height = _solve_stage_height()
+	return _stage_height
+
+
+# The ground under the units standing on the stage, averaged, lifted by the knob.
+#
+# The FALLBACK is the staged ground itself, for a pass whose stage nobody is standing on -- a
+# cell-effect deposit, or a body freed between the tear-out and this frame. It is the answer this
+# function used to give unconditionally, kept only where there is nothing better to say.
+func _solve_stage_height() -> float:
 	var heights: BoardHeights = game.board_heights
 	var total := 0.0
-	for cell in staged:
+	var counted := 0
+	for child in game.units_root.get_children():
+		var unit := child as Unit
+		if unit == null:
+			continue
+		var cell := UnitMirror.cell_under(unit)
+		if not BoardSpace.is_staged(cell):
+			continue
 		total += BoardSpace.surface_point(cell, heights).y
-	_stage_height = total / float(staged.size())
-	return _stage_height
+		counted += 1
+	if counted == 0:
+		var staged := BoardSpace.staged_cells()
+		if staged.is_empty():
+			return 0.0
+		for cell in staged:
+			total += BoardSpace.surface_point(cell, heights).y
+		counted = staged.size()
+	return total / float(counted) + Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE
 
 
 # ...and the vertical half the aim above cannot answer (#602): how far BELOW the board to take the

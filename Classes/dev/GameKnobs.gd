@@ -748,6 +748,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "The cliff follow", "label": "Bricks burst this far below", "static": "PLUMMET_BURST_BELOW",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.25,
 		"tip": "How far under the stopped camera a dead body's health bricks explode, in cells, so they rise up into the bottom of the frame instead of bursting somewhere off screen with the corpse. Larger means they start lower and arrive later; at 0 they burst level with the bottom of the shot."},
+	{"group": "The cliff follow", "label": "Shot sits above the units' feet", "static": "STAGE_AIM_LIFT",
+		"script": PACING_SCRIPT, "min": -2.0, "max": 4.0, "step": 0.05,
+		"tip": "How high above the ground the fighters are standing on the torn-out diorama is framed, in cells. At 0 the shot is level with their feet, which leaves the sprites sitting high; raise it to bring them to the middle of the screen. Negative aims below the floor."},
 
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
@@ -973,6 +976,7 @@ static func read_static(name: String) -> Variant:
 		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
 		"PLUMMET_BURST_BELOW": return Pacing.PLUMMET_BURST_BELOW
+		"STAGE_AIM_LIFT": return Pacing.STAGE_AIM_LIFT
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
 		"TEAR_OUT_ARRIVAL": return Pacing.TEAR_OUT_ARRIVAL
 		"TEAR_OUT_STAGGER_MAX": return Pacing.TEAR_OUT_STAGGER_MAX
@@ -1111,6 +1115,8 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.PLUMMET_HOLD = value
 		"PLUMMET_BURST_BELOW":
 			Pacing.PLUMMET_BURST_BELOW = value
+		"STAGE_AIM_LIFT":
+			Pacing.STAGE_AIM_LIFT = value
 		"TEAR_OUT_FLIGHT":
 			Pacing.TEAR_OUT_FLIGHT = value
 		"TEAR_OUT_ARRIVAL":

@@ -282,6 +282,11 @@ static var PLUMMET_HOLD := 0.7
 # the bricks exploding up from under the frame). Measured from where the follow STOPPED rather than
 # from the body, which by then is metres further down and out of every shot.
 static var PLUMMET_BURST_BELOW := 1.5
+# How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
+# "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
+# and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it
+# is a feel value rather than a derivation because how tall a unit reads depends on the art.
+static var STAGE_AIM_LIFT := 0.5
 
 
 # How much of a fall of `depth` world units the camera actually takes -- the strength and the ceiling

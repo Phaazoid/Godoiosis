@@ -495,9 +495,14 @@ func test_the_camera_rides_the_tear_out_up_off_the_board() -> void:
 	# Non-vacuous: the lift is a real distance rather than a knob someone has zeroed.
 	assert_bool(BoardSpace.stage_offset().length() > 1.0).override_failure_message(
 			"the stage lift is zero; the case proves nothing").is_true()
+	# The SHOT'S OWN LIFT joins the stage's since #602 round 3 -- the diorama is framed a knobbed
+	# distance above the ground its fighters stand on, so the camera rises by both. Re-derived from
+	# the two seams rather than written down, for the reason the header gives: neither is this case's
+	# to assert a number for. The rule pinned is still "the camera goes up with the fight".
+	var shot := BoardSpace.stage_offset() + Vector3(0.0, Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE, 0.0)
 	assert_that(_rig.position).override_failure_message(
 			"the fight lifted off the board and the camera stayed down on it") \
-		.is_equal(grounded + BoardSpace.stage_offset())
+		.is_equal(grounded + shot)
 
 	# ...and the poll sits ABOVE the mirror's playback gate, which is what keeps the rig out of the
 	# sky once a pass ends: execute_orders clears the staging and puts the lock back in ONE
@@ -1270,6 +1275,19 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 	var heights: BoardHeights = _game.board_heights
 	heights.set_cell(stage_cell, 8)
 	var raised := BoardSpace.surface_point(stage_cell, heights).y
+	# ...and a LOW cell on stage beside it, which is the shape a KNOCKBACK PATH makes: every cell a
+	# shoved body crosses is torn out too, and averaging that ground is what dragged the shot down
+	# into the pillar's wall with the fight above the frame (dev, 2026-08-29). Nobody stands on it,
+	# so it must contribute nothing.
+	var low_cell := stage_cell + Vector2i(3, 0)
+	heights.set_cell(low_cell, 0)
+	var low := BoardSpace.surface_point(low_cell, heights).y
+	assert_bool(raised - low > 1.0).override_failure_message(
+			"the two staged cells are level; the case cannot tell the answers apart").is_true()
+	for child in _game.units_root.get_children():
+		var other := child as Unit
+		assert_bool(other != null and UnitMirror.cell_under(other) == low_cell) \
+			.override_failure_message("fixture: somebody is standing on the low cell").is_false()
 
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(unit)
@@ -1286,13 +1304,43 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 			"the raised cell is level with the ground under the camera; the case proves nothing"
 	).is_true()
 
-	BoardSpace.stage([stage_cell], BoardSpace.lift_offset())
+	BoardSpace.stage([stage_cell, low_cell], BoardSpace.lift_offset())
 	await _settle()
 
+	var wanted := raised + Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE + BoardSpace.lift_offset().y
+	assert_bool(absf(wanted - ((raised + low) * 0.5 + BoardSpace.lift_offset().y)) > 0.5) \
+		.override_failure_message(
+			"the mean of the staged ground is the same answer here; the case proves nothing").is_true()
 	assert_float(_rig.position.y).override_failure_message(
-			"the camera rode the lift up from the ground UNDER IT rather than from the diorama's own "
-			+ "surface, so it is looking at empty space beside the fight") \
-		.is_equal_approx(raised + BoardSpace.lift_offset().y, 0.01)
+			"the camera did not frame the ground the UNITS are standing on -- it took the plain's "
+			+ "surface, or the average of every cell the fight touches") \
+		.is_equal_approx(wanted, 0.01)
+	BoardSpace.clear_staging()
+	_cam().set_playback_locked(false)
+
+
+# ...and that height is decided ONCE, when the ground leaves the board.
+#
+# The dev's pick was "stage height held, dip for a fall" (2026-08-29), and holding it is what stops
+# a fall being counted TWICE: a live height would follow the faller's own ground down while the
+# cliff-follow channel pulled the shot down again, so a two-cell drop would move the camera further
+# than two cells. The stage owns the height; only _drop moves the shot after that.
+func test_a_fall_moves_the_shot_ONCE_because_the_stage_height_is_already_decided() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	BoardSpace.stage([victim.movement.cell], BoardSpace.lift_offset())
+	await _settle()
+	var on_stage: float = _rig.position.y
+
+	_hanging(victim, 2.0)
+	await _settle()
+
+	assert_float(on_stage - _rig.position.y).override_failure_message(
+			"the fall moved the shot further than the follow itself -- the diorama's height is "
+			+ "tracking the faller too, so the dip is counted twice") \
+		.is_equal_approx(Pacing.followed_fall(2.0), 0.01)
 	BoardSpace.clear_staging()
 	_cam().set_playback_locked(false)
 
