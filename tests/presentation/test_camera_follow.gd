@@ -56,18 +56,25 @@ func test_the_mirror_gate_and_the_pointer_gate_are_never_open_together() -> void
 	_cam().set_playback_locked(false)
 
 
-# The dev's 2026-08-26 ruling: playback owns WHERE the camera looks, the player keeps HOW FAR OUT it
-# sits. Before #520 one flag killed orbit and wheel together for a whole AI turn.
-func test_the_player_keeps_the_zoom_wheel_while_playback_owns_the_camera() -> void:
+# REWRITTEN for #602 round 4 -- the rule this pins REVERSED, so the old assertion would have kept
+# a name claiming the repealed carve-out. The 2026-08-26 ruling split the wheel off ("the player
+# keeps HOW FAR OUT it sits"); the 2026-08-29 ruling repealed the split ("we control the camera,
+# fully. Their zoom gets overridden, period"), restoring #520's own Done-when. One predicate now
+# gates both halves, so whoever owns where the camera looks owns how far out it sits.
+func test_playback_takes_the_zoom_wheel_with_the_rest_of_the_camera() -> void:
 	_game.game_state = _game.GameState.AI_TURN
 	_cam().set_playback_locked(true)
 	await _settle()
 	assert_bool(_game._board_locked_for_player()).override_failure_message(
 			"precondition: playback should own the board here").is_true()
 	assert_bool(_rig.zoom_input_enabled).override_failure_message(
-			"the zoom wheel died with the rest of the rig -- the split did not take").is_true()
+			"playback owns the camera and the player can still zoom it -- the carve-out is back"
+	).is_false()
 	_cam().set_playback_locked(false)
 	_game.game_state = _game.GameState.IDLE
+	await _settle()
+	assert_bool(_rig.zoom_input_enabled).override_failure_message(
+			"playback let go and the wheel stayed dead -- the gate never reopens").is_true()
 
 
 # A pass CLAIMS the camera and hands it back to whoever held it -- it does not simply unlock.
@@ -222,6 +229,12 @@ func test_a_side_channel_verb_takes_the_camera_too() -> void:
 	rally.init(unit)
 	unit.squad._queue_action(rally)
 
+	# ZOOM OFF, and that is what keeps the wire observable since #602 round 4: with the zoom on, a
+	# rally stages and the tear-down's return pan clears the follow at the pass's end -- by design
+	# (the WIDE shot back before the tiles drop) -- so the real coda pan and a deleted-subjects
+	# mutant would both read null here. Plain board: the coda's pan is the only camera writer, and
+	# the subjects wire it drives is the same code path in either profile.
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.OFF)
 	_cam().set_playback_locked(true)
 	_cam().follow(elsewhere)
 	await _game.order_executor.execute_orders(unit)
@@ -489,6 +502,9 @@ func test_the_camera_rides_the_tear_out_up_off_the_board() -> void:
 	var grounded: Vector3 = _rig.position
 
 	var stage: Array[Vector2i] = [unit.movement.cell]
+	# Published AND staged, exactly as the executor does the pair since #602 round 4 -- the aim's
+	# stage height reads the published cells, the lift channel reads the staging.
+	_cam().shot_cells = stage
 	BoardSpace.stage(stage, BoardSpace.lift_offset())
 	await _settle()
 
@@ -1142,21 +1158,45 @@ func test_the_follow_stops_short_rather_than_taking_the_camera_under_the_world()
 	_cam().set_playback_locked(false)
 
 
-func test_dialling_the_follow_out_leaves_the_shot_exactly_where_it_was() -> void:
+# REWRITTEN for #602 round 4: the case this replaces pinned the strength dial ("At 0 it watches
+# from the lip exactly as it always did"), and the dial is GONE by ruling -- the trained shot rides
+# every fall, so an off switch would be a slider that can repeal a ruling. What replaces it is the
+# ruling's own new half: a LANDING fall -- a body dropping onto ground, which the old channel
+# deliberately clamped to zero and watched from the lip -- is ridden all the way down (dev,
+# 2026-08-29: "I want a close up of that unit's tumble, all the way through").
+#
+# The landing flags are set directly for the reason _hanging's are: _step_off returns before
+# raising them in a headless run, so the real path cannot reach this state in a suite.
+func test_the_trained_shot_rides_a_landing_fall_all_the_way_down() -> void:
 	var victim := _player_unit()
 	assert_object(victim).is_not_null()
-	Pacing.CLIFF_FOLLOW = 0.0
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(victim)
 	await _settle()
-	var on_the_lip: Vector3 = _rig.position
+	var on_the_ground: Vector3 = _rig.position
+	var surface := BoardSpace.surface_point(UnitMirror.cell_under(victim), _game.board_heights).y
 
-	_hanging(victim, 5.0)
+	victim.movement.landing_falling = true
+	victim.movement.landing_fall_top = surface + 4.0 * BoardSpace.CELL_SIZE
+	victim.movement.landing_fall_depth = 0.0
 	await _settle()
+	assert_float(_rig.position.y).override_failure_message(
+			"the body is in the air at the lip's height and the camera is not up there with it"
+	).is_equal_approx(on_the_ground.y + 4.0 * BoardSpace.CELL_SIZE, 0.001)
 
-	assert_that(_rig.position).override_failure_message(
-			"the strength is the off switch and it did not switch anything off") \
-		.is_equal(on_the_lip)
+	victim.movement.landing_fall_depth = 3.0
+	await _settle()
+	assert_float(_rig.position.y).override_failure_message(
+			"the body has dropped three cells of its fall and the shot is not tracking it -- the "
+			+ "landing fall is still clamped out of the ride").is_equal_approx(
+			on_the_ground.y + 1.0 * BoardSpace.CELL_SIZE, 0.001)
+
+	victim.movement.landing_fall_depth = 4.0
+	victim.movement.landing_falling = false
+	await _settle()
+	assert_float(_rig.position.y).override_failure_message(
+			"the body landed and the shot did not settle back onto the ground with it"
+	).is_equal_approx(on_the_ground.y, 0.001)
 	_cam().set_playback_locked(false)
 
 
@@ -1304,6 +1344,11 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 			"the raised cell is level with the ground under the camera; the case proves nothing"
 	).is_true()
 
+	# The PUBLISHED stage, exactly as the executor hands it over before its pan (#602 round 4) --
+	# the aim reads cam.shot_cells, not BoardSpace's staged set, so the approach is already at the
+	# stage's height while the ground is still on the board. The lift channel still rides staging.
+	var published: Array[Vector2i] = [stage_cell, low_cell]
+	_cam().shot_cells = published
 	BoardSpace.stage([stage_cell, low_cell], BoardSpace.lift_offset())
 	await _settle()
 
@@ -1319,20 +1364,22 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 	_cam().set_playback_locked(false)
 
 
-# ...and a fall lowers the shot by the FOLLOW and nothing more.
+# ...and a fall lowers the shot by the FALL and nothing more.
 #
-# A COMPOSITION check rather than a check on either half: the stage height and the cliff follow both
-# move this camera vertically, and what could go wrong is them both answering for the same fall. It
-# holds because the height is latched before anyone falls (see the case below, which is what pins
-# the latch) -- so read this as "the two channels do not add up wrong", not as evidence for either.
+# A COMPOSITION check rather than a check on either half: the stage height and the trained follow
+# both move this camera vertically, and what could go wrong is them both answering for the same
+# fall. It holds because the height is latched at the publish, before anyone falls -- so read this
+# as "the two channels do not add up wrong", not as evidence for either.
 #
-# Stated because two mutants had to be run to find it out: swapping the stage height's ground read
-# for a stand-height read leaves this GREEN, since at latch time the two agree exactly.
+# Stated because two mutants had to be run to find it out (round 3): swapping the stage height's
+# ground read for a stand-height read leaves this GREEN, since at latch time the two agree exactly.
 func test_a_fall_lowers_the_shot_by_the_follow_and_nothing_more() -> void:
 	var victim := _player_unit()
 	assert_object(victim).is_not_null()
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(victim)
+	var published: Array[Vector2i] = [victim.movement.cell]
+	_cam().shot_cells = published
 	BoardSpace.stage([victim.movement.cell], BoardSpace.lift_offset())
 	await _settle()
 	var on_stage: float = _rig.position.y
@@ -1341,21 +1388,62 @@ func test_a_fall_lowers_the_shot_by_the_follow_and_nothing_more() -> void:
 	await _settle()
 
 	assert_float(on_stage - _rig.position.y).override_failure_message(
-			"the fall moved the shot further than the follow itself -- the diorama's height is "
+			"the fall moved the shot further than the fall itself -- the diorama's height is "
 			+ "tracking the faller too, so the dip is counted twice") \
-		.is_equal_approx(Pacing.followed_fall(2.0), 0.01)
+		.is_equal_approx(2.0 * BoardSpace.CELL_SIZE, 0.01)
 	BoardSpace.clear_staging()
 	_cam().set_playback_locked(false)
 
 
-# ...and the LATCH is what stops a body being THROWN from walking the whole shot down after it.
+# ...and the trained shot FOLLOWS its thrown subject down, which is #602 round 4's whole ask.
 #
-# This is the case the first draft did not have. Its absence let a mutant that deleted the latch pass
-# every case in this file: the fall case above cannot see it, because a falling body's GROUND does
-# not move and the height is read off the ground. What does move is a body that lands somewhere
-# else -- which is a shove, i.e. the ordinary case, and mid-pass it would drag the diorama's shot
-# down to wherever the last person was thrown.
-func test_a_body_thrown_onto_lower_ground_does_not_walk_the_shot_down_after_it() -> void:
+# REWRITTEN: the case this replaces was named "a body thrown onto lower ground does not walk the
+# shot down after it", and that rule REVERSED for the body the camera is on (dev, 2026-08-29: "it
+# is not following a unit during their falls over non death pits... I want a close up of that
+# unit's tumble, all the way through"). The half that survived -- the stage's own height staying
+# latched -- is the case after this one, pinned on a body nobody is following.
+func test_the_trained_shot_follows_its_thrown_subject_onto_lower_ground() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	var high_cell: Vector2i = victim.movement.cell
+	var heights: BoardHeights = _game.board_heights
+	heights.set_cell(high_cell, 8)
+	var low_cell := high_cell + Vector2i(3, 0)
+	heights.set_cell(low_cell, 0)
+	var dropped := BoardSpace.surface_point(high_cell, heights).y \
+			- BoardSpace.surface_point(low_cell, heights).y
+	assert_bool(dropped > 1.0).override_failure_message(
+			"the two cells are level; the case cannot tell a moved shot from a held one").is_true()
+
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	var published: Array[Vector2i] = [high_cell, low_cell]
+	_cam().shot_cells = published
+	BoardSpace.stage([high_cell, low_cell], BoardSpace.lift_offset())
+	await _settle()
+	var framed: float = _rig.position.y
+
+	# The end state of a shove: the body is standing on the low cell now, and the camera is on it.
+	# set_cell writes the unit's position through the grid itself, so cell_under follows.
+	victim.movement.set_cell(low_cell)
+	await _settle()
+
+	assert_float(_rig.position.y).override_failure_message(
+			"the shot is trained on the thrown body and did not go down after it -- the landing "
+			+ "clamp is back, or the follow's height is still the stage's") \
+		.is_equal_approx(framed - dropped, 0.01)
+	BoardSpace.clear_staging()
+	_cam().set_playback_locked(false)
+
+
+# ...while the STAGE's own height holds -- the latch, pinned on a body nobody is following.
+#
+# This is the case whose absence let a round-3 mutant that deleted the latch pass the whole file: a
+# falling body's GROUND does not move, so the fall cases cannot see a re-solve. What moves is a
+# body that lands somewhere else, and with the camera trained on somebody -- or nobody -- else, a
+# live re-solve would drag the whole diorama's establishing shot down to wherever the last person
+# was thrown, mid-pass.
+func test_a_thrown_body_nobody_is_following_does_not_walk_the_stage_down() -> void:
 	var victim := _player_unit()
 	assert_object(victim).is_not_null()
 	var high_cell: Vector2i = victim.movement.cell
@@ -1369,19 +1457,134 @@ func test_a_body_thrown_onto_lower_ground_does_not_walk_the_shot_down_after_it()
 
 	_cam().set_playback_locked(true)
 	await _cam().pan_to(victim)
+	_cam().follow_unit = null   # the park: nobody followed, the stage's own shot
+	var published: Array[Vector2i] = [high_cell, low_cell]
+	_cam().shot_cells = published
 	BoardSpace.stage([high_cell, low_cell], BoardSpace.lift_offset())
 	await _settle()
 	var framed: float = _rig.position.y
 
-	# The end state of a shove: the body is standing on the low cell now.
+	# The end state of a shove: the body is standing on the low cell now -- a staged cell, so a
+	# live re-solve would average it in and walk the shot down.
 	victim.movement.set_cell(low_cell)
 	await _settle()
 
 	assert_float(_rig.position.y).override_failure_message(
-			"the diorama's shot followed the thrown body down -- the stage height is being re-solved "
-			+ "mid-pass instead of decided when the ground left the board") \
+			"the diorama's shot followed a body the camera is not even on -- the stage height is "
+			+ "being re-solved mid-pass instead of decided at the publish") \
 		.is_equal_approx(framed, 0.01)
 	BoardSpace.clear_staging()
+	_cam().set_playback_locked(false)
+
+
+# --- the stage aims the approach (#602 round 4) -------------------------------------------------
+
+# The stage is PUBLISHED before the executor's pan, and the aim reads the published set -- not
+# BoardSpace's staged cells, which fill only when the ground actually moves. Gated on the ground,
+# the whole approach hugged the terrain under the moving centre and scaled the cliff face on the
+# way in (the pillar board, found in play). So: a published stage, ground still on the board, and
+# the shot must already be at the stage's height.
+func test_a_published_stage_aims_the_approach_before_the_ground_moves() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	var stage_cell: Vector2i = unit.movement.cell
+	var heights: BoardHeights = _game.board_heights
+	heights.set_cell(stage_cell, 8)
+	var raised := BoardSpace.surface_point(stage_cell, heights).y
+
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)
+	_cam().follow_unit = null
+	var away: Vector2 = _cam().global_position + Vector2(GridUtils.TILE_SIZE * 5.0, 0.0)
+	_cam().global_position = away
+	_cam().target_position = away
+	await _settle()
+	assert_bool(absf(_rig.position.y - raised) > 1.0).override_failure_message(
+			"the parked ground is level with the stage; the case cannot see the aim change").is_true()
+
+	var published: Array[Vector2i] = [stage_cell]   # BoardSpace has staged NOTHING yet
+	_cam().shot_cells = published
+	await _settle()
+
+	assert_bool(BoardSpace.staging_active()).override_failure_message(
+			"fixture: the ground moved, so this is the staged case again").is_false()
+	assert_float(_rig.position.y).override_failure_message(
+			"the stage is published and the approach is still hugging the ground under the camera "
+			+ "-- the aim is waiting for the tiles to move") \
+		.is_equal_approx(raised + Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE, 0.01)
+	_cam().set_playback_locked(false)
+
+
+# --- the two shot distances (#602 round 4) ------------------------------------------------------
+
+# The zoom is the director's during playback, in two states read off facts already published: a
+# followed unit is the trained close-up, no follow is the playback base (a published stage widens
+# from there until the staged volume fits -- projection geometry the suite cannot watch, so what
+# is pinned is the DECISION). Edges, never per-frame asserts: the walk phase's span widen and the
+# dolly ride the same target and a per-frame write would stomp them.
+func test_following_a_unit_pulls_the_shot_to_the_trained_distance() -> void:
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_cam().set_playback_locked(true)
+	await _settle()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the claim did not open at the playback distance") \
+		.is_equal_approx(_rig.playback_distance, 0.001)
+
+	await _cam().pan_to(unit)
+	await _settle()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the camera is trained on a unit and still sitting at the playback distance -- there "
+			+ "is no close-up").is_equal_approx(Pacing.TRAINED_DISTANCE, 0.001)
+
+	_cam().follow_unit = null
+	await _settle()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the follow ended and the shot stayed at the trained distance").is_equal_approx(
+			_rig.playback_distance, 0.001)
+	_cam().set_playback_locked(false)
+
+
+# --- the death show's hold (#602 round 4) -------------------------------------------------------
+
+# A void death frees the body mid-shot, taking the published depth with it -- and the camera used
+# to start climbing the same frame the burst fired, racing the show at every recover rate. The
+# depth channel now answers with the LAST depth the body published for as long as the mirror says
+# the show is on. The flag's own lifecycle -- armed by a void death, cleared when the last cube
+# lands -- is pinned in test_health_block_debris beside the cubes it counts; what THIS pins is the
+# HOLD: flag up means held depth, flag down means zero and the held value forgotten.
+#
+# _fall_below is asked directly: the mirror's own _process clears a cube-less flag within a frame
+# (there is rightly no show with nothing flying), so a settle here would race the very door the
+# debris suite pins. The rig-ward half of the wire -- drop_to(_fall_below(...)) every frame under
+# the lock -- is what every ride case above drives.
+func test_the_depth_channel_holds_while_the_death_show_plays() -> void:
+	var mirror := _scene.get_node("UnitMirror") as UnitMirror
+	assert_bool(mirror.frame_floor.is_valid()).override_failure_message(
+			"nobody wired the mirror's frame floor -- a void burst would fall back to the corpse"
+	).is_true()
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	await _settle()
+	_hanging(victim, 2.0)
+	await _settle()
+	var held: float = _rig._target_drop
+	assert_float(held).override_failure_message(
+			"the ride never went down; the case cannot say anything about the hold").is_greater(0.5)
+
+	# The death: the body is gone, the show is on.
+	mirror._death_show = true
+	_cam().follow_unit = null
+	var aim: Vector3 = _scene._aim_over(_rig.position.x, _rig.position.z)
+	assert_float(_scene._fall_below(_cam(), aim.y)).override_failure_message(
+			"the show is on and the channel let the depth go -- the climb is racing the cubes again"
+	).is_equal_approx(held, 0.001)
+
+	mirror._death_show = false
+	assert_float(_scene._fall_below(_cam(), aim.y)).override_failure_message(
+			"the show is over and the channel still answers the held depth").is_equal(0.0)
 	_cam().set_playback_locked(false)
 
 

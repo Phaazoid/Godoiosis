@@ -165,6 +165,56 @@ func test_a_death_detonates_the_whole_grid_red_cubes_included() -> void:
 			).is_equal(sockets)
 
 
+# --- the void death's show (#602 round 4) -------------------------------------------------------
+
+# A void death is a SHOW the camera holds its dropped shot for: _on_unit_died arms
+# death_show_live() while its cubes fly, and battle3d._death_show_depth is the reader that holds
+# the depth on its strength. The anchor arithmetic is UnitMirror.burst_lift, pinned pure in
+# test_shove_fall; the hold's own seam is pinned in test_camera_follow. What THIS case pins is the
+# arming wire -- plummet depth at death -> flag up -> flag down when the last cube lands -- driven
+# through the real die() path with real debris, which only this suite's fixture can spawn.
+func test_a_void_death_arms_the_show_until_its_cubes_land() -> void:
+	_unit_mirror.block_burst_stagger = 0.0   # every cube launches at once, so landing them is fast
+	var unit := await _watched()
+	assert_bool(_unit_mirror.death_show_live()).override_failure_message(
+			"the show was armed before anybody died").is_false()
+
+	unit.movement.plummet_depth = 8.0   # the fact a void fall leaves behind at die() time
+	unit.die()
+	await _settle()
+	assert_bool(_unit_mirror.death_show_live()).override_failure_message(
+			"a void death did not arm the show -- the camera has nothing to hold its shot for"
+	).is_true()
+
+	# Land every cube -- through the KNOB, because _push_debris_knobs re-writes the debris node's
+	# own field from it every frame (the born-dead-slider guard), so poking the node is undone
+	# within a frame. A hair above zero, not zero: the fade divides flight by lifetime, and 0/0 is
+	# NaN, whose every comparison is false -- so at exactly 0.0 nothing ever retires. Bounded loop
+	# rather than a settle count, because a headless frame's delta is real elapsed time and can be
+	# well under a millisecond -- how many frames a 1ms lifetime takes is the machine's business.
+	_unit_mirror.block_lifetime = 0.001
+	for _frame in range(240):
+		if _unit_mirror.debris().live_count() == 0:
+			break
+		await await_idle_frame()
+	assert_int(_unit_mirror.debris().live_count()).override_failure_message(
+			"fixture: the cubes never landed, so the clear cannot be judged").is_equal(0)
+	await _settle()   # the mirror's own _process is what lowers the flag
+	assert_bool(_unit_mirror.death_show_live()).override_failure_message(
+			"every cube has landed and the show is still armed -- the camera would hold for ever"
+	).is_false()
+
+
+# ...and an ORDINARY death arms nothing: only a void fall takes the camera somewhere the burst
+# has to be rescued from, and a show armed by every kill would hold the camera in place each time.
+func test_an_ordinary_death_arms_no_show() -> void:
+	var unit := await _watched()
+	unit.die()
+	await _settle()
+	assert_bool(_unit_mirror.death_show_live()).override_failure_message(
+			"a death on the board armed the void show").is_false()
+
+
 func test_a_multi_cube_burst_marches_out_rather_than_leaving_all_at_once() -> void:
 	# Round 2 (dev: "march through the bricks that blast out, from start to finish"). A waiting cube
 	# is LIVE but has not LAUNCHED — it sits in its own socket — which is the distinction the two

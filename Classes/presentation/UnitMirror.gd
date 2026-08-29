@@ -235,6 +235,20 @@ var cinematic_playback := false
 enum Impact { HIT, DOWN }
 var report_impact: Callable
 
+# Where the bottom of the shot IS, in world y -- wired by battle3d exactly as report_impact is,
+# because only the host knows the rig (#602 round 4). A void death's burst is raised to this line
+# so the cubes rise into the frame the camera is actually holding: the round-2 arithmetic re-derived
+# the camera's stop from the body's own fall, and those are two different bases the moment the
+# fight's stage sits higher than the void's lip -- on the pillar board, five and a half units of
+# difference, and no slider setting could close it.
+var frame_floor: Callable
+
+# ...and whether a void death's burst is still in the air, for the camera to hold its shot on
+# (#602 round 4): true from the burst until every cube has landed, read back through
+# death_show_live(). The camera used to start its climb the frame the body was freed, racing the
+# very show the hold at the bottom exists for -- and winning at every recover rate.
+var _death_show := false
+
 var units_root: Node2D
 
 # The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
@@ -266,6 +280,17 @@ func _process(_delta: float) -> void:
 	if units_root != null:
 		reconcile()
 	_refresh_facing_on_camera_turn()
+	# The show ends when the last cube lands. Cleared here rather than inside death_show_live so a
+	# read is a read -- and BEFORE any later burst could re-arm it, an ordinary hit's cubes cannot
+	# hold the camera in a pit: only _on_unit_died sets the flag.
+	if _death_show and _debris.live_count() == 0:
+		_death_show = false
+
+
+# Whether a void death's cubes are still flying (#602 round 4). The camera holds its dropped shot
+# exactly as long as this is true -- see battle3d._death_show_depth, the one reader.
+func death_show_live() -> bool:
+	return _death_show
 
 
 # Facing is judged against the LIVE camera, but _sync only re-judges a sprite that MOVED
@@ -674,7 +699,15 @@ func _on_unit_died(unit: Unit, id: int) -> void:
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return
 	var standing := bar.filled_block_count()
-	var lift := plummet_lift(unit)
+	var lift := 0.0
+	if unit.movement.plummet_depth > 0.0:
+		# A void death is a SHOW: the camera holds its dropped shot until these cubes land (the
+		# flag), and they leave from just under the frame it is actually holding (the anchor) --
+		# never from an arithmetic re-derivation of where it stopped. Zero lift for every other
+		# death, and headless, where plummet() returns before it records any depth at all.
+		_death_show = true
+		if frame_floor.is_valid():
+			lift = burst_lift(float(frame_floor.call()), bar.block_world_position(0).y)
 	var positions: Array[Vector3] = []
 	var colors := PackedColorArray()
 	for step in bar.block_count():
@@ -684,25 +717,21 @@ func _on_unit_died(unit: Unit, id: int) -> void:
 	_throw(bar, positions, colors, block_death_power)
 
 
-# How far to RAISE a death burst that happened at the bottom of a void plummet (#602 round 2).
+# How far to RAISE a void death's burst so it erupts from under the camera's view (#602 round 4,
+# dev: "all we see after (after a beat) is the health bar bricks exploding from under the camera's
+# view"). The anchor is the SHOT's own frame floor, handed in by the host -- the round-2 spelling
+# derived the camera's stop from the body's fall instead, which is a second BASE as well as a
+# second spelling: the shot hangs off the stage's height and the body off the void's lip, and on a
+# fight above a pit those disagree by the whole cliff.
 #
-# The camera follows a fall only as far as Pacing.followed_fall and then stops while the body keeps
-# going, so by die() the readout is metres below anything on screen and its cubes would launch, arc
-# and land with nobody watching. Raised to a knobbed distance under where the camera STOPPED, so
-# they rise into the bottom of the frame -- which is what the beat at the bottom of the fall is for.
-#
-# Legitimate rather than a cheat: these cubes already leave the readout's SOCKETS rather than a body,
-# and they are a descriptor, not debris with mass. Zero for every other death, including headless,
-# where plummet() returns before it records any depth at all.
+# Legitimate rather than a cheat: these cubes already leave the readout's SOCKETS rather than a
+# body, and they are a descriptor, not debris with mass. Never lowered -- a burst already inside
+# the frame stays where the body is.
 #
 # Static and public because it is the arithmetic worth pinning and it needs no scene -- the burst
 # itself is a particle throw a suite cannot watch, so what a case can hold is WHERE it starts.
-static func plummet_lift(unit: Unit) -> float:
-	var fell := unit.movement.plummet_depth * BoardSpace.CELL_SIZE
-	if fell <= 0.0:
-		return 0.0
-	var burst_at := Pacing.followed_fall(fell) + Pacing.PLUMMET_BURST_BELOW * BoardSpace.CELL_SIZE
-	return maxf(fell - burst_at, 0.0)
+static func burst_lift(anchor_y: float, lowest_block_y: float) -> float:
+	return maxf(anchor_y - lowest_block_y, 0.0)
 
 
 # The cubes between two HP readings, thrown from the sockets they were standing in. They leave in the

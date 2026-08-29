@@ -183,10 +183,11 @@ func test_a_falling_body_reports_the_depth_its_own_sprite_is_placed_by() -> void
 
 
 func test_a_body_still_in_the_AIR_over_a_hole_reports_a_negative_depth() -> void:
-	# The third vertical animation, and the one the cliff follow deliberately does not ride: an
-	# airborne shove holds the body at its LAUNCH height while it flies over lower ground, so the
-	# same subtraction comes out the other way. Without the camera's floor this would take the shot
-	# UP on every knockback across a pit, which is a different effect nobody has asked for.
+	# The third vertical animation: an airborne shove holds the body at its LAUNCH height while it
+	# flies over lower ground, so the same subtraction comes out the other way. The sign is
+	# LOAD-BEARING since #602 round 4 -- the trained shot rides it UP, holding the camera level
+	# with the flying body instead of dipping to the ground it crosses (the old channel floored
+	# this at zero and watched every fall from the lip, the rule the round repealed).
 	var heights := BoardHeights.new()
 	heights.set_cell(Vector2i(0, 0), 8)
 	heights.set_cell(Vector2i(1, 0), 8)
@@ -257,31 +258,27 @@ func _slide_watching_the_drop(unit: Unit, outcome: ResolvedOutcome) -> Dictionar
 
 # --- and where its bricks burst once it has fallen out of frame (dev, 2026-08-29) ---------------
 
-# The camera follows a plummet only as far as Pacing.followed_fall and then stops while the body
-# keeps going, so by die() the readout is metres below anything on screen. The burst is raised to a
-# knobbed distance under where the camera STOPPED -- which is the property worth pinning, because it
-# means the shot is the same however deep the pit is.
+# REWRITTEN in #602 round 4: the round-2 spelling here re-derived the camera's stop from the
+# body's own fall (Pacing.followed_fall of the depth), which is a second BASE as well as a second
+# spelling -- the shot hangs off the STAGE's height and the body off the void's lip, and on a
+# fight staged above a pit those differ by the whole cliff, so the cubes were below the frame at
+# every slider setting (the pillar board, found in play). The burst is now raised to the frame the
+# camera actually holds: UnitMirror.burst_lift takes the host's own frame-floor anchor, and the
+# property worth pinning is unchanged -- the show lands in the same place however deep the pit is.
 func test_a_deeper_plummet_does_not_burst_further_from_the_camera() -> void:
-	var heights := BoardHeights.new()
-	heights.set_cell(Vector2i(0, 0), 4)
-	heights.set_cell(Vector2i(1, 0), 4)
-	var s := _setup(heights, 1, Vector2i(0, 0), Vector2i(1, 0))
-	var victim: Unit = s.d
+	var anchor := 2.5   # where the bottom of the shot happens to be, in world y
 
-	victim.movement.plummet_depth = 8.0
-	var deep := 8.0 * BoardSpace.CELL_SIZE - UnitMirror.plummet_lift(victim)
-	victim.movement.plummet_depth = 40.0
-	var deeper := 40.0 * BoardSpace.CELL_SIZE - UnitMirror.plummet_lift(victim)
-
+	# Two bodies, one five times deeper than the other: the burst LANDS at the anchor either way.
+	var deep := -8.0 + UnitMirror.burst_lift(anchor, -8.0)
+	var deeper := -40.0 + UnitMirror.burst_lift(anchor, -40.0)
 	assert_float(deeper).override_failure_message(
 			"a body that fell five times as far burst five times further from the camera -- the "
 			+ "cubes are launching somewhere nobody is looking").is_equal_approx(deep, 0.001)
-	# ...and it is UNDER the shot rather than inside it, which is what makes them rise into frame.
 	assert_float(deep).override_failure_message(
-			"the bricks burst level with or above where the camera stopped") \
-			.is_greater(Pacing.followed_fall(8.0))
+			"the bricks did not come up to the frame the camera is holding") \
+			.is_equal_approx(anchor, 0.001)
 
-	# An ordinary death is not moved at all: nothing else in the game bursts anywhere but the body.
-	victim.movement.plummet_depth = 0.0
-	assert_float(UnitMirror.plummet_lift(victim)).override_failure_message(
-			"a body that never plummeted had its death burst relocated").is_equal(0.0)
+	# A burst already inside the frame is never LOWERED: nothing else in the game bursts anywhere
+	# but the body, and a shallow fall whose readout is still on screen keeps it there.
+	assert_float(UnitMirror.burst_lift(anchor, anchor + 1.0)).override_failure_message(
+			"a burst already above the frame floor was dragged down to it").is_equal(0.0)

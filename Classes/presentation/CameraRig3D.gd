@@ -492,9 +492,15 @@ static func sway_offset(strength: float, elapsed: float) -> float:
 # wants to be a shot; it is also what leaves the camera still deep in the pit while the death jolt
 # and the down-beat's linger play out over it.
 #
+# The channel runs NEGATIVE since round 4 -- a followed body standing ABOVE the shot's base aims
+# the camera up at it -- and the whole negative range is EASED both ways: the snap exists to glue
+# the shot to a body in free FALL, and below zero there is no fall, only a re-frame, which wants to
+# be a glide. The one kink this buys is a ride that crosses zero mid-fall switching from ease to
+# snap as it does; declared rather than smoothed, because a second rate would be a second answer.
+#
 # `blend` rather than a delta so the caller owns the headless escape, exactly as the aim's does.
 static func recovered(current: float, target: float, blend: float) -> float:
-	if target >= current:
+	if target >= current and current >= 0.0:
 		return target
 	return lerpf(current, target, blend)
 
@@ -520,14 +526,15 @@ func dolly_to(emphasis: float) -> void:
 # Where the zoom actually eases to: the player's distance, less whatever the director is leaning in.
 #
 # THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that is the whole care here.
-# This rig has no zoom-in floor by dev ruling (asked twice) -- scrolling in past the aim point takes
-# the camera through its target to look back, which is his call for HIS hand. A director subtracting
-# from an already-close player would inherit that hole and fly the camera through a unit on the exact
-# beat it most wants to be looking at one.
-#
-# So the effective floor is the lower of DOLLY_FLOOR and where the player already is: closer than the
-# floor, and the push-in contributes nothing at all rather than the floor yanking them back OUT --
-# which would be a leash on the wheel, the thing #520 refused.
+# This rig has no zoom-in floor on the WHEEL by dev ruling (asked twice) -- scrolling in past the
+# aim point takes the camera through its target to look back, which is his call for HIS hand, and
+# that ruling keeps its scope: outside playback. The dolly only runs under a borrowed view, where
+# the base distance is the DIRECTOR's own since #602 round 4 ("we control the camera, fully"), and
+# the floor still caps the dolly's CONTRIBUTION, never the total: a base already closer than the
+# floor -- a trained distance tuned tight -- gets no push-in rather than being pulled back OUT,
+# which would be the push-in doing the opposite of its name. The 2026-08-26 comment justified this
+# arm as protecting the player's wheel; the wheel is gone from playback and the arithmetic stands
+# on its own reason.
 func _dollied_distance() -> float:
 	if _dolly <= 0.0 or not _view_borrowed:
 		return _target_distance
@@ -784,8 +791,9 @@ func _process(delta: float):
 	var blend := 1.0 - exp(-smoothing * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	# ...toward the DOLLIED distance (#520 diff 2c), which is _target_distance untouched unless the
-	# director is leaning in. The player's own value is never written, so the wheel keeps working
-	# under a push-in and the view handed back at the release is the distance they chose.
+	# director is leaning in. The target itself is never written by the dolly, so a beat ending
+	# publishes 0 and the shot eases back to its state's own base -- and the stashed view handed
+	# back at the release is still the distance the player chose.
 	_camera.position.z = lerpf(_camera.position.z, _dollied_distance(), blend)
 	# The third eased channel (#586), on the SAME rate as the yaw: they are two axes of one drag, and
 	# a pitch that settled at a different speed would make a diagonal drag curve. Plain lerpf rather

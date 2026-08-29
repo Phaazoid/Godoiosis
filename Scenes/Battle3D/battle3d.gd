@@ -136,13 +136,23 @@ var _playback_owned_camera := false
 # store the answer is drawn from -- rather than on a copy of what it resolves to (#308).
 var _framed_span: Array[Vector2i] = []
 
-# The diorama's own surface height, solved ONCE per tear-out (#602 round 3). See _staged_surface for
-# why it is latched rather than tracked: a live height would double-count a fall against the cliff
-# follow. `_was_staging` is the edge detector that clears the latch -- the shape _playback_owned_camera
-# already uses, and the only reliable one here, since nothing in this scene is told a pass has ended.
+# The diorama's own surface height, solved ONCE per published stage (#602 round 3; the edge moved
+# to cam.shot_cells in round 4). Latched rather than tracked because bodies get THROWN during a
+# pass: a live re-solve would find them standing on whatever they landed on and walk the whole
+# shot down after them mid-fight. `_stage_cells_solved` is the edge detector -- the published
+# store itself, not a copy of what it resolves to (#308) -- and the claim edge clears it, so two
+# passes staging the identical cells still each get their own solve against where the units stand
+# NOW.
 var _stage_height := 0.0
-var _stage_height_latched := false
-var _was_staging := false
+var _stage_cells_solved: Array[Vector2i] = []
+# The last depth the fall channel published while its body still existed (#602 round 4). A void
+# death frees the unit -- taking the fact with it -- so this is what the shot holds at while the
+# burst's cubes fly. Zeroed at the claim edge and whenever the show is over; the board-swap door
+# is drop_stashed_view's, which cuts the rig's own drop the same frame.
+var _held_drop := 0.0
+# ...and which unit the shot is trained on, BY ID, an edge detector for the zoom (#602 round 4).
+# An id rather than a ref so a body freed mid-beat cannot wedge the edge, and 0 is "nobody".
+var _trained_seen_id := 0
 
 
 func _ready() -> void:
@@ -186,6 +196,10 @@ func _ready() -> void:
 	# worth. It bound straight to _rig.shake until 2c gave a killing blow a second consequence --
 	# the freeze -- which is not the rig's to do, so the decision moved here where both are reachable.
 	_unit_mirror.report_impact = _on_impact
+	# ...and where the bottom of the shot is, so a void death's burst erupts from under the frame
+	# the camera is actually holding (#602 round 4). Only this host knows the rig -- same reason
+	# report_impact is a callable and not a lookup.
+	_unit_mirror.frame_floor = _shot_floor
 	_overlay_mirror.game = game
 	_overlay_mirror.overlays = _overlays
 	_overlay_mirror.unit_mirror = _unit_mirror
@@ -722,9 +736,12 @@ func _process(_delta: float) -> void:
 	# rig must keep SMOOTHING (the mirror below drives it) while refusing the player.
 	# Same predicate that refuses their clicks — one question, one answer.
 	_rig.manual_input_enabled = demo_mode or not game._board_locked_for_player()
-	# The ZOOM half is gated on the menu alone (#520, dev 2026-08-26): while playback owns where
-	# the camera looks, the player still owns how far out it sits. A menu takes both.
-	_rig.zoom_input_enabled = demo_mode or not game.menu_is_up()
+	# The ZOOM half rejoined the same gate in #602 round 4 (dev, 2026-08-29: "we control the camera,
+	# fully. Their zoom gets overridden, period" -- restoring #520's own Done-when after the
+	# 2026-08-26 carve-out left the wheel live under playback). One predicate, both halves: whoever
+	# owns where the camera looks owns how far out it sits. The player's only way out of a pass is
+	# the skip, which is #545's build.
+	_rig.zoom_input_enabled = _rig.manual_input_enabled
 	_poll_pointer()
 	_sync_brush_bindings()
 	_sync_brush_ghost()
@@ -763,10 +780,18 @@ func _mirror_camera() -> void:
 			# post-turn pass (#534) claims it again after that.
 			_rig.stash_view()
 			_rig.align_to_detent()
-			# ...and frame from a known distance (#520). The EDGE is the whole design: reset once
-			# as playback takes the camera, then leave the wheel alone, so the player may zoom
-			# freely for the rest of it. Re-applying per frame would be a leash instead.
+			# ...and frame from a known distance (#520). Still an EDGE, though the reason moved in
+			# #602 round 4: the wheel is dead under playback now, so this is the director's own
+			# opening base rather than a one-time reset the player zooms away from. The states
+			# below re-aim it -- a stage widens it to fit, a followed unit pulls it to the trained
+			# distance -- each on its own edge.
 			_rig.set_zoom(_rig.playback_distance)
+			# A fresh pass solves its own stage and holds no leftover fall: the same cells staged
+			# twice in a row still describe different standing units, and a held depth belongs to
+			# the show that latched it.
+			_stage_cells_solved = []
+			_held_drop = 0.0
+			_trained_seen_id = 0
 		else:
 			_rig.restore_view()
 	# ABOVE the early return, deliberately: how far the ground has been torn out is a fact about the
@@ -778,13 +803,6 @@ func _mirror_camera() -> void:
 	# ...and it asks where the CAMERA should be, which is the diorama's height at rest and something
 	# the transition drives while one is running (#521 slice B). Equal whenever nothing is driving
 	# it, so with the battle zoom off, or the flag off, this is bit-for-bit the old poll.
-	# The tear-out's own EDGE, polled beside the lift because it answers about the same fact: a fight
-	# arriving on stage is when the diorama's height is decided (#602 round 3). Above the playback
-	# gate for the same reason the lift is -- the staging outlives the lock at both ends.
-	var staging := BoardSpace.staging_active()
-	if staging != _was_staging:
-		_was_staging = staging
-		_stage_height_latched = false
 	_rig.lift_to(BoardSpace.camera_lift())
 	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
 	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
@@ -806,13 +824,36 @@ func _mirror_camera() -> void:
 	#
 	# HELD rather than glided (#520): the 2D camera this mirrors already tweens its own travel, so
 	# easing on top of that ease is lag between the action and the frame it is in.
+	# THE STAGE'S EDGE (#602 round 4): one height solve and one framing per published stage. On the
+	# publish -- which the executor makes BEFORE its pan, so the whole approach aims at the stage
+	# rather than hugging the ground under the moving centre -- solve where the fighters stand and
+	# widen the shot until the staged volume fits; on the clear, back to the playback base. Edges,
+	# never per-frame asserts: the walk phase's span widen and the dolly both live on this rig, and
+	# a per-frame set_zoom would stomp them.
+	if cam.shot_cells != _stage_cells_solved:
+		_stage_cells_solved = cam.shot_cells.duplicate()
+		_rig.set_zoom(_rig.playback_distance)
+		if not _stage_cells_solved.is_empty():
+			_stage_height = _solve_stage_height(_stage_cells_solved)
+			_rig.widen_to_fit(_shot_volume(_stage_cells_solved))
+	# ...and the TRAINED edge, its sibling: while the 2D camera is following one unit -- a beat's
+	# subject, a body mid-tumble -- the shot sits at the trained distance, the close-up the dev
+	# asked for. By id, so a body freed mid-beat reads as "nobody" and hands the distance back.
+	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
+	var trained_id := trained.get_instance_id() if trained != null else 0
+	if trained_id != _trained_seen_id:
+		_trained_seen_id = trained_id
+		_rig.set_zoom(Pacing.TRAINED_DISTANCE if trained != null else _rig.playback_distance)
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
-	_rig.hold_at(_aim_over(flat.x, flat.z))
-	# ...and how far the body it is watching has fallen BELOW that (#602). The aim above answers where
-	# on the board and derives its height from the SURFACE, which is exactly why a fall escapes it:
-	# both falls are mirror-side offsets, so the unit's own position never descends and the camera
-	# holds level at the lip while the sprite drops out of the bottom of the frame.
-	_rig.drop_to(_fall_below(cam))
+	var aim := _aim_over(flat.x, flat.z)
+	_rig.hold_at(aim)
+	# ...and how far the body it is watching sits ABOVE OR BELOW that aim (#602, re-based in round
+	# 4). The aim answers where the STAGE is; this channel is what trains the shot's height on the
+	# followed body itself -- riding a landing fall all the way down, riding a plummet as far as
+	# the follow cap, aiming UP at a subject standing higher than the stage's mean. Handing it the
+	# aim's own height is what makes the two channels one shot: camera height = aim - drop = the
+	# body's stand height plus the framing lift, whatever either base does.
+	_rig.drop_to(_fall_below(cam, aim.y))
 	# ...and WHICH PROFILE the beat runs under (#647), mirrored FIRST because all three channels below
 	# scale through it. It is what carries COMBAT_ONLY to a rig that has no beat in hand: a plain walk
 	# publishes BOARD and the sway, the push-in and the yaw all land at zero strength.
@@ -1163,21 +1204,20 @@ func _center_rig_on(cell: Vector2i) -> void:
 func _aim_over(x: float, z: float) -> Vector3:
 	# WHILE A FIGHT IS ON STAGE THE HEIGHT IS THE STAGE'S, NOT THE GROUND'S (2026-08-29, found in
 	# play). The lift channel has always said this -- "the whole stage, never the cell under the
-	# camera: the diorama is one thing at one height, and asking per cell would dip the camera every
-	# time a pan crossed unstaged ground" -- and the rule was written for one channel and never
-	# applied to the other. The rig adds the stage's LIFT to whatever this returns, so on flat ground
-	# the two agreed by accident; on a fight at the top of a ten-level pillar the diorama sits at the
-	# pillar's surface plus the lift while this handed back the PLAIN's surface plus the lift, ten
-	# levels low and looking at empty sky. It is also the second-order jerk: a pan crossing the
-	# pillar's edge stepped the camera by the pillar's whole height, mid-tear-out.
-	if BoardSpace.staging_active():
-		return Vector3(x, _staged_surface(), z)
+	# camera" -- and round 3 applied it to the aim. Round 4 moved the read to the PUBLISHED stage,
+	# cam.shot_cells, which the executor sets before its pan: gated on BoardSpace._staged (filled
+	# only at stage()) the approach still hugged the terrain under the moving centre, scaling a
+	# cliff face on the way in and whiting out against it. The lift the fighters are framed with is
+	# added HERE, over a raw solved mean, so the fall channel can reason about the same base.
+	var cam: CameraController = game.camera_controller
+	if not cam.shot_cells.is_empty():
+		return Vector3(x, _stage_height + Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE, z)
 	var cell := Vector2i(floori(x), floori(z))
 	return Vector3(x, BoardSpace.surface_height_at(cell, x, z, game.board_heights), z)
 
 
-# The one height the diorama sits at: the ground under the UNITS ON STAGE, plus a knob (dev,
-# 2026-08-29: *"the units need to be at the center"*).
+# The one height the diorama sits at: the RAW mean of the ground under the UNITS ON STAGE -- the
+# framing lift goes on in _aim_over (dev, 2026-08-29: *"the units need to be at the center"*).
 #
 # It was the mean of every STAGED CELL for one round and that is wrong in a specific way.
 # BeatSheet._gather_cells puts the whole KNOCKBACK PATH on stage -- correct for the ground, since a
@@ -1186,32 +1226,24 @@ func _aim_over(x: float, z: float) -> Vector3:
 # camera ended up staring at the pillar's wall with the fight above the frame, and the further a body
 # was thrown the worse it got. What the shot is about is where the PEOPLE are.
 #
-# LATCHED at the tear-out (dev's pick: *stage height held, dip for a fall*), and the latch is doing
-# ALL of the work -- which took two surviving mutants to establish, so it is written down plainly.
+# SOLVED ONCE PER PUBLISH, at the _mirror_camera edge (dev's pick: *stage height held, dip for a
+# fall* -- the latch law cost two surviving mutants in round 3, and the round-4 trained shot is
+# what made the dip half real). What the latch buys: bodies get THROWN during a pass, and a live
+# re-solve would find them standing on whatever ground they landed on and walk the whole diorama's
+# shot down after them, mid-fight. The trained shot follows its OWN subject through exactly that --
+# the latch keeps everyone else's throw from dragging the establishing base along.
 #
-# What it buys: bodies get THROWN during a pass, and a live re-solve would find them standing on
-# whatever ground they landed on and walk the whole diorama's shot down after them, mid-fight. It is
-# also what keeps a FALL costing exactly one dip, since the height is settled before anyone falls.
-#
-# `_solve_stage_height` reads the GROUND under each unit rather than their stand height because the
-# stage's height is a property of the ground, not of who happens to be standing on it. NO CASE CAN
-# CURRENTLY TELL THOSE TWO APART, and that is a fact about the latch: at solve time nothing is
-# falling and nobody has been thrown, so the two agree exactly, and a mutant swapping them stays
-# green. Kept for what it MEANS, not for a behaviour it is protecting today.
-func _staged_surface() -> float:
-	if _stage_height_latched:
-		return _stage_height
-	_stage_height_latched = true
-	_stage_height = _solve_stage_height()
-	return _stage_height
-
-
-# The ground under the units standing on the stage, averaged, lifted by the knob.
+# Reads the GROUND under each unit rather than their stand height because the stage's height is a
+# property of the ground, not of who happens to be standing on it -- and at the publish edge nothing
+# is falling yet, so no case can tell the two apart. Kept for what it MEANS.
 #
 # The FALLBACK is the staged ground itself, for a pass whose stage nobody is standing on -- a
-# cell-effect deposit, or a body freed between the tear-out and this frame. It is the answer this
-# function used to give unconditionally, kept only where there is nothing better to say.
-func _solve_stage_height() -> float:
+# cell-effect deposit, or a body freed between the resolve and this frame. Non-empty cells are the
+# caller's contract (the edge only solves a published stage).
+func _solve_stage_height(cells: Array[Vector2i]) -> float:
+	var on_stage: Dictionary[Vector2i, bool] = {}
+	for cell in cells:
+		on_stage[cell] = true
 	var heights: BoardHeights = game.board_heights
 	var total := 0.0
 	var counted := 0
@@ -1220,44 +1252,85 @@ func _solve_stage_height() -> float:
 		if unit == null:
 			continue
 		var cell := UnitMirror.cell_under(unit)
-		if not BoardSpace.is_staged(cell):
+		if not on_stage.has(cell):
 			continue
 		total += BoardSpace.surface_point(cell, heights).y
 		counted += 1
 	if counted == 0:
-		var staged := BoardSpace.staged_cells()
-		if staged.is_empty():
-			return 0.0
-		for cell in staged:
+		for cell in cells:
 			total += BoardSpace.surface_point(cell, heights).y
-		counted = staged.size()
-	return total / float(counted) + Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE
+		counted = cells.size()
+	return total / float(counted)
 
 
-# ...and the vertical half the aim above cannot answer (#602): how far BELOW the board to take the
-# shot so it rides the body the camera is following down a cliff or into a void, in world units.
+# ...and the vertical half the aim above cannot answer (#602, re-based in round 4): how far above
+# or below the aim to take the shot so it is TRAINED on the body the camera is following -- riding
+# a landing fall all the way to the ground, riding a void plummet as far as the follow cap and no
+# further, aiming up at a subject standing higher than the stage's mean. In world units, signed.
 #
-# The depth is UnitMirror's own, never re-derived. That node places the sprite from the same
-# arithmetic, so the shot and the body cannot end up at different heights -- and a second spelling of
-# exactly this fall is what #472 was filed for.
+# The fall is UnitMirror.fall_depth's own, never re-derived -- that node places the sprite from
+# the same arithmetic, so the shot and the body cannot end up at different heights, and a second
+# spelling of exactly this fall is what #472 was filed for. Negative depth (a body in the air over
+# a hole, holding its lip's height) rides the shot UP the same way, uncapped: only the descent has
+# a follow limit, because only a death fall has no end to ride to.
 #
-# Measured from the surface under the UNIT rather than from the aim: the 2D camera lags its follow
-# target by a frame or two, so an aim-relative depth would jump whenever that lag put the camera over
-# a neighbouring cell mid-fall -- and this channel lands its DOWNWARD moves instantly, so a spurious
-# jump would be a visible snap rather than something the easing absorbs.
+# HANDED THE AIM'S OWN HEIGHT, this frame's, because the depth is a difference of the two bases the
+# shot is actually built from: camera height = aim - drop, so drop = aim - (body + lift) makes the
+# camera sit at the body plus the framing lift EXACTLY, whatever either base does. The round-2
+# spelling measured the fall from the surface under the unit instead -- its own base -- which
+# agreed with the aim's base only on flat ground; on a fight staged above the pit the two differed
+# by the whole cliff, and the burst it anchored was never on screen (the pillar board, found in
+# play). A base-step under the unstaged aim eases through this channel as a transient rather than
+# cancelling exactly; the staged aim -- every showpiece -- is flat, so the ride there is exact.
 #
-# The STRENGTH and the CEILING are Pacing.followed_fall's, not spelled here: the health readout has
-# to know where the shot stopped so its debris can burst just under it (#602 round 2), and two
-# spellings of that would put the cubes somewhere the camera is not.
+# The follow cap is the body's own surface minus the knob: only a plummet descends below its
+# surface, so a landing fall never meets it and rides free, which is the round-4 ruling ("a close
+# up of that unit's tumble, all the way through").
 #
 # The guard is is_instance_valid BEFORE the typed read (#149): a void plummet ends in die(), and a
-# freed Unit assigned into a typed slot dies on the type-check before any null test can run.
-func _fall_below(cam: CameraController) -> float:
+# freed Unit assigned into a typed slot dies on the type-check before any null test can run. A
+# freed body hands the answer to the death show's hold.
+func _fall_below(cam: CameraController, aim_y: float) -> float:
 	if not is_instance_valid(cam.follow_unit):
-		return 0.0
+		return _death_show_depth()
 	var watched: Unit = cam.follow_unit
 	var heights: BoardHeights = game.board_heights
-	return Pacing.followed_fall(UnitMirror.fall_depth(watched, heights))
+	var surface := BoardSpace.surface_point(UnitMirror.cell_under(watched), heights).y
+	var fall := minf(UnitMirror.fall_depth(watched, heights),
+			Pacing.CLIFF_FOLLOW_MAX * BoardSpace.CELL_SIZE)
+	var lift := Pacing.STAGE_AIM_LIFT * BoardSpace.CELL_SIZE \
+			if not cam.shot_cells.is_empty() else 0.0
+	var depth := aim_y - (surface - fall + lift)
+	_held_drop = depth
+	return depth
+
+
+# What the fall channel answers once its body is gone (#602 round 4): a void death frees the unit
+# mid-shot, and the camera used to start climbing the same frame the burst fired -- racing, and at
+# any recover rate beating, the very show the hold at the bottom exists for. So the shot HOLDS the
+# last depth the body published for as long as the burst's cubes are in the air, and only then
+# hands the channel its zero. The claim edge and drop_stashed_view (the board-swap door) both
+# zero the held value, so neither a new pass nor a new board inherits a dead show's pit.
+func _death_show_depth() -> float:
+	if _unit_mirror.death_show_live():
+		return _held_drop
+	_held_drop = 0.0
+	return 0.0
+
+
+# Where the bottom of the shot is, in world y -- the anchor a void death's burst erupts from,
+# handed to UnitMirror as a callable (#602 round 4). The rig's node position IS the aim point (the
+# camera sits back from it on a child), already carrying the stage lift and the fall, so this is
+# the frame the player is actually watching -- not a re-derivation of where it ought to be.
+#
+# The offset is a CONST, not a knob, on WHITEOUT_SAFE_PEAK's reasoning: every other feel value in
+# this arc is tunable, but a slider that could push the death show out of shot would quietly repeal
+# the invariant this round exists to keep (dev, 2026-08-29: "I'll *always* want the death cubes in
+# shot").
+const PLUMMET_BURST_UNDER := 1.5
+
+func _shot_floor() -> float:
+	return _rig.position.y - PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same
@@ -1268,6 +1341,17 @@ func _span_volume(span: Array[Vector2i]) -> AABB:
 	var heights: BoardHeights = game.board_heights
 	return AABB(BoardSpace.surface_point(span[0], heights), Vector3.ZERO) \
 			.expand(BoardSpace.surface_point(span[1], heights))
+
+
+# ...and the whole STAGE's box (#602 round 4), for the WIDE shot: every staged cell's surface
+# point, not two corners -- a stage is not a span, and the tallest ground in the middle of one is
+# exactly what a corner pair misses. Small by nature (a fight's cells), so the loop is nothing.
+func _shot_volume(cells: Array[Vector2i]) -> AABB:
+	var heights: BoardHeights = game.board_heights
+	var box := AABB(BoardSpace.surface_point(cells[0], heights), Vector3.ZERO)
+	for cell in cells:
+		box = box.expand(BoardSpace.surface_point(cell, heights))
+	return box
 
 
 func _update_pointer(screen_pos: Vector2) -> void:

@@ -666,7 +666,10 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How much closer the camera sits on a killing blow, in world units, at full emphasis. SUBTRACTED from wherever you have left the zoom, so the wheel keeps working underneath and the push-in comes off when the beat ends. Scaled by the directed-shot strength, so it is dead on the plain board."},
 	{"group": "Camera flourish", "label": "Shot: how close the push-in may get", "static": "DOLLY_FLOOR",
 		"script": PACING_SCRIPT, "min": 0.5, "max": 20.0, "step": 0.5,
-		"tip": "The nearest the PUSH-IN alone may bring the camera. It never overrides your own zoom: if you are already closer than this, the push-in simply does nothing rather than pulling you back out. There is no floor on the wheel itself, by design -- this only stops the director flying through a unit."},
+		"tip": "The nearest the push-in may bring the directed shot. During playback the camera is fully directed -- your own zoom is stashed and handed back after -- so this floors the director against flying through a unit. It caps the push-in's contribution, never the total: a shot already sitting closer just gets no push-in rather than being shoved back out. No floor on the wheel outside playback, by design."},
+	{"group": "Camera flourish", "label": "Shot: trained on a unit", "static": "TRAINED_DISTANCE",
+		"script": PACING_SCRIPT, "min": 2.0, "max": 20.0, "step": 0.25,
+		"tip": "How far out the camera sits while the shot is following one unit -- a beat's subject, a body mid-tumble. The close-up of the pair: the wide establishing shot fits the whole stage, and this is what it cuts in to. The push-in still leans in from here on a killing blow, so keep it a little above its floor."},
 	{"group": "Camera flourish", "label": "Emphasis: a unit goes down", "static": "EMPHASIS_DOWN",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
 		"tip": "How big a moment a death is, 0 to 1 -- the weight that drives the push-in. Loudest rung wins, so this is the top of the ladder. An ordinary hit earns 0 and is the baseline the rest are read against."},
@@ -731,26 +734,22 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "How far above the board the torn-out diorama sits, in cells. The fight plays up there and the tiles thud back into their sockets when it ends. At 0 the diorama sits inside the board it came from. Nothing stages at all with the battle zoom off."},
 
 	# The cliff follow (#602). NO profile tag on any of these, and that is the section's own rule: a
-	# fall is an animation running in real time in both profiles, so it is flat like the linger and the
-	# impact jolt rather than forked like the sway. The strength row is the dial-out.
-	{"group": "The cliff follow", "label": "How much of a fall the camera rides", "static": "CLIFF_FOLLOW",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 1.0, "step": 0.05,
-		"tip": "How far the camera follows a body that has been shoved off a ledge or into a void, as a fraction of the drop. At 0 it watches from the lip exactly as it always did, and the body falls out of the bottom of the frame."},
-	{"group": "The cliff follow", "label": "How far down it will follow", "static": "CLIFF_FOLLOW_MAX",
+	# fall is an animation running in real time in both profiles, so it is flat like the linger and
+	# the impact jolt rather than forked like the sway. Since round 4 the trained shot rides every
+	# fall to its end by ruling -- the only dial here is how far a DEATH fall is followed, because
+	# only a death fall has no end to ride to.
+	{"group": "The cliff follow", "label": "How far down a death fall is followed", "static": "CLIFF_FOLLOW_MAX",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 16.0, "step": 0.25,
-		"tip": "A ceiling on that, in cells, so a long void plummet does not take the camera right under the world. Below the board there is only sky and fog, so this is where to stop short and let the body drop on out of frame."},
+		"tip": "How far below the lip the camera rides a body falling into a void, in cells, before it stops and lets the body drop on out of frame. This is the toggle on how long the ride lasts. Only a void fall meets it -- a drop onto ground is followed all the way down regardless."},
 	{"group": "The cliff follow", "label": "How fast it climbs back", "static": "CLIFF_RECOVER",
 		"script": PACING_SCRIPT, "min": 0.2, "max": 8.0, "step": 0.1,
-		"tip": "How quickly the camera comes back up once the fall is over, in e-folds per second -- lower is slower. Going DOWN is always instant, because the camera is chasing a body in free fall; only the climb back is eased, and a slow one keeps the camera in the pit while the death beat plays."},
+		"tip": "How quickly the camera comes back up once the fall's show is over, in e-folds per second -- HIGHER IS FASTER. Going down is always instant, because the camera is chasing a body in free fall. The climb never races the death cubes at any setting here: the shot holds until they land, and this only paces the ride home afterwards."},
 	{"group": "The cliff follow", "label": "Hold: the bottom of a void fall", "static": "PLUMMET_HOLD",
 		"script": PACING_SCRIPT, "min": 0.0, "max": 6.0, "step": 0.05,
-		"tip": "A beat down in the dark after a body stops falling, before it is removed from the board. At 0 it is taken away the instant it lands. Void falls only -- a drop off a cliff lands on ground and the shove carries on."},
-	{"group": "The cliff follow", "label": "Bricks burst this far below", "static": "PLUMMET_BURST_BELOW",
-		"script": PACING_SCRIPT, "min": 0.0, "max": 8.0, "step": 0.25,
-		"tip": "How far under the stopped camera a dead body's health bricks explode, in cells, so they rise up into the bottom of the frame instead of bursting somewhere off screen with the corpse. Larger means they start lower and arrive later; at 0 they burst level with the bottom of the shot."},
+		"tip": "A beat down in the dark after a body stops falling, before it is removed -- which is the moment its health bricks burst up from under the frame, so this is also the wait before that show. The bricks themselves always land in shot; there is no slider that can lose them."},
 	{"group": "The cliff follow", "label": "Shot sits above the units' feet", "static": "STAGE_AIM_LIFT",
 		"script": PACING_SCRIPT, "min": -2.0, "max": 4.0, "step": 0.05,
-		"tip": "How high above the ground the fighters are standing on the torn-out diorama is framed, in cells. At 0 the shot is level with their feet, which leaves the sprites sitting high; raise it to bring them to the middle of the screen. Negative aims below the floor."},
+		"tip": "How high above their feet the shot frames the people it is about, in cells -- the fighters on the torn-out diorama, and equally the one unit a trained shot is following. At 0 the shot is level with their feet, which leaves the sprites sitting high; raise it to bring them to the middle of the screen."},
 
 	# The shove slide (#259 rework). A static on MovementComponent -- per-unit nodes, so no single
 	# node property to address -- hence a class row with its own script home.
@@ -971,12 +970,11 @@ static func read_static(name: String) -> Variant:
 		"TEAR_OUT_EMPTY_SKY": return Pacing.TEAR_OUT_EMPTY_SKY
 		"TEAR_OUT_SETTLE": return Pacing.TEAR_OUT_SETTLE
 		"TEAR_OUT_AFTERMATH": return Pacing.TEAR_OUT_AFTERMATH
-		"CLIFF_FOLLOW": return Pacing.CLIFF_FOLLOW
 		"CLIFF_FOLLOW_MAX": return Pacing.CLIFF_FOLLOW_MAX
 		"CLIFF_RECOVER": return Pacing.CLIFF_RECOVER
 		"PLUMMET_HOLD": return Pacing.PLUMMET_HOLD
-		"PLUMMET_BURST_BELOW": return Pacing.PLUMMET_BURST_BELOW
 		"STAGE_AIM_LIFT": return Pacing.STAGE_AIM_LIFT
+		"TRAINED_DISTANCE": return Pacing.TRAINED_DISTANCE
 		"TEAR_OUT_FLIGHT": return Pacing.TEAR_OUT_FLIGHT
 		"TEAR_OUT_ARRIVAL": return Pacing.TEAR_OUT_ARRIVAL
 		"TEAR_OUT_STAGGER_MAX": return Pacing.TEAR_OUT_STAGGER_MAX
@@ -1105,18 +1103,16 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 			Pacing.TEAR_OUT_SETTLE = value
 		"TEAR_OUT_AFTERMATH":
 			Pacing.TEAR_OUT_AFTERMATH = value
-		"CLIFF_FOLLOW":
-			Pacing.CLIFF_FOLLOW = value
 		"CLIFF_FOLLOW_MAX":
 			Pacing.CLIFF_FOLLOW_MAX = value
 		"CLIFF_RECOVER":
 			Pacing.CLIFF_RECOVER = value
 		"PLUMMET_HOLD":
 			Pacing.PLUMMET_HOLD = value
-		"PLUMMET_BURST_BELOW":
-			Pacing.PLUMMET_BURST_BELOW = value
 		"STAGE_AIM_LIFT":
 			Pacing.STAGE_AIM_LIFT = value
+		"TRAINED_DISTANCE":
+			Pacing.TRAINED_DISTANCE = value
 		"TEAR_OUT_FLIGHT":
 			Pacing.TEAR_OUT_FLIGHT = value
 		"TEAR_OUT_ARRIVAL":

@@ -492,6 +492,13 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 	# second answer to where playback is looking. pan_to_position rather than pan_to, and for the
 	# reason it exists -- the diorama is a PLACE, and following one of its occupants would drag the
 	# rest of the stage out of frame.
+	#
+	# THE STAGE IS PUBLISHED BEFORE THE PAN (#602 round 4, found on the pillar board): the mirror
+	# aims at the stage's height from the pan's first frame, where waiting for stage() to fill
+	# BoardSpace._staged had the whole approach hugging the ground under the moving centre --
+	# scaling the cliff face on the way in. It is also what the mirror reads as "frame the WIDE
+	# shot", so the tear-out is watched from a distance that holds all of it.
+	game.camera_controller.shot_cells = cells.duplicate()
 	await game.camera_controller.pan_to_position(_stage_centre(cells), Pacing.PLAYBACK_PAN)
 	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
 	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
@@ -569,10 +576,13 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 func _bring_the_board_home() -> void:
 	var staged := BoardSpace.staged_cells()
 	if not staged.is_empty():
-		# THE CAMERA COMES BACK TO THE BATTLE VIEW FIRST (dev, 2026-08-29). A pass whose last blow
-		# knocked somebody into a pit ends with the shot still deep below the board, and the drop's
-		# climb home is eased -- longer than the aftermath hold -- so the tiles used to start
+		# THE CAMERA COMES BACK TO THE BATTLE VIEW FIRST (dev, 2026-08-29), and since round 4 that
+		# is BOTH halves of the battle view: the pan back to the stage's centre -- which clears the
+		# follow, so the shot is WIDE again and the last beat's close-up does not watch the tiles
+		# leave -- and then the climb out of whatever pit the last blow left the shot in. The climb
+		# is eased and longer than the aftermath hold, so without the wait the tiles used to start
 		# dropping while the camera was still on its way up.
+		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		await _wait_for_the_camera_to_come_home()
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
 		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
@@ -580,6 +590,12 @@ func _bring_the_board_home() -> void:
 		await Pacing.beat(self, Pacing.TEAR_OUT_AFTERMATH)
 		await _play_transition(staged, false)
 	BoardSpace.clear_staging()
+	# The stage leaves the air the moment the ground does. The release edge clears it too, but the
+	# tail of execute_orders still runs under the lock -- a stage surviving to there would hold the
+	# WIDE framing over a board that has already gone home. Through a typed local: a bare [] hits a
+	# typed Array property as a RUNTIME error when assigned through the untyped `game` chain.
+	var cam: CameraController = game.camera_controller
+	cam.shot_cells = []
 
 
 # Pause schedule for one phase: the action that OPENS each beat -> how long to hold before it.

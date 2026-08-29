@@ -671,7 +671,17 @@ func test_the_tear_out_looks_at_the_fight_before_the_ground_moves() -> void:
 	assert_bool(stage.has_point(_game.camera_controller.global_position)).override_failure_message(
 			"the ground tore out with the camera still at %s, outside the fight's own footprint %s"
 			% [_game.camera_controller.global_position, stage]).is_true()
+	# ...and the stage was PUBLISHED for the mirror before any of it (#602 round 4) -- the aim
+	# reads cam.shot_cells, so an unpublished stage has the approach hugging the terrain under the
+	# moving centre, scaling any cliff on the way in.
+	assert_bool(_game.camera_controller.shot_cells.is_empty()).override_failure_message(
+			"the tear-out never published its stage -- the camera aims at the ground, not the fight"
+	).is_false()
 	BoardSpace.clear_staging()
+	# This case never claims playback, so no release edge clears the publish for it. Typed local:
+	# a bare [] on a typed Array property errors at runtime through the untyped `_game` chain.
+	var cam: CameraController = _game.camera_controller
+	cam.shot_cells = []
 
 
 # The world-space box a cell set occupies, grown by a cell so the edge counts as inside. Derived

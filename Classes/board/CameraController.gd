@@ -48,6 +48,14 @@ var directed_line: Array[Vector2i] = []
 # never be folded together -- directed_line is an ANGLE and this is a FIT, so one field answering
 # both would spin the camera side-on to every walk.
 var framed_span: Array[Vector2i] = []
+# The ground ON STAGE this pass (#602 round 4): the staged cell set, published by the executor
+# BEFORE the pan that opens the tear-out. That ordering is the point -- the mirror aims at the
+# stage's height from the pan's first frame, where reading BoardSpace._staged (filled only at
+# stage()) had the pan hugging the terrain under the moving centre, scaling the cliff face on any
+# board with one. Non-empty is also what the mirror reads as "the WIDE shot": frame the whole
+# staged volume. A FOURTH question beside the trio above -- an ANGLE, a FIT, a WEIGHT, and this is
+# a PLACE.
+var shot_cells: Array[Vector2i] = []
 # How BIG the beat now playing is, 0..1 (#520 diff 2c) -- the collapse of its lethality rungs, from
 # Pacing.emphasis_for. The THIRD question this trio answers and the third field, for the reason the
 # other two are separate: that one is an ANGLE, that one a FIT, and this is a WEIGHT. The rig turns
@@ -230,6 +238,11 @@ func set_playback_locked(locked: bool) -> void:
 	# widens on the CHANGE, so a span surviving a claim would be the same value the mirror already
 	# has and the next squad's walk would open at whatever zoom the last one left.
 	framed_span = []
+	# ...and the stage, which a claim must clear so the previous pass's diorama cannot frame the
+	# next squad's opening shot, and a release must clear because the readers below the playback
+	# gate stop polling the moment the lock lets go -- a survivor would greet the next claim as
+	# "already on stage" and skip the solve edge.
+	shot_cells = []
 	# ...and the weight, which needs it for the SAME reason the span does: the rig re-solves the
 	# push-in every frame from this value, so one surviving a claim would push the next squad's opening
 	# shot in on a beat that has not earned it.

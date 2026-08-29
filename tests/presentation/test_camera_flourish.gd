@@ -140,6 +140,23 @@ func test_the_climb_actually_ARRIVES_rather_than_stalling_short_of_the_board() -
 	).is_equal_approx(0.0, 0.001)
 
 
+func test_the_whole_negative_range_is_eased_because_below_zero_there_is_no_fall() -> void:
+	# The channel runs NEGATIVE since #602 round 4 -- a trained subject standing ABOVE the shot's
+	# base aims the camera up at it. The snap exists to glue the shot to a body in free FALL, and a
+	# re-frame upward is a glide, in BOTH directions: rising toward a higher subject, and settling
+	# back down to level when that beat ends. Snapping either one is the jolt the ease exists to
+	# prevent, and settling-down is the arm a naive `target >= current` guard gets wrong.
+	var rising := CameraRig3D.recovered(0.0, -2.0, 0.25)
+	assert_float(rising).override_failure_message(
+			"the re-frame up to a high subject cut instead of gliding").is_less(0.0)
+	assert_float(rising).is_greater(-2.0)
+	var settling := CameraRig3D.recovered(-2.0, 0.0, 0.25)
+	assert_float(settling).override_failure_message(
+			"the settle back down from a high subject cut instead of gliding -- the guard reads "
+			+ "'target above current' as a fall").is_less(0.0)
+	assert_float(settling).is_greater(-2.0)
+
+
 # --- the gate ----------------------------------------------------------------------------------
 
 func test_the_camera_only_flourishes_while_playback_has_borrowed_the_view() -> void:
