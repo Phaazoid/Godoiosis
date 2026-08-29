@@ -118,6 +118,90 @@ func terrain_at(cell: Vector2i) -> Dictionary:
 	# headless RULES, which is exactly the Law #2 failure the Play API exists to catch.
 	return {"exists": true, "walkable": _board().is_walkable(cell), "cost": cost, "type": kind_name.to_lower()}
 
+# ---- affordances: what may this unit do RIGHT NOW (#613) ----
+#
+# WHY THESE EXIST. Driving the bridge, a third to a half of every command came back refused --
+# `move` 55%, `attack` 61% -- because the only way to find out where a unit could go was to guess a
+# cell and be told no. The rendered board says where everything IS; it never said what is LEGAL.
+#
+# EACH ONE CALLS THE GATE IT IS ANSWERING FOR, and that is the whole design rather than an
+# implementation note. A second reachability walk here would be a second answer to "can this unit
+# stand there" (Law #4), and the way it fails is silent and exact: the API starts offering a cell
+# queue_move refuses, which is the bug these exist to remove, reintroduced one layer up.
+# tests/play/test_affordances.gd drives both sides and asserts they agree cell for cell.
+
+func legal_moves(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	# THE set queue_move indexes -- not a copy of it. Both come back as Dictionaries keyed by cell
+	# (which is why the gate spells it `.has(dest)`), so the keys ARE the answer.
+	var range_info := RulesService.compute_move_range(unit, _board())
+	var cells: Array[Vector2i] = []
+	cells.assign(range_info.reachable.keys())
+	# Reported separately rather than merged: these are reachable on foot and refused by cohesion,
+	# and "your leader is too far" is a different fix from "that is too far to walk".
+	var leashed: Array[Vector2i] = []
+	leashed.assign(range_info.squad_unreachable.keys())
+	return {"ok": true, "unit": handle, "from": unit.movement.cell, "cells": cells, "leashed": leashed}
+
+
+func legal_targets(handle: String) -> Dictionary:
+	var unit := unit_by_handle(handle)
+	var gate := _controllable(unit, handle)
+	if not gate.ok:
+		return gate
+	if not unit.has_equipped_weapon():
+		return {"ok": false, "error": "%s has no equipped weapon" % handle}
+	var origin := unit.get_projected_destination()
+	var aiming := unit.get_fired_attack()
+	var board := _board()
+	var out: Array[Dictionary] = []
+	# The candidate set is the union over four facings -- what the red overlay draws -- and
+	# can_hit_cell_from is what narrows it to the aim actually available. Both of queue_attack's
+	# gates are applied here in its own order, so a cell offered can never be refused.
+	for aim: Vector2i in Reach.get_all_attack_cells_from(unit, origin, aiming):
+		if not Reach.can_hit_cell_from(unit, origin, aim, aiming, board):
+			continue
+		var victims := RulesService.gather_attack_victims(unit, \
+				Reach.get_affected_cells_from(unit, origin, aim, aiming), board, aiming)
+		if victims.is_empty():
+			continue   # queue_attack refuses an aim that hits nobody; so does this
+		var names: Array[String] = []
+		for v: Unit in victims:
+			names.append(handle_for(v))
+		out.append({"cell": aim, "victims": names})
+	return {"ok": true, "unit": handle, "from": origin, "aims": out}
+
+
+# The turn's own state, which the rendered board has never carried: whose turn it is, which squad
+# holds the activation, what it has queued, and which squads are spent. 43 of the refusals were
+# "another squad is already active" / "already acted" / "not the active faction" and 34 more were
+# "no squad has queued orders" -- every one of them answerable from here, and from state that
+# already exists. Nothing is stored; this is a read.
+func status() -> Dictionary:
+	var active: Squad = squad_manager.active_squad
+	var acted: Array[int] = []
+	var free: Array[int] = []
+	for squad: Squad in squad_manager.squads:
+		if squad.members.is_empty():
+			continue
+		if squad.members[0].get_faction() != turn_manager.active_faction():
+			continue
+		if squad.has_acted:
+			acted.append(_squad_id(squad))
+		else:
+			free.append(_squad_id(squad))
+	return {
+		"faction": _faction_name(active_faction()),
+		"active_squad": -1 if active == null else _squad_id(active),
+		"queued": 0 if active == null else active.action_queue.size(),
+		"acted": acted,
+		"free": free,
+	}
+
+
 # ---- commands (mutating) — all flow through the real SquadManager (Law #3) ----
 
 func _controllable(unit: Unit, handle: String) -> Dictionary:

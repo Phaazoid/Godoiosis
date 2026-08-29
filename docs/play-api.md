@@ -59,7 +59,8 @@ view**, not raw JSON — see *State representation*. Command vocabulary:
 | Command | Returns |
 |---|---|
 | `describe_state()` | full board snapshot (rendered view — see below) |
-| `legal_moves(unit_id)` / `legal_targets(unit_id)` | reachable cells / hittable cells + victims |
+| `legal_moves(unit_id)` / `legal_targets(unit_id)` | reachable cells / hittable cells + victims. **Each calls the predicate its own gate calls** — `compute_move_range` for moves, `can_hit_cell_from` + `gather_attack_victims` for aims — so a cell offered can never be one the queue refuses. A second derivation here would be Law #4 with a silent failure mode, and `tests/play/test_affordances.gd` drives both sides to keep them honest |
+| `status()` | whose turn, which squad holds the activation and what it has queued, which squads are spent. Rides every frame rather than being asked for |
 | `squad_up / join / leave / disband` | new squad state |
 | `queue_move(unit_id, dest)` / `queue_attack(unit_id, aim_cell)` | validity + updated plan |
 | `rescue / rally / reload / rev / burrow / guard` | the side-channel main actions, one verb each — the argument-taking ones (`rescue(a, b)`, `guard(a, ward)`) stay separate from the argument-free ones for the reason `game.queue_simple_action` does. Each gates on the same `RulesService` query the menu's row is built from. *(Still missing: `capture` — see Known gaps.)* |
@@ -116,10 +117,36 @@ assigned by `PlaySession` — units have no persistent id today.
 - **Overview** (`describe_state`): ruled board + one-line-per-unit legend + turn / squad status. The default; small.
 - **Focus** (`focus(unit)`): board re-rendered with that unit's **move range** (`+`) and **attack range** (`×`) overlaid; the unit's full stats / weapon / states; its legal actions; and (if squadded) the leader LDR range.
 - **Preview** (`preview`): the **resolved** outcome of the current/hypothetical plan — exact damage, deaths, counters, net board change — as a concise diff, not a re-dump. The deterministic-engine payoff.
-- **Result** (`execute`): the event log (equals the preview, by Law #2) + a fresh overview.
+- **Result** (`execute`): the event log (equals the preview, by Law #2). No overview — see below.
+- **Affordances** (`legal_moves(unit)` / `legal_targets(unit)`): where this unit may go, and which
+  aims hit whom. Cell lists grouped by row (`y=13: 19-23`), a few hundred bytes where the only way
+  to ask used to be `focus`, which renders a 2 KB board to say it.
 
 Micro-commands (`queue_move`, `cancel`) return a one-line ack + plan delta, **not** a full re-render —
-the board is redrawn only on overview / focus / preview / result / turn-change.
+**the board is redrawn only on `overview` and `focus`, both on request** (#613, 2026-08-28).
+
+`result` and `turn-change` used to redraw too, and that was 63% of all output measured over a real
+run: terrain is static, and what a pass changes is a handful of positions and HP, which the event log
+already names. Redrawing on every action also crowded out the state that actually gates the next
+command — see below.
+
+**Every frame carries a status line**, failures included, because a refusal is exactly when it is
+wanted:
+
+```
+[turn=PLAYER  active=sq4(2 queued)  free=sq5,sq6  acted=sq7]
+```
+
+Measured over five logged playthroughs before this existed, a third to a half of every command was
+*rejected* — `move` 55%, `attack` 61% — and the three largest causes were all answerable from this
+line plus the two affordance queries: guessing at reach (62), not knowing which squads were spent or
+which held the activation (43), and executing with nothing queued (34). The rendered board carried
+none of it.
+
+**Batching.** `{"id": N, "cmds": [{...}, {...}]}` runs a list in order and returns one envelope, for
+callers where a round trip costs more than the bytes do. It **stops at the first failure**: a refusal
+is nearly always a wrong belief about turn state, so everything after it rests on the same wrong
+belief.
 
 **Targeting.** Commands use **game coordinates** (no rebasing — one coordinate system kills a whole bug
 class). The board carries x / y rulers; exact targets are confirmed by the affordance overlay plus a

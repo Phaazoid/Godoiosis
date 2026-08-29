@@ -53,8 +53,55 @@ func _poll_loop() -> void:
 	while not _quitting:
 		await process_frame
 		var c := _read_command()
-		if c.has("id") and int(c.id) > _last_id:
+		if not (c.has("id") and int(c.id) > _last_id):
+			continue
+		# BATCH: {"id": N, "cmds": [{"cmd": ..., "args": ...}, ...]} beside the single form.
+		# One round trip instead of one per command, which for an agent driver costs more than the
+		# bytes do -- each is a separate tool call (#613).
+		if c.has("cmds") and c.cmds is Array:
+			await _handle_batch(int(c.id), c.cmds as Array)
+		else:
 			await _handle(int(c.id), str(c.get("cmd", "")), c.get("args", {}))
+
+# STOPS AT THE FIRST FAILURE, and that is the point rather than laziness: the logged runs show a
+# refusal is almost always a wrong belief about the turn's state, so every command after it is
+# built on the same wrong belief. Running them anyway turns one mistake into a compounding mess --
+# which is exactly the pattern behind the 34 "no squad has queued orders" refusals.
+func _handle_batch(id: int, cmds: Array) -> void:
+	var parts: Array[String] = []
+	var ok := true
+	var last := "batch"
+	for i in cmds.size():
+		var entry = cmds[i]
+		if not (entry is Dictionary):
+			parts.append("[%d] > ERROR: not a command object" % i)
+			ok = false
+			break
+		var one := entry as Dictionary
+		last = str(one.get("cmd", ""))
+		print("[bridge] id=%d [%d] cmd=%s" % [id, i, last])
+		var res := await _run_one(last, one.get("args", {}))
+		parts.append("[%d] %s\n%s" % [i, last, res.text])
+		if not res.ok:
+			ok = false
+			if i < cmds.size() - 1:
+				parts.append("> batch stopped at [%d]; %d command(s) not run" % [i, cmds.size() - 1 - i])
+			break
+	_write_state(id, ok, "batch:" + last, "\n\n".join(parts))
+	_last_id = id
+
+
+# The one place a command runs, so the single and batched forms cannot drift.
+func _run_one(cmd: String, args) -> Dictionary:
+	match cmd:
+		"new":
+			return {"ok": true, "text": await _cmd_new()}
+		"load":
+			return {"ok": true, "text": await _cmd_load(str((args as Dictionary).get("path", "")))}
+	if _session == null:
+		return {"ok": false, "text": "no board - send {\"cmd\":\"new\"} or a load command first"}
+	return _dispatch(cmd, args as Dictionary)
+
 
 func _handle(id: int, cmd: String, args: Dictionary) -> void:
 	print("[bridge] id=%d cmd=%s" % [id, cmd])
@@ -67,18 +114,10 @@ func _handle(id: int, cmd: String, args: Dictionary) -> void:
 			_quitting = true
 			quit()
 			return
-		"new":
-			text = await _cmd_new()
-		"load":
-			text = await _cmd_load(str(args.get("path", "")))
 		_:
-			if _session == null:
-				ok = false
-				text = "no board - send {\"cmd\":\"new\"} or a load command first"
-			else:
-				var res := _dispatch(cmd, args)
-				ok = res.ok
-				text = res.text
+			var res := await _run_one(cmd, args)
+			ok = res.ok
+			text = res.text
 	_write_state(id, ok, cmd, text)
 	_last_id = id
 
@@ -90,6 +129,12 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			return {"ok": true, "text": BoardView.render_preview(_session)}
 		"focus":
 			return {"ok": true, "text": BoardView.render_focus(_session, str(args.get("unit", "")))}
+		# The two the doc promised and nothing implemented (#613). They cost a few hundred bytes
+		# where the only previous way to ask was `focus`, which renders a 2 KB board to say it.
+		"legal_moves":
+			return {"ok": true, "text": BoardView.render_legal_moves(_session, str(args.get("unit", "")))}
+		"legal_targets":
+			return {"ok": true, "text": BoardView.render_legal_targets(_session, str(args.get("unit", "")))}
 		"move":
 			var r = _session.queue_move(str(args.get("unit", "")), _xy(args))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
@@ -102,25 +147,50 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 		"rescue":
 			var r = _session.rescue(str(args.get("unit", "")), str(args.get("target", "")))
 			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		# The squad verbs used to redraw the whole board to report a one-line change. What they
+		# actually changed -- which squads exist and which are spent -- is what the status line on
+		# every frame now says, so the picture is a separate `overview` when it is wanted.
 		"join":
 			var r = _session.join(str(args.get("unit", "")), str(args.get("leader", "")))
-			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
+			return {"ok": r.ok, "text": _ack(r)}
 		"leave":
 			var r = _session.leave(str(args.get("unit", "")))
-			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
+			return {"ok": r.ok, "text": _ack(r)}
 		"disband":
 			var r = _session.disband(str(args.get("unit", "")))
-			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_overview(_session)}
+			return {"ok": r.ok, "text": _ack(r)}
+		# The six verbs PlaySession has always implemented and _dispatch never exposed -- which is
+		# why a driver asking for `burrow` got `unknown cmd` for a verb the docs list (#613).
+		"guard":
+			var r = _session.guard(str(args.get("unit", "")), str(args.get("target", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"overwatch":
+			var r = _session.overwatch(str(args.get("unit", "")), _xy(args))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"rally":
+			var r = _session.rally(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"reload":
+			var r = _session.reload(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"rev":
+			var r = _session.rev(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
+		"burrow":
+			var r = _session.burrow(str(args.get("unit", "")))
+			return {"ok": r.ok, "text": _ack(r) + "\n\n" + BoardView.render_preview(_session)}
 		"execute":
 			var r = _session.execute()
 			if not r.ok:
 				return {"ok": false, "text": "> ERROR: " + str(r.error)}
-			return {"ok": true, "text": BoardView.render_result(r.get("events", [])) + "\n\n" + BoardView.render_overview(_session)}
+			# The event log IS the payload of a pass; the board picture that used to follow it was
+			# 45% of all output and repeated terrain nothing had changed (#613).
+			return {"ok": true, "text": BoardView.render_result(r.get("events", []))}
 		"endturn":
 			var r = _session.end_turn()
 			if not r.ok:
-				return {"ok": false, "text": "> " + str(r.error) + "\n\n" + BoardView.render_overview(_session)}
-			return {"ok": true, "text": "Turn -> %s\n\n%s" % [str(r.faction), BoardView.render_overview(_session)]}
+				return {"ok": false, "text": "> " + str(r.error)}
+			return {"ok": true, "text": "Turn -> %s" % str(r.faction)}
 		_:
 			return {"ok": false, "text": "unknown cmd: " + cmd}
 
@@ -168,10 +238,17 @@ func _write_state(id: int, ok: bool, cmd: String, text: String) -> void:
 	if f == null:
 		push_error("[bridge] cannot open state file")
 		return
-	f.store_string("@@ id=%d ok=%d cmd=%s @@\n\n%s\n" % [id, (1 if ok else 0), cmd, text])
+	# The status line rides EVERY frame, failures included -- a refusal is precisely when the caller
+	# needs to know whose turn it is, which squad holds the activation and what is already spent.
+	# Written here rather than per dispatch arm so no arm can forget it (#613).
+	# Composed ONCE and used for both sinks: the frame log is the record of what the caller was
+	# shown, so a status line the log did not carry would make every byte measurement over
+	# playrun/frames/ a measurement of something nobody read.
+	var body := BoardView.render_status(_session) + "\n\n" + text
+	f.store_string("@@ id=%d ok=%d cmd=%s @@\n\n%s\n" % [id, (1 if ok else 0), cmd, body])
 	f.close()
 	if _frames != null:
-		_frames.record(id, ok, cmd, text)
+		_frames.record(id, ok, cmd, body)
 
 # ---- helpers ----
 
