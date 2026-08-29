@@ -1186,10 +1186,17 @@ func _aim_over(x: float, z: float) -> Vector3:
 # camera ended up staring at the pillar's wall with the fight above the frame, and the further a body
 # was thrown the worse it got. What the shot is about is where the PEOPLE are.
 #
-# LATCHED at the tear-out rather than tracked live (dev's pick: *stage height held, dip for a fall*).
-# Live tracking would double-count a fall -- the faller's own ground would pull the mean down while
-# the cliff-follow channel pulled the shot down again -- so the diorama's height is decided when the
-# ground leaves the board and only _drop moves the camera after that.
+# Two separate things keep it steady (dev's pick: *stage height held, dip for a fall*), and they are
+# worth telling apart -- a mutant proved that conflating them leaves one of the two untested.
+#
+# It reads the GROUND under each unit, never their stand height, and THAT is what makes a fall count
+# exactly once: a falling body's ground does not move, so only the cliff-follow channel lowers the
+# shot. Reading stand heights here would pull the aim down and then pull it down again.
+#
+# And it is LATCHED at the tear-out, which answers a different question: bodies get THROWN during a
+# pass, and a live re-solve would find them standing on whatever ground they landed on and walk the
+# whole diorama's shot down after them, mid-fight. The stage's height is decided when the ground
+# leaves the board.
 func _staged_surface() -> float:
 	if _stage_height_latched:
 		return _stage_height

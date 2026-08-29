@@ -1319,13 +1319,15 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 	_cam().set_playback_locked(false)
 
 
-# ...and that height is decided ONCE, when the ground leaves the board.
+# ...and a FALL moves the shot exactly once.
 #
-# The dev's pick was "stage height held, dip for a fall" (2026-08-29), and holding it is what stops
-# a fall being counted TWICE: a live height would follow the faller's own ground down while the
-# cliff-follow channel pulled the shot down again, so a two-cell drop would move the camera further
-# than two cells. The stage owns the height; only _drop moves the shot after that.
-func test_a_fall_moves_the_shot_ONCE_because_the_stage_height_is_already_decided() -> void:
+# What buys that is _solve_stage_height reading the GROUND under each unit rather than their stand
+# height: a falling body's ground does not move, so only the cliff-follow channel lowers the shot.
+# Reading stand heights would lower the aim AND then lower it again.
+#
+# NOT the latch, which is what a surviving mutant taught here -- see the shove case below. The two
+# were one paragraph in the first draft and only one of them had a test.
+func test_a_fall_moves_the_shot_ONCE_because_the_stage_reads_ground_not_bodies() -> void:
 	var victim := _player_unit()
 	assert_object(victim).is_not_null()
 	_cam().set_playback_locked(true)
@@ -1341,6 +1343,43 @@ func test_a_fall_moves_the_shot_ONCE_because_the_stage_height_is_already_decided
 			"the fall moved the shot further than the follow itself -- the diorama's height is "
 			+ "tracking the faller too, so the dip is counted twice") \
 		.is_equal_approx(Pacing.followed_fall(2.0), 0.01)
+	BoardSpace.clear_staging()
+	_cam().set_playback_locked(false)
+
+
+# ...and the LATCH is what stops a body being THROWN from walking the whole shot down after it.
+#
+# This is the case the first draft did not have. Its absence let a mutant that deleted the latch pass
+# every case in this file: the fall case above cannot see it, because a falling body's GROUND does
+# not move and the height is read off the ground. What does move is a body that lands somewhere
+# else -- which is a shove, i.e. the ordinary case, and mid-pass it would drag the diorama's shot
+# down to wherever the last person was thrown.
+func test_a_body_thrown_onto_lower_ground_does_not_walk_the_shot_down_after_it() -> void:
+	var victim := _player_unit()
+	assert_object(victim).is_not_null()
+	var high_cell: Vector2i = victim.movement.cell
+	var heights: BoardHeights = _game.board_heights
+	heights.set_cell(high_cell, 8)
+	var low_cell := high_cell + Vector2i(3, 0)
+	heights.set_cell(low_cell, 0)
+	assert_bool(BoardSpace.surface_point(high_cell, heights).y
+			- BoardSpace.surface_point(low_cell, heights).y > 1.0).override_failure_message(
+			"the two cells are level; the case cannot tell a moved shot from a held one").is_true()
+
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(victim)
+	BoardSpace.stage([high_cell, low_cell], BoardSpace.lift_offset())
+	await _settle()
+	var framed: float = _rig.position.y
+
+	# The end state of a shove: the body is standing on the low cell now.
+	victim.movement.set_cell(low_cell)
+	await _settle()
+
+	assert_float(_rig.position.y).override_failure_message(
+			"the diorama's shot followed the thrown body down -- the stage height is being re-solved "
+			+ "mid-pass instead of decided when the ground left the board") \
+		.is_equal_approx(framed, 0.01)
 	BoardSpace.clear_staging()
 	_cam().set_playback_locked(false)
 
