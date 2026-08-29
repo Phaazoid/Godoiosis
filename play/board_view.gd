@@ -12,20 +12,31 @@ static func render_overview(session) -> String:
 	var bounds := _content_bounds(session)
 	var lines: Array[String] = []
 	lines.append("Turn: %s" % session._faction_name(session.active_faction()))
-	lines.append(_grid_block(session, bounds, _downed_overlay(session)))
+	lines.append(_grid_block(session, bounds, _overview_overlay(session)))
 	lines.append("")
 	lines.append(_legend(session))
+	var mission_str := _mission_block(session)
+	if mission_str != "":
+		lines.append("")
+		lines.append(mission_str)
 	return "\n".join(lines)
 
-# Mark every downed-but-alive body on the board ("v"). Downed units cling at 1 HP, are out
-# of action, and have been ejected into solo squads — but they still occupy their cell.
-#
-# Watched cells ("!") ride the same channel (#413), because the graphical board telegraphs every
-# live watch to both sides and a headless player has to be able to see the same thing. A body on a
-# watched cell keeps its "v": knowing a unit is down outranks knowing the cell is covered, and the
-# watch is still named in the legend.
-static func _downed_overlay(session) -> Dictionary:
+# Mark every downed-but-alive body on the board ("v"), live watches ("!"),
+# and mission zones ("C" = capture, "E" = extraction) (#413, #612).
+# Precedence: downed "v" > watch "!" > zone "C"/"E".
+static func _overview_overlay(session) -> Dictionary:
 	var overlay := {}
+	for zname in session.zones():
+		var zone: Dictionary = session.zones()[zname]
+		var kind: int = zone.get("kind", ZoneManager.Kind.PATROL)
+		var glyph := ""
+		if kind == ZoneManager.Kind.CAPTURE:
+			glyph = "C"
+		elif kind == ZoneManager.Kind.EXTRACTION:
+			glyph = "E"
+		if glyph != "":
+			for cell in zone.get("cells", []):
+				overlay[cell] = glyph
 	for unit in session.live_units():
 		if unit.watch == null or unit.watch.spent or not unit.watch.is_intact():
 			continue
@@ -156,9 +167,163 @@ static func _legend(session) -> String:
 		lines.append("  " + _unit_line(session, unit))
 		if unit.is_downed():
 			any_downed = true
+	var notes: Array[String] = []
 	if any_downed:
-		lines[0] = "Units:   (v = downed body on board; finish it or rescue it)"
+		notes.append("v = downed body on board; finish it or rescue it")
+	var has_c := false
+	var has_e := false
+	for zname in session.zones():
+		var kind: int = session.zones()[zname].get("kind", ZoneManager.Kind.PATROL)
+		if kind == ZoneManager.Kind.CAPTURE:
+			has_c = true
+		elif kind == ZoneManager.Kind.EXTRACTION:
+			has_e = true
+	if has_c:
+		notes.append("C = capture zone")
+	if has_e:
+		notes.append("E = extract zone")
+	if not notes.is_empty():
+		lines[0] = "Units:   (%s)" % "; ".join(notes)
 	return "\n".join(lines)
+
+static func _mission_block(session) -> String:
+	if session.scenario_data == null:
+		return ""
+	var lines: Array[String] = []
+	var obj_names: Array[String] = []
+	for obj in session.objectives():
+		obj_names.append(MissionRules.Objective.keys()[obj])
+	var title := "ROUT" if obj_names.is_empty() else " + ".join(obj_names)
+	var limit_str := "no limit" if session.round_limit() <= 0 else "limit: %d rounds" % session.round_limit()
+	lines.append("Mission: %s      (round %d, %s)" % [title, session.scenario_data.rounds_elapsed + 1, limit_str])
+	if session.objectives().is_empty():
+		lines.append("  ROUT     defeat all hostile units")
+	else:
+		for obj in session.objectives():
+			match obj:
+				MissionRules.Objective.ROUT:
+					lines.append("  ROUT     defeat all hostile units")
+				MissionRules.Objective.CAPTURE:
+					var any_zone := false
+					for zname in session.zones():
+						var z: Dictionary = session.zones()[zname]
+						if z.get("kind") == ZoneManager.Kind.CAPTURE:
+							lines.append("  CAPTURE  \"%s\"  %s" % [zname, _format_cells(z.get("cells", []))])
+							any_zone = true
+					if not any_zone:
+						lines.append("  CAPTURE  (no zone painted)")
+				MissionRules.Objective.EXTRACT:
+					var any_zone := false
+					for zname in session.zones():
+						var z: Dictionary = session.zones()[zname]
+						if z.get("kind") == ZoneManager.Kind.EXTRACTION:
+							lines.append("  EXTRACT  \"%s\"  %s" % [zname, _format_cells(z.get("cells", []))])
+							any_zone = true
+					if not any_zone:
+						lines.append("  EXTRACT  (no zone painted)")
+	for cond in session.lose_conditions():
+		lines.append("  FAIL IF  %s" % MissionRules.defeat_reason(cond))
+	lines.append("  (progress: not scored headlessly (#46))")
+	return "\n".join(lines)
+
+static func _format_cells(cells: Array) -> String:
+	var list: Array[Vector2i] = []
+	for c in cells:
+		if c is Vector2i:
+			list.append(c)
+	list.sort_custom(func(a: Vector2i, b: Vector2i) -> bool:
+		return a.y < b.y if a.y != b.y else a.x < b.x
+	)
+	var parts: Array[String] = []
+	for c in list:
+		parts.append("(%d,%d)" % [c.x, c.y])
+	return " ".join(parts)
+
+# ---- affordances (#613) ----
+#
+# What a unit may do, in place of making the caller guess a cell and be refused. A move range is a
+# REGION, so it prints grouped by row -- "y=13: 19-23" shows the shape of where you may go, which a
+# flat list of forty (x,y) pairs does not, and costs about half the bytes. Deliberately NOT
+# _format_cells, which stays the spelling for an ENUMERATION (the mission block's zone cells, read
+# off one at a time); the two answer different questions and the split is declared rather than
+# accidental.
+
+static func render_legal_moves(session, handle: String) -> String:
+	var res: Dictionary = session.legal_moves(handle)
+	if not res.ok:
+		return "> ERROR: " + str(res.error)
+	var head := "moves %s from (%d,%d): %d cells" % [res.unit, res.from.x, res.from.y, res.cells.size()]
+	var body := _cell_rows(res.cells)
+	if not res.leashed.is_empty():
+		# Named, because "too far to walk" and "your leader is too far" want different fixes.
+		body += "\n  outside leader range (%d): %s" % [res.leashed.size(), _cell_rows(res.leashed).strip_edges()]
+	return head + "\n" + body
+
+
+static func render_legal_targets(session, handle: String) -> String:
+	var res: Dictionary = session.legal_targets(handle)
+	if not res.ok:
+		return "> ERROR: " + str(res.error)
+	if res.aims.is_empty():
+		return "targets %s from (%d,%d): none" % [res.unit, res.from.x, res.from.y]
+	var lines: Array[String] = ["targets %s from (%d,%d): %d aims" % [res.unit, res.from.x, res.from.y, res.aims.size()]]
+	for aim: Dictionary in res.aims:
+		lines.append("  (%d,%d) hits %s" % [aim.cell.x, aim.cell.y, ", ".join(aim.victims)])
+	return "\n".join(lines)
+
+
+# The turn's own state, on EVERY frame including the failures -- a refusal is exactly when the
+# caller needs to know whose turn it is and what is already spent.
+static func render_status(session) -> String:
+	if session == null:
+		return "[no board]"
+	var st: Dictionary = session.status()
+	var parts: Array[String] = ["turn=" + str(st.faction)]
+	if int(st.active_squad) < 0:
+		parts.append("active=none")
+	else:
+		parts.append("active=sq%d(%d queued)" % [int(st.active_squad), int(st.queued)])
+	if not st.free.is_empty():
+		parts.append("free=" + _squad_list(st.free))
+	if not st.acted.is_empty():
+		parts.append("acted=" + _squad_list(st.acted))
+	return "[" + "  ".join(parts) + "]"
+
+
+static func _squad_list(ids: Array) -> String:
+	var parts: Array[String] = []
+	for i in ids:
+		parts.append("sq%d" % int(i))
+	return ",".join(parts)
+
+
+# Grouped by row, contiguous runs collapsed: "y=13: 19-23 25".
+static func _cell_rows(cells: Array) -> String:
+	var by_row := {}
+	for c in cells:
+		if not (c is Vector2i):
+			continue
+		var row: int = (c as Vector2i).y
+		if not by_row.has(row):
+			by_row[row] = [] as Array[int]
+		by_row[row].append((c as Vector2i).x)
+	var rows := by_row.keys()
+	rows.sort()
+	var lines: Array[String] = []
+	for row in rows:
+		var xs: Array = by_row[row]
+		xs.sort()
+		var runs: Array[String] = []
+		var i := 0
+		while i < xs.size():
+			var j := i
+			while j + 1 < xs.size() and int(xs[j + 1]) == int(xs[j]) + 1:
+				j += 1
+			runs.append(str(xs[i]) if j == i else "%d-%d" % [int(xs[i]), int(xs[j])])
+			i = j + 1
+		lines.append("  y=%d: %s" % [int(row), " ".join(runs)])
+	return "\n".join(lines)
+
 
 static func _unit_line(session, unit: Unit) -> String:
 	var fac := "P"

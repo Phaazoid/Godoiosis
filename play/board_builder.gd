@@ -181,4 +181,5 @@ static func apply_scenario(board: Dictionary, scenario: ScenarioData) -> Array[U
 			board.squad_manager.set_has_acted(unit.squad, true)
 
 	board.turn_manager.set_active_faction(scenario.active_faction)
+	board["scenario"] = scenario
 	return spawned
