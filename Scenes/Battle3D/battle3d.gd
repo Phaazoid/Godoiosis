@@ -1186,17 +1186,18 @@ func _aim_over(x: float, z: float) -> Vector3:
 # camera ended up staring at the pillar's wall with the fight above the frame, and the further a body
 # was thrown the worse it got. What the shot is about is where the PEOPLE are.
 #
-# Two separate things keep it steady (dev's pick: *stage height held, dip for a fall*), and they are
-# worth telling apart -- a mutant proved that conflating them leaves one of the two untested.
+# LATCHED at the tear-out (dev's pick: *stage height held, dip for a fall*), and the latch is doing
+# ALL of the work -- which took two surviving mutants to establish, so it is written down plainly.
 #
-# It reads the GROUND under each unit, never their stand height, and THAT is what makes a fall count
-# exactly once: a falling body's ground does not move, so only the cliff-follow channel lowers the
-# shot. Reading stand heights here would pull the aim down and then pull it down again.
+# What it buys: bodies get THROWN during a pass, and a live re-solve would find them standing on
+# whatever ground they landed on and walk the whole diorama's shot down after them, mid-fight. It is
+# also what keeps a FALL costing exactly one dip, since the height is settled before anyone falls.
 #
-# And it is LATCHED at the tear-out, which answers a different question: bodies get THROWN during a
-# pass, and a live re-solve would find them standing on whatever ground they landed on and walk the
-# whole diorama's shot down after them, mid-fight. The stage's height is decided when the ground
-# leaves the board.
+# `_solve_stage_height` reads the GROUND under each unit rather than their stand height because the
+# stage's height is a property of the ground, not of who happens to be standing on it. NO CASE CAN
+# CURRENTLY TELL THOSE TWO APART, and that is a fact about the latch: at solve time nothing is
+# falling and nobody has been thrown, so the two agree exactly, and a mutant swapping them stays
+# green. Kept for what it MEANS, not for a behaviour it is protecting today.
 func _staged_surface() -> float:
 	if _stage_height_latched:
 		return _stage_height

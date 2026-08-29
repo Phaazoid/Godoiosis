@@ -1319,15 +1319,16 @@ func test_the_camera_takes_the_STAGE_s_height_and_not_the_ground_under_itself() 
 	_cam().set_playback_locked(false)
 
 
-# ...and a FALL moves the shot exactly once.
+# ...and a fall lowers the shot by the FOLLOW and nothing more.
 #
-# What buys that is _solve_stage_height reading the GROUND under each unit rather than their stand
-# height: a falling body's ground does not move, so only the cliff-follow channel lowers the shot.
-# Reading stand heights would lower the aim AND then lower it again.
+# A COMPOSITION check rather than a check on either half: the stage height and the cliff follow both
+# move this camera vertically, and what could go wrong is them both answering for the same fall. It
+# holds because the height is latched before anyone falls (see the case below, which is what pins
+# the latch) -- so read this as "the two channels do not add up wrong", not as evidence for either.
 #
-# NOT the latch, which is what a surviving mutant taught here -- see the shove case below. The two
-# were one paragraph in the first draft and only one of them had a test.
-func test_a_fall_moves_the_shot_ONCE_because_the_stage_reads_ground_not_bodies() -> void:
+# Stated because two mutants had to be run to find it out: swapping the stage height's ground read
+# for a stand-height read leaves this GREEN, since at latch time the two agree exactly.
+func test_a_fall_lowers_the_shot_by_the_follow_and_nothing_more() -> void:
 	var victim := _player_unit()
 	assert_object(victim).is_not_null()
 	_cam().set_playback_locked(true)

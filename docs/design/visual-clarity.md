@@ -2097,8 +2097,30 @@ agree by accident, which is why it shipped; on a fight at the top of a ten-level
 sits at the pillar's surface plus the lift while the camera sat at the plain's surface plus the lift.
 **The rule existed, was correct, was written down, and governed one of the two channels that answer
 the question.** It is also the second-order jerk the dev reported: a pan crossing the pillar's edge
-stepped the camera by the pillar's whole height. `_staged_surface()` is the one answer now — the mean
-surface of the cells on stage, cached on `staging_version`.
+stepped the camera by the pillar's whole height. `_staged_surface()` is the one answer now.
+
+**Round 3 corrected what that one answer reads.** The first version averaged the surface of every
+**staged cell** — and `BeatSheet._gather_cells` puts the whole **knockback path** on stage. That is
+right for the *ground* (a shoved body has to land on something) and wrong for the *shot*: a shove off
+a pillar tears out the pillar top **and** every plain cell the body crossed, so the average sits
+between them and the camera stares at the wall with the fight above the frame — worse the further a
+body is thrown. The dev's words are the fix: *the units need to be at the center.* It reads the
+ground under the **units on stage**, plus `Pacing.STAGE_AIM_LIFT`, because "centred" on a sprite is a
+feel value and aiming at feet leaves them high.
+
+**And it is LATCHED at the tear-out** (dev: *stage height held, dip for a fall*). Bodies get thrown
+during a pass, and a live re-solve would find them standing on whatever ground they landed on and
+walk the whole diorama's shot down after them. The stage's height is decided when the ground leaves
+the board; only the cliff follow moves the camera after that.
+
+**Two mutants survived before that paragraph was true.** The first draft claimed the latch stopped a
+fall being double-counted; it doesn't — deleting the latch left every case green, because the height
+is read off the *ground* and a falling body's ground doesn't move. The second claim, that the ground
+read was what bought it, also stayed green — because the latch settles the height *before* anyone
+falls, so ground and stand-height agree exactly at the only moment either is evaluated. **A latch
+makes every choice behind it unobservable**, which is worth knowing before writing a case that claims
+to pin one. The ground read is kept for what it means, and the comment says outright that no test
+covers it.
 
 ### ...and the fall stops hugging the wall
 
