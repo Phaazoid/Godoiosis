@@ -113,6 +113,9 @@ func execute_orders(unit):
 	# would unlock the camera mid-turn.
 	var camera_was_locked: bool = game.camera_controller.playback_locked
 	game.camera_controller.set_playback_locked(true)
+	# ...and whether this pass shows a fight, published for the health readout. AFTER the claim, never
+	# before: set_playback_locked clears this on both edges, so publishing first would wipe it.
+	game.camera_controller.playback_cinematic = _shows_a_fight(sheet)
 
 	# The four schedules the volley phases read (#520), hoisted because sheet.volleys(false) is one
 	# array and this asked for it five times. It now covers the TRIGGERED shots as well as the
@@ -460,14 +463,13 @@ func _execute_action_sequence(actions: Array, beat: float = 0.0, holds: Dictiona
 # to know is whether this pass has a fight in it at all. Under COMBAT_ONLY that is the same question
 # as "does any beat run cinematic" -- a pass of nothing but walking stays on the board.
 func _stage_the_fight(sheet: BeatSheet) -> void:
-	if not _any_cinematic(sheet):
-		return
 	# THE GATE, and it is asked of the FIGHT's cells BEFORE any bystander is added -- an empty sheet
 	# means no main actions, which is the whole rule. Asking after would let the feels-test flag put
 	# a move-only pass back on stage, i.e. re-create the exact thing it is there to be judged next to.
-	var cells: Array[Vector2i] = sheet.cells.duplicate()
-	if cells.is_empty():
+	# Both halves live in _shows_a_fight now, which the health readout asks as well.
+	if not _shows_a_fight(sheet):
 		return
+	var cells: Array[Vector2i] = sheet.cells.duplicate()
 	if Experiments.is_on(Experiments.Flag.DIORAMA_BYSTANDERS):
 		var on_stage: Dictionary[Vector2i, bool] = {}
 		for cell in cells:
@@ -519,6 +521,17 @@ func _beat_profiles(beats: Array[BeatSheet.Beat]) -> Dictionary:
 		if not beat.actions.is_empty():
 			profiles[beat.actions[0]] = Pacing.profile_for(beat)
 	return profiles
+
+
+# DOES THIS PASS SHOW A FIGHT -- cinematic pacing AND something to be cinematic about. Two consumers
+# now (#647 follow-up): the tear-out below, and the health readout, which overrides the player's own
+# setting for the duration. One predicate rather than two spellings, because it is one question --
+# and the second consumer is exactly how a hand-copy would have drifted.
+#
+# The `cells` half is load-bearing under ALWAYS, where every beat is cinematic: an empty sheet means
+# no main actions, so a pass of nothing but walking is not a fight and neither consumer fires on one.
+func _shows_a_fight(sheet: BeatSheet) -> bool:
+	return _any_cinematic(sheet) and not sheet.cells.is_empty()
 
 
 # Does anything in this pass run cinematic? The tear-out's gate, and the only question about a whole

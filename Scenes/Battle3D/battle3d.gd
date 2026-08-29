@@ -627,6 +627,11 @@ func _mirror_camera() -> void:
 	# ever. The whole stage, never the cell under the camera: the diorama is one thing at one height,
 	# and asking per cell would dip the camera every time a pan crossed unstaged ground.
 	_rig.lift_to(BoardSpace.stage_offset())
+	# ABOVE the early return for the same reason, and it is the whole point of the field: the readout
+	# has to learn when a pass ENDS, and everything below here stops being polled the moment the lock
+	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
+	# answer and leave every bar on the board up for ever.
+	_unit_mirror.cinematic_playback = cam.playback_cinematic
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep

@@ -211,6 +211,17 @@ var plan_source: Callable
 # one. Unset reads as "no pass running", the same graceful absence plan_source has.
 var effect_subjects_source: Callable
 
+# IS A FIGHT BEING PLAYED OUT RIGHT NOW, mirrored per frame from CameraController.playback_cinematic
+# by the same poll that feeds the rig. A plain bool rather than a `*_source` Callable because the
+# answer is one board-wide fact playback already publishes -- there is nothing to ask, only something
+# to copy, which is the rig's idiom for the same channel.
+#
+# FALSE is the resting value and it must MEAN it: the field it mirrors is cleared on both edges of
+# the camera claim, and battle3d copies it above its own early return, precisely so the end of a pass
+# reaches this node. Mirroring `beat_profile` instead would not -- that one is held between passes on
+# purpose, so it says CINEMATIC for ever after the first clash.
+var cinematic_playback := false
+
 # Where an IMPACT is reported, injected by battle3d beside the three sources above (#520 diff 2b).
 # A verb rather than a `*_source` noun because it PUSHES: this node is the only thing that observes
 # the instant a blow lands (the HP poll below, and unit_died for a killing one), and the camera is
@@ -288,6 +299,16 @@ func reconcile() -> void:
 	# reason: it cannot change mid-frame, and a static read per unit would be N reads answering one
 	# question. WHICH units it names is per-unit and belongs to _sync_bar.
 	var bars := PlayerSettings.choice_of(PlayerSettings.Setting.HEALTH_BARS) as PlayerSettings.HealthBars
+	# THE ZOOM OVERRIDES THE PREFERENCE (dev, 2026-08-28): a clash you are being shown close up reads
+	# every combatant's health, whatever the player set for the ordinary board. Found in play -- the
+	# TARGET already wore one through `foretold`, so a zoomed fight read one-sided rather than bare.
+	#
+	# An override of WHICH MODE IS IN FORCE, deliberately, and not a fifth reason to be up: the gate
+	# below stays four disjuncts and #357's icon row keeps riding it unchanged. A new disjunct would
+	# have claimed the zoom is its own reason a bar is shown, which is a different and weaker thing --
+	# what the dev asked for is that the setting stops applying for the duration.
+	if cinematic_playback:
+		bars = PlayerSettings.HealthBars.EVERY
 	_push_debris_knobs()
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():

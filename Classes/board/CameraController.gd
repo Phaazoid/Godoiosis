@@ -61,6 +61,9 @@ var beat_emphasis := 0.0
 # question of the same set and the fourth field: that one is an ANGLE, that one a FIT, that one a
 # WEIGHT, and this is the CAUSE the other three are shaped by.
 #
+# A READER THAT NEEDS "is a zoom happening RIGHT NOW" MUST NOT USE THIS -- see playback_cinematic
+# below; held-not-cleared makes this say CINEMATIC for ever after the first clash.
+#
 # It exists because COMBAT_ONLY made the profile a fact about a BEAT rather than about the pass, and
 # the 3D rig has no beat in hand -- it polls. Publishing the cause is more honest than inferring it
 # from whether a line or a weight arrived, and it is the only channel the SWAY has at all: a sway is
@@ -69,6 +72,14 @@ var beat_emphasis := 0.0
 # Held rather than cleared, directed_line's idiom: between passes the last beat's profile stands, and
 # nothing reads it while the view is unborrowed.
 var beat_profile: Pacing.Profile = Pacing.Profile.BOARD
+# DOES THE PASS NOW RUNNING SHOW A FIGHT -- the PASS-level twin of beat_profile, and the fifth field
+# of the same set. It exists because the health readout asks a question none of the four above can
+# answer: beat_profile is HELD between passes on purpose (see its note), so "is a zoom happening
+# right now" cannot be read off it -- it stays CINEMATIC for ever after the first clash.
+#
+# CLEARED ON BOTH EDGES below, which is the whole of its lifetime: "the pass ended" and "this is
+# false" are the same event, so no reader needs a second fact to know when to stop.
+var playback_cinematic := false
 var _panning := false         # true while pan_to's tween owns global_position -- _process yields to it
 
 @export var move_speed := 14
@@ -210,6 +221,11 @@ func set_playback_locked(locked: bool) -> void:
 	# push-in every frame from this value, so one surviving a claim would push the next squad's opening
 	# shot in on a beat that has not earned it.
 	beat_emphasis = 0.0
+	# ...and whether the pass shows a fight, which needs the both-edges clear MOST of the four: the
+	# health readout reads it to decide whether to override the player's own setting, so one
+	# surviving a release would leave every bar on the board up until the next pass turned it off.
+	# A claiming pass publishes its own answer immediately after this call.
+	playback_cinematic = false
 	if not locked:
 		follow_unit = null
 

@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #647 (2026-08-28).**
+**Canon checked through #654 (2026-08-28).**
 
 ## Principles
 
@@ -492,6 +492,43 @@ and "must not go back to a `Popup`". `ReportPanel._build_kind_row` is the same s
 shipped, and its own comment states the other half of the reason: every choice is readable, and
 which one is picked is readable, without a click. Three toggle `Button`s in one `ButtonGroup`, so
 "two modes chosen at once" is unrepresentable rather than merely avoided.
+
+### ...and the ZOOM overrides all of it (2026-08-28)
+
+Found in play once the three modes shipped: **a zoomed clash read one-sided.** Under the shipped
+hovered-only default the TARGET already wore a bar — `foretold` names everyone the plan changes, and
+#354 keeps it up to the end of the pass — while the ATTACKER wore nothing unless it was countered.
+The dev's rule: *"healthbars should always be on in the battle zoom, no matter the settings."*
+
+**An OVERRIDE of which mode is in force, NOT a fifth reason to be up.** `bars` reads `EVERY` while a
+fight plays, and the gate below it is untouched — still `hovered or foretold or marked or preferred`,
+four disjuncts, so #357's icon row keeps riding it with nothing to keep in step. A fifth disjunct
+would have claimed the zoom is *its own reason a bar is shown*, which is a weaker and different
+statement: what was asked for is that the preference stops applying for the duration.
+
+**The signal is a PASS-level twin of `beat_profile`** — `CameraController.playback_cinematic`,
+published by `execute_orders` right after it claims the camera, cleared on both edges by
+`set_playback_locked` beside the line, span and weight. **Its lifetime being structural is the whole
+design**: "the pass ended" and "this is false" are the same event, so no reader needs a second fact
+to know when to stop.
+
+**Why not just read `beat_profile`, which already says CINEMATIC?** Two reasons, both measured, and
+each alone is fatal:
+
+- It is **held, not cleared** — its own note says *"between passes the last beat's profile stands"* —
+  so a readout gated on it says CINEMATIC for ever after the first clash and never puts the bars away.
+- It **toggles within a pass by design**: an action that named no beat publishes `BOARD`, deliberately,
+  so the camera sway does not ride in from the previous beat. Bars keyed to it would blink several
+  times inside one fight, even with the zoom on ALWAYS.
+
+The mirror in `battle3d._mirror_camera` therefore sits **above** that function's early return, where
+`beat_profile`'s own copy sits below it. Below the return the poll simply stops when the lock
+releases, which is the same staleness one layer along.
+
+**WHICH passes: `_shows_a_fight`** — cinematic AND a non-empty sheet — extracted from
+`_stage_the_fight` rather than written twice, since the tear-out was already asking exactly this pair.
+The `cells` half is load-bearing under ALWAYS, where *every* beat is cinematic: an empty sheet means
+no main actions, so a pass of nothing but walking is not a fight and forces nothing.
 
 **The crowding note above is why this was asked for**, and it stays open: "damaged only" thins the
 board out, which is a *workaround* for overlapping bars as much as a preference. Collapsing the
@@ -1793,6 +1830,15 @@ and every flourish channel scales through it. **The sway is why the field exists
 weight are published per beat and could in principle have been filtered at source, but a sway is a
 *resting* behaviour polled every frame while the view is borrowed — nothing else about a quiet beat
 would ever tell the camera to stop drifting.
+
+**A FIFTH field joined it for the health readout (2026-08-28), and the split is the point.**
+`playback_cinematic` answers *does the pass now running show a fight* — the PASS level, where the
+four above are per BEAT — and it exists because **`beat_profile` structurally cannot answer "is a
+zoom happening right now"**: it is held between passes on purpose, so it reads CINEMATIC for ever
+after the first clash, and it drops to `BOARD` for any unframed action inside a pass. Held is right
+for a value the rig SPENDS every frame and wrong for one a reader GATES on, which is why the fifth
+field is a field rather than a second read of the fourth. It is cleared on both edges of
+`set_playback_locked` beside the line, the span and the weight, so its lifetime is the pass's.
 
 **The lines and weights beside it are deliberately NOT filtered.** All four `BOARD_*` values ship at
 `0.0`, so a plain beat publishes its angle and its weight and they land at zero strength. That keeps
