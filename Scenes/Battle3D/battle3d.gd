@@ -602,11 +602,21 @@ func _board_volume() -> AABB:
 # The LIVE yaw and distance, never their _target twins: a screenshot caught where the smoothing
 # had reached, not where it was heading.
 func _describe_view() -> String:
-	return "%s -- yaw %.0f deg, zoom %.1f, centred on %s" % [
+	# ...and the CAMERA CHANNELS (#602 round 6), because five reports of grey void took a session
+	# to decode from pixels alone: a stuck lift, a held drop or a frozen clock is a number here and
+	# a diagnosis nowhere else. Live/target pairs where a channel eases, so a report says both
+	# where the camera IS and where it is trying to be.
+	return "%s -- yaw %.0f deg, zoom %.1f, centred on %s [lift %.1f, drop %.1f->%.1f, dist->%.1f, tscale %.2f, staged %d, flight %s]" % [
 		View.keys()[view],
 		_rig.rotation_degrees.y,
 		_camera.position.z,
 		BoardSpace.flat(BoardSpace.cell_of(_rig.position)),
+		_rig._lift.y,
+		_rig._drop, _rig._target_drop,
+		_rig._target_distance,
+		Engine.time_scale,
+		BoardSpace.staged_cells().size(),
+		"yes" if BoardSpace.flight_active() else "no",
 	]
 
 
@@ -1320,17 +1330,25 @@ func _death_show_depth() -> float:
 
 # Where the bottom of the shot is, in world y -- the anchor a void death's burst erupts from,
 # handed to UnitMirror as a callable (#602 round 4). The rig's node position IS the aim point (the
-# camera sits back from it on a child), already carrying the stage lift and the fall, so this is
-# the frame the player is actually watching -- not a re-derivation of where it ought to be.
+# camera sits back from it on a child), already carrying the stage lift and the fall, and the
+# frame's own bottom EDGE is the rig's to answer -- live fov, live distance, live pitch -- so this
+# is the frame the player is actually watching, not a re-derivation of where it ought to be.
+#
+# BELOW THE EDGE, not below the centre (#602 round 6, dev: "it needs to form off screen, and
+# explode upwards into view"). Round 4 anchored one and a half cells under the frame's CENTRE,
+# which at this game's narrow fov is inside the frame -- the burst's staggered march visibly
+# assembled a full health grid on screen before a cube launched. The margin keeps the assembling
+# grid under the edge; the death burst's own launch power carries the cubes up into view.
 #
 # The offset is a CONST, not a knob, on WHITEOUT_SAFE_PEAK's reasoning: every other feel value in
-# this arc is tunable, but a slider that could push the death show out of shot would quietly repeal
-# the invariant this round exists to keep (dev, 2026-08-29: "I'll *always* want the death cubes in
-# shot").
-const PLUMMET_BURST_UNDER := 1.5
+# this arc is tunable, but a slider that could push the death show out of shot -- or back INTO the
+# frame to assemble -- would quietly repeal the invariant this round exists to keep (dev,
+# 2026-08-29: "I'll *always* want the death cubes in shot").
+const PLUMMET_BURST_UNDER := 0.5
 
 func _shot_floor() -> float:
-	return _rig.position.y - PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
+	return _rig.position.y - _rig.frame_floor_depth() \
+			- PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same

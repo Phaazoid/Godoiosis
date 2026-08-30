@@ -440,6 +440,17 @@ static func flying_cells() -> Array[Vector2i]:
 
 
 static func _end_flight() -> void:
+	# ENDING A LIVE FLIGHT IS A DISCRETE EVENT THE RENDER MUST HEAR (#602 round 6). The executor's
+	# transition await and this overlay's own advance both cross the landing time on the same
+	# frame, and when the timer resumes first, end_flight_now() used to clear the overlay with no
+	# version bump -- so a tile the advance never observed landing was dropped with its flight map
+	# and re-seated NOWHERE. On the entry that is the fight's own ground vanishing for the whole
+	# battle (the pillar board, found in play, five reports deep); on the exit the pass-end
+	# clear_staging() bump happened to repair it. One bump here makes "the board is where the
+	# transition left it" true at the render layer whoever wins the race. Conditional so a no-op
+	# end (headless clear_staging on a bare board, a second end) moves nothing.
+	if not _flight_plan.is_empty() or not _flight.is_empty():
+		staging_version += 1
 	_flight.clear()
 	_flight_plan.clear()
 	_flight_elapsed = 0.0

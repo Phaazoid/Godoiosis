@@ -692,3 +692,102 @@ func _world_box(cells: Array[Vector2i], grid: TileMapLayer) -> Rect2:
 	for cell in cells:
 		box = box.expand(GridUtils.cell_world(grid, cell))
 	return box.grow(GridUtils.TILE_SIZE)
+
+
+# --- the interleave harness (#602 round 6) ------------------------------------------------------
+#
+# THE FRAME-DOMAIN ORDERINGS, driven by hand. Headless collapses every transition to zero frames
+# (the executor's beat returns instantly, so begin and end land in one synchronous stretch and no
+# flight map is ever built) -- which is exactly why five reports of vanished ground survived a
+# green suite. These cases build the frames themselves: begin a flight, advance its clock in
+# chosen steps, let the real drivers run between, and end it in EITHER ordering -- after the last
+# landing was observed, or before (the executor's timer resuming first, which is the race found on
+# the pillar board). The invariant is the same both ways: every staged column is SEATED somewhere.
+
+func _column_rows(map: GridMap, cell: Vector2i) -> int:
+	var rows := 0
+	for y in range(-8, 60):
+		if map.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
+			rows += 1
+	return rows
+
+
+func test_an_orderly_flight_end_leaves_every_column_seated() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	await _settle()
+
+	BoardSpace.advance_flight(StagingFlight.total(plan) + 0.1)   # every landing observed
+	await _settle()
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s never seated in the diorama after an orderly end" % cell).is_greater(0)
+	BoardSpace.clear_staging()
+	await _settle()
+
+
+func test_a_flight_ended_by_the_timer_first_still_seats_every_column() -> void:
+	# THE RACE (#602 round 6, the pillar board's vanished platforms): the executor's transition
+	# await and advance_flight cross the landing time on the same frame, and when the timer wins,
+	# the tile it beat is mid-air at end_flight_now -- its column is in a flight map about to be
+	# dropped, and nothing had bumped the version to re-seat it. The fix is _end_flight announcing
+	# itself; this case is the race replayed deliberately.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(plan)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	await _settle()
+
+	# Advance to where the LAST tile is still mid-air, and let the drivers draw that state.
+	BoardSpace.advance_flight(total - 0.5)
+	await _settle()
+	assert_bool(BoardSpace.in_flight(cells[cells.size() - 1])).override_failure_message(
+			"fixture: the last tile already landed; the race cannot be replayed").is_true()
+
+	# The timer resumes first: the executor finalizes with a tile the advance never landed.
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s was dropped with its flight map and re-seated nowhere -- the raced end is "
+				% cell + "invisible to the render").is_greater(0)
+	assert_bool(BoardSpace.flight_active()).is_false()
+	BoardSpace.clear_staging()
+	await _settle()
+
+
+func test_a_raced_exit_end_still_brings_every_column_home() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var entry := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(entry, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(entry) + 0.1)
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	var exit := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(exit)
+	BoardSpace.begin_flight(exit, Vector3.ZERO, -lift, false)
+	await _settle()
+	BoardSpace.advance_flight(total - 0.5)
+	await _settle()
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_board, cell)).override_failure_message(
+				"%s never came home from a raced exit end" % cell).is_greater(0)
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s is drawn in the diorama AND the board" % cell).is_equal(0)

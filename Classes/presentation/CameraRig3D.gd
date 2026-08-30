@@ -483,6 +483,30 @@ static func sway_offset(strength: float, elapsed: float) -> float:
 	return Pacing.SWAY_AMPLITUDE * strength * bob / 1.5
 
 
+# How far below the AIM a world point can fall before it leaves the bottom of the frame (#602
+# round 6), in world units. Pure, because the projection is three numbers and a test should not
+# need a viewport. The screen edge subtends fov/2 around the view axis; a vertical drop of d below
+# the aim presents d*cos(pitch) perpendicular to that axis AND recedes d*sin(pitch) along it, so
+# the edge is where d*cos(p) / (D + d*sin(p)) = tan(fov/2), i.e. d = D*tan(h) / (cos p - sin p *
+# tan h). THE RECESSION TERM IS NOT OPTIONAL: round 5 shipped d = D*tan(h)/cos(p) -- ~30% shallow
+# at this game's numbers -- and the death bar assembled just inside the frame it was meant to be
+# under. At pitch + fov/2 >= 90 a plumb line never exits the frame bottom; the denominator floor
+# keeps the answer finite there rather than meaningless.
+static func frame_drop(distance: float, fov_degrees: float, pitch_degrees: float) -> float:
+	var half := deg_to_rad(fov_degrees * 0.5)
+	var pitch := absf(deg_to_rad(pitch_degrees))
+	var denom := cos(pitch) - sin(pitch) * tan(half)
+	if denom < 0.05:
+		denom = 0.05
+	return distance * tan(half) / denom
+
+
+# The live reading of the same question: the frame the player is watching right now -- eased
+# distance (dolly included), authored fov, live pitch.
+func frame_floor_depth() -> float:
+	return frame_drop(_camera.position.z, _camera.fov, _pitch_degrees)
+
+
 # How the drop channel closes on its target, and pure the same way -- ASYMMETRIC, which is the whole
 # of the cliff follow (#602).
 #
