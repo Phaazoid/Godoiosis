@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #661 (2026-08-29).**
+**Canon checked through #661 (2026-08-30).**
 
 ## Principles
 
@@ -2172,6 +2172,19 @@ not a knob**, on `WHITEOUT_SAFE_PEAK`'s reasoning: a slider that could push the 
 shot would quietly repeal the invariant this round exists to keep (*"I'll always want the death
 cubes in shot"*). `followed_fall` died with its last caller.
 
+**Round 6 corrected what the callable ANSWERS.** Round 4 measured a fixed margin below the rig's
+own height — the frame's CENTRE — and at this game's narrow fov that is inside the frame, so the
+burst's staggered march assembled a full health grid on screen before a cube launched (*"a full
+health bar appears on screen, and explodes. That kinda ruins the effect."*). Where the bottom
+edge actually IS for a downward-pitched camera is `CameraRig3D.frame_drop`:
+`D·tan(fov/2) / (cos p − sin p·tan(fov/2))`, and the recession term in the denominator is the
+whole correction — the frame's bottom lands on ground FARTHER from the camera than the aim point,
+so the tempting `D·tan(fov/2)/cos p` (round 5's formula, reverted with it) reads ~30% shallow at
+the shipped pitch and puts an "off screen" anchor inside the frame. `frame_floor_depth()` feeds
+it the LIVE camera — rendered distance, live fov, live pitch — because the frame the player is
+watching is the only frame "off screen" can be measured against; `PLUMMET_BURST_UNDER` (now 0.5
+cells) is the margin UNDER that edge, still a const for the same reason.
+
 ### The camera comes home before the tiles do
 
 A pass whose last blow knocked somebody into a pit ends with the shot still deep below the board, and
@@ -2238,6 +2251,44 @@ contribution-cap survived the wheel it was written for; deleting it with the car
 inside the round); and **a knob whose store is re-pushed every frame is only tunable at the
 store** (`HealthBlockDebris.lifetime` is overwritten from `block_lifetime` per frame — the
 born-dead-slider guard, read from the other side).
+
+### Round 6 — the end of a flight announces itself (2026-08-30)
+
+Round 5 re-timed the exit flash onto the teleport and re-anchored the burst; the play-check came
+back *"now it's buggy"* with five reports — after the rise-up, **the platforms the fighters stand
+on disappeared**. The board data was intact and a headless replay of the exact battle was clean,
+which is the fingerprint of a RENDER hole rather than a board one; the bundle was reverted whole
+(playability first) and this round landed the two real defects it had been sitting on, plus the
+instrument that would have named them in the first report.
+
+**The race: the executor's transition await and the last landing cross `total` on the same
+frame.** `_play_transition` awaits a `SceneTreeTimer` cut to the schedule's total while
+`advance_flight` walks the same clock per frame — one length, two clocks, and the order inside
+the crossing frame is scheduler whim. Timer first → `end_flight_now()` cleared the flight with
+**no version bump**: the version-gated poll had last drawn that column as IN FLIGHT (excluded
+from the seated board, per the #521 slice-B law), the per-frame flight draw stopped with the
+flight, and with no bump nobody ever re-read — the column sat in neither draw, a hole where a
+platform stood, for the whole battle on an entry (the exit's `clear_staging()` bump happened to
+repair the same wound, which is why it only ever showed after the rise-up). The fix finishes the
+slice-B law: a tile LANDING is a discrete event, and so is **the flight ENDING** — `_end_flight`
+bumps `staging_version` whenever it clears a live flight, whoever killed it, so "the board is
+where the transition left it" is true at the render layer on both sides of the race. The
+interleave harness in `test_staging.gd` replays the exact ordering by hand (advance to just short
+of total, assert the tile still flies, end by the timer's door, settle, assert every staged
+column seated); its aimed mutant — silence the bump — reds exactly that case.
+
+**Both fixes landed apart from the redesign they were found under.** Round 5 bundled the
+flash re-timing with the frame-edge correction on top of the latent race, so the regression could
+have been any of the three — which is what made the whole-revert the only honest move. The
+flash-rides-the-cut design goes back in a later round, alone, on top of a board that provably
+seats its columns.
+
+**The reports diagnose themselves now.** The `View:` line in every `report.md` stamps the rig's
+channel state — lift, drop→target, distance→target, `Engine.time_scale`, staged-cell count,
+flight active — live/target pairs wherever a channel eases, so a report says both where the
+camera IS and where it is trying to be. Round 5's forensics spent a session proving from pixels
+that the eases were alive and the staging was stuck; those are six numbers now, on the line the
+reporter already writes.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
