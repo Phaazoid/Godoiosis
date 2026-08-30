@@ -143,10 +143,42 @@ line plus the two affordance queries: guessing at reach (62), not knowing which 
 which held the activation (43), and executing with nothing queued (34). The rendered board carried
 none of it.
 
-**Batching.** `{"id": N, "cmds": [{...}, {...}]}` runs a list in order and returns one envelope, for
-callers where a round trip costs more than the bytes do. It **stops at the first failure**: a refusal
-is nearly always a wrong belief about turn state, so everything after it rests on the same wrong
-belief.
+**Batching — and this is how you should drive the bridge, not a feature to reach for occasionally.**
+`{"id": N, "cmds": [{...}, {...}]}` runs a list in order and returns one envelope. It **stops at the
+first failure**: a refusal is nearly always a wrong belief about turn state, so everything after it
+rests on the same wrong belief.
+
+Use `play/send.sh`, which does the write-and-poll:
+
+```bash
+play/send.sh overview
+play/send.sh move '{"unit":"A","x":22,"y":7}'
+play/send.sh --batch '[{"cmd":"legal_moves","args":{"unit":"A"}},{"cmd":"preview"}]'
+```
+
+**Why this matters more than convenience (#666).** The protocol is write-then-poll, and every
+playtest driver measured so far wrote its own poller in Python and ran it in a loop — 69 of 72 shell
+calls in one logged run, 54 of 61 in another. The single run that batched aggressively needed
+**three** shell commands and no Python at all. The scripting tracks round-trip count and nothing
+else. An agent that must run arbitrary `python3` cannot be given a narrow permission allowlist, so an
+unattended playtest needs blanket approval — which removes the guard that stops a session that is
+supposed to be *playing* the game from editing it. One batch per turn, through `send.sh`, keeps the
+whole allowlist to two entries.
+
+**The opponent acts (#665).** `endturn` runs the incoming faction's AI when the board declares it in
+`ScenarioData.ai_factions`, and reports what it did as an event log — the same account `execute`
+gives of your own pass:
+
+```
+Turn -> PLAYER
+  b moves to (22, 16)
+  d moves to (18, 15)
+  Thug6 revs up
+```
+
+Before this, `end_turn` advanced the faction and nothing else: the enemy stood still for the whole
+match. Playtest reports read like real engagements because the counters in them are derived from the
+driver's *own* attacks during resolution, never an enemy taking a turn.
 
 **Targeting.** Commands use **game coordinates** (no rebasing — one coordinate system kills a whole bug
 class). The board carries x / y rulers; exact targets are confirmed by the affordance overlay plus a

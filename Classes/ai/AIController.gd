@@ -41,21 +41,52 @@ func set_ai_factions(factions: Array[Team.Faction]) -> void:
 	for faction in factions:
 		_enabled[faction] = true
 
+# WHICH SQUADS a faction still has to act with. Static and game-free because the headless Play
+# API takes an AI turn too (#665), and "which squads act" must have ONE answer -- a second walk
+# would drift the moment either side grew a skip condition (Law #4). What genuinely differs
+# between the two callers is PRESENTATION (camera, pacing) and EXECUTION (animated orders versus
+# the headless resolve), and those stay at the callers where they belong.
+#
+# The caller must STILL revalidate inside its loop: acting with one squad can kill another's
+# leader or disband it outright, so this is the starting list, not a promise about later.
+static func actable_squads(faction: Team.Faction, squad_manager: SquadManager) -> Array[Squad]:
+	var out: Array[Squad] = []
+	for squad: Squad in squad_manager.squads.duplicate():
+		if is_squad_actable(squad, faction):
+			out.append(squad)
+	return out
+
+
+static func is_squad_actable(squad: Squad, faction: Team.Faction) -> bool:
+	if not is_instance_valid(squad) or squad.has_acted:
+		return false
+	if squad.leader == null or squad.leader.get_faction() != faction:
+		return false
+	return squad.leader.is_active()
+
+
+# ONE squad's DECISION -- the archetype call, and the stale-pick reset that has to precede it.
+# No camera, no pacing, no execution: the caller owns those. Orders still reach the board only
+# through SquadManager.queue_action inside the archetype, so Law #3 is unaffected by the split.
+static func plan_squad(squad: Squad, board: BoardContext, squad_manager: SquadManager) -> void:
+	for member in squad.get_members():
+		member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
+	AIArchetype.resolve(squad.archetype).call(squad, board, squad_manager)
+
+
 func take_faction_turn(faction: Team.Faction, board: BoardContext) -> void:
-	for squad in game.squad_manager.squads.duplicate():
+	for squad in actable_squads(faction, game.squad_manager):
 		# The mission can end mid-turn -- this squad's pass may have wiped the player. Stop
 		# issuing orders behind the end-of-mission card (#96).
 		if game.mission_controller.is_over():
 			return
-		if not is_instance_valid(squad) or squad.has_acted:
-			continue
-		if squad.leader.get_faction() != faction or not squad.leader.is_active():
+		# Revalidated per iteration, not merely filtered once above: the squad that just acted
+		# may have downed this one's leader.
+		if not is_squad_actable(squad, faction):
 			continue
 
 		await game.camera_controller.pan_to(squad.get_leader())
-		for member in squad.get_members():
-			member.active_attack = null   # fresh pick each turn -- a stale winner from last turn would skew reach queries (mirrors _begin_attack's reset)
-		AIArchetype.resolve(squad.archetype).call(squad, board, game.squad_manager)
+		plan_squad(squad, board, game.squad_manager)
 		# The plan is on screen now -- queueing repaints the queue panel, path arrows, ghosts and
 		# target markers synchronously -- so hold before resolving it (#118). Skipped when the squad
 		# only holds position: there is nothing to read, and dead air per squad is the complaint.
