@@ -309,6 +309,9 @@ static var _flight: Dictionary[Vector2i, Vector3] = {}
 # executing_plan and staging_version.
 static var _flight_plan: Array[Dictionary] = []
 static var _flight_elapsed := 0.0
+# The plan's own landing time, cached at begin_flight because the flash and the cut ask for it
+# every frame (#602 round 7) and re-deriving it per frame from the plan would be a loop per poll.
+static var _flight_total := 0.0
 # The path every tile walks, same for all of them and offset only in TIME. Entry runs socket ->
 # diorama, exit runs diorama -> socket; one pair of endpoints rather than an "is it reversed" flag
 # the geometry then has to interpret.
@@ -329,6 +332,11 @@ static var _flight_entering := true
 # camera side-on to a walk (#520).
 static var _camera_lift := Vector3.ZERO
 static var _camera_lift_driven := false
+# Whether the driven lift is a CUT rather than a glide (#602 round 7): true only while a
+# transition is holding the camera on the far side of its teleport, and what the mirror reads to
+# pin the rig's eased lift channel to its target -- a 40-unit drop the ease would smear across the
+# flash's fade lands in one frame instead, under full white, which is the flash's whole job.
+static var _camera_lift_snap := false
 
 
 static func stage(cells: Array[Vector2i], offset: Vector3) -> void:
@@ -361,6 +369,7 @@ static func clear_staging() -> void:
 static func begin_flight(plan: Array[Dictionary], from: Vector3, to: Vector3, entering: bool) -> void:
 	_flight_plan = plan
 	_flight_elapsed = 0.0
+	_flight_total = StagingFlight.total(plan)
 	_flight_from = from
 	_flight_to = to
 	_flight_entering = entering
@@ -386,7 +395,12 @@ static func advance_flight(delta: float) -> bool:
 		var cell: Vector2i = entry["cell"]
 		var progress := StagingFlight.progress_at(entry, _flight_elapsed)
 		if progress >= 1.0:
-			if _flight.has(cell):
+			# A cell LANDS ONCE (#602 round 7): an exit's landed cell keeps holding _flight_to, and
+			# without this guard every frame past its land time erased and re-added it -- landed
+			# stayed true, staging_version bumped per frame, and the whole board's props rebuilt
+			# per frame -- for every exit's whole landing window, not just the flash tail that made
+			# it visible.
+			if _flight.has(cell) and _flight[cell] != _flight_to:
 				# Erased rather than set to the endpoint: absence IS the landed state, so a cell
 				# that is home costs nothing to ask about and cannot be left holding a stale delta.
 				_flight.erase(cell)
@@ -412,6 +426,12 @@ static func flight_entering() -> bool:
 
 static func flight_elapsed() -> float:
 	return _flight_elapsed
+
+
+# When the last tile of the current flight lands, in the flight's own clock -- the anchor the exit
+# flash and both cuts are scheduled against (#602 round 7). Zero with no flight, like elapsed.
+static func flight_total() -> float:
+	return _flight_total
 
 
 # This cell's displacement from the diorama right now. Zero once it is home, which is also what an
@@ -440,9 +460,21 @@ static func flying_cells() -> Array[Vector2i]:
 
 
 static func _end_flight() -> void:
+	# ENDING A LIVE FLIGHT IS A DISCRETE EVENT THE RENDER MUST HEAR (#602 round 6). The executor's
+	# transition await and this overlay's own advance both cross the landing time on the same
+	# frame, and when the timer resumes first, end_flight_now() used to clear the overlay with no
+	# version bump -- so a tile the advance never observed landing was dropped with its flight map
+	# and re-seated NOWHERE. On the entry that is the fight's own ground vanishing for the whole
+	# battle (the pillar board, found in play, five reports deep); on the exit the pass-end
+	# clear_staging() bump happened to repair it. One bump here makes "the board is where the
+	# transition left it" true at the render layer whoever wins the race. Conditional so a no-op
+	# end (headless clear_staging on a bare board, a second end) moves nothing.
+	if not _flight_plan.is_empty() or not _flight.is_empty():
+		staging_version += 1
 	_flight.clear()
 	_flight_plan.clear()
 	_flight_elapsed = 0.0
+	_flight_total = 0.0
 	_flight_from = Vector3.ZERO
 	_flight_to = Vector3.ZERO
 	_flight_entering = true
@@ -455,14 +487,22 @@ static func camera_lift() -> Vector3:
 	return _camera_lift if _camera_lift_driven else _stage_offset
 
 
-static func drive_camera_lift(lift: Vector3) -> void:
+static func drive_camera_lift(lift: Vector3, snap := false) -> void:
 	_camera_lift = lift
 	_camera_lift_driven = true
+	_camera_lift_snap = snap
+
+
+# Whether the driven lift is a CUT the mirror should land in one frame (#602 round 7). Only ever
+# true under a transition's own drive, so the rig's eased lift is untouched everywhere else.
+static func camera_lift_snapped() -> bool:
+	return _camera_lift_snap
 
 
 static func release_camera_lift() -> void:
 	_camera_lift = Vector3.ZERO
 	_camera_lift_driven = false
+	_camera_lift_snap = false
 
 
 # Where this cell's contents render, relative to the board. THE placement question -- every mirror
@@ -489,6 +529,13 @@ static func staged_cells() -> Array[Vector2i]:
 
 static func stage_offset() -> Vector3:
 	return _stage_offset
+
+
+# Is a fight on stage AT ALL -- asked by the camera per frame, so it must not build the cell array
+# staged_cells() does. Not derivable from stage_offset(), which is legitimately ZERO when the lift
+# knob is dialled to nothing.
+static func staging_active() -> bool:
+	return not _staged.is_empty()
 
 
 # Where the diorama sits for a tear-out starting now. Straight up: the tiles rise OUT of the board

@@ -77,3 +77,14 @@ func test_the_view_the_host_named_reaches_report_md() -> void:
 	assert_str(text).contains("View: **%s**" % expected)
 	# Not vacuous by way of the fallback: the flat-launch sentence must NOT be what got written.
 	assert_str(text).not_contains(BugReporter.NO_3D_VIEW)
+
+
+func test_the_view_note_carries_the_camera_channels() -> void:
+	# The diagnostic half (#602 round 6): five reports of grey void took a session to decode from
+	# pixels because no report said where the rig's channels WERE. A stuck lift, a held drop or a
+	# frozen clock is a number in this line now -- so the line losing them is a finding.
+	var note: String = _scene._describe_view()
+	for key in ["lift", "drop", "tscale", "staged", "flight"]:
+		assert_str(note).override_failure_message(
+				"the view note lost its '%s' channel -- reports stop self-diagnosing" % key
+		).contains(key)

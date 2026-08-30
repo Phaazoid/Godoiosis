@@ -79,7 +79,11 @@ static var TEAR_OUT_CAMERA_HOLD := 0.95
 # Each is a beat the transition would otherwise not have, and each can be dialled to 0 to get the
 # hard cut back. SETTLE is the one he asked for by name.
 static var TEAR_OUT_BRACE := 0.5        # the board holds still, intact, before it comes apart
-static var TEAR_OUT_EMPTY_SKY := 0.7    # the camera waits over empty space before the first tile
+# The camera waits over empty space before the first tile. At least the whole flash by design
+# (ramp + hold + ramp = 1.1 at the shipped values): the lead exists so the flash plays over nothing
+# and the arrivals are WATCHED -- at 0.7 the first tiles were landing behind the fade and the rise
+# read as missing (#602 round 4, the pillar board).
+static var TEAR_OUT_EMPTY_SKY := 1.1
 static var TEAR_OUT_SETTLE := 0.9       # the assembled diorama holds before the first blow lands
 static var TEAR_OUT_AFTERMATH := 0.8    # ...and holds again after the last one, before it goes home
 
@@ -102,9 +106,9 @@ static var CINEMATIC_ACTION := 0.4
 # VERBS and must go on reporting ATTACK as undeclared.
 static var HOLD_ATTACK := 0.25     # a hit that just does damage -- the floor the rest are read against
 static var HOLD_DOWN := 0.9        # a unit goes down, is killed, maimed, or removed from the board
-static var HOLD_CRISIS := 0.85      # someone stands up surged instead of falling
+static var HOLD_CRISIS := 0.8      # someone stands up surged instead of falling
 static var HOLD_IRON_WILL := 0.45  # the cap BIT: that should have killed them and did not
-static var HOLD_KNOCKBACK := 0.8   # the hit shoved its target
+static var HOLD_KNOCKBACK := 0.75   # the hit shoved its target
 static var HOLD_TURNOVER := 0.8    # the act break: the defending line raises weapons
 static var HOLD_HEAL := 0.8       # HP came back -- the quiet beat this table had no row for
 
@@ -214,21 +218,27 @@ static var CINEMATIC_SWAY := 1.0
 # blow holding three times as long as a scratch -- so what is here is the push-in and the freeze.
 
 # How far the camera pushes IN on the loudest beat, in world units of camera distance. Subtracted
-# from wherever the player has left the zoom, never assigned over it: the wheel stays theirs through
-# a pass (#520, dev 2026-08-26) and a per-beat set_zoom is exactly the leash that ruling refuses.
+# from the shot's own base -- which since #602 round 4 is the DIRECTOR's, not the player's: during
+# playback the zoom is directed with everything else (dev, 2026-08-29: "we control the camera,
+# fully. Their zoom gets overridden, period" -- #520's own Done-when, restored after the 2026-08-26
+# carve-out that left the wheel live). The push-in is still an addend over that base, so it comes
+# off when the beat ends.
 #
 # Scaled by direction_of, the same fork the side-on angle and the pitch stoop use -- whether the
 # plain board gets DIRECTED shots at all is one question and it already has an answer.
 static var DOLLY_IN := 2.5
-# ...and the floor the dolly's OWN CONTRIBUTION respects. There is no zoom-in floor on this rig by
-# dev ruling (asked twice, "please remove it entirely"), and scrolling past the aim point takes the
-# camera through its target to look back -- his call, for HIS hand. A director inheriting that hole
-# would fly the camera through a unit on the exact beat it most wants to be looking at one.
-#
-# So this floors what the DOLLY adds, never the total: a player already closer than this keeps their
-# distance untouched and simply gets no push-in, which is why it cannot re-introduce the floor the
-# ruling removed.
+# ...and the floor the dolly may push the shot to. There is no zoom-in floor on the WHEEL by dev
+# ruling (asked twice, "please remove it entirely"), and that ruling keeps its scope: the player's
+# own hand, outside playback. This floors the DIRECTED shot, because a director would otherwise fly
+# the camera through a unit on the exact beat it most wants to be looking at one -- and it caps the
+# dolly's CONTRIBUTION, never the total, so a base tuned tighter than the floor simply gets no
+# push-in rather than being shoved back out (see CameraRig3D._dollied_distance).
 static var DOLLY_FLOOR := 4.0
+# The trained shot's distance (#602 round 4): how far out the camera sits while it is following one
+# unit -- a beat's subject, a body mid-tumble. Between DOLLY_FLOOR and the rig's playback_distance
+# by design: the close-up the dev asked for ("a close up of that unit's tumble, all the way
+# through"), with the push-in still able to lean in on a kill without hitting the floor.
+static var TRAINED_DISTANCE := 7.0
 
 # The RUNGS, 0..1, and they are the holds' ladder asked a different question -- how big is this
 # moment, rather than how long to wait before it. Their own numbers because the two rankings may
@@ -246,6 +256,46 @@ static var EMPHASIS_IRON_WILL := 0.5
 static var HITSTOP_DOWN := 0.09
 static var BOARD_HITSTOP := 0.0
 static var CINEMATIC_HITSTOP := 1.0
+
+# --- the cliff follow (#602) --------------------------------------------------------------------
+#
+# A unit shoved off a ledge or into a void FALLS, and until this the camera watched it go from the
+# lip: both falls are mirror-side Y offsets (MovementComponent's plummet_depth and
+# landing_fall_depth), so the unit's own board position never descends and follow_unit tracked a
+# body the board thinks has already arrived.
+#
+# FLAT ACROSS PROFILES, on the LINGER's reasoning rather than the sway's: a fall is an animation
+# running in real time whichever profile is up, and the body leaves the frame just as thoroughly
+# with the battle zoom off. Drama-scaling it would give the plain board none -- the same instant-cut
+# hole the linger exists to close. The dial-out is the strength below, not the profile.
+
+# How far down a DEATH fall is followed, in CELLS below the lip the body left -- the dev toggle on
+# how long the camera rides before it stops and the body falls on out of frame (dev, 2026-08-29). A
+# void plummet is eight cells, which would put the camera well under the board looking at sky and
+# fog. Only a void fall meets this cap: a landing fall ends ON ground, and since round 4 the camera
+# rides one all the way down ("a close up of that unit's tumble, all the way through") -- the old
+# fraction dial and the floor-at-zero that held the shot at the lip are both gone with that ruling.
+static var CLIFF_FOLLOW_MAX := 3.0
+# How fast the camera climbs back once the fall's show is over, in e-folds per second -- HIGHER IS
+# FASTER (it is a rate, which is exactly the way it was once mis-tuned in search of a longer
+# linger). Its own rate rather than the rig's glide because the channel is asymmetric: down is
+# instant (see CameraRig3D.recovered), and the climb no longer races the death show at any setting
+# -- the shot holds until the burst's debris are done (see battle3d._death_show_depth) and this
+# only paces the ride home afterwards.
+static var CLIFF_RECOVER := 1.6
+# The beat at the BOTTOM: how long the fall holds after the body stops falling and before it is
+# removed -- which is the moment the bricks burst, so this is also "the beat before the show". It
+# lives inside plummet() rather than at a call site because the depth is what the camera is riding
+# -- ending the tween and then waiting would have the rig climbing out during the very pause the
+# pause is for. A void fall only; a cliff drop lands and the slide carries on.
+static var PLUMMET_HOLD := 0.9
+# How far ABOVE the ground the units stand on the tear-out's shot sits, in cells (dev, 2026-08-29:
+# "the units need to be at the center"). Aiming at their feet is what the board's own recentre does
+# and it leaves a sprite sitting high in frame; this is the half-body lift that centres them, and it
+# is a feel value rather than a derivation because how tall a unit reads depends on the art. The
+# trained shot frames its followed body with the same lift, so the two states agree about where a
+# unit sits in frame.
+static var STAGE_AIM_LIFT := 0.5
 
 
 # What mode the player has the zoom in. ONE read of the setting, so nothing else names it.

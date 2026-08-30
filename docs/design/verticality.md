@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #581 (2026-08-27).**
+**Canon checked through #661 (2026-08-29).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -699,6 +699,40 @@ into a hole falls a long way instead of vanishing at the lip. It is 3D-ONLY by c
 flat board has no height to fall through), a declared [#292](https://github.com/Phaazoid/Godoiosis/issues/292)
 asymmetry, and `play_session`'s hand-copied twin deliberately skips it. Both the depth and the
 duration are Game-tab knobs beside *Shove slide speed*.
+
+**THE BODY STEPS CLEAR OF THE EDGE BEFORE IT DROPS (dev, 2026-08-29).** #472 travelled a dropping
+segment in two halves and fell at the **midpoint of the shared edge** — the sprite descends exactly
+in the boundary plane, half inside the wall it just left, and the leftover half-step then runs in a
+sixteenth of a second after the fall. Invisible at a drop of one; down a ten-level pillar it is a
+body sinking through rock and then snapping sideways. `MovementComponent._step_off` completes the
+step into the landing cell first and drops from there. #431's *"it starts falling AT THE EDGE"* is
+untouched — that ruling is about **which edge along the path** the fall belongs to, not about the
+sprite being embedded in it — but note the drop POINTER still hangs at the edge while the body now
+falls half a cell further in.
+
+Two things it depends on. The fall flag is raised **before** the step, so the height is owned at the
+lip's own level while the body clears the wall; drop that and the mirror falls through to its ground
+branch mid-step, which makes a tumble *sink* and a flight *pop back to the launch surface*. And the
+reason the second half of that was direction-dependent: **the midpoint of two adjacent cell centres
+sits exactly on their shared boundary, and `floori` resolves an exact boundary to the `+` side** — so
+the cell under the sprite read as the one being LEFT for a shove north or west and the one being
+ENTERED for a shove south or east.
+
+**...and since [#602](https://github.com/Phaazoid/Godoiosis/issues/602) the fall has a THIRD reader:
+the camera rides it down.** That gives both fall states a consumer outside `UnitMirror`, which is why
+the placement rule was extracted to `UnitMirror.stand_height` / `fall_depth` — the shot and the
+sprite read one arithmetic, the thing this ticket's own bug (two spellings of one edge) exists to
+warn about. Two consequences here rather than in the camera's own canon. The plummet now **holds at
+full depth** before `die()` (`Pacing.PLUMMET_HOLD`, awaited inside `plummet()` so the flag is still
+raised while it waits), so the awaited stretch `AttackAction.execute` sits through is the fall plus
+that beat. And the third vertical animation — an airborne shove, which holds a body *above* the
+ground it sails over — reports a **negative** depth by the same subtraction. Round 2 floored that
+at zero so a body blown over a chasm was not followed upward; **round 4 repealed the floor with
+the rule it served** (dev, 2026-08-29: *"I want a close up of that unit's tumble, all the way
+through"*) — the trained shot now rides the whole signed range, up over the chasm and down every
+landing fall, and only a void plummet stops short, at `CLIFF_FOLLOW_MAX` below the lip. The sign
+convention is unchanged; what changed is that both of its directions finally have the same
+consumer.
 
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the

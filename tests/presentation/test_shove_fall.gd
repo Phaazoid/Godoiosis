@@ -151,3 +151,134 @@ func test_an_edge_reads_the_same_height_from_both_of_its_sides() -> void:
 	assert_float(east_side).override_failure_message(
 			"two ramps continuing one slope do not meet at their shared edge") \
 			.is_equal_approx(west_side, 0.001)
+
+
+# --- the depth the CAMERA rides (#602) ----------------------------------------------------------
+#
+# UnitMirror.fall_depth is UnitMirror.stand_height read from the other end, and the cliff follow
+# takes the camera down by it. Both cases below drive the state DIRECTLY, which is forced rather
+# than lazy: plummet() and _fall both return before raising their flag when DisplayServer is
+# headless, so no run of the real path can ever reach the state these describe -- which is exactly
+# why the SIGN is worth a case. The camera floors this at zero, and only a case can say whether
+# that floor is guarding against something or is dead code.
+
+func test_a_falling_body_reports_the_depth_its_own_sprite_is_placed_by() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 4)
+	heights.set_cell(Vector2i(1, 0), 4)
+	var s := _setup(heights, 1, Vector2i(0, 0), Vector2i(1, 0))
+	var victim: Unit = s.d
+	var surface := BoardSpace.surface_point(Vector2i(1, 0), heights).y
+	victim.movement.plummeting = true
+	victim.movement.plummet_depth = 3.0
+
+	assert_float(UnitMirror.fall_depth(victim, heights)).override_failure_message(
+			"a body three cells down a hole does not report three cells of fall") \
+			.is_equal_approx(3.0 * BoardSpace.CELL_SIZE, 0.001)
+	# ...and the complement holds, which is what makes the shot and the sprite one answer: the
+	# camera drops by the depth, the sprite is placed at the height, and both come off this pair.
+	assert_float(UnitMirror.stand_height(victim, heights)).override_failure_message(
+			"the depth and the stand height disagree about where the body is") \
+			.is_equal_approx(surface - UnitMirror.fall_depth(victim, heights), 0.001)
+
+
+func test_a_body_still_in_the_AIR_over_a_hole_reports_a_negative_depth() -> void:
+	# The third vertical animation: an airborne shove holds the body at its LAUNCH height while it
+	# flies over lower ground, so the same subtraction comes out the other way. The sign is
+	# LOAD-BEARING since #602 round 4 -- the trained shot rides it UP, holding the camera level
+	# with the flying body instead of dipping to the ground it crosses (the old channel floored
+	# this at zero and watched every fall from the lip, the rule the round repealed).
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 8)
+	heights.set_cell(Vector2i(1, 0), 8)
+	heights.set_cell(Vector2i(2, 0), 2)   # the low ground it is flying over
+	var s := _setup(heights, 2, Vector2i(0, 0), Vector2i(1, 0))
+	var victim: Unit = s.d
+	victim.movement.set_cell(Vector2i(2, 0))
+	victim.movement.sliding = true
+	victim.movement.airborne = true
+	victim.movement.slide_origin = Vector2i(1, 0)
+
+	assert_float(UnitMirror.fall_depth(victim, heights)).override_failure_message(
+			"a body flying above the ground beneath it did not report a negative depth") \
+			.is_less(0.0)
+
+
+# --- the body steps CLEAR of the edge before it drops (dev, 2026-08-29) -------------------------
+
+# It used to slide to the MIDPOINT of the shared edge and fall from there, which puts the sprite
+# exactly in the boundary plane -- half inside the wall for the whole descent. Invisible on the
+# one-cell drops this suite was written for; down a ten-level pillar the dev watched a body sink
+# through the rock for two and a half seconds and then snap sideways to the cell centre, that snap
+# being the leftover half-step running in a sixteenth of a second after the fall had played.
+#
+# The FALL is headless-escaped, as everything in this neighbourhood is -- but the STEP is a real
+# tween in every run, so the ordering between them is observable even though the descent is not.
+# That is why _step_off does the step first in both branches.
+func test_a_body_finishes_its_step_before_it_starts_to_drop() -> void:
+	var heights := BoardHeights.new()
+	heights.set_cell(Vector2i(0, 0), 10)
+	heights.set_cell(Vector2i(1, 0), 10)
+	heights.set_cell(Vector2i(2, 0), 10)
+	heights.set_cell(Vector2i(3, 0), 0)   # a sheer drop of five levels off the lip
+	heights.set_cell(Vector2i(4, 0), 0)
+	var s := _setup(heights, 2, Vector2i(0, 0), Vector2i(1, 0))
+	var outcome := _resolve(s)
+	assert_bool(outcome.knockback_landing_index > 0).override_failure_message(
+			"the board is not the one this case is about -- nothing flew").is_true()
+
+	var victim: Unit = s.d
+	var caught := await _slide_watching_the_drop(victim, outcome)
+	assert_bool(caught.has("at")).override_failure_message(
+			"no fall was recorded at all -- this shove never left the lip").is_true()
+
+	var grid: TileMapLayer = s.grid
+	var at: Vector2 = caught["at"]
+	var centre: Vector2 = grid.map_to_local(caught["cell"])
+	assert_float(at.distance_to(centre)).override_failure_message(
+			"the body began to drop %.1f px from the centre of the cell it was entering -- it is "
+			% at.distance_to(centre) + "falling in the boundary plane, half inside the wall it left"
+	).is_less(0.5)
+
+
+# Run the real slide, recording where the body stood the first frame its fall was recorded.
+func _slide_watching_the_drop(unit: Unit, outcome: ResolvedOutcome) -> Dictionary:
+	var caught: Dictionary = {}
+	unit.movement.slide_along_path(outcome.knockback_path, outcome.knockback_landing_index)
+	for _frame in range(600):
+		if not caught.has("at") and unit.movement.landing_fall_depth > 0.0:
+			caught["at"] = unit.position
+			caught["cell"] = unit.movement.cell
+		if not unit.movement.sliding:
+			return caught
+		await await_idle_frame()
+	fail("the slide never finished -- 600 frames elapsed with sliding still true")
+	return caught
+
+
+# --- and where its bricks burst once it has fallen out of frame (dev, 2026-08-29) ---------------
+
+# REWRITTEN in #602 round 4: the round-2 spelling here re-derived the camera's stop from the
+# body's own fall (Pacing.followed_fall of the depth), which is a second BASE as well as a second
+# spelling -- the shot hangs off the STAGE's height and the body off the void's lip, and on a
+# fight staged above a pit those differ by the whole cliff, so the cubes were below the frame at
+# every slider setting (the pillar board, found in play). The burst is now raised to the frame the
+# camera actually holds: UnitMirror.burst_lift takes the host's own frame-floor anchor, and the
+# property worth pinning is unchanged -- the show lands in the same place however deep the pit is.
+func test_a_deeper_plummet_does_not_burst_further_from_the_camera() -> void:
+	var anchor := 2.5   # where the bottom of the shot happens to be, in world y
+
+	# Two bodies, one five times deeper than the other: the burst LANDS at the anchor either way.
+	var deep := -8.0 + UnitMirror.burst_lift(anchor, -8.0)
+	var deeper := -40.0 + UnitMirror.burst_lift(anchor, -40.0)
+	assert_float(deeper).override_failure_message(
+			"a body that fell five times as far burst five times further from the camera -- the "
+			+ "cubes are launching somewhere nobody is looking").is_equal_approx(deep, 0.001)
+	assert_float(deep).override_failure_message(
+			"the bricks did not come up to the frame the camera is holding") \
+			.is_equal_approx(anchor, 0.001)
+
+	# A burst already inside the frame is never LOWERED: nothing else in the game bursts anywhere
+	# but the body, and a shallow fall whose readout is still on screen keeps it there.
+	assert_float(UnitMirror.burst_lift(anchor, anchor + 1.0)).override_failure_message(
+			"a burst already above the frame floor was dragged down to it").is_equal(0.0)

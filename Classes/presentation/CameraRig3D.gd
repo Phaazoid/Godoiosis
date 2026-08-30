@@ -156,12 +156,23 @@ var _target_pitch_degrees := -40.0
 # The LIVE angle, and the rig's OWN -- never read back off the Pitch node, which is a pure output.
 # See _process for why that read is what stopped this channel settling.
 var _pitch_degrees := -40.0
-# The two position channels (see the header): where the rig looks NOW and where it is heading, plus
-# the same pair for the diorama's rise. `position` is their sum and nothing else.
+# The position channels (see the header): where the rig looks NOW and where it is heading, the same
+# pair for the diorama's rise, and since #602 the same pair again for a fall. `position` is their
+# sum -- with the flourish below -- and nothing else.
 var _aim := Vector3.ZERO
 var _target_aim := Vector3.ZERO
 var _lift := Vector3.ZERO
 var _target_lift := Vector3.ZERO
+# ...and the DROP, how far below the board plane the shot has gone to ride a falling body down
+# (#602). A fourth channel rather than a second use of the lift above, because that one is per-CELL
+# staging -- a GridMap's node transform -- and a falling unit is not a cell and does not live in
+# that lattice. Sharing one addend would have the tear-out and a fall fighting over it in exactly
+# the case this exists for: somebody shoved into a void during a staged fight.
+#
+# A scalar, not a Vector3, and the sign is DOWN: a fall has one axis and naming it in world Y here
+# means no caller can express a sideways one by accident.
+var _drop := 0.0
+var _target_drop := 0.0
 var _home_position := Vector3.ZERO
 var _home_yaw_degrees := 0.0
 var _home_distance := 14.0
@@ -418,9 +429,32 @@ func lift_to(lift: Vector3) -> void:
 	_target_lift = lift
 
 
-# The ONE place the node's position is written. All three channels, summed -- see the header.
+# ...and the CUT: land the lift channel on its target now (#602 round 7). Called by the mirror
+# only while a transition declares its drive a cut -- the flash is at full white for exactly this
+# frame, and the ease would still be smearing a 40-unit teleport across the fade that reveals it.
+func cut_lift() -> void:
+	_lift = _target_lift
+	_apply_position()
+
+
+# ...and how far the body the shot is following has fallen below the board (#602). POLLED like the
+# lift above and for the same reason: the fall ends by publishing zero, so a unit that dies at the
+# bottom of a plummet -- taking the fact with it -- leaves nothing to remember to undo.
+func drop_to(depth: float) -> void:
+	_target_drop = depth
+
+
+# ...and how far down it actually IS, which is a different question from how far it was told to go:
+# the climb back is eased, so this is still positive for a second or two after the fall published
+# zero. Playback waits on it before dropping the tiles home (#602 round 2) -- the LIVE value, since
+# a target-based answer would say "home" while the shot was still deep in a pit.
+func drop_depth() -> float:
+	return _drop
+
+
+# The ONE place the node's position is written. All four channels, summed -- see the header.
 func _apply_position() -> void:
-	position = _aim + _lift + flourish()
+	position = _aim + _lift + Vector3(0.0, -_drop, 0.0) + flourish()
 
 
 # The shake and the sway, summed, and ZERO unless playback has BORROWED the view. That flag is the
@@ -457,6 +491,57 @@ static func sway_offset(strength: float, elapsed: float) -> float:
 	return Pacing.SWAY_AMPLITUDE * strength * bob / 1.5
 
 
+# How far below the AIM a world point can fall before it leaves the bottom of the frame (#602
+# round 6), in world units. Pure, because the projection is three numbers and a test should not
+# need a viewport. The screen edge subtends fov/2 around the view axis; a vertical drop of d below
+# the aim presents d*cos(pitch) perpendicular to that axis AND recedes d*sin(pitch) along it, so
+# the edge is where d*cos(p) / (D + d*sin(p)) = tan(fov/2), i.e. d = D*tan(h) / (cos p - sin p *
+# tan h). THE RECESSION TERM IS NOT OPTIONAL: round 5 shipped d = D*tan(h)/cos(p) -- ~30% shallow
+# at this game's numbers -- and the death bar assembled just inside the frame it was meant to be
+# under. At pitch + fov/2 >= 90 a plumb line never exits the frame bottom; the denominator floor
+# keeps the answer finite there rather than meaningless.
+static func frame_drop(distance: float, fov_degrees: float, pitch_degrees: float) -> float:
+	var half := deg_to_rad(fov_degrees * 0.5)
+	var pitch := absf(deg_to_rad(pitch_degrees))
+	var denom := cos(pitch) - sin(pitch) * tan(half)
+	if denom < 0.05:
+		denom = 0.05
+	return distance * tan(half) / denom
+
+
+# The world y of the frame's bottom edge once every eased channel ARRIVES (#602 round 8). Every
+# term is deliberately the TARGET, never the live value: the aim is HELD under playback, the lift
+# and the drop ease toward these, and the dolly only ever moves the camera CLOSER -- a shallower
+# frame -- so this is the DEEPEST the frame's bottom can reach from here, and a burst anchored
+# under it cannot be descended onto by a channel still settling (a body can die mid-ease). The
+# flourish is excluded: a shake is transient and bounded well inside the burst's own margin.
+func settled_frame_floor() -> float:
+	return _aim.y + _target_lift.y - _target_drop \
+			- frame_drop(_target_distance, _camera.fov, _pitch_degrees)
+
+
+# How the drop channel closes on its target, and pure the same way -- ASYMMETRIC, which is the whole
+# of the cliff follow (#602).
+#
+# DOWN LANDS IMMEDIATELY: the camera is chasing a body in free fall at eight cells a second, and any
+# easing at all is lag, which drops it out of the bottom of the frame -- the exact thing the ticket
+# exists to stop. UP is eased, because the climb back is nobody's animation but the camera's own and
+# wants to be a shot; it is also what leaves the camera still deep in the pit while the death jolt
+# and the down-beat's linger play out over it.
+#
+# The channel runs NEGATIVE since round 4 -- a followed body standing ABOVE the shot's base aims
+# the camera up at it -- and the whole negative range is EASED both ways: the snap exists to glue
+# the shot to a body in free FALL, and below zero there is no fall, only a re-frame, which wants to
+# be a glide. The one kink this buys is a ride that crosses zero mid-fall switching from ease to
+# snap as it does; declared rather than smoothed, because a second rate would be a second answer.
+#
+# `blend` rather than a delta so the caller owns the headless escape, exactly as the aim's does.
+static func recovered(current: float, target: float, blend: float) -> float:
+	if target >= current and current >= 0.0:
+		return target
+	return lerpf(current, target, blend)
+
+
 # The impact door. STRONGEST WINS, measured against what is LEFT of a jolt in flight rather than
 # against what it started at -- the holds' own rule ("the loudest single one wins, by value"),
 # applied to an impulse. Summing would make a three-victim volley hit three times as hard as a duel,
@@ -478,14 +563,15 @@ func dolly_to(emphasis: float) -> void:
 # Where the zoom actually eases to: the player's distance, less whatever the director is leaning in.
 #
 # THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that is the whole care here.
-# This rig has no zoom-in floor by dev ruling (asked twice) -- scrolling in past the aim point takes
-# the camera through its target to look back, which is his call for HIS hand. A director subtracting
-# from an already-close player would inherit that hole and fly the camera through a unit on the exact
-# beat it most wants to be looking at one.
-#
-# So the effective floor is the lower of DOLLY_FLOOR and where the player already is: closer than the
-# floor, and the push-in contributes nothing at all rather than the floor yanking them back OUT --
-# which would be a leash on the wheel, the thing #520 refused.
+# This rig has no zoom-in floor on the WHEEL by dev ruling (asked twice) -- scrolling in past the
+# aim point takes the camera through its target to look back, which is his call for HIS hand, and
+# that ruling keeps its scope: outside playback. The dolly only runs under a borrowed view, where
+# the base distance is the DIRECTOR's own since #602 round 4 ("we control the camera, fully"), and
+# the floor still caps the dolly's CONTRIBUTION, never the total: a base already closer than the
+# floor -- a trained distance tuned tight -- gets no push-in rather than being pulled back OUT,
+# which would be the push-in doing the opposite of its name. The 2026-08-26 comment justified this
+# arm as protecting the player's wheel; the wheel is gone from playback and the arithmetic stands
+# on its own reason.
 func _dollied_distance() -> float:
 	if _dolly <= 0.0 or not _view_borrowed:
 		return _target_distance
@@ -689,6 +775,12 @@ func stash_view() -> void:
 	# claim landing moments after a big hit does not inherit the tail of that hit's jolt.
 	_shake_amplitude = 0.0
 	_shake_elapsed = 0.0
+	# ...and it opens ON THE BOARD (#602). The drop is polled below the playback gate, so a pass that
+	# ended while the camera was still climbing out of a pit would hand the next one a rig hanging in
+	# mid-air with nobody publishing a reason. Both channels are zeroed here rather than gated inside
+	# _apply_position the way the flourish is, because a release must be a CLIMB and not a cut.
+	_drop = 0.0
+	_target_drop = 0.0
 
 
 # ...and on the edge back out. A no-op unless something is actually borrowed, so a release with no
@@ -708,6 +800,11 @@ func restore_view() -> void:
 	# The tilt comes back with the rest (#586). A player who tilted to read a pit and then pressed
 	# Execute is standing where they were standing; the pitch is part of that, exactly as the yaw is.
 	_target_pitch_degrees = _borrowed_pitch_degrees
+	# ...and the camera climbs out of whatever pit the last beat left it in (#602), on the drop's own
+	# rate rather than with the pan. The TARGET only: the view return is the most visible pan in the
+	# game, and cutting the height back at the same instant would make it start from a place the
+	# player never saw.
+	_target_drop = 0.0
 
 
 # Anything that redefines the OPENING SHOT is a new board, and a view borrowed from the old one
@@ -715,14 +812,25 @@ func restore_view() -> void:
 # would otherwise fire the restore above on a board that no longer exists.
 func drop_stashed_view() -> void:
 	_view_borrowed = false
+	# ...and the fall goes with it, LIVE VALUE AND ALL (#602). This is the one door where the drop is
+	# cut rather than climbed out of: restore_view hands a view back to a player who was watching, so
+	# it eases, while a board swap means the pit the camera is in does not exist any more.
+	#
+	# It has to be here rather than left to the poll, because the poll is below the playback gate and
+	# a swap releases the lock -- so a pass interrupted mid-plummet (F2, Mission Select, a scenario
+	# load from the dev tab) had nothing left publishing a depth and nothing left to zero it, and the
+	# rig stayed under the new board for ever. Found by the shared-board fixture, not by reasoning.
+	_drop = 0.0
+	_target_drop = 0.0
 
 
 func _process(delta: float):
 	var blend := 1.0 - exp(-smoothing * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	# ...toward the DOLLIED distance (#520 diff 2c), which is _target_distance untouched unless the
-	# director is leaning in. The player's own value is never written, so the wheel keeps working
-	# under a push-in and the view handed back at the release is the distance they chose.
+	# director is leaning in. The target itself is never written by the dolly, so a beat ending
+	# publishes 0 and the shot eases back to its state's own base -- and the stashed view handed
+	# back at the release is still the distance the player chose.
 	_camera.position.z = lerpf(_camera.position.z, _dollied_distance(), blend)
 	# The third eased channel (#586), on the SAME rate as the yaw: they are two axes of one drag, and
 	# a pitch that settled at a different speed would make a diagonal drag curve. Plain lerpf rather
@@ -771,6 +879,13 @@ func _process(delta: float):
 	var glide := 1.0 if DisplayServer.get_name() == "headless" else 1.0 - exp(-glide_smoothing * delta)
 	_aim = _aim.lerp(_target_aim, glide)
 	_lift = _lift.lerp(_target_lift, glide)
+	# ...and the drop, on its OWN rate (#602) rather than the glide above: this one is asymmetric, and
+	# the climb back out of a pit is a slower, more deliberate move than a pan across the board. Same
+	# headless escape, so a case sampling the rig reads the decision instead of frame timing; one that
+	# wants to watch the curve supplies the blend and calls recovered() directly.
+	var recover := 1.0 if DisplayServer.get_name() == "headless" \
+			else 1.0 - exp(-Pacing.CLIFF_RECOVER * delta)
+	_drop = recovered(_drop, _target_drop, recover)
 
 	# The flourish clocks (#520 diff 2b). The headless escape is HERE, on the clock, rather than on
 	# the offsets -- both curves are naturally zero at t = 0 (a sine of nothing), so a headless run

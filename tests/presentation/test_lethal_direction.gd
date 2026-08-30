@@ -191,19 +191,22 @@ func test_the_push_in_never_takes_the_camera_through_the_board() -> void:
 	).is_equal_approx(4.0, 0.0001)
 
 
-func test_a_player_already_closer_than_the_floor_keeps_their_own_distance() -> void:
-	# The floor is on the DOLLY'S CONTRIBUTION, never on the total -- so it cannot re-introduce the
-	# zoom-in floor the dev had removed. Closer than the floor and the push-in simply does nothing;
-	# it must not yank them back OUT to it, which would be a leash on the wheel.
+# RENAMED in #602 round 4 (was "a player already closer..."): the base is the DIRECTOR's own now
+# -- the wheel is dead under playback -- but the arithmetic stands on its own reason, and this
+# case is what proved that when the round briefly deleted the arm and it went red.
+func test_a_base_already_closer_than_the_floor_is_not_pulled_out_to_it() -> void:
+	# The floor is on the DOLLY'S CONTRIBUTION, never on the total. A trained distance tuned
+	# tighter than the floor gets no push-in; the push-in must not shove the shot back OUT to the
+	# floor, which would be the effect doing the opposite of its name on the tightest shots.
 	var rig := _rig()
 	Pacing.CINEMATIC_DIRECTION = 1.0
 	Pacing.DOLLY_IN = 3.0
 	Pacing.DOLLY_FLOOR = 4.0
 	rig.stash_view()
-	rig.set_zoom(2.0)             # the player has scrolled well past the floor
+	rig.set_zoom(2.0)             # the director's base sits well past the floor
 	rig.dolly_to(1.0)
 	assert_float(rig._dollied_distance()).override_failure_message(
-			"the push-in pulled the player back OUT to the floor -- that is the wheel floor, restored"
+			"the push-in pulled the shot back OUT to the floor -- the contribution cap is gone"
 	).is_equal_approx(2.0, 0.0001)
 
 

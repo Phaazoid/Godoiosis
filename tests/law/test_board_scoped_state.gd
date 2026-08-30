@@ -38,11 +38,14 @@ const BOARD_SCOPED := {
 	"_flight": "BoardSpace.clear_staging(",
 	"_flight_plan": "BoardSpace.clear_staging(",
 	"_flight_elapsed": "BoardSpace.clear_staging(",
+	"_flight_total": "BoardSpace.clear_staging(",   # #602 round 7: dies in _end_flight with elapsed
 	"_flight_from": "BoardSpace.clear_staging(",
 	"_flight_to": "BoardSpace.clear_staging(",
 	"_flight_entering": "BoardSpace.clear_staging(",
 	"_camera_lift": "BoardSpace.clear_staging(",
 	"_camera_lift_driven": "BoardSpace.clear_staging(",
+	# #602 round 7: the cut flag rides the lift channel and dies in release_camera_lift with it.
+	"_camera_lift_snap": "BoardSpace.clear_staging(",
 }
 
 # Process-scoped and therefore safe to survive a board reset, but NOT named by a knob table.

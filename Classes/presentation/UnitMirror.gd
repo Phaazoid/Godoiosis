@@ -235,6 +235,20 @@ var cinematic_playback := false
 enum Impact { HIT, DOWN }
 var report_impact: Callable
 
+# Where the bottom of the shot IS, in world y -- wired by battle3d exactly as report_impact is,
+# because only the host knows the rig (#602 round 4). A void death's burst is raised to this line
+# so the cubes rise into the frame the camera is actually holding: the round-2 arithmetic re-derived
+# the camera's stop from the body's own fall, and those are two different bases the moment the
+# fight's stage sits higher than the void's lip -- on the pillar board, five and a half units of
+# difference, and no slider setting could close it.
+var frame_floor: Callable
+
+# ...and whether a void death's burst is still in the air, for the camera to hold its shot on
+# (#602 round 4): true from the burst until every cube has landed, read back through
+# death_show_live(). The camera used to start its climb the frame the body was freed, racing the
+# very show the hold at the bottom exists for -- and winning at every recover rate.
+var _death_show := false
+
 var units_root: Node2D
 
 # The elevation store (#273); pushed in by battle3d beside units_root. A unit stands on the
@@ -266,6 +280,17 @@ func _process(_delta: float) -> void:
 	if units_root != null:
 		reconcile()
 	_refresh_facing_on_camera_turn()
+	# The show ends when the last cube lands. Cleared here rather than inside death_show_live so a
+	# read is a read -- and BEFORE any later burst could re-arm it, an ordinary hit's cubes cannot
+	# hold the camera in a pit: only _on_unit_died sets the flag.
+	if _death_show and _debris.live_count() == 0:
+		_death_show = false
+
+
+# Whether a void death's cubes are still flying (#602 round 4). The camera holds its dropped shot
+# exactly as long as this is true -- see battle3d._death_show_depth, the one reader.
+func death_show_live() -> bool:
+	return _death_show
 
 
 # Facing is judged against the LIVE camera, but _sync only re-judges a sprite that MOVED
@@ -395,33 +420,42 @@ func ghost_count() -> int:
 	return visible_count
 
 
-func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
-	# The BOARD point, which is what every derivation below reads — never the written position,
-	# which since #321 also carries the effect offset.
-	var previous := sprite.position - sprite.art_offset
-	# The height comes from the cell the sprite is OVER, not from unit.movement.cell: mid-walk the
-	# pixel position is between cells, and reading the destination would pop the sprite to the new
-	# level before it arrives. Derived from the same pixels that place X and Z, so it steps up as
-	# the sprite crosses the edge.
-	var over := Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
+# --- where a unit stands, and how far it has fallen (#602) --------------------------------------
+#
+# EXTRACTED from _sync unchanged, because the CAMERA asks the same question and a second spelling of
+# it is exactly the disagreement #472 was filed for. Static and pure, so a case can pin the rule
+# with no scene at all; the two readers are the sprite placement below and battle3d._mirror_camera.
+
+# The cell a unit's PIXELS sit over, not unit.movement.cell: mid-walk the pixel position is between
+# cells, and reading the destination would pop the sprite to the new level before it arrives.
+# Derived from the same pixels that place X and Z, so it steps up as the sprite crosses the edge.
+static func cell_under(unit: Unit) -> Vector2i:
+	return Vector2i(floori(unit.position.x / PIXELS_PER_CELL),
 			floori(unit.position.y / PIXELS_PER_CELL))
+
+
+# Where the unit is STANDING in world Y -- the surface under those pixels, unless one of the three
+# vertical animations owns the height outright.
+#
+# The airborne shove (#259 rework; the fall became a BEAT of the slide in #472). While sliding,
+# height is SLAVED to the horizontal motion, never rate-limited -- the slide runs many cells a
+# second, so an eased height cannot track a ramp and reads as floating (measured, dev report).
+# Airborne holds the launch height; ground contact follows the surface plane directly under the
+# sprite (surface_height_at -- ramp-aware and continuous, so a tumble STICKS to the slope).
+#
+# There is no ramp/flat LANDING fork here any more, and its absence is the #472 fix. This used
+# to begin ground contact on any ramp landing, on the theory that a ramp's high edge meets the
+# flight level -- true only at a drop of ONE down a matching slope, which is the sole case the
+# resolver calls a slide-on. Every other ramp landing therefore snapped by the difference, in
+# one frame, halfway through the final flight segment. MovementComponent now ends the flight at
+# the edge and FALLS there, so by the time `airborne` goes false the sprite is already on the
+# surface and there is nothing left to reconcile.
+#
+# Both falls are checked BEFORE the slide: each owns the height outright while it runs, and the
+# slide branch below would otherwise haul the sprite back to the lip it is dropping past.
+static func stand_height(unit: Unit, heights: BoardHeights) -> float:
+	var over := cell_under(unit)
 	var stand_y := BoardSpace.surface_point(over, heights).y
-	# The airborne shove (#259 rework; the fall became a BEAT of the slide in #472). While sliding,
-	# height is SLAVED to the horizontal motion, never rate-limited -- the slide runs many cells a
-	# second, so an eased height cannot track a ramp and reads as floating (measured, dev report).
-	# Airborne holds the launch height; ground contact follows the surface plane directly under the
-	# sprite (surface_height_at -- ramp-aware and continuous, so a tumble STICKS to the slope).
-	#
-	# There is no ramp/flat LANDING fork here any more, and its absence is the #472 fix. This used
-	# to begin ground contact on any ramp landing, on the theory that a ramp's high edge meets the
-	# flight level -- true only at a drop of ONE down a matching slope, which is the sole case the
-	# resolver calls a slide-on. Every other ramp landing therefore snapped by the difference, in
-	# one frame, halfway through the final flight segment. MovementComponent now ends the flight at
-	# the edge and FALLS there, so by the time `airborne` goes false the sprite is already on the
-	# surface and there is nothing left to reconcile.
-	#
-	# Both falls are checked BEFORE the slide: each owns the height outright while it runs, and the
-	# slide branch below would otherwise haul the sprite back to the lip it is dropping past.
 	if unit.movement.plummeting:
 		stand_y -= unit.movement.plummet_depth * BoardSpace.CELL_SIZE
 	elif unit.movement.landing_falling:
@@ -434,6 +468,24 @@ func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
 		else:
 			stand_y = BoardSpace.surface_height_at(over, unit.position.x / PIXELS_PER_CELL,
 					unit.position.y / PIXELS_PER_CELL, heights)
+	return stand_y
+
+
+# ...and the SAME fact read from the other end (#602): how far below the surface it would otherwise
+# stand on the unit has got. Positive while it falls, zero standing, and NEGATIVE while a shove
+# holds it in the air over a hole -- the third animation above, and that sign is why the camera
+# floors this rather than the floor living here. A subtraction rather than a fourth branch, so the
+# two answers cannot drift: there is one arithmetic and this is its complement.
+static func fall_depth(unit: Unit, heights: BoardHeights) -> float:
+	return BoardSpace.surface_point(cell_under(unit), heights).y - stand_height(unit, heights)
+
+
+func _sync(unit: Unit, sprite: UnitSprite3D) -> void:
+	# The BOARD point, which is what every derivation below reads — never the written position,
+	# which since #321 also carries the effect offset.
+	var previous := sprite.position - sprite.art_offset
+	var over := cell_under(unit)
+	var stand_y := stand_height(unit, heights)
 	var stand := Vector3(unit.position.x / PIXELS_PER_CELL,
 			stand_y, unit.position.y / PIXELS_PER_CELL)
 	# Half a ROW down, not half a cell (#427 slice 2): the standing point sits exactly on a row
@@ -635,7 +687,7 @@ func _settle_health_change(unit: Unit, id: int, bar: UnitHealthBar) -> void:
 # the red blocks should fly away"). Reached by signal because nothing else can reach it: see the
 # connect site in reconcile. The standing/lost split comes off the RENDERED count, so each cube
 # leaves wearing what it was showing rather than what an HP number says it should have been.
-func _on_unit_died(_unit: Unit, id: int) -> void:
+func _on_unit_died(unit: Unit, id: int) -> void:
 	# Above the same gate, for the same reason, and this one is NOT redundant with the poll's report
 	# (#520 diff 2b): die() emits and queue_frees in ONE frame and the loop above skips a unit already
 	# queued for deletion, so the poll NEVER observes a unit at 0 HP. A killing blow therefore reaches
@@ -647,13 +699,39 @@ func _on_unit_died(_unit: Unit, id: int) -> void:
 	if bar == null or not is_instance_valid(bar) or not bar.visible:
 		return
 	var standing := bar.filled_block_count()
+	var lift := 0.0
+	if unit.movement.plummet_depth > 0.0:
+		# A void death is a SHOW: the camera holds its dropped shot until these cubes land (the
+		# flag), and they leave from just under the frame it is actually holding (the anchor) --
+		# never from an arithmetic re-derivation of where it stopped. Zero lift for every other
+		# death, and headless, where plummet() returns before it records any depth at all.
+		_death_show = true
+		if frame_floor.is_valid():
+			lift = burst_lift(float(frame_floor.call()), bar.block_world_position(0).y)
 	var positions: Array[Vector3] = []
 	var colors := PackedColorArray()
 	for step in bar.block_count():
 		var index := bar.block_count() - 1 - step   # see _burst_lost: the march starts at the top right
-		positions.append(bar.block_world_position(index))
+		positions.append(bar.block_world_position(index) + Vector3(0.0, lift, 0.0))
 		colors.append(bar_fill_color if index < standing else bar_missing_color)
 	_throw(bar, positions, colors, block_death_power)
+
+
+# How far to RAISE a void death's burst so it erupts from under the camera's view (#602 round 4,
+# dev: "all we see after (after a beat) is the health bar bricks exploding from under the camera's
+# view"). The anchor is the SHOT's own frame floor, handed in by the host -- the round-2 spelling
+# derived the camera's stop from the body's fall instead, which is a second BASE as well as a
+# second spelling: the shot hangs off the stage's height and the body off the void's lip, and on a
+# fight above a pit those disagree by the whole cliff.
+#
+# Legitimate rather than a cheat: these cubes already leave the readout's SOCKETS rather than a
+# body, and they are a descriptor, not debris with mass. Never lowered -- a burst already inside
+# the frame stays where the body is.
+#
+# Static and public because it is the arithmetic worth pinning and it needs no scene -- the burst
+# itself is a particle throw a suite cannot watch, so what a case can hold is WHERE it starts.
+static func burst_lift(anchor_y: float, lowest_block_y: float) -> float:
+	return maxf(anchor_y - lowest_block_y, 0.0)
 
 
 # The cubes between two HP readings, thrown from the sockets they were standing in. They leave in the

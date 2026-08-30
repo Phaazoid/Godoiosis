@@ -689,3 +689,57 @@ func test_disabling_manual_input_refuses_keys_but_keeps_smoothing_alive() -> voi
 		rig._process(0.016)
 	assert_float(_camera().position.z).override_failure_message(
 			"the camera never moved — _process is dead, not merely input-gated").is_greater(start + 4.0)
+
+
+# --- where the frame's bottom edge is (#602 round 6) ---------------------------------------------
+
+# Pure: three numbers of projection, no viewport. A vertical drop below the aim presents its
+# cos(pitch) component across the view axis AND recedes sin(pitch) along it, so the frame edge is
+# d = D*tan(fov/2) / (cos p - sin p * tan(fov/2)). What rides on it: a void death's burst
+# assembles its grid BELOW this line and crests up into view (dev: "it needs to form off screen,
+# and explode upwards into view").
+func test_the_frame_drop_is_the_projected_half_height_when_the_camera_is_level() -> void:
+	assert_float(CameraRig3D.frame_drop(10.0, 30.0, 0.0)).override_failure_message(
+			"a level camera's frame drop is not distance times tan(fov/2)") \
+		.is_equal_approx(10.0 * tan(deg_to_rad(15.0)), 0.001)
+
+
+func test_a_pitched_frame_edge_is_deeper_than_the_formula_that_forgot_recession() -> void:
+	# THE REGRESSION PIN: round 5 shipped d = D*tan(h)/cos(p), which ignores that the point also
+	# moves AWAY along the view axis -- ~30% shallow at this game's numbers, so the death bar
+	# assembled just inside the frame it was meant to be under. The true edge is strictly deeper.
+	var d := 7.0
+	var wrong := d * tan(deg_to_rad(15.0)) / cos(deg_to_rad(40.0))
+	assert_float(CameraRig3D.frame_drop(d, 30.0, -40.0)).override_failure_message(
+			"the frame edge lost its recession term again -- the death bar will assemble on screen"
+	).is_greater(wrong + 0.1)
+
+
+func test_the_frame_drop_grows_with_distance_and_stays_finite_looking_down() -> void:
+	assert_float(CameraRig3D.frame_drop(4.0, 30.0, -40.0)).is_less(
+			CameraRig3D.frame_drop(11.0, 30.0, -40.0))
+	# At pitch + fov/2 past vertical the plumb line never exits the frame; the floor keeps the
+	# answer finite and positive rather than infinite or negative.
+	var steep := CameraRig3D.frame_drop(7.0, 30.0, -80.0)
+	assert_bool(steep > 0.0 and steep < 1000.0).override_failure_message(
+			"a steep pitch made the frame edge infinite or negative").is_true()
+
+
+func test_the_settled_frame_floor_reads_the_targets_not_the_easing_channels() -> void:
+	# A body can die while the drop is still easing toward its held depth, and an anchor measured
+	# off the LIVE frame leaves the frame still descending onto it (#602 round 8). Targets are the
+	# deepest this frame can get -- the dolly only moves closer, the eases only approach -- so the
+	# burst anchors under them. No settle between the writes and the read, deliberately: the live
+	# channels are still wherever the scene opened, which is what gives the target-vs-live
+	# distinction teeth.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 6.0, 4.0))
+	rig.lift_to(Vector3(0.0, 40.0, 0.0))
+	rig.drop_to(5.0)
+	rig.set_zoom(11.0)
+	var expected := 6.0 + 40.0 - 5.0 \
+			- CameraRig3D.frame_drop(11.0, _camera().fov, rig._pitch_degrees)
+	assert_float(rig.settled_frame_floor()).override_failure_message(
+			"the settled floor is not composed from the target channels -- a mid-ease death "
+			+ "leaves the frame descending onto the burst's sockets").is_equal_approx(
+			expected, 0.001)

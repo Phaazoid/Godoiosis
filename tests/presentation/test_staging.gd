@@ -468,6 +468,33 @@ func test_a_landing_bumps_the_version_and_a_plain_frame_does_not() -> void:
 	assert_int(BoardSpace.staging_version).is_greater(before)
 
 
+func test_a_landed_exit_tile_lands_ONCE_however_long_the_flash_holds_the_flight_open() -> void:
+	# An EXIT's landed cell keeps holding its socket offset (absence means "home at zero", which an
+	# exit's home is not), and before #602 round 7 every frame past its land time erased and
+	# re-added it -- a landing per frame, a version bump per frame, the whole board's props rebuilt
+	# per frame, for the exit's whole landing window. The flash tail the exit now carries just made
+	# it long enough to see.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, Vector3.ZERO, -lift, false)
+
+	assert_bool(BoardSpace.advance_flight(StagingFlight.total(plan) + 0.01)) \
+		.override_failure_message("no tile landed by the end of its own schedule").is_true()
+	var landed_version := BoardSpace.staging_version
+
+	for _frame in range(5):
+		assert_bool(BoardSpace.advance_flight(0.016)).override_failure_message(
+				"a tile that was already home landed again -- the flash tail rebuilds the board "
+				+ "every frame").is_false()
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"the version moved after every tile was home").is_equal(landed_version)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+
+
 func test_clearing_the_staging_takes_the_flight_with_it() -> void:
 	# The F2 case. clear_board() calls clear_staging(), and if the flight did not die INSIDE that
 	# door a board swapped mid-transition would hand the fresh board columns in the air with nothing
@@ -635,3 +662,159 @@ func _queue_a_move(unit: Unit) -> void:
 func _settle() -> void:
 	await await_idle_frame()
 	await await_idle_frame()
+
+
+# --- the tear-out LOOKS AT THE FIGHT (2026-08-29, found in play) --------------------------------
+
+# The tear-out is the first thing a pass plays and nothing before it had aimed the camera:
+# _frame_the_walk returns early on an EMPTY span, which is what a hold-position queue produces, so
+# the whole brace/flight/settle stretch played over wherever the view happened to be left. On the
+# dev's report that was fifteen cells away and the frame was simply empty for the entire transition.
+#
+# Driven at _stage_the_fight ALONE rather than through a whole pass, because the later beats pan to
+# their own subjects and would hide whichever answer this phase gave -- the phase that OWNS the
+# property is the phase to drive (#521 slice B's own lesson, one case over).
+func test_the_tear_out_looks_at_the_fight_before_the_ground_moves() -> void:
+	PlayerSettings.set_choice(PlayerSettings.Setting.BATTLE_ZOOM_MODE, PlayerSettings.BattleZoom.ALWAYS)
+	var unit := _a_unit()
+	_swing_at_open_ground(unit)
+	var plan: ResolvedPlan = _game.squad_manager.resolve_plan(unit.squad, _game._board())
+	var sheet := BeatSheet.read(unit.squad, plan)
+	assert_bool(not sheet.cells.is_empty()).override_failure_message(
+			"fixture: this pass puts no fight on stage").is_true()
+
+	var grid: TileMapLayer = _game.grid
+	var stage := _world_box(sheet.cells, grid)
+	# Park the camera well outside the fight -- the state a hold-position queue leaves it in.
+	var away: Vector2 = stage.get_center() + Vector2(GridUtils.TILE_SIZE * 15, GridUtils.TILE_SIZE * 9)
+	_game.camera_controller.global_position = away
+	_game.camera_controller.target_position = away
+	assert_bool(stage.has_point(away)).override_failure_message(
+			"the camera was parked INSIDE the fight; the case proves nothing").is_false()
+
+	await _game.order_executor._stage_the_fight(sheet)
+	await _settle()
+
+	assert_bool(stage.has_point(_game.camera_controller.global_position)).override_failure_message(
+			"the ground tore out with the camera still at %s, outside the fight's own footprint %s"
+			% [_game.camera_controller.global_position, stage]).is_true()
+	# ...and the stage was PUBLISHED for the mirror before any of it (#602 round 4) -- the aim
+	# reads cam.shot_cells, so an unpublished stage has the approach hugging the terrain under the
+	# moving centre, scaling any cliff on the way in.
+	assert_bool(_game.camera_controller.shot_cells.is_empty()).override_failure_message(
+			"the tear-out never published its stage -- the camera aims at the ground, not the fight"
+	).is_false()
+	BoardSpace.clear_staging()
+	# This case never claims playback, so no release edge clears the publish for it. Typed local:
+	# a bare [] on a typed Array property errors at runtime through the untyped `_game` chain.
+	var cam: CameraController = _game.camera_controller
+	cam.shot_cells = []
+
+
+# The world-space box a cell set occupies, grown by a cell so the edge counts as inside. Derived
+# from the cells the sheet names rather than spelled as a midpoint, which would be the executor's
+# own arithmetic asserting against itself.
+func _world_box(cells: Array[Vector2i], grid: TileMapLayer) -> Rect2:
+	var box := Rect2(GridUtils.cell_world(grid, cells[0]), Vector2.ZERO)
+	for cell in cells:
+		box = box.expand(GridUtils.cell_world(grid, cell))
+	return box.grow(GridUtils.TILE_SIZE)
+
+
+# --- the interleave harness (#602 round 6) ------------------------------------------------------
+#
+# THE FRAME-DOMAIN ORDERINGS, driven by hand. Headless collapses every transition to zero frames
+# (the executor's beat returns instantly, so begin and end land in one synchronous stretch and no
+# flight map is ever built) -- which is exactly why five reports of vanished ground survived a
+# green suite. These cases build the frames themselves: begin a flight, advance its clock in
+# chosen steps, let the real drivers run between, and end it in EITHER ordering -- after the last
+# landing was observed, or before (the executor's timer resuming first, which is the race found on
+# the pillar board). The invariant is the same both ways: every staged column is SEATED somewhere.
+
+func _column_rows(map: GridMap, cell: Vector2i) -> int:
+	var rows := 0
+	for y in range(-8, 60):
+		if map.get_cell_item(Vector3i(cell.x, y, cell.y)) != GridMap.INVALID_CELL_ITEM:
+			rows += 1
+	return rows
+
+
+func test_an_orderly_flight_end_leaves_every_column_seated() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	await _settle()
+
+	BoardSpace.advance_flight(StagingFlight.total(plan) + 0.1)   # every landing observed
+	await _settle()
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s never seated in the diorama after an orderly end" % cell).is_greater(0)
+	BoardSpace.clear_staging()
+	await _settle()
+
+
+func test_a_flight_ended_by_the_timer_first_still_seats_every_column() -> void:
+	# THE RACE (#602 round 6, the pillar board's vanished platforms): the executor's transition
+	# await and advance_flight cross the landing time on the same frame, and when the timer wins,
+	# the tile it beat is mid-air at end_flight_now -- its column is in a flight map about to be
+	# dropped, and nothing had bumped the version to re-seat it. The fix is _end_flight announcing
+	# itself; this case is the race replayed deliberately.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(plan)
+	BoardSpace.begin_flight(plan, -lift, Vector3.ZERO, true)
+	await _settle()
+
+	# Advance to where the LAST tile is still mid-air, and let the drivers draw that state.
+	BoardSpace.advance_flight(total - 0.5)
+	await _settle()
+	assert_bool(BoardSpace.in_flight(cells[cells.size() - 1])).override_failure_message(
+			"fixture: the last tile already landed; the race cannot be replayed").is_true()
+
+	# The timer resumes first: the executor finalizes with a tile the advance never landed.
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s was dropped with its flight map and re-seated nowhere -- the raced end is "
+				% cell + "invisible to the render").is_greater(0)
+	assert_bool(BoardSpace.flight_active()).is_false()
+	BoardSpace.clear_staging()
+	await _settle()
+
+
+func test_a_raced_exit_end_still_brings_every_column_home() -> void:
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var entry := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(entry, -lift, Vector3.ZERO, true)
+	BoardSpace.advance_flight(StagingFlight.total(entry) + 0.1)
+	BoardSpace.end_flight_now()
+	await _settle()
+
+	var exit := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(exit)
+	BoardSpace.begin_flight(exit, Vector3.ZERO, -lift, false)
+	await _settle()
+	BoardSpace.advance_flight(total - 0.5)
+	await _settle()
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+	await _settle()
+
+	for cell in cells:
+		assert_int(_column_rows(_board, cell)).override_failure_message(
+				"%s never came home from a raced exit end" % cell).is_greater(0)
+		assert_int(_column_rows(_staged, cell)).override_failure_message(
+				"%s is drawn in the diorama AND the board" % cell).is_equal(0)

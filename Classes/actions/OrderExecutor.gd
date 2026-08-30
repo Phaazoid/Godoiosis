@@ -482,6 +482,24 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 			if not on_stage.has(cell):
 				on_stage[cell] = true
 				cells.append(cell)
+	# LOOK AT THE FIGHT FIRST (2026-08-29, found in play). The tear-out is the first thing a pass
+	# plays and nothing before it had aimed the camera: _frame_the_walk returns early on an empty
+	# span -- which a hold-position queue is by definition -- so the whole brace/flight/settle
+	# stretch, seven to twelve seconds at the shipped timings, played over wherever the player
+	# happened to leave the view. On his report that was fifteen cells from the fight.
+	#
+	# The 2D camera, not the rig: it is what the mirror reads, so aiming anything else would be a
+	# second answer to where playback is looking. pan_to_position rather than pan_to, and for the
+	# reason it exists -- the diorama is a PLACE, and following one of its occupants would drag the
+	# rest of the stage out of frame.
+	#
+	# THE STAGE IS PUBLISHED BEFORE THE PAN (#602 round 4, found on the pillar board): the mirror
+	# aims at the stage's height from the pan's first frame, where waiting for stage() to fill
+	# BoardSpace._staged had the whole approach hugging the ground under the moving centre --
+	# scaling the cliff face on the way in. It is also what the mirror reads as "frame the WIDE
+	# shot", so the tear-out is watched from a distance that holds all of it.
+	game.camera_controller.shot_cells = cells.duplicate()
+	await game.camera_controller.pan_to_position(_stage_centre(cells), Pacing.PLAYBACK_PAN)
 	# The board holds still, intact, before it comes apart. BEFORE stage(), not after: staging is
 	# what puts the cells in the diorama, and a beat between that and begin_flight would hold them
 	# in the sky rather than on the board.
@@ -491,6 +509,39 @@ func _stage_the_fight(sheet: BeatSheet) -> void:
 	# ...and the assembled diorama holds before the first blow (dev, 2026-08-28: the action used to
 	# start the moment the last tile landed).
 	await Pacing.beat(self, Pacing.TEAR_OUT_SETTLE)
+
+
+# Wait until the rig is back on the board plane (#602 round 2). It waits on the fact the RIG
+# publishes rather than on a beat of its own: the climb is the rig's eased channel, so a beat here
+# would be a second answer to how long it takes and the two would disagree the moment the rate knob
+# moved. See CameraController.fall_depth for why that one fact travels the other way.
+#
+# BOUNDED rather than open. Nothing publishes headlessly, so this returns on its first check there
+# and costs the suite nothing; and a rig that somehow never settles costs ten seconds rather than
+# hanging the pass.
+func _wait_for_the_camera_to_come_home() -> void:
+	var cam: CameraController = game.camera_controller
+	for _frame in range(600):
+		if cam.fall_depth <= 0.01:
+			return
+		await game.get_tree().process_frame
+	push_warning("the camera never climbed back out of its fall -- the tiles are going home anyway")
+
+
+# Where the diorama IS, as a 2D world point -- the centre of the staged set's BOUNDING BOX.
+#
+# The box rather than the mean, so a lone bystander on the far side cannot drag the shot off the
+# fight it is about; a box rather than the sheet's first cell, so a wide brawl is framed rather than
+# one corner of it. Non-empty by construction: _shows_a_fight requires cells, and it is the gate
+# this function's only caller returns on.
+func _stage_centre(cells: Array[Vector2i]) -> Vector2:
+	var lo := cells[0]
+	var hi := cells[0]
+	for cell in cells:
+		lo = Vector2i(mini(lo.x, cell.x), mini(lo.y, cell.y))
+		hi = Vector2i(maxi(hi.x, cell.x), maxi(hi.y, cell.y))
+	var grid: TileMapLayer = game.grid
+	return (GridUtils.cell_world(grid, lo) + GridUtils.cell_world(grid, hi)) * 0.5
 
 
 # The transition itself (#521 slice B): the tiles TRAVEL between their sockets and the diorama
@@ -512,7 +563,12 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 	var socket := -BoardSpace.lift_offset()
 	BoardSpace.begin_flight(plan, socket if entering else Vector3.ZERO,
 			Vector3.ZERO if entering else socket, entering)
-	await Pacing.beat(self, StagingFlight.total(plan))
+	# Each direction's FULL cost, flash included (#602 round 7): the exit's flash plays AFTER its
+	# last tile lands -- it covers the camera's drop home -- so awaiting bare total would tear the
+	# driver down with the screen still white and the camera still up. The entry already contains
+	# its flash unless the knobs are tuned shorter than one; entry_total is that insurance.
+	await Pacing.beat(self,
+			StagingFlight.entry_total(plan) if entering else StagingFlight.exit_total(plan))
 	# Ended HERE rather than left to the driver, and that is what makes the property hold in every
 	# run: headless the await returns without a single frame, so nothing ever advanced the flight
 	# and the tiles would still be sitting at their opening offsets. Every existing staging
@@ -525,11 +581,32 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 func _bring_the_board_home() -> void:
 	var staged := BoardSpace.staged_cells()
 	if not staged.is_empty():
+		# THE DEATH SHOW FINISHES BEFORE ANYTHING MOVES (#602 round 8, dev: "the camera should
+		# never look at where it forms"): release the follow so the depth channel answers the show
+		# -- or zero, and never a living subject's standing fall, which would hold the wait open --
+		# then wait out the held depth AND the climb, and only THEN pan back to the stage's centre.
+		# The shot stays on the pit while the cubes erupt up into it, rises out, and pulls back
+		# wide. The round-4 ruling (the camera comes back to the battle view first, dev 2026-08-29)
+		# keeps its scope: the pan and the climb both still land before the aftermath hold and the
+		# tiles going home -- what moved is only their order between themselves. The pan is what
+		# makes the shot WIDE again, so the last beat's close-up does not watch the tiles leave; the
+		# climb is eased and longer than the aftermath hold, so without the wait the tiles used to
+		# start dropping while the camera was still on its way up.
+		game.camera_controller.follow(null)
+		await _wait_for_the_camera_to_come_home()
+		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
-		# last blow is not immediately swept away by the tiles going home.
+		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
+		# a beat on the diorama rather than a beat spent travelling.
 		await Pacing.beat(self, Pacing.TEAR_OUT_AFTERMATH)
 		await _play_transition(staged, false)
 	BoardSpace.clear_staging()
+	# The stage leaves the air the moment the ground does. The release edge clears it too, but the
+	# tail of execute_orders still runs under the lock -- a stage surviving to there would hold the
+	# WIDE framing over a board that has already gone home. Through a typed local: a bare [] hits a
+	# typed Array property as a RUNTIME error when assigned through the untyped `game` chain.
+	var cam: CameraController = game.camera_controller
+	cam.shot_cells = []
 
 
 # Pause schedule for one phase: the action that OPENS each beat -> how long to hold before it.
