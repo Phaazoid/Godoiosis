@@ -722,4 +722,64 @@ func end_turn() -> Dictionary:
 		turn_manager.end_turn(board.present_factions())
 	var faction := turn_manager.active_faction()
 	squad_manager.reset_faction_actions(faction)
-	return {"ok": true, "faction": _faction_name(faction)}
+
+	# THE OPPONENT ACTS (#665). Until this existed, a headless "playthrough" was played against a
+	# stationary board: end_turn advanced the faction and nothing else, so every enemy sat still
+	# for the whole match while the reports read like real engagements -- the counters in them are
+	# derived from the DRIVER's own attacks during resolution, never an enemy taking a turn.
+	#
+	# Which factions are AI is not a new flag: ScenarioData.ai_factions already declares it per
+	# board (#150), and both shipped missions declare ENEMY. A board built without a scenario (the
+	# test fixtures) declares nobody and is unaffected.
+	#
+	# Loops, because several AI factions can follow one another, and re-reads the faction each pass
+	# rather than assuming one hand-off.
+	var log: Array[String] = []
+	while _is_ai_faction(turn_manager.active_faction()):
+		var acting := turn_manager.active_faction()
+		log.append_array(_take_ai_turn(acting))
+		if mission_tag() != "":
+			break
+		turn_manager.end_turn(_board().present_factions())
+		var next := turn_manager.active_faction()
+		if next == acting:
+			break   # nobody else to hand to; do not spin
+		squad_manager.reset_faction_actions(next)
+	faction = turn_manager.active_faction()
+	return {"ok": true, "faction": _faction_name(faction), "ai_events": log}
+
+
+func _is_ai_faction(faction: Team.Faction) -> bool:
+	return scenario_data != null and scenario_data.ai_factions.has(faction)
+
+
+# One AI faction's whole turn, through the SAME decision the game uses -- AIController's statics,
+# not a headless copy of them (Law #4). What differs here is only what is missing: no camera pan,
+# no pacing beat, and execute() rather than the animated OrderExecutor.
+func _take_ai_turn(faction: Team.Faction) -> Array[String]:
+	var events: Array[String] = []
+	for squad: Squad in AIController.actable_squads(faction, squad_manager):
+		if mission_tag() != "":
+			break
+		# Revalidated per squad for the same reason the game revalidates: the squad that just
+		# acted may have downed this one's leader.
+		if not AIController.is_squad_actable(squad, faction):
+			continue
+		AIController.plan_squad(squad, _board(), squad_manager)
+		if squad_manager.active_squad != squad:
+			# The archetype queued nothing at all (no reachable enemy, nothing fireable). Mark the
+			# squad spent so the faction's turn terminates -- the game reaches the same state via
+			# _end_squad_turn, and without it a hold-only squad would be offered again forever.
+			squad_manager.set_has_acted(squad, true)
+			continue
+		var res := execute()
+		if res.ok:
+			for e in res.get("events", []):
+				events.append(str(e))
+		else:
+			# An AI plan the resolver refuses is a bug worth surfacing, not a silent skip -- the
+			# game's own answer to this (#103) is that an AI squad refused there must still end its
+			# turn, or the identical plan is re-offered every turn forever.
+			events.append("%s squad could not act: %s" % [_faction_name(faction), str(res.error)])
+			squad_manager.set_has_acted(squad, true)
+	return events

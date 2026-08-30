@@ -190,7 +190,21 @@ func _dispatch(cmd: String, args: Dictionary) -> Dictionary:
 			var r = _session.end_turn()
 			if not r.ok:
 				return {"ok": false, "text": "> " + str(r.error)}
-			return {"ok": true, "text": "Turn -> %s" % str(r.faction)}
+			# WHAT THE OPPONENT DID (#664/#665). #613 stopped redrawing the board here, and the
+			# measured consequence was drivers buying a 3 KB overview after every hand-off -- the
+			# pre-registered guard caught it at 1.12 overviews per execute. The cause was not the
+			# missing picture: it was that an AI turn mutated the board and said nothing, so there
+			# was no way to learn what happened except to look at everything.
+			#
+			# The answer is the one `execute` already proved sufficient -- an EVENT LOG. Across
+			# both treated runs, zero batches called `overview` after an execute, because the log
+			# accounts for the pass. The same account, for the enemy's pass, costs a few hundred
+			# bytes against a board redraw.
+			var moves: Array = r.get("ai_events", [])
+			if moves.is_empty():
+				return {"ok": true, "text": "Turn -> %s\n  (nothing happened)" % str(r.faction)}
+			return {"ok": true, "text": "Turn -> %s\n%s"
+					% [str(r.faction), BoardView.render_result(moves)]}
 		_:
 			return {"ok": false, "text": "unknown cmd: " + cmd}
 
