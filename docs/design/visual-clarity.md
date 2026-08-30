@@ -2290,6 +2290,32 @@ camera IS and where it is trying to be. Round 5's forensics spent a session prov
 that the eases were alive and the staging was stuck; those are six numbers now, on the line the
 reporter already writes.
 
+### Round 7 — the flash rides the cut, re-landed (2026-08-30)
+
+Round 5's design returns, on top of a board that provably seats its columns — the dev's play-check
+confirmed round 6's race fix closed the platform holes, so the re-timing lands whole rather than
+piece by piece. **The white-out and the camera's teleport are ONE schedule** (dev: *"the white out
+should always be tied to the last thing that happens, the teleport, no matter what. Its whole
+purpose is to hide the teleport"*): the cut sits at the flash's first full-white frame, and the
+flash anchors to the transition's cut-ward end — the entry's start, the exit's LANDING, the travel
+entry's camera hold. The exit had been borrowing the entry's clock, so its flash played at the
+start over nothing and the 40-unit drop home ran bare after the tiles fell. Now the tiles fall
+dark (watched, deliberately — that part the dev liked), the flash ramps once the last one is home,
+and the camera drops under full white — **snapped, not eased**
+(`BoardSpace.drive_camera_lift(..., snap)` → `CameraRig3D.cut_lift`), because an eased 40-unit
+drop is still settling as the fade reveals it. The schedule lives in `StagingFlight` beside the
+travel it times — `flash_anchor` / `whiteout_level` / `cut_over` / `entry_total` / `exit_total` —
+so the flash, the camera and the executor's await read ONE clock; the executor awaits `exit_total`
+(travel + the whole flash) so the driver is never torn down mid-white.
+
+**And a cell LANDS ONCE** — the re-land the flash tail exposed was never tail-only: an exit's
+landed tile keeps holding its socket offset (absence means "home at zero", which an exit's home is
+not), so every frame of the exit's landing window — first landing to `total`, in every exit the
+game has ever played — erased and re-added it, a `staging_version` bump and a whole-board prop
+rebuild per frame. The guard (`_flight[cell] != _flight_to`) makes a landing land once; the
+round-6 flight-end bump beneath it is what makes ending that longer-lived flight safe on both
+sides of the timer race.
+
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
 landed as #229 above; the PANEL half and Will are both still open); squad-target
