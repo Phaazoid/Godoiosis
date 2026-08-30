@@ -2239,35 +2239,6 @@ inside the round); and **a knob whose store is re-pushed every frame is only tun
 store** (`HealthBlockDebris.lifetime` is overwritten from `block_lifetime` per frame — the
 born-dead-slider guard, read from the other side).
 
-### Round 5 — the flash rides the cut, and the bar forms off screen (2026-08-29)
-
-Two more from the same play-check. **The white-out and the camera's teleport are ONE schedule
-now** (dev: *"the white out should always be tied to the last thing that happens, the teleport,
-no matter what. Its whole purpose is to hide the teleport"*): the cut sits at the flash's first
-full-white frame, and the flash anchors to the transition's cut-ward end — the entry's start, the
-exit's LANDING. The exit had been borrowing the entry's clock, so its flash played at the start
-over nothing and the 40-unit drop home ran bare after the tiles fell. Now the tiles fall dark
-(watched, deliberately — that part the dev liked), the flash ramps once the last one is home, and
-the camera drops under full white — **snapped, not eased** (`BoardSpace.drive_camera_lift(...,
-snap)` → `CameraRig3D.cut_lift`), because an eased 40-unit drop is still settling as the fade
-reveals it. The schedule lives in `StagingFlight` beside the travel it times — `flash_anchor` /
-`whiteout_level` / `cut_over` / `entry_total` / `exit_total` — so the flash, the camera and the
-executor's await read ONE clock; the executor awaits `exit_total` (travel + the whole flash) so
-the driver is never torn down mid-white. One mechanical consequence: the exit flight now outlives
-its last landing, which exposed `advance_flight` re-landing every already-home exit tile per
-frame (a `staging_version` bump and a whole-board prop rebuild each time) — a cell lands ONCE
-now.
-
-**And the death bar forms OFF screen** (dev: *"it needs to form off screen, and explode upwards
-into view"*). Round 4's frame anchor sat 1.5 cells under the frame's CENTRE, which at this game's
-narrow authored fov (30°) is well inside the frame — so the burst's staggered march visibly
-assembled a full health grid on screen before a cube launched. The anchor is the frame's true
-bottom EDGE now: `CameraRig3D.frame_drop(distance, fov, pitch)` = `distance·tan(fov/2)/cos(pitch)`
-(a pitched camera sees deeper below its aim before the edge — ~2.5 units at the trained distance),
-read live off the eased distance so the dolly's lean-in moves the edge with the frame the player
-is actually watching. The grid assembles just under that line and the death burst's own launch
-power carries the cubes up into view.
-
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
 landed as #229 above; the PANEL half and Will are both still open); squad-target
