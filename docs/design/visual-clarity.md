@@ -2180,10 +2180,12 @@ edge actually IS for a downward-pitched camera is `CameraRig3D.frame_drop`:
 `D·tan(fov/2) / (cos p − sin p·tan(fov/2))`, and the recession term in the denominator is the
 whole correction — the frame's bottom lands on ground FARTHER from the camera than the aim point,
 so the tempting `D·tan(fov/2)/cos p` (round 5's formula, reverted with it) reads ~30% shallow at
-the shipped pitch and puts an "off screen" anchor inside the frame. `frame_floor_depth()` feeds
-it the LIVE camera — rendered distance, live fov, live pitch — because the frame the player is
-watching is the only frame "off screen" can be measured against; `PLUMMET_BURST_UNDER` (now 0.5
-cells) is the margin UNDER that edge, still a const for the same reason.
+the shipped pitch and puts an "off screen" anchor inside the frame. Round 6 fed it the LIVE
+camera; **round 8 corrected that to the SETTLED one** (`settled_frame_floor`, which replaced the
+live `frame_floor_depth` with its only caller) — the live frame is transient, and a body dying
+mid-ease left it still descending onto the anchor; the targets are the deepest the frame can get.
+`PLUMMET_BURST_UNDER` (now 0.5 cells) is the margin UNDER that edge, still a const for the same
+reason.
 
 ### The camera comes home before the tiles do
 
@@ -2315,6 +2317,41 @@ game has ever played — erased and re-added it, a `staging_version` bump and a 
 rebuild per frame. The guard (`_flight[cell] != _flight_to`) makes a landing land once; the
 round-6 flight-end bump beneath it is what makes ending that longer-lived flight safe on both
 sides of the timer race.
+
+### Round 8 — the death show owns the SHOT, not just the depth (2026-08-30)
+
+The dev's play-check of round 7: the bar still forms in picture — *"or slightly off picture, but
+then the picture immediately looks at it"* — with the ruling that scopes this round: **"the
+camera should never look at where it forms, only the upward directed results of the explosion
+should be visible."** His report's own View line named the mover in two numbers: `drop 5.0->5.0`
+(round 4's depth hold, working) beside `zoom 8.3 → dist 11.0` — the camera mid-DOLLY over the
+forming bar. A farther camera's frame bottom is DEEPER (~0.45 units per unit of dolly at the
+shipped fov/pitch), so the bar never moved; the frame's edge descended onto it.
+
+Round 4 gated one channel — the drop — on `death_show_live()`. Three movers never joined it, and
+round 8 is those three joining:
+
+- **The trained release edge DEFERS.** The moment the followed body was freed, the edge handed
+  the distance back (`set_zoom(playback_distance)`) — the dolly-out. While the show is live the
+  edge holds; `_trained_seen_id` does not advance, so the ordinary release fires the moment the
+  last cube lands. Deferred, never skipped.
+- **The teardown waits before it pans.** `_bring_the_board_home` panned to the stage centre
+  FIRST and waited for the depth second, so a pass-end death re-framed mid-show. Now: release
+  the follow (so the depth channel answers the show, never a living subject's standing fall,
+  which would hold the wait open), wait out the held depth and the climb, THEN pan. The shot
+  stays on the pit while the cubes erupt up into it, rises, and pulls back wide. The round-4
+  ruling — the camera comes back to the battle view before the tiles drop — keeps its scope:
+  only the pan and the climb swapped places between themselves.
+- **The anchor measures the SETTLED frame** (`CameraRig3D.settled_frame_floor` — aim, target
+  lift, target drop, target distance, the pure `frame_drop` at the end). A body can die while
+  the drop is still easing toward its held depth, and an anchor measured off the live frame
+  leaves the frame descending onto it after the sockets froze. Every term is a target because
+  targets are the DEEPEST this frame can get — the dolly only moves closer, the eases only
+  approach — so a socket below that line can never be scrolled onto.
+
+Known residual, declared not built: a MID-pass death followed by more beats still pans *away*
+with cubes flying — that abandons the show off-screen, which does not violate the ruling (the
+camera never looks at the formation), and it gets its own ticket if it reads badly in play.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
