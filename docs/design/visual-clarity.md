@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #656 (2026-08-29).**
+**Canon checked through #661 (2026-08-29).**
 
 ## Principles
 
@@ -1500,9 +1500,12 @@ delegates to — and the rig **widens its distance** through `widen_to_fit`.
   playback distance; pulling *in* to fit one answers a question nobody asked. `set_zoom` is the
   door, so the board's own ceiling still clamps it — which is the ticket's own *"unless super
   zoomed in"*, expressed as a clamp rather than a special case.
-- **It is an EDGE, never a per-frame apply**, the same rule the playback-distance reset follows: the
-  shot is set up once and the wheel is the player's again for the rest of the pass. Gated on
-  `framed_span` itself — the store the answer is drawn from — not on a copy of what it resolves to.
+- **It is an EDGE, never a per-frame apply**, the same rule the playback-distance reset follows —
+  originally so the wheel was the player's again for the rest of the pass, and since #602 round 4
+  (the wheel is dead under playback) because the zoom is a meeting point of edges: the walk's widen,
+  the stage's fit, the trained pull-in and the dolly all write the same target, and any of them
+  asserting per-frame would stomp the rest. Gated on `framed_span` itself — the store the answer is
+  drawn from — not on a copy of what it resolves to.
 - **`framed_span` is a THIRD published field beside `directed_line`,** and folding them together
   would be wrong: that one is an ANGLE and this is a FIT, so one field answering both would spin the
   camera side-on to every walk.
@@ -1744,21 +1747,23 @@ its neighbours are.
 `directed_line`'s idiom and would be exactly wrong here: the camera would stay pushed in from a kill
 through every quiet beat after it, and the pass would never breathe.
 
-**The push-in is an ADDEND over the player's distance, never a `set_zoom`.** The wheel stays theirs
-through a pass (#520's own ruling — reset once on the claim edge, then *"leave the wheel alone"*), so
-a per-beat assign is precisely the leash that ruling refuses. It re-solves from the published weight
+**The push-in is an ADDEND over the shot's base, never a `set_zoom`.** The base was the player's
+distance when this shipped (the 2026-08-26 carve-out left the wheel live through a pass); since
+#602 round 4 it is the DIRECTOR's own — the trained or the wide distance — and the addend shape is
+what made that repeal a base swap rather than a rewrite. It re-solves from the published weight
 every frame rather than accumulating, so the mirror's poll is idempotent and a beat ending needs
 nothing unwound — the same shape `aim_along` has, one axis across.
 
 **THE FLOOR IS ON THE DOLLY'S OWN CONTRIBUTION, NEVER ON THE TOTAL, and that distinction is the
-whole care in this slice.** This rig has **no zoom-in floor** by dev ruling (asked twice, *"please
-remove it entirely"*) — scrolling in past the aim point takes the camera through its target to look
-back, which is his call for *his hand*. A director subtracting from an already-close player inherits
-that hole and flies the camera through a unit on the exact beat it most wants to be looking at one.
-So the effective floor is the lower of `DOLLY_FLOOR` and where the player already is: closer than the
-floor, and the push-in contributes **nothing** rather than the floor yanking them back out — which
-would be the wheel floor, restored, under another name. Two cases pin the two halves separately, and
-the naive version (floor the total) passes one and fails the other.
+whole care in this slice.** This rig has **no zoom-in floor on the wheel** by dev ruling (asked
+twice, *"please remove it entirely"*) — scrolling in past the aim point takes the camera through
+its target to look back, which is his call for *his hand*, and that ruling keeps its scope now that
+the wheel's scope shrank: outside playback. Under playback the floor guards the DIRECTED base the
+same way it guarded the player's: a base already closer than `DOLLY_FLOOR` — a trained distance
+tuned tight — gets **no push-in** rather than being shoved back OUT to the floor, which would be
+the push-in doing the opposite of its name on the tightest shots. Round 4 briefly deleted that arm
+as "the player carve-out's leftovers" and its case went red on the spot — the arithmetic stands on
+its own reason, whoever owns the base.
 
 **`Pacing.hitstop` sits beside `beat()`** because it is a playback pause like any other — it just
 spends its time by stopping the world. Three things are load-bearing: the unfreeze timer is created
@@ -2097,7 +2102,9 @@ agree by accident, which is why it shipped; on a fight at the top of a ten-level
 sits at the pillar's surface plus the lift while the camera sat at the plain's surface plus the lift.
 **The rule existed, was correct, was written down, and governed one of the two channels that answer
 the question.** It is also the second-order jerk the dev reported: a pan crossing the pillar's edge
-stepped the camera by the pillar's whole height. `_staged_surface()` is the one answer now.
+stepped the camera by the pillar's whole height. The staged branch of `_aim_over` became the one
+answer (round 3 called it `_staged_surface()`; round 4 folded the latch into `_mirror_camera`'s
+publish edge and re-keyed it on `shot_cells` — see Round 4 below).
 
 **Round 3 corrected what that one answer reads.** The first version averaged the surface of every
 **staged cell** — and `BeatSheet._gather_cells` puts the whole **knockback path** on stage. That is
@@ -2149,14 +2156,21 @@ unit keeps falling off screen, and all we see after — after a beat — is the 
 from under the camera's view.*
 
 The follow ceiling ships at **3 cells** rather than the whole 8-cell plummet, so the body genuinely
-leaves frame; `PLUMMET_HOLD` is the beat; and the death burst is raised to a knobbed distance under
-**where the camera stopped** rather than wherever the corpse ended up, so the cubes rise into the
-bottom of the shot. Legitimate rather than a cheat — they already leave the readout's *sockets*
-rather than a body, and they are a descriptor, not debris with mass.
+leaves frame; `PLUMMET_HOLD` is the beat; and the death burst rises into the bottom of the shot.
+Legitimate rather than a cheat — the cubes already leave the readout's *sockets* rather than a
+body, and they are a descriptor, not debris with mass.
 
-`Pacing.followed_fall` is what makes that safe: the strength and the ceiling applied once, read by
-the shot **and** by the readout that has to know where the shot stopped. Two spellings would put the
-cubes somewhere the camera is not — which is this whole round's theme.
+Round 2 anchored that burst by re-deriving where the camera stopped from the body's own fall
+(`Pacing.followed_fall` of the depth), reasoning that one spelling shared with the shot could not
+drift. **It was a second BASE even as a single spelling** — the shot hangs off the *stage's*
+height and the body off the *void's lip*, and on a fight staged above a pit those differ by the
+whole cliff (5 units on the pillar board), so the cubes burst below the frame at every slider
+setting while every number agreed with itself. Round 4 replaced the arithmetic with the fact:
+`UnitMirror.frame_floor` is a callable the host wires (the `report_impact` shape) answering *where
+the bottom of the shot IS*, and the burst is raised to it — `PLUMMET_BURST_UNDER` is a **const,
+not a knob**, on `WHITEOUT_SAFE_PEAK`'s reasoning: a slider that could push the death show out of
+shot would quietly repeal the invariant this round exists to keep (*"I'll always want the death
+cubes in shot"*). `followed_fall` died with its last caller.
 
 ### The camera comes home before the tiles do
 
@@ -2165,9 +2179,65 @@ the climb is *eased* — longer than `TEAR_OUT_AFTERMATH` — so the board used 
 mid-climb. The exit now waits on the rig's own published depth
 (`CameraController.fall_depth`, the one fact that travels rig → playback down that channel) rather
 than on a beat of its own, which would be a second answer to how long the climb takes and would
-disagree the moment the rate knob moved.
+disagree the moment the rate knob moved. Since round 4 the same wait covers the death show too —
+the depth stays published until the last cube lands — and the exit's return pan restores the WIDE
+shot before the tiles drop, so a pass ends on the full battle view it opened with.
 
-## #44 board-side items (cross-referenced, not in this doc's running order)
+### Round 4 — the playback director (2026-08-29)
+
+The pillar board's second play-check turned four complaints into one ruling: *"The **only**
+controls a player should have during battle zoom is the ability to skip it. Otherwise, we are
+presenting the player a presentation. We control the camera, fully. Their zoom gets overridden,
+period."* That RESTORES #520's own Done-when (*"manual camera input is suppressed for the
+duration"*) after the 2026-08-26 carve-out had left the wheel live under playback — a ruling's
+scope narrowing back to the player's own hand, outside playback, where the no-floor rule still
+holds untouched. The skip is [#545](https://github.com/Phaazoid/Godoiosis/issues/545)'s build; the
+wheel died here (`zoom_input_enabled` rejoined the same predicate that gates orbit — one question,
+one answer, both halves).
+
+**Two shots, and the states are facts already published — no new enum.** `follow_unit` valid is
+the TRAINED close-up (`Pacing.TRAINED_DISTANCE`); a non-empty `shot_cells` is the WIDE
+establishing shot (the playback distance widened until the staged volume fits); neither is the
+plain mirror. `Beat.subject()` was already the victim and `pan_to` already ends in `follow()`, so
+the tumble follow the dev asked for (*"a close up of that unit's tumble, all the way through"*)
+was three-quarters built — what round 4 added is the VERTICAL half: the trained shot rides its
+subject through **every** fall. A landing fall is ridden to the ground (the round-2 clamp that
+held the camera at the lip is repealed — its test's NAME pinned the old rule and was rewritten
+with it); a void plummet is ridden to `CLIFF_FOLLOW_MAX` below the lip and held; a subject
+standing above the stage's mean aims the camera UP (the drop channel runs negative, eased through
+its whole negative range — below zero there is no fall, only a re-frame). `CLIFF_FOLLOW` (the
+fraction dial) died with the ruling: a slider that can hold the camera at the lip is a slider that
+can repeal it.
+
+**The stage is PUBLISHED before the pan.** `CameraController.shot_cells` is the fourth published
+field beside the angle, the fit and the weight — a PLACE — set by `_stage_the_fight` before its
+`pan_to_position` and cleared with the staging, both edges of the lock, and the exit. Gated on
+`BoardSpace._staged` (filled only at `stage()`), the whole approach hugged the terrain under the
+moving centre — on the pillar board that is frame centre climbing a five-unit cliff face mid-pan,
+which is what *"the camera just kinda stares at the wall before whiting out"* was. The stage
+height solves ONCE per publish off the published cells (the round-3 latch, re-keyed; the claim
+edge resets the key so two passes staging identical cells still each solve fresh), and the WIDE
+fit reads `_shot_volume` — every staged cell's surface, not a corner pair, because the tallest
+ground in the middle of a stage is exactly what corners miss.
+
+**The death show is event-gated, never timed.** The camera used to start climbing the frame the
+body was freed — racing the burst it was holding for, and winning at every `CLIFF_RECOVER`
+setting, which is why the dev's linger tuning could never bring the cubes back (raising a RATE
+knob shortens a linger; the panel now says HIGHER IS FASTER out loud). Now `UnitMirror` arms
+`death_show_live()` at a void death's burst and clears it when the last cube lands
+(`HealthBlockDebris.live_count()`, the debris' own fact); `battle3d._death_show_depth` holds the
+last depth the body published for exactly that long, and the tear-down's camera-home wait covers
+the whole show for free. Doors on every path that ends the gate, as always: the claim edge and
+`drop_stashed_view` zero the held depth, so neither a fresh pass nor a board swap inherits a dead
+show's pit.
+
+Laws this round paid for: **a single spelling can still be a second BASE** (the burst above — the
+two-base gap was invisible on flat ground and the whole cliff on a staged fight); **a repealed
+ruling's arithmetic may stand on a reason the ruling never named** (the dolly floor's
+contribution-cap survived the wheel it was written for; deleting it with the carve-out went red
+inside the round); and **a knob whose store is re-pushed every frame is only tunable at the
+store** (`HealthBlockDebris.lifetime` is overwritten from `block_lifetime` per frame — the
+born-dead-slider guard, read from the other side).
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head

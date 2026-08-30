@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #656 (2026-08-29).**
+**Canon checked through #661 (2026-08-29).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -726,8 +726,13 @@ warn about. Two consequences here rather than in the camera's own canon. The plu
 full depth** before `die()` (`Pacing.PLUMMET_HOLD`, awaited inside `plummet()` so the flag is still
 raised while it waits), so the awaited stretch `AttackAction.execute` sits through is the fall plus
 that beat. And the third vertical animation — an airborne shove, which holds a body *above* the
-ground it sails over — reports a **negative** depth by the same subtraction; the camera floors it,
-deliberately, so a body blown over a chasm is not followed upward.
+ground it sails over — reports a **negative** depth by the same subtraction. Round 2 floored that
+at zero so a body blown over a chasm was not followed upward; **round 4 repealed the floor with
+the rule it served** (dev, 2026-08-29: *"I want a close up of that unit's tumble, all the way
+through"*) — the trained shot now rides the whole signed range, up over the chasm and down every
+landing fall, and only a void plummet stops short, at `CLIFF_FOLLOW_MAX` below the lip. The sign
+convention is unchanged; what changed is that both of its directions finally have the same
+consumer.
 
 **A void removal is the KILLED rung plus `ResolvedOutcome.removed`.** KILLED so every reader lights
 up unchanged — the AI counts it a removal, the queue shows KILL, `lifecycle_for` threads DEAD; the
