@@ -429,6 +429,14 @@ func lift_to(lift: Vector3) -> void:
 	_target_lift = lift
 
 
+# ...and the CUT: land the lift channel on its target now (#602 round 5). Called by the mirror
+# only while a transition declares its drive a cut -- the flash is at full white for exactly this
+# frame, and the ease would still be smearing a 40-unit teleport across the fade that reveals it.
+func cut_lift() -> void:
+	_lift = _target_lift
+	_apply_position()
+
+
 # ...and how far the body the shot is following has fallen below the board (#602). POLLED like the
 # lift above and for the same reason: the fall ends by publishing zero, so a unit that dies at the
 # bottom of a plummet -- taking the fact with it -- leaves nothing to remember to undo.
@@ -481,6 +489,26 @@ static func sway_offset(strength: float, elapsed: float) -> float:
 		return 0.0
 	var bob := sin(Pacing.SWAY_SPEED * elapsed) + 0.5 * sin(Pacing.SWAY_SPEED * 1.618 * elapsed)
 	return Pacing.SWAY_AMPLITUDE * strength * bob / 1.5
+
+
+# How far below the AIM a world point can fall before it leaves the bottom of the frame (#602
+# round 5), in world units. Pure, because the projection is three numbers and a test should not
+# need a viewport: the screen's half-height subtends fov/2 around the view axis, and a vertical
+# world offset presents only its component perpendicular to a camera pitched th below horizontal
+# -- so the drop that reaches the frame edge is dilated by 1/cos(th). The narrow authored fov (30)
+# makes this MUCH shallower than intuition: ~2.5 units at the trained distance, which is why round
+# 4's centre-relative burst anchor sat visibly inside the frame.
+static func frame_drop(distance: float, fov_degrees: float, pitch_degrees: float) -> float:
+	var cos_pitch := absf(cos(deg_to_rad(pitch_degrees)))
+	if cos_pitch < 0.01:
+		cos_pitch = 0.01   # a straight-down camera has no meaningful vertical edge; stay finite
+	return distance * tan(deg_to_rad(fov_degrees * 0.5)) / cos_pitch
+
+
+# The live reading of the same question: the frame the player is watching right now -- eased
+# distance (dolly included), authored fov, live pitch.
+func frame_floor_depth() -> float:
+	return frame_drop(_camera.position.z, _camera.fov, _pitch_degrees)
 
 
 # How the drop channel closes on its target, and pure the same way -- ASYMMETRIC, which is the whole

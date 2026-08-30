@@ -16,6 +16,9 @@ var _cap := 0.0
 var _flight := 0.0
 var _slam := 0.0
 var _lead := 0.0
+var _whiteout := 0.0
+var _whiteout_hold := 0.0
+var _camera_hold := 0.0
 
 
 func before_test() -> void:
@@ -25,6 +28,9 @@ func before_test() -> void:
 	_flight = Pacing.TEAR_OUT_FLIGHT
 	_slam = Pacing.TEAR_OUT_SLAM
 	_lead = Pacing.TEAR_OUT_EMPTY_SKY
+	_whiteout = Pacing.TEAR_OUT_WHITEOUT
+	_whiteout_hold = Pacing.TEAR_OUT_HOLD
+	_camera_hold = Pacing.TEAR_OUT_CAMERA_HOLD
 
 
 func after_test() -> void:
@@ -33,6 +39,9 @@ func after_test() -> void:
 	Pacing.TEAR_OUT_FLIGHT = _flight
 	Pacing.TEAR_OUT_SLAM = _slam
 	Pacing.TEAR_OUT_EMPTY_SKY = _lead
+	Pacing.TEAR_OUT_WHITEOUT = _whiteout
+	Pacing.TEAR_OUT_HOLD = _whiteout_hold
+	Pacing.TEAR_OUT_CAMERA_HOLD = _camera_hold
 
 
 func test_tiles_leave_in_the_order_their_owners_act() -> void:
@@ -135,3 +144,102 @@ func test_no_lead_is_asked_for_by_default() -> void:
 	assert_float(float(plan[0]["start"])).override_failure_message(
 			"schedule() read the empty-sky knob on its own instead of being handed a lead"
 			).is_equal(0.0)
+
+
+# --- the flash and the cut (#602 round 5) -------------------------------------------------------
+#
+# One rule, both directions: the cut sits at the flash's first full-white frame, and the flash
+# anchors to the transition's cut-ward end (dev, 2026-08-29: "the white out should always be tied
+# to the last thing that happens, the teleport, no matter what"). Pinned here because this class
+# is the artifact both sides read -- the driver draws the level, the driver moves the camera, the
+# executor awaits the total, and three derivations of one timeline is how the exit's flash came to
+# play over nothing while its teleport ran bare.
+
+func _flash_knobs() -> void:
+	Pacing.TEAR_OUT_WHITEOUT = 0.3
+	Pacing.TEAR_OUT_HOLD = 0.4
+	Pacing.TEAR_OUT_FLIGHT = 1.0
+	Pacing.TEAR_OUT_STAGGER_MAX = 0.5
+	Pacing.TEAR_OUT_ARRIVAL = 2.0
+
+
+func test_the_exit_flash_is_dark_while_a_tile_still_flies() -> void:
+	# The dev watches the blocks fall -- deliberately bare -- and the flash belongs to the drop
+	# after them. An exit flash anchored at zero (the entry's clock, the round-4 bug) lights up
+	# here and this reds.
+	_flash_knobs()
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0), Vector2i(2, 0)]
+	var plan := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(plan)
+	var anchor := StagingFlight.flash_anchor(false, true, total)
+	for elapsed in [0.0, total * 0.3, total * 0.7, total - 0.01]:
+		assert_float(StagingFlight.whiteout_level(elapsed, anchor)).override_failure_message(
+				"the exit flash is lit at %s with tiles still in the air -- it is riding the "
+				% elapsed + "entry's clock again").is_equal(0.0)
+
+
+func test_the_exit_camera_comes_down_at_the_flashs_first_full_frame() -> void:
+	_flash_knobs()
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var plan := StagingFlight.schedule(cells)
+	var total := StagingFlight.total(plan)
+	var ramp := Pacing.TEAR_OUT_WHITEOUT
+	var anchor := StagingFlight.flash_anchor(false, false, total)
+	assert_bool(StagingFlight.cut_over(total + ramp - 0.01, false, total)) \
+		.override_failure_message("the camera dropped before the flash reached full white") \
+		.is_false()
+	assert_bool(StagingFlight.cut_over(total + ramp, false, total)).override_failure_message(
+			"the flash is full and the camera still has not come down").is_true()
+	assert_float(StagingFlight.whiteout_level(total + ramp, anchor)).override_failure_message(
+			"the cut's own frame is not at full white -- the teleport shows").is_equal(1.0)
+
+
+func test_the_entry_cut_waits_for_full_white_too() -> void:
+	# The entry used to cut at zero with the flash only beginning -- decent, never tied. Now the
+	# same rule as the exit, one ramp in.
+	_flash_knobs()
+	var cells: Array[Vector2i] = [Vector2i(0, 0)]
+	var plan := StagingFlight.schedule(cells, 1.1)
+	var total := StagingFlight.total(plan)
+	var ramp := Pacing.TEAR_OUT_WHITEOUT
+	var anchor := StagingFlight.flash_anchor(true, true, total)
+	assert_bool(StagingFlight.cut_over(ramp - 0.01, true, total)).override_failure_message(
+			"the camera teleported up before the flash could hide it").is_false()
+	assert_bool(StagingFlight.cut_over(ramp, true, total)).is_true()
+	assert_float(StagingFlight.whiteout_level(ramp, anchor)).override_failure_message(
+			"the entry cut's own frame is not at full white").is_equal(1.0)
+
+
+func test_an_exit_costs_its_travel_plus_the_whole_flash() -> void:
+	# The executor awaits exactly this; awaiting bare total tears the driver down with the screen
+	# still white and the camera still up, which un-ties the very thing this round tied.
+	_flash_knobs()
+	var cells: Array[Vector2i] = [Vector2i(0, 0), Vector2i(1, 0)]
+	var plan := StagingFlight.schedule(cells)
+	var flash := Pacing.TEAR_OUT_WHITEOUT + Pacing.TEAR_OUT_HOLD + Pacing.TEAR_OUT_WHITEOUT
+	assert_float(StagingFlight.exit_total(plan)).override_failure_message(
+			"the exit's await does not cover its own flash") \
+		.is_equal_approx(StagingFlight.total(plan) + flash, 0.001)
+
+
+func test_a_knob_shrunken_entry_still_pays_for_its_own_flash() -> void:
+	# Insurance, not pacing: the shipped entry already contains its flash, but a zeroed flight and
+	# lead could end the driver mid-flash with the camera already up -- a hard white cut-off.
+	_flash_knobs()
+	Pacing.TEAR_OUT_FLIGHT = 0.0
+	var cells: Array[Vector2i] = [Vector2i(0, 0)]
+	var plan := StagingFlight.schedule(cells)
+	var flash := Pacing.TEAR_OUT_WHITEOUT + Pacing.TEAR_OUT_HOLD + Pacing.TEAR_OUT_WHITEOUT
+	assert_float(StagingFlight.entry_total(plan)).override_failure_message(
+			"an entry shorter than its flash is torn down mid-white").is_greater_equal(flash)
+
+
+func test_the_travel_entrys_flash_still_waits_for_its_camera_hold() -> void:
+	# The travel arm has no cut -- its flash covers an eased rise after the hold that watches the
+	# tiles leave. The arm forks the ANCHOR, never the arithmetic.
+	_flash_knobs()
+	Pacing.TEAR_OUT_CAMERA_HOLD = 0.95
+	var anchor := StagingFlight.flash_anchor(true, false, 5.0)
+	assert_float(anchor).override_failure_message(
+			"the travel entry's flash no longer waits for the camera hold") \
+		.is_equal_approx(Pacing.TEAR_OUT_CAMERA_HOLD, 0.001)
