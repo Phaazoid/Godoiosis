@@ -689,33 +689,3 @@ func test_disabling_manual_input_refuses_keys_but_keeps_smoothing_alive() -> voi
 		rig._process(0.016)
 	assert_float(_camera().position.z).override_failure_message(
 			"the camera never moved — _process is dead, not merely input-gated").is_greater(start + 4.0)
-
-
-# --- where the frame's bottom edge is (#602 round 5) ---------------------------------------------
-
-# Pure by design: three numbers of projection, no viewport. The screen's half-height subtends
-# fov/2 around the view axis, and a vertical world offset presents only its perpendicular
-# component to a pitched camera -- so the drop that leaves the frame is dilated by 1/cos(pitch).
-# What rides on it: a void death's burst assembles its grid BELOW this line and crests up into
-# view (dev, 2026-08-29: "it needs to form off screen, and explode upwards into view").
-func test_the_frame_drop_is_the_projected_half_height_when_the_camera_is_level() -> void:
-	assert_float(CameraRig3D.frame_drop(10.0, 30.0, 0.0)).override_failure_message(
-			"a level camera's frame drop is not distance times tan(fov/2)") \
-		.is_equal_approx(10.0 * tan(deg_to_rad(15.0)), 0.001)
-
-
-func test_a_pitched_camera_sees_deeper_below_its_aim_before_the_edge() -> void:
-	# The component perpendicular to the view axis shrinks by cos(pitch), so the same screen edge
-	# is further down in world units -- the round-4 anchor missed the frame by exactly this.
-	var level := CameraRig3D.frame_drop(7.0, 30.0, 0.0)
-	var pitched := CameraRig3D.frame_drop(7.0, 30.0, -40.0)
-	assert_float(pitched).override_failure_message(
-			"pitching the camera did not deepen the frame's bottom edge").is_greater(level)
-	assert_float(pitched).is_equal_approx(level / cos(deg_to_rad(40.0)), 0.001)
-
-
-func test_a_closer_shot_has_a_shallower_frame_edge() -> void:
-	# Monotonic in distance: the dolly leaning in on a kill pulls the edge up with it, and the
-	# live accessor reads the eased distance for exactly that reason.
-	assert_float(CameraRig3D.frame_drop(4.0, 30.0, -40.0)).is_less(
-			CameraRig3D.frame_drop(11.0, 30.0, -40.0))

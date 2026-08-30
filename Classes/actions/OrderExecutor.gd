@@ -563,12 +563,7 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 	var socket := -BoardSpace.lift_offset()
 	BoardSpace.begin_flight(plan, socket if entering else Vector3.ZERO,
 			Vector3.ZERO if entering else socket, entering)
-	# Each direction's FULL cost, flash included (#602 round 5): the exit's flash plays AFTER its
-	# last tile lands -- it covers the camera's drop home -- so awaiting bare total would tear the
-	# driver down with the screen still white and the camera still up. The entry already contains
-	# its flash unless the knobs are tuned shorter than one; entry_total is that insurance.
-	await Pacing.beat(self,
-			StagingFlight.entry_total(plan) if entering else StagingFlight.exit_total(plan))
+	await Pacing.beat(self, StagingFlight.total(plan))
 	# Ended HERE rather than left to the driver, and that is what makes the property hold in every
 	# run: headless the await returns without a single frame, so nothing ever advanced the flight
 	# and the tiles would still be sitting at their opening offsets. Every existing staging
