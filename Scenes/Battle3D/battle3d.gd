@@ -866,9 +866,17 @@ func _mirror_camera() -> void:
 	# ...and the TRAINED edge, its sibling: while the 2D camera is following one unit -- a beat's
 	# subject, a body mid-tumble -- the shot sits at the trained distance, the close-up the dev
 	# asked for. By id, so a body freed mid-beat reads as "nobody" and hands the distance back.
+	#
+	# THE DEATH SHOW OWNS THE SHOT (#602 round 8, dev: "camera should never look at where it forms,
+	# only the upward directed results of the explosion should be visible"): a subject that died
+	# into a void keeps its trained frame until the last cube lands. The release edge used to fire
+	# the frame the body was freed, and a farther camera's frame bottom is DEEPER -- the dolly-out
+	# walked the edge down onto the bar assembling under it. DEFERRED, not skipped: _trained_seen_id
+	# does not advance, so the ordinary release fires the moment the show clears.
 	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
 	var trained_id := trained.get_instance_id() if trained != null else 0
-	if trained_id != _trained_seen_id:
+	var show_holds := trained == null and _unit_mirror.death_show_live()
+	if not show_holds and trained_id != _trained_seen_id:
 		_trained_seen_id = trained_id
 		_rig.set_zoom(Pacing.TRAINED_DISTANCE if trained != null else _rig.playback_distance)
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
@@ -1346,16 +1354,19 @@ func _death_show_depth() -> float:
 
 
 # Where the bottom of the shot is, in world y -- the anchor a void death's burst erupts from,
-# handed to UnitMirror as a callable (#602 round 4). The rig's node position IS the aim point (the
-# camera sits back from it on a child), already carrying the stage lift and the fall, and the
-# frame's own bottom EDGE is the rig's to answer -- live fov, live distance, live pitch -- so this
-# is the frame the player is actually watching, not a re-derivation of where it ought to be.
+# handed to UnitMirror as a callable (#602 round 4). The frame's own bottom edge is the rig's to
+# answer, so this is the frame the player is watching, not a re-derivation of where it ought to be.
 #
 # BELOW THE EDGE, not below the centre (#602 round 6, dev: "it needs to form off screen, and
 # explode upwards into view"). Round 4 anchored one and a half cells under the frame's CENTRE,
 # which at this game's narrow fov is inside the frame -- the burst's staggered march visibly
 # assembled a full health grid on screen before a cube launched. The margin keeps the assembling
 # grid under the edge; the death burst's own launch power carries the cubes up into view.
+#
+# ...and below the SETTLED edge, not the live one (#602 round 8): a body can die while the drop is
+# still easing toward its held depth, and an anchor measured off the live frame leaves the frame
+# still descending onto it. The settled floor composes from the rig's TARGETS -- the deepest this
+# frame can get -- see CameraRig3D.settled_frame_floor.
 #
 # The offset is a CONST, not a knob, on WHITEOUT_SAFE_PEAK's reasoning: every other feel value in
 # this arc is tunable, but a slider that could push the death show out of shot -- or back INTO the
@@ -1364,8 +1375,7 @@ func _death_show_depth() -> float:
 const PLUMMET_BURST_UNDER := 0.5
 
 func _shot_floor() -> float:
-	return _rig.position.y - _rig.frame_floor_depth() \
-			- PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
+	return _rig.settled_frame_floor() - PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same

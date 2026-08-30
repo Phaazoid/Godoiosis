@@ -1629,3 +1629,87 @@ func test_the_tiles_wait_for_the_camera_to_climb_out_before_they_go_home() -> vo
 	).is_true()
 	assert_bool(BoardSpace.staging_active()).override_failure_message(
 			"the exit finished without putting the board back").is_false()
+
+
+# --- the death show owns the SHOT (#602 round 8) ------------------------------------------------
+
+# The dev's ruling: "the camera should never look at where it forms, only the upward directed
+# results of the explosion should be visible." Round 4 gated the DROP channel on the show; the
+# DISTANCE and the AIM never joined it, and each was a mover -- the trained release edge dollied
+# out the frame the body was freed (a farther camera's frame bottom is DEEPER, so the edge walked
+# down onto the assembling bar), and the teardown panned to the stage centre while the cubes were
+# still in the air.
+
+func test_the_death_show_holds_the_trained_frame_until_the_last_cube_lands() -> void:
+	var mirror := _scene.get_node("UnitMirror") as UnitMirror
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	_cam().set_playback_locked(true)
+	await _cam().pan_to(unit)
+	await _settle()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the follow never trained; the case cannot say anything about the hold") \
+		.is_equal_approx(Pacing.TRAINED_DISTANCE, 0.001)
+
+	# The void death: the body is freed, the show is on. The flag is set directly on this suite's
+	# declared pattern (its lifecycle is pinned beside the cubes in test_health_block_debris), and
+	# _mirror_camera is driven directly because the mirror's own _process clears a cube-less flag
+	# within a frame -- a settle here would race the very door the debris suite pins.
+	mirror._death_show = true
+	_cam().follow_unit = null
+	_scene._mirror_camera()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the follow died into a death show and the shot dollied out -- the deepening frame "
+			+ "edge walks down onto the forming bar").is_equal_approx(
+			Pacing.TRAINED_DISTANCE, 0.001)
+
+	# The show ends: the deferred release fires and hands the distance back.
+	mirror._death_show = false
+	_scene._mirror_camera()
+	assert_float(_rig._target_distance).override_failure_message(
+			"the show ended and the release edge never fired -- the defer became a skip") \
+		.is_equal_approx(_rig.playback_distance, 0.001)
+	_cam().set_playback_locked(false)
+
+
+func test_the_return_pan_waits_out_the_held_depth_before_it_moves_the_aim() -> void:
+	# The teardown used to pan to the stage centre FIRST and only then wait for the depth -- so at
+	# pass end the aim travelled and the shot re-framed while the cubes were still assembling. The
+	# wait covers the held depth (the show holds it) AND the climb; the pan lands after both, and
+	# still before the aftermath beat and the tiles (the round-4 ruling's scope).
+	_rig.drop_to(2.0)
+	await _settle()
+	assert_float(_cam().fall_depth).override_failure_message(
+			"the rig is two cells under the board and playback was never told").is_greater(1.0)
+
+	var unit := _player_unit()
+	assert_object(unit).is_not_null()
+	BoardSpace.stage([unit.movement.cell], BoardSpace.lift_offset())
+	# Parked through the camera's own door, then measured by DISTANCE to the pan's destination:
+	# the 2D camera clamps and glides its position per frame, so an exact-position assert fights
+	# the camera's own housekeeping rather than the teardown's pan.
+	var staged: Array[Vector2i] = [unit.movement.cell]
+	var centre: Vector2 = _game.order_executor._stage_centre(staged)
+	await _cam().pan_to_position(centre + Vector2(300.0, 0.0), 0.05)
+	await _settle()
+	assert_bool(_cam().global_position.distance_to(centre) > 1.0).override_failure_message(
+			"the fixture could not park the camera away from the stage centre; the ordering "
+			+ "cannot be observed").is_true()
+	var done := [false]
+	var exit := func() -> void:
+		await _game.order_executor._bring_the_board_home()
+		done[0] = true
+	exit.call()
+	await _settle()
+	assert_bool(done[0]).override_failure_message(
+			"the exit finished with the camera still two cells under the board").is_false()
+	assert_float(_cam().global_position.distance_to(centre)).override_failure_message(
+			"the return pan moved the aim while the depth was still held -- the shot re-framed "
+			+ "over the forming bar").is_greater(1.0)
+
+	_rig.drop_to(0.0)
+	await _settle()
+	assert_bool(done[0]).override_failure_message(
+			"the depth cleared and the exit never resumed").is_true()
+	assert_float(_cam().global_position.distance_to(centre)).override_failure_message(
+			"the exit finished without panning back to the stage's centre").is_less(1.0)

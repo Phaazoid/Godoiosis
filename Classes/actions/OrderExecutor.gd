@@ -581,14 +581,20 @@ func _play_transition(cells: Array[Vector2i], entering: bool) -> void:
 func _bring_the_board_home() -> void:
 	var staged := BoardSpace.staged_cells()
 	if not staged.is_empty():
-		# THE CAMERA COMES BACK TO THE BATTLE VIEW FIRST (dev, 2026-08-29), and since round 4 that
-		# is BOTH halves of the battle view: the pan back to the stage's centre -- which clears the
-		# follow, so the shot is WIDE again and the last beat's close-up does not watch the tiles
-		# leave -- and then the climb out of whatever pit the last blow left the shot in. The climb
-		# is eased and longer than the aftermath hold, so without the wait the tiles used to start
-		# dropping while the camera was still on its way up.
-		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
+		# THE DEATH SHOW FINISHES BEFORE ANYTHING MOVES (#602 round 8, dev: "the camera should
+		# never look at where it forms"): release the follow so the depth channel answers the show
+		# -- or zero, and never a living subject's standing fall, which would hold the wait open --
+		# then wait out the held depth AND the climb, and only THEN pan back to the stage's centre.
+		# The shot stays on the pit while the cubes erupt up into it, rises out, and pulls back
+		# wide. The round-4 ruling (the camera comes back to the battle view first, dev 2026-08-29)
+		# keeps its scope: the pan and the climb both still land before the aftermath hold and the
+		# tiles going home -- what moved is only their order between themselves. The pan is what
+		# makes the shot WIDE again, so the last beat's close-up does not watch the tiles leave; the
+		# climb is eased and longer than the aftermath hold, so without the wait the tiles used to
+		# start dropping while the camera was still on its way up.
+		game.camera_controller.follow(null)
 		await _wait_for_the_camera_to_come_home()
+		await game.camera_controller.pan_to_position(_stage_centre(staged), Pacing.PLAYBACK_PAN)
 		# The aftermath sits before the board reassembles -- SETTLE's twin at the other end, so the
 		# last blow is not immediately swept away by the tiles going home. AFTER the climb, so it is
 		# a beat on the diorama rather than a beat spent travelling.

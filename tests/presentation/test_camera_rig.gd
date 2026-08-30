@@ -723,3 +723,23 @@ func test_the_frame_drop_grows_with_distance_and_stays_finite_looking_down() -> 
 	var steep := CameraRig3D.frame_drop(7.0, 30.0, -80.0)
 	assert_bool(steep > 0.0 and steep < 1000.0).override_failure_message(
 			"a steep pitch made the frame edge infinite or negative").is_true()
+
+
+func test_the_settled_frame_floor_reads_the_targets_not_the_easing_channels() -> void:
+	# A body can die while the drop is still easing toward its held depth, and an anchor measured
+	# off the LIVE frame leaves the frame still descending onto it (#602 round 8). Targets are the
+	# deepest this frame can get -- the dolly only moves closer, the eases only approach -- so the
+	# burst anchors under them. No settle between the writes and the read, deliberately: the live
+	# channels are still wherever the scene opened, which is what gives the target-vs-live
+	# distinction teeth.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 6.0, 4.0))
+	rig.lift_to(Vector3(0.0, 40.0, 0.0))
+	rig.drop_to(5.0)
+	rig.set_zoom(11.0)
+	var expected := 6.0 + 40.0 - 5.0 \
+			- CameraRig3D.frame_drop(11.0, _camera().fov, rig._pitch_degrees)
+	assert_float(rig.settled_frame_floor()).override_failure_message(
+			"the settled floor is not composed from the target channels -- a mid-ease death "
+			+ "leaves the frame descending onto the burst's sockets").is_equal_approx(
+			expected, 0.001)

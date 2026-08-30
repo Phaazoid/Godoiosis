@@ -509,10 +509,15 @@ static func frame_drop(distance: float, fov_degrees: float, pitch_degrees: float
 	return distance * tan(half) / denom
 
 
-# The live reading of the same question: the frame the player is watching right now -- eased
-# distance (dolly included), authored fov, live pitch.
-func frame_floor_depth() -> float:
-	return frame_drop(_camera.position.z, _camera.fov, _pitch_degrees)
+# The world y of the frame's bottom edge once every eased channel ARRIVES (#602 round 8). Every
+# term is deliberately the TARGET, never the live value: the aim is HELD under playback, the lift
+# and the drop ease toward these, and the dolly only ever moves the camera CLOSER -- a shallower
+# frame -- so this is the DEEPEST the frame's bottom can reach from here, and a burst anchored
+# under it cannot be descended onto by a channel still settling (a body can die mid-ease). The
+# flourish is excluded: a shake is transient and bounded well inside the burst's own margin.
+func settled_frame_floor() -> float:
+	return _aim.y + _target_lift.y - _target_drop \
+			- frame_drop(_target_distance, _camera.fov, _pitch_degrees)
 
 
 # How the drop channel closes on its target, and pure the same way -- ASYMMETRIC, which is the whole
