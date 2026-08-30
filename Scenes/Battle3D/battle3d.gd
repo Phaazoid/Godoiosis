@@ -330,27 +330,46 @@ func _drive_transition(delta: float) -> void:
 		return   # advance_flight bumped the version; _sync_staging re-seats the landed columns
 
 
-# WHERE THE CAMERA WATCHES FROM, and the only thing the Experiments flag decides. The travel itself
-# is identical either way -- a tile always runs between its socket and the diorama -- so this is a
-# fork about the SHOT, not about the geometry, which is why knobs can tune within either arm.
+# WHERE THE CAMERA WATCHES FROM, and the only thing the Experiments flag decides about the ENTRY.
+# The travel itself is identical either way -- a tile always runs between its socket and the
+# diorama -- so this is a fork about the SHOT, not about the geometry, which is why knobs can tune
+# within either arm.
 #
 # The cut is sanctioned: #520's "the camera should always pan, never teleport" is a rule about the
 # map, and the dev carved this transition out of it by name (2026-08-27) -- "we can make an exception
 # for the transition from the map view to the battle view".
+#
+# EVERY CUT LANDS AT THE FLASH'S FIRST FULL-WHITE FRAME (#602 round 7, dev: "the white out should
+# always be tied to the last thing that happens, the teleport, no matter what") -- the schedule is
+# StagingFlight's, so the flash and the cut read one clock and cannot drift. Snapped, not eased:
+# the flash hides a teleport, and an eased 40-unit drop would still be settling as the fade
+# revealed it.
 func _drive_transition_camera() -> void:
+	var elapsed := BoardSpace.flight_elapsed()
+	var total := BoardSpace.flight_total()
+	# THE EXIT IS ONE TREATMENT FOR BOTH ARMS: the tiles fall bare with the camera up top watching
+	# them home (dev's own read of round 4: the falls are right, the drop after them was not), then
+	# the flash ramps and the camera comes down under full white.
+	if not BoardSpace.flight_entering():
+		if StagingFlight.cut_over(elapsed, false, total):
+			BoardSpace.drive_camera_lift(Vector3.ZERO, true)
+		else:
+			BoardSpace.drive_camera_lift(BoardSpace.stage_offset())
+		return
 	if Experiments.is_on(Experiments.Flag.DIORAMA_CAMERA_CUTS_AHEAD):
-		# Already up there, over empty sky, before a single tile arrives.
-		BoardSpace.drive_camera_lift(BoardSpace.stage_offset())
+		# The cut entry: hold with the intact board while the flash ramps, teleport up under full
+		# white, and the fade reveals empty sky before the first tile arrives (TEAR_OUT_EMPTY_SKY
+		# ships at the flash's full length for exactly that).
+		if StagingFlight.cut_over(elapsed, true, total):
+			BoardSpace.drive_camera_lift(BoardSpace.stage_offset(), true)
+		else:
+			BoardSpace.drive_camera_lift(Vector3.ZERO)
 		return
 	# Travelling with the tear-out: hold with the board long enough to see the tiles leave, then
 	# rise. The hold is a knob whose 0 is exactly the cut's starting position, so the two treatments
-	# meet in the middle rather than being separate code.
+	# meet in the middle rather than being separate code. No cut here, so no snap: the rise is the
+	# rig's own ease, and the flash covers it from the hold onward (see flash_anchor).
 	var hold := maxf(Pacing.TEAR_OUT_CAMERA_HOLD, 0.0)
-	var elapsed := BoardSpace.flight_elapsed()
-	var lift := BoardSpace.stage_offset()
-	if not BoardSpace.flight_entering():
-		BoardSpace.drive_camera_lift(lift)
-		return
 	if elapsed <= hold:
 		BoardSpace.drive_camera_lift(Vector3.ZERO)
 		return
@@ -384,23 +403,15 @@ func _sync_flight_maps() -> void:
 		map.position = BoardSpace.stage_offset() + BoardSpace.flight_offset(cell)
 
 
-# The flash that covers the swap. Ramp up, hold, ramp down -- and it STARTS where the treatment
-# needs it to: at zero for the cut (it has to hide a camera teleport) and after the camera's hold for
-# the travel arm (there is nothing to hide until you have watched the tiles leave).
+# The flash that covers the swap. Ramp up, hold, ramp down -- anchored at the transition's
+# cut-ward end (#602 round 7): the entry's start, the exit's landing, the travel entry's camera
+# hold. The maths and the anchor are StagingFlight's, beside the cut they exist to hide, so the
+# two read one clock.
 func _drive_whiteout() -> void:
 	var cuts: bool = Experiments.is_on(Experiments.Flag.DIORAMA_CAMERA_CUTS_AHEAD)
-	var since := BoardSpace.flight_elapsed() - (0.0 if cuts else maxf(Pacing.TEAR_OUT_CAMERA_HOLD, 0.0))
-	var ramp := maxf(Pacing.TEAR_OUT_WHITEOUT, 0.001)
-	var hold := maxf(Pacing.TEAR_OUT_HOLD, 0.0)
-	var level := 0.0
-	if since >= 0.0:
-		if since < ramp:
-			level = since / ramp
-		elif since < ramp + hold:
-			level = 1.0
-		elif since < ramp + hold + ramp:
-			level = 1.0 - (since - ramp - hold) / ramp
-	_apply_whiteout(level)
+	var anchor := StagingFlight.flash_anchor(
+			BoardSpace.flight_entering(), cuts, BoardSpace.flight_total())
+	_apply_whiteout(StagingFlight.whiteout_level(BoardSpace.flight_elapsed(), anchor))
 
 
 # #217's photosensitivity switch, which every white-out in this arc owes a reading of. The TIMING is
@@ -814,6 +825,12 @@ func _mirror_camera() -> void:
 	# the transition drives while one is running (#521 slice B). Equal whenever nothing is driving
 	# it, so with the battle zoom off, or the flag off, this is bit-for-bit the old poll.
 	_rig.lift_to(BoardSpace.camera_lift())
+	# ...and when the transition says its drive is a CUT, the eased lift lands NOW (#602 round 7):
+	# the flash is at full white for exactly this, and an ease would still be smearing the 40-unit
+	# teleport across the fade that reveals it. Idempotent past the first frame -- pinning a channel
+	# to the target it is already at moves nothing.
+	if BoardSpace.camera_lift_snapped():
+		_rig.cut_lift()
 	# ...and how far below the board the rig has GOT, published back to playback (#602). ABOVE the
 	# gate for the same reason the lift is, and it is the whole point: the climb home finishes after
 	# playback lets go, so a poll below the return would freeze on the last value it saw and the

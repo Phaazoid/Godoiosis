@@ -76,3 +76,67 @@ static func progress_at(entry: Dictionary, elapsed: float) -> float:
 # reasoned about -- and tested -- one at a time.
 static func slam(progress: float) -> float:
 	return pow(clampf(progress, 0.0, 1.0), maxf(Pacing.TEAR_OUT_SLAM, 0.05))
+
+
+# --- the flash and the cut (#602 round 7) -------------------------------------------------------
+#
+# The white-out exists to hide the camera's CUT, so the two are ONE schedule under one rule: the
+# cut sits at the flash's first full-white frame, and the flash anchors to the transition's
+# cut-ward end (dev, 2026-08-29: "the white out should always be tied to the last thing that
+# happens, the teleport, no matter what. Its whole purpose is to hide the teleport"). An ENTRY
+# cuts UP at its start -- flash from zero, cut one ramp in, arrivals after the fade (which is why
+# TEAR_OUT_EMPTY_SKY ships at the flash's full length). An EXIT cuts DOWN at its end -- the tiles
+# fall bare, watched deliberately, the flash ramps once the last one is home, and the camera drops
+# under full white. The exit used to borrow the entry's clock: flash at the start over nothing,
+# drop bare at the end, which is exactly the report this round answers.
+
+
+# Where the flash's clock starts for this transition. The travel-arm entry keeps its camera hold
+# -- there is no cut to hide there, the flash covers an eased rise -- which is why the arm forks
+# the ANCHOR rather than the arithmetic.
+static func flash_anchor(entering: bool, cuts: bool, total_time: float) -> float:
+	if not entering:
+		return total_time
+	return 0.0 if cuts else maxf(Pacing.TEAR_OUT_CAMERA_HOLD, 0.0)
+
+
+# The flash at `elapsed` given its anchor: ramp up, full, ramp down, dark outside. Moved here from
+# the 3D driver so the flash and the cut read ONE clock and cannot drift.
+static func whiteout_level(elapsed: float, anchor: float) -> float:
+	var since := elapsed - anchor
+	var ramp := maxf(Pacing.TEAR_OUT_WHITEOUT, 0.001)
+	var hold := maxf(Pacing.TEAR_OUT_HOLD, 0.0)
+	if since < 0.0:
+		return 0.0
+	if since < ramp:
+		return since / ramp
+	if since < ramp + hold:
+		return 1.0
+	if since < ramp + hold + ramp:
+		return 1.0 - (since - ramp - hold) / ramp
+	return 0.0
+
+
+# Whether the camera has crossed its cut at `elapsed`: one ramp past the flash's anchor, i.e. AT
+# the first full-white frame. Asked by the cut-arm entry and by every exit; the travel-arm entry
+# has no cut and never asks.
+static func cut_over(elapsed: float, entering: bool, total_time: float) -> bool:
+	var ramp := maxf(Pacing.TEAR_OUT_WHITEOUT, 0.001)
+	return elapsed >= (ramp if entering else total_time + ramp)
+
+
+# What each direction costs in full, awaited by the executor so the driver is never torn down with
+# the flash still lit or the camera still up. An exit is the travel plus the whole flash that
+# covers the drop home; an entry already contains its flash unless the knobs are tuned shorter
+# than one, so the maxf is insurance rather than pacing.
+static func entry_total(plan: Array[Dictionary]) -> float:
+	return maxf(total(plan), _flash_length())
+
+
+static func exit_total(plan: Array[Dictionary]) -> float:
+	return total(plan) + _flash_length()
+
+
+static func _flash_length() -> float:
+	var ramp := maxf(Pacing.TEAR_OUT_WHITEOUT, 0.001)
+	return ramp + maxf(Pacing.TEAR_OUT_HOLD, 0.0) + ramp

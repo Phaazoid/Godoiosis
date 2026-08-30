@@ -468,6 +468,33 @@ func test_a_landing_bumps_the_version_and_a_plain_frame_does_not() -> void:
 	assert_int(BoardSpace.staging_version).is_greater(before)
 
 
+func test_a_landed_exit_tile_lands_ONCE_however_long_the_flash_holds_the_flight_open() -> void:
+	# An EXIT's landed cell keeps holding its socket offset (absence means "home at zero", which an
+	# exit's home is not), and before #602 round 7 every frame past its land time erased and
+	# re-added it -- a landing per frame, a version bump per frame, the whole board's props rebuilt
+	# per frame, for the exit's whole landing window. The flash tail the exit now carries just made
+	# it long enough to see.
+	var cells: Array[Vector2i] = _painted_cells().slice(0, 2)
+	var lift := BoardSpace.lift_offset()
+	BoardSpace.stage(cells, lift)
+	var plan := StagingFlight.schedule(cells)
+	BoardSpace.begin_flight(plan, Vector3.ZERO, -lift, false)
+
+	assert_bool(BoardSpace.advance_flight(StagingFlight.total(plan) + 0.01)) \
+		.override_failure_message("no tile landed by the end of its own schedule").is_true()
+	var landed_version := BoardSpace.staging_version
+
+	for _frame in range(5):
+		assert_bool(BoardSpace.advance_flight(0.016)).override_failure_message(
+				"a tile that was already home landed again -- the flash tail rebuilds the board "
+				+ "every frame").is_false()
+	assert_int(BoardSpace.staging_version).override_failure_message(
+			"the version moved after every tile was home").is_equal(landed_version)
+
+	BoardSpace.end_flight_now()
+	BoardSpace.clear_staging()
+
+
 func test_clearing_the_staging_takes_the_flight_with_it() -> void:
 	# The F2 case. clear_board() calls clear_staging(), and if the flight did not die INSIDE that
 	# door a board swapped mid-transition would hand the fresh board columns in the air with nothing

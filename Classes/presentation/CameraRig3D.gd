@@ -429,6 +429,14 @@ func lift_to(lift: Vector3) -> void:
 	_target_lift = lift
 
 
+# ...and the CUT: land the lift channel on its target now (#602 round 7). Called by the mirror
+# only while a transition declares its drive a cut -- the flash is at full white for exactly this
+# frame, and the ease would still be smearing a 40-unit teleport across the fade that reveals it.
+func cut_lift() -> void:
+	_lift = _target_lift
+	_apply_position()
+
+
 # ...and how far the body the shot is following has fallen below the board (#602). POLLED like the
 # lift above and for the same reason: the fall ends by publishing zero, so a unit that dies at the
 # bottom of a plummet -- taking the fact with it -- leaves nothing to remember to undo.
