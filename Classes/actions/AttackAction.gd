@@ -152,8 +152,11 @@ func execute():
 	finish_execution()
 
 func get_action_icon() -> Texture2D:
-	var lethal := _lethality_icon()
+	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else ATTACK_ICON
+
+func resolved_outcome() -> ResolvedOutcome:
+	return resolved
 
 # A derived row shows its AIM's validity: the panel's ATTACK rows are the resolver's copies, whose
 # own is_valid is always the default true, so a refused aim could never render red.
@@ -162,9 +165,11 @@ func get_ui_modulate() -> Color:
 		return source_aim.get_ui_modulate()
 	return super()
 
-func _lethality_icon() -> Texture2D:
-	if resolved != null:
-		match resolved.lethality:
+# Static since #419: a derived row that is NOT an attack shows the same rung triple, and two
+# spellings would let the queue disagree with itself about what a down looks like.
+static func lethality_icon(outcome: ResolvedOutcome) -> Texture2D:
+	if outcome != null:
+		match outcome.lethality:
 			ResolvedOutcome.Lethality.DOWNED:
 				return DOWN_ICON
 			ResolvedOutcome.Lethality.MAIMED:

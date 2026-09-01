@@ -738,11 +738,11 @@ func _apply_cell_effects(cell_effects: Array[ResolvedCellEffect]) -> void:
 # neither, so using it would mean faking a plan. It reuses #520's camera seam at a shorter
 # duration rather than growing one of its own.
 func apply_burning_tile_damage(faction: Team.Faction) -> void:
-	var burned := _units_standing_in_fire(faction)
+	var hits := _tile_hits_for(faction)
 	# Claim NOTHING for a phase with nothing to show: the release is what hands the player their
 	# view back (#520 follow-up), so claiming here would fire a camera return at the end of every
 	# turn, burning or not.
-	if burned.is_empty():
+	if hits.is_empty():
 		_process_downed_pending()
 		return
 
@@ -751,29 +751,40 @@ func apply_burning_tile_damage(faction: Team.Faction) -> void:
 	# The SAME list the loop walks, published so the health readouts are up for it. Raised for the
 	# WHOLE phase rather than one unit at a time, matching how a plan raises a bar over everyone it
 	# will touch -- so the units still to come are already readable when the camera reaches them.
-	for unit in burned:
-		effect_pass_subjects[unit.get_instance_id()] = true
-	for unit in burned:
-		await game.camera_controller.pan_to(unit, Pacing.ENVIRONMENT_PAN)
+	for hit in hits:
+		effect_pass_subjects[hit.actor.get_instance_id()] = true
+	for hit in hits:
+		await game.camera_controller.pan_to(hit.actor, Pacing.ENVIRONMENT_PAN)
 		# The hit lands BEFORE the hold (dev, 2026-08-26: "the point of the linger is to show that
 		# something happened"). The other way round, the pause watched a unit at full health and the
 		# camera left as the cubes burst. It is also what keeps the mission banner off a kill that is
 		# not on screen yet -- game.end_turn calls mission_controller.check the moment this returns.
-		unit.take_damage(Terrain.BURNING_TILE_DAMAGE)
+		hit.execute()
 		await Pacing.beat(self, Pacing.ENVIRONMENT_HOLD)
 	effect_pass_subjects.clear()
 	game.camera_controller.set_playback_locked(camera_was_locked)
 	_process_downed_pending()
 
-# Who this phase is about, answered ONCE before any of it plays -- the whole set is knowable up
-# front, being a pure query over the burning cells and the acting faction.
-func _units_standing_in_fire(faction: Team.Faction) -> Array[Unit]:
-	var burned: Array[Unit] = []
-	for cell in game.terrain_states.burning_cells():
-		var unit: Unit = game.get_unit_at_cell(cell)
-		if unit != null and unit.get_faction() == faction:
-			burned.append(unit)
-	return burned
+# Who this phase is about, answered ONCE before any of it plays -- the same TileHitAction the queue
+# forecasts (#419), derived here from LIVE positions and tile state instead of the plan's projected
+# ones. Two derivations of one rule: a plan is per-SQUAD and this phase is per-FACTION, so neither
+# can consume the other's list -- what they share is Terrain.occupant_damage and the maker below it.
+#
+# Walks UNITS rather than burning cells, which is what keeps it symmetric with the forecast: both
+# ask "what is under this unit", so a hazard family the forecast can see cannot be one this misses.
+func _tile_hits_for(faction: Team.Faction) -> Array[TileHitAction]:
+	var hits: Array[TileHitAction] = []
+	var states_store: TerrainStateManager = game.terrain_states
+	var units: Array[Unit] = game._all_units()
+	for unit in units:
+		if unit == null or not is_instance_valid(unit) or unit.get_faction() != faction:
+			continue
+		var states := states_store.states_at(unit.movement.cell)
+		var damage := Terrain.occupant_damage(states)
+		if damage > 0:
+			hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage,
+					LethalityRules.situation_for(unit)))
+	return hits
 
 # ==============================================================================
 #  Downed units

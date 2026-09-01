@@ -36,6 +36,19 @@ class Situation:
 	var can_maim: bool = false               # a limb remains to take; false = already fully maimed
 	var crisis_armed: bool = false           # holds the Crisis ability (#158) — the gambit fires itself
 
+	# A detached copy of the ladder's own fields — how a caller predicts against a threaded
+	# hypothetical without touching it (#419). Beside the fields, so the two cannot drift.
+	func copy() -> Situation:
+		var s := Situation.new()
+		s.hp = hp
+		s.start_hp = start_hp
+		s.lifecycle = lifecycle
+		s.will = will
+		s.in_crisis = in_crisis
+		s.can_maim = can_maim
+		s.crisis_armed = crisis_armed
+		return s
+
 # The live, execution-time reading of a unit. start_hp == hp because at execution there is no
 # "earlier in the pass" — this hit IS the pass.
 static func situation_for(unit: Unit) -> Situation:

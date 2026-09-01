@@ -37,19 +37,19 @@ func setup(action_ref: BaseAction):
 	description_label.text = action.get_description()
 
 	if action is AttackAction:
-		var atk := action as AttackAction
-		_show_elemental_overlays(atk)
-		_show_hp_delta(atk)
+		_show_elemental_overlays(action as AttackAction)
+	# Any order carrying an outcome shows the readout, not attacks alone (#419) — a tile's
+	# end-of-turn damage reads as a hit like any other.
+	var outcome := action.resolved_outcome()
+	if outcome != null:
+		_show_hp_delta(outcome, action.aimed_at())
 
 	action_icon.modulate = action.get_ui_modulate()
 
 	# The X keeps its slot on every row (so content stays aligned) but is inert on rows that
-	# can't be cancelled: hold-position moves, derived counters, and the watch shot a walk takes
-	# (#592) — all three are computed rather than player orders, Law #2.
-	var hide_cancel: bool = (action is MoveAction and action.is_hold_position) \
-			or action is CounterAttackAction \
-			or (action is AttackAction and (action as AttackAction).is_watch_shot)
-	if hide_cancel:
+	# can't be cancelled. That is exactly "not an order the player sequenced", which the order
+	# already answers for the drag — one question, one answer (#419; was a hand-listed triple).
+	if not action.is_reorderable():
 		cancel_button.modulate.a = 0.0
 		cancel_button.disabled = true
 		cancel_button.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -110,17 +110,15 @@ func _overlay_behind(host: TextureRect, tex: Texture2D, pixel_offset := Vector2.
 	bg.offset_top += pixel_offset.y
 	bg.offset_bottom += pixel_offset.y
 	
-func _show_hp_delta(atk: AttackAction) -> void:
-	if atk.resolved == null:
-		return
+func _show_hp_delta(outcome: ResolvedOutcome, subject: Unit) -> void:
 	# target_hp_after is threaded across the whole pass (R4): for the Nth hit it already accounts
 	# for the earlier hits this combat. The raw number goes negative on a fatal hit, so the
 	# DISPLAYED "after" is clamped by the lifecycle result -- a down/maim leaves HP at 1, a kill at 0.
 	# That clamp is LethalityRules' since #313: the ghost readout over the unit draws the same
 	# prediction, and two spellings of it would let this panel and the board disagree.
-	var hp_before: int = atk.resolved.hp_before
-	var hp_after: int = LethalityRules.displayed_hp(atk.resolved.target_hp_after,
-			LethalityRules.lifecycle_for(atk.resolved.lethality))
+	var hp_before: int = outcome.hp_before
+	var hp_after: int = LethalityRules.displayed_hp(outcome.target_hp_after,
+			LethalityRules.lifecycle_for(outcome.lethality))
 
 	var hp_label := Label.new()
 	hp_label.text = "%d->%d" % [hp_before, hp_after]
@@ -130,8 +128,8 @@ func _show_hp_delta(atk: AttackAction) -> void:
 
 	# Team-color the readout: green when a friendly is losing HP, red for an enemy.
 	var friendly := true
-	if atk.target != null and is_instance_valid(atk.target):
-		friendly = not Team.is_enemy(atk.target.get_faction(), Team.Faction.PLAYER)
+	if subject != null and is_instance_valid(subject):
+		friendly = not Team.is_enemy(subject.get_faction(), Team.Faction.PLAYER)
 	var hp_color := Color(0.4, 1.0, 0.4) if friendly else Color(1.0, 0.4, 0.4)
 	hp_label.add_theme_color_override("font_color", hp_color)
 

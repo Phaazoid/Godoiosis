@@ -31,7 +31,8 @@ enum ActionType {
 	BURROW,
 	CAPTURE,
 	GUARD,
-	OVERWATCH
+	OVERWATCH,
+	TILE_HIT   # derived, never queued (#419) — the tile's own end-of-turn damage
 }
 
 # The action registry: a new action type is added to the enum + whichever lists apply.
@@ -100,6 +101,11 @@ func actor_can_perform() -> bool:
 # done to whom, and only the order can say who that is.
 func aimed_at() -> Unit:
 	return actor
+
+# The resolved outcome this order carries, or null — aimed_at's sibling door (#419). The queue row's
+# HP readout asks here rather than testing for AttackAction.
+func resolved_outcome() -> ResolvedOutcome:
+	return null
 
 func get_actor_texture() -> Texture2D:
 	if actor == null or not is_instance_valid(actor):

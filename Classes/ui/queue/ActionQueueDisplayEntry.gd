@@ -71,6 +71,11 @@ static func build_for(squad: Squad, plan: ResolvedPlan) -> Array[ActionQueueDisp
 			live_reactions.append(reaction)
 	_add_section(entries, "REACTION", live_reactions)
 
+	# LAST, because it happens last (#419). Its own section rather than a row indented under MOVE:
+	# the queue's order is the pass's clock, and a tile's damage lands after every order in it —
+	# including for a unit that never moved at all.
+	_add_section(entries, "END OF TURN", plan.tile_hits)
+
 	return entries
 
 # Appends a header plus its rows, preceded by a divider unless this is the first section on the

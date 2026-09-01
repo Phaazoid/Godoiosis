@@ -57,6 +57,54 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 			for cell_effect in _resolve_cell_effects(ctr, board, terrain_reactions):
 				plan.cell_effects.append(cell_effect)
 
+# --- The END OF TURN forecast (#419) --------------------------------------------------------
+#
+# What the tile each of this squad's units ENDS the pass on will do to it when the faction's turn
+# ends. Runs LAST, after attacks, counters, cell effects and the side-channel tail, because that is
+# when the burn happens — so it reads what the whole pass leaves behind.
+#
+# The squad's OWN members, which is also the faction filter: the end-of-turn pass burns the acting
+# faction alone, so an enemy shoved into fire correctly grows no row here — that happens at the end
+# of THEIR turn. The cell comes from get_projected_destination (the halt, the shove and the rescue
+# haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
+# fireball igniting a squadmate's cell is a burn the queue has to show.
+static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, hypo: Dictionary, board: BoardContext) -> void:
+	if board == null or board.terrain_states == null or squad == null:
+		return
+	var revived := _rescued_this_pass(squad, hypo)
+	for unit in squad.get_members():
+		if unit == null or not is_instance_valid(unit):
+			continue
+		var situation := projected_situation(unit, hypo)
+		if revived.has(unit):
+			# A queued Rescue revives its target ACTIVE at 1 HP, and the tail runs after everything
+			# the hypo threads — without this the forecast reads a DOWNED unit and predicts KILLED.
+			situation.lifecycle = Unit.LifecycleState.ACTIVE
+			situation.hp = maxi(situation.hp, 1)
+		if situation.lifecycle == Unit.LifecycleState.DEAD:
+			continue
+		var states := board.terrain_states.projected_states_at(
+				unit.get_projected_destination(), plan.cell_effects)
+		var damage := Terrain.occupant_damage(states)
+		if damage <= 0:
+			continue
+		plan.tile_hits.append(TileHitAction.make(unit, Terrain.burning_state(states), damage, situation))
+
+
+# Who this squad's queued rescues put back on their feet. Asked of the PROJECTED lifecycle, matching
+# RescueAction.execute's own is_downed() read, which runs after the attack phase (#124).
+static func _rescued_this_pass(squad: Squad, hypo: Dictionary) -> Array[Unit]:
+	var revived: Array[Unit] = []
+	for action in squad.action_queue:
+		if action.action_type != BaseAction.ActionType.RESCUE or not action.is_valid:
+			continue
+		var target: Unit = (action as RescueAction).target
+		if target != null and is_instance_valid(target) \
+				and projected_lifecycle(target, hypo) == Unit.LifecycleState.DOWNED:
+			revived.append(target)
+	return revived
+
+
 # --- Guard substitution (#414, docs/design/standing-reactions.md) ---------------------------
 #
 # ONE BLAST, ONE MOMENT: this runs once per volley, BEFORE any member resolves, so standing-reaction
@@ -733,6 +781,13 @@ static func projected_position(unit: Unit, hypo: Dictionary) -> Vector2i:
 	if not hypo.has(unit):
 		return unit.get_projected_destination()
 	return (hypo[unit] as _Hypo).position
+
+# The unit as this pass LEAVES it, as a Situation the ladder can read (#419) — a COPY, so asking
+# cannot alter the pass. situation_for's threaded twin.
+static func projected_situation(unit: Unit, hypo: Dictionary) -> LethalityRules.Situation:
+	if hypo.has(unit):
+		return (hypo[unit] as _Hypo).copy()
+	return LethalityRules.situation_for(unit)
 
 # Does this pass MOVE the unit's rung -- the alarm's question (#313), re-asked against the hypo's own
 # baseline rather than the live unit (#354). DOWNED and MAIMED move the lifecycle, KILLED moves it

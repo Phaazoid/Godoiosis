@@ -675,6 +675,54 @@ func test_every_class_knob_is_findable_in_the_file_it_names() -> void:
 				% [an_edit["label"], name, path.get_file()]).is_not_empty()
 
 
+# The half the two laws above cannot see: they ask whether the rewriter FINDS a declaration, never
+# whether what it leaves behind still parses. Both failures are silent and the second is worse --
+# Save reports success and the script stops loading.
+#
+# The live case, measured while #506 was being built: `DECLARATION_LINE` carries a `: set = _name`
+# SUFFIX but has no clause for an inline `set(value):` BLOCK, so a block-form declaration matches
+# anyway and the trailing colon is eaten as part of the value. `x := 0.06:` becomes `x := 0.99`,
+# the block beneath it is orphaned, and BoardOverlays.gd -- which the whole 3D stack hangs off --
+# is a parse error the first time a knob on it is tuned and saved. Nothing else in the suite could
+# have caught it; the findable law passes, because the rewriter did find something.
+#
+# Rewriting with each knob's OWN literal rather than a stand-in: `var x: Color = 1.0` is a type
+# error rather than a syntax one, and this law is about what Save actually writes.
+func test_a_saved_knob_leaves_its_script_still_parsing() -> void:
+	for knob: Dictionary in GameKnobs.KNOBS:
+		var path := KnobSource.script_path_for(_scene, knob)
+		if path.is_empty():
+			continue   # the findable law above owns that failure; do not report it twice
+		var prop := KnobSource.declaration_prop(knob)
+		# The DECLARATION's own value, not the knob's. A knob may name a component of one
+		# (`shadow_offset:y`), and writing that float over the whole `Vector3` declaration is a type
+		# error rather than the syntax fault this law is about -- it would fail on knobs that are
+		# perfectly fine.
+		var target := LookKnobs.target_of(_scene, knob)
+		var literal := DevWidgets.literal_for(target.get(prop))
+		var rewritten := KnobSource.rewrite_declaration_default(_read_file(path), prop, literal)
+		if rewritten.is_empty():
+			continue
+		var script := GDScript.new()
+		script.source_code = _without_class_name(rewritten)
+		assert_int(script.reload()).override_failure_message(
+			("saving '%s' would leave %s unparseable -- check how %s is declared "
+			+ "(an inline `set(value):` block loses its colon; use `: set = _name`)")
+				% [knob["label"], path.get_file(), prop]).is_equal(OK)
+
+
+# Parsing a real script's text as an anonymous GDScript refuses outright -- "Class X hides a global
+# script class" -- so the registered name comes out first. It is the one line that cannot take part
+# in the corruption being checked for, and dropping it leaves the whole body, declarations and
+# blocks included, to be judged exactly as written.
+func _without_class_name(source: String) -> String:
+	var kept := PackedStringArray()
+	for line in source.split("\n"):
+		if not line.strip_edges().begins_with("class_name "):
+			kept.append(line)
+	return "\n".join(kept)
+
+
 # The measured assumption the whole tab rests on. An override authored in the scene WINS over the
 # script default, so the moment one exists Save writes a line the game never reads -- and the only
 # symptom would be the dev tuning the same value twice.

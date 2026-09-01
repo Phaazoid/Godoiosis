@@ -12,6 +12,11 @@ var counters: Array[CounterAttackAction] = []
 # Terrain consequences derived this pass (#50). Empty unless the resolver ran with a board.
 var cell_effects: Array[ResolvedCellEffect] = []
 
+# What the END OF TURN pass will do to this squad's own units (#419) — derived LAST, after
+# everything above, because that is when it happens. Its own list for the reason watch_shots is:
+# nothing walking `attacks` may treat a tile's damage as an attack.
+var tile_hits: Array[TileHitAction] = []
+
 # The Guards this pass can see (#414), in ARM ORDER — so a stacked pair absorbs earliest-first with
 # no precedence rule to write down. Two sources, one list: wards armed in an EARLIER pass (copied
 # off the units, oldest sequence first) and Guards queued in THIS plan, appended by

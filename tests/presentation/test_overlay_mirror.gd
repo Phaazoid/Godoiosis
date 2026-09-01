@@ -333,6 +333,40 @@ func test_sight_trace_line_reaches_the_diorama_and_clears() -> void:
 	assert_int(_overlays.line_of(BoardOverlays.Layer.SIGHT_TRACE).size()).is_equal(0)
 
 
+# Tuning a verdict colour (#506) has to repaint a beam that is ALREADY UP, which is the only state
+# the dev is ever in while dragging the slider -- both views read these colours when the trace is
+# DRAWN, and a trace is only drawn when the hovered aim changes. Driven through the real knob so
+# the whole wire is asserted: GameKnobs.write_static -> OverlayManager.restyle_sight_trace ->
+# version bump -> this mirror -> the beam's own shader parameter.
+func test_tuning_a_verdict_colour_repaints_a_beam_that_is_already_standing() -> void:
+	var knob: Dictionary = {}
+	for entry: Dictionary in GameKnobs.CLASS_KNOBS:
+		if entry.get("static", "") == "CLEAR_COLOR":
+			knob = entry
+			break
+	assert_bool(knob.is_empty()).override_failure_message("no CLEAR_COLOR knob row").is_false()
+
+	var attacker := _spawn(PLAYER, Vector2i(2, 2))
+	var foe := _spawn(ENEMY, Vector2i(3, 2))
+	attacker.equipped_weapon = H.make_weapon(3)
+	game.enter_attack_mode(attacker)
+	game.selected_unit = attacker
+	game.hover_presenter._hover_attack_targeting(foe.movement.cell)
+	await _settle()
+
+	var beam := _overlays._markers[BoardOverlays.Layer.SIGHT_TRACE][0] as MeshInstance3D
+	var material := beam.material_override as ShaderMaterial
+	var before: Color = SightTrace2D.CLEAR_COLOR
+	# Any colour that is not the one standing; the VALUE is never the point.
+	var tuned := Color(before.g, before.b, before.r, before.a * 0.5)
+
+	GameKnobs.write_class(_scene, knob, tuned)
+	await _settle()
+	assert_that(material.get_shader_parameter("beam_color")).is_equal(tuned)
+
+	GameKnobs.write_class(_scene, knob, before)
+
+
 func test_target_pick_markers_split_from_the_reach_fill() -> void:
 	var rescuer := _spawn(PLAYER, Vector2i(2, 2))
 	var body := _spawn(PLAYER, Vector2i(3, 2))
