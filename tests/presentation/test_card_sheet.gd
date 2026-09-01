@@ -42,7 +42,7 @@ static var _shipped: Dictionary = {}
 func test_it_reads_the_frames_durations_and_animation_split_of_a_card_sheet() -> void:
 	var read := CardSheet.read(_build(), Rect2i(Vector2i.ZERO, SHEET_SIZE), NAMES)
 	assert_int(_errors(read).size()).override_failure_message(
-			"unexpected: %s" % _errors(read)).is_equal(0)
+			"unexpected: %s" % [_errors(read)]).is_equal(0)
 
 	var animations: Array = read["animations"]
 	assert_int(animations.size()).is_equal(2)
@@ -65,7 +65,7 @@ func test_a_frame_is_the_WHOLE_card_and_not_the_ink_inside_it() -> void:
 	img.set_pixel(22, 32, INK)
 	var read := CardSheet.read(img, Rect2i(Vector2i.ZERO, SHEET_SIZE), NAMES)
 	assert_int(_errors(read).size()).override_failure_message(
-			"unexpected: %s" % _errors(read)).is_equal(0)
+			"unexpected: %s" % [_errors(read)]).is_equal(0)
 	var first: Rect2i = (read["animations"][0]["cards"] as Array)[0]
 	assert_vector(first.position).is_equal(Vector2i(20, 30))
 	assert_vector(first.size).is_equal(CARD_SIZE)
@@ -81,7 +81,7 @@ func test_a_sprite_overhanging_its_gutter_does_not_weld_two_frames_into_one() ->
 
 	var read := CardSheet.read(img, Rect2i(Vector2i.ZERO, SHEET_SIZE), NAMES)
 	assert_int(_errors(read).size()).override_failure_message(
-			"unexpected: %s" % _errors(read)).is_equal(0)
+			"unexpected: %s" % [_errors(read)]).is_equal(0)
 	var cards: Array = read["animations"][0]["cards"]
 	assert_int(cards.size()).is_equal(5)
 	assert_vector((cards[0] as Rect2i).position).is_equal(Vector2i(20, 30))
@@ -141,7 +141,7 @@ func test_a_sheet_with_no_clear_card_colour_is_refused() -> void:
 func test_the_shipped_sheet_reads_without_error() -> void:
 	var read := _shipped_read()
 	assert_int(_errors(read).size()).override_failure_message(
-			"unexpected: %s" % _errors(read)).is_equal(0)
+			"unexpected: %s" % [_errors(read)]).is_equal(0)
 	assert_array(read["animations"]).is_not_empty()
 
 
@@ -300,6 +300,13 @@ func _glyph(img: Image, value: int, card_x: int, top: int) -> void:
 # runtime, and `assert_array()` reports it EMPTY whatever it holds -- so `is_empty()` on one passes
 # vacuously and can never fail. Caught here the honest way: the case that corrupts a glyph went
 # green against a reader that was correctly refusing it. Assert on `.size()` of a typed local.
+#
+# AND BRACKET IT AT A FORMAT SITE (#668). `%` reads an Array right-hand side as the ARGUMENT LIST,
+# never as one value, and `override_failure_message` builds its string EAGERLY -- so `% _errors(read)`
+# errored on the PASSING run (empty array, one placeholder, no arguments), four times per suite.
+# `read` returns at every append, so today the list is only ever 0 or 1 long and the one-error case
+# happened to render; bracket it anyway, or collecting errors instead of returning breaks the
+# message on the very run that wants it.
 func _errors(read: Dictionary) -> Array:
 	return read["errors"]
 
