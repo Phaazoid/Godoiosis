@@ -26,6 +26,9 @@ class_name GameTool
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
 # A NOTE rather than a heading, so it must not read as one -- cool against the headings' gold.
 const NOTICE_COLOR := Color(0.62, 0.82, 1.0, 1)
+# How many rows the save confirm names before it stops counting them out. A dialog listing sixty is
+# one nobody reads, which is the failure this list exists to fix.
+const CONFIRM_LIST_MAX := 12
 const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
 const PALETTE_SETTING := PlayerSettings.Setting.AIM_PALETTE
 
@@ -449,9 +452,31 @@ func _on_save_pressed() -> void:
 		_status.text = "Nothing has moved off what is saved."
 		return
 	DevWidgets.confirm(self,
-		"Write %d changed value(s) into the scripts that declare them? The old defaults are replaced."
-			% (moved.size() + moved_class.size()),
+		"Write %d changed value(s) into the scripts that declare them? The old defaults are replaced.\n\n%s"
+			% [moved.size() + moved_class.size(), _moved_labels(moved, moved_class)],
 		func() -> void: _save_confirmed(moved, moved_class))
+
+
+# WHAT is about to be written, by NAME (#394). A count alone was enough while this panel was the only
+# writer of every row it can save -- "changed off baseline" meant "you dragged it here". A SETTING row
+# breaks that equivalence: the pause menu's Settings page writes the same store, so a preference
+# flipped THERE reads as a changed row here and rides into the next Save as the shipped default, with
+# the ask unable to say so. Naming the rows is the general answer rather than a clause about settings,
+# since it is #380's ask-first doing its job for every kind at once.
+#
+# ONE PER LINE: ConfirmationDialog's text does not autowrap, so a joined run would leave its tail off
+# the side of the dialog -- which is the same failure as not naming them at all.
+func _moved_labels(moved: PackedInt32Array, moved_class: PackedInt32Array) -> String:
+	var labels: PackedStringArray = PackedStringArray()
+	for i: int in moved:
+		labels.append(String(GameKnobs.KNOBS[i]["label"]))
+	for i: int in moved_class:
+		labels.append(String(GameKnobs.CLASS_KNOBS[i]["label"]))
+	if labels.size() <= CONFIRM_LIST_MAX:
+		return "\n".join(labels)
+	var shown := labels.slice(0, CONFIRM_LIST_MAX)
+	shown.append("...and %d more" % (labels.size() - CONFIRM_LIST_MAX))
+	return "\n".join(shown)
 
 
 func _save_confirmed(moved: PackedInt32Array, moved_class: PackedInt32Array) -> void:

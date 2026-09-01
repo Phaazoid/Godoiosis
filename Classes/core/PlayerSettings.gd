@@ -115,7 +115,7 @@ const DEFS := {
 	},
 	Setting.UNHOVERED_BAR_NUMBERS: {
 		"title": "Numbers on unhovered bars",
-		"desc": "Show the HP digits on a bar that is up for some reason other than your cursor -- a queued plan, or the setting above. Pointing at a unit shows its numbers either way, so this is about how crowded the board gets.",
+		"desc": "Show the HP digits on a bar that is up for some reason other than your cursor -- a queued plan, or the Health bars setting. Pointing at a unit shows its numbers either way, so this is about how crowded the board gets.",
 		"default": false,
 	},
 }

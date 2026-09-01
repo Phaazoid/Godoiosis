@@ -920,3 +920,48 @@ func test_a_setting_row_writes_the_real_preference() -> void:
 
 	assert_bool(PlayerSettings.is_on(setting)).override_failure_message(
 			"the dev checkbox moved and the player's setting did not").is_equal(want)
+
+
+# --- The ask NAMES what it is about to write (#394) ------------------------------------------
+
+func test_the_save_confirm_names_the_rows_it_would_write() -> void:
+	# A count alone was enough while this panel was the only writer of every row it can save. A
+	# SETTING row breaks that: the pause menu's Settings page writes the same store, so a preference
+	# flipped THERE reads as changed here and would ride into the next Save as the shipped default --
+	# and #380's ask-first cannot do its job while it only says how many.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var knob := _class_knob("setting", setting)
+	assert_bool(knob.is_empty()).override_failure_message(
+			"no CLASS_KNOBS row names the unhovered-bar-numbers setting").is_false()
+
+	# Written from OUTSIDE the panel entirely -- the whole point is that this row can move without
+	# anyone touching the Game tab.
+	PlayerSettings.set_on(setting, not PlayerSettings.is_on(setting))
+	_game._on_save_pressed()
+
+	var dialog := _find_dialog(_game)
+	assert_object(dialog).override_failure_message("the save never reached its confirm").is_not_null()
+	assert_str(dialog.dialog_text).override_failure_message(
+			"the ask does not say WHICH rows it would write, so a preference set on the Settings page "
+			+ "would become the shipped default unannounced").contains(String(knob["label"]))
+
+	dialog.canceled.emit()
+	dialog.hide()
+	await await_idle_frame()
+
+func test_the_save_confirm_stops_counting_rows_out_past_a_dozen() -> void:
+	# A dialog listing sixty labels is one nobody reads, which is the failure the list exists to fix.
+	# Driven through the real formatter rather than the panel: reaching thirteen moved rows by hand
+	# would be pinning which knobs happen to be tunable, not the wrapping rule.
+	var many := PackedInt32Array()
+	for i in mini(GameTool.CONFIRM_LIST_MAX + 3, GameKnobs.KNOBS.size()):
+		many.append(i)
+	assert_int(many.size()).override_failure_message(
+			"KNOBS is too short for this case to mean anything").is_greater(GameTool.CONFIRM_LIST_MAX)
+
+	var text := _game._moved_labels(many, PackedInt32Array())
+	assert_int(text.split("\n").size()).override_failure_message(
+			"the list did not cap at CONFIRM_LIST_MAX plus its own summary line").is_equal(
+			GameTool.CONFIRM_LIST_MAX + 1)
+	assert_str(text).contains("and %d more" % (many.size() - GameTool.CONFIRM_LIST_MAX))

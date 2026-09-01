@@ -117,7 +117,7 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
 		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
 	# (Unhovered bars show number LEFT this table in #394 -- it is a player setting now, and a value
-	# has one store. It is still tunable in play: SETTING_KNOBS below puts it on this same tab, as a
+	# has one store. It is still tunable in play: CLASS_KNOBS below puts it on this same tab, as a
 	# control that writes the real preference rather than a knob with a copy of it.)
 	# --- The element-state row (#357) ---
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
@@ -1515,6 +1515,12 @@ static func class_edits(host: Node3D, indices: PackedInt32Array) -> Array[Dictio
 		if knob.has("setting"):
 			# The live preference becomes the SHIPPED DEFAULT. Unlike the two kinds below, what is
 			# written is not where the value was read from -- the store keeps owning the live one.
+			#
+			# WATCH THE LITERAL WHEN A CHOICE ROW JOINS. literal_for spells a bool as true/false,
+			# which is what a DEFS default already looks like; an int would replace
+			# `AimPalette.DEFAULT` with a bare `0` -- correct, lossy, and every test here would still
+			# pass. A choice row wants its enum spelling written: a branch to add, not a default to
+			# inherit.
 			var setting_name: String = PlayerSettings.Setting.keys()[knob["setting"]]
 			edits.append(KnobSource.edit(SETTINGS_SCRIPT, KnobSource.Kind.SETTING_DEFAULT,
 				setting_name, literal, knob["label"], i, CLASS_SOURCE))
