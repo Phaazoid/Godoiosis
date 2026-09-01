@@ -62,6 +62,16 @@ const KNOBS: Array[Dictionary] = [
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "billboard_pixel_size", "label": "Icon pixel size", "min": 0.004, "max": 0.1, "step": 0.001,
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
+	# The sight beam's SHAPE (#506); its colour is two rows in CLASS_KNOBS, because the verdict hue
+	# is shared with the flat view and these three have no flat-view equivalent at all. Each one
+	# re-applies on write through its own setter, so a standing beam changes under the slider.
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_width", "label": "Sight beam width", "min": 0.01, "max": 0.4, "step": 0.005,
+		"tip": "How thick the aim's sight beam is, in cells -- it is a ribbon turned to face the camera, so this is a real world width that gets smaller with distance like everything else in the diorama. Thin reads as a laser sight, thick as a tracer round."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
+		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
+	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,
+		"tip": "Brightness multiplier on the beam's colour. Past the scene's glow threshold (1.2 by default, on the Moods tab) the bloom takes over and the beam starts to burn -- which is the dial that makes it read as light rather than paint. Separate from the colour because a colour row cannot go above full white."},
+
 	# --- Dev chrome ---
 	# Filed truthfully rather than folded into the markup above it: these are the only rows on this
 	# tab a player never sees.
@@ -358,6 +368,7 @@ const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
 const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
+const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
@@ -444,6 +455,17 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	{"group": "Board markup colours", "label": "Tile-pick flash period", "static": "PICK_FLASH_PERIOD",
 		"min": 0.05, "max": 2.0, "step": 0.05,
 		"tip": "Seconds for HALF a flash cycle -- the time from the layer's own alpha up to the peak, then the same back down. Smaller is a faster blink. Takes effect on the next pick."},
+
+	# The sight trace's two VERDICT colours (#506). They live on SightTrace2D because that is who
+	# draws the flat view, and the diorama's beam copies them -- one answer, so the two views can
+	# never disagree about what a blocked shot looks like. Statics rather than LAYERS entries for
+	# the same reason: BoardOverlays' SIGHT_TRACE colour is only the no-mirror fallback, so a knob
+	# pointed at it would be a slider nothing reads. HOW BRIGHT the 3D beam burns is a separate row
+	# on the Board markup group, since a colour row here tops out at full white.
+	{"group": "Board markup colours", "label": "Sight beam, clear", "static": "CLEAR_COLOR", "script": SIGHT_TRACE_SCRIPT,
+		"tip": "The aim's sight beam when the shot has a clear line. Reads on top of the terrain rather than as part of it, so it wants to be a colour nothing on the board is -- the default is plain white and lets the glow knob do the work. Takes effect on a beam already up. Unlike the reach and footprint rows, the player's Aim colours palette does NOT repaint this -- the beam is outside #422's vocabulary, so what you tune here is what every player sees."},
+	{"group": "Board markup colours", "label": "Sight beam, blocked", "static": "BLOCKED_COLOR", "script": SIGHT_TRACE_SCRIPT,
+		"tip": "The same beam when terrain stops the shot -- it is drawn only as far as the block, so this colour and the length are together the whole verdict. Wants to be unmistakable against the clear colour at a glance, since the two are never on screen at the same time to compare. Takes effect on a beam already up. Not palette-driven either, so this colour stands whatever Aim colours is set to."},
 
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
@@ -964,6 +986,10 @@ static func read_static(name: String) -> Variant:
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
 		"KNOCKBACK_MODULATE": return OverlayManager.KNOCKBACK_MODULATE
 		"WATCH_MARK_COLOR": return OverlayManager.WATCH_MARK_COLOR
+		# On SightTrace2D, not OverlayManager -- the flat renderer owns the verdict hue and the
+		# diorama's beam copies it. The names match the vars, as every row in this table does.
+		"CLEAR_COLOR": return SightTrace2D.CLEAR_COLOR
+		"BLOCKED_COLOR": return SightTrace2D.BLOCKED_COLOR
 		"WATCH_MARK_SCALE": return OverlayManager.WATCH_MARK_SCALE
 		"WATCH_REACH_MODULATE": return OverlayManager.WATCH_REACH_MODULATE
 		"WATCH_HOVER_MODULATE": return OverlayManager.WATCH_HOVER_MODULATE
@@ -1088,6 +1114,11 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
 		"KNOCKBACK_MODULATE": OverlayManager.KNOCKBACK_MODULATE = value
 		"WATCH_MARK_COLOR": OverlayManager.WATCH_MARK_COLOR = value
+		# Both fall through to the re-apply match below rather than returning: a beam that is
+		# already up does not repaint until the hovered aim changes, which is precisely not what
+		# happens while the dev drags a slider (WATCH_MARK_COLOR's born-dead-slider reasoning).
+		"CLEAR_COLOR": SightTrace2D.CLEAR_COLOR = value
+		"BLOCKED_COLOR": SightTrace2D.BLOCKED_COLOR = value
 		"WATCH_MARK_SCALE": OverlayManager.WATCH_MARK_SCALE = value
 		"WATCH_REACH_MODULATE": OverlayManager.WATCH_REACH_MODULATE = value
 		"WATCH_HOVER_MODULATE": OverlayManager.WATCH_HOVER_MODULATE = value
@@ -1410,6 +1441,9 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 		# Written once when the marks are built, so a tuned value needs a re-apply or the slider moves
 		# and nothing on the board does (#264's born-dead slider).
 		"WATCH_MARK_COLOR", "WATCH_MARK_SCALE": manager.restyle_watch_marks()
+		# Re-showing the standing trace is the re-apply: it repaints the flat line and bumps the
+		# version the mirror gates on, which is exactly what a fresh hover does (#506).
+		"CLEAR_COLOR", "BLOCKED_COLOR": manager.restyle_sight_trace()
 		# No bespoke sweep for the three planned-move tints: redraw_planned_paths already tears
 		# every arrow down and rebuilds it through _arrow_modulate, so it IS the re-apply.
 		"MOVE_ARROW_MODULATE", "INVALID_ARROW_MODULATE", "TRAILING_ARROW_MODULATE":

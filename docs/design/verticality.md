@@ -6,7 +6,7 @@ grill-style. Every ruling below is his; the rationale is recorded because almost
 re-derivable from the code. Numbers (tolerances, drop damage, the 2D offset) are deliberately absent —
 they are feel values and get knobs, not guesses (`CLAUDE.md` → the tuning rule).
 
-**Canon checked through #661 (2026-08-29).**
+**Canon checked through #674 (2026-09-01).**
 
 The one-line version: **a cell has a height, height changes only via ramps, ramps are chokepoints
 rather than tolls, and what height buys you is REACH — not damage, not to-hit.**
@@ -562,6 +562,45 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   trace — and a directional spread has no single line. Pinned by
   `tests/weapons/test_sight_trace.gd` — including the law that the gate and the trace can never
   disagree — falsified against a wrong eye height and against the version bump being dropped.
+- **What the diorama DRAWS those points as is a ribbon, not a line ([#506](https://github.com/Phaazoid/Godoiosis/issues/506)).** The LINE kind emitted an
+  `ImmediateMesh` line strip, which **Godot draws at one screen pixel regardless of distance** — so
+  the bead stayed a hairline however far [#410](https://github.com/Phaazoid/Godoiosis/issues/410)'s zoom pushed the camera in, which is what the dev
+  reported: *"the current one of just a thin line doesn't look good."* `set_line` now emits each
+  centreline point TWICE with a side flag and the joint-averaged tangent, and
+  `Classes/presentation/sight_beam.gdshader` pushes the pair apart toward the camera. **The
+  expansion is in the VERTEX stage rather than in GDScript** because the side vector depends on
+  where the camera is, so a CPU ribbon would rebuild every frame the rig orbits — and
+  `BoardOverlays` has no `_process` to grow one in. Three things carry it: `cull_disabled` (the
+  winding flips with the tangent's direction relative to the camera, so half the orbit would render
+  nothing), a joint-averaged tangent (a lob's arc bends at every sample and a per-segment tangent
+  splits the strip open at each joint), and `extra_cull_margin` (the mesh's AABB is the centreline,
+  and the shader draws outside it). **The centreline store is untouched** — `line_of` still returns
+  the points, so `Reach`, `HoverPresenter` and `OverlayMirror` needed no edit at all.
+- **Two visual regressions shipped on this before it was right, and both are worth carrying.** The
+  cross-ribbon `abs()` was taken in the VERTEX stage, where every vertex sits on a rim, so it
+  interpolated to a constant and ALPHA came out **zero everywhere** — a beam built correctly,
+  positioned correctly and completely invisible. Then a screen-pixel **width floor**, derived from
+  view depth over `PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y`, **dominated the width at every knob
+  setting** and drew the beam as enormous wedges. **What identified the second one was the SHAPE,
+  not the numbers**: the beam was narrow at the shooter and flared toward the target, and
+  perspective does the opposite to a constant-width ribbon, so the only depth-dependent term had to
+  be the culprit whatever its denominator was really doing. The floor is gone — width is one
+  world-space multiply, and `tests/presentation/test_sight_beam.gd` refuses the builtin by name.
+  **Neither was visible to any test, and that is structural**: no headless run has a rendering
+  device, so the suite can assert the mesh and every knob wire and still never see that nothing is
+  drawn. A `.gdshader` diff's gate is the dev's eyes; say so rather than letting a green suite imply
+  otherwise.
+- **The flat view keeps the thin line, and that is a DECLARED asymmetry** (dev, 2026-09-01) — one
+  more entry on [#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s existing ledger for this feature rather than a new debt, since the
+  two views already differ about the arc. What they must NOT differ about is the VERDICT, so the
+  clear/blocked colours stay one answer on `SightTrace2D` (now `static var`, so a knob has
+  something to write) and the beam copies them. Its width, edge softness and glow are 3D-only
+  `BoardOverlays` exports, the flat line having no equivalent of any of them.
+- **Everything else the look could grow is [#674](https://github.com/Phaazoid/Godoiosis/issues/674)**, filed as a declared deferral rather than
+  attempted here: motion along the beam (**marching dashes**, the dev's choice), a terminal
+  reticule and an impact mark at the block — which is what would answer "blocked vs clear at a
+  glance", since a blocked shot currently reads only as *shorter and red* — and a ground shadow
+  under a lob's arc.
 
 **Stale-content trap, paid once the day this shipped:** a scenario snapshot EMBEDS carving copies,
 and `.tres` omits defaulted fields — so a board saved before `arc_clearance` existed loads its

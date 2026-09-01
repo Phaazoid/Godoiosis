@@ -424,6 +424,17 @@ func clear_sight_trace() -> void:
 	_sight_trace_2d.trace = null
 	_sight_trace_2d.queue_redraw()
 
+
+# The verdict colours' re-apply (#506). Both views read them when the trace is DRAWN, and a trace
+# is only drawn when the hovered aim changes -- so tuning a colour with an aim standing still would
+# move the slider and nothing else until the pointer did. Re-showing the same trace is the whole
+# fix: it repaints the 2D and bumps the version the mirror gates on, which is exactly what a fresh
+# hover does. No standing trace means nothing to repaint, and the next one will read the new value.
+func restyle_sight_trace() -> void:
+	if sight_trace == null:
+		return
+	show_sight_trace(sight_trace)
+
 # What color the reach layer should paint with for this attack -- red for damage, green for a
 # heal. A null attack (bare fists) reads as the default/damage color. A WATCH aim paints its own
 # colour whatever the attack does; see WATCH_REACH_MODULATE for why the verb outranks the heal fork.
