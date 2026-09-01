@@ -209,10 +209,14 @@ func test_a_body_this_pass_rescues_is_forecast_standing_not_dead() -> void:
 # LAST, because it happens last -- after every order in the queue, which is the pass's clock. And
 # undraggable, or the player could sequence a consequence nobody ordered.
 func test_the_row_closes_the_panel_in_its_own_section_and_cannot_be_dragged() -> void:
+	# A walk AND an attack that draws a counter, so the panel really has a REACTION section to be
+	# ordered against -- without one the "last section" assertion passes on a board that has none.
 	_ignite(FIRE)
-	var walker := H.spawn_solo(self, _sm, PLAYER, Vector2i(0, 0), STOUT, false)
+	var walker := H.spawn_solo(self, _sm, PLAYER, Vector2i(2, 0), STOUT, true, 3)
+	var enemy := H.spawn_solo(self, _sm, ENEMY, Vector2i(4, 0), STOUT, true, 4)
 	walker.squad._queue_action(_walk(walker, FIRE))
-	var plan := _sm.resolve_plan(walker.squad, _board([walker]))
+	walker.squad._queue_action(H.stamped_attack(walker, enemy))
+	var plan := _sm.resolve_plan(walker.squad, _board([walker, enemy]))
 
 	var entries := ActionQueueDisplayEntry.build_for(walker.squad, plan)
 
@@ -230,9 +234,9 @@ func test_the_row_closes_the_panel_in_its_own_section_and_cannot_be_dragged() ->
 			assert_bool(entry.action.is_reorderable()).override_failure_message(
 					"the burn row is draggable -- the player could sequence a consequence").is_false()
 	assert_int(rows).override_failure_message("the burn never reached the panel").is_equal(1)
-	assert_int(headers.size()).override_failure_message(
-			"precondition: this walk should also produce a MOVE section to order against") \
-		.is_greater(1)
+	assert_bool(headers.has("REACTION")).override_failure_message(
+			"precondition: no counter was drawn, so there is no later section to order against") \
+		.is_true()
 	assert_str(headers[-1]).override_failure_message(
 			"END OF TURN is not the last section -- it happens after everything in the queue") \
 		.is_equal("END OF TURN")
