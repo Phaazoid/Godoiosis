@@ -33,13 +33,10 @@ uniform float beam_min_pixels = 2.0;
 // Edge falloff exponent: 1.0 is a linear fade to the rim, higher concentrates a bright core.
 uniform float beam_softness = 1.5;
 
-varying float v_edge;
-
 void vertex() {
 	// UV.y is the side flag as 0/1; remap to -1/+1. UV.x is the normalized position along the beam
 	// (see set_line) -- unused here, and #674's marching dashes are what would read it.
 	float side_sign = UV.y * 2.0 - 1.0;
-	v_edge = abs(side_sign);
 
 	vec3 view_pos = (MODELVIEW_MATRIX * vec4(VERTEX, 1.0)).xyz;
 	vec3 view_tangent = (MODELVIEW_MATRIX * vec4(NORMAL, 0.0)).xyz;
@@ -68,7 +65,17 @@ void fragment() {
 	// A bright core fading to the rim, which is what separates a beam from a flat strip with hard
 	// edges. beam_softness only shapes the falloff; the rim always reaches zero, so the ribbon has
 	// no visible boundary to read as geometry.
-	float falloff = pow(max(1.0 - v_edge, 0.0), beam_softness);
+	//
+	// THE DISTANCE ACROSS THE RIBBON IS ONLY KNOWABLE HERE. Every VERTEX sits on a rim, at side
+	// -1 or +1, so `abs(side)` is 1.0 at all of them -- taking it in the vertex stage and passing
+	// the result interpolates 1.0 with 1.0, reads 1.0 across the whole surface, and makes ALPHA
+	// uniformly ZERO. That shipped: the beam was perfectly built, perfectly positioned and
+	// completely invisible, and no knob could reach it (width widened nothing, glow multiplied an
+	// ALBEDO never blended in, softness was pow(0, n) either way). The ABS MUST FOLLOW THE
+	// INTERPOLATION. Reading UV.y back here rather than passing a varying is the same fix with one
+	// less moving part -- UV interpolates on its own, 0 and 1 at the rims and 0.5 down the middle.
+	float edge = abs(UV.y * 2.0 - 1.0);
+	float falloff = pow(max(1.0 - edge, 0.0), beam_softness);
 	ALBEDO = beam_color.rgb * beam_intensity;
 	ALPHA = beam_color.a * falloff;
 }
