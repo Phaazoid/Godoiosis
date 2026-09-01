@@ -376,6 +376,12 @@ const CLASS_KNOBS: Array[Dictionary] = [
 		"tip": "The reach fill while aiming a damaging attack. Red reads as hostile, which is the whole reason a healing pick paints green instead."},
 	{"group": "Board markup colours", "label": "Heal reach (2D+3D)", "static": "HEAL_ATTACK_MODULATE",
 		"tip": "The same reach fill when the pick HEALS. Forked off the attack's own heals flag, so an attack cannot paint the wrong colour for what it does."},
+	# The footprint the reach pair above is aimed THROUGH -- the cells the current pick would actually
+	# hit. A const with no row until #422 made it a static var: it is the third channel a player's aim
+	# palette repaints, and a value a palette can move has to be one the dev can author. Its pulsed low
+	# point follows it (aim_pulse_color borrows the fill's RGB), so there is no second colour to chase.
+	{"group": "Board markup colours", "label": "Aim footprint (2D+3D)", "static": "HOVER_MODULATE",
+		"tip": "The cells your current pick would actually hit, drawn on top of the reach fill. Yellow-on-red out of the box, which is the contrast that makes an aim readable -- tune it against whichever reach colour it sits over, not on its own."},
 	{"group": "Board markup colours", "label": "Blocked-reach dim (3D)", "static": "BLOCKED_REACH_DIM",
 		"min": 0.1, "max": 1.0, "step": 0.01,
 		"tip": "How much darker a reach cell past the attack's vertical tolerance draws in 3D, relative to the live reach colour. The 2D says the same thing with a hatched tile instead."},
@@ -949,6 +955,7 @@ static func read_static(name: String) -> Variant:
 	match name:
 		"ATTACK_MODULATE": return OverlayManager.ATTACK_MODULATE
 		"HEAL_ATTACK_MODULATE": return OverlayManager.HEAL_ATTACK_MODULATE
+		"HOVER_MODULATE": return OverlayManager.HOVER_MODULATE
 		"BLOCKED_REACH_DIM": return OverlayManager.BLOCKED_REACH_DIM
 		"SQUAD_RING_ALPHA": return OverlayManager.SQUAD_RING_ALPHA
 		"SQUAD_RING_PULSE_GAIN": return OverlayManager.SQUAD_RING_PULSE_GAIN
@@ -1072,6 +1079,7 @@ static func write_static(host: Node3D, name: String, value: Variant) -> void:
 	match name:
 		"ATTACK_MODULATE": OverlayManager.ATTACK_MODULATE = value
 		"HEAL_ATTACK_MODULATE": OverlayManager.HEAL_ATTACK_MODULATE = value
+		"HOVER_MODULATE": OverlayManager.HOVER_MODULATE = value
 		"BLOCKED_REACH_DIM": OverlayManager.BLOCKED_REACH_DIM = value   # mirror reads it per frame; the refresh below is harmless
 		"SQUAD_RING_ALPHA": OverlayManager.SQUAD_RING_ALPHA = value
 		"SQUAD_RING_PULSE_GAIN": OverlayManager.SQUAD_RING_PULSE_GAIN = value
