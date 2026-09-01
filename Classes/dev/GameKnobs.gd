@@ -116,8 +116,9 @@ const KNOBS: Array[Dictionary] = [
 	# where it lands more precisely than a marker beside them could, so #313's notch is gone.
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
 		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "unhovered_shows_number", "label": "Unhovered bars show number",
-		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
+	# (Unhovered bars show number LEFT this table in #394 -- it is a player setting now, and a value
+	# has one store. It is still tunable in play: SETTING_KNOBS below puts it on this same tab, as a
+	# control that writes the real preference rather than a knob with a copy of it.)
 	# --- The element-state row (#357) ---
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
 		"tip": "Size of each element-state icon above the health bar, in texels -- 16 is one cell. The source art is 32px (wet) and 16px (the frozen-tile stand-in for chilled), so powers of two land on exact reductions and anything else will shimmer as the camera moves. This is the first dial to reach for if the icons stop reading at play distance."},
@@ -353,6 +354,9 @@ const KNOBS: Array[Dictionary] = [
 # of "which file holds LAYERS" would go stale the first time one moved. Checked by a law.
 const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
 const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
+# Where a PLAYER SETTING's authored default lives (#394). The third thing CLASS_KNOBS can name, and
+# the only one whose live value is not what Save writes -- see the "setting" rows below.
+const SETTINGS_SCRIPT := "res://Classes/core/PlayerSettings.gd"
 const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
@@ -360,6 +364,17 @@ const MISSION_STATUS_SCRIPT := "res://Classes/ui/MissionStatusPanel.gd"
 const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
+	# --- Player settings the dev authors the DEFAULT for (#394) ---
+	#
+	# A THIRD kind of class-level value, and the only one where the control and the Save write
+	# different things: the control writes the REAL preference (one value, one store -- dev, 2026-08-28,
+	# so this and the pause menu's Settings page can never disagree), while Save writes the "default"
+	# in PlayerSettings.DEFS, i.e. what someone who never opens that page gets. Flipping it here really
+	# does change your own preference; saving is a separate act that decides what SHIPS.
+	{"group": "Player settings", "setting": PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS,
+		"label": "Unhovered bars show number",
+		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
+
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
 		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
 	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
@@ -887,6 +902,10 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Board markup colours": "Colours",
 	"Squad markers": "Colours",
 	"Unit HUD": "Unit HUD",
+	# Its OWN heading on the Unit HUD tab rather than joining the knobs above it (#394): these rows
+	# write a player's real preference and their Save writes a different value again, which is worth
+	# a line of separation from the knobs that simply are what they say.
+	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
 	"World": "World",
@@ -935,6 +954,8 @@ const CLASS_SOURCE := "class"
 # property to address, so each store gets its answer here and nowhere else.
 
 static func read_class(host: Node3D, knob: Dictionary) -> Variant:
+	if knob.has("setting"):
+		return PlayerSettings.value_of(knob["setting"])
 	if knob.has("static"):
 		return read_static(knob["static"])
 	var overlays := overlays_of(host)
@@ -944,6 +965,11 @@ static func read_class(host: Node3D, knob: Dictionary) -> Variant:
 
 
 static func write_class(host: Node3D, knob: Dictionary, value: Variant) -> void:
+	if knob.has("setting"):
+		# The REAL preference, not a panel-local copy -- no re-apply, because the one reader
+		# (UnitMirror) is a per-frame reconcile and reads the store itself.
+		PlayerSettings.set_value(knob["setting"], value)
+		return
 	if knob.has("static"):
 		write_static(host, knob["static"], value)
 		return
@@ -1486,6 +1512,13 @@ static func class_edits(host: Node3D, indices: PackedInt32Array) -> Array[Dictio
 	for i: int in indices:
 		var knob: Dictionary = CLASS_KNOBS[i]
 		var literal := DevWidgets.literal_for(read_class(host, knob))
+		if knob.has("setting"):
+			# The live preference becomes the SHIPPED DEFAULT. Unlike the two kinds below, what is
+			# written is not where the value was read from -- the store keeps owning the live one.
+			var setting_name: String = PlayerSettings.Setting.keys()[knob["setting"]]
+			edits.append(KnobSource.edit(SETTINGS_SCRIPT, KnobSource.Kind.SETTING_DEFAULT,
+				setting_name, literal, knob["label"], i, CLASS_SOURCE))
+			continue
 		if knob.has("static"):
 			edits.append(KnobSource.edit(knob.get("script", OVERLAY_MANAGER_SCRIPT),
 				KnobSource.Kind.DECLARATION,
@@ -1513,4 +1546,6 @@ static func tip_for(knob: Dictionary) -> String:
 		tip += "\n\n3D ONLY -- the flat 2D board keeps its own colour. A declared divergence, and provisional: tune it, look at it, then decide whether 2D should follow."
 	elif knob.has("static"):
 		tip += "\n\nMOVES BOTH STACKS -- this is one value both the 2D and the 3D read, so the flat game changes with it."
+	elif knob.has("setting"):
+		tip += "\n\nTHE REAL PLAYER SETTING, not a preview -- the same one the pause menu's Settings page shows, so flipping it here changes your own preference. Save writes what a player who never opens that page gets."
 	return DevWidgets.wrap_tooltip(tip)

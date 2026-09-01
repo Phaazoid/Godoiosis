@@ -553,9 +553,13 @@ func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
 		"Knobs with no row drawn anywhere: %s" % ", ".join(missing)).is_empty()
 
 
+# ASK THE ONE QUESTION -- "is this addressed as node:prop?" -- rather than enumerating the kinds
+# CLASS_KNOBS can hold. It listed `layer` and `static`, so #394's third kind fell through to
+# LookKnobs.read, came back null, and the checkbox skip above never fired: a real setting row was
+# reported as a knob with no row. An enumeration of kinds is a copy of read_class's own fork and
+# goes stale every time that table learns something (Law #4, in a test helper).
 func _value_of(knob: Dictionary) -> Variant:
-	return GameKnobs.read_class(_scene, knob) if knob.has("layer") or knob.has("static") \
-		else LookKnobs.read(_scene, knob)
+	return LookKnobs.read(_scene, knob) if knob.has("node") else GameKnobs.read_class(_scene, knob)
 
 
 func test_every_knob_has_a_tooltip() -> void:
@@ -640,25 +644,35 @@ func test_every_class_knob_is_findable_in_the_file_it_names() -> void:
 		"could not read %s -- this law would pass vacuously" % GameKnobs.OVERLAYS_SCRIPT).is_not_empty()
 	assert_str(manager).override_failure_message(
 		"could not read %s -- this law would pass vacuously" % GameKnobs.OVERLAY_MANAGER_SCRIPT).is_not_empty()
-	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+	# DERIVED from class_edits rather than re-enumerating the kinds. It WAS an if/else over `static`
+	# and `layer`, so #394's third kind fell into the layer branch and asked BoardOverlays about a
+	# Setting. Asking the SAVE what it would write is the same question the panel's button asks, so a
+	# fourth kind arrives here already covered -- and one with no arm below rewrites nothing and reds.
+	var indices := PackedInt32Array()
+	for i in GameKnobs.CLASS_KNOBS.size():
+		indices.append(i)
+	var edits := GameKnobs.class_edits(_scene, indices)
+	assert_int(edits.size()).override_failure_message(
+			"class_edits skipped rows -- this law would pass vacuously over them").is_equal(
+			GameKnobs.CLASS_KNOBS.size())
+	for an_edit: Dictionary in edits:
+		var path: String = an_edit["path"]
+		var source := _read_file(path)
+		assert_str(source).override_failure_message(
+			"could not read %s -- this law would pass vacuously" % path).is_not_empty()
+		var name: String = an_edit["name"]
+		var literal: String = an_edit["literal"]
 		var rewritten := ""
-		var what := ""
-		if knob.has("static"):
-			# A static row names its own script home since the #259 rework (default: the
-			# OverlayManager file) -- the law reads the same key the Save routes by.
-			var home: String = knob.get("script", GameKnobs.OVERLAY_MANAGER_SCRIPT)
-			var source := manager if home == GameKnobs.OVERLAY_MANAGER_SCRIPT else _read_file(home)
-			assert_str(source).override_failure_message(
-				"could not read %s -- this law would pass vacuously" % home).is_not_empty()
-			what = "static var %s in %s" % [knob["static"], home.get_file()]
-			rewritten = KnobSource.rewrite_declaration_default(source, knob["static"], "1.0")
-		else:
-			var layer_name: String = BoardOverlays.Layer.keys()[knob["layer"]]
-			what = "Layer.%s's entry in BoardOverlays.LAYERS" % layer_name
-			rewritten = KnobSource.rewrite_layer_color(overlays, layer_name, "Color(1, 1, 1, 1)")
+		match an_edit["kind"]:
+			KnobSource.Kind.DECLARATION:
+				rewritten = KnobSource.rewrite_declaration_default(source, name, literal)
+			KnobSource.Kind.LAYER_COLOR:
+				rewritten = KnobSource.rewrite_layer_color(source, name, literal)
+			KnobSource.Kind.SETTING_DEFAULT:
+				rewritten = KnobSource.rewrite_setting_default(source, name, literal)
 		assert_str(rewritten).override_failure_message(
-			"'%s' has no %s left to write -- Save would report success having written nothing"
-				% [knob["label"], what]).is_not_empty()
+			"'%s' has no %s left to write in %s -- Save would report success having written nothing"
+				% [an_edit["label"], name, path.get_file()]).is_not_empty()
 
 
 # The measured assumption the whole tab rests on. An override authored in the scene WINS over the
@@ -867,3 +881,42 @@ func test_the_panel_says_when_a_palette_has_made_the_aim_knobs_inert() -> void:
 	assert_str(notice.text).override_failure_message(
 			"the notice does not name the palette the player is actually on").contains(
 			str(labels[PlayerSettings.AimPalette.HIGH_CONTRAST]))
+
+
+# --- A player setting shown on this tab (#394) ----------------------------------------------
+
+func test_a_setting_row_follows_the_store_rather_than_latching_it() -> void:
+	# The #647 ruling on a checkbox: the pause menu's Settings page is a SECOND OS WINDOW and can be
+	# moved while this one is open, so a control built once goes stale exactly when both are on
+	# screen. What is asserted is the POLL -- the store is written from outside the panel entirely.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var box: CheckBox = _game._setting_checks.get(setting)
+	assert_object(box).override_failure_message(
+			"the Game tab built no control for the unhovered-bar-numbers setting").is_not_null()
+	assert_bool(box.button_pressed).override_failure_message(
+			"the row did not start on the store's own value").is_equal(
+			bool(PlayerSettings.value_of(setting)))
+
+	PlayerSettings.set_on(setting, not PlayerSettings.is_on(setting))
+	await await_idle_frame()
+	await await_idle_frame()
+
+	assert_bool(box.button_pressed).override_failure_message(
+			"the setting moved elsewhere and this panel went on showing the old value"
+			).is_equal(PlayerSettings.is_on(setting))
+
+func test_a_setting_row_writes_the_real_preference() -> void:
+	# The other direction, and the reason there is no panel-local copy: pressing here changes what
+	# the PLAYER has set, which is what "one value, one store" means for a control on two surfaces.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var box: CheckBox = _game._setting_checks.get(setting)
+	assert_object(box).is_not_null()
+	var want := not PlayerSettings.is_on(setting)
+
+	box.button_pressed = want   # what a click does -- through the control's own state
+	await await_idle_frame()
+
+	assert_bool(PlayerSettings.is_on(setting)).override_failure_message(
+			"the dev checkbox moved and the player's setting did not").is_equal(want)

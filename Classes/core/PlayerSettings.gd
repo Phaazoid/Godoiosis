@@ -33,6 +33,7 @@ enum Setting {
 	PHOTOSENSITIVITY,
 	BATTLE_ZOOM_MODE,
 	AIM_PALETTE,
+	UNHOVERED_BAR_NUMBERS,
 }
 
 ## When a unit wears its readout (#418). A DECLARED duplicate: these values ARE the indices into the
@@ -111,6 +112,11 @@ const DEFS := {
 		"desc": "Which colours the board paints while you are aiming -- the reach an attack covers, the reach a heal covers, and the cells your pick would actually hit. Colour-blind safe tells an attack from a heal without leaning on red against green.",
 		"options": ["Default", "Colour-blind safe", "High contrast"],
 		"default": AimPalette.DEFAULT,
+	},
+	Setting.UNHOVERED_BAR_NUMBERS: {
+		"title": "Numbers on unhovered bars",
+		"desc": "Show the HP digits on a bar that is up for some reason other than your cursor -- a queued plan, or the setting above. Pointing at a unit shows its numbers either way, so this is about how crowded the board gets.",
+		"default": false,
 	},
 }
 

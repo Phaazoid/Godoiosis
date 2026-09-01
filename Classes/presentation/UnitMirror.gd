@@ -167,12 +167,10 @@ const PIXELS_PER_CELL := float(GridUtils.TILE_SIZE)  # 16 — grid.map_to_local'
 @export var hp_pop_stagger := 0.08
 
 # --- Crowding, shared by every non-hover reason (#313, widened by #350) ----------------
-# Whether a bar that is up for a reason OTHER than hover also carries its number. Off by default,
-# and the reason generalises past the ticket that found it: a plan can put a readout over half the
-# board at once, and #350's toggle puts one over ALL of it. So the digits stay a hover reward
-# either way. ONE knob rather than one per reason -- the question is how crowded this volume may
-# get, and that question does not change with why a bar happens to be up.
-@export var unhovered_shows_number := false
+# (Whether an unhovered bar carries its number MOVED to PlayerSettings.UNHOVERED_BAR_NUMBERS in
+# #394. It is an information-density PREFERENCE and the dev and the player were setting it on the
+# same axis, so per the #422 ruling it has one store and the Game tab writes that. Read once per
+# reconcile below, beside the health-bar mode, and passed down.)
 
 # --- The element-state row (#357) ------------------------------------------------------
 # One icon per state the unit holds, just above the bar. In TEXELS, at the same pixel density as
@@ -334,6 +332,9 @@ func reconcile() -> void:
 	# what the dev asked for is that the setting stops applying for the duration.
 	if cinematic_playback:
 		bars = PlayerSettings.HealthBars.EVERY
+	# The digits preference (#394), asked once for the same reason as `bars` above and passed the
+	# same way -- a static read per unit would be N reads answering one question.
+	var unhovered_numbers := PlayerSettings.is_on(PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS)
 	_push_debris_knobs()
 	var live: Dictionary[int, bool] = {}
 	for child in units_root.get_children():
@@ -357,7 +358,8 @@ func reconcile() -> void:
 			# dying. Nothing else here needs a wire; this cannot be answered without one.
 			unit.unit_died.connect(_on_unit_died.bind(id))
 		_sync(unit, _mirrored[id])
-		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars)
+		_sync_bar(unit, _mirrored[id], _bars[id], unit == hovered, plan, marked.has(id), bars,
+				unhovered_numbers)
 		_settle_health_change(unit, id, _bars[id])
 	for id: int in _mirrored.keys():
 		if not live.has(id):
@@ -570,7 +572,8 @@ func _predicted_hp(unit: Unit, plan: ResolvedPlan) -> int:
 
 
 func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bool,
-		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars) -> void:
+		plan: ResolvedPlan, marked: bool, bars: PlayerSettings.HealthBars,
+		unhovered_numbers: bool) -> void:
 	# Two reasons to be up (#313), and the SECOND is the whole ticket: a readout stays over a unit
 	# because a plan is about to happen to it. That reaches everyone the plan touches, enemies your
 	# own attack will hit included, and nobody it doesn't.
@@ -605,7 +608,7 @@ func _sync_bar(unit: Unit, sprite: UnitSprite3D, bar: UnitHealthBar, hovered: bo
 	bar.set_cube_style(hp_block_recess_shrink, hp_block_recess_shade, hp_block_top_shade)
 	bar.set_pop(block_pop_time, hp_pop_lift_texels, hp_pop_stagger)
 	bar.set_hp(unit.get_current_hp(), unit.get_max_hp())
-	bar.set_number_shown(hovered or unhovered_shows_number)
+	bar.set_number_shown(hovered or unhovered_numbers)
 	# #357: what this unit IS, in the channel #346 freed. Below the early return above, so the row
 	# rides THE gate rather than growing one — and the art comes from StateIcons, which stays the
 	# one answer to which icon means which state for all three surfaces that draw them.

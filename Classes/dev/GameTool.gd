@@ -58,6 +58,10 @@ var _zoom_picker: OptionButton   # the battle-zoom mode, polled against the stor
 var _palette_notice: Label
 # What the notice is currently WORDED for. -1 is "nothing yet", so the first refresh always writes.
 var _notice_palette := -1
+# Every setting row's checkbox, by its Setting (#394). Kept for the same reason the battle-zoom
+# picker is: a control on BOTH a dev and a player surface polls the store rather than latching it,
+# and the Settings page is a second OS window that can be moved while this one is open.
+var _setting_checks: Dictionary[int, CheckBox] = {}
 var _shown_action: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 # Every control each row put on the page, by its row's tags. Kept because a row is not one node --
 # a colour row is several -- so hiding one means hiding the span DevWidgets.add_knob_row returned.
@@ -188,6 +192,7 @@ func _rebuild() -> void:
 	_filtered.clear()
 	_action_picker = null
 	_palette_notice = null
+	_setting_checks.clear()
 	_build_playback_header()
 	var group := ""
 	for knob: Dictionary in GameKnobs.KNOBS:
@@ -223,18 +228,37 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 		DevWidgets.add_label(rows, "%s - UNRESOLVED" % knob["label"])
 		push_error("GameTool: class knob does not resolve: %s" % knob["label"])
 		return
-	_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, value,
+	var controls := DevWidgets.add_knob_row(rows, knob, value,
 		func(picked: Variant) -> void:
 			GameKnobs.write_class(_host, knob, picked)
 			_touch(),
-		tip_for(knob)))
+		tip_for(knob))
+	_remember_filter(knob, controls)
+	_remember_setting(knob, controls)
 
 
 # The where-does-this-live note is appended per table rather than typed into each tip, so it cannot
 # drift out of step with what Save actually writes. GameKnobs owns the which-stack half.
+#
+# A SETTING row is the exception and gets no game-wide line: it is not one value for every board, it
+# is one value per PLAYER, and GameKnobs.tip_for has already said so.
 func tip_for(knob: Dictionary) -> String:
+	if knob.has("setting"):
+		return GameKnobs.tip_for(knob)
 	return GameKnobs.tip_for(knob) + "\n\n" + DevWidgets.wrap_tooltip(
 		"GAME-WIDE -- one value for every board. Save to source writes it into the declaration that authors it; no mission can carry its own.")
+
+
+# A setting row's checkbox, kept so _process can reconcile it against the store. Found by TYPE rather
+# than by position: add_knob_row picks the widget from the value's kind, so asking for a CheckBox is
+# asking the same question it answered.
+func _remember_setting(knob: Dictionary, controls: Array[Node]) -> void:
+	if not knob.has("setting"):
+		return
+	for control: Node in controls:
+		if control is CheckBox:
+			_setting_checks[knob["setting"]] = control as CheckBox
+			return
 
 
 # --- The Playback page's filters (#520 2b slice 2) --------------------------------------------
@@ -279,6 +303,7 @@ func _process(_delta: float) -> void:
 	# #422 rides the same poll for the same reason, and BEFORE the zoom guard rather than after it:
 	# a page with no battle-zoom picker built still has aim rows that a palette can make inert.
 	_refresh_palette_notice()
+	_refresh_setting_rows()
 	if _zoom_picker == null:
 		return
 	var live := PlayerSettings.choice_of(ZOOM_SETTING)
@@ -286,6 +311,18 @@ func _process(_delta: float) -> void:
 		return
 	_zoom_picker.select(live)
 	_apply_playback_filter()
+
+
+# THE STORE IS THE TRUTH, this panel only shows it (#394, the #647 ruling applied to a checkbox). The
+# pause menu's Settings page is a second OS window and can be moved while this one is open, so a
+# latched control would go stale exactly when the two are on screen together. `set_pressed_no_signal`
+# or the reconcile writes back into the store on a frame nobody touched it.
+func _refresh_setting_rows() -> void:
+	for setting: int in _setting_checks:
+		var box: CheckBox = _setting_checks[setting]
+		var live := bool(PlayerSettings.value_of(setting))
+		if box.button_pressed != live:
+			box.set_pressed_no_signal(live)
 
 
 # A section's own control, drawn under its heading. Actions has the picker that decides which verb's
