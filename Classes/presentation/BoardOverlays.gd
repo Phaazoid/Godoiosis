@@ -177,22 +177,37 @@ enum SelectorDepth { LEVEL, HALF }
 # COLOUR is deliberately absent: it arrives per draw as the aim's verdict tint, copied from
 # SightTrace2D so the flat view and the diorama cannot disagree about what "blocked" looks like.
 # Brightness is here rather than folded into that colour -- see the shader's own note.
-@export var beam_width := 0.06:            # world units; a cell is BoardSpace.CELL_SIZE = 1.0
-	set(value):
-		beam_width = value
-		_apply_beam_params()
-@export var beam_min_pixels := 2.0:        # screen-space floor, so zoom-out cannot re-thin it
-	set(value):
-		beam_min_pixels = value
-		_apply_beam_params()
-@export var beam_softness := 1.5:          # edge falloff exponent; higher = tighter bright core
-	set(value):
-		beam_softness = value
-		_apply_beam_params()
-@export var beam_intensity := 2.0:         # ALBEDO multiplier; above glow_hdr_threshold it blooms
-	set(value):
-		beam_intensity = value
-		_apply_beam_params()
+#
+# THE `: set = _name` SUFFIX IS REQUIRED, NOT A STYLE CHOICE, and tidying these four into inline
+# `set(value):` blocks silently breaks the file. `KnobSource.DECLARATION_LINE` carries that suffix
+# but has no clause for a block, so it matches an inline-block declaration anyway and eats the
+# trailing colon with the value -- Save rewrites `x := 0.06:` to `x := 0.99` and leaves the block
+# beneath it orphaned, i.e. a parse error in the script the whole 3D stack hangs off, written
+# silently the first time the dev tunes a beam and presses Save. Measured, not reasoned.
+@export var beam_width := 0.06: set = _set_beam_width              # world units; a cell is 1.0
+@export var beam_min_pixels := 2.0: set = _set_beam_min_pixels     # screen floor; zoom-out guard
+@export var beam_softness := 1.5: set = _set_beam_softness         # edge falloff exponent
+@export var beam_intensity := 2.0: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
+
+
+func _set_beam_width(value: float) -> void:
+	beam_width = value
+	_apply_beam_params()
+
+
+func _set_beam_min_pixels(value: float) -> void:
+	beam_min_pixels = value
+	_apply_beam_params()
+
+
+func _set_beam_softness(value: float) -> void:
+	beam_softness = value
+	_apply_beam_params()
+
+
+func _set_beam_intensity(value: float) -> void:
+	beam_intensity = value
+	_apply_beam_params()
 
 var fill_texture: Texture2D
 
