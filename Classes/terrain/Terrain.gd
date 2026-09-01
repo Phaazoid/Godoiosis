@@ -29,11 +29,21 @@ enum TileState {
 # No reader may enumerate fire members itself.
 const FIRE_STATES: Array[TileState] = [TileState.BURNING, TileState.BLAZE]
 
-static func is_burning(states: Array[TileState]) -> bool:
+# WHICH fire state a cell holds, or NONE — the named form, for readouts that must say Burning or
+# Blaze rather than just "on fire" (#419). is_burning is derived from it, so there is one loop.
+static func burning_state(states: Array[TileState]) -> TileState:
 	for state in states:
 		if FIRE_STATES.has(state):
-			return true
-	return false
+			return state
+	return TileState.NONE
+
+static func is_burning(states: Array[TileState]) -> bool:
+	return burning_state(states) != TileState.NONE
+
+# What standing here costs its occupant at end of turn. The queue's forecast and the end-of-turn
+# pass both ask here, so the number previewed is the number dealt (#419).
+static func occupant_damage(states: Array[TileState]) -> int:
+	return BURNING_TILE_DAMAGE if is_burning(states) else 0
 
 # Static authored tile content, read straight off the tileset's "terrain_type" int
 # custom-data layer (Resources/TestTiles.tres). Serialized in the .tres: APPEND-ONLY.

@@ -39,15 +39,7 @@ func apply(effect: ResolvedCellEffect) -> void:
 	# a cell whose tile was just erased still has to be cleanable, and routing that through here
 	# keeps the timer bookkeeping below correct instead of needing a second back door.
 	var grounded := _has_ground(effect.cell)
-	var current: Array[Terrain.TileState] = []
-	if _states.has(effect.cell):
-		current.assign(_states[effect.cell])
-	for s in effect.states_removed:
-		current.erase(s)
-	if grounded:
-		for s in effect.states_added:
-			if not current.has(s):
-				current.append(s)
+	var current := fold(states_at(effect.cell), effect, grounded)
 	if current.is_empty():
 		_states.erase(effect.cell)
 	else:
@@ -58,6 +50,31 @@ func apply(effect: ResolvedCellEffect) -> void:
 		for s in effect.states_added:
 			if STATE_DURATIONS.has(s):
 				_start_timer(effect.cell, s)
+
+# The remove-then-add fold one effect makes to a state list — apply()'s rule, shared so a PENDING
+# deposit reads exactly as the applied one will (#419).
+static func fold(states: Array[Terrain.TileState], effect: ResolvedCellEffect,
+		grounded := true) -> Array[Terrain.TileState]:
+	var result := states.duplicate()
+	for s in effect.states_removed:
+		result.erase(s)
+	if grounded:
+		for s in effect.states_added:
+			if not result.has(s):
+				result.append(s)
+	return result
+
+
+# A cell's states with this pass's own deposits folded in — what the END OF TURN forecast reads,
+# since cell effects only reach the store at execution (#419).
+func projected_states_at(cell: Vector2i, effects: Array[ResolvedCellEffect]) -> Array[Terrain.TileState]:
+	var states := states_at(cell)
+	var grounded := _has_ground(cell)
+	for effect in effects:
+		if effect.cell == cell:
+			states = fold(states, effect, grounded)
+	return states
+
 
 func _has_ground(cell: Vector2i) -> bool:
 	if not ground_source.is_valid():

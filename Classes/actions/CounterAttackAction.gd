@@ -32,7 +32,7 @@ func get_description() -> String:
 	return "%s counters %s" % [actor.get_unit_name(), get_target_name()]
 
 func get_action_icon() -> Texture2D:
-	var lethal := _lethality_icon()
+	var lethal := lethality_icon(resolved)
 	return lethal if lethal != null else COUNTER_ATTACK_ICON
 
 static func create_counter_volley(counter_unit: Unit, origin: Vector2i, victims: Array[Unit], source: AttackAction) -> Array[CounterAttackAction]:

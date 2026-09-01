@@ -81,6 +81,29 @@ func test_fire_spares_the_faction_whose_turn_is_not_ending() -> void:
 
 	assert_int(unit.get_current_hp()).is_equal(hp_before)
 
+# --- the queue says so first (#419) -------------------------------------------------------------
+
+# LAW #2 over the whole seam: the number the END OF TURN section forecasts is the number the pass
+# deals. The two derive it separately -- the queue from a squad's projected positions, the phase
+# from live ones -- and what stops them drifting is Terrain.occupant_damage plus TileHitAction.make,
+# so this is the case that reds if either half grows its own answer.
+func test_the_queue_forecasts_exactly_what_the_end_of_turn_pass_deals() -> void:
+	var unit := _spawn(CELL, Team.Faction.PLAYER)
+	_deposit(CELL, Terrain.TileState.BURNING)
+	var plan: ResolvedPlan = game.squad_manager.resolve_plan(unit.squad, game._board())
+	assert_int(plan.tile_hits.size()).override_failure_message(
+			"the queue forecast no burn for a unit standing in fire").is_equal(1)
+	var forecast: TileHitAction = plan.tile_hits[0]
+	var predicted: int = LethalityRules.displayed_hp(forecast.resolved.target_hp_after,
+			LethalityRules.lifecycle_for(forecast.resolved.lethality))
+
+	await game.order_executor.apply_burning_tile_damage(Team.Faction.PLAYER)
+
+	assert_int(unit.get_current_hp()).override_failure_message(
+			"the queue previewed one number and the turn end dealt another") \
+		.is_equal(predicted)
+
+
 func test_burning_finishes_a_downed_unit_standing_on_the_fire() -> void:
 	# Fork 3 (#33): a downed body takes any damaging hit as a kill. Burn is a damage source like
 	# any other -- it must not be the one thing on the board that lets a downed unit sit in fire
@@ -162,9 +185,9 @@ func test_a_turn_end_with_nothing_burning_never_claims_the_camera() -> void:
 # and that is as true of the last unit in the list as the first.
 #
 # Probed from INSIDE the running phase, through the one event that fires mid-pass: a downed body in
-# fire dies. The fixture deposits the doomed cell FIRST on purpose (burning_cells walks the state
-# store in insertion order), so at that death the second unit is one the camera has genuinely not
-# reached yet -- which is what a per-unit implementation would fail to have named.
+# fire dies. The fixture SPAWNS the doomed unit first on purpose (since #419 the phase walks units,
+# not burning cells), so at that death the second unit is one the camera has genuinely not reached
+# yet -- which is what a per-unit implementation would fail to have named.
 func test_the_pass_names_every_unit_it_will_hit_before_it_reaches_any_of_them() -> void:
 	var doomed := _spawn(CELL, Team.Faction.PLAYER)
 	doomed.force_down()

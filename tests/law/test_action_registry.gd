@@ -10,6 +10,7 @@ const FIXED_PIPELINE: Array[BaseAction.ActionType] = [
 	BaseAction.ActionType.MOVE,
 	BaseAction.ActionType.ATTACK,
 	BaseAction.ActionType.COUNTER_ATTACK,
+	BaseAction.ActionType.TILE_HIT,   # #419: derived by the resolver, played by the end-of-turn pass
 ]
 
 func test_every_action_type_is_exactly_one_of_pipeline_or_side_channel() -> void:

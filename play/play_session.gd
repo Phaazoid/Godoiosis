@@ -509,7 +509,13 @@ func _describe_plan(squad: Squad, plan: ResolvedPlan) -> Dictionary:
 			if target is Unit:
 				entry["target"] = handle_for(target)
 			side_actions.append(entry)
-	return {"moves": moves, "attacks": attacks, "counters": counters, "side_actions": side_actions}
+	# What the end of the turn will do to this squad on the tiles it stops on (#419) — the headless
+	# twin of the panel's END OF TURN section.
+	var tile_hits: Array = []
+	for hit in plan.tile_hits:
+		tile_hits.append({"actor": handle_for(hit.actor), "description": hit.get_description()})
+	return {"moves": moves, "attacks": attacks, "counters": counters,
+			"side_actions": side_actions, "tile_hits": tile_hits}
 
 func _describe_attack(atk: AttackAction) -> Dictionary:
 	var r := atk.resolved
