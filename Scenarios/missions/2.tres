@@ -1,65 +1,65 @@
-[gd_resource type="Resource" script_class="ScenarioData" format=4]
+[gd_resource type="Resource" script_class="ScenarioData" format=4 uid="uid://ccmircjl1g3gw"]
 
-[ext_resource type="Script" path="res://Classes/flow/DialogBeat.gd" id="1_pmydw"]
-[ext_resource type="Script" path="res://Classes/presentation/CameraPose.gd" id="1_r1p0o"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioData.gd" id="2_nd7cn"]
-[ext_resource type="Script" path="res://Classes/flow/TutorialStep.gd" id="3_s62aq"]
-[ext_resource type="Script" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_stn5m"]
-[ext_resource type="Script" path="res://Classes/items/EquippableData.gd" id="5_iwu1s"]
-[ext_resource type="Script" path="res://Classes/units/StatEffect.gd" id="6_r1p0o"]
+[ext_resource type="Script" uid="uid://b7i3qekbjuuca" path="res://Classes/flow/DialogBeat.gd" id="1_pmydw"]
+[ext_resource type="Script" uid="uid://c3hntyytrjkko" path="res://Classes/presentation/CameraPose.gd" id="1_r1p0o"]
+[ext_resource type="Script" uid="uid://cw4xhmsnr71ao" path="res://Classes/flow/ScenarioData.gd" id="2_nd7cn"]
+[ext_resource type="Script" uid="uid://8ryqq4dv281h" path="res://Classes/flow/TutorialStep.gd" id="3_s62aq"]
+[ext_resource type="Script" uid="uid://dbb0pgdet8qo0" path="res://Classes/flow/ScenarioUnitEntry.gd" id="4_stn5m"]
+[ext_resource type="Script" uid="uid://cbb6calgu7yux" path="res://Classes/items/EquippableData.gd" id="5_iwu1s"]
+[ext_resource type="Script" uid="uid://6vu10nf3p58m" path="res://Classes/units/StatEffect.gd" id="6_r1p0o"]
 [ext_resource type="Resource" path="res://Resources/Units/Bandit.tres" id="7_vhyx4"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="8_35mrr"]
-[ext_resource type="Script" path="res://Classes/weapons/WeaponModData.gd" id="9_qdmue"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="10_3dhy4"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="11_ewlgh"]
-[ext_resource type="Script" path="res://Classes/jobs/AbilityData.gd" id="12_n4ew8"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand.png" id="13_6vxg7"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="14_safmu"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="15_pulfu"]
-[ext_resource type="Script" path="res://Classes/units/UnitData.gd" id="16_3jx33"]
+[ext_resource type="Script" uid="uid://bu1j3q4jhqcpf" path="res://Classes/weapons/instances/DrillWeaponInstance.gd" id="8_35mrr"]
+[ext_resource type="Script" uid="uid://df2c8ssuh18ff" path="res://Classes/weapons/WeaponModData.gd" id="9_qdmue"]
+[ext_resource type="Resource" uid="uid://bv7tui68o7xfr" path="res://Resources/Weapons/MainVarieties/Drill.tres" id="10_3dhy4"]
+[ext_resource type="Texture2D" uid="uid://c5o27na4rlnf6" path="res://Art/Units/MapSprites/Brigand_Downed.png" id="11_ewlgh"]
+[ext_resource type="Script" uid="uid://7w7ajveltxx5" path="res://Classes/jobs/AbilityData.gd" id="12_n4ew8"]
+[ext_resource type="Texture2D" uid="uid://bxnjjje4mnfqs" path="res://Art/Units/MapSprites/Brigand.png" id="13_6vxg7"]
+[ext_resource type="Texture2D" uid="uid://lin61ix60e11" path="res://Art/Units/MapSprites/Brigand_Moving.png" id="14_safmu"]
+[ext_resource type="Texture2D" uid="uid://bg13ksnfa1txj" path="res://Art/Units/Portraits/hair_mcgee_evil.png" id="15_pulfu"]
+[ext_resource type="Script" uid="uid://cvvknuw621ar2" path="res://Classes/units/UnitData.gd" id="16_3jx33"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Drill.tres" id="17_cv4cp"]
-[ext_resource type="Script" path="res://Classes/alchemy/TransmutationData.gd" id="18_qsyhc"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="19_uj0ip"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="20_ihlrs"]
-[ext_resource type="Texture2D" path="res://Art/Icons/StateIcons/WetIcon.png" id="21_56m1w"]
-[ext_resource type="Script" path="res://Classes/alchemy/RuneData.gd" id="22_p0bb0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Downed.png" id="23_nrv7u"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage.png" id="24_yf3dj"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Mage_Moving.png" id="25_ubnfa"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee.png" id="26_ne4ag"]
+[ext_resource type="Script" uid="uid://bgbidu2bbf33l" path="res://Classes/alchemy/TransmutationData.gd" id="18_qsyhc"]
+[ext_resource type="Script" uid="uid://bbbfksnb0tted" path="res://Classes/weapons/patterns/ForwardLinePattern.gd" id="19_uj0ip"]
+[ext_resource type="Script" uid="uid://cuvfasmongryk" path="res://Classes/weapons/patterns/ForwardWidePattern.gd" id="20_ihlrs"]
+[ext_resource type="Texture2D" uid="uid://c0sxhv5hl83yc" path="res://Art/Icons/StateIcons/WetIcon.png" id="21_56m1w"]
+[ext_resource type="Script" uid="uid://ckrp1phgirys0" path="res://Classes/alchemy/RuneData.gd" id="22_p0bb0"]
+[ext_resource type="Texture2D" uid="uid://bo1qvlq27vqqs" path="res://Art/Units/MapSprites/Mage_Downed.png" id="23_nrv7u"]
+[ext_resource type="Texture2D" uid="uid://blok5uhqdbsn8" path="res://Art/Units/MapSprites/Mage.png" id="24_yf3dj"]
+[ext_resource type="Texture2D" uid="uid://g2uho841m3aw" path="res://Art/Units/MapSprites/Mage_Moving.png" id="25_ubnfa"]
+[ext_resource type="Texture2D" uid="uid://bun6xqwudsavw" path="res://Art/Units/Portraits/hair_mcgee.png" id="26_ne4ag"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/FreezeRune.tres" id="27_1uxod"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="28_si1vl"]
+[ext_resource type="Script" uid="uid://bncwoq0llmo08" path="res://Classes/weapons/instances/CarbineWeaponInstance.gd" id="28_si1vl"]
 [ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Carbine.tres" id="29_vx34y"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Downed.png" id="30_qa4qg"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer.png" id="31_legt1"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Archer_Moving.png" id="32_ybcgu"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="33_vk1dv"]
+[ext_resource type="Texture2D" uid="uid://dnujumhyrhxk1" path="res://Art/Units/MapSprites/Archer_Downed.png" id="30_qa4qg"]
+[ext_resource type="Texture2D" uid="uid://fru8tri4sat1" path="res://Art/Units/MapSprites/Archer.png" id="31_legt1"]
+[ext_resource type="Texture2D" uid="uid://bjd6rwjgyea45" path="res://Art/Units/MapSprites/Archer_Moving.png" id="32_ybcgu"]
+[ext_resource type="Texture2D" uid="uid://bg707w6kaqv1a" path="res://Art/Units/Portraits/hair_mcgee_blond.png" id="33_vk1dv"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Gun.tres" id="34_ljhnb"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="35_v3otg"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="36_8eos2"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="37_8axrb"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit.png" id="38_5o3n1"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="39_rwqt4"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="40_qufww"]
+[ext_resource type="Script" uid="uid://bsnik7hj876qc" path="res://Classes/weapons/instances/ChainswordWeaponInstance.gd" id="35_v3otg"]
+[ext_resource type="Resource" uid="uid://qm4wjlfxedbr" path="res://Resources/Weapons/MainVarieties/ChainSword.tres" id="36_8eos2"]
+[ext_resource type="Texture2D" uid="uid://btayn3n3cf8k0" path="res://Art/Units/MapSprites/Recruit_Downed.png" id="37_8axrb"]
+[ext_resource type="Texture2D" uid="uid://b7ghetjud0n2p" path="res://Art/Units/MapSprites/Recruit.png" id="38_5o3n1"]
+[ext_resource type="Texture2D" uid="uid://bwd4se3jxnvtg" path="res://Art/Units/MapSprites/Recruit_Moving.png" id="39_rwqt4"]
+[ext_resource type="Texture2D" uid="uid://dio6wu07l06cy" path="res://Art/Units/Portraits/hair_mcgee_sky.png" id="40_qufww"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/vroom.tres" id="41_gqkqi"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="42_j056q"]
-[ext_resource type="Resource" path="res://Resources/Abilities/IronWill.tres" id="43_h5w62"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter.png" id="44_jibd0"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="45_ivfr0"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="46_6uw3n"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="47_3kvu3"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="48_40nhu"]
-[ext_resource type="Script" path="res://Classes/weapons/instances/ProstheticWeaponInstance.gd" id="49_twn6l"]
-[ext_resource type="Resource" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="50_xrpfk"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="51_2h4sr"]
+[ext_resource type="Texture2D" uid="uid://bg655ethyluqq" path="res://Art/Units/MapSprites/Fighter_Downed.png" id="42_j056q"]
+[ext_resource type="Resource" uid="uid://ceqrjbp6yyh2" path="res://Resources/Abilities/IronWill.tres" id="43_h5w62"]
+[ext_resource type="Texture2D" uid="uid://bd7syo8j146ue" path="res://Art/Units/MapSprites/Fighter.png" id="44_jibd0"]
+[ext_resource type="Texture2D" uid="uid://b1anjqkkd37ko" path="res://Art/Units/MapSprites/Fighter_Moving.png" id="45_ivfr0"]
+[ext_resource type="Texture2D" uid="uid://cum85ohppxgiq" path="res://Art/Units/Portraits/hair_mcgee_orange.png" id="46_6uw3n"]
+[ext_resource type="Script" uid="uid://t6htdtobwxob" path="res://Classes/weapons/instances/KineticMaceWeaponInstance.gd" id="47_3kvu3"]
+[ext_resource type="Resource" uid="uid://ceogmk32dfq6l" path="res://Resources/Weapons/MainVarieties/Kinetic_Mace.tres" id="48_40nhu"]
+[ext_resource type="Script" uid="uid://p3jyhhtj7rtg" path="res://Classes/weapons/instances/ProstheticWeaponInstance.gd" id="49_twn6l"]
+[ext_resource type="Resource" uid="uid://cx75h4chpy74e" path="res://Resources/Weapons/MainVarieties/Prosthetic.tres" id="50_xrpfk"]
+[ext_resource type="Texture2D" uid="uid://dvmd0ncpyryv7" path="res://Art/Units/Portraits/hair_mcgee_red.png" id="51_2h4sr"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/Smasher.tres" id="52_g2al6"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvArm.tres" id="53_o5xut"]
 [ext_resource type="Resource" path="res://Resources/Weapons/WeaponVariants/TorvLeg.tres" id="54_mk6g8"]
-[ext_resource type="Script" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="55_k6c8t"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Downed.png" id="56_2n0v3"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest.png" id="57_k4pjl"]
-[ext_resource type="Texture2D" path="res://Art/Units/MapSprites/Priest_Moving.png" id="58_wuqe3"]
-[ext_resource type="Texture2D" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="59_ewjek"]
+[ext_resource type="Script" uid="uid://dsxc14gee2d01" path="res://Classes/weapons/patterns/ManhattanRangePattern.gd" id="55_k6c8t"]
+[ext_resource type="Texture2D" uid="uid://ysa7poog58u7" path="res://Art/Units/MapSprites/Priest_Downed.png" id="56_2n0v3"]
+[ext_resource type="Texture2D" uid="uid://b6203vr2vlac3" path="res://Art/Units/MapSprites/Priest.png" id="57_k4pjl"]
+[ext_resource type="Texture2D" uid="uid://cpxuk13uu7yem" path="res://Art/Units/MapSprites/Priest_Moving.png" id="58_wuqe3"]
+[ext_resource type="Texture2D" uid="uid://dkb5xbjjl4q5v" path="res://Art/Units/Portraits/hair_mcgee_white.png" id="59_ewjek"]
 [ext_resource type="Resource" path="res://Resources/RuneVariants/Heal2.tres" id="60_ord8c"]
 
 [sub_resource type="Resource" id="Resource_vhyx4"]
@@ -315,7 +315,6 @@ display_name = "FreezeRune"
 script = ExtResource("16_3jx33")
 display_name = "Isaac"
 portrait = ExtResource("26_ne4ag")
-faction = 1
 map_sprite = ExtResource("24_yf3dj")
 move_sprite = ExtResource("25_ubnfa")
 downed_sprite = ExtResource("23_nrv7u")
@@ -377,7 +376,6 @@ display_name = "Gun"
 script = ExtResource("16_3jx33")
 display_name = "Noemie"
 portrait = ExtResource("33_vk1dv")
-faction = 1
 map_sprite = ExtResource("31_legt1")
 move_sprite = ExtResource("32_ybcgu")
 downed_sprite = ExtResource("30_qa4qg")
@@ -439,7 +437,6 @@ base_stats = Dictionary[int, int]({
 2: 5,
 4: 5
 })
-faction = 1
 map_sprite = ExtResource("38_5o3n1")
 move_sprite = ExtResource("39_rwqt4")
 downed_sprite = ExtResource("37_8axrb")
@@ -488,7 +485,6 @@ display_name = "Drill"
 script = ExtResource("16_3jx33")
 display_name = "Ross"
 portrait = ExtResource("46_6uw3n")
-faction = 1
 map_sprite = ExtResource("44_jibd0")
 move_sprite = ExtResource("45_ivfr0")
 downed_sprite = ExtResource("42_j056q")
@@ -559,7 +555,6 @@ base_stats = Dictionary[int, int]({
 2: 6,
 4: 6
 })
-faction = 1
 map_sprite = ExtResource("44_jibd0")
 move_sprite = ExtResource("45_ivfr0")
 downed_sprite = ExtResource("42_j056q")
@@ -636,7 +631,6 @@ base_stats = Dictionary[int, int]({
 2: 5,
 4: 5
 })
-faction = 1
 map_sprite = ExtResource("57_k4pjl")
 move_sprite = ExtResource("58_wuqe3")
 downed_sprite = ExtResource("56_2n0v3")
@@ -682,8 +676,11 @@ limb_states = Dictionary[int, int]({
 script = ExtResource("2_nd7cn")
 scenario_name = "missions/2"
 unit_entries = Array[ExtResource("4_stn5m")]([SubResource("Resource_r1p0o"), SubResource("Resource_35mrr"), SubResource("Resource_ewlgh"), SubResource("Resource_safmu"), SubResource("Resource_pulfu"), SubResource("Resource_3jx33"), SubResource("Resource_uj0ip"), SubResource("Resource_ihlrs"), SubResource("Resource_56m1w"), SubResource("Resource_si1vl"), SubResource("Resource_legt1"), SubResource("Resource_ljhnb"), SubResource("Resource_8axrb"), SubResource("Resource_j056q"), SubResource("Resource_3kvu3")])
-tile_data = PackedByteArray("AAAAAAcAAAAFAAAAAAABAAcAAAAFAAAAAAACAAcAAAAFAAAAAAADAAcAAAAFAAAAAAAEAAcAAAAFAAAAAAAFAAcAAAAFAAAAAAAGAAcAAAAFAAAAAAAHAAcAAAAFAAAAAAAIAAgAAAAFAAAAAAAJAAgAAAAFAAAAAAAKAAgAAAAFAAAAAAALAAgAAAAFAAAAAAAJAAkAAAAFAAAAAAAIAAkAAAAFAAAAAAAHAAkAAAAFAAAAAAAGAAkAAAAFAAAAAAAFAAkAAAAFAAAAAAAEAAgAAAAFAAAAAAADAAgAAAAFAAAAAAACAAgAAAAFAAAAAAABAAgAAAAFAAAAAAAAAAgAAAAFAAAAAAAIAAcAAAAFAAAAAAAJAAcAAAAFAAAAAAAKAAcAAAAFAAAAAAALAAcAAAAFAAAAAAACAAkAAAAFAAAAAAADAAkAAAAFAAAAAAAEAAkAAAAFAAAAAAAKAAkAAAAFAAAAAAABAAkAAAAFAAAAAAAAAAkAAAAFAAAAAAALAAkAAAAFAAAAAAAGAAgAAAAFAAAAAAAFAAgAAAAFAAAAAAAHAAgAAAAFAAAAAAAGAAYAAAAFAAAAAAAFAAYAAAAFAAAAAAAEAAYAAAAFAAAAAAADAAYAAAAFAAAAAAACAAYAAAAFAAAAAAABAAYAAAAFAAAAAAAAAAYAAAAFAAAAAAAAAAUAAAAFAAAAAAABAAUAAAAFAAAAAAACAAUAAAAFAAAAAAADAAUAAAAFAAAAAAAEAAUAAAAFAAAAAAAFAAUAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAAUAAAAFAAAAAAAIAAUAAAAFAAAAAAAJAAUAAAAFAAAAAAAKAAUAAAAFAAAAAAALAAUAAAAFAAAAAAALAAYAAAAFAAAAAAAKAAYAAAAFAAAAAAAJAAYAAAAFAAAAAAAIAAYAAAAFAAAAAAAHAAYAAAAFAAAAAAADAAQAAAAFAAAAAAAEAAQAAAAFAAAAAAAFAAQAAAAFAAAAAAAGAAQAAAAFAAAAAAAHAAQAAAAFAAAAAAAIAAQAAAAFAAAAAAAJAAQAAAAFAAAAAAAKAAQAAAAFAAAAAAALAAQAAAAFAAAAAAAJAAMAAAAFAAAAAAAKAAMAAAAFAAAAAAALAAMAAAAFAAAAAAAIAAMAAAAFAAAAAAAHAAMAAAAFAAAAAAAGAAMAAAAFAAAAAAAFAAMAAAAFAAAAAAAEAAMAAAAFAAAAAAADAAMAAAAFAAAAAAACAAMAAAAFAAAAAAAGAAIAAAAFAAAAAAAHAAIAAAAFAAAAAAAIAAIAAAAFAAAAAAAJAAIAAAAFAAAAAAAKAAIAAAAFAAAAAAALAAIAAAAFAAAAAAACAAQAAAAFAAAAAAAAAAMAAAAFAAAAAAABAAMAAAAFAAAAAAABAAQAAAAFAAAAAAAAAAQAAAAFAAAAAAAAAAIAAAAFAAAAAAABAAIAAAAFAAAAAAACAAIAAAAFAAAAAAADAAIAAAAFAAAAAAAEAAIAAAAFAAAAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAAAAAAFAAIAAAAFAAAAAAALAAEAAAAFAAAAAAAKAAEAAAAFAAAAAAAJAAEAAAAFAAAAAAAIAAEAAAAFAAAAAAAHAAEAAAAFAAAAAAAGAAEAAAAFAAAAAAAFAAEAAAAFAAAAAAAEAAEAAAAFAAAAAAADAAEAAAAFAAAAAAACAAEAAAAFAAAAAAALAAAAAAAFAAAAAAAKAAAAAAAFAAAAAAAJAAAAAAAFAAAAAAAIAAAAAAAFAAAAAAAHAAAAAAAFAAAAAAAGAAAAAAAFAAAAAAAFAAAAAAAFAAAAAAAEAAAAAAAFAAAAAAADAAAAAAAFAAAAAAACAAAAAAAFAAAAAAABAAAAAAAFAAAAAAAAAAAAAAAFAAAAAAALAAoAAAAFAAAAAAAKAAoAAAAFAAAAAAAJAAoAAAAFAAAAAAAIAAoAAAAFAAAAAAAHAAoAAAAFAAAAAAAGAAoAAAAFAAAAAAAFAAoAAAAFAAAAAAAEAAoAAAAFAAAAAAADAAoAAAAFAAAAAAACAAoAAAAFAAAAAAABAAoAAAAFAAAAAAAAAAoAAAAFAAAAAAALAAsAAAAFAAAAAAAKAAsAAAAFAAAAAAAJAAsAAAAFAAAAAAAIAAsAAAAFAAAAAAAHAAsAAAAFAAAAAAAGAAsAAAAFAAAAAAAFAAsAAAAFAAAAAAAEAAsAAAAFAAAAAAADAAsAAAAFAAAAAAACAAsAAAAFAAAAAAABAAsAAAAFAAAAAAAAAAsAAAAFAAAAAAAAAAwAAAAFAAAAAAAAAA0AAAAFAAAAAAAAAA4AAAAFAAAAAAAAAA8AAAAFAAAAAAAAABAAAAAFAAAAAAAAABEAAAAFAAAAAAAAABIAAAAFAAAAAAAAABMAAAAFAAAAAAABAAwAAAAFAAAAAAABAA0AAAAFAAAAAAABAA4AAAAFAAAAAAABAA8AAAAFAAAAAAABABAAAAAFAAAAAAABABEAAAAFAAAAAAABABIAAAAFAAAAAAABABMAAAAFAAAAAAACAAwAAAAFAAAAAAACAA0AAAAFAAAAAAACAA4AAAAFAAAAAAACAA8AAAAFAAAAAAACABAAAAAFAAAAAAACABEAAAAFAAAAAAACABIAAAAFAAAAAAACABMAAAAFAAAAAAADAAwAAAAFAAAAAAADAA0AAAAFAAAAAAADAA4AAAAFAAAAAAADAA8AAAAFAAAAAAADABAAAAAFAAAAAAADABEAAAAFAAAAAAADABIAAAAFAAAAAAADABMAAAAFAAAAAAAEAAwAAAAFAAAAAAAEAA0AAAAFAAAAAAAEAA4AAAAFAAAAAAAEAA8AAAAFAAAAAAAEABAAAAAFAAAAAAAEABEAAAAFAAAAAAAEABIAAAAFAAAAAAAEABMAAAAFAAAAAAAFAAwAAAAFAAAAAAAFAA0AAAAFAAAAAAAFAA4AAAAFAAAAAAAFAA8AAAAFAAAAAAAFABAAAAAFAAAAAAAFABEAAAAFAAAAAAAFABIAAAAFAAAAAAAFABMAAAAFAAAAAAAGAAwAAAAFAAAAAAAGAA0AAAAFAAAAAAAGAA4AAAAFAAAAAAAGAA8AAAAFAAAAAAAGABAAAAAFAAAAAAAGABEAAAAFAAAAAAAGABIAAAAFAAAAAAAGABMAAAAFAAAAAAAHAAwAAAAFAAAAAAAHAA0AAAAFAAAAAAAHAA4AAAAFAAAAAAAHAA8AAAAFAAAAAAAHABAAAAAFAAAAAAAHABEAAAAFAAAAAAAHABIAAAAFAAAAAAAHABMAAAAFAAAAAAAIAAwAAAAFAAAAAAAIAA0AAAAFAAAAAAAIAA4AAAAFAAAAAAAIAA8AAAAFAAAAAAAIABAAAAAFAAAAAAAIABEAAAAFAAAAAAAIABIAAAAFAAAAAAAIABMAAAAFAAAAAAAJAAwAAAAFAAAAAAAJAA0AAAAFAAAAAAAJAA4AAAAFAAAAAAAJAA8AAAAFAAAAAAAJABAAAAAFAAAAAAAJABEAAAAFAAAAAAAJABIAAAAFAAAAAAAJABMAAAAFAAAAAAAKAAwAAAAFAAAAAAAKAA0AAAAFAAAAAAAKAA4AAAAFAAAAAAAKAA8AAAAFAAAAAAAKABAAAAAFAAAAAAAKABEAAAAFAAAAAAAKABIAAAAFAAAAAAAKABMAAAAFAAAAAAALAAwAAAAFAAAAAAALAA0AAAAFAAAAAAALAA4AAAAFAAAAAAALAA8AAAAFAAAAAAALABAAAAAFAAAAAAALABEAAAAFAAAAAAALABIAAAAFAAAAAAALABMAAAAFAAAAAAA=")
+tile_data = PackedByteArray("AAAAAAcAAAALAAkAAAABAAcAAAALAAkAAAACAAcAAAALAAkAAAADAAcAAAAMAAkAAAAEAAcAAAAFAAAAAAAFAAcAAAAFAAAAAAAGAAcAAAAFAAAAAAAHAAcAAAAFAAAAAAAIAAgAAAAFAAAAAAAJAAgAAAAFAAAAAAAKAAgAAAAAAA0AAAALAAgAAAAFAAAAAAAJAAkAAAAFAAAAAAAIAAkAAAAFAAAAAAAHAAkAAAAFAAAAAAAGAAkAAAAFAAAAAAAFAAkAAAAFAAAAAAAEAAgAAAAFAAAAAAADAAgAAAAFAAAAAAACAAgAAAAFAAAAAAABAAgAAAAFAAAAAAAAAAgAAAAFAAAAAAAIAAcAAAAFAAAAAAAJAAcAAAAFAAAAAAAKAAcAAAAAAA0AAAALAAcAAAAFAAAAAAACAAkAAAAFAAAAAAADAAkAAAAFAAAAAAAEAAkAAAAFAAAAAAAKAAkAAAAAAA0AAAABAAkAAAAFAAAAAAAAAAkAAAAFAAAAAAALAAkAAAAFAAAAAAAGAAgAAAAFAAAAAAAFAAgAAAAFAAAAAAAHAAgAAAAFAAAAAAAGAAYAAAAFAAAAAAAFAAYAAAAFAAAAAAAEAAYAAAAFAAAAAAADAAYAAAAKAAgAAAACAAYAAAAFAAAAAAABAAYAAAAFAAAAAAAAAAYAAAAFAAAAAAAAAAUAAAAFAAAAAAABAAUAAAAFAAAAAAACAAUAAAAFAAAAAAADAAUAAAAKAAgAAAAEAAUAAAAFAAAAAAAFAAUAAAAFAAAAAAAGAAUAAAAFAAAAAAAHAAUAAAAFAAAAAAAIAAUAAAAFAAAAAAAJAAUAAAAFAAAAAAAKAAUAAAAFAAAAAAALAAUAAAAFAAAAAAALAAYAAAAFAAAAAAAKAAYAAAAAAA0AAAAJAAYAAAAFAAAAAAAIAAYAAAAFAAAAAAAHAAYAAAAFAAAAAAADAAQAAAAMAAcAAAAEAAQAAAAFAAAAAAAFAAQAAAAFAAAAAAAGAAQAAAAFAAAAAAAHAAQAAAAFAAAAAAAIAAQAAAAFAAAAAAAJAAQAAAAFAAAAAAAKAAQAAAAAAA0AAAALAAQAAAAFAAAAAAAJAAMAAAAFAAAAAAAKAAMAAAAAAA0AAAALAAMAAAAFAAAAAAAIAAMAAAAFAAAAAAAHAAMAAAAFAAAAAAAGAAMAAAAFAAAAAAAFAAMAAAAFAAAAAAAEAAMAAAAFAAAAAAADAAMAAAAFAAAAAAACAAMAAAAFAAAAAAAGAAIAAAAFAAAAAAAHAAIAAAAFAAAAAAAIAAIAAAAFAAAAAAAJAAIAAAAFAAAAAAAKAAIAAAAAAA0AAAALAAIAAAAFAAAAAAACAAQAAAALAAkAAAAAAAMAAAAFAAAAAAABAAMAAAAFAAAAAAABAAQAAAAFAAAAAAAAAAQAAAALAAkAAAAAAAIAAAAFAAAAAAABAAIAAAAFAAAAAAACAAIAAAAFAAAAAAADAAIAAAAFAAAAAAAEAAIAAAAFAAAAAAAAAAEAAAAFAAAAAAABAAEAAAAFAAAAAAAFAAIAAAAFAAAAAAALAAEAAAAFAAAAAAAKAAEAAAAFAAAAAAAJAAEAAAAFAAAAAAAIAAEAAAAFAAAAAAAHAAEAAAAFAAAAAAAGAAEAAAAFAAAAAAAFAAEAAAAFAAAAAAAEAAEAAAAFAAAAAAADAAEAAAAFAAAAAAACAAEAAAAFAAAAAAALAAAAAAAFAAAAAAAKAAAAAAAFAAAAAAAJAAAAAAAFAAAAAAAIAAAAAAAFAAAAAAAHAAAAAAAFAAAAAAAGAAAAAAAFAAAAAAAFAAAAAAAFAAAAAAAEAAAAAAAFAAAAAAADAAAAAAAFAAAAAAACAAAAAAAFAAAAAAABAAAAAAAFAAAAAAAAAAAAAAAFAAAAAAALAAoAAAAFAAAAAAAKAAoAAAAAAA0AAAAJAAoAAAAFAAAAAAAIAAoAAAAMAAcAAAAHAAoAAAALAAkAAAAGAAoAAAAFAAAAAAAFAAoAAAALAAkAAAAEAAoAAAAKAAcAAAADAAoAAAAFAAAAAAACAAoAAAAFAAAAAAABAAoAAAAFAAAAAAAAAAoAAAAFAAAAAAALAAsAAAAFAAAAAAAKAAsAAAAAAA0AAAAJAAsAAAAFAAAAAAAIAAsAAAAKAAgAAAAHAAsAAAAFAAAAAAAGAAsAAAAFAAAAAAAFAAsAAAAFAAAAAAAEAAsAAAAMAAgAAAADAAsAAAAFAAAAAAACAAsAAAAFAAAAAAABAAsAAAAFAAAAAAAAAAsAAAAFAAAAAAALAAwAAAAFAAAAAAAKAAwAAAAAAA0AAAAJAAwAAAAFAAAAAAAIAAwAAAAKAAgAAAAHAAwAAAAFAAAAAAAGAAwAAAAFAAAAAAAFAAwAAAAFAAAAAAAEAAwAAAAMAAgAAAADAAwAAAAFAAAAAAACAAwAAAAFAAAAAAABAAwAAAAFAAAAAAAAAAwAAAAFAAAAAAALABMAAAAFAAAAAAAKABMAAAAAAA0AAAAJABMAAAAFAAAAAAAIABMAAAAFAAAAAAAHABMAAAAFAAAAAAAGABMAAAAFAAAAAAAFABMAAAAFAAAAAAAEABMAAAAFAAAAAAADABMAAAAFAAAAAAACABMAAAAFAAAAAAABABMAAAAFAAAAAAAAABMAAAAFAAAAAAAAABIAAAAFAAAAAAAAABEAAAAFAAAAAAAAABAAAAAFAAAAAAAAAA8AAAAFAAAAAAAAAA4AAAAFAAAAAAAAAA0AAAAFAAAAAAABAA0AAAAFAAAAAAABAA4AAAAFAAAAAAABAA8AAAAFAAAAAAABABAAAAAFAAAAAAABABEAAAAFAAAAAAABABIAAAAFAAAAAAACABIAAAAFAAAAAAACABEAAAAFAAAAAAACABAAAAAFAAAAAAACAA8AAAAFAAAAAAACAA4AAAAFAAAAAAACAA0AAAAFAAAAAAADAA0AAAAFAAAAAAADAA4AAAAFAAAAAAADAA8AAAAFAAAAAAADABAAAAAFAAAAAAADABEAAAAFAAAAAAADABIAAAAFAAAAAAAEABIAAAAFAAAAAAAEABEAAAAFAAAAAAAEABAAAAAFAAAAAAAEAA8AAAAFAAAAAAAEAA4AAAAFAAAAAAAEAA0AAAAKAAkAAAAFAA0AAAALAAkAAAAFAA4AAAAFAAAAAAAFAA8AAAAFAAAAAAAFABAAAAAFAAAAAAAFABEAAAAFAAAAAAAFABIAAAAFAAAAAAAGABIAAAAFAAAAAAAGABEAAAAFAAAAAAAGABAAAAAFAAAAAAAGAA8AAAAFAAAAAAAGAA4AAAAFAAAAAAAGAA0AAAALAAkAAAAHAA0AAAALAAkAAAAHAA4AAAAFAAAAAAAHAA8AAAAFAAAAAAAHABAAAAAFAAAAAAAHABEAAAAFAAAAAAAHABIAAAAFAAAAAAAIABIAAAAFAAAAAAAIABEAAAAFAAAAAAAIABAAAAAFAAAAAAAIAA8AAAAFAAAAAAAIAA4AAAAFAAAAAAAIAA0AAAAMAAkAAAAJAA0AAAAFAAAAAAAJAA4AAAAFAAAAAAAJAA8AAAAFAAAAAAAJABAAAAAFAAAAAAAJABEAAAAFAAAAAAAJABIAAAAFAAAAAAAKABIAAAAAAA0AAAAKABEAAAAAAA0AAAAKABAAAAAAAA0AAAAKAA8AAAAFAAAAAAAKAA4AAAAFAAAAAAAKAA0AAAAAAA0AAAALAA0AAAAFAAAAAAALAA4AAAAFAAAAAAALAA8AAAAFAAAAAAALABAAAAAFAAAAAAALABEAAAAFAAAAAAALABIAAAAFAAAAAAAMABMAAAAFAAAAAAAMABIAAAAFAAAAAAAMABEAAAAFAAAAAAAMABAAAAAFAAAAAAAMAA8AAAAFAAAAAAAMAA4AAAAFAAAAAAAMAA0AAAAFAAAAAAAMAAwAAAAFAAAAAAAMAAsAAAAFAAAAAAAMAAoAAAAFAAAAAAAMAAkAAAAFAAAAAAAMAAgAAAAFAAAAAAAMAAcAAAAFAAAAAAAMAAYAAAAFAAAAAAAMAAUAAAAFAAAAAAAMAAQAAAAFAAAAAAAMAAMAAAAFAAAAAAAMAAIAAAAFAAAAAAAMAAEAAAAFAAAAAAAMAAAAAAAFAAAAAAANAAAAAAAFAAAAAAANAAEAAAAFAAAAAAANAAIAAAAFAAAAAAANAAMAAAAFAAAAAAANAAQAAAAFAAAAAAANAAgAAAAFAAAAAAANAAcAAAAFAAAAAAANAAYAAAAFAAAAAAANAAUAAAAFAAAAAAANAAkAAAAFAAAAAAANAAoAAAAFAAAAAAANAAsAAAAFAAAAAAANAAwAAAAFAAAAAAANAA0AAAAFAAAAAAANAA4AAAAFAAAAAAANAA8AAAAFAAAAAAANABAAAAAFAAAAAAANABEAAAAFAAAAAAANABIAAAAFAAAAAAANABMAAAAFAAAAAAD//xMAAAAFAAAAAAD//xIAAAAFAAAAAAD//xEAAAAFAAAAAAD//xAAAAAFAAAAAAD//w8AAAAFAAAAAAD//w4AAAAFAAAAAAD//w0AAAAFAAAAAAD//wwAAAAFAAAAAAD//wsAAAAFAAAAAAD//woAAAAFAAAAAAD//wkAAAAFAAAAAAD//wgAAAAFAAAAAAD//wcAAAAKAAkAAAD//wYAAAAKAAgAAAD//wUAAAAKAAgAAAD//wQAAAAKAAcAAAD//wMAAAAFAAAAAAD//wEAAAAFAAAAAAD//wAAAAAFAAAAAAD//wIAAAAFAAAAAAA=")
 corner_heights = Dictionary[Vector2i, Vector4i]({
+Vector2i(-1, 0): Vector4i(-1, -1, -1, -1),
+Vector2i(-1, 1): Vector4i(-1, -1, -1, -1),
+Vector2i(-1, 2): Vector4i(-1, -1, 0, 0),
 Vector2i(0, 0): Vector4i(-1, -1, -1, -1),
 Vector2i(0, 1): Vector4i(-1, -1, -1, -1),
 Vector2i(0, 2): Vector4i(-1, -1, 0, 0),
@@ -820,7 +817,47 @@ Vector2i(11, 15): Vector4i(-1, -1, -1, -1),
 Vector2i(11, 16): Vector4i(-1, -1, -1, -1),
 Vector2i(11, 17): Vector4i(-1, -1, -1, -1),
 Vector2i(11, 18): Vector4i(-1, -1, -1, -1),
-Vector2i(11, 19): Vector4i(-1, -1, -1, -1)
+Vector2i(11, 19): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 0): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 1): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 2): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 3): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 4): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 5): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 6): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 7): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 8): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 9): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 10): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 11): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 12): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 13): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 14): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 15): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 16): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 17): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 18): Vector4i(-1, -1, -1, -1),
+Vector2i(12, 19): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 0): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 1): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 2): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 3): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 4): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 5): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 6): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 7): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 8): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 9): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 10): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 11): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 12): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 13): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 14): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 15): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 16): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 17): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 18): Vector4i(-1, -1, -1, -1),
+Vector2i(13, 19): Vector4i(-1, -1, -1, -1)
 })
 active_faction = 1
 objectives = Array[int]([0])
