@@ -63,12 +63,10 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "World size of ONE pixel of a billboard icon. 1/32 matches the tile art's density; mixing densities is the loudest amateur tell in HD-2D, so change this only with the art in view."},
 
 	# The sight beam's SHAPE (#506); its colour is two rows in CLASS_KNOBS, because the verdict hue
-	# is shared with the flat view and these four have no flat-view equivalent at all. Each one
+	# is shared with the flat view and these three have no flat-view equivalent at all. Each one
 	# re-applies on write through its own setter, so a standing beam changes under the slider.
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_width", "label": "Sight beam width", "min": 0.01, "max": 0.4, "step": 0.005,
 		"tip": "How thick the aim's sight beam is, in cells -- it is a ribbon turned to face the camera, so this is a real world width that gets smaller with distance like everything else in the diorama. Thin reads as a laser sight, thick as a tracer round."},
-	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_min_pixels", "label": "Sight beam min width", "min": 0.0, "max": 8.0, "step": 0.25,
-		"tip": "A floor on the beam's on-screen width in PIXELS, whichever is wider winning. It exists so pulling the camera back cannot shrink the beam into the one-pixel hairline it replaced. Zero removes the floor and lets width alone decide."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_softness", "label": "Sight beam edge", "min": 0.25, "max": 6.0, "step": 0.05,
 		"tip": "How the beam fades from its bright middle to nothing at the edge. Around 1 is a flat, even ribbon; higher pulls the brightness into a narrow core with a soft halo around it, which is what stops it reading as a solid strip of geometry."},
 	{"group": "Board markup", "node": "BoardOverlays", "prop": "beam_intensity", "label": "Sight beam glow", "min": 0.5, "max": 6.0, "step": 0.05,

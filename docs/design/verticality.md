@@ -576,6 +576,20 @@ h(t) = lerp(elev_origin + EYE, elev_target + EYE, t) + arc_clearance * 4t(1 - t)
   splits the strip open at each joint), and `extra_cull_margin` (the mesh's AABB is the centreline,
   and the shader draws outside it). **The centreline store is untouched** — `line_of` still returns
   the points, so `Reach`, `HoverPresenter` and `OverlayMirror` needed no edit at all.
+- **Two visual regressions shipped on this before it was right, and both are worth carrying.** The
+  cross-ribbon `abs()` was taken in the VERTEX stage, where every vertex sits on a rim, so it
+  interpolated to a constant and ALPHA came out **zero everywhere** — a beam built correctly,
+  positioned correctly and completely invisible. Then a screen-pixel **width floor**, derived from
+  view depth over `PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y`, **dominated the width at every knob
+  setting** and drew the beam as enormous wedges. **What identified the second one was the SHAPE,
+  not the numbers**: the beam was narrow at the shooter and flared toward the target, and
+  perspective does the opposite to a constant-width ribbon, so the only depth-dependent term had to
+  be the culprit whatever its denominator was really doing. The floor is gone — width is one
+  world-space multiply, and `tests/presentation/test_sight_beam.gd` refuses the builtin by name.
+  **Neither was visible to any test, and that is structural**: no headless run has a rendering
+  device, so the suite can assert the mesh and every knob wire and still never see that nothing is
+  drawn. A `.gdshader` diff's gate is the dev's eyes; say so rather than letting a green suite imply
+  otherwise.
 - **The flat view keeps the thin line, and that is a DECLARED asymmetry** (dev, 2026-09-01) — one
   more entry on [#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s existing ledger for this feature rather than a new debt, since the
   two views already differ about the arc. What they must NOT differ about is the VERDICT, so the

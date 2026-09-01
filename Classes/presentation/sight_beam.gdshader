@@ -14,8 +14,16 @@ shader_type spatial;
 // would render nothing. depth_draw_never keeps a translucent beam from writing depth over itself;
 // the depth TEST stays on, so terrain still occludes it exactly as the old line strip was occluded.
 //
-// Perspective is assumed (the rig is FOV 30) -- beam_min_pixels derives a world width from view
-// depth, which an orthographic projection would not satisfy.
+// WIDTH IS PURELY WORLD-SPACE, and that is a scar rather than a preference. This carried a second
+// term -- a floor in SCREEN PIXELS, so zooming out could not re-thin the beam -- derived from view
+// depth over PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y. It shipped, and the beam came out as huge
+// flaring wedges that no knob could shrink, because that term dominated the max() at every setting.
+// The screenshot is what identified it: the beam was NARROW at the shooter and WIDER at the target,
+// and perspective does the exact opposite, so the only depth-dependent term in the shader had to be
+// the culprit whatever its denominator was really doing. A `max(denominator, 0.000001)` written as
+// safety is what turned a bad read into a silently enormous width instead of a visible NaN.
+// Re-adding a screen-space floor means PASSING the viewport size in as a uniform rather than
+// trusting a builtin in this stage, and it is not worth a third visual regression on a nicety.
 render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
 
 // Colour arrives per draw as the verdict tint (SightTrace2D.CLEAR_COLOR / BLOCKED_COLOR, copied by
@@ -26,10 +34,9 @@ render_mode unshaded, cull_disabled, depth_draw_never, blend_mix;
 uniform vec4 beam_color : source_color = vec4(1.0, 1.0, 1.0, 0.9);
 // Multiplies ALBEDO past the diorama's glow_hdr_threshold (1.2) so the beam blooms. 1.0 = no bloom.
 uniform float beam_intensity = 2.0;
-// Half-width is derived from this, in world units (a cell is BoardSpace.CELL_SIZE = 1.0).
+// The beam's full width in world units (a cell is BoardSpace.CELL_SIZE = 1.0). It is the ONE term
+// in the offset, so the ribbon cannot be any wider than this however far away it is drawn.
 uniform float beam_width = 0.06;
-// A floor in SCREEN pixels, so zooming out cannot return the beam to the hairline it replaced.
-uniform float beam_min_pixels = 2.0;
 // Edge falloff exponent: 1.0 is a linear fade to the rim, higher concentrates a bright core.
 uniform float beam_softness = 1.5;
 
@@ -50,14 +57,8 @@ void vertex() {
 	vec3 side = cross(view_tangent, to_camera);
 	side = length(side) > 0.000001 ? normalize(side) : vec3(1.0, 0.0, 0.0);
 
-	// The world half-width that would subtend beam_min_pixels at this depth. Screen height in
-	// pixels for a world offset w is w * P[1][1] * VIEWPORT_SIZE.y / (2 * -view_z); solving for w
-	// at the floor gives this, and max() lets the wider of the two win.
-	float depth = max(-view_pos.z, 0.000001);
-	float floor_width = beam_min_pixels * 2.0 * depth / max(PROJECTION_MATRIX[1][1] * VIEWPORT_SIZE.y, 0.000001);
-	float half_width = max(beam_width * 0.5, floor_width);
-
-	view_pos += side * side_sign * half_width;
+	// No depth term, deliberately -- see the render_mode note. The offset is bounded by the knob.
+	view_pos += side * side_sign * beam_width * 0.5;
 	POSITION = PROJECTION_MATRIX * vec4(view_pos, 1.0);
 }
 

@@ -132,13 +132,42 @@ func test_a_shape_knob_reaches_the_shader_and_not_merely_the_export() -> void:
 	_draw_straight()
 	var material := _beam_material()
 	_overlays.beam_width = 0.25
-	_overlays.beam_min_pixels = 5.0
 	_overlays.beam_softness = 3.0
 	_overlays.beam_intensity = 4.0
 	assert_float(material.get_shader_parameter("beam_width")).is_equal(0.25)
-	assert_float(material.get_shader_parameter("beam_min_pixels")).is_equal(5.0)
 	assert_float(material.get_shader_parameter("beam_softness")).is_equal(3.0)
 	assert_float(material.get_shader_parameter("beam_intensity")).is_equal(4.0)
+
+
+func test_width_is_the_only_thing_the_offset_is_made_of() -> void:
+	# The beam shipped once as huge flaring wedges no knob could shrink, because the offset also
+	# carried a screen-pixel FLOOR derived from view depth over PROJECTION_MATRIX * VIEWPORT_SIZE --
+	# builtins this suite has no way to read, in a stage it has no way to run. That term dominated
+	# the max() at every setting the panel could reach.
+	#
+	# What a headless test CAN hold is that the shader takes no such input any more: the offset is
+	# beam_width and nothing else, so no camera, projection or viewport value can widen it. A
+	# uniform this suite does not know about is exactly how the floor got back in last time.
+	# COMMENTS ARE STRIPPED FIRST, and that is not fussiness: the shader's own note explains this
+	# bug by NAMING the builtins it must not use, so a raw scan reds on the explanation of why it
+	# is correct. A law over source text has to read the code and not the prose about it.
+	var code := _shader_code_without_comments()
+	for banned in ["VIEWPORT_SIZE", "beam_min_pixels"]:
+		assert_bool(code.contains(banned)).override_failure_message(
+			("sight_beam.gdshader names %s again -- the beam's width must not depend on a "
+			+ "screen-space builtin, see the render_mode note") % banned).is_false()
+	# The one legitimate PROJECTION_MATRIX use is the final clip transform, never a width term.
+	assert_int(code.count("PROJECTION_MATRIX")).override_failure_message(
+		"PROJECTION_MATRIX should appear once, projecting POSITION").is_equal(1)
+
+
+func _shader_code_without_comments() -> String:
+	var kept := PackedStringArray()
+	for line in (load(BoardOverlays.SIGHT_BEAM_SHADER_PATH) as Shader).code.split("\n"):
+		var body: String = line.split("//")[0]
+		if not body.strip_edges().is_empty():
+			kept.append(body)
+	return "\n".join(kept)
 
 
 func test_a_knob_written_before_any_beam_exists_still_reaches_the_first_one() -> void:

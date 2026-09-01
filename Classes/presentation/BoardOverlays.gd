@@ -176,27 +176,22 @@ enum SelectorDepth { LEVEL, HALF }
 #
 # COLOUR is deliberately absent: it arrives per draw as the aim's verdict tint, copied from
 # SightTrace2D so the flat view and the diorama cannot disagree about what "blocked" looks like.
-# Brightness is here rather than folded into that colour -- see the shader's own note.
+# Brightness is here rather than folded into that colour -- see the shader's own note. WIDTH is the
+# whole offset: the screen-pixel FLOOR that used to sit beside it is gone, and the shader says why.
 #
-# THE `: set = _name` SUFFIX IS REQUIRED, NOT A STYLE CHOICE, and tidying these four into inline
+# THE `: set = _name` SUFFIX IS REQUIRED, NOT A STYLE CHOICE, and tidying these three into inline
 # `set(value):` blocks silently breaks the file. `KnobSource.DECLARATION_LINE` carries that suffix
 # but has no clause for a block, so it matches an inline-block declaration anyway and eats the
 # trailing colon with the value -- Save rewrites `x := 0.06:` to `x := 0.99` and leaves the block
 # beneath it orphaned, i.e. a parse error in the script the whole 3D stack hangs off, written
 # silently the first time the dev tunes a beam and presses Save. Measured, not reasoned.
 @export var beam_width := 0.06: set = _set_beam_width              # world units; a cell is 1.0
-@export var beam_min_pixels := 2.0: set = _set_beam_min_pixels     # screen floor; zoom-out guard
 @export var beam_softness := 1.5: set = _set_beam_softness         # edge falloff exponent
 @export var beam_intensity := 2.0: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
 
 
 func _set_beam_width(value: float) -> void:
 	beam_width = value
-	_apply_beam_params()
-
-
-func _set_beam_min_pixels(value: float) -> void:
-	beam_min_pixels = value
 	_apply_beam_params()
 
 
@@ -390,7 +385,6 @@ func _style_beam(material: ShaderMaterial) -> void:
 	if material == null:
 		return
 	material.set_shader_parameter("beam_width", beam_width)
-	material.set_shader_parameter("beam_min_pixels", beam_min_pixels)
 	material.set_shader_parameter("beam_softness", beam_softness)
 	material.set_shader_parameter("beam_intensity", beam_intensity)
 
