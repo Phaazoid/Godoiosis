@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #661 (2026-09-01).**
+**Canon checked through #676 (2026-09-01).**
 
 ## Principles
 
@@ -156,9 +156,16 @@ you read it *afterwards*. Both are #44 children.
   What a log must show that **no queue row ever did** *(halved 2026-08-09: the other half was
   post-BREAK reality, and the BREAK repeal — resolution-pipeline R9 — means execution never diverges
   from the preview, so there is no post-divergence state to report)*: every event that isn't a player
-  order at all — end-of-phase burn damage, Crisis outcomes, expiring downed clocks, squad ejections,
-  terrain deposits. Those are precisely the events players miss, and they are invisible to the queue
-  by construction.
+  order at all — Crisis outcomes, expiring downed clocks, squad ejections, terrain deposits. Those
+  are precisely the events players miss.
+
+  **"Invisible to the queue by construction" was too strong, and #419 is what showed it** (2026-09-01).
+  End-of-phase burn damage was the first item on that list and it is now an **END OF TURN** queue
+  section — the queue already drew derived non-orders (counters, watch shots), so what actually kept
+  the burn out was that nobody had derived it, not the panel's construction. Read the remaining items
+  as *not derived yet*, and check each against the resolver before assuming a log is the only home
+  for it; what stays genuinely log-only is anything whose inputs are **gone by the time it is read**,
+  which is the split the paragraph above draws.
 
 ## The volume above a unit ([#229](https://github.com/Phaazoid/Godoiosis/issues/229), BUILT 2026-08-15)
 
@@ -1277,16 +1284,32 @@ first as `ALWAYS_SHOW_SQUAD_RINGS`. What remains open is the animation itself, a
 question the restraint doctrine sharpens: squads re-form often, and three of these firing at once
 during a settle is worth designing for rather than discovering.
 
-**Warn when a move ends on — or crosses — an element-afflicted tile.** *(Merged capture: the
+**Warn when a move ends on — or crosses — an element-afflicted tile — the QUEUE half BUILT
+([#419](https://github.com/Phaazoid/Godoiosis/issues/419), 2026-09-01).** *(Merged capture: the
 action-menu warning recorded 2026-08-18 and the queue-row warning recorded 2026-08-19 are the same
-fact asked at two surfaces.)* Before committing a move onto a tile carrying fire (or any later
-hazard), say so. Three surfaces want it and they are one question: **prefer** in pathing (the AI and
-Group Move half — [terrain.md](terrain.md) owns the rule, and the AI's share files to
-[#117](https://github.com/Phaazoid/Godoiosis/issues/117)), **warn** on the action-menu entry, and
-**warn** on the queued row. Open: what the notice IS (menu text, an icon, a confirm), and whether it
-covers only the **destination** or **any afflicted tile the path crosses** — the second is strictly
-more honest and strictly more visual noise. Precedent for the row half: `ActionQueueRow` already
-renders element icons off the shared `StateIcons.ICONS` table, so the queue surface has the art.
+fact asked at two surfaces.)* Of the three surfaces that wanted it, one shipped: the queued row, as
+an **END OF TURN** section closing the panel, one derived undraggable row per unit the tile will
+damage — actor sprite, the tile's own icon, and the same `hp->hp` readout with the same DOWN/KILL
+rung art every other row uses. **Overwatch's architecture, generalized** (dev's call, and the
+starting point): a standing board condition whose consequences the resolver derives per pass into
+its own `ResolvedPlan` list, which the panel draws as rows that ask the action about themselves.
+[terrain.md](terrain.md) → *Hazardous tiles and pathing* owns the mechanism and the two open halves.
+
+Two findings the build produced, both about the ask rather than the code. **The "crosses" half had
+nothing to report**: crossing fire costs nothing today, so a path-crossing warning would have
+described a rule that does not exist — that is [#509](https://github.com/Phaazoid/Godoiosis/issues/509),
+and it lands as another moment on the same derived list. **And the action-menu entry cannot carry
+this at all for a move**: the Move row is picked *before* a destination exists, so at that moment
+there is nothing to warn about. The surface that could is a **destination-time notice during move
+planning** (the path arrow / ghost) — unfiled, and the honest replacement for the menu-entry line
+in the original capture. Not a confirm: a prompt on every step into fire would be miserable.
+
+Two rows of cleanup rode along, each collapsing a hand-listed answer the order already gave.
+`ActionQueueRow`'s cancel-is-inert triple became `not action.is_reorderable()` (the same question the
+drag already asks), and its HP readout now asks `BaseAction.resolved_outcome()` instead of testing
+for `AttackAction` — `aimed_at()`'s sibling door, and the reason a burn row draws its numbers with
+no new UI code. `AttackAction.lethality_icon` went static for the same reason: two spellings of what
+a down looks like would let the panel disagree with itself.
 
 **A queued move still offers "Move" — BUILT ([#417](https://github.com/Phaazoid/Godoiosis/issues/417),
 2026-08-21).** Picking it **cancels** the queued order and re-enters move planning, so backing out of
