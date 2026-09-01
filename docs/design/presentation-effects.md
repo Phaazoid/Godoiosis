@@ -118,7 +118,8 @@ a player setting, which is exactly what the ruling above refuses.
 **Scope is the reach pair plus the footprint** (dev's call). A watch aim keeps `WATCH_REACH_MODULATE`
 under every palette, pinned so a half-widening is loud. Worth a look in play: the watch's red-orange
 and the colour-blind palette's vermillion are neighbours, where against the DEFAULT red they were tuned
-apart — widening the vocabulary belongs to the colour-blind-mode ticket.
+apart — widening the vocabulary belongs to
+[#675](https://github.com/Phaazoid/Godoiosis/issues/675), which inherits that measurement.
 
 **Two doors it needed, both found rather than reasoned about.** `_ready` paints the two aim layers, so
 it reads through the accessors — with it reading the statics directly, three suites were **33 cases

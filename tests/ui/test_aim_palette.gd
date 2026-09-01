@@ -101,7 +101,8 @@ func test_the_heal_fork_survives_every_palette() -> void:
 func test_a_watch_aim_is_untouched_by_the_palette() -> void:
 	# SCOPE, pinned so a half-widening is loud rather than a surprise in play: #422 moved the reach
 	# pair and the footprint, and the dev scoped the watch pair OUT. If the watch ever joins them,
-	# this is the case to delete on purpose -- see AIM_PALETTES for why it is worth a look first.
+	# this is the case to delete on purpose (#675) -- see AIM_PALETTES for why it is worth a look
+	# in play first: the watch's red-orange and the colour-blind palette's vermillion are neighbours.
 	for palette: int in PlayerSettings.AimPalette.values():
 		PlayerSettings.set_choice(PALETTE, palette)
 		var palette_name: String = PlayerSettings.AimPalette.keys()[palette]

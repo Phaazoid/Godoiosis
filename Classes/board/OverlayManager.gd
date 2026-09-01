@@ -118,7 +118,7 @@ static var WATCH_HOVER_MODULATE := Color(1.0, 0.75, 0.4, 1.0)
 # NOT WIDENED TO THE WATCH PAIR, deliberately (dev scope call): aiming a watch keeps
 # WATCH_REACH_MODULATE under every palette. Worth a look in play -- the watch's red-orange and the
 # colour-blind palette's vermillion are neighbours, where against the DEFAULT red they were tuned
-# apart. Widening the vocabulary is the colour-blind-mode ticket's job, not this one's.
+# apart. Widening the vocabulary is #675's job, not this one's.
 enum AimChannel { ATTACK, HEAL, FOOTPRINT }
 
 const AIM_PALETTES := {

@@ -1392,7 +1392,9 @@ the doors it needed are in
 window (#212, law-tested) and an embedded popup does not dismiss on outside-click inside `GameView`;
 and real colour-blindness support, which wants the whole markup vocabulary rather than the aim's three
 channels — the sibling of [#217](https://github.com/Phaazoid/Godoiosis/issues/217) this entry always
-said it was. Both are filed.
+said it was. Filed as [#676](https://github.com/Phaazoid/Godoiosis/issues/676) and
+[#675](https://github.com/Phaazoid/Godoiosis/issues/675) respectively; #676 carries the
+ColorPicker-ban finding so it is not rediscovered.
 
 ## The camera takes an ANGLE ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2a, BUILT 2026-08-26)
 
