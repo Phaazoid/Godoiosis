@@ -65,8 +65,10 @@ const BLOCKED_ATLAS_COORDS = Vector2i(2, 0)
 
 const PROJECTED_MODULATE := Color(0.7, 0.9, 1, 0.75)        # the planning-ghost tint
 const PROJECTED_HIGHLIGHT := Color(1.4, 1.4, 1.0, 1.0)      # brightened + opaque on hover
-const HOVER_MODULATE := Color(1, 1, 0)                  # the aim-footprint fill
-const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point
+# static var since #422, joining the reach pair below: the footprint is one of the three channels a
+# player's palette repaints, so its authored value has to be tunable like the two it sits with.
+static var HOVER_MODULATE := Color(1, 1, 0)             # the aim-footprint fill
+const HOVER_PULSE_MODULATE := Color(1, 1, 0, 0.3)       # its pulsed low point -- only its ALPHA is read
 
 # The reach layer's fill (#123 follow-up): red reads as hostile, so a healing pick paints green
 # instead. Decided from the attack's own `heals` flag -- the one question, one answer this already
@@ -94,6 +96,44 @@ static var HEAL_ATTACK_MODULATE := Color(0, 1, 0, .5)
 # mark read as one vocabulary out of the box.
 static var WATCH_REACH_MODULATE := Color(1.0, 0.35, 0.25, 0.5)
 static var WATCH_HOVER_MODULATE := Color(1.0, 0.75, 0.4, 1.0)
+
+# --- The player's aim palette (#422) ------------------------------------------------------------
+#
+# WHICH palette is the player's (PlayerSettings.AIM_PALETTE); WHAT is in one is authored here. Two
+# different axes, which is why this is NOT the one-value-one-store case #647 built: the dev tunes a
+# palette's colours, the player picks between palettes. Both are in presentation-effects.md.
+#
+# DEFAULT IS NOT A ROW IN THIS TABLE, and that is the load-bearing part. It falls through to the
+# three statics above -- what the Game tab's knobs write and what Save-to-source authors. A copied
+# row would be a second answer to "what colour is an attack reach" and would go stale the instant a
+# knob moved (#308's copied-key shape, again). So this table holds the ALTERNATIVES, entire.
+#
+# CONSEQUENCE, so the panel can say it out loud: a colour knob moves the DEFAULT palette alone. With
+# another palette live the knobs are inert, which is the dev's own call (2026-09-01) -- the
+# alternatives are authored here, in source, and nowhere else.
+#
+# The non-default values are seeded from the Okabe-Ito colour-blind-safe set rather than picked by
+# eye, so they start defensible rather than guessed. They are still the dev's to tune.
+#
+# NOT WIDENED TO THE WATCH PAIR, deliberately (dev scope call): aiming a watch keeps
+# WATCH_REACH_MODULATE under every palette. Worth a look in play -- the watch's red-orange and the
+# colour-blind palette's vermillion are neighbours, where against the DEFAULT red they were tuned
+# apart. Widening the vocabulary is #675's job, not this one's.
+enum AimChannel { ATTACK, HEAL, FOOTPRINT }
+
+const AIM_PALETTES := {
+	PlayerSettings.AimPalette.COLOUR_BLIND: {
+		AimChannel.ATTACK: Color(0.835, 0.369, 0.0, 0.5),      # vermillion
+		AimChannel.HEAL: Color(0.337, 0.706, 0.914, 0.5),      # sky blue
+		AimChannel.FOOTPRINT: Color(0.941, 0.894, 0.259, 1.0), # yellow
+	},
+	PlayerSettings.AimPalette.HIGH_CONTRAST: {
+		AimChannel.ATTACK: Color(1.0, 0.0, 1.0, 0.5),
+		AimChannel.HEAL: Color(0.0, 1.0, 1.0, 0.5),
+		AimChannel.FOOTPRINT: Color(1.0, 1.0, 1.0, 1.0),
+	},
+}
+
 # How much darker a vertically-BLOCKED reach cell (#258) draws than the reach fill. The 2D says
 # "blocked" with the hatched tile under the same modulate; the 3D has no per-cell art, so its
 # ATTACK_BLOCKED layer derives its colour as the live reach modulate scaled by this. One factor,
@@ -331,8 +371,10 @@ func _ready() -> void:
 	}
 	
 	move_overlay.modulate = Color(1, 1, 0, .5)
-	attack_overlay.modulate = ATTACK_MODULATE
-	hover_overlay.modulate = HOVER_MODULATE
+	# Through the accessors, never the statics: these two layers wear a PALETTE now, and a raw read
+	# here would paint the authored colour once at setup and stay wrong until the next aim (#422).
+	attack_overlay.modulate = attack_reach_color(null)
+	hover_overlay.modulate = aim_fill_color()
 	squad_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	squadrange_overlay.modulate = Color(1, 0.5, 0, 0.5)
 	invalidmove_overlay.modulate = Color(0.5, 0.36, 0.4, .5)
@@ -388,11 +430,34 @@ func clear_sight_trace() -> void:
 static func attack_reach_color(attack: AttackData, watch := false) -> Color:
 	if watch:
 		return WATCH_REACH_MODULATE
-	return HEAL_ATTACK_MODULATE if attack != null and attack.heals else ATTACK_MODULATE
+	if attack != null and attack.heals:
+		return _palette_color(AimChannel.HEAL, HEAL_ATTACK_MODULATE)
+	return _palette_color(AimChannel.ATTACK, ATTACK_MODULATE)
 
 # The aim FOOTPRINT's fill -- the layer HoverPresenter draws what the current aim would affect on.
 static func aim_fill_color(watch := false) -> Color:
-	return WATCH_HOVER_MODULATE if watch else HOVER_MODULATE
+	if watch:
+		return WATCH_HOVER_MODULATE
+	return _palette_color(AimChannel.FOOTPRINT, HOVER_MODULATE)
+
+# One channel of the aim palette the PLAYER has picked (#422). DEFAULT returns `authored` -- the
+# static the Game tab tunes -- rather than reading a table row, which is the whole reason the dev's
+# knob and the shipped default cannot drift apart. See AIM_PALETTES.
+#
+# A palette with no row is a table that has fallen behind its enum (tests/ui/test_aim_palette pins
+# it). Say so and paint the authored colour: an aim that is the wrong colour is legible, an aim that
+# crashed the draw is not.
+static func _palette_color(channel: AimChannel, authored: Color) -> Color:
+	var picked := PlayerSettings.choice_of(PlayerSettings.Setting.AIM_PALETTE)
+	if picked == PlayerSettings.AimPalette.DEFAULT:
+		return authored
+	if not AIM_PALETTES.has(picked):
+		push_error("OverlayManager: aim palette %d has no colours -- falling back to the authored ones"
+				% picked)
+		return authored
+	var row: Dictionary = AIM_PALETTES[picked]
+	var painted: Color = row[channel]
+	return painted
 
 # Its pulsed low point, DERIVED rather than authored: the same fill at the alpha the pulse has always
 # dropped to. One factor, never a third colour -- BLOCKED_REACH_DIM's precedent.

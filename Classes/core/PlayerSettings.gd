@@ -32,6 +32,7 @@ enum Setting {
 	SHOW_DIALOG,
 	PHOTOSENSITIVITY,
 	BATTLE_ZOOM_MODE,
+	AIM_PALETTE,
 }
 
 ## When a unit wears its readout (#418). A DECLARED duplicate: these values ARE the indices into the
@@ -54,6 +55,21 @@ enum BattleZoom {
 	OFF,           # the plain board everywhere -- Pacing's BOARD profile, which still paces (#519)
 	COMBAT_ONLY,   # volleys and the turnover; moves, side channels and cell effects play plain
 	ALWAYS,        # every beat, the shipped default
+}
+
+## Which colours an aim wears (#422). The same DECLARED-duplicate rule as HealthBars and BattleZoom:
+## these values ARE the indices into the row's `options`, and THE ENUM IS AUTHORITATIVE.
+##
+## DEFAULT is not merely the first entry, it is a FALL-THROUGH. OverlayManager holds no table row for
+## it and reads its own authored statics instead, which is what keeps the dev's colour knobs and the
+## shipped default ONE value rather than two that can drift -- see OverlayManager.AIM_PALETTES.
+##
+## The player picks BETWEEN palettes; the dev tunes what is IN one. Two axes, so this is not the
+## one-value-one-store case #647 built -- docs/design/presentation-effects.md carries both.
+enum AimPalette {
+	DEFAULT,         # the authored colours: red reach, green heal, yellow footprint
+	COLOUR_BLIND,    # Okabe-Ito vermillion / sky blue / yellow, for the red-green fork
+	HIGH_CONTRAST,   # magenta / cyan / white, for legibility over busy art rather than for CVD
 }
 
 # Per-setting metadata. Literal-only, so it can be a compile-time const (the Experiments.DEFS shape).
@@ -89,6 +105,12 @@ const DEFS := {
 		"desc": "Which moments get the camera treatment -- a killing blow, a Crisis or a last-gasp survival held on and leaned into. Combat only keeps the drama for blows and counters, and lets walking, reloading and rescues play plain. Off paces the whole pass plainly.",
 		"options": ["Off", "Combat only", "Every action"],
 		"default": BattleZoom.ALWAYS,
+	},
+	Setting.AIM_PALETTE: {
+		"title": "Aim colours",
+		"desc": "Which colours the board paints while you are aiming -- the reach an attack covers, the reach a heal covers, and the cells your pick would actually hit. Colour-blind safe tells an attack from a heal without leaning on red against green.",
+		"options": ["Default", "Colour-blind safe", "High contrast"],
+		"default": AimPalette.DEFAULT,
 	},
 }
 

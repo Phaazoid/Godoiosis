@@ -342,3 +342,45 @@ func test_escape_backs_out_of_the_settings_page() -> void:
 
 	assert_object(_first_modal_of(SettingsScreen)).override_failure_message(
 		"Esc did not close the settings page").is_null()
+
+
+# ==============================================================================
+#  The board follows a palette out of the page (#422)
+# ==============================================================================
+
+func test_picking_an_aim_palette_repaints_the_board_on_close() -> void:
+	# #422's wire from the PLAYER's side, and it needs the close because the two aim layers are
+	# painted on entering an aim and on leaving one -- so without a repaint here a palette picked on
+	# this page reaches nothing until the player next aims an attack, and the footprint layer is what
+	# a rescue or squad-up pick is drawn on, which needs no aim at all.
+	#
+	# Asserted on the LIVE layer rather than the store: the store is already pinned one suite over,
+	# and the modulate is what OverlayMirror polls into the 3D stack every frame.
+	var setting := PlayerSettings.Setting.AIM_PALETTE
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var labels: Array = PlayerSettings.options_of(setting)
+	var pick: Button = _button_with_text(screen, str(labels[PlayerSettings.AimPalette.HIGH_CONTRAST]))
+	assert_object(pick).override_failure_message(
+		"the settings page has no segment for the High contrast palette").is_not_null()
+
+	pick.button_pressed = true
+	await _frames(2)
+	assert_int(PlayerSettings.choice_of(setting)).override_failure_message(
+		"the palette segment moved and the store did not").is_equal(
+		PlayerSettings.AimPalette.HIGH_CONTRAST)
+
+	var close: Button = _button_with_text(screen, "Close")
+	assert_object(close).is_not_null()
+	close.pressed.emit()
+	await _frames(4)
+
+	# DERIVED from the accessor, never a literal -- the palettes are the dev's to retune.
+	var overlays: OverlayManager = game.overlay_manager
+	assert_that(overlays.hover_overlay.modulate).override_failure_message(
+			"the aim footprint did not follow the palette out of the settings page"
+			).is_equal(OverlayManager.aim_fill_color())
+	assert_that(overlays.hover_overlay.modulate).override_failure_message(
+			"the aim footprint is still on the AUTHORED colour -- closing the page repainted nothing"
+			).is_not_equal(OverlayManager.HOVER_MODULATE)

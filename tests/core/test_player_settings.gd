@@ -25,6 +25,7 @@ func _choice_enum_sizes() -> Dictionary:
 	return {
 		PlayerSettings.Setting.HEALTH_BARS: PlayerSettings.HealthBars.size(),
 		PlayerSettings.Setting.BATTLE_ZOOM_MODE: PlayerSettings.BattleZoom.size(),
+		PlayerSettings.Setting.AIM_PALETTE: PlayerSettings.AimPalette.size(),
 	}
 
 func test_every_setting_has_metadata() -> void:

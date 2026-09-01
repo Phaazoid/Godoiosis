@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #661 (2026-08-30).**
+**Canon checked through #661 (2026-09-01).**
 
 ## Principles
 
@@ -1374,19 +1374,27 @@ already produced two bugs; anything that chains one menu into the next lands dir
 level down — but a terminal pick still does, so this caution stands for whatever auto-open ends up
 chaining into.)*
 
-**Player-chosen aim / attack reticule colours.** The dev's half-joking aside at #212 (*"a color
-slider to set whatever color they want"*), kept because it is closer than it sounds: the reach fill
-is a tunable `OverlayManager.ATTACK_MODULATE` **static** rather than a `const`, the 3D mirrors that
-modulate rather than holding its own colour, and since #350 the game **has** a settings surface that
-did not exist when this was said. So the pieces are: a store row, a projection row, and a widget
-kind that `DEFS` does not have yet (a colour, like the three-way above — the same gap, twice).
-Real colour-blindness support would want the whole `BoardOverlays.LAYERS` / `OverlayManager`
-modulate set rather than the reticule alone, which makes this a sibling of
-[#217](https://github.com/Phaazoid/Godoiosis/issues/217)'s photosensitivity toggle — the other
-accessibility knob whose home is that same page. **Note the tuning-surface collision before
-building:** those same layer colours are `GameKnobs.CLASS_KNOBS` rows (#373), i.e. dev-tunable
-game constants written back into their declarations — a player override is a *second* writer of the
-same value and needs a declared relationship with the authored default, not a second seam.
+**Player-chosen aim colours — BUILT as a PALETTE ([#422](https://github.com/Phaazoid/Godoiosis/issues/422), 2026-09-01).**
+The dev's half-joking aside at #212 (*"a color slider to set whatever color they want"*) turned out to
+be closer than it sounded, and to want a different shape than it asked for. **The player picks a named
+palette, not four free colours** — which needed no new widget kind at all (an ordinary `DEFS` choice
+row, #418's), and serves the underlying want better: a palette is designed as a SET, where four freely
+picked colours can be chosen into a combination nothing reads against.
+
+That also dissolved the collision this entry was filed to warn about. The dev and the player move
+different things — he authors what is in a palette, they choose between palettes — so no player
+override sits on top of a dev-tunable constant, and no colour leaves `OverlayManager`. The rule and
+the doors it needed are in
+[presentation-effects.md](presentation-effects.md) → *The aim palette*.
+
+**What is left of the original ask, deliberately:** free per-colour pickers, which need a colour row in
+`PlayerSettings.DEFS` **and** a game-side widget, since the `ColorPicker` family is banned from the dev
+window (#212, law-tested) and an embedded popup does not dismiss on outside-click inside `GameView`;
+and real colour-blindness support, which wants the whole markup vocabulary rather than the aim's three
+channels — the sibling of [#217](https://github.com/Phaazoid/Godoiosis/issues/217) this entry always
+said it was. Filed as [#676](https://github.com/Phaazoid/Godoiosis/issues/676) and
+[#675](https://github.com/Phaazoid/Godoiosis/issues/675) respectively; #676 carries the
+ColorPicker-ban finding so it is not rediscovered.
 
 ## The camera takes an ANGLE ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2a, BUILT 2026-08-26)
 

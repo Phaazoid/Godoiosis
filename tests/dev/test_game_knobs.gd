@@ -68,6 +68,9 @@ func after_test() -> void:
 		GameKnobs.write_static(_scene, name, _static_snapshot[name])
 	get_tree().root.remove_child(_scene)
 	_scene.free()
+	# Same reason as the static snapshot above: PlayerSettings._state is process-global, so a case
+	# that picked an aim palette would leave every later suite drawing an aim in it (#422).
+	PlayerSettings.reset_for_test()
 
 
 # --- Helpers -------------------------------------------------------------------------------
@@ -830,3 +833,37 @@ func test_save_object_fields_asks_before_writing() -> void:
 	objects._on_save_fields_pressed()
 
 	assert_object(_find_dialog(objects)).is_not_null()
+
+
+# --- The aim-palette notice (#422) ---------------------------------------------------------
+
+func test_the_panel_says_when_a_palette_has_made_the_aim_knobs_inert() -> void:
+	# The dev's colour knobs write the DEFAULT palette (his call, 2026-09-01: the alternatives are
+	# authored in source and nowhere else). So while the player is on another palette, the three aim
+	# rows in Board markup colours move a value the board is not currently reading -- #264's
+	# born-dead slider, except CORRECT, which is exactly why it has to be said rather than fixed.
+	#
+	# POLLED, not latched, and that is the half worth pinning: the settings page is a SECOND OS
+	# WINDOW and can be moved while this one is open, which is the live bug #647's ruling was made
+	# about. A notice built once would be right until the moment it mattered.
+	PlayerSettings.reset_for_test()
+	var notice: Label = _game._palette_notice
+	assert_object(notice).override_failure_message(
+			"the Board markup colours group built no palette notice at all").is_not_null()
+	assert_bool(notice.visible).override_failure_message(
+			"the notice is showing while the player is on the Default palette, which the knobs DO reach"
+			).is_false()
+
+	PlayerSettings.set_choice(PlayerSettings.Setting.AIM_PALETTE,
+			PlayerSettings.AimPalette.HIGH_CONTRAST)
+	await await_idle_frame()
+	await await_idle_frame()
+
+	assert_bool(notice.visible).override_failure_message(
+			"a palette went live and the panel never said the aim knobs had stopped reaching the board"
+			).is_true()
+	# The store's OWN label, never a copy typed here -- the rule the battle-zoom picker follows.
+	var labels: Array = PlayerSettings.options_of(PlayerSettings.Setting.AIM_PALETTE)
+	assert_str(notice.text).override_failure_message(
+			"the notice does not name the palette the player is actually on").contains(
+			str(labels[PlayerSettings.AimPalette.HIGH_CONTRAST]))
