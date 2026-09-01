@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #661 (2026-09-01).**
+**Canon checked through #676 (2026-09-01).**
 
 ---
 
@@ -132,6 +132,53 @@ on it having never aimed at all, which is what makes both doors reachable rather
 
 **No test says what any colour is.** Every expectation derives from the accessors, so the dev may retune
 all four authored colours and the palettes themselves without reddening anything.
+
+### The player SCALES what the dev authored ([#394](https://github.com/Phaazoid/Godoiosis/issues/394), BUILT 2026-09-01)
+
+**A third shape, and it is the one #394 was filed without.** That ticket asked whether a value can live
+in both places — dev default and player setting — and the [#422](https://github.com/Phaazoid/Godoiosis/issues/422)
+ruling answered *no, it moves*. The camera-handling knobs are neither: the dev authors `pan_speed`,
+`orbit_sensitivity`, `zoom_step` and `smoothing`, and the player picks a **step that multiplies them**.
+So nothing leaves `GameKnobs`, Save-to-source is untouched, and the ticket's own framing — *five rows
+move to `PlayerSettings`* — is wrong about what shipped.
+
+Stated as a rule: **a value can be scaled from the player's side without leaving the dev's.** It is the
+palette's different-axes case one turn further on. The palette asks *which authored set*; this asks
+*how far from the authored number*, which is the same fork wearing arithmetic.
+
+**Its advantage over the palette, and the reason to reach for it first:** a multiplier never makes a knob
+inert. Dragging *Pan speed* while the player is on Slow still moves the board, just scaled — where a
+palette leaves three colour rows tuning a set nobody is looking at. What the Game tab has to say is
+therefore the *other* half: while a step is off Normal the dev is tuning a base he is not feeling, and a
+value that felt right ships a factor away from what a Normal player gets. One polled clause per row that
+is off Normal, from the store's own title and `CameraRig3D.scale_of`'s own factor.
+
+**`NORMAL` is absent from `SCALE_FACTORS` and falls through to 1.0** — `AIM_PALETTES`' rule, for the same
+reason: a factor of 1.0 written down is a second answer to what *unchanged* means. Factors are **per
+setting**, seeded identically, because `blend = 1 - exp(-smoothing * delta)` is nonlinear and the step
+that feels right on smoothing is not the one that feels right on pan speed.
+
+**Three rows over ONE enum** (`PlayerSettings.Scale`), each with its own labels — *Slow/Normal/Fast*,
+*Low/Normal/High*, *Cinematic/Normal/Snappy*. Deliberately not called `Pace`: `Pacing` is the beat table,
+and two camera-adjacent names one letter apart is a trap for whoever greps next.
+
+**Two things are deliberately OUT.** `glide_smoothing` answers how a shot TRAVELS when playback moves the
+camera — direction rather than comfort, and its own declaration already keeps it separate from the input
+rate — so welding it to the smoothing row would hand the player a dial on the end of every Execute. And
+the four **limit** rows (both tilt clamps, pan margin, zoom-out slack) stay dev-only: a player widening
+the steep limit is not choosing a preference, they are choosing to see billboard art from overhead.
+`playback_distance` left the group entirely — it is authored direction, and sits on the Playback tab now.
+
+**The rig reads its orbit rate ONCE for both axes.** Turning and tilting are two halves of one drag, so a
+player's sensitivity has to reach them by the same number; scaling only one is a diagonal drag that
+CURVES, which no straight-line case can see. `tests/presentation/test_camera_scale.gd` drives an
+equal-magnitude diagonal at every step and asserts the ratio — and with the pitch read reverted, 27 cases
+of `test_camera_rig` stayed green while that one failed.
+
+**The flat 2D view is untouched**, and that is a declared divergence rather than an oversight:
+`CameraController.move_speed` / `scroll_speed` are separate exports in no knob table at all, so the
+preference moves the 3D rig only. Widening it is [#292](https://github.com/Phaazoid/Godoiosis/issues/292)'s
+business.
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source

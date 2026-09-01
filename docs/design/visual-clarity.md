@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #661 (2026-09-01).**
+**Canon checked through #676 (2026-09-01).**
 
 ## Principles
 
@@ -393,6 +393,11 @@ The rulings, all dev calls, all made before building:
   had already answered this one level down for prediction bars, so the knob simply **widened**
   (renamed `unhovered_shows_number`, since the question is *how crowded may this volume get* and
   that does not change with why a bar happens to be up). One knob, not one per reason.
+  **It stopped being a knob in [#394](https://github.com/Phaazoid/Godoiosis/issues/394) (2026-09-01)**
+  and became `PlayerSettings.UNHOVERED_BAR_NUMBERS` — the dev and the player were setting it on the
+  same axis, so per #422's ruling it has one store. The Game tab still shows it, as a control that
+  writes the real preference; what the dev's Save writes there is the `DEFS` default, i.e. what a
+  player who never opens the options page gets.
 
 Two things that generalise past this ticket:
 
