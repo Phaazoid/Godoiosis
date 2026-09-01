@@ -965,3 +965,45 @@ func test_the_save_confirm_stops_counting_rows_out_past_a_dozen() -> void:
 			"the list did not cap at CONFIRM_LIST_MAX plus its own summary line").is_equal(
 			GameTool.CONFIRM_LIST_MAX + 1)
 	assert_str(text).contains("and %d more" % (many.size() - GameTool.CONFIRM_LIST_MAX))
+
+
+# --- The Camera page says what the player's steps are scaling (#394) -------------------------
+
+func test_the_camera_page_is_quiet_while_every_step_is_normal() -> void:
+	# The ordinary case. A step never makes a camera knob INERT -- it multiplies it -- so there is
+	# nothing to say until one is off Normal, and a permanent line would be noise on every page load.
+	PlayerSettings.reset_for_test()
+	await await_idle_frame()
+	await await_idle_frame()
+	var notice: Label = _game._scale_notice
+	assert_object(notice).override_failure_message(
+			"the Camera handling group built no scale notice at all").is_not_null()
+	assert_bool(notice.visible).override_failure_message(
+			"the notice is showing while every camera step is Normal").is_false()
+
+func test_the_camera_page_names_the_step_and_its_factor() -> void:
+	# POLLED, like the palette notice and the zoom picker: the Settings page is a second OS window.
+	# What is asserted is the store's OWN title and CameraRig3D's OWN factor reaching the label --
+	# neither is copied into the panel, so neither can drift.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.MOUSE_SENSITIVITY
+	PlayerSettings.set_choice(setting, PlayerSettings.Scale.FASTER)
+	await await_idle_frame()
+	await await_idle_frame()
+
+	var notice: Label = _game._scale_notice
+	assert_bool(notice.visible).override_failure_message(
+			"a camera step went off Normal and the panel never said the rows below are scaled"
+			).is_true()
+	assert_str(notice.text).override_failure_message(
+			"the notice does not name the setting doing the scaling").contains(
+			PlayerSettings.title_of(setting))
+	assert_str(notice.text).override_failure_message(
+			"the notice does not name the factor the board is applying").contains(
+			String.num(CameraRig3D.scale_of(setting), 2))
+
+	PlayerSettings.reset_for_test()
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(notice.visible).override_failure_message(
+			"the notice stayed up after every step went back to Normal").is_false()

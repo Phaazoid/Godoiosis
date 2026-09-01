@@ -870,6 +870,16 @@ const ACTION_GROUP := "Actions"
 # The group whose three aim rows a player's palette can override (#422). Named for the same reason
 # ACTION_GROUP is: the table rows spell the string, and the PANEL needs one place to recognise it.
 const MARKUP_COLOUR_GROUP := "Board markup colours"
+# The group whose rows a player's camera steps SCALE (#394). Named for the panel's benefit, exactly
+# as the two above are: the table rows spell the string, this is what recognises it.
+const CAMERA_GROUP := "Camera handling"
+# Which player settings scale something in that group, in the order their notice reads. A DECLARED
+# list rather than "every Scale row", so a fourth one joins by decision -- MAIN_ACTION_NEVER's shape.
+const CAMERA_SCALE_SETTINGS: Array[PlayerSettings.Setting] = [
+	PlayerSettings.Setting.CAMERA_PAN_SPEED,
+	PlayerSettings.Setting.MOUSE_SENSITIVITY,
+	PlayerSettings.Setting.CAMERA_SMOOTHING,
+]
 
 
 # The verbs the Actions section can show, in the order its picker lists them. DERIVED from the

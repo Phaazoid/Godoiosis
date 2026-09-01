@@ -61,6 +61,11 @@ var _zoom_picker: OptionButton   # the battle-zoom mode, polled against the stor
 var _palette_notice: Label
 # What the notice is currently WORDED for. -1 is "nothing yet", so the first refresh always writes.
 var _notice_palette := -1
+# The camera-scale notice (#394) and what it is currently worded for. Same poll, different sentence:
+# a step never makes a knob INERT here -- it multiplies it -- so what has to be said is that the
+# sliders below are the UNSCALED numbers and the board is not showing you them.
+var _scale_notice: Label
+var _notice_scales := ""
 # Every setting row's checkbox, by its Setting (#394). Kept for the same reason the battle-zoom
 # picker is: a control on BOTH a dev and a player surface polls the store rather than latching it,
 # and the Settings page is a second OS window that can be moved while this one is open.
@@ -195,6 +200,8 @@ func _rebuild() -> void:
 	_filtered.clear()
 	_action_picker = null
 	_palette_notice = null
+	_scale_notice = null
+	_notice_scales = ""
 	_setting_checks.clear()
 	_build_playback_header()
 	var group := ""
@@ -306,6 +313,7 @@ func _process(_delta: float) -> void:
 	# #422 rides the same poll for the same reason, and BEFORE the zoom guard rather than after it:
 	# a page with no battle-zoom picker built still has aim rows that a palette can make inert.
 	_refresh_palette_notice()
+	_refresh_scale_notice()
 	_refresh_setting_rows()
 	if _zoom_picker == null:
 		return
@@ -334,6 +342,9 @@ func _refresh_setting_rows() -> void:
 func _build_group_header(rows: VBoxContainer, group: String) -> void:
 	if group == GameKnobs.MARKUP_COLOUR_GROUP:
 		_build_palette_notice(rows)
+		return
+	if group == GameKnobs.CAMERA_GROUP:
+		_build_scale_notice(rows)
 		return
 	if group != GameKnobs.ACTION_GROUP:
 		return
@@ -392,6 +403,49 @@ func _apply_playback_filter() -> void:
 #
 # Built unconditionally and hidden, rather than built on demand: this page's own filter idiom, and
 # what keeps the panel laws in tests/dev/test_game_knobs.gd able to walk a complete tree.
+# WHAT THE BOARD IS ACTUALLY DOING WITH THESE NUMBERS (#394). A player's camera step MULTIPLIES the
+# rows below rather than replacing them, so unlike the palette notice above nothing here is inert --
+# every slider still reaches the board. What needs saying is the other half: while a step is off
+# Normal you are tuning a base you are not feeling, and a value that felt right to you ships x0.6 or
+# x1.6 away from what a Normal player gets.
+#
+# Built unconditionally and hidden, this page's own filter idiom -- see _build_palette_notice.
+func _build_scale_notice(rows: VBoxContainer) -> void:
+	_scale_notice = Label.new()
+	_scale_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_scale_notice.add_theme_color_override("font_color", NOTICE_COLOR)
+	rows.add_child(_scale_notice)
+	_notice_scales = ""
+	_refresh_scale_notice()
+
+
+# One clause per row that is off Normal, using the store's OWN titles and CameraRig3D's own factor --
+# never a copy of either. Silent while every step is Normal, which is the ordinary case.
+func _refresh_scale_notice() -> void:
+	if _scale_notice == null:
+		return
+	var parts: PackedStringArray = PackedStringArray()
+	for setting: PlayerSettings.Setting in GameKnobs.CAMERA_SCALE_SETTINGS:
+		var factor := CameraRig3D.scale_of(setting)
+		if is_equal_approx(factor, 1.0):
+			continue
+		var labels: Array = PlayerSettings.options_of(setting)
+		parts.append("%s x%s (%s)" % [PlayerSettings.title_of(setting), String.num(factor, 2),
+				str(labels[PlayerSettings.choice_of(setting)])])
+	var live := ", ".join(parts)
+	# VISIBILITY BEFORE THE DIFF. The diff exists to skip rebuilding the string every frame, and at
+	# BUILD time `live` and `_notice_scales` are both "" -- so behind the early-out the label kept a
+	# Label's default visible=true and the notice showed on a page with nothing to say.
+	_scale_notice.visible = not parts.is_empty()
+	if live == _notice_scales:
+		return
+	_notice_scales = live
+	if parts.is_empty():
+		return
+	_scale_notice.text = ("Your own settings are scaling these rows: %s. The sliders below are the "
+			+ "UNSCALED values you author, so what you tune here is not what you are feeling.") % live
+
+
 func _build_palette_notice(rows: VBoxContainer) -> void:
 	_palette_notice = Label.new()
 	_palette_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
