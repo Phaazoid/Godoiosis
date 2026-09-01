@@ -137,6 +137,8 @@ const LAYERS: Dictionary[Layer, Dictionary] = {
 }
 
 const FILL_TEXTURE_PATH := "res://Art/LookDev/cell_fill.png"
+# Colocated with its only consumer rather than in a shaders folder the project does not have.
+const SIGHT_BEAM_SHADER_PATH := "res://Classes/presentation/sight_beam.gdshader"
 # The 2D art's metric: a 16px texture covers exactly one board cell.
 const ART_PIXELS_PER_CELL := 16.0
 
@@ -165,6 +167,32 @@ enum SelectorDepth { LEVEL, HALF }
 # A knob because there is nothing to mirror here: 2D says "invalid" with a negative-icon TEXTURE,
 # and a bracket has no texture to swap, so the colour is a fresh aesthetic call.
 @export var invalid_bracket_color := Color(1.0, 0.3, 0.3, 0.9)
+
+# The sight beam's shape (#506). Each one re-applies on write rather than being read at build time:
+# a knob that only takes effect on the next rebuild is a slider the dev drags with nothing moving,
+# and a standing trace does not rebuild until the pointer does. The pools may not exist yet when a
+# setter runs (member initializers, and a LINE pool is built lazily by set_line), which is why
+# _apply_beam_params tolerates an empty one instead of guarding at each call site.
+#
+# COLOUR is deliberately absent: it arrives per draw as the aim's verdict tint, copied from
+# SightTrace2D so the flat view and the diorama cannot disagree about what "blocked" looks like.
+# Brightness is here rather than folded into that colour -- see the shader's own note.
+@export var beam_width := 0.06:            # world units; a cell is BoardSpace.CELL_SIZE = 1.0
+	set(value):
+		beam_width = value
+		_apply_beam_params()
+@export var beam_min_pixels := 2.0:        # screen-space floor, so zoom-out cannot re-thin it
+	set(value):
+		beam_min_pixels = value
+		_apply_beam_params()
+@export var beam_softness := 1.5:          # edge falloff exponent; higher = tighter bright core
+	set(value):
+		beam_softness = value
+		_apply_beam_params()
+@export var beam_intensity := 2.0:         # ALBEDO multiplier; above glow_hdr_threshold it blooms
+	set(value):
+		beam_intensity = value
+		_apply_beam_params()
 
 var fill_texture: Texture2D
 
@@ -261,8 +289,13 @@ func set_layer_modulate(layer: Layer, color: Color) -> void:
 
 
 # Replaces a LINE layer's polyline wholesale -- one pooled MeshInstance3D whose ImmediateMesh is
-# rebuilt per call (a hovered aim changes every mouse move; a line strip rebuild of ~15 points is
+# rebuilt per call (a hovered aim changes every mouse move; a ribbon rebuild of ~15 points is
 # nothing). Points arrive in WORLD space at the trajectory's own heights; fewer than 2 hides it.
+#
+# The centreline is emitted TWICE per point (#506) -- same position, side flag 0 then 1 -- and
+# sight_beam.gdshader pushes the pair apart to face the camera. So the mesh is a TRIANGLE_STRIP of
+# 2N vertices, and what it stores is still just the centreline: `line_of` and every caller upstream
+# are unchanged, which is what let the ribbon land without touching Reach or OverlayMirror.
 func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 	var spec: Dictionary = LAYERS[layer]
 	if spec["kind"] != Kind.LINE:
@@ -279,11 +312,72 @@ func set_line(layer: Layer, points: PackedVector3Array, color: Color) -> void:
 		node.visible = false
 		return
 	node.visible = true
-	mesh.surface_begin(Mesh.PRIMITIVE_LINE_STRIP)
-	for p in points:
-		mesh.surface_add_vertex(p)
+	var tangents := _beam_tangents(points)
+	var last := float(points.size() - 1)
+	mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in points.size():
+		# UV.x is the position along the beam, UV.y the side flag the shader remaps to -1/+1.
+		var along := float(i) / last
+		mesh.surface_set_normal(tangents[i])
+		mesh.surface_set_uv(Vector2(along, 0.0))
+		mesh.surface_add_vertex(points[i])
+		mesh.surface_set_normal(tangents[i])
+		mesh.surface_set_uv(Vector2(along, 1.0))
+		mesh.surface_add_vertex(points[i])
 	mesh.surface_end()
-	(node.material_override as StandardMaterial3D).albedo_color = color
+	(node.material_override as ShaderMaterial).set_shader_parameter("beam_color", color)
+
+
+# The direction the ribbon is "along" at each point. Interior points AVERAGE their two segments
+# rather than taking one: a lob's arc bends at every sample, and a tangent that jumps between
+# segments splits the strip open at each joint. Endpoints have one segment and use it. A
+# zero-length segment (coincident samples, which a shot blocked at t=0 can produce) contributes
+# nothing instead of poisoning the average with a NaN.
+func _beam_tangents(points: PackedVector3Array) -> PackedVector3Array:
+	var tangents := PackedVector3Array()
+	var count := points.size()
+	for i in count:
+		var back := Vector3.ZERO
+		var ahead := Vector3.ZERO
+		if i > 0:
+			back = points[i] - points[i - 1]
+			if back.length_squared() > 0.0:
+				back = back.normalized()
+			else:
+				back = Vector3.ZERO
+		if i < count - 1:
+			ahead = points[i + 1] - points[i]
+			if ahead.length_squared() > 0.0:
+				ahead = ahead.normalized()
+			else:
+				ahead = Vector3.ZERO
+		var joint := back + ahead
+		if joint.length_squared() > 0.0:
+			tangents.append(joint.normalized())
+		else:
+			tangents.append(Vector3.FORWARD)
+	return tangents
+
+
+# Pushes the four shape knobs at every built beam. Called by each setter AND by _make_line, which
+# is the half that is easy to miss: the LINE pool is built lazily on the first set_line, so a knob
+# written before any aim was hovered would otherwise be dropped and the beam would come up with the
+# shader's own defaults instead of the authored ones.
+func _apply_beam_params() -> void:
+	for layer: Layer in _markers:
+		if LAYERS[layer]["kind"] != Kind.LINE:
+			continue
+		for node: Node3D in _markers[layer]:
+			_style_beam((node as MeshInstance3D).material_override as ShaderMaterial)
+
+
+func _style_beam(material: ShaderMaterial) -> void:
+	if material == null:
+		return
+	material.set_shader_parameter("beam_width", beam_width)
+	material.set_shader_parameter("beam_min_pixels", beam_min_pixels)
+	material.set_shader_parameter("beam_softness", beam_softness)
+	material.set_shader_parameter("beam_intensity", beam_intensity)
 
 
 func line_of(layer: Layer) -> PackedVector3Array:
@@ -572,21 +666,27 @@ func _make_quad(spec: Dictionary, texture: Texture2D, color: Color) -> MeshInsta
 	return instance
 
 
-# The laser polyline: an unshaded ImmediateMesh line strip, rebuilt by set_line. 1-px engine
-# lines -- if that reads too thin in play, the upgrade is a camera-facing ribbon built here,
-# with nothing upstream changing.
+# The sight beam: an ImmediateMesh ribbon, rebuilt by set_line and widened toward the camera by
+# sight_beam.gdshader. This WAS a 1-px engine line strip, and the note here said the upgrade would
+# be "a camera-facing ribbon built here, with nothing upstream changing" -- #506 is that upgrade,
+# and the prediction held: only this function and set_line changed.
+#
+# extra_cull_margin exists because the mesh's AABB is computed from the CENTRELINE while the shader
+# draws outside it. Without the margin a beam whose centreline leaves the frustum pops out while
+# its visible width is still on screen. The value is generous next to any sane beam width -- this
+# is one small mesh, so there is nothing to save by trimming it.
 func _make_line(spec: Dictionary) -> MeshInstance3D:
 	var instance := MeshInstance3D.new()
 	instance.mesh = ImmediateMesh.new()
-	var material := StandardMaterial3D.new()
-	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
-	material.vertex_color_use_as_albedo = false
+	var material := ShaderMaterial.new()
+	material.shader = load(SIGHT_BEAM_SHADER_PATH) as Shader
 	material.render_priority = spec["sort"]
 	instance.material_override = material
+	instance.extra_cull_margin = 1.0
 	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	instance.layers = WORLD_RENDER_LAYER
 	add_child(instance)
+	_style_beam(material)
 	return instance
 
 
