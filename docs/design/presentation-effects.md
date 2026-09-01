@@ -2,7 +2,7 @@
 
 **Status: an idea wall plus two locked decisions.** Solicited by the dev on 2026-08-12, the day Stage 0 (#203) passed its GO gate: *"a full thought experiment, all ideas on the wall."* Nothing below the Decisions section is a commitment — it is the candidate pool for #176's stage 5 and beyond, kept so it can't evaporate from chat. The look-dev scene (`Scenes/LookDev/LookDev.tscn`) is the standing playground where any of it gets prototyped before it's real — and since #212 (2026-08-15) the **Moods tab** in the dev-tools window tunes the *shipping* view live, so a value on this wall can be judged on a real board rather than in the diorama. **It is a playground, not a scratch scene ([#393](https://github.com/Phaazoid/Godoiosis/issues/393), 2026-08-19)** — seven presentation suites fixture on it, `Battle3D.tscn` loads its MeshLibrary, and `BoardMirror`/`BoardOverlays` read textures out of `Art/LookDev/`, so it is edited with the same care as shipping code. Its four moods stopped being a second copy at the same time: `look_dev.gd` held them as a hardcoded `PRESETS` table, seeded from the same values four of the twelve `LookPreset` files now carry, and it resolves them by NAME through `LookKnobs` instead.
 
-**Canon checked through #647 (2026-08-28).**
+**Canon checked through #661 (2026-09-01).**
 
 ---
 
@@ -84,11 +84,53 @@ menu left it stale *and showing the wrong column of knobs*. Both surfaces poll n
 doctrine (*"callers poll it; there is no changed signal"*), so no new seam.
 
 **One refinement the wording does not itself reach**, recorded here rather than improvised later: for
-a value with *both* a source declaration and a per-player cfg — #422's reticule colour, when it is
-built — "never disagree" cannot mean one storage location, because the dev's lives in source and the
-player's in `user://`. It means **one live runtime value**, and **eligibility moves the value's home**:
-the moment a knob becomes player-facing, `PlayerSettings` owns it and the dev panel writes *that*, with
-the authored default being the `DEFS` literal saved to source. Nothing exercises it yet.
+a value with *both* a source declaration and a per-player cfg, "never disagree" cannot mean one storage
+location, because the dev's lives in source and the player's in `user://`. It means **one live runtime
+value**, and **eligibility moves the value's home**: the moment a knob becomes player-facing,
+`PlayerSettings` owns it and the dev panel writes *that*, with the authored default being the `DEFS`
+literal saved to source.
+
+**Still nothing exercises it — and the case named here as the one that would did not.** This paragraph
+predicted #422's reticule colour would move its home; it does not, because it turned out not to be this
+section's case at all. See *The aim palette* below, and take the correction as the general lesson:
+**which section a value belongs in is decided by whether the dev and the player move it along the SAME
+axis, and that is worth asking again at build time rather than inheriting from the filing.**
+
+### The aim palette: the player picks BETWEEN authored sets ([#422](https://github.com/Phaazoid/Godoiosis/issues/422), BUILT 2026-09-01)
+
+**The player chooses WHICH palette; the dev goes on authoring what is IN one.** Two different axes, so
+this is the camera-pitch case above and not the one-store case — which is what kept it small: the store
+gains a single ordinary CHOICE row (`PlayerSettings.AIM_PALETTE`, #418's kind, no new widget and no
+third row kind) and not one colour leaves `OverlayManager`.
+
+**DEFAULT IS NOT A ROW IN `AIM_PALETTES`, and that is the load-bearing part.** It falls through to the
+authored statics — what the Game tab's knobs write and what Save-to-source authors. A copied row would
+be a second answer to *what colour is an attack reach* and would go stale the instant a knob moved, so
+the table holds the ALTERNATIVES entire. The fork lives inside the three accessors
+(`attack_reach_color` / `aim_fill_color` / `aim_pulse_color`) and nowhere else.
+
+**A colour knob therefore moves the DEFAULT palette alone** (dev, 2026-09-01: the alternatives are
+authored in source and nowhere else). With another palette live the three aim rows are inert — correct,
+and #264's born-dead slider unless the panel says so, which is why the Game tab wears a polled NOTICE
+naming the live palette. A LABEL, never a control: offering a picker there would put a second writer on
+a player setting, which is exactly what the ruling above refuses.
+
+**Scope is the reach pair plus the footprint** (dev's call). A watch aim keeps `WATCH_REACH_MODULATE`
+under every palette, pinned so a half-widening is loud. Worth a look in play: the watch's red-orange
+and the colour-blind palette's vermillion are neighbours, where against the DEFAULT red they were tuned
+apart — widening the vocabulary belongs to the colour-blind-mode ticket.
+
+**Two doors it needed, both found rather than reasoned about.** `_ready` paints the two aim layers, so
+it reads through the accessors — with it reading the statics directly, three suites were **33 cases
+green** between them, both ends correct and nothing connecting them (#103's shape); it is pinned now by
+`tests/ui/test_aim_palette_reaches_the_board.gd`, whose whole fixture is choosing the palette BEFORE the
+scene is instantiated. And the layers are otherwise painted only on entering an aim and leaving one, so
+`SettingsScreen` re-applies through `refresh_aim_colors` on close — the door the Game tab's colour knobs
+already use. The footprint layer is shared with `PICKING_TARGET`, so a rescue or squad-up pick is drawn
+on it having never aimed at all, which is what makes both doors reachable rather than theoretical.
+
+**No test says what any colour is.** Every expectation derives from the accessors, so the dev may retune
+all four authored colours and the palettes themselves without reddening anything.
 
 **Every save that can overwrite asks first (#380's convention, dev: "anything that can overwrite
 settings should").** Every tool's Update — load-gated *and* confirmed — plus the Game tab's source
