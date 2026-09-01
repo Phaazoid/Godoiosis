@@ -797,6 +797,10 @@ func resolve_plan(squad: Squad, board: BoardContext) -> ResolvedPlan:
 	for armed in watch_orders:
 		(watch_orders[armed] as OverwatchAction).resolved_spent = (armed as Watch).spent
 
+	# The END OF TURN forecast (#419), last of all: it reads where the pass leaves every member and
+	# which deposits the pass made, so it can only be derived once both are settled.
+	PlanResolver.resolve_tile_hits(plan, squad, hypo, board)
+
 	_last_resolved_plan = plan
 	_last_resolved_squad = squad
 	return plan
