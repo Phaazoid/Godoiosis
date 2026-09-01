@@ -41,11 +41,21 @@ func _init() -> void:
 	button_size = Vector2(150, 36)
 
 # The GlossaryScreen shape: build, wait for Close, free.
+#
+# ...plus ONE act on the way out (#422). The board's two aim layers are painted on entering an aim
+# and on leaving one, so an aim palette picked here would reach nothing until the player next aimed
+# an attack -- and the footprint layer is shared with PICKING_TARGET, so a rescue or squad-up pick
+# is drawn on it having never aimed at all. `refresh_aim_colors` is the door the Game tab's colour
+# knobs already re-apply through; this is the same act from the player's side, and it costs one call
+# at a moment the board is frozen anyway rather than a poll on a manager that has no _process by
+# design (every draw here is RETAINED -- OverlayMirror polls IT).
 static func show_screen(game_node: Node) -> void:
 	var screen := SettingsScreen.new()
 	game_node.ui_layer.add_child(screen)
 	screen._build(game_node)
 	await screen.closed
+	var overlays: OverlayManager = game_node.overlay_manager
+	overlays.refresh_aim_colors()
 	screen.queue_free()
 
 func _build(game_node: Node) -> void:

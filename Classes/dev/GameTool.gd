@@ -24,7 +24,10 @@ class_name GameTool
 # reports "no 3D host" instead of failing.
 
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
+# A NOTE rather than a heading, so it must not read as one -- cool against the headings' gold.
+const NOTICE_COLOR := Color(0.62, 0.82, 1.0, 1)
 const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
+const PALETTE_SETTING := PlayerSettings.Setting.AIM_PALETTE
 
 var _host: Node3D
 var _baseline: Array = []         # per KNOBS index: what is currently ON DISK, i.e. Reset's target
@@ -50,6 +53,11 @@ var _dirty := false
 # TileBrushTool._set_paint_mode is the same idiom one panel over.
 var _action_picker: OptionButton
 var _zoom_picker: OptionButton   # the battle-zoom mode, polled against the store (see _process)
+# The aim-palette notice (#422), polled the same way. NOT a control: the dev tunes the DEFAULT
+# palette and the alternatives are authored in source, so there is nothing here to write.
+var _palette_notice: Label
+# What the notice is currently WORDED for. -1 is "nothing yet", so the first refresh always writes.
+var _notice_palette := -1
 var _shown_action: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 # Every control each row put on the page, by its row's tags. Kept because a row is not one node --
 # a colour row is several -- so hiding one means hiding the span DevWidgets.add_knob_row returned.
@@ -179,6 +187,7 @@ func _rebuild() -> void:
 		return
 	_filtered.clear()
 	_action_picker = null
+	_palette_notice = null
 	_build_playback_header()
 	var group := ""
 	for knob: Dictionary in GameKnobs.KNOBS:
@@ -267,6 +276,9 @@ func _build_playback_header() -> void:
 # A POLL rather than a changed signal, which is the store's own doctrine ("callers poll it") and needs
 # no new seam. It is one int per frame, and it re-runs the filter only on an actual move.
 func _process(_delta: float) -> void:
+	# #422 rides the same poll for the same reason, and BEFORE the zoom guard rather than after it:
+	# a page with no battle-zoom picker built still has aim rows that a palette can make inert.
+	_refresh_palette_notice()
 	if _zoom_picker == null:
 		return
 	var live := PlayerSettings.choice_of(ZOOM_SETTING)
@@ -276,9 +288,13 @@ func _process(_delta: float) -> void:
 	_apply_playback_filter()
 
 
-# A section's own control, drawn under its heading. Only Actions has one: the picker that decides
-# which verb's rows are on the page (ObjectTool's per-type dropdown, one panel over).
+# A section's own control, drawn under its heading. Actions has the picker that decides which verb's
+# rows are on the page (ObjectTool's per-type dropdown, one panel over); Board markup colours has a
+# NOTICE rather than a control -- see below.
 func _build_group_header(rows: VBoxContainer, group: String) -> void:
+	if group == GameKnobs.MARKUP_COLOUR_GROUP:
+		_build_palette_notice(rows)
+		return
 	if group != GameKnobs.ACTION_GROUP:
 		return
 	var labels: Array = []
@@ -323,6 +339,46 @@ func _apply_playback_filter() -> void:
 			var drawn := control as CanvasItem
 			if drawn != null:
 				drawn.visible = shown
+
+
+# WHY A KNOB HERE CAN DO NOTHING, said out loud (#422). A player's aim palette overrides the three
+# aim rows in this group, and the dev's knobs write the DEFAULT palette alone (his call, 2026-09-01:
+# the alternatives are authored in source and nowhere else). So while a non-default palette is live,
+# dragging those three moves a value the board is not currently reading -- #264's born-dead slider,
+# except that here it is CORRECT and only needs saying.
+#
+# A LABEL, never a control. Offering a picker here would put a second writer on a player setting,
+# which is exactly what the #647 ruling refuses; the player's own Settings page is where it moves.
+#
+# Built unconditionally and hidden, rather than built on demand: this page's own filter idiom, and
+# what keeps the panel laws in tests/dev/test_game_knobs.gd able to walk a complete tree.
+func _build_palette_notice(rows: VBoxContainer) -> void:
+	_palette_notice = Label.new()
+	_palette_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_palette_notice.add_theme_color_override("font_color", NOTICE_COLOR)
+	rows.add_child(_palette_notice)
+	_notice_palette = -1
+	_refresh_palette_notice()
+
+
+# The palette's NAME comes from the store's own labels, never a copy typed here -- the rule the
+# battle-zoom picker follows one section up, for the same reason: two surfaces naming the modes
+# differently is the drift the ruling is about.
+func _refresh_palette_notice() -> void:
+	if _palette_notice == null:
+		return
+	var picked := PlayerSettings.choice_of(PALETTE_SETTING)
+	if picked == _notice_palette:
+		return
+	_notice_palette = picked
+	_palette_notice.visible = picked != PlayerSettings.AimPalette.DEFAULT
+	if not _palette_notice.visible:
+		return
+	var labels: Array = PlayerSettings.options_of(PALETTE_SETTING)
+	_palette_notice.text = ("Aim colours: the player is on %s. The reach and footprint rows below "
+			+ "tune the DEFAULT palette, so the board will not follow them until Aim colours is "
+			+ "back on Default. %s is authored in OverlayManager.AIM_PALETTES.") % [
+			str(labels[picked]), str(labels[picked])]
 
 
 func _add_heading(rows: VBoxContainer, text: String) -> void:

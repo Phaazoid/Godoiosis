@@ -852,6 +852,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 # opinion about what a section is called -- the table stays the one declaration.
 const PROFILE_TAB := "Playback"
 const ACTION_GROUP := "Actions"
+# The group whose three aim rows a player's palette can override (#422). Named for the same reason
+# ACTION_GROUP is: the table rows spell the string, and the PANEL needs one place to recognise it.
+const MARKUP_COLOUR_GROUP := "Board markup colours"
 
 
 # The verbs the Actions section can show, in the order its picker lists them. DERIVED from the
