@@ -185,9 +185,9 @@ enum SelectorDepth { LEVEL, HALF }
 # trailing colon with the value -- Save rewrites `x := 0.06:` to `x := 0.99` and leaves the block
 # beneath it orphaned, i.e. a parse error in the script the whole 3D stack hangs off, written
 # silently the first time the dev tunes a beam and presses Save. Measured, not reasoned.
-@export var beam_width := 0.06: set = _set_beam_width              # world units; a cell is 1.0
-@export var beam_softness := 1.5: set = _set_beam_softness         # edge falloff exponent
-@export var beam_intensity := 2.0: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
+@export var beam_width := 0.075: set = _set_beam_width              # world units; a cell is 1.0
+@export var beam_softness := 1.1: set = _set_beam_softness         # edge falloff exponent
+@export var beam_intensity := 3.9: set = _set_beam_intensity       # ALBEDO multiplier; >1.2 blooms
 
 
 func _set_beam_width(value: float) -> void:
