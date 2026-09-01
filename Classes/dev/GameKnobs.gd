@@ -178,10 +178,21 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The STEEPEST the player's drag may take the camera. Steep is what lets you see into a one-cell hole -- it needs about -70 to read the floor of one two units deep. Past that the unit sprites are being looked at from overhead, which is the one angle billboard art is not drawn for, so this is where the HD-2D conceit gives out rather than where the maths does."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
-	{"group": "Camera handling", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
-		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
 		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
+
+	# --- Playback framing (#394, off Camera handling) ---
+	#
+	# It was filed among the camera knobs and is not one of them: handling is what the PLAYER'S hand
+	# may do, and this is where a fight OPENS FROM -- authored direction, which is #520's business.
+	# Its own group rather than joining "Camera travel" one table over, on the precedent that split
+	# "Board markup" from "Board markup colours": a group name shared across KNOBS and CLASS_KNOBS
+	# draws its heading twice, once per pass.
+	#
+	# UNTAGGED by profile on purpose, so it shows whichever column the Playback page is filtered to --
+	# it is applied ONCE as playback starts, not per beat, so no one profile owns it.
+	{"group": "Playback framing", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
+		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 
 	# --- World (#380, from the Objects tab's Globals) ---
 	# How the world's own furniture is drawn -- art conventions matched to the tile art once and
@@ -918,6 +929,7 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
+	"Playback framing": "Playback",
 	"World": "World",
 	# Water took its OWN sub-tab once every dial went per type (#552): twenty-one rows under the prop
 	# lamps on World is a scroll rather than a panel. Two groups into one tab, and since a group draws
