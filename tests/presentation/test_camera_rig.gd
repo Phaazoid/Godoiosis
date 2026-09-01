@@ -316,7 +316,11 @@ func test_the_tilt_is_clamped_to_its_own_band() -> void:
 	# The band is a knob, so the case drives PAST whatever it is set to rather than naming a number.
 	var rig := _rig()
 	var span: float = rig.max_pitch_degrees - rig.min_pitch_degrees
-	var pixels: float = (span * 4.0) / rig.orbit_sensitivity
+	# The EFFECTIVE rate (#394), not the authored one: the drag the rig actually applies is scaled by
+	# the player's mouse-sensitivity step. Over-driven 4x either way, so this case was never going to
+	# fail over it -- it is repointed because deriving from the wrong property is how a later case
+	# written at a non-Normal step would quietly measure the wrong thing.
+	var pixels: float = (span * 4.0) / rig.effective_orbit_sensitivity()
 
 	rig._target_pitch_degrees = rig.max_pitch_degrees
 	_drag(rig.orbit_button, Vector2(0.0, -pixels))
