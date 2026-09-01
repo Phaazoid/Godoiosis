@@ -465,9 +465,9 @@ const CLASS_KNOBS: Array[Dictionary] = [
 	# pointed at it would be a slider nothing reads. HOW BRIGHT the 3D beam burns is a separate row
 	# on the Board markup group, since a colour row here tops out at full white.
 	{"group": "Board markup colours", "label": "Sight beam, clear", "static": "CLEAR_COLOR", "script": SIGHT_TRACE_SCRIPT,
-		"tip": "The aim's sight beam when the shot has a clear line. Reads on top of the terrain rather than as part of it, so it wants to be a colour nothing on the board is -- the default is plain white and lets the glow knob do the work. Takes effect on a beam already up."},
+		"tip": "The aim's sight beam when the shot has a clear line. Reads on top of the terrain rather than as part of it, so it wants to be a colour nothing on the board is -- the default is plain white and lets the glow knob do the work. Takes effect on a beam already up. Unlike the reach and footprint rows, the player's Aim colours palette does NOT repaint this -- the beam is outside #422's vocabulary, so what you tune here is what every player sees."},
 	{"group": "Board markup colours", "label": "Sight beam, blocked", "static": "BLOCKED_COLOR", "script": SIGHT_TRACE_SCRIPT,
-		"tip": "The same beam when terrain stops the shot -- it is drawn only as far as the block, so this colour and the length are together the whole verdict. Wants to be unmistakable against the clear colour at a glance, since the two are never on screen at the same time to compare. Takes effect on a beam already up."},
+		"tip": "The same beam when terrain stops the shot -- it is drawn only as far as the block, so this colour and the length are together the whole verdict. Wants to be unmistakable against the clear colour at a glance, since the two are never on screen at the same time to compare. Takes effect on a beam already up. Not palette-driven either, so this colour stands whatever Aim colours is set to."},
 
 	# The #325 rings. A float rather than a colour, and the reason this table is named for WHERE a
 	# value lives rather than for what type it is: ring alpha is a static on OverlayManager, exactly
