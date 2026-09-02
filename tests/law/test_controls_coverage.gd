@@ -1,4 +1,4 @@
-# Controls registry completeness (#690): the store and the real Input Map agree, in BOTH
+# Controls registry completeness (#690, widened by #691): the store and the real Input Map agree, in BOTH
 # directions. A miss here is fixed by AUTHORING the entry or deleting the dead action, never by
 # editing this suite -- the whole point is that a doc could not be checked against the bindings
 # and this can.
@@ -7,14 +7,16 @@
 # action declared in project.godot and consumed by nothing, Space-spawn being a hardcoded
 # KEY_SPACE check in game.gd. A markdown table cannot notice that; this reds.
 #
+# #691 filled the player contexts, which let that direction go from "every `dev`-named action" to
+# "every action the project authored". The scope now lives in BUILTIN_PREFIX and nowhere else.
+#
 # Presence only, never wording: what an entry SAYS is edited freely.
 extends GdUnitTestSuite
 
-# The naming convention the dev bindings follow -- `dev_*` plus `toggle_dev_overlay`. Matching on
-# the substring rather than a listed set on purpose: a list here would be a second copy of the
-# Input Map, which is the seam this registry exists to close. `cam_*`, `ui_*` and Dialogic's
-# action are player-facing and belong to #691's contexts, so they are out of scope until it lands.
-const DEV_ACTION_MARKER := "dev"
+# Godot's own built-ins, which the project never authored and a controls page has no business
+# listing. Everything else in the Input Map is the project's, and must be documented -- see
+# test_every_project_action_is_documented for why that widened at #691.
+const BUILTIN_PREFIX := "ui_"
 
 
 func test_every_entry_is_complete() -> void:
@@ -58,13 +60,37 @@ func test_every_documented_action_exists() -> void:
 			.is_true()
 
 
-func test_every_dev_action_is_documented() -> void:
+# WIDENED AT #691, and the widening is the point. While only the dev context existed this could
+# ask about `dev`-named actions alone, because `cam_*` and Dialogic's action were documented
+# nowhere and the strong form would have failed. With the player contexts landed, every action the
+# project authored has an entry -- so the law becomes "anything in the Input Map that is not a
+# Godot built-in is documented". A new action now cannot ship undocumented at all, rather than
+# only being caught if somebody happened to name it `dev_`.
+#
+# `ui_*` is SKIPPED rather than listed: those are Godot's, there are dozens, and a controls page
+# naming `ui_graphics_toggle` is noise. An entry MAY still name one -- Escape names `ui_cancel` --
+# and the forward case above checks it exists.
+func test_every_project_action_is_documented() -> void:
 	var documented: Array[String] = Controls.documented_actions()
 	for action_name: StringName in InputMap.get_actions():
 		var action: String = String(action_name)
-		if not action.contains(DEV_ACTION_MARKER):
+		if action.begins_with(BUILTIN_PREFIX):
 			continue
 		assert_bool(documented.has(action)) \
 			.override_failure_message("Input Map action '%s' is documented nowhere -- either give it a Controls entry or delete the action"
 				% action) \
 			.is_true()
+
+
+# The player's page is filtered by PLAYER_CONTEXTS, so an authoring binding reaching it is a FILTER
+# fault rather than a wording one. This is what makes that list worth declaring instead of writing
+# "everything except DEV" at the page: a second dev-only context must not publish itself.
+func test_no_dev_binding_is_reachable_from_the_player_contexts() -> void:
+	var player_rows := 0
+	for context: Controls.Context in Controls.PLAYER_CONTEXTS:
+		assert_bool(context == Controls.Context.DEV) \
+			.override_failure_message("Controls.PLAYER_CONTEXTS includes the DEV context -- the Settings page would list authoring keys") \
+			.is_false()
+		player_rows += Controls.in_context(context).size()
+	assert_int(player_rows).override_failure_message(
+		"No player-facing bindings at all -- the Settings Controls tab would render empty").is_greater(0)

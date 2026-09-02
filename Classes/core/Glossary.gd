@@ -14,6 +14,13 @@ class_name Glossary
 #     (reaction_lines/terrain_reaction_lines), never hand-written — the page cannot claim what
 #     the resolver doesn't do. Transmutation recipe→identity content is deliberately absent:
 #     that is #75's discovery layer.
+#
+# THIS REGISTRY HOLDS TERMS, NOT BINDINGS. It carried a CONTROLS category from #182 until #691
+# moved it to Settings -> Controls, projected from Classes/core/Controls.gd. That category was a
+# THIRD hand-maintained copy beside the Input Map and the hardcoded keycode checks, and it had
+# already drifted -- its 3D camera row claimed Q/E orbit and middle-drag orbits, when Q/E snap to
+# detents and it is right-drag. A key belongs to the binding registry; what a WORD means belongs
+# here.
 
 enum Term {
 	# Squads
@@ -33,12 +40,9 @@ enum Term {
 	TERRAIN_KINDS, WATER_TILE, SHALLOW_WATER, BURNING, BLAZE, FROZEN, COVER,
 	# Will & lifecycle
 	DOWNED, CRISIS, MAIM, PROSTHETIC,
-	# Controls (the controls card, #182 -- key names are STATIC text: most controls are hardwired
-	# clicks/keys, not InputMap actions, so a live read has nothing to read for most rows)
-	CTRL_SELECT, CTRL_CANCEL, CTRL_CAMERA_PAN, CTRL_CAMERA_3D, CTRL_CENTER, CTRL_DIALOG, CTRL_MENU,
 }
 
-enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE, CONTROLS }
+enum Category { SQUADS, STATS, ACTIONS, ELEMENTAL, TERRAIN, LIFECYCLE }
 
 # Player-facing category names, in page order.
 const CATEGORY_NAMES: Dictionary[Category, String] = {
@@ -48,7 +52,6 @@ const CATEGORY_NAMES: Dictionary[Category, String] = {
 	Category.ELEMENTAL: "Elemental",
 	Category.TERRAIN: "Terrain",
 	Category.LIFECYCLE: "Will & Lifecycle",
-	Category.CONTROLS: "Controls",
 }
 
 # Built lazily rather than declared const so entry text can interpolate the constants that rule
@@ -505,37 +508,5 @@ static func _build_entries() -> Dictionary:
 		"short": "A built replacement for a lost limb, with its own stat value.",
 		"long": "A crafted limb installed in place of a lost one, carrying its own stat value — "
 			+ "usually weaker than what it replaces, occasionally not."}
-
-	# Controls (#182): the card is a category so the page renders it for free. Bodies say what the
-	# input DOES in play terms; the Actions category already explains what each menu action means.
-	e[Term.CTRL_SELECT] = {"category": Category.CONTROLS, "title": "Left Click",
-		"short": "Select a unit or tile; confirm a target or destination; advance dialog.",
-		"long": "The do-it button. Click a unit to open its action menu, click highlighted tiles to "
-			+ "pick destinations and targets, click buttons and menus, and click (or Space/Enter) "
-			+ "to advance dialog when someone is talking."}
-	e[Term.CTRL_CANCEL] = {"category": Category.CONTROLS, "title": "Right Click",
-		"short": "Back out: cancel the current mode, close the menu, drop the aim.",
-		"long": "The never-mind button. Cancels whatever mode the board is in — an aimed attack, a "
-			+ "move pick, an open menu — without spending anything."}
-	e[Term.CTRL_CAMERA_PAN] = {"category": Category.CONTROLS, "title": "Camera — WASD / Arrows",
-		"short": "Pan the camera across the board.",
-		"long": "Slides the view without touching the board state. Works in both the flat and the "
-			+ "3D view."}
-	e[Term.CTRL_CAMERA_3D] = {"category": Category.CONTROLS, "title": "Camera — Q/E, Wheel, R (3D)",
-		"short": "Q/E orbit the battle, the wheel zooms, R resets the shot.",
-		"long": "The 3D rig: Q and E (or middle-drag) orbit around the board, the mouse wheel zooms, "
-			+ "and R returns the camera to the mission's opening shot."}
-	e[Term.CTRL_CENTER] = {"category": Category.CONTROLS, "title": "Space",
-		"short": "Center the camera on the pointer.",
-		"long": "Snaps the view to wherever the mouse is pointing — the fastest way back to the "
-			+ "action after panning away."}
-	e[Term.CTRL_DIALOG] = {"category": Category.CONTROLS, "title": "Dialog — Click / Space / Enter",
-		"short": "Advance the current line when a character is speaking.",
-		"long": "Any of them steps the conversation forward. Dialog opens over the board; the board "
-			+ "waits underneath until the line is done."}
-	e[Term.CTRL_MENU] = {"category": Category.CONTROLS, "title": "Escape",
-		"short": "Pause: menu with Restart, Save/Load, Glossary, Settings, and Quit.",
-		"long": "Opens the pause menu and freezes the board. Everything here — including this "
-			+ "Glossary — is reachable mid-battle; Resume puts you back exactly where you were."}
 
 	return e
