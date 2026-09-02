@@ -601,31 +601,44 @@ static func frame_drop(distance: float, fov_degrees: float, pitch_degrees: float
 	return distance * tan(half) / denom
 
 
-# The world y of the frame's bottom edge once every eased channel ARRIVES (#602 round 8). Every
-# term is deliberately the TARGET, never the live value: the aim is HELD under playback, the lift
-# and the drop ease toward these, and the dolly only ever moves the camera CLOSER -- a shallower
-# frame -- so this is the DEEPEST the frame's bottom can reach from here, and a burst anchored
-# under it cannot be descended onto by a channel still settling (a body can die mid-ease). The
-# flourish is excluded: a shake is transient and bounded well inside the burst's own margin.
-func settled_frame_floor() -> float:
-	return _aim.y + _target_lift.y - _target_drop \
-			- frame_drop(_target_distance, _camera.fov, _pitch_degrees)
+# WHEN a frame query is asked about (#670). The rig's channels ease, so "where is the frame's
+# edge" has two honest answers and the difference between them is the whole of #602 round 8:
+#
+#   LIVE    -- where the edge is this instant, off the current channel values.
+#   SETTLED -- where it will be once every ease ARRIVES, off the targets. This is the DEEPEST the
+#              frame's bottom can reach from here: the lift and the drop only approach their
+#              targets and the dolly only moves the camera CLOSER, i.e. shallower. An anchor
+#              measured off LIVE can therefore be descended onto by a channel still settling --
+#              a body can die mid-ease, which is exactly what round 8 shipped wrong.
+#
+# An axis, not two functions. It was two until #670, and they were the same composition written
+# twice; a second edge (top, left, right) would have doubled again.
+enum When { LIVE, SETTLED }
 
 
-# ...and where it is RIGHT NOW (#669), for the report line that sits beside the settled one.
+# The world y of the frame's bottom edge (#602 round 6, given its WHEN axis by #670).
 #
-# Structurally identical to its twin above, term for term, and that is the point: the ONLY
-# difference between the two numbers is live-versus-target, so a report showing them apart is
-# showing exactly how far the frame still has to descend. The live distance is the camera's own z,
-# which _process eases toward _dollied_distance() -- the dolly is therefore already IN it and needs
-# no separate term. The flourish stays excluded on both sides, so a shake cannot make the pair
-# disagree for a reason that has nothing to do with settling.
+# ONE composition, with `when` choosing the TERMS rather than picking between two copies of the
+# arithmetic -- which is the point of the collapse, since the recession term below is the part
+# nobody re-derives correctly (round 5 shipped it missing and ran ~30% shallow).
 #
-# A SIBLING, NOT A SECOND ANSWER: #670 folds both into one query surface that takes a WHEN, and the
-# callers listed there (battle3d._shot_floor, widen_to_fit, the report line) move together.
-func live_frame_floor() -> float:
-	return _aim.y + _lift.y - _drop \
-			- frame_drop(_camera.position.z, _camera.fov, _pitch_degrees)
+# The aim is shared by both answers deliberately: it is HELD under playback, so it has no target
+# to differ from. The live distance is the camera's own z, which _process eases toward
+# _dollied_distance(), so the dolly is already IN it and needs no term of its own. The flourish is
+# excluded from both -- a shake is transient and bounded well inside any margin a caller sets, and
+# excluding it on one side only would make the pair disagree for a reason that is not settling.
+#
+# NOT the answer to "is this point on camera" in general: for the LIVE pose the engine already has
+# that exactly (`Camera3D.is_position_in_frustum`), and what it structurally cannot answer is the
+# SETTLED one, since it can only see where the camera IS. See the #670 note in visual-clarity.md
+# before building a general query here -- and note `_fit_distance` is a different question again
+# (it RE-AIMS, answering how far back to sit to contain a box).
+func frame_floor(when: When) -> float:
+	var settled := when == When.SETTLED
+	var lift: float = _target_lift.y if settled else _lift.y
+	var drop: float = _target_drop if settled else _drop
+	var distance: float = _target_distance if settled else _camera.position.z
+	return _aim.y + lift - drop - frame_drop(distance, _camera.fov, _pitch_degrees)
 
 
 # --- The camera trace (#669) -------------------------------------------------------------------
