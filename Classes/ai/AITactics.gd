@@ -409,6 +409,11 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds
 
 	# ...and once more on the way out: the loop breaks with a hypothetical as its last resolve.
+	# DECLARED UNPINNED -- no case here goes red when this line is deleted, and two attempts at one
+	# failed. Kept for what it MEANS rather than for a behaviour a test can currently see: the pass
+	# must not hand the board back dressed for a plan nobody gave. Everything downstream happens to
+	# re-resolve (the queue panel's refresh, OrderExecutor's own pass), so the residue is masked
+	# rather than harmless -- delete this and the masking becomes load-bearing.
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 
 
