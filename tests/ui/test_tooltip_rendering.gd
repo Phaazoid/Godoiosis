@@ -229,3 +229,54 @@ func test_a_gear_granted_ability_reaches_the_readout() -> void:
 	assert_bool(found).override_failure_message(
 		"The abilities section never renders '%s', granted by the worn armor -- the readout is missing the gear source of the live kit."
 		% granted[0].display_name).is_true()
+
+
+# --- the settings page joined this law on 2026-09-02 -----------------------------------------
+#
+# Its descriptions moved off the page and into hover text, which put a fresh batch of tooltips into
+# the game's own tree -- and this walk starts at `game`, so it reaches them the moment the page is
+# open. It was NOT reaching them before: the fixture inspects a unit and nothing else, so a settings
+# page full of unwrapped descriptions would have sailed past every case above.
+
+# Collected from the page's OWN SUBTREE rather than by matching its path -- the same reason this file
+# excludes DevOverlay structurally. A modal is `SettingsScreen.new()` with no name set, and Godot
+# names an unnamed node after its ENGINE class, so its path reads `@Control@9`: a filter on
+# "SettingsScreen" matches nothing at all and the guard passes by finding zero of zero.
+func _open_the_settings_page() -> Node:
+	SettingsScreen.show_screen(game)
+	for _i in 4:
+		await get_tree().process_frame
+	for node: Node in get_tree().get_nodes_in_group("modal"):
+		if node is SettingsScreen:
+			return node
+	return null
+
+func test_the_settings_page_renders_tooltips_at_all() -> void:
+	# Vacuity guard, the shape the panel case above uses: if the page stopped putting its
+	# descriptions on hover, the display-safe case below would pass while pinning nothing.
+	var screen: Node = await _open_the_settings_page()
+	assert_object(screen).override_failure_message("the settings page did not open").is_not_null()
+
+	var on_the_page: Array = []
+	_collect(screen, on_the_page)
+	assert_int(on_the_page.size()).override_failure_message(
+		"The settings page rendered no tooltips -- its descriptions are neither on the page nor on hover."
+		).is_greater(PlayerSettings.Setting.size())
+
+func test_every_settings_description_is_display_safe() -> void:
+	# The same rule as the panel case, applied where the words are longest: a DEFS description is a
+	# player-facing paragraph, well past the width, so this is the surface most likely to break it.
+	var screen: Node = await _open_the_settings_page()
+	assert_object(screen).is_not_null()
+
+	var rendered: Array = []
+	_collect(screen, rendered)
+	var offenders: Array = []
+	for entry in rendered:
+		if UiText.wrap(str(entry[1])) != str(entry[1]):
+			offenders.append(entry)
+
+	assert_int(offenders.size()).override_failure_message(
+		"These settings tooltips are not in wrapped form -- Godot will not wrap them, so they run off-screen:\n  %s"
+			% _paths_joined(offenders)).is_equal(0)
+
