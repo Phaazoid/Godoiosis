@@ -316,6 +316,28 @@ func _execute_move_phase(actions: Array, plan: ResolvedPlan, sheet: BeatSheet,
 				continue
 
 		if all_complete and pending.is_empty():
+			# THE WALK RETRACTS ITS OWN SPAN (#672), the same idiom by which it publishes its own
+			# zero emphasis above: absence means "nothing walks", and a cause that is never
+			# withdrawn is a latch wearing a level's clothes.
+			#
+			# set_playback_locked already clears this on both lock edges, and says why -- a
+			# surviving span would open the next squad's walk at whatever zoom the last one left.
+			# That rule was right at PASS granularity and the span outlives its PHASE, which is the
+			# scope #672's table made matter: the shot model reads a published span as "that shot is
+			# live", so the walk's framing could outlive the walk.
+			#
+			# HARDENING, NOT A FIX: measured, there is no frame in which it is currently reachable.
+			# The window it would open -- the stage clearing at the end of a pass, dropping the solve
+			# back to a stale span -- is zero frames wide, because `cam.shot_cells = []` is the last
+			# line of _bring_the_board_home and set_playback_locked(false) is the next statement in
+			# execute_orders, which is synchronous; and the burning-tile phase claims the lock, which
+			# clears the span itself.
+			#
+			# Through a typed local: a bare [] hits a typed Array property as a RUNTIME error when
+			# assigned through the untyped `game` chain -- the same reason _bring_the_board_home
+			# takes one to clear the stage.
+			var cam: CameraController = game.camera_controller
+			cam.framed_span = []
 			return
 
 		await get_tree().process_frame
