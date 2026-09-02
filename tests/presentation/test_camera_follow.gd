@@ -1662,17 +1662,15 @@ func test_the_death_show_holds_the_trained_frame_until_the_last_cube_lands() -> 
 			"the follow died into a death show and the shot dollied out -- the deepening frame "
 			+ "edge walks down onto the forming bar").is_equal_approx(
 			Pacing.TRAINED_DISTANCE, 0.001)
-	# ...and the trace SAYS SO (#669). This is the line eight rounds of screenshots could not
-	# produce: a deferred release and a skipped one leave the same camera in the same place one
-	# frame later, so only a record of the ORDER tells them apart. The assertion rides this case
-	# rather than a fixture of its own because the deferral has no other way to be reached.
-	var deferrals: int = 0
-	for entry: Dictionary in _rig.trace._entries:
-		if String(entry["event"]).contains("DEFERRED"):
-			deferrals += 1
-	assert_int(deferrals).override_failure_message(
-			"the release was deferred and the trace never said so -- a report of this bug reads "
-			+ "identically to one where the release was skipped").is_equal(1)
+	# ...and the trace SAYS SO (#669, re-worded by #672's shot model). This is the line eight rounds
+	# of screenshots could not produce: a deferred release and a skipped one leave the same camera
+	# in the same place one frame later, so only a record of the ORDER tells them apart. BOTH halves
+	# are asserted, because either alone reads like an ordinary shot change -- the hold as the shot
+	# takes the camera, and the release that follows it named as the deferred one it is.
+	assert_str(_last_shot_row()).override_failure_message(
+			"the death show took the camera and the trace did not name it a HOLD -- a report of "
+			+ "this bug reads identically to one where the release was skipped") \
+		.contains("DEATH_SHOW (holds)")
 
 	# The show ends: the deferred release fires and hands the distance back.
 	mirror._death_show = false
@@ -1680,6 +1678,9 @@ func test_the_death_show_holds_the_trained_frame_until_the_last_cube_lands() -> 
 	assert_float(_rig._target_distance).override_failure_message(
 			"the show ended and the release edge never fired -- the defer became a skip") \
 		.is_equal_approx(_rig.playback_distance, 0.001)
+	assert_str(_last_shot_row()).override_failure_message(
+			"the release fired after a hold and the trace recorded an ordinary shot change") \
+		.contains("deferred release")
 	_cam().set_playback_locked(false)
 
 
@@ -1769,6 +1770,16 @@ func _shot_after(cells: Array[Vector2i], follow: Unit, death_show := false) -> f
 
 func _unit_mirror() -> UnitMirror:
 	return _scene.get_node("UnitMirror") as UnitMirror
+
+
+# The newest SHOT row in the trace -- the transcript's own line, as report.md lays it out.
+func _last_shot_row() -> String:
+	var entries: Array[Dictionary] = _rig.trace._entries
+	for i in range(entries.size() - 1, -1, -1):
+		var event: String = entries[i]["event"]
+		if event.begins_with("shot "):
+			return event
+	return "(no shot row recorded)"
 
 
 func test_a_staged_fight_takes_these_shot_distances_in_this_order() -> void:
