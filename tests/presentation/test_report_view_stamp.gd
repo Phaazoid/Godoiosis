@@ -116,10 +116,10 @@ func test_the_two_frame_floors_are_reported_as_two_different_readings() -> void:
 	assert_str(note).override_failure_message(
 			"the view note printed one floor twice -- a frame still three cells from settled "
 			+ "reports as arrived, which is the reading round 8 proved you must not trust"
-	).contains("floor %.2f live / %.2f settled" % [rig.live_frame_floor(), rig.settled_frame_floor()])
-	assert_float(rig.live_frame_floor()).override_failure_message(
+	).contains("floor %.2f live / %.2f settled" % [rig.frame_floor(CameraRig3D.When.LIVE), rig.frame_floor(CameraRig3D.When.SETTLED)])
+	assert_float(rig.frame_floor(CameraRig3D.When.LIVE)).override_failure_message(
 			"the fixture never got the floors apart; the case cannot say anything").is_not_equal(
-			rig.settled_frame_floor())
+			rig.frame_floor(CameraRig3D.When.SETTLED))
 
 
 func test_the_camera_trace_reaches_report_md() -> void:
