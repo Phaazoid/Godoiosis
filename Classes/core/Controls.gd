@@ -21,6 +21,9 @@ class_name Controls
 #     documented action that was deleted and a dev action nobody documented both red.
 #   - The store never moves into a page's layout. A projection may reorder or style entries; it may
 #     not author one.
+#
+# Dev mode is editor-only tooling: none of these bindings are intended for the shipped game, and
+# the page projecting them is a DevOverlay leaf, so it is absent from a demo build outright.
 
 # Where a binding lives. #691 adds the player-facing contexts (the flat 2D game, the 3D battle view)
 # when it has a Settings tab to render them on; DEV is the only one with a surface today.
