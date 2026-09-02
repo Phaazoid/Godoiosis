@@ -1724,3 +1724,115 @@ func test_the_return_pan_waits_out_the_held_depth_before_it_moves_the_aim() -> v
 			"the depth cleared and the exit never resumed").is_true()
 	assert_float(_cam().global_position.distance_to(centre)).override_failure_message(
 			"the exit finished without panning back to the stage's centre").is_less(1.0)
+
+
+# --- The shot transcript (#672) -----------------------------------------------------------------
+#
+# A CHARACTERIZATION baseline, written BEFORE the shot model exists: which distance the camera
+# takes at each moment of a staged fight, in order, as the five hand-ordered edges produce it
+# today. The model lands against this, so "the refactor moved nothing" becomes a thing the suite
+# says rather than a thing the diff claims.
+#
+# DRIVEN BY HAND, and that is not a shortcut -- it is the only way this sequence is OBSERVABLE
+# headlessly. Two measurements, the second found by writing the case that assumed otherwise and
+# watching it report zero:
+#
+#   1. Every beat is `pan_to(subject)`, whose first line nulls the follow and whose last re-follows
+#      once the tween lands; headless, `pan_to_position` returns WITHOUT SUSPENDING, so no frame
+#      falls inside that null window -- the shot BETWEEN beats, which is the one this ticket
+#      changes, would be invisible.
+#   2. Worse, and the reason there is no "played pass" twin of this case: headless, a whole pass
+#      runs with NO FRAME IN IT AT ALL. Pacing collapses every beat to zero, so the move phase's
+#      `while true` loop finds all_complete on its first check and returns before it ever reaches
+#      `await get_tree().process_frame` -- the mirror is never polled while the lock is held, and a
+#      pass records not one trace row. Measured: 0 named moments over a real queued move.
+#
+# So the causes are scripted at the seam the mirror actually reads. What the executor publishes is
+# a different question with its own cases above (the span, the stage, the trained edge), and it
+# does not need a third answer here.
+#
+# The round-8 case drives the mirror the same way, for a sibling reason of its own.
+#
+# The distances are read off _target_distance rather than the trace, deliberately: the trace's
+# event STRINGS are renamed when the model lands, and a baseline that compares strings would report
+# a rename as a behaviour change. The channel is the fact; the row naming it is presentation.
+
+# One mirrored frame with the causes as given -> the distance the shot landed on.
+func _shot_after(cells: Array[Vector2i], follow: Unit, death_show := false) -> float:
+	var cam := _cam()
+	cam.shot_cells = cells.duplicate()
+	cam.follow_unit = follow
+	_unit_mirror()._death_show = death_show
+	_scene._mirror_camera()
+	return _rig._target_distance
+
+
+func _unit_mirror() -> UnitMirror:
+	return _scene.get_node("UnitMirror") as UnitMirror
+
+
+func test_a_staged_fight_takes_these_shot_distances_in_this_order() -> void:
+	var attacker := _player_unit()
+	assert_object(attacker).is_not_null()
+	var other := _any_unit_besides(attacker)
+	assert_object(other).override_failure_message(
+			"fixture: one unit on the board, so no second beat to train on").is_not_null()
+
+	# A stage wide enough that holding all of it sits FURTHER OUT than the playback base. Without
+	# that gap every reading below is the same number and the transcript cannot fail whatever the
+	# code does -- the vacuous-pass hazard, asserted rather than assumed.
+	var stage: Array[Vector2i] = [Vector2i(1, 1), Vector2i(10, 8)]
+
+	_cam().set_playback_locked(true)
+	var claimed := _shot_after([], null)
+	var staged := _shot_after(stage, null)
+	var beat_one := _shot_after(stage, attacker)
+	var between := _shot_after(stage, null)
+	var beat_two := _shot_after(stage, other)
+	# The subject dies into a void: the body is freed and the show is on, so the release that is
+	# now due is DEFERRED rather than dropped (#602 round 8).
+	var held := _shot_after(stage, null, true)
+	var after_show := _shot_after(stage, null)
+	var cleared := _shot_after([], null)
+	_cam().set_playback_locked(false)
+
+	assert_float(staged).override_failure_message(
+			"the staged volume already fits inside the playback base, so every reading in this "
+			+ "transcript is the same number and the case cannot fail").is_greater(claimed + 1.0)
+
+	assert_float(claimed).override_failure_message(
+			"the claim did not frame from the playback base").is_equal_approx(
+			_rig.playback_distance, 0.001)
+	assert_float(beat_one).override_failure_message(
+			"a followed subject did not pull the shot to the trained distance").is_equal_approx(
+			Pacing.TRAINED_DISTANCE, 0.001)
+	assert_float(beat_two).override_failure_message(
+			"the second beat did not train").is_equal_approx(Pacing.TRAINED_DISTANCE, 0.001)
+	assert_float(held).override_failure_message(
+			"the death show did not hold the trained frame -- a deferred release became a skipped "
+			+ "one").is_equal_approx(Pacing.TRAINED_DISTANCE, 0.001)
+	assert_float(cleared).override_failure_message(
+			"the stage cleared and the shot did not go back to the playback base").is_equal_approx(
+			_rig.playback_distance, 0.001)
+
+	# THE TWO READINGS #672 CHANGES, pinned here as what the code does TODAY. Both are a trained
+	# release asking for the playback base rather than for whatever else is still live -- and a
+	# published stage IS still live at both. See the ticket: the stage's framing survives until the
+	# first beat and never comes back.
+	assert_float(between).override_failure_message(
+			"between beats the shot no longer sits at the playback base").is_equal_approx(
+			_rig.playback_distance, 0.001)
+	assert_float(after_show).override_failure_message(
+			"the deferred release no longer hands the shot back to the playback base") \
+		.is_equal_approx(_rig.playback_distance, 0.001)
+
+	# ...and the transcript SAYS SO. The distances above are the fact; this is the half a bug
+	# report can read, and the half #672 turns into a shot name rather than a zoom number.
+	var events: Array[String] = []
+	for entry: Dictionary in _rig.trace._entries:
+		var event: String = entry["event"]
+		if not event.is_empty():
+			events.append(event)
+	assert_bool(events.size() >= 6).override_failure_message(
+			"the transcript recorded %d named moments for eight shots -- a report of a shot bug "
+			% events.size() + "would not show the sequence it is about: %s" % str(events)).is_true()
