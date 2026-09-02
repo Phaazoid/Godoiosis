@@ -7,7 +7,8 @@ extends GdUnitTestSuite
 
 const MAIN_SCENE := "res://Scenes/Main.tscn"
 
-# The panel's authored gap to the right edge (offset_right = -7 in the scene).
+# The panel's authored gap to the right edge (offset_right = -7 in the scene). A DESIGN-SPACE
+# number since #659 — on screen it is this times the window's scale factor.
 const EDGE_MARGIN := 7.0
 
 var _main: Node
@@ -42,6 +43,12 @@ func test_the_dock_follows_a_viewport_resize() -> void:
 	# The reported bug: resize the window bigger and the panel stays put. A window resize reaches
 	# the game as GameContainer resizing (SubViewportContainer stretch is ON, which is what sizes
 	# GameView) — drive that directly and the dock must follow.
+	#
+	# THE EDGE IS A DESIGN-SPACE NUMBER SINCE #659, not a physical one: GameView carries a 2D
+	# content scale now, so Controls lay out in a fixed 1280x720 space that is stretched to the
+	# window. get_visible_rect() is that space; `size` is still the physical window. The RULE this
+	# case pins is unchanged — the dock follows the edge — only the unit it is measured in moved,
+	# so do not "fix" this back to viewport.size.
 	var container: SubViewportContainer = _main.get_node("GameContainer")
 	var viewport: SubViewport = _main.get_node("GameContainer/GameView")
 	container.size = Vector2(1600, 900)
@@ -52,9 +59,26 @@ func test_the_dock_follows_a_viewport_resize() -> void:
 	assert_int(viewport.size.x) \
 		.override_failure_message("fixture assumption broke: resizing GameContainer did not resize GameView (still %d wide)" % viewport.size.x) \
 		.is_equal(1600)
+	var design_width: float = viewport.get_visible_rect().size.x
 	assert_float(_panel_right_edge()) \
-		.override_failure_message("the queue panel did not follow the right edge: panel ends at %.0f of %d" % [_panel_right_edge(), viewport.size.x]) \
-		.is_equal_approx(1600.0 - EDGE_MARGIN, 0.5)
+		.override_failure_message("the queue panel did not follow the right edge: panel ends at %.0f of %.0f"
+			% [_panel_right_edge(), design_width]) \
+		.is_equal_approx(design_width - EDGE_MARGIN, 0.5)
+
+	# ...and the same edge in PHYSICAL pixels, which is the half a player actually sees: the gap
+	# scales with everything else, so the panel keeps its authored 7px margin rather than a margin
+	# that thins to a hairline as the window grows.
+	var panel: Panel = game.squad_action_queue_control.get_node("BackgroundPanel")
+	# get_final_transform() composed with the canvas-aware global transform, NOT get_screen_transform():
+	# that one drops the viewport content scale for a Control under a CanvasLayer (measured). This is
+	# the chain a click traverses, so it is what "on screen" means here.
+	var to_screen: Transform2D = viewport.get_final_transform() * panel.get_global_transform_with_canvas()
+	var physical_end: float = to_screen.get_origin().x + panel.size.x * to_screen.get_scale().x
+	var expected_end: float = 1600.0 - EDGE_MARGIN * (900.0 / 720.0)
+	assert_float(physical_end) \
+		.override_failure_message("on screen the panel ends at %.0f of 1600, expected %.0f"
+			% [physical_end, expected_end]) \
+		.is_equal_approx(expected_end, 1.0)
 
 
 func test_the_full_rect_root_never_eats_board_clicks() -> void:

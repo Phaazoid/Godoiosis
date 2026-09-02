@@ -2,6 +2,7 @@
 
 [ext_resource type="PackedScene" uid="uid://cpjb265bomn6i" path="res://Scenes/Game.tscn" id="1_r150o"]
 [ext_resource type="PackedScene" uid="uid://i2kwnt6y4jcd" path="res://Scenes/DevOverlay.tscn" id="2_idj7w"]
+[ext_resource type="Script" uid="uid://blu6v43ai7le1" path="res://Classes/ui/GameSurface.gd" id="3_gsurf"]
 
 [node name="Main" type="Node" unique_id=2063756715]
 
@@ -14,6 +15,7 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 stretch = true
+script = ExtResource("3_gsurf")
 
 [node name="GameView" type="SubViewport" parent="GameContainer" unique_id=2042839917]
 handle_input_locally = false
