@@ -30,6 +30,7 @@ class_name DevOverlay
 @onready var object_tool: ObjectTool = get_node("%Objects")
 @onready var game_tool: GameTool = get_node("%Game")
 @onready var tool_tree: Tree = get_node("%ToolTree")
+@onready var dev_info: DevInfoTool = get_node("%Info")
 @onready var dev_mode_toggle: CheckButton = %DevModeToggle
 @onready var dev_mode_banner: PanelContainer = %DevModeBanner
 
@@ -66,6 +67,8 @@ const LEAVES: Array[Dictionary] = [
 		"tip": "The game's own constants — board markup and its colours, the unit readout, camera handling, world construction, elemental effects. Save to source writes each value into the declaration that authors it."},
 	{"scope": "Session", "label": "Experiments", "page": "%Experiments",
 		"tip": "Dev feature flags for this machine — persisted to user://, read by nothing a player ships with."},
+	{"scope": "Session", "label": "Info", "page": "%Info",
+		"tip": "Where this build writes and what it is — report folder, log, checkout, version — plus every dev key and what it does."},
 ]
 
 # The banner's two faces. Dev chrome, not the HD-2D look stack -- no mission wears these and
@@ -112,6 +115,7 @@ func _ready() -> void:
 	spawn.init(game, scenario_header)
 	unit_editor.init(game, scenario_header)
 	tile_brush.init(game)
+	dev_info.init(game)
 	# A file op changes the board under every scenario-scoped page; the header says so once and
 	# the window routes it, so the header never reaches into a panel.
 	scenario_header.file_changed.connect(_on_scenario_file_changed)
@@ -264,6 +268,8 @@ func _on_tab_changed(_tab: int):
 		squads_ai.refresh_on_show()
 	if showing(dialog_tool):
 		dialog_tool.refresh_on_show()
+	if showing(dev_info):
+		dev_info.refresh_on_show()
 	if not showing(tile_brush):
 		tile_brush.deactivate()
 	_update_zone_visibility()

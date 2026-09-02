@@ -22,6 +22,9 @@ class_name BugReporter
 enum Kind { BUG, FEEDBACK }
 
 const REPORT_DIR := "user://reports/"
+# Godot's own log. Named here rather than typed at each reader: the Info page (#690) globalizes
+# it to tell a co-dev where it is on THEIR machine, and _log_tail() below reads the same string.
+const LOG_PATH := "user://logs/godot.log"
 const LOG_TAIL_LINES := 80
 
 # Discord caps a message at 2000 characters, and the untruncated note is in report.md regardless.
@@ -357,7 +360,7 @@ static func _outcome_note(action: BaseAction) -> String:
 	]
 
 func _log_tail() -> String:
-	var file := FileAccess.open("user://logs/godot.log", FileAccess.READ)
+	var file := FileAccess.open(LOG_PATH, FileAccess.READ)
 	if file == null:
 		return "(no godot.log -- file logging is off)"
 	var lines := file.get_as_text().split("\n")
