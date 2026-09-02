@@ -553,9 +553,13 @@ func test_every_knob_has_a_row_somewhere_in_the_panel() -> void:
 		"Knobs with no row drawn anywhere: %s" % ", ".join(missing)).is_empty()
 
 
+# ASK THE ONE QUESTION -- "is this addressed as node:prop?" -- rather than enumerating the kinds
+# CLASS_KNOBS can hold. It listed `layer` and `static`, so #394's third kind fell through to
+# LookKnobs.read, came back null, and the checkbox skip above never fired: a real setting row was
+# reported as a knob with no row. An enumeration of kinds is a copy of read_class's own fork and
+# goes stale every time that table learns something (Law #4, in a test helper).
 func _value_of(knob: Dictionary) -> Variant:
-	return GameKnobs.read_class(_scene, knob) if knob.has("layer") or knob.has("static") \
-		else LookKnobs.read(_scene, knob)
+	return LookKnobs.read(_scene, knob) if knob.has("node") else GameKnobs.read_class(_scene, knob)
 
 
 func test_every_knob_has_a_tooltip() -> void:
@@ -640,25 +644,35 @@ func test_every_class_knob_is_findable_in_the_file_it_names() -> void:
 		"could not read %s -- this law would pass vacuously" % GameKnobs.OVERLAYS_SCRIPT).is_not_empty()
 	assert_str(manager).override_failure_message(
 		"could not read %s -- this law would pass vacuously" % GameKnobs.OVERLAY_MANAGER_SCRIPT).is_not_empty()
-	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+	# DERIVED from class_edits rather than re-enumerating the kinds. It WAS an if/else over `static`
+	# and `layer`, so #394's third kind fell into the layer branch and asked BoardOverlays about a
+	# Setting. Asking the SAVE what it would write is the same question the panel's button asks, so a
+	# fourth kind arrives here already covered -- and one with no arm below rewrites nothing and reds.
+	var indices := PackedInt32Array()
+	for i in GameKnobs.CLASS_KNOBS.size():
+		indices.append(i)
+	var edits := GameKnobs.class_edits(_scene, indices)
+	assert_int(edits.size()).override_failure_message(
+			"class_edits skipped rows -- this law would pass vacuously over them").is_equal(
+			GameKnobs.CLASS_KNOBS.size())
+	for an_edit: Dictionary in edits:
+		var path: String = an_edit["path"]
+		var source := _read_file(path)
+		assert_str(source).override_failure_message(
+			"could not read %s -- this law would pass vacuously" % path).is_not_empty()
+		var name: String = an_edit["name"]
+		var literal: String = an_edit["literal"]
 		var rewritten := ""
-		var what := ""
-		if knob.has("static"):
-			# A static row names its own script home since the #259 rework (default: the
-			# OverlayManager file) -- the law reads the same key the Save routes by.
-			var home: String = knob.get("script", GameKnobs.OVERLAY_MANAGER_SCRIPT)
-			var source := manager if home == GameKnobs.OVERLAY_MANAGER_SCRIPT else _read_file(home)
-			assert_str(source).override_failure_message(
-				"could not read %s -- this law would pass vacuously" % home).is_not_empty()
-			what = "static var %s in %s" % [knob["static"], home.get_file()]
-			rewritten = KnobSource.rewrite_declaration_default(source, knob["static"], "1.0")
-		else:
-			var layer_name: String = BoardOverlays.Layer.keys()[knob["layer"]]
-			what = "Layer.%s's entry in BoardOverlays.LAYERS" % layer_name
-			rewritten = KnobSource.rewrite_layer_color(overlays, layer_name, "Color(1, 1, 1, 1)")
+		match an_edit["kind"]:
+			KnobSource.Kind.DECLARATION:
+				rewritten = KnobSource.rewrite_declaration_default(source, name, literal)
+			KnobSource.Kind.LAYER_COLOR:
+				rewritten = KnobSource.rewrite_layer_color(source, name, literal)
+			KnobSource.Kind.SETTING_DEFAULT:
+				rewritten = KnobSource.rewrite_setting_default(source, name, literal)
 		assert_str(rewritten).override_failure_message(
-			"'%s' has no %s left to write -- Save would report success having written nothing"
-				% [knob["label"], what]).is_not_empty()
+			"'%s' has no %s left to write in %s -- Save would report success having written nothing"
+				% [an_edit["label"], name, path.get_file()]).is_not_empty()
 
 
 # The half the two laws above cannot see: they ask whether the rewriter FINDS a declaration, never
@@ -915,3 +929,129 @@ func test_the_panel_says_when_a_palette_has_made_the_aim_knobs_inert() -> void:
 	assert_str(notice.text).override_failure_message(
 			"the notice does not name the palette the player is actually on").contains(
 			str(labels[PlayerSettings.AimPalette.HIGH_CONTRAST]))
+
+
+# --- A player setting shown on this tab (#394) ----------------------------------------------
+
+func test_a_setting_row_follows_the_store_rather_than_latching_it() -> void:
+	# The #647 ruling on a checkbox: the pause menu's Settings page is a SECOND OS WINDOW and can be
+	# moved while this one is open, so a control built once goes stale exactly when both are on
+	# screen. What is asserted is the POLL -- the store is written from outside the panel entirely.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var box: CheckBox = _game._setting_checks.get(setting)
+	assert_object(box).override_failure_message(
+			"the Game tab built no control for the unhovered-bar-numbers setting").is_not_null()
+	assert_bool(box.button_pressed).override_failure_message(
+			"the row did not start on the store's own value").is_equal(
+			bool(PlayerSettings.value_of(setting)))
+
+	PlayerSettings.set_on(setting, not PlayerSettings.is_on(setting))
+	await await_idle_frame()
+	await await_idle_frame()
+
+	assert_bool(box.button_pressed).override_failure_message(
+			"the setting moved elsewhere and this panel went on showing the old value"
+			).is_equal(PlayerSettings.is_on(setting))
+
+func test_a_setting_row_writes_the_real_preference() -> void:
+	# The other direction, and the reason there is no panel-local copy: pressing here changes what
+	# the PLAYER has set, which is what "one value, one store" means for a control on two surfaces.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var box: CheckBox = _game._setting_checks.get(setting)
+	assert_object(box).is_not_null()
+	var want := not PlayerSettings.is_on(setting)
+
+	box.button_pressed = want   # what a click does -- through the control's own state
+	await await_idle_frame()
+
+	assert_bool(PlayerSettings.is_on(setting)).override_failure_message(
+			"the dev checkbox moved and the player's setting did not").is_equal(want)
+
+
+# --- The ask NAMES what it is about to write (#394) ------------------------------------------
+
+func test_the_save_confirm_names_the_rows_it_would_write() -> void:
+	# A count alone was enough while this panel was the only writer of every row it can save. A
+	# SETTING row breaks that: the pause menu's Settings page writes the same store, so a preference
+	# flipped THERE reads as changed here and would ride into the next Save as the shipped default --
+	# and #380's ask-first cannot do its job while it only says how many.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS
+	var knob := _class_knob("setting", setting)
+	assert_bool(knob.is_empty()).override_failure_message(
+			"no CLASS_KNOBS row names the unhovered-bar-numbers setting").is_false()
+
+	# Written from OUTSIDE the panel entirely -- the whole point is that this row can move without
+	# anyone touching the Game tab.
+	PlayerSettings.set_on(setting, not PlayerSettings.is_on(setting))
+	_game._on_save_pressed()
+
+	var dialog := _find_dialog(_game)
+	assert_object(dialog).override_failure_message("the save never reached its confirm").is_not_null()
+	assert_str(dialog.dialog_text).override_failure_message(
+			"the ask does not say WHICH rows it would write, so a preference set on the Settings page "
+			+ "would become the shipped default unannounced").contains(String(knob["label"]))
+
+	dialog.canceled.emit()
+	dialog.hide()
+	await await_idle_frame()
+
+func test_the_save_confirm_stops_counting_rows_out_past_a_dozen() -> void:
+	# A dialog listing sixty labels is one nobody reads, which is the failure the list exists to fix.
+	# Driven through the real formatter rather than the panel: reaching thirteen moved rows by hand
+	# would be pinning which knobs happen to be tunable, not the wrapping rule.
+	var many := PackedInt32Array()
+	for i in mini(GameTool.CONFIRM_LIST_MAX + 3, GameKnobs.KNOBS.size()):
+		many.append(i)
+	assert_int(many.size()).override_failure_message(
+			"KNOBS is too short for this case to mean anything").is_greater(GameTool.CONFIRM_LIST_MAX)
+
+	var text := _game._moved_labels(many, PackedInt32Array())
+	assert_int(text.split("\n").size()).override_failure_message(
+			"the list did not cap at CONFIRM_LIST_MAX plus its own summary line").is_equal(
+			GameTool.CONFIRM_LIST_MAX + 1)
+	assert_str(text).contains("and %d more" % (many.size() - GameTool.CONFIRM_LIST_MAX))
+
+
+# --- The Camera page says what the player's steps are scaling (#394) -------------------------
+
+func test_the_camera_page_is_quiet_while_every_step_is_normal() -> void:
+	# The ordinary case. A step never makes a camera knob INERT -- it multiplies it -- so there is
+	# nothing to say until one is off Normal, and a permanent line would be noise on every page load.
+	PlayerSettings.reset_for_test()
+	await await_idle_frame()
+	await await_idle_frame()
+	var notice: Label = _game._scale_notice
+	assert_object(notice).override_failure_message(
+			"the Camera handling group built no scale notice at all").is_not_null()
+	assert_bool(notice.visible).override_failure_message(
+			"the notice is showing while every camera step is Normal").is_false()
+
+func test_the_camera_page_names_the_step_and_its_factor() -> void:
+	# POLLED, like the palette notice and the zoom picker: the Settings page is a second OS window.
+	# What is asserted is the store's OWN title and CameraRig3D's OWN factor reaching the label --
+	# neither is copied into the panel, so neither can drift.
+	PlayerSettings.reset_for_test()
+	var setting := PlayerSettings.Setting.MOUSE_SENSITIVITY
+	PlayerSettings.set_choice(setting, PlayerSettings.Scale.FASTER)
+	await await_idle_frame()
+	await await_idle_frame()
+
+	var notice: Label = _game._scale_notice
+	assert_bool(notice.visible).override_failure_message(
+			"a camera step went off Normal and the panel never said the rows below are scaled"
+			).is_true()
+	assert_str(notice.text).override_failure_message(
+			"the notice does not name the setting doing the scaling").contains(
+			PlayerSettings.title_of(setting))
+	assert_str(notice.text).override_failure_message(
+			"the notice does not name the factor the board is applying").contains(
+			String.num(CameraRig3D.scale_of(setting), 2))
+
+	PlayerSettings.reset_for_test()
+	await await_idle_frame()
+	await await_idle_frame()
+	assert_bool(notice.visible).override_failure_message(
+			"the notice stayed up after every step went back to Normal").is_false()

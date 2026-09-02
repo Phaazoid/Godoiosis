@@ -16,11 +16,15 @@ class_name KnobSource
 # the `devtools` feature (dev, 2026-08-16 -- builds never carry these tools). A failed write is
 # REPORTED, never assumed.
 
-# WHAT can be rewritten. Two shapes, because a game constant is authored two ways: as a var's
-# default, or as a field of a const table that has no var to name.
+# WHAT can be rewritten. Three shapes, because an authored default has three homes: a var's own
+# default, a field of a const table that has no var to name, and -- since #394 -- the `"default"` of
+# a PlayerSettings.DEFS row, which is the one case where the value the dev authors is not the value
+# the game reads (the store owns that; this line is only what a player who never opened the options
+# page gets).
 enum Kind {
-	DECLARATION,   # `@export var x := v` / `static var x := v` -- the var's own default
-	LAYER_COLOR,   # `Layer.X: {"color": v, ...}` -- one entry of BoardOverlays.LAYERS
+	DECLARATION,      # `@export var x := v` / `static var x := v` -- the var's own default
+	LAYER_COLOR,      # `Layer.X: {"color": v, ...}` -- one entry of BoardOverlays.LAYERS
+	SETTING_DEFAULT,  # `Setting.X: {..., "default": v, ...}` -- one entry of PlayerSettings.DEFS
 }
 
 # Both spellings of an authored default are accepted (`:= value` and `: Type = value`) and any
@@ -35,6 +39,18 @@ enum Kind {
 # intent, and a name is unique in its script either way. The `^` anchor is what keeps an indented
 # local `var` of the same name out.
 const DECLARATION_LINE := "(?m)^((?:@export|static)[ \\t]+var[ \\t]+%s[ \\t]*(?::[ \\t]*\\w+[ \\t]*=|:=)[ \\t]*)([^#\\n]+?)([ \\t]*:[ \\t]*set[ \\t]*=[ \\t]*\\w+)?([ \\t]*#[^\\n]*)?$"
+
+# One entry of PlayerSettings.DEFS, keyed by the Setting member's NAME (#394). The THIRD shape, and
+# the first that writes a value the DEV does not own outright: once a knob is player-facing the store
+# owns the live value and this line is only what a player who has never touched it gets. That is the
+# refinement presentation-effects.md recorded at #422 and nothing exercised until now.
+#
+# `[^}]*?` rather than `.*?` is what keeps it honest: a DEFS entry's body holds no `}` until its own
+# close, so a Setting that has somehow lost its "default" key CANNOT have the search run on into the
+# next entry and rewrite a sibling's default. It fails and is reported instead -- which is the whole
+# reason the misses in this file return "" rather than the source unchanged. Same declared fragility
+# as the layer form below: re-format DEFS and every setting save fails LOUDLY, pinned by its own law.
+const SETTING_DEFAULT_LINE := "(?m)^([ \\t]*Setting\\.%s:[ \\t]*\\{[^}]*?\"default\":[ \\t]*)([^,#\\n]+)"
 
 # One entry of a const Layer -> spec dictionary, keyed by the layer's NAME as written. The value is
 # a Color(...) call or a constant reference, and it cannot be matched as "up to the next comma" --
@@ -62,6 +78,15 @@ static func rewrite_layer_color(source: String, layer_name: String, literal: Str
 		push_error("KnobSource: '%s' is not a plain Layer name" % layer_name)
 		return ""
 	return _rewrite(source, LAYER_COLOR_LINE % layer_name, literal, false)
+
+
+# The AUTHORED DEFAULT of a player setting -- what someone who has never opened the options page
+# gets. It is NOT the live value: the store owns that, and writing here does not move it.
+static func rewrite_setting_default(source: String, setting_name: String, literal: String) -> String:
+	if not setting_name.is_valid_identifier():
+		push_error("KnobSource: '%s' is not a plain Setting name" % setting_name)
+		return ""
+	return _rewrite(source, SETTING_DEFAULT_LINE % setting_name, literal, false)
 
 
 # Rebuilt from the match rather than through sub(), so a literal containing $ could never be read
@@ -206,6 +231,8 @@ static func _save_one_file(path: String, edits: Array, report: Dictionary) -> vo
 				updated = rewrite_declaration_default(source, name, literal)
 			Kind.LAYER_COLOR:
 				updated = rewrite_layer_color(source, name, literal)
+			Kind.SETTING_DEFAULT:
+				updated = rewrite_setting_default(source, name, literal)
 		if updated.is_empty():
 			report["failed"].append("%s: nothing to rewrite for %s in %s"
 				% [an_edit["label"], name, path.get_file()])
@@ -229,6 +256,8 @@ static func _written_line(kind: Kind, name: String, literal: String) -> String:
 	match kind:
 		Kind.LAYER_COLOR:
 			return "Layer.%s color = %s" % [name, literal]
+		Kind.SETTING_DEFAULT:
+			return "%s default = %s" % [name, literal]
 	return "%s = %s" % [name, literal]
 
 

@@ -221,3 +221,78 @@ func test_a_reformatted_layers_table_refuses_rather_than_guessing() -> void:
 }
 """
 	assert_str(KnobSource.rewrite_layer_color(reformatted, "MOVE", "Color(1, 1, 1, 1)")).is_empty()
+
+
+# --- The SETTING_DEFAULT shape (#394) ------------------------------------------------------
+#
+# The third shape, and the first whose write is NOT where the value was read from: a player setting's
+# live value belongs to the store, and what this rewrites is only what someone who never opens the
+# options page gets.
+
+const DEFS_TABLE := """extends Object
+
+const DEFS := {
+	Setting.SHOW_DIALOG: {
+		"title": "Show mission dialog",
+		"desc": "Characters speak during missions.",
+		"default": true,
+	},
+	Setting.UNHOVERED_BAR_NUMBERS: {
+		"title": "Numbers on unhovered bars",
+		"desc": "Show the HP digits.",
+		"default": false,
+	},
+}
+"""
+
+func test_a_setting_default_is_rewritten() -> void:
+	var out := KnobSource.rewrite_setting_default(DEFS_TABLE, "UNHOVERED_BAR_NUMBERS", "true")
+	assert_str(out).contains("\"default\": true,\n\t},\n}")
+	# ...and the row ABOVE it is untouched, which is the whole risk of a multi-line entry match.
+	assert_str(out).override_failure_message(
+			"rewriting one setting's default moved another's").contains(
+			"\"title\": \"Show mission dialog\"")
+	assert_str(out).contains("Characters speak during missions.")
+
+func test_the_entry_above_keeps_its_own_default() -> void:
+	# The sibling half of the case above, stated as the value rather than the labels: SHOW_DIALOG
+	# defaults true and must still, after its neighbour is written to.
+	var out := KnobSource.rewrite_setting_default(DEFS_TABLE, "UNHOVERED_BAR_NUMBERS", "true")
+	var dialog_entry := out.substr(out.find("Setting.SHOW_DIALOG"))
+	dialog_entry = dialog_entry.substr(0, dialog_entry.find("},"))
+	assert_str(dialog_entry).override_failure_message(
+			"SHOW_DIALOG's own default was rewritten instead").contains("\"default\": true")
+
+func test_an_unknown_setting_returns_empty_rather_than_the_source() -> void:
+	assert_str(KnobSource.rewrite_setting_default(DEFS_TABLE, "NOT_A_SETTING", "true")).is_empty()
+
+func test_a_setting_whose_entry_has_no_default_cannot_reach_the_next_ones() -> void:
+	# THE case this shape is written around. The search is bounded to the entry's own braces, so a
+	# row that has somehow lost its "default" key FAILS -- rather than running on and quietly
+	# rewriting whichever sibling declares one next, which no caller could detect.
+	var missing := """const DEFS := {
+	Setting.BROKEN: {
+		"title": "No default here",
+	},
+	Setting.SHOW_DIALOG: {
+		"default": true,
+	},
+}
+"""
+	assert_str(KnobSource.rewrite_setting_default(missing, "BROKEN", "false")).override_failure_message(
+			"the search escaped a defaultless entry and reached a sibling's default").is_empty()
+
+func test_a_setting_name_that_is_not_an_identifier_is_refused() -> void:
+	assert_str(KnobSource.rewrite_setting_default(DEFS_TABLE, "Setting.X", "true")).is_empty()
+
+func test_every_setting_knob_is_findable_in_the_real_defs_table() -> void:
+	# The table law, the shape test_game_knobs.gd uses for the other two kinds: a row naming a
+	# Setting whose DEFS entry cannot be rewritten is a Save that reports success and writes nothing.
+	var source := FileAccess.get_file_as_string(GameKnobs.SETTINGS_SCRIPT)
+	assert_str(source).override_failure_message("could not read PlayerSettings.gd").is_not_empty()
+	for knob: Dictionary in GameKnobs.CLASS_KNOBS:
+		if not knob.has("setting"):
+			continue
+		var name: String = PlayerSettings.Setting.keys()[knob["setting"]]
+		assert_str(KnobSource.rewrite_setting_default(source, name, "false")).override_failure_message(
+				"%s has no rewritable \"default\" in PlayerSettings.DEFS" % name).is_not_empty()

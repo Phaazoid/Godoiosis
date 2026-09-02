@@ -33,6 +33,27 @@ enum Setting {
 	PHOTOSENSITIVITY,
 	BATTLE_ZOOM_MODE,
 	AIM_PALETTE,
+	UNHOVERED_BAR_NUMBERS,
+	CAMERA_PAN_SPEED,
+	MOUSE_SENSITIVITY,
+	CAMERA_SMOOTHING,
+}
+
+## How far a camera-handling value is scaled from its authored one (#394). ONE enum over three rows,
+## deliberately: they are three separate preferences sharing a three-step vocabulary, and stating the
+## DECLARED-duplicate rule once is better than three copies of it. Each row supplies its own labels.
+##
+## NORMAL IS NOT A FACTOR, it is the absence of one -- CameraRig3D.SCALE_FACTORS holds no entry for it
+## and the read falls through to the authored value untouched. The AIM_PALETTES rule (#422), for the
+## same reason: a factor of 1.0 written down is a second answer to what "unchanged" means, and it goes
+## stale the day someone edits it.
+##
+## NOT called Pace -- `Pacing` is the beat table, and two camera-adjacent names one letter apart is a
+## trap for whoever greps next.
+enum Scale {
+	SLOWER,
+	NORMAL,
+	FASTER,
 }
 
 ## When a unit wears its readout (#418). A DECLARED duplicate: these values ARE the indices into the
@@ -111,6 +132,33 @@ const DEFS := {
 		"desc": "Which colours the board paints while you are aiming -- the reach an attack covers, the reach a heal covers, and the cells your pick would actually hit. Colour-blind safe tells an attack from a heal without leaning on red against green.",
 		"options": ["Default", "Colour-blind safe", "High contrast"],
 		"default": AimPalette.DEFAULT,
+	},
+	Setting.UNHOVERED_BAR_NUMBERS: {
+		"title": "Numbers on unhovered bars",
+		"desc": "Show the HP digits on a bar that is up for some reason other than your cursor -- a queued plan, or the Health bars setting. Pointing at a unit shows its numbers either way, so this is about how crowded the board gets.",
+		"default": false,
+	},
+	# The camera-handling trio (#394). Each SCALES what the dev authored rather than replacing it, so
+	# these three and the Game tab's own sliders are never two answers to one question -- see
+	# CameraRig3D.SCALE_FACTORS, and presentation-effects.md for why that is a third shape rather
+	# than either of the two the palette work left behind.
+	Setting.CAMERA_PAN_SPEED: {
+		"title": "Pan speed",
+		"desc": "How fast WASD slides the view across the board. Only the 3D view -- the flat board (F4) keeps its own speed.",
+		"options": ["Slow", "Normal", "Fast"],
+		"default": Scale.NORMAL,
+	},
+	Setting.MOUSE_SENSITIVITY: {
+		"title": "Mouse sensitivity",
+		"desc": "How far the view turns per pixel you drag, and how far one notch of the wheel zooms. One setting for both, because they are the same hand doing the same thing.",
+		"options": ["Low", "Normal", "High"],
+		"default": Scale.NORMAL,
+	},
+	Setting.CAMERA_SMOOTHING: {
+		"title": "Camera smoothing",
+		"desc": "How quickly the view catches up to your own turning and zooming. Snappy answers the hand at once; Cinematic glides. This is your input alone -- how a shot travels when playback moves the camera is the game's to direct.",
+		"options": ["Cinematic", "Normal", "Snappy"],
+		"default": Scale.NORMAL,
 	},
 }
 

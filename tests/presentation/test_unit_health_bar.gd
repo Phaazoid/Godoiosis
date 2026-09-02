@@ -846,3 +846,25 @@ func test_a_walk_only_pass_leaves_the_setting_alone() -> void:
 
 	while not done[0]:
 		await await_idle_frame()
+
+
+# --- The digits preference reaches the board (#394) -----------------------------------------
+
+func test_the_digits_preference_puts_numbers_on_an_unhovered_bar() -> void:
+	# The WIRE for #394's move. This value was a dev knob on UnitMirror with no test at all; moving
+	# it to PlayerSettings is only done if the store actually reaches the readout, and the reader is
+	# a per-frame reconcile that now takes the answer as a parameter rather than off a property.
+	#
+	# The case above is its OFF half, already shipped: an always-on bar carries no digits by default.
+	var pointed := _spawn(PLAYER, Vector2i(2, 2))
+	var other := _spawn(PLAYER, Vector2i(6, 2))
+	_set_bars(PlayerSettings.HealthBars.EVERY)
+	PlayerSettings.set_on(PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS, true)
+	_point_at(pointed.movement.cell)
+	await _settle()
+
+	assert_bool(_unit_mirror.bar_for(other).number_shown()).override_failure_message(
+			"the digits preference did not reach a bar that is up without the cursor on it"
+			).is_true()
+	assert_bool(_unit_mirror.bar_for(pointed).number_shown()).override_failure_message(
+			"the hovered unit lost its digits").is_true()

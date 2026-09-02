@@ -126,8 +126,9 @@ const KNOBS: Array[Dictionary] = [
 	# where it lands more precisely than a marker beside them could, so #313's notch is gone.
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "alarm_peak_color", "label": "Alarm peak",
 		"tip": "What the predicted-loss span pulses TO when the plan predicts a named rung -- a down, a kill, or Crisis. It pulses back to the ordinary loss colour, so this is only the bright half of the cue; make it too close to that colour and the pulse stops registering."},
-	{"group": "Unit HUD", "node": "UnitMirror", "prop": "unhovered_shows_number", "label": "Unhovered bars show number",
-		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
+	# (Unhovered bars show number LEFT this table in #394 -- it is a player setting now, and a value
+	# has one store. It is still tunable in play: CLASS_KNOBS below puts it on this same tab, as a
+	# control that writes the real preference rather than a knob with a copy of it.)
 	# --- The element-state row (#357) ---
 	{"group": "Unit HUD", "node": "UnitMirror", "prop": "state_icon_texels", "label": "State icon size", "min": 2.0, "max": 32.0, "step": 1.0,
 		"tip": "Size of each element-state icon above the health bar, in texels -- 16 is one cell. The source art is 32px (wet) and 16px (the frozen-tile stand-in for chilled), so powers of two land on exact reductions and anything else will shimmer as the camera moves. This is the first dial to reach for if the icons stop reading at play distance."},
@@ -187,10 +188,21 @@ const KNOBS: Array[Dictionary] = [
 		"tip": "The STEEPEST the player's drag may take the camera. Steep is what lets you see into a one-cell hole -- it needs about -70 to read the floor of one two units deep. Past that the unit sprites are being looked at from overhead, which is the one angle billboard art is not drawn for, so this is where the HD-2D conceit gives out rather than where the maths does."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "pan_margin_cells", "label": "Pan margin (cells)", "min": 0.0, "max": 12.0, "step": 0.5,
 		"tip": "How far past the board's edge you may pan before being stopped. Some slack keeps a corner unit from being pinned against the screen edge."},
-	{"group": "Camera handling", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
-		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 	{"group": "Camera handling", "node": "CameraRig", "prop": "zoom_out_slack", "label": "Zoom-out slack", "min": 0.5, "max": 3.0, "step": 0.05,
 		"tip": "How far past the whole board you may zoom out. 1.0 means the board exactly fills the view at full zoom-out; above 1 lets you pull back and see it sitting in the world."},
+
+	# --- Playback framing (#394, off Camera handling) ---
+	#
+	# It was filed among the camera knobs and is not one of them: handling is what the PLAYER'S hand
+	# may do, and this is where a fight OPENS FROM -- authored direction, which is #520's business.
+	# Its own group rather than joining "Camera travel" one table over, on the precedent that split
+	# "Board markup" from "Board markup colours": a group name shared across KNOBS and CLASS_KNOBS
+	# draws its heading twice, once per pass.
+	#
+	# UNTAGGED by profile on purpose, so it shows whichever column the Playback page is filtered to --
+	# it is applied ONCE as playback starts, not per beat, so no one profile owns it.
+	{"group": "Playback framing", "node": "CameraRig", "prop": "playback_distance", "label": "Playback zoom distance", "min": 4.0, "max": 30.0, "step": 0.5,
+		"tip": "How far out the camera sits when a pass or an AI turn takes it (#520). Applied ONCE as playback starts and then the wheel is yours again -- so this is where a fight opens from, not a leash."},
 
 	# --- World (#380, from the Objects tab's Globals) ---
 	# How the world's own furniture is drawn -- art conventions matched to the tile art once and
@@ -363,6 +375,9 @@ const KNOBS: Array[Dictionary] = [
 # of "which file holds LAYERS" would go stale the first time one moved. Checked by a law.
 const OVERLAYS_SCRIPT := "res://Classes/presentation/BoardOverlays.gd"
 const OVERLAY_MANAGER_SCRIPT := "res://Classes/board/OverlayManager.gd"
+# Where a PLAYER SETTING's authored default lives (#394). The third thing CLASS_KNOBS can name, and
+# the only one whose live value is not what Save writes -- see the "setting" rows below.
+const SETTINGS_SCRIPT := "res://Classes/core/PlayerSettings.gd"
 const MOVEMENT_SCRIPT := "res://Classes/units/MovementComponent.gd"
 const ACTION_MENU_SCRIPT := "res://Classes/ui/ActionMenuController.gd"
 const PACING_SCRIPT := "res://Classes/core/Pacing.gd"
@@ -371,6 +386,17 @@ const BOARD_SPACE_SCRIPT := "res://Classes/presentation/BoardSpace.gd"
 const SIGHT_TRACE_SCRIPT := "res://Classes/board/SightTrace2D.gd"
 
 const CLASS_KNOBS: Array[Dictionary] = [
+	# --- Player settings the dev authors the DEFAULT for (#394) ---
+	#
+	# A THIRD kind of class-level value, and the only one where the control and the Save write
+	# different things: the control writes the REAL preference (one value, one store -- dev, 2026-08-28,
+	# so this and the pause menu's Settings page can never disagree), while Save writes the "default"
+	# in PlayerSettings.DEFS, i.e. what someone who never opens that page gets. Flipping it here really
+	# does change your own preference; saving is a separate act that decides what SHIPS.
+	{"group": "Player settings", "setting": PlayerSettings.Setting.UNHOVERED_BAR_NUMBERS,
+		"label": "Unhovered bars show number",
+		"tip": "Whether a readout that is up for any reason OTHER than hover -- a queued plan, or the always-show setting -- also carries the HP digits. Off by default: either one can put a bar over half the board or all of it, and pointing at any of them reveals its number anyway."},
+
 	{"group": "Board markup colours", "label": "Move fill", "layer": BoardOverlays.Layer.MOVE,
 		"tip": "The tiles a unit can reach while you are ordering a move. Alpha is the dial that matters most -- markup has to read as gameplay information without burying the terrain under it."},
 	{"group": "Board markup colours", "label": "Invalid-move fill", "layer": BoardOverlays.Layer.INVALID_MOVE,
@@ -877,6 +903,16 @@ const ACTION_GROUP := "Actions"
 # The group whose three aim rows a player's palette can override (#422). Named for the same reason
 # ACTION_GROUP is: the table rows spell the string, and the PANEL needs one place to recognise it.
 const MARKUP_COLOUR_GROUP := "Board markup colours"
+# The group whose rows a player's camera steps SCALE (#394). Named for the panel's benefit, exactly
+# as the two above are: the table rows spell the string, this is what recognises it.
+const CAMERA_GROUP := "Camera handling"
+# Which player settings scale something in that group, in the order their notice reads. A DECLARED
+# list rather than "every Scale row", so a fourth one joins by decision -- MAIN_ACTION_NEVER's shape.
+const CAMERA_SCALE_SETTINGS: Array[PlayerSettings.Setting] = [
+	PlayerSettings.Setting.CAMERA_PAN_SPEED,
+	PlayerSettings.Setting.MOUSE_SENSITIVITY,
+	PlayerSettings.Setting.CAMERA_SMOOTHING,
+]
 
 
 # The verbs the Actions section can show, in the order its picker lists them. DERIVED from the
@@ -909,8 +945,13 @@ const GROUP_TABS: Dictionary[String, String] = {
 	"Board markup colours": "Colours",
 	"Squad markers": "Colours",
 	"Unit HUD": "Unit HUD",
+	# Its OWN heading on the Unit HUD tab rather than joining the knobs above it (#394): these rows
+	# write a player's real preference and their Save writes a different value again, which is worth
+	# a line of separation from the knobs that simply are what they say.
+	"Player settings": "Unit HUD",
 	"Mission HUD": "Mission",
 	"Camera handling": "Camera",
+	"Playback framing": "Playback",
 	"World": "World",
 	# Water took its OWN sub-tab once every dial went per type (#552): twenty-one rows under the prop
 	# lamps on World is a scroll rather than a panel. Two groups into one tab, and since a group draws
@@ -957,6 +998,8 @@ const CLASS_SOURCE := "class"
 # property to address, so each store gets its answer here and nowhere else.
 
 static func read_class(host: Node3D, knob: Dictionary) -> Variant:
+	if knob.has("setting"):
+		return PlayerSettings.value_of(knob["setting"])
 	if knob.has("static"):
 		return read_static(knob["static"])
 	var overlays := overlays_of(host)
@@ -966,6 +1009,11 @@ static func read_class(host: Node3D, knob: Dictionary) -> Variant:
 
 
 static func write_class(host: Node3D, knob: Dictionary, value: Variant) -> void:
+	if knob.has("setting"):
+		# The REAL preference, not a panel-local copy -- no re-apply, because the one reader
+		# (UnitMirror) is a per-frame reconcile and reads the store itself.
+		PlayerSettings.set_value(knob["setting"], value)
+		return
 	if knob.has("static"):
 		write_static(host, knob["static"], value)
 		return
@@ -1520,6 +1568,19 @@ static func class_edits(host: Node3D, indices: PackedInt32Array) -> Array[Dictio
 	for i: int in indices:
 		var knob: Dictionary = CLASS_KNOBS[i]
 		var literal := DevWidgets.literal_for(read_class(host, knob))
+		if knob.has("setting"):
+			# The live preference becomes the SHIPPED DEFAULT. Unlike the two kinds below, what is
+			# written is not where the value was read from -- the store keeps owning the live one.
+			#
+			# WATCH THE LITERAL WHEN A CHOICE ROW JOINS. literal_for spells a bool as true/false,
+			# which is what a DEFS default already looks like; an int would replace
+			# `AimPalette.DEFAULT` with a bare `0` -- correct, lossy, and every test here would still
+			# pass. A choice row wants its enum spelling written: a branch to add, not a default to
+			# inherit.
+			var setting_name: String = PlayerSettings.Setting.keys()[knob["setting"]]
+			edits.append(KnobSource.edit(SETTINGS_SCRIPT, KnobSource.Kind.SETTING_DEFAULT,
+				setting_name, literal, knob["label"], i, CLASS_SOURCE))
+			continue
 		if knob.has("static"):
 			edits.append(KnobSource.edit(knob.get("script", OVERLAY_MANAGER_SCRIPT),
 				KnobSource.Kind.DECLARATION,
@@ -1547,4 +1608,6 @@ static func tip_for(knob: Dictionary) -> String:
 		tip += "\n\n3D ONLY -- the flat 2D board keeps its own colour. A declared divergence, and provisional: tune it, look at it, then decide whether 2D should follow."
 	elif knob.has("static"):
 		tip += "\n\nMOVES BOTH STACKS -- this is one value both the 2D and the 3D read, so the flat game changes with it."
+	elif knob.has("setting"):
+		tip += "\n\nTHE REAL PLAYER SETTING, not a preview -- the same one the pause menu's Settings page shows, so flipping it here changes your own preference. Save writes what a player who never opens that page gets."
 	return DevWidgets.wrap_tooltip(tip)

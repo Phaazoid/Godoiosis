@@ -96,6 +96,73 @@ class_name CameraRig3D
 @export var orbit_sensitivity := 0.25        # degrees of yaw AND pitch per pixel dragged
 @export var orbit_click_slop_px := 4.0       # travel under this still counts as a click
 
+# --- What the PLAYER scales these by (#394) -----------------------------------------------------
+#
+# The dev authors the numbers above; the player picks a STEP that multiplies them. Two different
+# axes, so nothing here moves out of GameKnobs and Save-to-source is untouched -- a knob dragged on
+# the Game tab still reaches the board, just scaled by whatever the player chose. That is the whole
+# reason this is a multiplier rather than a move: no slider is ever inert.
+#
+# NORMAL IS ABSENT ON PURPOSE and falls through to 1.0 -- AIM_PALETTES' DEFAULT rule (#422). Writing
+# it down as a factor would be a second answer to what "unchanged" means.
+#
+# PER SETTING, not one shared triple, and seeded identically so splitting them costs one number.
+# `blend = 1 - exp(-smoothing * delta)` is nonlinear, so the step that feels right on smoothing is
+# not the one that feels right on pan speed -- these are the dev's to tune apart in play.
+#
+# GLIDE_SMOOTHING IS DELIBERATELY NOT HERE. Its own declaration says why: it answers how a shot
+# TRAVELS when playback moves the camera, which is direction rather than comfort, and welding it to
+# the input-response row would hand the player a dial on the end of every Execute.
+const SCALE_FACTORS := {
+	PlayerSettings.Setting.CAMERA_PAN_SPEED: {
+		PlayerSettings.Scale.SLOWER: 0.6,
+		PlayerSettings.Scale.FASTER: 1.6,
+	},
+	PlayerSettings.Setting.MOUSE_SENSITIVITY: {
+		PlayerSettings.Scale.SLOWER: 0.6,
+		PlayerSettings.Scale.FASTER: 1.6,
+	},
+	PlayerSettings.Setting.CAMERA_SMOOTHING: {
+		PlayerSettings.Scale.SLOWER: 0.6,
+		PlayerSettings.Scale.FASTER: 1.6,
+	},
+}
+
+
+# The authored value as the player has scaled it. One accessor per knob rather than a scale applied
+# at each read: a read site that forgot to scale is invisible, and a missing accessor is a parse
+# error. MOUSE SENSITIVITY drives TWO of them -- the drag and the wheel are one hand.
+func effective_pan_speed() -> float:
+	return pan_speed * scale_of(PlayerSettings.Setting.CAMERA_PAN_SPEED)
+
+
+func effective_orbit_sensitivity() -> float:
+	return orbit_sensitivity * scale_of(PlayerSettings.Setting.MOUSE_SENSITIVITY)
+
+
+func effective_zoom_step() -> float:
+	return zoom_step * scale_of(PlayerSettings.Setting.MOUSE_SENSITIVITY)
+
+
+func effective_smoothing() -> float:
+	return smoothing * scale_of(PlayerSettings.Setting.CAMERA_SMOOTHING)
+
+
+# Public so a test can state a ratio without naming a factor, and so the dev panel can say what a
+# knob is being multiplied by. A table that has fallen behind its enum scales by 1.0 and says so:
+# the camera answering the hand at its authored rate is legible, a camera that stopped is not.
+static func scale_of(setting: PlayerSettings.Setting) -> float:
+	var picked := PlayerSettings.choice_of(setting)
+	if picked == PlayerSettings.Scale.NORMAL:
+		return 1.0
+	var row: Dictionary = SCALE_FACTORS.get(setting, {})
+	if not row.has(picked):
+		push_error("CameraRig3D: no scale factor for %s step %d -- using the authored value"
+				% [PlayerSettings.Setting.keys()[setting], picked])
+		return 1.0
+	var factor: float = row[picked]
+	return factor
+
 # How far the player's own drag may tilt, in degrees below the horizon (#586). Handling rather than
 # mood, so they are GameKnobs rows and not a Look preset's business -- the board authors where the
 # camera STARTS (board_pitch_degrees below), these say how far a hand may take it from there.
@@ -268,7 +335,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		var drag := event as InputEventMouseMotion
 		if drag != null:
 			_orbit_travel_px += drag.relative.length()
-			_target_yaw_degrees -= drag.relative.x * orbit_sensitivity
+			# ONE read for BOTH axes (#394). Turning and tilting are two halves of one drag, so a
+			# player's sensitivity has to reach them by the same number as well as be authored as
+			# one -- scaling only one of them is precisely the diagonal-drag curve the declaration
+			# above warns about, and it is invisible in a straight drag.
+			var sensitivity := effective_orbit_sensitivity()
+			_target_yaw_degrees -= drag.relative.x * sensitivity
 			# The same drag's OTHER axis, which this branch used to throw away (#586, dev: "I don't
 			# see the harm in letting the player drag up/down too"). Grab-the-world in both, so
 			# dragging DOWN pulls the far edge down and the camera looks further down with it.
@@ -276,7 +348,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Clamped on the TARGET rather than after easing: a target parked past the limit would
 			# drag the angle back out to it on every frame it eased in -- the same reasoning the
 			# pan_limit clamp states for the aim.
-			_target_pitch_degrees = clampf(_target_pitch_degrees - drag.relative.y * orbit_sensitivity,
+			_target_pitch_degrees = clampf(_target_pitch_degrees - drag.relative.y * sensitivity,
 					min_pitch_degrees, max_pitch_degrees)
 			return
 
@@ -305,7 +377,7 @@ func _unhandled_input(event: InputEvent) -> void:
 # One notch of zoom. Public so a host that has taken the wheel away can still hand a MODIFIED
 # notch back (#285's Ctrl+wheel) without reaching into _target_distance or re-spelling the step.
 func zoom_by(notches: int) -> void:
-	set_zoom(_target_distance + zoom_step * notches)
+	set_zoom(_target_distance + effective_zoom_step() * notches)
 
 
 # The next detent in `direction`. From an exact detent this is the old `+= yaw_step`
@@ -825,7 +897,7 @@ func drop_stashed_view() -> void:
 
 
 func _process(delta: float):
-	var blend := 1.0 - exp(-smoothing * delta)
+	var blend := 1.0 - exp(-effective_smoothing() * delta)
 	rotation_degrees.y = _lerp_angle_degrees(rotation_degrees.y, _target_yaw_degrees, blend)
 	# ...toward the DOLLIED distance (#520 diff 2c), which is _target_distance untouched unless the
 	# director is leaning in. The target itself is never written by the dolly, so a beat ending
@@ -869,7 +941,7 @@ func _process(delta: float):
 		if Input.is_physical_key_pressed(KEY_D):
 			pan.x += 1.0
 		if pan != Vector2.ZERO:
-			pan = pan.normalized() * pan_speed * delta
+			pan = pan.normalized() * effective_pan_speed() * delta
 			hold_at(_target_aim + Vector3(pan.x, 0.0, pan.y).rotated(Vector3.UP, deg_to_rad(rotation_degrees.y)))
 
 	# The two eased channels (#520). Headless, land now: nobody is watching, the asymptotic lerp

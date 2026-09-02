@@ -26,6 +26,11 @@ func _choice_enum_sizes() -> Dictionary:
 		PlayerSettings.Setting.HEALTH_BARS: PlayerSettings.HealthBars.size(),
 		PlayerSettings.Setting.BATTLE_ZOOM_MODE: PlayerSettings.BattleZoom.size(),
 		PlayerSettings.Setting.AIM_PALETTE: PlayerSettings.AimPalette.size(),
+		# Three rows over ONE enum (#394) -- they are three preferences sharing a three-step
+		# vocabulary, so the pin is the same size three times rather than three enums.
+		PlayerSettings.Setting.CAMERA_PAN_SPEED: PlayerSettings.Scale.size(),
+		PlayerSettings.Setting.MOUSE_SENSITIVITY: PlayerSettings.Scale.size(),
+		PlayerSettings.Setting.CAMERA_SMOOTHING: PlayerSettings.Scale.size(),
 	}
 
 func test_every_setting_has_metadata() -> void:

@@ -26,6 +26,9 @@ class_name GameTool
 const HEADING_COLOR := Color(1, 0.83, 0.4, 1)   # the Look and Scenario tabs' heading gold
 # A NOTE rather than a heading, so it must not read as one -- cool against the headings' gold.
 const NOTICE_COLOR := Color(0.62, 0.82, 1.0, 1)
+# How many rows the save confirm names before it stops counting them out. A dialog listing sixty is
+# one nobody reads, which is the failure this list exists to fix.
+const CONFIRM_LIST_MAX := 12
 const ZOOM_SETTING := PlayerSettings.Setting.BATTLE_ZOOM_MODE
 const PALETTE_SETTING := PlayerSettings.Setting.AIM_PALETTE
 
@@ -58,6 +61,15 @@ var _zoom_picker: OptionButton   # the battle-zoom mode, polled against the stor
 var _palette_notice: Label
 # What the notice is currently WORDED for. -1 is "nothing yet", so the first refresh always writes.
 var _notice_palette := -1
+# The camera-scale notice (#394) and what it is currently worded for. Same poll, different sentence:
+# a step never makes a knob INERT here -- it multiplies it -- so what has to be said is that the
+# sliders below are the UNSCALED numbers and the board is not showing you them.
+var _scale_notice: Label
+var _notice_scales := ""
+# Every setting row's checkbox, by its Setting (#394). Kept for the same reason the battle-zoom
+# picker is: a control on BOTH a dev and a player surface polls the store rather than latching it,
+# and the Settings page is a second OS window that can be moved while this one is open.
+var _setting_checks: Dictionary[int, CheckBox] = {}
 var _shown_action: BaseAction.ActionType = BaseAction.ActionType.ATTACK
 # Every control each row put on the page, by its row's tags. Kept because a row is not one node --
 # a colour row is several -- so hiding one means hiding the span DevWidgets.add_knob_row returned.
@@ -188,6 +200,9 @@ func _rebuild() -> void:
 	_filtered.clear()
 	_action_picker = null
 	_palette_notice = null
+	_scale_notice = null
+	_notice_scales = ""
+	_setting_checks.clear()
 	_build_playback_header()
 	var group := ""
 	for knob: Dictionary in GameKnobs.KNOBS:
@@ -223,18 +238,37 @@ func _build_class_row(rows: VBoxContainer, knob: Dictionary) -> void:
 		DevWidgets.add_label(rows, "%s - UNRESOLVED" % knob["label"])
 		push_error("GameTool: class knob does not resolve: %s" % knob["label"])
 		return
-	_remember_filter(knob, DevWidgets.add_knob_row(rows, knob, value,
+	var controls := DevWidgets.add_knob_row(rows, knob, value,
 		func(picked: Variant) -> void:
 			GameKnobs.write_class(_host, knob, picked)
 			_touch(),
-		tip_for(knob)))
+		tip_for(knob))
+	_remember_filter(knob, controls)
+	_remember_setting(knob, controls)
 
 
 # The where-does-this-live note is appended per table rather than typed into each tip, so it cannot
 # drift out of step with what Save actually writes. GameKnobs owns the which-stack half.
+#
+# A SETTING row is the exception and gets no game-wide line: it is not one value for every board, it
+# is one value per PLAYER, and GameKnobs.tip_for has already said so.
 func tip_for(knob: Dictionary) -> String:
+	if knob.has("setting"):
+		return GameKnobs.tip_for(knob)
 	return GameKnobs.tip_for(knob) + "\n\n" + DevWidgets.wrap_tooltip(
 		"GAME-WIDE -- one value for every board. Save to source writes it into the declaration that authors it; no mission can carry its own.")
+
+
+# A setting row's checkbox, kept so _process can reconcile it against the store. Found by TYPE rather
+# than by position: add_knob_row picks the widget from the value's kind, so asking for a CheckBox is
+# asking the same question it answered.
+func _remember_setting(knob: Dictionary, controls: Array[Node]) -> void:
+	if not knob.has("setting"):
+		return
+	for control: Node in controls:
+		if control is CheckBox:
+			_setting_checks[knob["setting"]] = control as CheckBox
+			return
 
 
 # --- The Playback page's filters (#520 2b slice 2) --------------------------------------------
@@ -279,6 +313,8 @@ func _process(_delta: float) -> void:
 	# #422 rides the same poll for the same reason, and BEFORE the zoom guard rather than after it:
 	# a page with no battle-zoom picker built still has aim rows that a palette can make inert.
 	_refresh_palette_notice()
+	_refresh_scale_notice()
+	_refresh_setting_rows()
 	if _zoom_picker == null:
 		return
 	var live := PlayerSettings.choice_of(ZOOM_SETTING)
@@ -288,12 +324,27 @@ func _process(_delta: float) -> void:
 	_apply_playback_filter()
 
 
+# THE STORE IS THE TRUTH, this panel only shows it (#394, the #647 ruling applied to a checkbox). The
+# pause menu's Settings page is a second OS window and can be moved while this one is open, so a
+# latched control would go stale exactly when the two are on screen together. `set_pressed_no_signal`
+# or the reconcile writes back into the store on a frame nobody touched it.
+func _refresh_setting_rows() -> void:
+	for setting: int in _setting_checks:
+		var box: CheckBox = _setting_checks[setting]
+		var live := bool(PlayerSettings.value_of(setting))
+		if box.button_pressed != live:
+			box.set_pressed_no_signal(live)
+
+
 # A section's own control, drawn under its heading. Actions has the picker that decides which verb's
 # rows are on the page (ObjectTool's per-type dropdown, one panel over); Board markup colours has a
 # NOTICE rather than a control -- see below.
 func _build_group_header(rows: VBoxContainer, group: String) -> void:
 	if group == GameKnobs.MARKUP_COLOUR_GROUP:
 		_build_palette_notice(rows)
+		return
+	if group == GameKnobs.CAMERA_GROUP:
+		_build_scale_notice(rows)
 		return
 	if group != GameKnobs.ACTION_GROUP:
 		return
@@ -352,6 +403,49 @@ func _apply_playback_filter() -> void:
 #
 # Built unconditionally and hidden, rather than built on demand: this page's own filter idiom, and
 # what keeps the panel laws in tests/dev/test_game_knobs.gd able to walk a complete tree.
+# WHAT THE BOARD IS ACTUALLY DOING WITH THESE NUMBERS (#394). A player's camera step MULTIPLIES the
+# rows below rather than replacing them, so unlike the palette notice above nothing here is inert --
+# every slider still reaches the board. What needs saying is the other half: while a step is off
+# Normal you are tuning a base you are not feeling, and a value that felt right to you ships x0.6 or
+# x1.6 away from what a Normal player gets.
+#
+# Built unconditionally and hidden, this page's own filter idiom -- see _build_palette_notice.
+func _build_scale_notice(rows: VBoxContainer) -> void:
+	_scale_notice = Label.new()
+	_scale_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	_scale_notice.add_theme_color_override("font_color", NOTICE_COLOR)
+	rows.add_child(_scale_notice)
+	_notice_scales = ""
+	_refresh_scale_notice()
+
+
+# One clause per row that is off Normal, using the store's OWN titles and CameraRig3D's own factor --
+# never a copy of either. Silent while every step is Normal, which is the ordinary case.
+func _refresh_scale_notice() -> void:
+	if _scale_notice == null:
+		return
+	var parts: PackedStringArray = PackedStringArray()
+	for setting: PlayerSettings.Setting in GameKnobs.CAMERA_SCALE_SETTINGS:
+		var factor := CameraRig3D.scale_of(setting)
+		if is_equal_approx(factor, 1.0):
+			continue
+		var labels: Array = PlayerSettings.options_of(setting)
+		parts.append("%s x%s (%s)" % [PlayerSettings.title_of(setting), String.num(factor, 2),
+				str(labels[PlayerSettings.choice_of(setting)])])
+	var live := ", ".join(parts)
+	# VISIBILITY BEFORE THE DIFF. The diff exists to skip rebuilding the string every frame, and at
+	# BUILD time `live` and `_notice_scales` are both "" -- so behind the early-out the label kept a
+	# Label's default visible=true and the notice showed on a page with nothing to say.
+	_scale_notice.visible = not parts.is_empty()
+	if live == _notice_scales:
+		return
+	_notice_scales = live
+	if parts.is_empty():
+		return
+	_scale_notice.text = ("Your own settings are scaling these rows: %s. The sliders below are the "
+			+ "UNSCALED values you author, so what you tune here is not what you are feeling.") % live
+
+
 func _build_palette_notice(rows: VBoxContainer) -> void:
 	_palette_notice = Label.new()
 	_palette_notice.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -412,9 +506,31 @@ func _on_save_pressed() -> void:
 		_status.text = "Nothing has moved off what is saved."
 		return
 	DevWidgets.confirm(self,
-		"Write %d changed value(s) into the scripts that declare them? The old defaults are replaced."
-			% (moved.size() + moved_class.size()),
+		"Write %d changed value(s) into the scripts that declare them? The old defaults are replaced.\n\n%s"
+			% [moved.size() + moved_class.size(), _moved_labels(moved, moved_class)],
 		func() -> void: _save_confirmed(moved, moved_class))
+
+
+# WHAT is about to be written, by NAME (#394). A count alone was enough while this panel was the only
+# writer of every row it can save -- "changed off baseline" meant "you dragged it here". A SETTING row
+# breaks that equivalence: the pause menu's Settings page writes the same store, so a preference
+# flipped THERE reads as a changed row here and rides into the next Save as the shipped default, with
+# the ask unable to say so. Naming the rows is the general answer rather than a clause about settings,
+# since it is #380's ask-first doing its job for every kind at once.
+#
+# ONE PER LINE: ConfirmationDialog's text does not autowrap, so a joined run would leave its tail off
+# the side of the dialog -- which is the same failure as not naming them at all.
+func _moved_labels(moved: PackedInt32Array, moved_class: PackedInt32Array) -> String:
+	var labels: PackedStringArray = PackedStringArray()
+	for i: int in moved:
+		labels.append(String(GameKnobs.KNOBS[i]["label"]))
+	for i: int in moved_class:
+		labels.append(String(GameKnobs.CLASS_KNOBS[i]["label"]))
+	if labels.size() <= CONFIRM_LIST_MAX:
+		return "\n".join(labels)
+	var shown := labels.slice(0, CONFIRM_LIST_MAX)
+	shown.append("...and %d more" % (labels.size() - CONFIRM_LIST_MAX))
+	return "\n".join(shown)
 
 
 func _save_confirmed(moved: PackedInt32Array, moved_class: PackedInt32Array) -> void:

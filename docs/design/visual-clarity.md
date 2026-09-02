@@ -400,6 +400,11 @@ The rulings, all dev calls, all made before building:
   had already answered this one level down for prediction bars, so the knob simply **widened**
   (renamed `unhovered_shows_number`, since the question is *how crowded may this volume get* and
   that does not change with why a bar happens to be up). One knob, not one per reason.
+  **It stopped being a knob in [#394](https://github.com/Phaazoid/Godoiosis/issues/394) (2026-09-01)**
+  and became `PlayerSettings.UNHOVERED_BAR_NUMBERS` — the dev and the player were setting it on the
+  same axis, so per #422's ruling it has one store. The Game tab still shows it, as a control that
+  writes the real preference; what the dev's Save writes there is the `DEFS` default, i.e. what a
+  player who never opens the options page gets.
 
 Two things that generalise past this ticket:
 
