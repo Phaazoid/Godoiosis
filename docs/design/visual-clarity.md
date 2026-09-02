@@ -386,6 +386,14 @@ The rulings, all dev calls, all made before building:
   before the first mission is one nobody has to pause to find).
 - **The page is a PROJECTION of `PlayerSettings.DEFS`**, so it never learns a setting's name. That
   is the whole point of paying for a table with one row in it: #217 is a store edit, not UI work.
+  **Its descriptions are HOVER TEXT as of 2026-09-02** (dev: the page was getting crowded) — the
+  projection is unchanged, `desc` is still the one place the words live, only where they draw moved.
+  Two mechanics carry it and either one ships a half-working page: the text goes on **every control
+  the row built** (a Button has `mouse_filter` STOP, so Godot asks IT and never walks up), and a
+  **`Label` must be given `MOUSE_FILTER_STOP`** or it is never asked at all — which would leave every
+  choice row's title silently bare while the toggle rows looked fine. The trade is stated rather than
+  hidden: a player who does not hover now reads nothing, which is ordinary for an options page but is
+  the reason a row whose text is load-bearing would want to stay visible.
   A test pins "every declared setting gets a row" so the property cannot quietly lapse.
 - **Persisted, not session-scoped.** `user://settings.cfg` via `ConfigFile`, keyed by the enum
   member's NAME — `Experiments`'s shape, minus its cull-the-flags doctrine, because a setting is a

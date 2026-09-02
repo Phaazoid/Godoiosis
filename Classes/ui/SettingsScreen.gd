@@ -6,7 +6,8 @@ class_name SettingsScreen
 # underneath is frozen while the player reads.
 #
 # Pure projection of PlayerSettings.DEFS: one row per declared setting, built from the table's own
-# title and description. Nothing here owns content, and nothing here owns a default. That is what
+# title, with its description as HOVER TEXT since 2026-09-02 (the page was getting crowded -- see
+# _apply_desc_tooltip). Nothing here owns content, and nothing here owns a default. That is what
 # makes #217's photosensitivity toggle a one-line diff in the store rather than UI work — the
 # ruling in docs/design/presentation-effects.md that a settings surface DRIVES that switch rather
 # than a second one growing beside it only holds if this page never learns a setting's name.
@@ -23,8 +24,6 @@ class_name SettingsScreen
 signal closed
 
 const BODY_WIDTH := 520
-const DESC_COLOR := Color(0.78, 0.78, 0.84)
-const DESC_INDENT := 8
 const SEGMENT_GAP := 6
 const SEGMENT_HEIGHT := 32
 const ROW_SEPARATION := 14
@@ -101,11 +100,12 @@ func _chrome_height(content: Control) -> float:
 	return outer.get_combined_minimum_size().y
 
 func _add_row(parent: Container, setting: PlayerSettings.Setting) -> void:
+	var first := parent.get_child_count()
 	if PlayerSettings.is_choice(setting):
 		_add_choice_row(parent, setting)
 	else:
 		_add_toggle_row(parent, setting)
-	_add_desc(parent, setting)
+	_apply_desc_tooltip(parent, first, setting)
 
 # A CheckButton rather than a Button: this page's rows have a STATE the player is reading back,
 # which is the one thing every other ModalCard row does not (they emit a choice and close).
@@ -174,18 +174,38 @@ func _process(_delta: float) -> void:
 			if segment.button_pressed != (i == picked):
 				segment.set_pressed_no_signal(i == picked)
 
-func _add_desc(parent: Container, setting: PlayerSettings.Setting) -> void:
-	# Autowrap against a real width, the way GlossaryScreen's body text does — UiText.wrap is for
-	# tooltip_text, which has no width to wrap into.
-	var desc := Label.new()
-	desc.text = PlayerSettings.desc_of(setting)
-	desc.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
-	desc.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	desc.modulate = DESC_COLOR
-	var indent := MarginContainer.new()
-	indent.add_theme_constant_override("margin_left", DESC_INDENT)
-	indent.add_child(desc)
-	parent.add_child(indent)
+# THE DESCRIPTION IS HOVER TEXT, not a line under the row (dev, 2026-09-02: the page was getting too
+# crowded). The store is untouched -- `desc` is still the one place the words live and this page still
+# never learns a setting's NAME, so the projection is unchanged in everything but where it draws.
+#
+# Wrapped through UiText, because Godot's built-in tooltip is a Label with autowrap OFF and no theme
+# item to switch it on: an unwrapped line runs off the screen edge instead. Every tooltip in
+# Classes/ui/ routes through wrap() for that reason, and tests/ui/test_tooltip_rendering.gd walks the
+# live tree to check they all did.
+#
+# EVERY CONTROL THE ROW BUILT, never the row -- a Button has mouse_filter STOP, so Godot asks IT and
+# never walks up to a parent that holds the text. The same rule DevWidgets.apply_tooltip follows one
+# window over, and info_panel's stat pair follows here.
+#
+# ...which is also why the filter is set: a LABEL defaults to MOUSE_FILTER_IGNORE, so a choice row's
+# title would never be asked at all. That is half the page silently without hover text, and the half
+# a screenshot cannot tell from the other. `info_panel._badge` sets it beside its own tooltip for
+# exactly this reason.
+func _apply_desc_tooltip(parent: Container, first: int, setting: PlayerSettings.Setting) -> void:
+	var wrapped := UiText.wrap(PlayerSettings.desc_of(setting))
+	for i in range(first, parent.get_child_count()):
+		_tooltip_subtree(parent.get_child(i), wrapped)
+
+
+# A row is not one node -- a choice row is a title plus a strip of buttons -- so the text goes on the
+# whole span, gaps between segments included.
+func _tooltip_subtree(node: Node, wrapped: String) -> void:
+	var control := node as Control
+	if control != null:
+		control.tooltip_text = wrapped
+		control.mouse_filter = Control.MOUSE_FILTER_STOP
+	for child: Node in node.get_children():
+		_tooltip_subtree(child, wrapped)
 
 
 # Esc closes the page, the same door the Close button is -- and the reason this file grew a scroll
