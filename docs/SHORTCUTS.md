@@ -1,6 +1,8 @@
-# Iosis — Keys & Shortcuts
+# Iosis — Player Controls
 
-Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. Keep this updated as new bindings are added (in-game ones live in Project Settings → Input Map, prefixed `cam_*` / `dev_*`). This is the canonical list — tab tooltips in the dev window should mirror it, not replace it.
+What the player presses, in both views. **The dev-tools and authoring keys are NOT here** — they live in the dev window itself, on **Session → Info**, projected from `Classes/core/Controls.gd` ([#690](https://github.com/Phaazoid/Godoiosis/issues/690)); the Claude slash commands moved to `CLAUDE.md`. In-game bindings that are Input Map actions are prefixed `cam_*` / `dev_*`, but most are hardcoded key checks — the registry says which is which, per entry.
+
+**This file is on its way out.** [#691](https://github.com/Phaazoid/Godoiosis/issues/691) gives Settings a Controls tab reading the same registry, and deletes this file when it lands. The two tables below are here because they are load-bearing rulings in prose, not because a document is the right home for them — do not add to them.
 
 ## Gameplay (the flat 2D game)
 | Key | Action |
@@ -11,7 +13,7 @@ Quick reference for controls, dev-tool shortcuts, and Claude workflow commands. 
 | Space | Center camera on cursor *(outside dev mode)* |
 
 ## The 3D battle view (`Scenes/Battle3D`, #176) — this is what the game boots into
-**`Battle3D.tscn` is the main scene as of 2026-08-14.** Launching the game lands here, on Mission Select drawn over the 3D world; **F4** is the only way to the flat 2D game and it toggles straight back. There is deliberately no 2D option on the title screen.
+**`Battle3D.tscn` is the main scene as of 2026-08-14.** Launching the game lands here, on Mission Select drawn over the 3D world; **F4** is the only way to the flat 2D game and it toggles straight back. That key is dev-gated, so it is in the Info tab's registry rather than in the table below. There is deliberately no 2D option on the title screen.
 
 The 2D game runs underneath as the UI layer, so every UI click behaves exactly as above. These are the board-and-camera keys the 3D host owns. **Note the 2D camera stands down here** — `cam_*` reaches the 3D rig only, so W/A/S/D and the arrows drive one camera, not two.
 
@@ -25,41 +27,8 @@ The 2D game runs underneath as the UI layer, so every UI click behaves exactly a
 | W / A / S / D (or arrows) | Pan the diorama, bounded to the board plus a margin |
 | Space | Recentre the diorama on the pointer cell — **unless dev mode is up**, where it spawns instead, the same precedence the flat game gives it |
 | R | Reset to the opening shot (the framing the board loaded with) — **the only leveller for the tilt**, which returns to the board's own authored angle rather than a second copy of it |
-| F4 | Toggle the flat 2D game full-screen and back *(dev builds)* |
-| Shift + F4 | The corner picture-in-picture debug view *(dev builds)* |
 
 The view **opens close on your own squad**, not on the whole board (`opening_view_cells`); the board is what bounds zoom and panning, so pulling back still reaches every corner. During an AI turn the camera follows the acting squad by itself, squares up to the nearest 90° detent, and refuses manual input until the turn ends.
 
-## Dev tools
-| Key | Action |
-|-----|--------|
-| F1 | Toggle the dev tools window (`toggle_dev_overlay`) — enters/exits DEV_MODE |
-| Space | Spawn a unit at the hovered cell *(in dev mode, with the Spawn tool configured)* — hardcoded `KEY_SPACE` check in `game.gd`, not an Input Map action |
-| F2 | Reload the last-loaded scenario (`dev_reset_scenario`) — instant board reset |
-| F5 | Toggle the elevation readout ([#257](https://github.com/Phaazoid/Godoiosis/issues/257)) — each cell's height, with an arrow on ramps showing which way they rise. Flat 2D view only; **throwaway**, and deleted when the real 2D height render lands. Hardcoded `KEY_F5` in `game.gd`, gated on `DevTools.enabled()`. The terrain brush lights it too (#260, and #340 once the level merged into that brush), and the two reasons are independent: leaving Terrain mode never switches off a readout F5 asked for |
-| Left-click a unit | (DEV_MODE) Edit that unit in the Unit Editor |
-| Left-drag | (DEV_MODE, Tile Brush active) Paint the selected tile — works in **both** views; the 3D one previews the real block under the cursor. In **Corners** mode ([#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice 4) it drags the grid POINT nearest the cursor to the level picker's height instead, welding all four tiles that touch it; the 3D preview is a small cube on the point, and a drag repeats the same absolute write rather than nudging, so holding still holds still. A corner that would make its own tile illegal — a third height, a saddle, past 45° — stops there rather than dragging its neighbours along, so a tall hill takes a few strokes across neighbouring points |
-| Right-click | (DEV_MODE, Tile Brush active) Erase a tile. In **Corners** mode it pulls the point back down to the board floor, as far as the same clamp allows. In the 3D view this is why orbit steps aside to middle-drag while the brush is armed |
-| Mouse wheel | (DEV_MODE, Tile Brush in **Terrain** or **Corners** mode) Raise / lower the level the brush paints at ([#260](https://github.com/Phaazoid/Godoiosis/issues/260); the level rides the terrain brush rather than a mode of its own since [#340](https://github.com/Phaazoid/Godoiosis/issues/340), so one click paints a tile *at* a height and raising a cell means repainting it). Corners mode reads the same number as the height a dragged point goes to. Negative levels are dips. Inert in Zones and Tile States, which is the rule and not a list — a control only moves a brush you can SEE, so the wheel answers in exactly the modes that show the level row; the tab's *Reset to flat (0)* button returns the brush to level 0 with no ramp. The terrain brush lights the F5 readout on its own. **Works in the 3D view too as of [#285](https://github.com/Phaazoid/Godoiosis/issues/285)**, where a ghost block hangs at the level the next click would produce (the wedge, when a rise is set) and the wheel is the brush's — Ctrl+wheel zooms there instead |
-| Ctrl+Z | (DEV_MODE) **Undo the last board edit** ([#391](https://github.com/Phaazoid/Godoiosis/issues/391)) — one press per *stroke*, not per cell, so a whole drag comes back at once. One stack across all four paint modes, plus Resize Map and Clear Tile States; it restores terrain, height, ramps, tile states and zones together. Not the same verb as right-click's order undo (#228): that takes back an ORDER you gave, this takes back an EDIT you made to the board. Inert outside dev mode, and a Ctrl+Z typed into a dev-window text field is still that field's own text undo |
-| Ctrl+Shift+Z / Ctrl+Y | (DEV_MODE) Redo. A new edit after undoing abandons the redo tail. Depth is capped at 50 steps, and loading a board clears the history — it belongs to one board |
-| Z / C | (DEV_MODE, Tile Brush in **Terrain** mode) Turn the ramp rise one step, the way Q/E turn the board — None → North → East → South → West and around. Holding the key does not spin it. Inert with the brush down or in another paint mode — including **Corners**, which shows the level row but not the rise one, and is what split this gate off the wheel's in slice 4. **Greyed out for a tile that stands up** (a rock, a lantern): only flat ground can slope (#340), and the ramp then wears whatever ground you painted on it |
-| X | (DEV_MODE, Tile Brush in **Terrain** mode) Cycle how FAR that rise climbs ([#427](https://github.com/Phaazoid/Godoiosis/issues/427) slice 2) — Full (45°, a whole level over one cell) ↔ Half (26.6°, one unit over one cell, so two of them stacked climb a level across two cells). Sits between Z and C so turn-left / change-pitch / turn-right read as one gesture, and greys out with the direction. Survives *Reset to flat*: it is a steepness preference, not a piece of the shape |
-| V | (3D view, **no dev mode needed**) Cycle how DEEP the hover selector reads — Level (one whole block) ↔ Half (one unit). Its top face sits on the cell's surface either way, so this only changes how far **down** the box reaches. Deliberately not gated on dev mode or an armed brush: the selector is up in ordinary play, so a key that needed either would leave the thing visible and the key dead. The Game tab's *Selector depth* row is the same setting |
-
-**Which window are these live in?** Both — since #340. Every dev key (F1/F2/F3, V, the Tile Brush's Z/X/C and Ctrl+Z/Y) is handled in `DevController`, which lives in the game subtree, and `DevOverlay._input` forwards to the same public entry so the keys also work while the **dev-tools** window has focus. That matters because authoring leaves you there: you pick a tile in the dev window, then want to turn the rise. Keys typed into a text or number field in the dev window are excluded, so naming a scenario cannot reset the board.
-
-## Claude slash commands
-Typed into the **Claude Code chat** (not in-game). Each lives as a file in [`.claude/commands/`](../.claude/commands/) — the filename *is* the command name, and the file is the instructions Claude follows when you run it. Anything after the command is passed in as an argument to scope the run.
-
-| Command | What it does |
-|---------|--------------|
-| `/agent-queue` | Advance every open issue whose **last word was yours** (derived from the thread — Claude's comments lead with `🤖 Claude says:`, so anything it spoke on last is waiting on you). `priority/P1-soon` first. Per issue: post a plan (feature / core-gameplay change), fix it and write it up (small bugfix, `tests/`, `docs/`), or flag a decision. The comment *is* the hand-back — nothing to flip. Add issue numbers (e.g. `/agent-queue 23 25`) to work only those. |
-| `/scratchpad-sweep` | Read [`docs/SCRATCHPAD.md`](SCRATCHPAD.md), file each **Inbox** idea into the right design doc / a proposed issue / the defer pile, log where it went, and leave the Inbox empty. Add an area or idea (e.g. `/scratchpad-sweep weapons`) to sweep just those. |
-
 ## Notes
-- The dev tools open as a **separate OS window** (draggable to a second monitor). See `CLAUDE.md` → "Dev tools = separate OS window" for the architecture.
-- **The dev bindings work in the 3D view as of #231 (v0.20.0).** The tile brush paints and erases there, SPACE spawns, and the brush previews the real 3D block under the cursor. *(This note previously said every `dev_*` binding was inert in 3D, blaming an absolute `DevOverlay` path in `game.gd`. Both halves are dead: the lookup became relative earlier in the arc, and the input plumbing landed with #231.)*
 - **Bindings are deliberately IDENTICAL between the two views** — the flat game is not a different control scheme. The one runtime difference is right-click: the brush claims it to erase while armed, so orbit falls back to middle-drag and the help bar re-reads the live binding. 3D-*native* authoring — placing at height rather than on the flat plane — **landed with [#285](https://github.com/Phaazoid/Godoiosis/issues/285)**: the wheel sets the brush's paint level in the 3D view too, and a ghost block hangs at the level the next click would produce. See the 3D battle view table above. *(This note previously called that a separate future issue gated on #218's verticality work. Both halves are dead: #218's design landed in [verticality.md](design/verticality.md) and the issue is closed, and #285 built the authoring on top of it — #340 then folded the level into the terrain brush itself.)*
-- Dev mode is editor-only tooling; none of the `dev_*` bindings are intended for the shipped game.
-- Scenarios (saved skirmish setups: units, squads, loadouts, tiles) live in `res://Scenarios/` and are saved/loaded from the dev tools' Save/Load section.

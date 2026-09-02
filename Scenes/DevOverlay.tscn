@@ -16,6 +16,7 @@
 [ext_resource type="Script" path="res://Classes/dev/SquadsAiTool.gd" id="11_sqai"]
 [ext_resource type="Script" path="res://Classes/dev/DialogTool.gd" id="11_dlgt"]
 [ext_resource type="Script" path="res://Classes/dev/ExperimentsTool.gd" id="12_exps"]
+[ext_resource type="Script" path="res://Classes/dev/DevInfoTool.gd" id="13_info"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_1dnd3"]
 bg_color = Color(0.4416867, 0.22230786, 0.4029888, 1)
@@ -108,6 +109,12 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 script = ExtResource("12_exps")
+
+[node name="Info" type="VBoxContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000690]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+script = ExtResource("13_info")
 
 [node name="Unit Authoring" type="MarginContainer" parent="Panel/MarginContainer/VBoxContainer/Body/DevTabs" unique_id=990000044]
 unique_name_in_owner = true
