@@ -68,10 +68,10 @@ static func resolve_counters(plan: ResolvedPlan, hypo: Dictionary, reactions: Ar
 # of THEIR turn. The cell comes from get_projected_destination (the halt, the shove and the rescue
 # haul all land in it), the states from the store WITH this pass's own deposits folded in — your own
 # fireball igniting a squadmate's cell is a burn the queue has to show.
-static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, hypo: Dictionary, board: BoardContext) -> void:
+static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, actions: Array[BaseAction], hypo: Dictionary, board: BoardContext) -> void:
 	if board == null or board.terrain_states == null or squad == null:
 		return
-	var revived := _rescued_this_pass(squad, hypo)
+	var revived := _rescued_this_pass(actions, hypo)
 	for unit in squad.get_members():
 		if unit == null or not is_instance_valid(unit):
 			continue
@@ -92,10 +92,12 @@ static func resolve_tile_hits(plan: ResolvedPlan, squad: Squad, hypo: Dictionary
 
 
 # Who this squad's queued rescues put back on their feet. Asked of the PROJECTED lifecycle, matching
-# RescueAction.execute's own is_downed() read, which runs after the attack phase (#124).
-static func _rescued_this_pass(squad: Squad, hypo: Dictionary) -> Array[Unit]:
+# RescueAction.execute's own is_downed() read, which runs after the attack phase (#124). Takes the
+# ACTION LIST rather than the squad, so a hypothetical resolve reads its own queue (#117) -- the
+# sixth and last of resolve_plan's queue walks.
+static func _rescued_this_pass(actions: Array[BaseAction], hypo: Dictionary) -> Array[Unit]:
 	var revived: Array[Unit] = []
-	for action in squad.action_queue:
+	for action in actions:
 		if action.action_type != BaseAction.ActionType.RESCUE or not action.is_valid:
 			continue
 		var target: Unit = (action as RescueAction).target

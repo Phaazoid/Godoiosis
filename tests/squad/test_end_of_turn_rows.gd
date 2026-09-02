@@ -116,7 +116,7 @@ func test_the_forecast_sees_a_fire_this_pass_is_about_to_light() -> void:
 	var plan := ResolvedPlan.new()
 	plan.cell_effects.append(_deposit(FIRE, Terrain.TileState.BURNING))
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, plan.hypo, _board([stander]))
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
 
 	assert_object(_hit_for(plan, stander)).override_failure_message(
 			"the forecast read the live store and missed the fire this pass lights").is_not_null()
@@ -133,7 +133,7 @@ func test_a_fire_this_pass_puts_out_is_not_forecast() -> void:
 	douse.states_removed.assign([Terrain.TileState.BURNING])
 	plan.cell_effects.append(douse)
 
-	PlanResolver.resolve_tile_hits(plan, stander.squad, plan.hypo, _board([stander]))
+	PlanResolver.resolve_tile_hits(plan, stander.squad, stander.squad.action_queue, plan.hypo, _board([stander]))
 
 	assert_int(plan.tile_hits.size()).override_failure_message(
 			"the forecast burned a unit standing on a fire this pass puts out").is_equal(0)
