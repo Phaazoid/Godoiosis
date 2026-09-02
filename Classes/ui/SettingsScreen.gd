@@ -5,6 +5,12 @@ class_name SettingsScreen
 # menu and the title screen. A ModalCard like its siblings — it claims the modal lock, so the board
 # underneath is frozen while the player reads.
 #
+# TWO PANES since #691: Settings, and a read-only CONTROLS list projected from Classes/core/Controls.gd
+# (the same registry the dev Info tab reads, filtered to its PLAYER_CONTEXTS). Both panes are
+# projections and this file authors neither's content. Rebinding is deliberately NOT here -- it can
+# only reach Input Map actions, and most bindings are hardcoded keycode checks, so a rebind UI would
+# offer rows it structurally cannot serve. That is #691 phase 2 and it is gated on promoting them.
+#
 # Pure projection of PlayerSettings.DEFS: one row per declared setting, built from the table's own
 # title, with its description as HOVER TEXT since 2026-09-02 (the page was getting crowded -- see
 # _apply_desc_tooltip). Nothing here owns content, and nothing here owns a default. That is what
@@ -30,6 +36,16 @@ const ROW_SEPARATION := 14
 # A floor, not a look: on a viewport too short to hold the chrome the subtraction below goes
 # negative, and a card with no body at all is the bug this whole file is fixing.
 const MIN_BODY_HEIGHT := 120.0
+const HEADING_FONT_SIZE := 18
+const KEY_COLUMN_WIDTH := 150.0
+const CONDITION_COLOR := Color(1, 1, 1, 0.6)
+
+# The card's two panes (#691). An enum rather than a bool because a third pane is a plausible
+# future (Audio, Video) and a bool would have to become one anyway.
+enum Pane { SETTINGS, CONTROLS }
+
+var _panes: Dictionary[Pane, Control] = {}
+var _pane_buttons: Dictionary[Pane, Button] = {}
 
 # Every control this page built, by the setting it shows: a CheckButton for a toggle row, the ordered
 # segment Buttons for a choice row. Kept only so _process can reconcile them against the store.
@@ -61,6 +77,14 @@ func _build(game_node: Node) -> void:
 	var content := _build_chrome(game_node)
 	_build_title(content, "SETTINGS")
 
+	# TWO PANES since #691, on GlossaryScreen's marker: the active pane's button is DISABLED, and
+	# that is the selection indicator -- no second highlight state to keep in step with which pane
+	# is actually up. Settings first, because that is what the card is named and what the pause
+	# menu row promises; Controls is a reference the player consults and leaves.
+	var tabs := _build_button_row(content, false, SEGMENT_GAP)
+	_pane_buttons[Pane.SETTINGS] = _add_button(tabs, "Settings", func(): _show_pane(Pane.SETTINGS))
+	_pane_buttons[Pane.CONTROLS] = _add_button(tabs, "Controls", func(): _show_pane(Pane.CONTROLS))
+
 	# GlossaryScreen's shape: a bounded scroll between the title and Close, horizontal disabled so
 	# the descriptions wrap rather than run off the side. Built at ZERO height and given its real
 	# ceiling below, once the chrome around it can be measured.
@@ -69,22 +93,92 @@ func _build(game_node: Node) -> void:
 	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	content.add_child(scroll)
 
+	# ONE scroll holding both panes, hidden by `visible` rather than rebuilt on every switch: a
+	# container skips invisible children entirely, so the chrome measurement below is unaffected and
+	# _process keeps reconciling the settings controls whichever pane is up. Rebuilding instead
+	# would mean _toggles and _segments emptying and refilling, i.e. a second lifetime to get right
+	# for no gain -- the panes are static once built.
+	var body := VBoxContainer.new()
+	body.custom_minimum_size = Vector2(BODY_WIDTH, 0)
+	body.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	scroll.add_child(body)
+
 	var rows := VBoxContainer.new()
-	rows.custom_minimum_size = Vector2(BODY_WIDTH, 0)
 	rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	rows.add_theme_constant_override("separation", ROW_SEPARATION)
-	scroll.add_child(rows)
-
+	body.add_child(rows)
+	_panes[Pane.SETTINGS] = rows
 	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
 		_add_row(rows, setting)
 
+	var controls := VBoxContainer.new()
+	controls.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	controls.add_theme_constant_override("separation", ROW_SEPARATION)
+	body.add_child(controls)
+	_panes[Pane.CONTROLS] = controls
+	_build_controls(controls)
+
 	var close_row := _build_button_row(content, false, content_separation)
 	_add_button(close_row, "Close", func(): closed.emit())
+
+	_show_pane(Pane.SETTINGS)
 
 	# THE BODY'S CEILING IS WHATEVER THE VIEWPORT LEAVES, and the chrome is MEASURED rather than
 	# added up -- no fudge constant, and a sixth setting cannot do what the fifth did.
 	scroll.custom_minimum_size.y = maxf(
 			MIN_BODY_HEIGHT, get_viewport_rect().size.y - _chrome_height(content))
+
+
+# A pure projection of Controls.gd's player contexts (#691), the way the rows above are of
+# PlayerSettings.DEFS -- this page owns no binding text and no list of what a player may see.
+# PLAYER_CONTEXTS is the filter, declared in the store, so a dev context cannot leak onto a
+# player's page by being added to the enum.
+func _build_controls(parent: Container) -> void:
+	for context: Controls.Context in Controls.PLAYER_CONTEXTS:
+		var heading := Label.new()
+		heading.text = Controls.context_name(context)
+		heading.add_theme_font_size_override("font_size", HEADING_FONT_SIZE)
+		parent.add_child(heading)
+		for entry: Dictionary in Controls.in_context(context):
+			_add_binding_row(parent, entry)
+
+
+# Key on the left at a fixed width, meaning on the right, wrapping. The condition rides ABOVE the
+# description rather than beside the key, because "the newest order is one unit's own move" is a
+# sentence and a key name is two words.
+func _add_binding_row(parent: Container, entry: Dictionary) -> void:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", SEGMENT_GAP)
+	var key := Label.new()
+	key.text = entry["key"]
+	key.custom_minimum_size = Vector2(KEY_COLUMN_WIDTH, 0)
+	key.vertical_alignment = VERTICAL_ALIGNMENT_TOP
+	row.add_child(key)
+
+	var text := VBoxContainer.new()
+	text.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	var when: String = entry["when"]
+	if when != "":
+		var condition := Label.new()
+		condition.text = when
+		condition.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		condition.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		condition.modulate = CONDITION_COLOR
+		text.add_child(condition)
+	var does := Label.new()
+	does.text = entry["does"]
+	does.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	# An autowrap Label collapses to zero width in a container without the expand flag.
+	does.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	text.add_child(does)
+	row.add_child(text)
+	parent.add_child(row)
+
+
+func _show_pane(pane: Pane) -> void:
+	for other: Pane in _panes:
+		_panes[other].visible = other == pane
+		_pane_buttons[other].disabled = other == pane
 
 # Everything the card needs around its body: title, separations, the Close row, the margins and the
 # panel's own padding, whatever those have been restyled to.

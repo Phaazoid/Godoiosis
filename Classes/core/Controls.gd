@@ -25,13 +25,23 @@ class_name Controls
 # Dev mode is editor-only tooling: none of these bindings are intended for the shipped game, and
 # the page projecting them is a DevOverlay leaf, so it is absent from a demo build outright.
 
-# Where a binding lives. #691 adds the player-facing contexts (the flat 2D game, the 3D battle view)
-# when it has a Settings tab to render them on; DEV is the only one with a surface today.
-enum Context { DEV }
+# Where a binding lives, and what a SURFACE projects. The split is by what the player is doing --
+# BOARD and CAMERA -- deliberately NOT by view (#691): `docs/SHORTCUTS.md` listed "the flat 2D game"
+# and "the 3D battle view" as separate control schemes, and for a player that is a distinction
+# without a difference. F4 is gated on DevTools.enabled(), so a shipped build has no flat 2D view to
+# reach at all, and the bindings were identical between the two by design anyway. Splitting a
+# player's controls page that way would document a screen they can never open.
+enum Context { DEV, BOARD, CAMERA }
 
 const CONTEXT_NAMES: Dictionary[Context, String] = {
 	Context.DEV: "Dev tools & authoring",
+	Context.BOARD: "On the board",
+	Context.CAMERA: "Camera",
 }
+
+# The contexts a PLAYER may see. Declared rather than "everything except DEV", so that adding a
+# second dev-only context cannot silently leak it into the Settings page.
+const PLAYER_CONTEXTS: Array[Context] = [Context.BOARD, Context.CAMERA]
 
 # `action` for a binding the Input Map does not own. Not "" as a bare literal at 14 call sites: the
 # whole point of the field is that "has no action" is a DECLARED state, not a missing value.
@@ -95,6 +105,54 @@ const ENTRIES: Array[Dictionary] = [
 	{"key": "Ctrl+Shift+Z / Ctrl+Y", "context": Context.DEV, "when": "dev mode",
 		"does": "Redo. A new edit after undoing abandons the redo tail; depth caps at 50, and loading a board clears the history — it belongs to one board.",
 		"action": HARDCODED},
+	# --- What the player presses. Moved out of docs/SHORTCUTS.md by #691, which deleted it. The
+	# WORDING is the player's, not the changelog's: the rules these lines carry are load-bearing
+	# (right-click is two verbs, mode first; the tilt survives Q/E and only R levels it) but their
+	# rationale and issue citations live in docs/design/ -- squad-system.md's LIFO-undo section,
+	# visual-clarity.md's realign-keeps-the-tilt rule, presentation-effects.md's orbit_button knob.
+	{"key": "Left-click", "context": Context.BOARD, "when": "",
+		"does": "Select a tile or unit, commit the action ring's current slice, and confirm a target. With a ring open the whole screen is live -- the slice you get is the DIRECTION from the ring's centre, however far out you point -- and a click in the dead centre dismisses it.",
+		"action": HARDCODED},
+	{"key": "Right-click", "context": Context.BOARD, "when": "",
+		"does": "Back out, mode first: it leaves an open aim, move pick or target pick, and collapses one ring at a time until there is nothing left to back out of. From a board already at rest it instead UNDOES your last order, newest first -- a group move comes back whole, because it was one decision.",
+		"action": HARDCODED},
+	{"key": "Right-click", "context": Context.BOARD, "when": "the newest order is one unit's own move",
+		"does": "Re-opens that move's planning instead of undoing it, as though you had picked Move again. Pressing again with nothing planned leaves no move at all.",
+		"action": HARDCODED},
+	{"key": "Click / Space / Enter", "context": Context.BOARD, "when": "someone is speaking",
+		"does": "Advance the conversation. Dialog opens over the board, and the board waits underneath until the line is done.",
+		"action": "dialogic_default_action"},
+	{"key": "Escape", "context": Context.BOARD, "when": "",
+		"does": "Pause: the menu with Restart, Save and Load, Glossary, Settings and Quit. Everything there is reachable mid-battle, and Resume puts you back exactly where you were.",
+		"action": "ui_cancel"},
+	{"key": "W / Up", "context": Context.CAMERA, "when": "",
+		"does": "Pan the view forward, bounded to the board plus a margin.",
+		"action": "cam_up"},
+	{"key": "S / Down", "context": Context.CAMERA, "when": "",
+		"does": "Pan the view back.",
+		"action": "cam_down"},
+	{"key": "A / Left", "context": Context.CAMERA, "when": "",
+		"does": "Pan the view left.",
+		"action": "cam_left"},
+	{"key": "D / Right", "context": Context.CAMERA, "when": "",
+		"does": "Pan the view right.",
+		"action": "cam_right"},
+	{"key": "Right-drag", "context": Context.CAMERA, "when": "",
+		"does": "Orbit AND tilt, freely -- sideways turns, up and down tilts, and both rest wherever you leave them. Tilting steeper is how you see into a hole the board's own angle hides. A drag orbits; a click that barely moves cancels instead.",
+		"action": HARDCODED},
+	{"key": "Q / E", "context": Context.CAMERA, "when": "",
+		"does": "Square up to the next 90 degree turn -- one press realigns from any angle. The tilt SURVIVES it: looking down into a pit and then turning to see its other side is the gesture the tilt exists for, so squaring up must not throw the first half away.",
+		"action": HARDCODED},
+	{"key": "R", "context": Context.CAMERA, "when": "",
+		"does": "Return to the opening shot the board loaded with. This is the ONLY thing that levels the tilt, and it returns to the mission's own authored angle rather than to flat.",
+		"action": HARDCODED},
+	{"key": "Mouse wheel", "context": Context.CAMERA, "when": "",
+		"does": "Zoom, clamped so you cannot pull back past the whole board.",
+		"action": HARDCODED},
+	{"key": "Space", "context": Context.CAMERA, "when": "",
+		"does": "Recentre on the cell under the pointer -- the fastest way back to the action after panning away.",
+		"action": HARDCODED},
+
 ]
 
 
