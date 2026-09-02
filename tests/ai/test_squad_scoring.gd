@@ -289,24 +289,50 @@ func test_a_hypothetical_resolve_never_becomes_the_squads_stored_plan() -> void:
 # The projections half: a scoring pass runs many hypotheticals and the LAST one is not the queue,
 # so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
 #
-# TWO INGREDIENTS, and the first draft of this case had NEITHER, which a mutant caught: the pass
-# must END on a REFUSED candidate (otherwise the next round's base resolve is real and covers for
-# it), and that candidate's resolve must actually PUBLISH something (with no knockback anywhere,
-# every projection is just the unit's own cell and the assertion cannot fail).
+# A SHOVING attack must still be queueable, and it very nearly was not. queue_action's whiff gate
+# (SquadPlanValidator.aim_finds_a_target) is the one reader of PUBLISHED KNOCKBACK, and it is
+# correct there only because that knockback belongs to the already-queued aims. A scoring pass
+# publishes a candidate's shove too -- so the gate went looking for the target on the cell the
+# scoring resolve had thrown it to, found nobody, and refused the winner as a whiff. Every attack
+# that knocks its target back was unqueueable by the joint pass, and no fixture with a plain weapon
+# could see it. The pass now restores the real plan before it queues.
+func test_a_shoving_attack_is_still_queued() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	attacker.equipped_weapon = _shoving_weapon()
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, foe.movement.cell)).override_failure_message(
+			"the shove the scoring pass published made its own winner look like a whiff").is_equal(1)
+
+
+# The projections half: a scoring pass runs many hypotheticals and the LAST one is not the queue,
+# so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
 #
-# So: a shoving weapon, and the one candidate on the board scores NEGATIVE because the counter it
-# draws would fell the attacker -- refused, having already published the shove it would have landed.
+# TWO INGREDIENTS, and the first draft of this case had NEITHER, which a mutant caught: the pass
+# must END on a candidate that is not queued (otherwise a later real resolve covers for it), and
+# that candidate's resolve must actually PUBLISH something (with no knockback anywhere, every
+# projection is just the unit's own cell and the assertion cannot fail whatever the code does).
+#
+# Both come from one shoving attacker with nothing worth hitting: the enemy is DOWNED, so pass 1
+# declines it (#57) and pass 2 scores only what a body is worth -- which the counter it can still
+# draw outweighs, so the candidate loses after its resolve has already published the shove.
 func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 	var board: Dictionary = _build_board()
 	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
 	attacker.equipped_weapon = _shoving_weapon()
-	attacker.set_current_hp(3)                       # the counter fells it -> the candidate scores below zero
-	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 0))   # armed, at full HP: survives and answers
+	attacker.set_current_hp(3)                             # a counter would fell it
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	var guard: Unit = _spawn(board, ENEMY, Vector2i(0, 1))  # squadmate of nobody, but it CAN answer
+	board.squad_manager.join_squad(guard, foe.squad)        # ...so the party counters as one (C1/C4)
+	foe.lifecycle_state = Unit.LifecycleState.DOWNED
 	var context: BoardContext = _context(board)
 
 	AITactics.queue_main_actions_for_squad(attacker.squad, context, board.squad_manager)
 	assert_int(_aim_count(attacker.squad, foe.movement.cell)).override_failure_message(
-			"the fixture no longer refuses its only candidate, so nothing is being pinned").is_equal(0)
+			"the fixture no longer declines its only candidate, so nothing is being pinned").is_equal(0)
 
 	var after_pass := {}
 	for unit in context.units:
@@ -314,5 +340,5 @@ func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 	board.squad_manager.resolve_plan(attacker.squad, context)
 	for unit in context.units:
 		assert_that(after_pass[unit]).override_failure_message(
-				"a unit sat at a REFUSED candidate's projection after the pass") \
+				"a unit sat at a DECLINED candidate's projection after the pass") \
 			.is_equal(unit.get_projected_destination())

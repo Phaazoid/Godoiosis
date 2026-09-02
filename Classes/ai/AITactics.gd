@@ -134,9 +134,11 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
+		# The board must be back on the real queue before the gate sees it -- see the note at
+		# _queue_attacks_jointly's own restore for what a leftover shove does to the whiff clause.
+		squad_manager.resolve_plan(squad, board, reactions, terrain)
 		queued = squad_manager.queue_action(squad, pick.action)
-	# Restore: a hypothetical resolve publishes projections and stamps the plan cache, so the LAST
-	# thing to run over this squad must be the real queue (SquadManager._resolve_actions).
+	# ...and afterwards, because a hypothetical publishes projections onto units.
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 	return queued
 
@@ -396,10 +398,17 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 		if best == null:
 			break
 		best.action.actor.active_attack = best.action.fired_attack
+		# RESTORE BEFORE QUEUEING, not merely at the end. queue_action's whiff gate asks
+		# SquadPlanValidator.aim_finds_a_target, the one reader of published knockback, and it is
+		# correct there ONLY because that knockback is the already-queued aims' shoves. Scoring has
+		# just published a LOSING candidate's shove, so without this the gate looks for the target
+		# on the cell some rejected hypothetical would have thrown it to, finds nobody, and refuses
+		# the winner as a whiff -- which made a shoving attack unqueueable by this pass entirely.
+		squad_manager.resolve_plan(squad, board, reactions, terrain)
 		if not squad_manager.queue_action(squad, best.action):
 			refused[_candidate_key(best.action)] = true   # bounded: candidates are finite and keys are stable across rounds
 
-	# Restore, for the same reason _try_best_attack does: the loop's last act was a hypothetical.
+	# ...and once more on the way out: the loop breaks with a hypothetical as its last resolve.
 	squad_manager.resolve_plan(squad, board, reactions, terrain)
 
 
