@@ -129,8 +129,8 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 	var reactions := ReactionCatalog.get_all()   # hoisted -- both catalogs dir-scan per call, and
 	var terrain := TerrainReactionCatalog.get_all()   # a scoring pass resolves many times
 	var squad := unit.squad
-	var base := _score_plan(unit.get_faction(), squad_manager.resolve_plan(squad, board, reactions, terrain), false)
-	var pick := _best_candidate_for(unit, squad, board, base, squad_manager, reactions, terrain, {}, true)
+	var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
+	var pick := _best_candidate_for(unit, squad, board, base_plan, squad_manager, reactions, terrain, {}, true)
 	var queued := false
 	if pick != null:
 		unit.active_attack = pick.action.fired_attack   # the winner stays live, mirroring a player pick
@@ -147,7 +147,16 @@ static func _try_best_attack(unit: Unit, board: BoardContext, squad_manager: Squ
 # every enemy it can reach and legally aim at. Built as REAL declared orders through
 # AttackAction.declare -- the one stamp factory (#78) -- so the thing scored and the thing queued
 # are the same object rather than two descriptions of one.
-static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i, include_downed: bool) -> Array[AttackAction]:
+#
+# PASS 1 IS "WHO IS STILL STANDING WHEN THE PLAN SO FAR HAS RUN", not "who is standing right now".
+# Planning does not execute, so a unit a squadmate already felled THIS round is still is_active()
+# on the live board -- ask the base plan's hypo instead. Without that the two-pass rule reads the
+# wrong board: the felled unit stays a pass-1 candidate, and since #57's fall-through only opens
+# pass 2 when pass 1 offered nothing, a member whose one other option is an OLD body would idle
+# beside it. (It could never actually be ATTACKED -- the overkill clamp scores it (0,0) -- so this
+# only ever removes a candidate that was going to lose, which is why nothing else moves.)
+static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i, include_downed: bool,
+		base_hypo: Dictionary) -> Array[AttackAction]:
 	var out: Array[AttackAction] = []
 	var candidates: Array[AttackData] = unit.get_selectable_attacks()
 	if candidates.is_empty():
@@ -165,6 +174,8 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 				continue
 			if not (other.is_active() or (include_downed and other.is_downed())):
 				continue
+			if not include_downed and PlanResolver.projected_lifecycle(other, base_hypo) != Unit.LifecycleState.ACTIVE:
+				continue   # a squadmate already felled them this pass -- see the header
 			if not reach.has(other.movement.cell):
 				continue
 			# The player's vertical gate, mirrored (#258): a point aim above the attack's tolerance
@@ -383,16 +394,15 @@ static func _queue_attacks_jointly(squad: Squad, board: BoardContext, squad_mana
 	var leader := squad.get_leader()
 	if leader == null or not is_instance_valid(leader):
 		return
-	var faction := leader.get_faction()
 	var reactions := ReactionCatalog.get_all()
 	var terrain := TerrainReactionCatalog.get_all()
 	var refused := {}   # candidate key -> true; queue_action turned this one down, don't re-pick it
 
 	while true:
-		var base := _score_plan(faction, squad_manager.resolve_plan(squad, board, reactions, terrain), false)
+		var base_plan := squad_manager.resolve_plan(squad, board, reactions, terrain)
 		var best: _Scored = null
 		for member in squad.get_members():
-			var pick := _best_candidate_for(member, squad, board, base, squad_manager, reactions, terrain, refused, true)
+			var pick := _best_candidate_for(member, squad, board, base_plan, squad_manager, reactions, terrain, refused, true)
 			if pick != null and (best == null or _beats(pick.score, best.score)):
 				best = pick
 		if best == null:
@@ -422,20 +432,35 @@ class _Scored:
 	var score: Vector2i
 
 
-# One member's best candidate, or null when nothing it can do beats (0,0). Two passes preserve
-# #57's downed deprioritization PER MEMBER: downed enemies neither aim nor score until nothing
-# active produced a candidate for this unit.
-static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base: Vector2i,
+# One member's best candidate, or null when nothing it can do beats (0,0).
+#
+# TWO PASSES, and the fall-through between them is #57's downed deprioritization per member: a
+# body is neither aimed at nor scored while anyone is still standing in reach. That is a HARD
+# PRECEDENCE rather than a weight -- no amount of damage on a corpse can outrank engaging someone
+# on their feet -- which is what makes the player's rescue window worth playing for.
+#
+# PASS 2 NEEDS AN EMPTY PASS 1, NOT A LOSING ONE (dev ruling, 2026-09-02). It used to open whenever
+# pass 1 produced nothing QUEUEABLE, so a member whose only standing target was a bad trade (one
+# whose counter would fell it) went and executed a downed unit instead -- precisely the moment the
+# body most wants sparing. `considered` is what separates "nobody to fight" from "nobody worth
+# fighting"; a REFUSED candidate deliberately does not count, since the queue gate turning it down
+# means it was never a real option and the body genuinely is the only one.
+static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext, base_plan: ResolvedPlan,
 		squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary, allow_lookahead: bool) -> _Scored:
 	if not member.is_active() or member.has_main_action_queued() or not member.can_wield_equipped():
 		return null
 	var origin := member.get_projected_destination()
 	for include_downed in [false, true]:
+		# Measured on the SAME terms as the candidate, or a pass-2 marginal double-counts damage a
+		# pass-2 order queued in an earlier round already put on a downed enemy.
+		var base := _score_plan(member.get_faction(), base_plan, include_downed)
 		var best: _Scored = null
-		for candidate in _attack_candidates(member, board, origin, include_downed):
+		var considered := false
+		for candidate in _attack_candidates(member, board, origin, include_downed, base_plan.hypo):
 			if refused.has(_candidate_key(candidate)):
 				continue
+			considered = true
 			var one: Array[BaseAction] = [candidate]
 			var plan := squad_manager.resolve_hypothetical(squad, one, board, reactions, terrain)
 			var score := _score_plan(member.get_faction(), plan, include_downed) - base
@@ -444,7 +469,7 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 			# the AI was structurally unable to OPEN a combo. One step of lookahead prices it by
 			# what a squadmate could then do (dev call, pairs in v1, 2026-09-02).
 			if not _beats(score, Vector2i.ZERO) and allow_lookahead and _applies_state_to_an_enemy(member.get_faction(), plan):
-				score = _lookahead(member, candidate, squad, board, base, squad_manager, reactions, terrain, refused)
+				score = _lookahead(member, candidate, squad, board, base_plan, squad_manager, reactions, terrain, refused)
 			if not _beats(score, Vector2i.ZERO):
 				continue
 			if best == null or _beats(score, best.score):
@@ -453,6 +478,8 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 				best.score = score
 		if best != null:
 			return best
+		if not include_downed and considered:
+			return null   # someone was standing in reach and the exchange was not worth it: idle, don't execute a body
 	return null
 
 
@@ -463,14 +490,15 @@ static func _best_candidate_for(member: Unit, squad: Squad, board: BoardContext,
 # Bounded by its trigger rather than by a depth counter: only a candidate that scores nothing alone
 # AND applies a state to an enemy gets here, so a squad of plain weapons pays nothing at all.
 static func _lookahead(setup_unit: Unit, setup: AttackAction, squad: Squad, board: BoardContext,
-		base: Vector2i, squad_manager: SquadManager, reactions: Array[ElementalReaction],
+		base_plan: ResolvedPlan, squad_manager: SquadManager, reactions: Array[ElementalReaction],
 		terrain: Array[TerrainReaction], refused: Dictionary) -> Vector2i:
+	var base := _score_plan(setup_unit.get_faction(), base_plan, false)
 	var best := Vector2i.ZERO
 	for mate in squad.get_members():
 		if mate == setup_unit or not mate.is_active() or mate.has_main_action_queued() or not mate.can_wield_equipped():
 			continue
 		var origin := mate.get_projected_destination()
-		for follow in _attack_candidates(mate, board, origin, false):
+		for follow in _attack_candidates(mate, board, origin, false, base_plan.hypo):
 			if refused.has(_candidate_key(follow)):
 				continue
 			var pair: Array[BaseAction] = [setup, follow]

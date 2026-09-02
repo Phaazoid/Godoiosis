@@ -342,3 +342,48 @@ func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 		assert_that(after_pass[unit]).override_failure_message(
 				"a unit sat at a DECLINED candidate's projection after the pass") \
 			.is_equal(unit.get_projected_destination())
+
+
+# --- Pass 2 needs an EMPTY pass 1, not a losing one (dev ruling, 2026-09-02) --------------------
+
+# The player's downed unit is a rescue waiting to happen, so the AI must never spend an action
+# executing one while anybody is still on their feet in reach -- and "a bad trade" is not the same
+# as "nobody to fight". Here the only standing enemy would answer with a counter that fells the
+# attacker, so every pass-1 candidate loses; the body must still be left alone.
+func test_a_losing_trade_does_not_open_the_door_to_finishing_a_body() -> void:
+	var board: Dictionary = _build_board()
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	attacker.set_current_hp(3)                              # the counter takes it off its feet
+	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 0))
+	body.lifecycle_state = Unit.LifecycleState.DOWNED
+	var armed: Unit = _spawn(board, ENEMY, Vector2i(0, 1))  # standing, and its answer is lethal
+
+	AITactics.queue_main_actions_for_squad(attacker.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(attacker.squad, body.movement.cell)).override_failure_message(
+			"the AI executed a downed unit because its only standing target was a bad trade").is_equal(0)
+	assert_int(_aim_count(attacker.squad, armed.movement.cell)).override_failure_message(
+			"the losing trade was taken after all -- the fixture is no longer pinning the rule").is_equal(0)
+
+
+# ...and the other half, which is why "considered" reads the PLAN rather than the live board.
+# Planning does not execute, so a unit a squadmate fells THIS round is still is_active() -- read
+# live it would count as a standing target and wedge pass 2 shut, leaving M2 idling beside a body
+# it should finish. M1 can reach only A; M2 can reach A and the old body, so once M1 downs A the
+# body really is M2's only option.
+func test_a_squadmate_felled_this_round_is_not_a_standing_target_any_more() -> void:
+	var board: Dictionary = _build_board()
+	var m1: Unit = _spawn(board, PLAYER, Vector2i(2, 0))    # reaches A only
+	var m2: Unit = _spawn(board, PLAYER, Vector2i(1, 1))    # reaches A and the body
+	board.squad_manager.join_squad(m2, m1.squad)
+	var a: Unit = _spawn(board, ENEMY, Vector2i(1, 0), false)
+	a.set_current_hp(3)                                     # one hit fells it
+	var body: Unit = _spawn(board, ENEMY, Vector2i(1, 2), false)
+	body.lifecycle_state = Unit.LifecycleState.DOWNED
+
+	AITactics.queue_main_actions_for_squad(m1.squad, _context(board), board.squad_manager)
+
+	assert_int(_aim_count(m1.squad, a.movement.cell)).override_failure_message(
+			"the squad did not fell A first: %s" % str(_attack_aims(m1.squad))).is_equal(1)
+	assert_int(_aim_count(m1.squad, body.movement.cell)).override_failure_message(
+			"the second member idled beside the body -- it read A as still standing: %s" % str(_attack_aims(m1.squad))).is_equal(1)
