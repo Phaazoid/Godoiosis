@@ -60,15 +60,6 @@ var _subject_id := 0
 var _cells: Array[Vector2i] = []
 var _span: Array[Vector2i] = []
 
-# STEP 3 SCAFFOLD, DELETED IN STEP 4 -- do not build on it.
-#
-# It reproduces the shipped behaviour that a trained release hands the shot to the playback base
-# rather than back to whatever else is still live, so the refactor that introduces this table can
-# be shown to move nothing. It is a LATCH and not a row, and that is the point: "WIDE outranks
-# STAGE, but only after a release" is a statement about HISTORY, and a priority table cannot hold
-# one. Needing it is the evidence that the shipped rule was never a rule.
-var _released_since_stage := false
-
 
 # The table: one row per shot, each stating its own liveness, and the highest-ranked live one
 # wins. Static and total -- five facts in, one shot out, no state.
@@ -122,21 +113,6 @@ static func _ranked(held: Shot, candidate: Shot, is_live: bool) -> Shot:
 func update(locked: bool, subject_id: int, cells: Array[Vector2i], span: Array[Vector2i],
 		death_show: bool) -> bool:
 	var next := solve(locked, subject_id, staged(cells), spanned(span), death_show)
-
-	# The gate's own edge, taken BEFORE the latch below reads it: entering the table is a fresh
-	# pass and inherits nothing from the last one.
-	if next != Shot.NONE and active == Shot.NONE:
-		_released_since_stage = false
-
-	# STEP 3 SCAFFOLD -- see the field. A stage re-published clears it (that is the edge the shipped
-	# code re-fits on); a release from a trained frame sets it.
-	if cells != _cells:
-		_released_since_stage = false
-	if _holds_the_frame(active) and not _holds_the_frame(next):
-		_released_since_stage = true
-	if next == Shot.STAGE and _released_since_stage:
-		next = Shot.WIDE
-
 	var changed := next != active or subject_id != _subject_id \
 			or cells != _cells or span != _span
 	if not changed:
@@ -147,13 +123,6 @@ func update(locked: bool, subject_id: int, cells: Array[Vector2i], span: Array[V
 	_cells = cells.duplicate()
 	_span = span.duplicate()
 	return true
-
-
-# Is this shot trained on one subject, or holding the frame it left? The pair the release edge is
-# measured across -- DEATH_SHOW is the trained frame outliving its body, so leaving either of them
-# for anything else is the release.
-static func _holds_the_frame(shot: Shot) -> bool:
-	return shot == Shot.TRAINED or shot == Shot.DEATH_SHOW
 
 
 static func staged(cells: Array[Vector2i]) -> bool:

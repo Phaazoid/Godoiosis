@@ -1826,16 +1826,17 @@ func test_a_staged_fight_takes_these_shot_distances_in_this_order() -> void:
 			"the stage cleared and the shot did not go back to the playback base").is_equal_approx(
 			_rig.playback_distance, 0.001)
 
-	# THE TWO READINGS #672 CHANGES, pinned here as what the code does TODAY. Both are a trained
-	# release asking for the playback base rather than for whatever else is still live -- and a
-	# published stage IS still live at both. See the ticket: the stage's framing survives until the
-	# first beat and never comes back.
+	# THE TWO READINGS #672 MOVED (dev ruling, 2026-09-02). Both are a trained release, and until
+	# the table existed both hardcoded the playback base rather than asking what else was still
+	# live -- so a staged fight framed its whole stage until the first beat and never again, even
+	# though _shot_volume's own header calls that volume "the WIDE shot". A release now falls to the
+	# next LIVE shot, which is the stage that is still published.
 	assert_float(between).override_failure_message(
-			"between beats the shot no longer sits at the playback base").is_equal_approx(
-			_rig.playback_distance, 0.001)
+			"between beats the shot pulled in to the playback base instead of holding the stage "
+			+ "that is still published").is_equal_approx(staged, 0.001)
 	assert_float(after_show).override_failure_message(
-			"the deferred release no longer hands the shot back to the playback base") \
-		.is_equal_approx(_rig.playback_distance, 0.001)
+			"the deferred release pulled in to the playback base instead of falling back to the "
+			+ "stage").is_equal_approx(staged, 0.001)
 
 	# ...and the transcript SAYS SO. The distances above are the fact; this is the half a bug
 	# report can read, and the half #672 turns into a shot name rather than a zoom number.
