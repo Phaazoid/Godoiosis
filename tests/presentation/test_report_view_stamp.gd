@@ -103,6 +103,25 @@ func test_the_view_note_says_which_holds_are_live_and_where_the_frame_ends() -> 
 		).contains(key)
 
 
+func test_the_two_frame_floors_are_reported_as_two_different_readings() -> void:
+	# The pair only earns its width if each half is really the half it is labelled. Printing the
+	# settled number in both slots leaves every WORD in the line intact -- "floor", "live",
+	# "settled" -- so the shape assertion above cannot see it, and the report would quietly claim
+	# the frame had finished descending. Driven into a state where the two must differ: a drop
+	# published with no frame after it is exactly round 8's mid-ease death.
+	var rig := _scene.get_node("CameraRig") as CameraRig3D
+	rig.drop_to(3.0)
+
+	var note: String = _scene._describe_view()
+	assert_str(note).override_failure_message(
+			"the view note printed one floor twice -- a frame still three cells from settled "
+			+ "reports as arrived, which is the reading round 8 proved you must not trust"
+	).contains("floor %.2f live / %.2f settled" % [rig.live_frame_floor(), rig.settled_frame_floor()])
+	assert_float(rig.live_frame_floor()).override_failure_message(
+			"the fixture never got the floors apart; the case cannot say anything").is_not_equal(
+			rig.settled_frame_floor())
+
+
 func test_the_camera_trace_reaches_report_md() -> void:
 	# The wire, end to end, for the SECOND push (#669) -- battle3d composes, BugReporter renders,
 	# and delete the one line in _ready and both ends still pass their own suites (#103's shape).
