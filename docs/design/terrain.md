@@ -16,7 +16,7 @@
 >
 > **The walls** are `terrain_type` = ROCK + `prop_shape` = PLANE + a `wall_edges` mask, i.e. exactly the fence setup — the sheet ships a stone twin of the fence's 3×3 hollow frame at `10:7`–`12:9`, and all eight pieces map onto the fence's own masks one-for-one. They block movement the way the fences do, by leaving `walkable` unset. What did *not* transfer is the wall FACE: see `presentation-effects.md` → *WHICH slabs wear the tile's own art is a fact about the MATERIAL, not the axis*.
 
-**Canon checked through #676 (2026-09-01).**
+**Canon checked through #699 (2026-09-02).**
 
 ## The tile model (implemented — [LOCKED shape])
 
@@ -154,7 +154,7 @@ What that leaves genuinely unbuilt is narrower and worth naming precisely: **des
 
 ## Atmosphere as chemistry (captured — [WORKSHOP], from scratchpad)
 
-A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model. **Not committed — captured.**
+A deeper model the dev floated: the **atmosphere layer is gaseous materia** (default ≈ "inert air" + "vital air"), and **gases diffuse to neighboring tiles toward equilibrium.** That would make Smoke/Steam/gas mods **spread and dissipate** on a known cadence rather than sitting static, and couples to the **weather** subsystem (Doldrums → gas lingers; High Winds → gas disperses; see elemental-interactions "Weather & atmosphere"). Ties to [alchemy-kit.md](alchemy-kit.md)'s materia model — **which was rewritten 2026-08-29** (supercharge, never fuel), so re-read it before costing this: an atmosphere of gaseous materia would be a *diffusing, self-modifying source layer*, where the ratified model's sources are static terrain facts that change only when the terrain does. That is a real tension to resolve rather than a detail, and it is the reason this stays where it is. **Not committed — captured.**
 
 ## Hazardous tiles and pathing — nothing avoids them today (captured 2026-08-20, NOT decided)
 

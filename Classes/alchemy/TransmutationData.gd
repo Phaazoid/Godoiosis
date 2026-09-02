@@ -14,7 +14,8 @@ extends AttackData
 @export var flourishes: Array[Flourish.Type] = []
 @export var popup: String = ""
 @export var icon: Texture2D
-# materia: DEFERRED — some carvings will require fuel; not modeled yet.
+# materia: casting needs no fuel (ratified 2026-08-29). Not modeled yet: the
+#   empowered form a carving takes at a source (#695); the exotic reagent gate (#698).
 # flourish magnitudes (Spread/Focus reshaping): DEFERRED until numbers firm up.
 
 func tier() -> int:

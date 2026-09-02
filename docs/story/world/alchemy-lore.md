@@ -40,3 +40,19 @@ The **Magnum Opus** of all alchemy — a stable manifestation of **alkahest**. I
 ## Aether — note
 
 **Aether** is the fifth element (the Philosopher's own discovery) and represents **life-force**: living things emit it when they die, which is the grisly basis for the Cartel's fake-stone process. Aether alchemy is the domain of **healers** like [Aldin](../characters/aldin.md), and is entangled with the **dragon** experiments in the wilderness ([locations/wilderness.md](../locations/wilderness.md)).
+
+## Materia — the minerals **[PROPOSED]**
+
+*Co-dev, 2026-09-02, during the materia grill's review. Recorded as PROPOSED rather than locked — it arrived from a paraphrase of his own notes and is his to promote. Mechanics live in [alchemy-kit.md](../../design/alchemy-kit.md) → Materia; **this section is the authority on what materia IS**, that one on what it DOES.*
+
+**Do not confuse *materia* with *prima materia*.** The Latin phrase above means **alkahest** — the chaotic base state all elements derive from. **Materia** is the workable substance an alchemist draws on: refined, elemental, and mundane by comparison.
+
+Certain minerals are **molecularly concentrated, accessible forms of a pure element once a specific transmutation is applied to them** — the refining is itself an alchemical act, done in workshops and mines rather than on the battlefield:
+
+- **Sulfur → fire.** **Mercury → water.** **Salt → earth.** These are the **tria prima**, the three principles the Philosopher's own school taught (sulfur the combustible soul, mercury the fluid spirit, salt the fixed body) — which is why **Paracelsus**, built on his ruin, is named for the man who wrote them down.
+- **Corundum + a trace element** is the crystalline form: the stone itself is clear and element-agnostic, and takes its nature entirely from what is caught inside it — chromium burning red, iron and titanium running blue. It is the **mineral echo of a blank rune**, and gem-grade pieces are the richest carried materia there is.
+- **Alkahest veins stay runestone**, not mineral — Stone-fallout soaked into rock, which is why they empower any element and why they cluster under the old capital. Two kinds of vein, two different substances underneath.
+
+*Open:* **air** and **aether** have no named mineral. Aether already leans organic (the life-dense herb), and whether corundum can host either is unwritten.
+
+**The economy is unchanged by any of this.** Refining is what the world does off-screen; materia reaching a squad is authored per mission on a drawn curve ([progression.md](../../design/progression.md)), never crafted or farmed.
