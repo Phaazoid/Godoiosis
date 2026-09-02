@@ -2385,7 +2385,8 @@ round 8 is those three joining:
 - **The trained release edge DEFERS.** The moment the followed body was freed, the edge handed
   the distance back (`set_zoom(playback_distance)`) — the dolly-out. While the show is live the
   edge holds; `_trained_seen_id` does not advance, so the ordinary release fires the moment the
-  last cube lands. Deferred, never skipped.
+  last cube lands. Deferred, never skipped. *(That latch is gone as of #672 below — the deferral
+  is a row in the priority table now, and the rule survives unchanged.)*
 - **The teardown waits before it pans.** `_bring_the_board_home` panned to the stage centre
   FIRST and waited for the depth second, so a pass-end death re-framed mid-show. Now: release
   the follow (so the depth channel answers the show, never a living subject's standing fall,
@@ -2443,6 +2444,10 @@ edge because `_trained_seen_id` deliberately does not advance while the show hol
 fires on a no-op is guarded at each door for one reason: a row reading `11.0 -> 11.0` stands where
 a cause should be, and enough of them evict the causes.
 
+*(Since #672 those four `battle3d` edges are ONE: a shot transition, named by the table that
+produced it. The rows are the same moments under better names, and the deferral no longer needs a
+latch to be seen — it is the transition out of `DEATH_SHOW`.)*
+
 `CameraTrace` is **pure on time** — every verb takes `now_msec`, `recovered()`'s idiom — so the
 rate limit is asserted rather than slept through.
 
@@ -2478,6 +2483,82 @@ The rest of the filed scope — the other three edges, a both-polarity margin qu
 rather than built, with no consumer today** (dev ruling, 2026-09-02). [#672](https://github.com/Phaazoid/Godoiosis/issues/672)
 is the likely consumer: its invariants are frame-edge assertions and its headless harness is what
 would ask them, so the shape is better learned from that harness than guessed ahead of it.
+**Outcome: it did not become one.** The shot model's arbitration turned out to be about the
+DISTANCE channel, not about frame edges, so it asks `frame_floor` no more often than round 8 did
+and the three unbuilt edges still have no consumer. Deferring rather than building was right.
+
+## The shot model — named shots and one priority table ([#672](https://github.com/Phaazoid/Godoiosis/issues/672), BUILT 2026-09-02)
+
+Lever 4, and the reason the other three exist. The camera's shots were **implicit**: no object
+called "the trained close-up", only five edge-driven writers of the distance channel inside
+`_mirror_camera` whose precedence was TEMPORAL — whichever edge fired last won. Round 8's three
+hand-rolled fixes were one sentence (*the death show outranks everything until its last cube lands*)
+with nowhere to be written down, so every channel had to learn it separately.
+
+**`ShotDirector` answers one question — which shot owns the camera — and the enum's ORDER is the
+table.** `NONE` · `WIDE` · `SPAN` · `STAGE` · `TRAINED` · `DEATH_SHOW`, ascending, and `solve()`
+picks the highest-ranked LIVE row. The framings live at the one apply site in `battle3d`, because
+what a shot DOES needs the board volumes, the staged height and the rig; what it IS needs none of
+them. Two questions, two homes, along the #176 grain.
+
+Four things are worth carrying out of the build.
+
+- **The lock is the table's GATE, not a row in it.** While playback does not own the camera the
+  answer is `NONE`, so a release always restores. A `LOCKED` row would sit somewhere in the order
+  and be outranked from above — which is how a death show still playing as the lock let go would
+  hold the camera past the end of the pass.
+- **The rank compare is the mechanism, and an if-cascade would only have looked like one.** Written
+  as a cascade the enum's order is a convention nothing enforces, and a mutant that swaps two rows
+  PASSES. Found by asking what that mutant would do before writing it.
+- **What the death show outranks is the FALLBACK, not the close-up.** Its condition is *the show is
+  live AND nobody is followed*, and TRAINED's is *somebody is followed* — mutually exclusive, never
+  in competition. `DEATH_SHOW` stands in TRAINED's place once the body is gone, and the rank that
+  matters is the one over STAGE/SPAN/WIDE, the shots a release would otherwise fall to. **That is
+  what makes the release a deferral, and reading round 8 as "the show beats the follow" is why it
+  took three hand-rolled fixes to say once.** The deferral is no longer maintained: while the show
+  holds the solve says `DEATH_SHOW`; when it clears the solve drops to whatever is next and the
+  transition fires THEN. A priority table cannot express "skipped".
+- **The shipped inconsistency the table exposed, and the dev's ruling on it.** A trained release
+  hardcoded `set_zoom(playback_distance)` rather than asking what else was live. Since every beat
+  is `pan_to(subject)` — whose first line nulls the follow and whose last re-follows once the tween
+  lands — a staged fight read `stage fit → 7 → 11 → 7 → 11`: the stage's framing survived until the
+  first beat and never came back, though `_shot_volume`'s own header calls that volume *"the WIDE
+  shot"*. Nobody wrote that rule; it was what five independent edges added up to. **Ruled
+  2026-09-02: a release falls to the next LIVE shot**, so the gap between beats now holds the stage.
+  No feel value moved — what moved is which shipped shot the gap belongs to.
+
+Five latches retired from `battle3d` (`_playback_owned_camera`, `_framed_span`,
+`_stage_cells_solved`, `_trained_seen_id`, `_release_deferred`), each of which half-answered "what
+is the camera doing" and none of which could be asked. `_death_show_seen` survived: a show
+BEGINNING while a subject is still followed changes no shot at all, so the shot transitions
+structurally cannot carry that row.
+
+**The transcript is the trace, not a second one.** Each transition notes itself through
+`note_event`, so `report.md` gains the shot line for free — `shot TRAINED -> DEATH_SHOW (holds)`,
+`shot DEATH_SHOW -> STAGE (deferred release)` — and there is one record of the camera's sequence
+rather than two.
+
+### What the build measured about testing a pass headlessly
+
+Both findings came from writing the case that assumed otherwise and watching it report zero.
+
+- **A played pass runs with NO FRAME IN IT.** `Pacing` collapses every beat to zero headlessly, so
+  the move phase finds `all_complete` on its first check and returns before reaching its own
+  `await get_tree().process_frame`. A real queued move records **zero** trace rows — the mirror is
+  never polled while the lock is held. There is therefore no played-pass twin of the transcript
+  case, and there cannot be one.
+- **Even with frames, the inter-beat shot is invisible.** `pan_to` is `await pan_to_position(...)`
+  then `follow(unit)`, and headless `pan_to_position` returns without suspending — so no frame
+  falls inside the null-follow window where the between-beats shot lives, which is exactly the shot
+  the ruling above moved.
+
+So the transcript scripts its causes at the seam the mirror actually reads, and drives
+`_mirror_camera()` by hand — the round-8 case's own idiom, for a sibling reason. What the executor
+publishes is a different question with its own cases (the span, the stage, the trained edge).
+
+The commit sequence is the argument: the harness landed FIRST, over the unchanged code, as a
+characterization baseline; the refactor then had to leave its distance column identical; and the
+ruled change is its own commit, moving two readings and nothing else.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head

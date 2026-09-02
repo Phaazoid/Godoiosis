@@ -84,10 +84,9 @@ and "The camera RIDES A BODY DOWN".*
 
 ## The shot words
 
-**These describe what the code does TODAY.**
-[#672](https://github.com/Phaazoid/Godoiosis/issues/672) will make *shot*, *hold* and *cut* into real
-constructs with a priority table; until it lands, they are descriptive words for shapes that already
-exist implicitly. Nothing here should be read as committing #672 to a design.
+**A shot is a real construct as of [#672](https://github.com/Phaazoid/Godoiosis/issues/672)** —
+`ShotDirector.Shot`, a named row in a priority table, and the highest-ranked live one owns the
+camera. What follows is the table plus the words for how a channel gets where the shot wants it.
 
 ### How a channel moves
 
@@ -97,21 +96,35 @@ exist implicitly. Nothing here should be read as committing #672 to a design.
   transition declares its drive a cut, because the flash is at full white for exactly that frame.
 - **snap** — set live and target together at once, without easing: `hold_at()`. Distinct from a cut
   in that nothing was mid-ease to interrupt.
-- **hold** — a channel deliberately kept where it is while something else finishes. The one shipped
-  hold POLICY is the death show outranking the trained release (see below).
+- **hold** — a framing that writes nothing, keeping the camera where the last shot left it while
+  something finishes. One row has it: `DEATH_SHOW`.
 
-### The implicit shots
+### The priority table
 
-Each is a named framing the code already produces, with no `Shot` object behind it:
+`ShotDirector.Shot`, ascending — a higher row outranks a lower one, and the highest LIVE row owns
+the camera. **The enum's order is the mechanism**, not a comment: `solve()` is a rank compare, so
+moving a row changes the answer.
 
-| Shot | What sets it |
-|---|---|
-| the **opening pose** | `battle3d.fit_camera()` — an authored `CameraPose`, else a solved fit |
-| the **playback wide** | `CameraRig3D.playback_distance` (an `@export`, tunable on the Game tab) |
-| the **trained follow** | `Pacing.TRAINED_DISTANCE`, while the 2D camera is following one unit |
-| the **staging transition** | `BoardSpace.camera_lift()`, the diorama tearing out |
-| the **death show** | `UnitMirror.death_show_live()` holding the trained frame until the last cube lands |
-| the **board-home teardown** | `restore_view()` — the climb out and the pan back |
+| Rank | Shot | Live when | Framing |
+|---|---|---|---|
+| 5 | `DEATH_SHOW` | a show is playing and nobody is followed | **hold** — writes no distance |
+| 4 | `TRAINED` | `cam.follow_unit` is valid | `Pacing.TRAINED_DISTANCE` |
+| 3 | `STAGE` | `cam.shot_cells` is non-empty | `playback_distance`, widened to hold the staged volume |
+| 2 | `SPAN` | `cam.framed_span` has two cells | `playback_distance`, widened to hold the walk |
+| 1 | `WIDE` | playback owns the camera | `playback_distance` |
+| 0 | `NONE` | — | the gate's answer: the view is the player's, and a release restores it |
+
+**The playback lock is the table's GATE, not a row in it.** A `LOCKED` row would be outranked from
+above, so a death show still playing as the lock let go would hold the camera past the pass's end.
+
+**What `DEATH_SHOW` outranks is the FALLBACK, not the close-up.** Its condition and TRAINED's are
+mutually exclusive, so those two never compete — it stands in TRAINED's place once the body is gone,
+and outranking STAGE/SPAN/WIDE is what makes the release a **deferral** rather than a skip.
+
+Two things sit OUTSIDE the table and are not shots: the **opening pose** (`battle3d.fit_camera()`,
+an authored `CameraPose` or a solved fit — a board loading, not a shot inside a pass) and the
+**staging transition** (`BoardSpace.camera_lift()`, which drives the lift channel; the lift is
+polled above the gate because how far the ground has been torn out is a fact about the BOARD).
 
 Note the two distances live in **different homes on purpose**: `playback_distance` is a rig `@export`
 the dev tunes, `TRAINED_DISTANCE` is a `Pacing` constant. Both are content, neither is a magic number.
@@ -155,8 +168,14 @@ The **causes** the 2D `CameraController` publishes: `shot_cells`, `follow_unit`,
 `CameraController.fall_depth`, the rig telling playback how far under the board it has got, so the
 teardown can wait for the climb.
 
-#672's priority table is the formalization of this table. Until then, adding a sixth door is a
-decision worth stating out loud.
+Adding a sixth door is a decision worth stating out loud.
+
+**#672 narrowed the FIRST door rather than adding one.** `_mirror_camera` still polls every frame,
+but every distance and framing it writes now goes through `battle3d._apply_shot`, one `match` with
+one arm per row of the priority table above — so a new framing rule has nowhere to go except that
+table, because there is no second line to add code to. That is the same guarantee `_apply_position`
+gives `position`, and it is what the ungated-mover bug class of the #602 arc was missing. The other
+four doors are unchanged, and the flourish is still declared outside the shot entirely.
 
 ---
 

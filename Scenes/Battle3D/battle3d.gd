@@ -129,40 +129,30 @@ var _pointer_vertex := Vector2i.ZERO
 # container SIZE to it (GameView keeps full resolution under stretch) and shrinks
 # only the display via scale.
 var _pip_native: Vector2 = Vector2(1280.0, 720.0)
-# Last frame's playback_locked, so the square-on realign fires once per AI turn, not per frame.
-var _playback_owned_camera := false
-# ...and last frame's framed span (#520), for the same reason: the widen is an EDGE, so the player's
-# wheel is theirs again the instant the shot is set up. Gated on the published span itself -- the
-# store the answer is drawn from -- rather than on a copy of what it resolves to (#308).
-var _framed_span: Array[Vector2i] = []
+# WHICH SHOT OWNS THE CAMERA (#672), and the edge that says when to apply one. It replaced five
+# separate latches here -- last frame's playback lock, last frame's span, the solved stage cells,
+# the trained subject's id and the round-8 deferral -- each of which half-answered "what is the
+# camera doing" and none of which could be asked. See ShotDirector for the table itself.
+var _shots := ShotDirector.new()
 
-# The diorama's own surface height, solved ONCE per published stage (#602 round 3; the edge moved
-# to cam.shot_cells in round 4). Latched rather than tracked because bodies get THROWN during a
-# pass: a live re-solve would find them standing on whatever they landed on and walk the whole
-# shot down after them mid-fight. `_stage_cells_solved` is the edge detector -- the published
-# store itself, not a copy of what it resolves to (#308) -- and the claim edge clears it, so two
-# passes staging the identical cells still each get their own solve against where the units stand
-# NOW.
+# The diorama's own surface height, solved ONCE per published stage (#602 round 3). Latched rather
+# than tracked because bodies get THROWN during a pass: a live re-solve would find them standing on
+# whatever they landed on and walk the whole shot down after them mid-fight. The STAGE shot's own
+# arm is the one writer, and the director's edge is what makes it a latch -- two passes staging the
+# identical cells still each get their own solve against where the units stand NOW.
 var _stage_height := 0.0
-var _stage_cells_solved: Array[Vector2i] = []
 # The last depth the fall channel published while its body still existed (#602 round 4). A void
 # death frees the unit -- taking the fact with it -- so this is what the shot holds at while the
-# burst's cubes fly. Zeroed at the claim edge and whenever the show is over; the board-swap door
-# is drop_stashed_view's, which cuts the rig's own drop the same frame.
+# burst's cubes fly. Zeroed when the camera is claimed and whenever the show is over; the board-swap
+# door is drop_stashed_view's, which cuts the rig's own drop the same frame.
 var _held_drop := 0.0
-# ...and which unit the shot is trained on, BY ID, an edge detector for the zoom (#602 round 4).
-# An id rather than a ref so a body freed mid-beat cannot wedge the edge, and 0 is "nobody".
-var _trained_seen_id := 0
 # ...and last frame's death show (#669), so the trace can say when it began and when it cleared.
 # A DIFF KEY on another store's fact, which is normally the #308 mistake -- declared here because
 # the store it copies is a bool with no richer form, and because its whole failure mode is a
-# missing trace row: nothing reads it to decide where the camera goes. The camera's own hold reads
-# _unit_mirror.death_show_live() live, below, exactly as it did before this existed.
+# missing trace row: nothing reads it to decide where the camera goes. It survived #672's table
+# because a show BEGINNING while a subject is still followed changes no shot at all, so the shot
+# transitions cannot carry this on their own.
 var _death_show_seen := false
-# ...and last frame's DEFERRAL (#669): a trained release that is due while the death show outranks
-# it. Its own latch rather than a read of the two above, because the deferral is a state they
-# COMPOSE and its rising edge is the moment worth a row. Trace-only, like _death_show_seen.
-var _release_deferred := false
 
 
 func _ready() -> void:
@@ -826,33 +816,28 @@ func _process(_delta: float) -> void:
 # rest on game_state carrying AI_TURN for the whole turn, which set_dev_mode falsified.
 func _mirror_camera() -> void:
 	var cam: CameraController = game.camera_controller
-	# Square-on for the enemy phase (dev call 2026-08-14), on the EDGE into the turn rather
-	# than every frame: idempotent either way today, but the moment orbit is allowed to stay
-	# live under an AI turn a per-frame snap would fight the player's own drag.
-	if cam.playback_locked != _playback_owned_camera:
-		_playback_owned_camera = cam.playback_locked
-		_rig.note_event("playback lock %s" % ("ACQUIRED" if _playback_owned_camera else "released"))
-		if _playback_owned_camera:
-			# BEFORE the two resets below, or it stashes the reset rather than the player's own
-			# framing. One edge serves every case the dev named (dev, 2026-08-26): a pass claims and
-			# releases inside execute_orders, an AI turn holds it across the whole turn, and the
-			# post-turn pass (#534) claims it again after that.
-			_rig.stash_view()
-			_rig.align_to_detent()
-			# ...and frame from a known distance (#520). Still an EDGE, though the reason moved in
-			# #602 round 4: the wheel is dead under playback now, so this is the director's own
-			# opening base rather than a one-time reset the player zooms away from. The states
-			# below re-aim it -- a stage widens it to fit, a followed unit pulls it to the trained
-			# distance -- each on its own edge.
-			_rig.set_zoom(_rig.playback_distance)
-			# A fresh pass solves its own stage and holds no leftover fall: the same cells staged
-			# twice in a row still describe different standing units, and a held depth belongs to
-			# the show that latched it.
-			_stage_cells_solved = []
-			_held_drop = 0.0
-			_trained_seen_id = 0
-		else:
-			_rig.restore_view()
+	# WHICH SHOT OWNS THE CAMERA (#672). One solve, one apply site, and every framing decision under
+	# playback is a row in ShotDirector's table -- which is the invariant this replaced five
+	# hand-ordered edges to buy, and the same one `_apply_position` gives `position`: a new framing
+	# rule has nowhere to go except the table, because there is no second line to add code to.
+	#
+	# The trained subject is read here rather than inside the director because validity is this
+	# scene's question: a void plummet ends in die(), and a freed Unit assigned into a typed slot
+	# dies on the type-check before any null test can run (#149). The director takes the ID.
+	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
+	var trained_id := trained.get_instance_id() if trained != null else 0
+	# ...and the death show, traced ABOVE the gate for the reason the depth below is: the show's flag
+	# clears in UnitMirror's own _process, so its END can land after playback has let go, and an edge
+	# polled below the return would never see it.
+	var show_live: bool = _unit_mirror.death_show_live()
+	if show_live != _death_show_seen:
+		_death_show_seen = show_live
+		_rig.note_event("death show %s" % ("BEGAN" if show_live else "ended"))
+	# The whole table runs ABOVE the early return, because the LOCK IS ITS GATE rather than a row in
+	# it: releasing the camera is a shot transition like any other (to NONE), and it is the one that
+	# must never be missed.
+	if _shots.update(cam.playback_locked, trained_id, cam.shot_cells, cam.framed_span, show_live):
+		_apply_shot(cam.shot_cells, cam.framed_span, trained)
 	# ABOVE the early return, deliberately: how far the ground has been torn out is a fact about the
 	# BOARD, not about who owns the camera (#521). The tiles thud back into their sockets INSIDE
 	# execute_orders and the lock is put back in the same synchronous stretch, so a poll below the
@@ -880,13 +865,6 @@ func _mirror_camera() -> void:
 	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
 	# answer and leave every bar on the board up for ever.
 	_unit_mirror.cinematic_playback = cam.playback_cinematic
-	# ...and whether a void death's cubes are still in the air (#669), traced ABOVE the gate for the
-	# reason the depth is: the show's flag clears in UnitMirror's own _process, so its END can land
-	# after playback has let go, and an edge polled below the return would never see it.
-	var show_live: bool = _unit_mirror.death_show_live()
-	if show_live != _death_show_seen:
-		_death_show_seen = show_live
-		_rig.note_event("death show %s" % ("BEGAN" if show_live else "ended"))
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
@@ -896,48 +874,6 @@ func _mirror_camera() -> void:
 	#
 	# HELD rather than glided (#520): the 2D camera this mirrors already tweens its own travel, so
 	# easing on top of that ease is lag between the action and the frame it is in.
-	# THE STAGE'S EDGE (#602 round 4): one height solve and one framing per published stage. On the
-	# publish -- which the executor makes BEFORE its pan, so the whole approach aims at the stage
-	# rather than hugging the ground under the moving centre -- solve where the fighters stand and
-	# widen the shot until the staged volume fits; on the clear, back to the playback base. Edges,
-	# never per-frame asserts: the walk phase's span widen and the dolly both live on this rig, and
-	# a per-frame set_zoom would stomp them.
-	if cam.shot_cells != _stage_cells_solved:
-		_stage_cells_solved = cam.shot_cells.duplicate()
-		_rig.note_event("stage %s" % ("cleared" if _stage_cells_solved.is_empty()
-				else "published (%d cells)" % _stage_cells_solved.size()))
-		_rig.set_zoom(_rig.playback_distance)
-		if not _stage_cells_solved.is_empty():
-			_stage_height = _solve_stage_height(_stage_cells_solved)
-			_rig.widen_to_fit(_shot_volume(_stage_cells_solved))
-	# ...and the TRAINED edge, its sibling: while the 2D camera is following one unit -- a beat's
-	# subject, a body mid-tumble -- the shot sits at the trained distance, the close-up the dev
-	# asked for. By id, so a body freed mid-beat reads as "nobody" and hands the distance back.
-	#
-	# THE DEATH SHOW OWNS THE SHOT (#602 round 8, dev: "camera should never look at where it forms,
-	# only the upward directed results of the explosion should be visible"): a subject that died
-	# into a void keeps its trained frame until the last cube lands. The release edge used to fire
-	# the frame the body was freed, and a farther camera's frame bottom is DEEPER -- the dolly-out
-	# walked the edge down onto the bar assembling under it. DEFERRED, not skipped: _trained_seen_id
-	# does not advance, so the ordinary release fires the moment the show clears.
-	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
-	var trained_id := trained.get_instance_id() if trained != null else 0
-	var show_holds := trained == null and _unit_mirror.death_show_live()
-	# THE ROUND-8 LINE (#669). This state -- a release edge is due AND the death show is outranking
-	# it -- is precisely what eight rounds of screenshots could not show: a deferred release and a
-	# skipped one leave the same camera in the same place one frame later, and only the ORDER tells
-	# them apart. Its OWN latch, on its own rising edge: _trained_seen_id deliberately does not
-	# advance while the show holds, so the condition stays true every frame the cubes are in the
-	# air, and _death_show_seen is already set by the edge above and so cannot serve as the gate.
-	var release_deferred: bool = show_holds and trained_id != _trained_seen_id
-	if release_deferred != _release_deferred:
-		_release_deferred = release_deferred
-		if release_deferred:
-			_rig.note_event("trained release DEFERRED (death show)")
-	if not show_holds and trained_id != _trained_seen_id:
-		_trained_seen_id = trained_id
-		_rig.note_event("follow -> %s" % (trained.get_unit_name() if trained != null else "nobody"))
-		_rig.set_zoom(Pacing.TRAINED_DISTANCE if trained != null else _rig.playback_distance)
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
 	var aim := _aim_over(flat.x, flat.z)
 	_rig.hold_at(aim)
@@ -961,13 +897,66 @@ func _mirror_camera() -> void:
 	# angle rather than edged like the widen below, because it must relax as well as push: a quiet
 	# beat publishes 0 and the camera eases back out on its own, with nothing to remember to undo.
 	_rig.dolly_to(cam.beat_emphasis)
-	# ...and HOW WIDE, the third of the same three questions (#520). An EDGE, never a per-frame
-	# apply: the same rule the playback-distance reset above follows, so the shot is set up once and
-	# the wheel is the player's again for the rest of it.
-	if cam.framed_span != _framed_span:
-		_framed_span = cam.framed_span.duplicate()
-		if _framed_span.size() == 2:
-			_rig.widen_to_fit(_span_volume(_framed_span))
+
+
+# The ONE place a distance or a framing is written under playback (#672). Every arm is a row of
+# ShotDirector's table, so a new framing rule has nowhere to go but that table -- the same guarantee
+# `CameraRig3D._apply_position` gives `position`, and the reason the ungated-mover bug class that
+# cost the #602 arc eight rounds is now a thing you would have to go out of your way to write.
+#
+# EDGE-DRIVEN, never per frame: update() answers false while nothing has moved. Both framings here
+# would misbehave under a per-frame apply -- widen_to_fit solves against the camera's live basis, so
+# a fit would breathe as the yaw eased, and the stage's height LATCH exists precisely so a body
+# thrown mid-fight cannot walk the whole shot down after it (#602 round 3).
+func _apply_shot(cells: Array[Vector2i], span: Array[Vector2i], trained: Unit) -> void:
+	# Claiming the camera. BEFORE the framing below, or the stash keeps the reset rather than the
+	# player's own view. One transition serves every case the dev named (dev, 2026-08-26): a pass
+	# claims and releases inside execute_orders, an AI turn holds it across the whole turn, and the
+	# post-turn pass (#534) claims it again after that.
+	if _shots.previous == ShotDirector.Shot.NONE and _shots.active != ShotDirector.Shot.NONE:
+		_rig.stash_view()
+		# Square-on for the enemy phase (dev call 2026-08-14), on the EDGE into the turn rather than
+		# every frame: idempotent either way today, but the moment orbit is allowed to stay live
+		# under an AI turn a per-frame snap would fight the player's own drag.
+		_rig.align_to_detent()
+		# A fresh pass holds no leftover fall: a held depth belongs to the show that latched it.
+		_held_drop = 0.0
+	# BEFORE the framing, so the row carries the channels the transition fired AT rather than the
+	# ones it produced -- #669's rule, and the half round 8 needed.
+	_rig.note_event(_shots.transition_note(
+			trained.get_unit_name() if trained != null else "nobody"))
+
+	match _shots.active:
+		ShotDirector.Shot.NONE:
+			# Handing the camera back: the climb out, the pan home, the player's own distance.
+			_rig.restore_view()
+		ShotDirector.Shot.DEATH_SHOW:
+			# HOLD -- the one framing that writes nothing (#602 round 8, dev: "the camera should
+			# never look at where it forms, only the upward directed results of the explosion
+			# should be visible"). A subject that died into a void keeps its trained frame until
+			# the last cube lands, because a farther camera's frame bottom is DEEPER and dollying
+			# out walks that edge down onto the bar assembling under it. The release is not skipped
+			# -- it fires as the transition OUT of this shot, once the show clears.
+			pass
+		ShotDirector.Shot.TRAINED:
+			# The close-up the dev asked for: a beat's subject, or a body mid-tumble.
+			_rig.set_zoom(Pacing.TRAINED_DISTANCE)
+		ShotDirector.Shot.STAGE:
+			# One height solve and one framing per published stage (#602 round 4). The executor
+			# publishes BEFORE its pan, so the whole approach aims at the stage rather than hugging
+			# the ground under the moving centre.
+			_rig.set_zoom(_rig.playback_distance)
+			_stage_height = _solve_stage_height(cells)
+			_rig.widen_to_fit(_shot_volume(cells))
+		ShotDirector.Shot.SPAN:
+			# Both ends of a walk (#520): the shot opens wide enough to hold where they set off and
+			# where they are going.
+			_rig.set_zoom(_rig.playback_distance)
+			_rig.widen_to_fit(_span_volume(span))
+		ShotDirector.Shot.WIDE:
+			# The director's own base (#520) -- and since #602 round 4 that is what it IS, rather
+			# than a one-time reset the player zooms away from: the wheel is dead under playback.
+			_rig.set_zoom(_rig.playback_distance)
 
 
 func _unhandled_input(event: InputEvent) -> void:
