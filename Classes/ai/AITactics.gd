@@ -205,22 +205,17 @@ static func _attack_candidates(unit: Unit, board: BoardContext, origin: Vector2i
 # CRISIS counts as nothing -- the target stands back up surged, so triggering it is neither prize
 # nor penalty (revisit with smarter AI kinds). Downed enemies count only when count_downed (#57).
 static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed: bool) -> Vector2i:
-	var net := 0
-	var victims := {}   # Unit -> true, first-seen order; the removal ledger below walks it
+	var dealt := {}   # Unit -> damage this plan lands on them, before the overkill clamp
 	for a in plan.attacks:
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
-		var hostile := Team.is_enemy(faction, victim.get_faction())
-		if hostile:
+		if Team.is_enemy(faction, victim.get_faction()):
 			if a.resolved.lethality == ResolvedOutcome.Lethality.CRISIS:
 				continue
 			if victim.is_downed() and not count_downed:
 				continue   # already on the ground before this plan -- #57, pass 1
-			net += a.resolved.damage
-		else:
-			net -= a.resolved.damage
-		victims[victim] = true
+		dealt[victim] = int(dealt.get(victim, 0)) + a.resolved.damage
 
 	# The REACTIONS this plan draws -- counters and any watch shots it sets off. Their victims join
 	# the removal ledger and nothing else, per the ruling above.
@@ -228,7 +223,19 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed:
 		var victim: Unit = a.target
 		if victim == null or a.resolved == null or not is_instance_valid(victim):
 			continue
-		victims[victim] = true
+		if not dealt.has(victim):
+			dealt[victim] = 0
+
+	# OVERKILL IS WORTH NOTHING: a victim's damage is capped at the HP they had going in, so you
+	# cannot get more value out of a person than taking them out of the fight. Without this the
+	# removal ledger below fixes only half the double-spend -- a second member swinging at someone
+	# the first already downed still banked full damage, which ties exactly with hitting an
+	# untouched enemy for the same number, leaving focus-fire to be decided by board order. The cap
+	# binds only on overkill, so chipping a healthy unit is unaffected. Live HP is plan-start HP.
+	var net := 0
+	for victim: Unit in dealt:
+		var counted: int = mini(int(dealt[victim]), maxi(victim.get_current_hp(), 0))
+		net += counted if Team.is_enemy(faction, victim.get_faction()) else -counted
 
 	# A REMOVAL IS PER VICTIM, NOT PER HIT, and that is the whole of squad focus-fire. Counting the
 	# lethality rung of each row instead double-pays: the ladder answers KILLED for any damaging hit
@@ -237,7 +244,7 @@ static func _score_plan(faction: Team.Faction, plan: ResolvedPlan, count_downed:
 	# second enemy went untouched. Asked as a CHANGE OF STANDING -- on its feet before the plan,
 	# off them after -- so it is the plan's effect on a person, which is what a removal means.
 	var removals := 0
-	for victim: Unit in victims:
+	for victim: Unit in dealt:
 		if not _plan_removes(victim, plan):
 			continue
 		removals += 1 if Team.is_enemy(faction, victim.get_faction()) else -1
