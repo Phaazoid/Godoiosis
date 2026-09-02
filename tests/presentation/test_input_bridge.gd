@@ -562,8 +562,9 @@ func test_the_board_hide_spares_the_ui_and_the_authoring_layer() -> void:
 
 
 func test_a_ui_click_over_the_3d_board_stays_in_the_ui() -> void:
-	# The payoff: a Control is clicked at its REAL screen rect (identity transform —
-	# no container math), the 2D consumes it, and nothing leaks to the 3D picker.
+	# The payoff: a Control is clicked at its REAL screen rect, the 2D consumes it, and nothing
+	# leaks to the 3D picker. The transform is the IDENTITY here only because before_test sizes the
+	# root to the design resolution — the sibling case below is the same click with a scale on it.
 	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
 	await await_idle_frame()
 	var presses: Array[bool] = []
@@ -575,6 +576,52 @@ func test_a_ui_click_over_the_3d_board_stays_in_the_ui() -> void:
 
 	assert_int(presses.size()).is_equal(1)
 	assert_object(_selected()).is_null()   # the UI consumed it; the picker never acted
+
+
+# The same click with a SCALE on it (#659). The UI lays out in a fixed 1280x720 design space now,
+# so on a bigger window a Control's screen rect is its design rect times the scale factor — and
+# every physical click has to survive that transform on its way in.
+#
+# THIS IS THE ONLY THING THAT CAN SEE size_2d_override_stretch. Set the override without the
+# stretch flag and the UI still lays out in the design space, so every assertion about that space
+# passes while the whole interface draws at 1:1 in the corner and no click ever lands. The click
+# point is therefore derived from where the button OUGHT to be (design rect x factor), never from
+# its live transform — asking the live transform would just agree with whatever the build does.
+func test_a_click_on_scaled_ui_still_lands_on_the_control() -> void:
+	get_tree().root.size = Vector2i(2560, 1440)
+	await await_idle_frame()
+	await await_idle_frame()
+
+	var end_turn: Control = _game.get_node("UILayer/EndTurnButton")
+	var button: Button = end_turn.get_node("Button")
+	var factor := 2.0                                  # 2560x1440 over the 1280x720 design space
+	var design_centre: Vector2 = button.get_global_rect().get_center()
+	var expected: Vector2 = design_centre * factor
+
+	# THE TEETH, asserted rather than assumed: an UNSCALED build anchors the button to the physical
+	# bottom-right instead, and the click point must fall OUTSIDE that rect or the case cannot tell
+	# the two builds apart. Worth stating because the two rects OVERLAP near the corner they share --
+	# picking a point by eye lands in the overlap and proves nothing (it cost this suite a case).
+	var unscaled_rect := Rect2(
+		Vector2(get_tree().root.size) - (Vector2(1280, 720) - button.get_global_rect().position),
+		button.size)
+	assert_bool(unscaled_rect.has_point(expected)) \
+		.override_failure_message("fixture is toothless: %s lies inside the unscaled rect %s too"
+			% [expected, unscaled_rect]) \
+		.is_false()
+
+	var presses: Array[bool] = []
+	end_turn.end_turn_requested.connect(func() -> void: presses.append(true))
+
+	_parse_click(expected)
+	await _pump()
+
+	assert_int(presses.size()) \
+		.override_failure_message("a click at %s missed the End Turn button, whose design rect %s "
+			% [expected, button.get_global_rect()]
+			+ "should sit at %sx on a 2560x1440 window" % factor) \
+		.is_equal(1)
+	assert_object(_selected()).is_null()   # still consumed by the UI; the picker never acted
 
 
 func test_the_delegation_gate_stops_the_2d_board_acting_twice() -> void:
