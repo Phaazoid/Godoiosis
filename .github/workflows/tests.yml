@@ -99,6 +99,25 @@ jobs:
             git checkout -- project.godot
           fi
 
+      # AN IMPORT MUST NOT PRODUCE FILES THE COMMIT WAS MISSING (#659 follow-up). Godot mints a
+      # .uid sidecar beside every script the first time it imports one, so a commit that adds a
+      # .gd without its sidecar leaves every clone -- the dev's included -- going dirty by itself
+      # the moment the editor opens. That is the "a dirty tree is a ticket defect at both ends"
+      # rule, and nothing was watching for it: the guard above diffs project.godot alone, which
+      # is a TRACKED file, while a missing sidecar arrives UNTRACKED and shows up in neither
+      # `git diff` nor the test run (the import has already created it by the time gdUnit4 looks,
+      # so an on-disk assertion would pass vacuously in exactly the case it exists to catch).
+      #
+      # Fails rather than warns, unlike its neighbour: this one's cause is always the PR in hand.
+      - name: Guard against sidecars the commit forgot
+        run: |
+          untracked="$(git ls-files --others --exclude-standard)"
+          if [ -n "$untracked" ]; then
+            echo "::error::The import created files that are not committed. A .gd needs its .uid sidecar committed beside it, or every fresh checkout goes dirty on first open. Add these and push:"
+            echo "$untracked"
+            exit 1
+          fi
+
       # THE VERDICT IS gdUnit4'S, NOT THE PROCESS'S -- mirrors tests/run_tests.ps1 (#93).
       # Godot can die with SIGSEGV while tearing the engine down, AFTER every test has run and
       # been counted, which reports failure on a clean pass. Today the full-tree run happens not
