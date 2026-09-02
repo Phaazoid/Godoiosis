@@ -743,7 +743,7 @@ func test_the_settled_frame_floor_reads_the_targets_not_the_easing_channels() ->
 	rig.set_zoom(11.0)
 	var expected := 6.0 + 40.0 - 5.0 \
 			- CameraRig3D.frame_drop(11.0, _camera().fov, rig._pitch_degrees)
-	assert_float(rig.settled_frame_floor()).override_failure_message(
+	assert_float(rig.frame_floor(CameraRig3D.When.SETTLED)).override_failure_message(
 			"the settled floor is not composed from the target channels -- a mid-ease death "
 			+ "leaves the frame descending onto the burst's sockets").is_equal_approx(
 			expected, 0.001)
@@ -770,10 +770,10 @@ func test_the_live_frame_floor_and_its_settled_twin_agree_once_nothing_is_easing
 			+ "one frame of smoothing got -- not on the composition").is_equal_approx(
 			rig._target_distance, 0.001)
 
-	assert_float(rig.live_frame_floor()).override_failure_message(
+	assert_float(rig.frame_floor(CameraRig3D.When.LIVE)).override_failure_message(
 			"the two floors disagree on a settled rig, so the pair cannot be read as "
 			+ "live-versus-target -- one of them is composing from something else").is_equal_approx(
-			rig.settled_frame_floor(), 0.001)
+			rig.frame_floor(CameraRig3D.When.SETTLED), 0.001)
 
 
 func test_the_live_frame_floor_sits_above_the_settled_one_while_a_channel_is_still_falling() -> void:
@@ -785,10 +785,10 @@ func test_the_live_frame_floor_sits_above_the_settled_one_while_a_channel_is_sti
 	await await_idle_frame()
 	rig.drop_to(5.0)
 
-	assert_float(rig.live_frame_floor()).override_failure_message(
+	assert_float(rig.frame_floor(CameraRig3D.When.LIVE)).override_failure_message(
 			"the live floor already reads the target drop -- the two numbers say the same thing "
 			+ "and the report cannot show how far the frame still has to descend").is_greater(
-			rig.settled_frame_floor())
+			rig.frame_floor(CameraRig3D.When.SETTLED))
 
 
 # ---- the camera trace (#669) ----

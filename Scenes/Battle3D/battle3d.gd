@@ -654,8 +654,8 @@ func _describe_view() -> String:
 		"yes" if cam.playback_locked else "no",
 		"yes" if _unit_mirror.death_show_live() else "no",
 		trained.get_unit_name() if trained != null else "nobody",
-		_rig.live_frame_floor(),
-		_rig.settled_frame_floor(),
+		_rig.frame_floor(CameraRig3D.When.LIVE),
+		_rig.frame_floor(CameraRig3D.When.SETTLED),
 	]
 
 
@@ -1424,8 +1424,8 @@ func _death_show_depth() -> float:
 #
 # ...and below the SETTLED edge, not the live one (#602 round 8): a body can die while the drop is
 # still easing toward its held depth, and an anchor measured off the live frame leaves the frame
-# still descending onto it. The settled floor composes from the rig's TARGETS -- the deepest this
-# frame can get -- see CameraRig3D.settled_frame_floor.
+# still descending onto it. SETTLED composes from the rig's TARGETS -- the deepest this frame can
+# get -- see CameraRig3D.frame_floor and the When enum above it.
 #
 # The offset is a CONST, not a knob, on WHITEOUT_SAFE_PEAK's reasoning: every other feel value in
 # this arc is tunable, but a slider that could push the death show out of shot -- or back INTO the
@@ -1434,7 +1434,7 @@ func _death_show_depth() -> float:
 const PLUMMET_BURST_UNDER := 0.5
 
 func _shot_floor() -> float:
-	return _rig.settled_frame_floor() - PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
+	return _rig.frame_floor(CameraRig3D.When.SETTLED) - PLUMMET_BURST_UNDER * BoardSpace.CELL_SIZE
 
 
 # The box a framed span (#520) must fit inside: the two cells' own surface points, through the same

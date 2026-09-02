@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #687 (2026-09-02).**
+**Canon checked through #691 (2026-09-02).**
 
 ## Principles
 
@@ -2226,8 +2226,9 @@ whole correction — the frame's bottom lands on ground FARTHER from the camera 
 so the tempting `D·tan(fov/2)/cos p` (round 5's formula, reverted with it) reads ~30% shallow at
 the shipped pitch and puts an "off screen" anchor inside the frame. Round 6 fed it the LIVE
 camera; **round 8 corrected that to the SETTLED one** (`settled_frame_floor`, which replaced the
-live `frame_floor_depth` with its only caller) — the live frame is transient, and a body dying
-mid-ease left it still descending onto the anchor; the targets are the deepest the frame can get.
+live `frame_floor_depth` with its only caller; both became `frame_floor(SETTLED)` at #670) — the
+live frame is transient, and a body dying mid-ease left it still descending onto the anchor; the
+targets are the deepest the frame can get.
 `PLUMMET_BURST_UNDER` (now 0.5 cells) is the margin UNDER that edge, still a const for the same
 reason.
 
@@ -2386,7 +2387,7 @@ round 8 is those three joining:
   stays on the pit while the cubes erupt up into it, rises, and pulls back wide. The round-4
   ruling — the camera comes back to the battle view before the tiles drop — keeps its scope:
   only the pan and the climb swapped places between themselves.
-- **The anchor measures the SETTLED frame** (`CameraRig3D.settled_frame_floor` — aim, target
+- **The anchor measures the SETTLED frame** (`CameraRig3D.frame_floor(SETTLED)` — aim, target
   lift, target drop, target distance, the pure `frame_drop` at the end). A body can die while
   the drop is still easing toward its held depth, and an anchor measured off the live frame
   leaves the frame descending onto it after the sockets froze. Every term is a target because
@@ -2409,12 +2410,10 @@ law.)
 
 **The View line grew the HOLDS and a floor PAIR.** The channels say where the camera is; the holds
 — playback lock, death show, followed unit — say *why it is held there*, which is the question
-every round of the arc opened with. `CameraRig3D.live_frame_floor()` is the structural twin of
-`settled_frame_floor()`, term for term, so the only difference between the two printed numbers is
-live-versus-target and a gap between them is exactly how far the frame still has to descend.
-Flourish is excluded on both sides. It is a **declared sibling, not a second answer**: #670 folds
-both into one query surface taking a WHEN, and sweeps `battle3d._shot_floor`, `widen_to_fit` and
-this line together.
+every round of the arc opened with. The floor is printed as a PAIR — live and settled — so the only
+difference between the two numbers is live-versus-target, and a gap between them is exactly how far
+the frame still has to descend. Flourish is excluded on both sides. It shipped as two functions,
+declared a sibling rather than a second answer; #670 collapsed them (below).
 
 **`CameraTrace` is the black box** — a bounded ring (`MAX_ENTRIES` 120) of named moments plus a
 heartbeat, rendered as its own `report.md` section. A final-frame reading cannot show a sequence,
@@ -2442,7 +2441,37 @@ a cause should be, and enough of them evict the causes.
 rate limit is asserted rather than slept through.
 
 Residual, declared: whether the rendered section is *readable* in a real report is the dev's, by
-filing one.
+filing one. **Answered 2026-09-02, played:** *"Those traces are very readable."*
+
+## Where the frame's edge is — one answer with a WHEN ([#670](https://github.com/Phaazoid/Godoiosis/issues/670), BUILT 2026-09-02)
+
+Lever 2 of the standardization. `settled_frame_floor()` and `live_frame_floor()` were the same
+composition written twice, differing only in which channel values they read — so they became
+**`frame_floor(when: When)`**, with `When { LIVE, SETTLED }` choosing the TERMS rather than the
+function. A second edge (top, left, right) would have doubled the pair again; now it reuses the
+same term selection. Callers: `battle3d._shot_floor` (SETTLED, the death-burst anchor) and the
+View line (both).
+
+**The ticket was filed larger than it turned out to be, and the two corrections are the durable
+part — they are what stops the next camera feature re-deriving frame geometry by hand a fourth
+time.** Both were found by checking the issue's own premises against the code:
+
+- **"Is X in frame?" is not unanswered — for LIVE.** `Camera3D.is_position_in_frustum()` is exact
+  and has always been there (verified against 4.7.1, not recalled). What the engine structurally
+  *cannot* answer is the SETTLED question, because it can only see where the camera IS, not where
+  its channels are heading. So the whole value of a general query surface sits in the SETTLED half
+  — and that is precisely the half round 8 needed. Reach for the engine call for anything live.
+- **`widen_to_fit` is NOT a caller of this seam**, though the issue listed it as one. It routes to
+  `_fit_distance`, which calls `_aim_at(box)` and **re-aims** — answering *how far back must I sit
+  to contain this box if I look at it*, in camera space, across all four edges. `frame_drop`
+  answers *how far below the aim does the bottom edge fall*, in world-vertical. Shared
+  trigonometry, genuinely different questions; folding them would force two questions into one
+  seam, which is Law #4 run backwards.
+
+The rest of the filed scope — the other three edges, a both-polarity margin query — was **deferred
+rather than built, with no consumer today** (dev ruling, 2026-09-02). [#672](https://github.com/Phaazoid/Godoiosis/issues/672)
+is the likely consumer: its invariants are frame-edge assertions and its headless harness is what
+would ask them, so the shape is better learned from that harness than guessed ahead of it.
 
 Flash-not-glow unit highlights; counter-hover -> show countering enemy's attack range;
 enemy attack-range on hover during player turn; real Will bars on panels (HP over a unit's head
