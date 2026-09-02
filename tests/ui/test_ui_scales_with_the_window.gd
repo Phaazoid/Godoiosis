@@ -72,18 +72,37 @@ func test_the_ui_lays_out_in_the_design_space_at_any_window_size() -> void:
 	assert_vector(_design_space()).is_equal(NATIVE)
 
 
-# EXPAND, not fit. A 21:9 window is bounded by its HEIGHT, so the extra width arrives as extra
-# design space rather than as a horizontal squeeze -- the board gets wider, the panels do not
-# stretch. Pins minf() against a height-only factor, which would give 1280 here.
-func test_an_ultrawide_window_gets_more_width_not_a_squeeze() -> void:
+# EXPAND, not fit, asked as a PROPERTY rather than by re-deriving the formula: the design space
+# never drops below the native resolution on either axis, so the extra room a non-16:9 window has
+# arrives as extra design space and no panel is ever crowded off an edge.
+#
+# The two directions are separate cases because they fail to different mistakes, and a wide window
+# alone is BLIND to one of them -- found by a surviving mutant. For anything WIDER than 16:9 the
+# height ratio already IS the smaller of the two, so a height-only factor agrees with minf() to the
+# pixel here and only a TALLER-than-16:9 window can tell them apart.
+func test_a_wide_window_gets_more_design_width_not_a_squeeze() -> void:
 	await _resize_to(2560.0, 1080.0)
-	var factor: float = minf(2560.0 / NATIVE.x, 1080.0 / NATIVE.y)
-	var expected := Vector2(roundi(2560.0 / factor), roundi(1080.0 / factor))
-	assert_vector(_design_space()) \
-		.override_failure_message("a 21:9 window got design space %s, expected %s (height-bounded)"
-			% [_design_space(), expected]) \
-		.is_equal(expected)
-	assert_float(_design_space().y).is_equal_approx(NATIVE.y, 0.5)
+	assert_float(_design_space().y) \
+		.override_failure_message("a 21:9 window should be bounded by its height, but the design space is %s"
+			% _design_space()) \
+		.is_equal_approx(NATIVE.y, 0.5)
+	assert_float(_design_space().x) \
+		.override_failure_message("a 21:9 window got %.0f of design width -- no wider than 16:9, so the UI was squeezed"
+			% _design_space().x) \
+		.is_greater(NATIVE.x)
+
+
+# The mirror image, and the case a height-only factor dies on: it would scale by 1440/720 = 2 and
+# hand the UI a 640-wide design space -- HALF the native width, with the panels overlapping in the
+# middle of a window that is in no way short of room.
+func test_a_tall_window_is_bounded_by_its_width_not_its_height() -> void:
+	await _resize_to(1280.0, 1440.0)
+	assert_float(_design_space().x) \
+		.override_failure_message("a tall window got %.0f of design width against a native 1280 -- "
+			% _design_space().x
+			+ "the factor is following the height, so the UI is being squeezed inward") \
+		.is_equal_approx(NATIVE.x, 0.5)
+	assert_float(_design_space().y).is_greater(NATIVE.y)
 
 
 # THE ISSUE'S OWN PROPERTY: "a 4K player should get the same relative panel footprint the dev sees
