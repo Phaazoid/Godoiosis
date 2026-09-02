@@ -384,3 +384,83 @@ func test_picking_an_aim_palette_repaints_the_board_on_close() -> void:
 	assert_that(overlays.hover_overlay.modulate).override_failure_message(
 			"the aim footprint is still on the AUTHORED colour -- closing the page repainted nothing"
 			).is_not_equal(OverlayManager.HOVER_MODULATE)
+
+
+# ==============================================================================
+#  The description is HOVER TEXT (2026-09-02)
+# ==============================================================================
+#
+# Asserted through `get_tooltip(point)`, never by reading `tooltip_text` back. That call walks the
+# same ownership chain a real hover walks -- it asks the control under the point, and returns "" when
+# that control's mouse_filter is IGNORE. So it sees the failure this change is actually likely to
+# have (a Label that is never asked), where a property read cannot.
+
+func _tooltip_over(control: Control) -> String:
+	# The control's own centre, in its own space -- get_tooltip takes a LOCAL point.
+	return control.get_tooltip(control.size * 0.5)
+
+func test_a_toggle_rows_description_is_reachable_by_hover() -> void:
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var setting := PlayerSettings.Setting.ALWAYS_SHOW_SQUAD_RINGS
+	var row: Button = _button_with_text(screen, PlayerSettings.title_of(setting))
+	assert_object(row).is_not_null()
+
+	assert_str(_tooltip_over(row)).override_failure_message(
+			"hovering a toggle row answers with nothing -- its description is unreachable"
+			).is_equal(UiText.wrap(PlayerSettings.desc_of(setting)))
+
+func test_a_choice_rows_title_is_reachable_by_hover() -> void:
+	# THE half that breaks quietly. A choice row's title is a plain Label, and a Label defaults to
+	# MOUSE_FILTER_IGNORE -- so without the filter set it is never asked, and half the page has no
+	# hover text while the other half looks fine.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var setting := PlayerSettings.Setting.HEALTH_BARS
+	var title: Label = _label_with_text(screen, PlayerSettings.title_of(setting))
+	assert_object(title).override_failure_message(
+			"the health-bar row has no title label").is_not_null()
+
+	assert_str(_tooltip_over(title)).override_failure_message(
+			"hovering a choice row's TITLE answers with nothing -- a Label defaults to "
+			+ "MOUSE_FILTER_IGNORE, so it is never asked").is_equal(
+			UiText.wrap(PlayerSettings.desc_of(setting)))
+
+func test_a_choice_rows_segments_carry_the_same_description() -> void:
+	# A Button has mouse_filter STOP, so Godot asks IT and never walks up to the title that holds the
+	# text. The row is not one node, so the text goes on the whole span.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	var setting := PlayerSettings.Setting.HEALTH_BARS
+	var wrapped := UiText.wrap(PlayerSettings.desc_of(setting))
+	for mode: PlayerSettings.HealthBars in [PlayerSettings.HealthBars.HOVERED,
+			PlayerSettings.HealthBars.DAMAGED, PlayerSettings.HealthBars.EVERY]:
+		var segment: Button = _health_segment(screen, mode)
+		assert_object(segment).is_not_null()
+		assert_str(_tooltip_over(segment)).override_failure_message(
+				"the %s segment answers hover with nothing" % PlayerSettings.HealthBars.keys()[mode]
+				).is_equal(wrapped)
+
+func test_no_description_is_drawn_as_a_row_any_more() -> void:
+	# The other half of the ask: the words moved, they did not get duplicated. A desc still rendered
+	# as a Label is the crowding this change is about, and it would look identical in a diff.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
+		var desc := PlayerSettings.desc_of(setting)
+		assert_object(_label_with_text(screen, desc)).override_failure_message(
+				"%s still draws its description on the page" % PlayerSettings.Setting.keys()[setting]
+				).is_null()
+
+func test_every_description_is_wrapped_for_the_tooltip() -> void:
+	# Godot's tooltip is a Label with autowrap OFF and no theme item to switch it on, so an unwrapped
+	# line runs off the screen edge. wrap() is idempotent, so equality means "already display-safe".
+	for setting: PlayerSettings.Setting in PlayerSettings.Setting.values():
+		var wrapped := UiText.wrap(PlayerSettings.desc_of(setting))
+		assert_str(UiText.wrap(wrapped)).override_failure_message(
+				"%s's description does not survive a second wrap" % PlayerSettings.Setting.keys()[setting]
+				).is_equal(wrapped)
