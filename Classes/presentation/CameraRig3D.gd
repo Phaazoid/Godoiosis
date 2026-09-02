@@ -289,6 +289,12 @@ var pan_limit := Rect2()
 var _orbiting := false
 var _orbit_travel_px := 0.0
 
+# The camera's black box (#669), dumped into report.md beside the View line. It lives HERE rather
+# than on the host because the rig is the one place every channel is readable at once -- so a trace
+# entry can never disagree with another about what the camera was doing. battle3d writes its own
+# named moments through note_event() below, against this same snapshot.
+var trace := CameraTrace.new()
+
 
 func _ready() -> void:
 	_target_yaw_degrees = rotation_degrees.y
@@ -454,7 +460,14 @@ func _set_board_pitch_degrees(value: float) -> void:
 
 
 func set_zoom(distance: float) -> void:
+	var before := _target_distance
 	_target_distance = minf(distance, max_distance)
+	# The ONE distance door -- widen_to_fit, frame, pose, restore_view and the wheel all arrive
+	# here -- so tracing it catches every zoom whatever asked for it (#669). Only a zoom that
+	# actually MOVES the target is a moment: battle3d re-asserts the playback distance on several
+	# edges, and a row saying "11.0 -> 11.0" is noise standing where a cause should be.
+	if not is_equal_approx(before, _target_distance):
+		note_event("zoom -> %.1f" % _target_distance)
 
 
 # Widen the DISTANCE alone until `volume` fits, leaving the aim, the yaw and the opening shot exactly
@@ -505,8 +518,15 @@ func lift_to(lift: Vector3) -> void:
 # only while a transition declares its drive a cut -- the flash is at full white for exactly this
 # frame, and the ease would still be smearing a 40-unit teleport across the fade that reveals it.
 func cut_lift() -> void:
+	# Only a cut that actually LANDS something is a moment (#669): the mirror calls this every
+	# frame the transition declares a cut, and its own header says it is idempotent past the first
+	# -- so an unguarded note would write the flood the heartbeat's rate limit exists to prevent,
+	# and it would write it under a name that claims a teleport happened sixty times.
+	var moved := not _lift.is_equal_approx(_target_lift)
 	_lift = _target_lift
 	_apply_position()
+	if moved:
+		note_event("lift CUT to %.1f" % _target_lift.y)
 
 
 # ...and how far the body the shot is following has fallen below the board (#602). POLLED like the
@@ -592,6 +612,51 @@ func settled_frame_floor() -> float:
 			- frame_drop(_target_distance, _camera.fov, _pitch_degrees)
 
 
+# ...and where it is RIGHT NOW (#669), for the report line that sits beside the settled one.
+#
+# Structurally identical to its twin above, term for term, and that is the point: the ONLY
+# difference between the two numbers is live-versus-target, so a report showing them apart is
+# showing exactly how far the frame still has to descend. The live distance is the camera's own z,
+# which _process eases toward _dollied_distance() -- the dolly is therefore already IN it and needs
+# no separate term. The flourish stays excluded on both sides, so a shake cannot make the pair
+# disagree for a reason that has nothing to do with settling.
+#
+# A SIBLING, NOT A SECOND ANSWER: #670 folds both into one query surface that takes a WHEN, and the
+# callers listed there (battle3d._shot_floor, widen_to_fit, the report line) move together.
+func live_frame_floor() -> float:
+	return _aim.y + _lift.y - _drop \
+			- frame_drop(_camera.position.z, _camera.fov, _pitch_degrees)
+
+
+# --- The camera trace (#669) -------------------------------------------------------------------
+
+# Every channel at once, and the ONE composer of that snapshot: the rig's own doors, the heartbeat
+# in _process and battle3d's named moments all record through here, so no two entries in a trace
+# can disagree about what the camera was doing (Law #4).
+#
+# The three EASED channels carry live AND target, because the gap between them is the whole of what
+# rounds 7 and 8 were about. Everything else is a single value. Engine.time_scale rides along
+# because a frozen clock presents as a stuck camera and cost a round-6 session to tell apart.
+func _trace_channels() -> Dictionary:
+	return {
+		"aim": Vector2(_target_aim.x, _target_aim.z),
+		"lift": _lift.y, "lift_target": _target_lift.y,
+		"drop": _drop, "drop_target": _target_drop,
+		"dist": _camera.position.z, "dist_target": _target_distance,
+		"dolly": _dolly,
+		"yaw": _target_yaw_degrees,
+		"pitch": _pitch_degrees,
+		"borrowed": _view_borrowed,
+		"tscale": Engine.time_scale,
+	}
+
+
+# A named moment. The doors below call it for their own causes; battle3d calls it for the holds it
+# alone can see (the playback lock, the death show, which unit the shot is trained on).
+func note_event(event: String) -> void:
+	trace.note(event, _trace_channels(), Time.get_ticks_msec())
+
+
 # How the drop channel closes on its target, and pure the same way -- ASYMMETRIC, which is the whole
 # of the cliff follow (#602).
 #
@@ -623,6 +688,9 @@ func shake(amplitude: float) -> void:
 		return
 	_shake_amplitude = amplitude
 	_shake_elapsed = 0.0
+	# Below the strongest-wins early-out, so a traced shake is a jolt that actually LANDED rather
+	# than one a bigger jolt swallowed (#669).
+	note_event("shake %.2f" % amplitude)
 
 
 # The director's push-in for the beat now playing (#520 diff 2c), taking the published 0..1 weight.
@@ -670,6 +738,9 @@ func frame(volume: AABB, bounds := AABB()) -> void:
 	if not rebound(limits):
 		return   # no valid projection yet (a viewport with no size); keep the current framing
 
+	# Past the guard, so a trace never claims a framing that did not happen (#669).
+	note_event("framed volume")
+
 	# Snap, never ease -- hold_at, not glide_to: a camera still lerping toward the fit unprojects at
 	# one distance and picks at another, which desyncs every screen-space read taken on the way.
 	hold_at(_aim_at(box))
@@ -715,6 +786,7 @@ func pose(aim: Vector3, yaw_degrees: float, distance: float, bounds: AABB) -> vo
 		_target_yaw_degrees = previous_target_yaw
 		return
 
+	note_event("posed (authored start)")
 	hold_at(aim)
 	set_zoom(distance)
 	_camera.position.z = _target_distance
@@ -781,7 +853,12 @@ func _fit_distance(box: AABB) -> float:
 # Snap the yaw to the NEAREST detent, unlike Q/E which always travel one. The AI turn is
 # its caller: an enemy phase reads square-on however the player left the camera.
 func align_to_detent() -> void:
+	var before := _target_yaw_degrees
 	_target_yaw_degrees = roundf(_target_yaw_degrees / yaw_step) * yaw_step
+	# A realign that was already square is not a moment (#669) -- and it is the common case, since
+	# every AI turn calls this whether the player moved the camera or not.
+	if not is_equal_approx(before, _target_yaw_degrees):
+		note_event("squared up -> %.0f deg" % _target_yaw_degrees)
 	# ...and THAT is what a directed shot is measured from (#520). Captured here rather than read
 	# live at aim_along below, because a live read would compound: beat two would lerp from where
 	# beat one landed, so a partial strength would give the fifth beat more angle than the first.
@@ -853,6 +930,7 @@ func stash_view() -> void:
 	# _apply_position the way the flourish is, because a release must be a CLIMB and not a cut.
 	_drop = 0.0
 	_target_drop = 0.0
+	note_event("view BORROWED")
 
 
 # ...and on the edge back out. A no-op unless something is actually borrowed, so a release with no
@@ -865,6 +943,10 @@ func stash_view() -> void:
 func restore_view() -> void:
 	if not _view_borrowed:
 		return
+	# BEFORE the writes, so the row carries the channels the release fired AT -- which is the half
+	# round 8 needed and the half a post-restore reading destroys (#669). set_zoom's own note lands
+	# next with where it went.
+	note_event("view RESTORED")
 	_view_borrowed = false
 	glide_to(_borrowed_position)
 	_target_yaw_degrees = _borrowed_yaw_degrees
@@ -883,6 +965,11 @@ func restore_view() -> void:
 # must never be flown back to -- ScenarioManager.clear_board releases the playback lock, which
 # would otherwise fire the restore above on a board that no longer exists.
 func drop_stashed_view() -> void:
+	# Only when there was actually a view to throw away (#669). frame() and pose() both end here
+	# unconditionally, so an unguarded note would stamp "view DROPPED" on every opening shot in the
+	# game and say nothing.
+	if _view_borrowed:
+		note_event("view DROPPED (board swap)")
 	_view_borrowed = false
 	# ...and the fall goes with it, LIVE VALUE AND ALL (#602). This is the one door where the drop is
 	# cut rather than climbed out of: restore_view hands a view back to a player who was watching, so
@@ -981,6 +1068,20 @@ func _process(delta: float):
 		_aim.z = clampf(_aim.z, pan_limit.position.y, pan_limit.end.y)
 
 	_apply_position()
+
+	# THE TRACE'S HEARTBEAT (#669), and it is deliberately LAST: every channel this frame touched --
+	# the eases above, the pan clamp two lines up, whatever a host wrote earlier in the frame -- has
+	# landed by here, so the row is what the camera actually was rather than what it was partway to.
+	#
+	# A heartbeat rather than hooks on the mutators, and the difference is not stylistic. hold_at,
+	# drop_to and lift_to are re-driven EVERY FRAME by the playback mirror, so door hooks would
+	# write sixty rows a second and evict the named moments the trace exists for; and stash_view,
+	# restore_view and drop_stashed_view write _target_drop and _target_yaw_degrees DIRECTLY, past
+	# every door there is. Reading the channels where they ended up catches both.
+	#
+	# CameraTrace owns the "has anything moved, and has long enough passed" decision -- one rule in
+	# one place instead of a guard at each writer.
+	trace.sample(_trace_channels(), Time.get_ticks_msec())
 
 
 func _lerp_angle_degrees(from_degrees: float, to_degrees: float, weight: float) -> float:

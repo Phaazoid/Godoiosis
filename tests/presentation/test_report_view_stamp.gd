@@ -88,3 +88,52 @@ func test_the_view_note_carries_the_camera_channels() -> void:
 		assert_str(note).override_failure_message(
 				"the view note lost its '%s' channel -- reports stop self-diagnosing" % key
 		).contains(key)
+
+
+func test_the_view_note_says_which_holds_are_live_and_where_the_frame_ends() -> void:
+	# The channels say where the camera IS; these say WHY it is there (#669). Every #602 round
+	# opened on "why is it stuck", and a report that answers it costs nobody a play-check round.
+	# The floor is a PAIR: settled alone hides how far the frame still has to descend, and live
+	# alone is the reading round 8 proved nothing may be anchored to.
+	var note: String = _scene._describe_view()
+	for key in ["lock", "death show", "following", "floor", "live", "settled"]:
+		assert_str(note).override_failure_message(
+				"the view note lost its '%s' hold -- a report can say where the camera is but "
+				% key + "not why it is held there, which is the question every round opened with"
+		).contains(key)
+
+
+func test_the_two_frame_floors_are_reported_as_two_different_readings() -> void:
+	# The pair only earns its width if each half is really the half it is labelled. Printing the
+	# settled number in both slots leaves every WORD in the line intact -- "floor", "live",
+	# "settled" -- so the shape assertion above cannot see it, and the report would quietly claim
+	# the frame had finished descending. Driven into a state where the two must differ: a drop
+	# published with no frame after it is exactly round 8's mid-ease death.
+	var rig := _scene.get_node("CameraRig") as CameraRig3D
+	rig.drop_to(3.0)
+
+	var note: String = _scene._describe_view()
+	assert_str(note).override_failure_message(
+			"the view note printed one floor twice -- a frame still three cells from settled "
+			+ "reports as arrived, which is the reading round 8 proved you must not trust"
+	).contains("floor %.2f live / %.2f settled" % [rig.live_frame_floor(), rig.settled_frame_floor()])
+	assert_float(rig.live_frame_floor()).override_failure_message(
+			"the fixture never got the floors apart; the case cannot say anything").is_not_equal(
+			rig.settled_frame_floor())
+
+
+func test_the_camera_trace_reaches_report_md() -> void:
+	# The wire, end to end, for the SECOND push (#669) -- battle3d composes, BugReporter renders,
+	# and delete the one line in _ready and both ends still pass their own suites (#103's shape).
+	var result: Dictionary = await _game.bug_reporter.report(
+		"IDLE", BugReporter.Kind.BUG, "the camera would not let go", null)
+	_written.append(result["dir"])
+
+	var text := FileAccess.get_file_as_string(result["dir"] + "report.md")
+	assert_str(text).contains("## Camera trace")
+	# Not vacuous by way of the fallback: a hosted game must not file the flat-launch sentence.
+	assert_str(text).override_failure_message(
+			"the trace section fell back to its no-host sentence inside a real 3D host -- the "
+			+ "push in _ready is not landing").not_contains(BugReporter.NO_CAMERA_TRACE)
+	# The opening shot poses or frames the rig, so a hosted board has always moved its camera.
+	assert_str(text).not_contains("nothing recorded")

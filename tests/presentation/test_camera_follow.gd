@@ -1662,6 +1662,17 @@ func test_the_death_show_holds_the_trained_frame_until_the_last_cube_lands() -> 
 			"the follow died into a death show and the shot dollied out -- the deepening frame "
 			+ "edge walks down onto the forming bar").is_equal_approx(
 			Pacing.TRAINED_DISTANCE, 0.001)
+	# ...and the trace SAYS SO (#669). This is the line eight rounds of screenshots could not
+	# produce: a deferred release and a skipped one leave the same camera in the same place one
+	# frame later, so only a record of the ORDER tells them apart. The assertion rides this case
+	# rather than a fixture of its own because the deferral has no other way to be reached.
+	var deferrals: int = 0
+	for entry: Dictionary in _rig.trace._entries:
+		if String(entry["event"]).contains("DEFERRED"):
+			deferrals += 1
+	assert_int(deferrals).override_failure_message(
+			"the release was deferred and the trace never said so -- a report of this bug reads "
+			+ "identically to one where the release was skipped").is_equal(1)
 
 	# The show ends: the deferred release fires and hands the distance back.
 	mirror._death_show = false

@@ -264,3 +264,35 @@ func test_a_closed_dev_tools_window_is_stated_rather_than_left_blank() -> void:
 		no_units, "log")
 
 	assert_str(text).contains("Dev tools: **%s**" % BugReporter.NO_DEVTOOLS)
+
+# ---- what the camera just did (#669) ----
+
+func test_the_report_carries_the_camera_trace_it_was_handed() -> void:
+	# Passed like the view and the look, and for the same reason: the trace lives on the 3D rig,
+	# which the reporter cannot reach. This pins that it lands in the body at all.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log", "", "", "", "2 moments over 3.0 s\nplayback lock ACQUIRED")
+
+	assert_str(text).contains("## Camera trace")
+	assert_str(text).contains("playback lock ACQUIRED")
+
+func test_a_flat_launch_says_the_camera_trace_has_no_host() -> void:
+	# The NO_3D_VIEW idiom again: an empty section reads as a broken dump, and "there was no 3D
+	# host" is a real fact about the run rather than an absence.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log")
+
+	assert_str(text).contains("## Camera trace")
+	assert_str(text).contains(BugReporter.NO_CAMERA_TRACE)
+
+func test_the_trace_sits_below_the_board_and_above_the_log() -> void:
+	# Placement is a claim about what KIND of evidence it is: a sequence, read the way the log
+	# tail is read, rather than more of the state the report is about.
+	var no_units: Array[Unit] = []
+	var text := BugReporter.build_report_text("stamp", "IDLE", BugReporter.Kind.BUG, "", null, null,
+		no_units, "log", "", "", "", "trace body")
+
+	assert_int(text.find("## Units")).is_less(text.find("## Camera trace"))
+	assert_int(text.find("## Camera trace")).is_less(text.find("## Engine log"))
