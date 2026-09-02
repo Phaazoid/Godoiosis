@@ -43,7 +43,11 @@ Need some more dev tool control with tile brush - currently lacking in the abili
 
 To include in the issue about damage types - where armor grants def that can mitigate some weapon damage, perhaps alchemic wards can be the mirror for elemental stuff.  I could see wards being inscriptions on equipment, or buffs that have to be channeled mid fight and last X turns.  
 
+reorder the pause menu
 
+no pause menu on title screen?
+
+no menus during battle zoom (action queue, hover menus, etc)
 
 ## 🗂 Dispersed (log)
 
