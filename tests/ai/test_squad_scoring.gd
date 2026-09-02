@@ -82,6 +82,17 @@ func _attacks_in_order(squad: Squad) -> Array[AttackAction]:
 	return out
 
 
+# A pattern-less weapon that SHOVES, so a resolve has a projection to publish and the case below
+# can tell a hypothetical's board from the real one.
+func _shoving_weapon() -> WeaponInstance:
+	var template := WeaponData.new()
+	template.weapon_type = WeaponData.WeaponType.CHAINSWORD
+	template.main_attack = WeaponAttackData.new()
+	template.main_attack.power = 3
+	template.main_attack.knockback = 1
+	return WeaponInstance.make(template)
+
+
 func _damage_to(plan: ResolvedPlan, victim: Unit) -> int:
 	var total := 0
 	for a in plan.attacks:
@@ -276,23 +287,32 @@ func test_a_hypothetical_resolve_never_becomes_the_squads_stored_plan() -> void:
 
 
 # The projections half: a scoring pass runs many hypotheticals and the LAST one is not the queue,
-# so the pass has to finish on a real resolve. Two members and one 3 HP enemy is the shape that
-# reaches it -- the second member's only candidate is refused, so the loop breaks with a rejected
-# hypothetical as the last thing resolved.
+# so the pass has to finish on a real resolve or the board is left dressed for a plan nobody gave.
+#
+# TWO INGREDIENTS, and the first draft of this case had NEITHER, which a mutant caught: the pass
+# must END on a REFUSED candidate (otherwise the next round's base resolve is real and covers for
+# it), and that candidate's resolve must actually PUBLISH something (with no knockback anywhere,
+# every projection is just the unit's own cell and the assertion cannot fail).
+#
+# So: a shoving weapon, and the one candidate on the board scores NEGATIVE because the counter it
+# draws would fell the attacker -- refused, having already published the shove it would have landed.
 func test_scoring_leaves_the_board_where_a_real_resolve_would() -> void:
 	var board: Dictionary = _build_board()
-	var pair := _pair(board)
-	var a: Unit = _spawn(board, ENEMY, A_CELL)
-	a.set_current_hp(3)
+	var attacker: Unit = _spawn(board, PLAYER, Vector2i(0, 0))
+	attacker.equipped_weapon = _shoving_weapon()
+	attacker.set_current_hp(3)                       # the counter fells it -> the candidate scores below zero
+	var foe: Unit = _spawn(board, ENEMY, Vector2i(1, 0))   # armed, at full HP: survives and answers
 	var context: BoardContext = _context(board)
 
-	AITactics.queue_main_actions_for_squad(pair[0].squad, context, board.squad_manager)
+	AITactics.queue_main_actions_for_squad(attacker.squad, context, board.squad_manager)
+	assert_int(_aim_count(attacker.squad, foe.movement.cell)).override_failure_message(
+			"the fixture no longer refuses its only candidate, so nothing is being pinned").is_equal(0)
 
 	var after_pass := {}
 	for unit in context.units:
 		after_pass[unit] = unit.get_projected_destination()
-	board.squad_manager.resolve_plan(pair[0].squad, context)
+	board.squad_manager.resolve_plan(attacker.squad, context)
 	for unit in context.units:
 		assert_that(after_pass[unit]).override_failure_message(
-				"%s sat at a HYPOTHETICAL's projection after the pass" % unit.get_unit_name()) \
+				"a unit sat at a REFUSED candidate's projection after the pass") \
 			.is_equal(unit.get_projected_destination())
