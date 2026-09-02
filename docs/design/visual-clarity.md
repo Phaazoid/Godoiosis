@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #676 (2026-09-01).**
+**Canon checked through #683 (2026-09-02).**
 
 ## Principles
 
@@ -2410,3 +2410,62 @@ per unit or a generic one). "It should be very obvious a unit is in crisis mode.
 third consumer of [#358](https://github.com/Phaazoid/Godoiosis/issues/358)'s effect stack.
 
 *Authored by Claude (Opus 4.8) at @Phaazoid's direction, 2026-06-26.*
+
+## The UI has a DESIGN SPACE ([#659](https://github.com/Phaazoid/Godoiosis/issues/659), BUILT 2026-09-02)
+
+**An authored pixel size is a design-space unit, not a screen pixel.** Every Control in the battle
+UI lays out in a fixed **1280×720** space that is stretched to fill the window, so a panel covers
+the same fraction of the screen at 720p, at 1440p and at 4K. That is the whole ask: the co-dev's 4K
+report showed the board filling the screen while the inspect panel — 300px, which is 23% of a 720p
+width — shrank to 8% of theirs.
+
+**Where it lives.** `Classes/ui/GameSurface.gd`, a script on `Main.tscn`'s `GameContainer`. It gives
+`GameView` a `size_2d_override` sized to the window ÷ the scale factor, with
+`size_2d_override_stretch` on — Godot's own 2D content scale, the machinery a Window's
+`content_scale_mode = canvas_items` runs on, applied one level down from where it usually sits. The
+root window is the wrong place for it here: the root's base size would clamp `GameContainer` to
+1280×720 and the whole game would become a 720p texture blown up to the window. On `GameView`,
+`size` stays physical, so 2D still *renders* at full resolution and only the layout space is scaled.
+Text follows without help — `Viewport.oversampling` reads the same transform, so glyphs
+re-rasterize at the effective scale rather than being magnified.
+
+**One seam, deliberately.** Every panel, menu, modal and screen mounts at `game.ui_layer` inside
+that viewport, so all of them scale with no per-surface work — and so does anything added later.
+It rides on the *container* rather than on `Battle3D` because all four hosting paths must get it:
+Battle3D's three views each work by setting that node's anchors or size, and a bare `Main.tscn`
+launch sets neither, so `resized` covers the lot and `battle3d.gd` needs no edit at all. CORNER
+falls out for free — it pins the container to the native size, so the factor is exactly 1 there.
+
+**The factor is EXPAND, and never below 1.** `minf(size.x / 1280, size.y / 720)`: the smaller ratio
+wins, so a window wider than 16:9 gets extra design *width* (the board breathes, the panels stay
+against their anchors) and a taller one is bounded by its width instead of having the panels
+squeezed inward. And `GameContainer.custom_minimum_size` floors the container at the native
+resolution, so a window smaller than 1280×720 clips exactly as it always has rather than scaling
+the UI down into illegibility. The design resolution is **not** a new constant — that same
+`custom_minimum_size` is already "the one source of that fact" for `battle3d.gd`'s PiP.
+
+Four things this changed that are easy to get wrong later:
+
+- **`get_viewport_rect()` inside the game is the DESIGN space; `GameView.size` is still physical.**
+  Comparing the two is now a category error. `tests/ui/test_queue_panel_docking.gd` says so at its
+  own assertion, because that is exactly the mistake its old form made.
+- **`Control.get_screen_transform()` does not compose the content scale** for a Control under a
+  `CanvasLayer` — measured on the real scene, it returns the bare global transform. "How big is
+  this on screen" is `viewport.get_final_transform() * control.get_global_transform_with_canvas()`,
+  which is the chain `Viewport.push_input` inverts on the way in.
+- **FLAT_2D reframes.** The Camera2D's authored `zoom = 2` now divides design pixels rather than
+  physical ones, so F4 shows a fixed amount of board at any window size instead of more board on a
+  bigger monitor. Arguably the fix rather than a cost, and the escape if it ever reads wrong is one
+  line dividing that zoom by the factor.
+- **Icons magnify at a non-integer factor.** `game._ready` sets the viewport's canvas filter to
+  NEAREST, so the 16×16 action icons draw at ~3.7× on the dev's own window — cleanly nearest, but
+  unevenly doubled. Left alone deliberately; it is a look call, not a bug.
+
+**What does NOT scale.** Dialogic's layout mounts on the **tree root** (`create_layout` defaults its
+parent to `dialogic.get_parent()`), outside the SubViewport entirely — so the dialog box is still
+physical pixels on a big screen while everything around it scales. Filed rather than fixed here:
+re-homing it into `ui_layer` drags in the #370 synthesized-click behaviour, the
+`DialogFixtures.end_all_dialog` teardown, and whether a dialog inside ModalLock's frozen subtree
+freezes itself. `Battle3D`'s own root readouts — the help line, checkout stamp and dev badge — do
+not scale either, and stay that way on purpose: the whiteout transition shares their CanvasLayer and
+must cover the real window.
