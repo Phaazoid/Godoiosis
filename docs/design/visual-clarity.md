@@ -7,7 +7,7 @@ its child [#49 Action Queue UX](https://github.com/Phaazoid/Godoiosis/issues/49)
 This is a *guidelines* doc, not a spec — it captures the principles we're holding the work to,
 plus the running order of the queue-UX checklist. Update it as items land.
 
-**Canon checked through #691 (2026-09-02).**
+**Canon checked through #699 (2026-09-02).**
 
 ## Principles
 
@@ -1431,6 +1431,12 @@ channels — the sibling of [#217](https://github.com/Phaazoid/Godoiosis/issues/
 said it was. Filed as [#676](https://github.com/Phaazoid/Godoiosis/issues/676) and
 [#675](https://github.com/Phaazoid/Godoiosis/issues/675) respectively; #676 carries the
 ColorPicker-ban finding so it is not rediscovered.
+
+> **The camera sections start here** and run to the end of this file — eleven of them, chronological,
+> each answering *why is it like that*. **For what a WORD means and which symbol owns it, read
+> [`camera-language.md`](camera-language.md) instead** ([#671](https://github.com/Phaazoid/Godoiosis/issues/671)):
+> the channels and their doors, LIVE vs SETTLED, the shot words, the five movers, and the two things
+> a camera feature keeps re-deriving. That page names and points; this one tells the story.
 
 ## The camera takes an ANGLE ([#520](https://github.com/Phaazoid/Godoiosis/issues/520) diff 2a, BUILT 2026-08-26)
 
