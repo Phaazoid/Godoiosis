@@ -390,10 +390,15 @@ func test_picking_an_aim_palette_repaints_the_board_on_close() -> void:
 #  The description is HOVER TEXT (2026-09-02)
 # ==============================================================================
 #
-# Asserted through `get_tooltip(point)`, never by reading `tooltip_text` back. That call walks the
-# same ownership chain a real hover walks -- it asks the control under the point, and returns "" when
-# that control's mouse_filter is IGNORE. So it sees the failure this change is actually likely to
-# have (a Label that is never asked), where a property read cannot.
+# TWO ASSERTIONS, because one of them cannot see half the failure and I shipped a version that
+# pretended otherwise. `get_tooltip(point)` answers with the control's OWN text (walking UP to a
+# parent only when its own is empty) -- it does NOT pick, so it returns the right string for a
+# control Godot would never ask. Measured: deleting the mouse_filter line left all these cases GREEN.
+#
+# So the text and the REACHABILITY are pinned separately. get_tooltip covers "the right words are on
+# this control"; test_every_control_carrying_a_tooltip_can_be_asked covers "the viewport will pick
+# it", by asserting the one property that decides it. Picking itself is the Viewport's, has no public
+# entry to drive, and skips MOUSE_FILTER_IGNORE outright -- which is a Label's default.
 
 func _tooltip_over(control: Control) -> String:
 	# The control's own centre, in its own space -- get_tooltip takes a LOCAL point.
@@ -464,3 +469,43 @@ func test_every_description_is_wrapped_for_the_tooltip() -> void:
 		assert_str(UiText.wrap(wrapped)).override_failure_message(
 				"%s's description does not survive a second wrap" % PlayerSettings.Setting.keys()[setting]
 				).is_equal(wrapped)
+
+func test_every_control_carrying_a_tooltip_can_be_asked() -> void:
+	# THE case the get_tooltip ones cannot be: picking is the Viewport's job and it skips
+	# MOUSE_FILTER_IGNORE outright, which is a plain Label's DEFAULT -- so a choice row's title can
+	# hold perfectly correct text that no player will ever see. Nothing about the text can detect it;
+	# the filter is the whole mechanism, so the filter is what gets asserted.
+	SettingsScreen.show_screen(game)
+	await _frames(4)
+	var screen: Node = _first_modal_of(SettingsScreen)
+	assert_object(screen).is_not_null()
+
+	var unreachable: Array[String] = []
+	var carriers := 0
+	_collect_unreachable(screen, unreachable)
+	for node: Node in _tooltip_carriers(screen):
+		carriers += 1
+	# Vacuity guard first: a page that set no tooltips at all would pass the loop below trivially.
+	assert_int(carriers).override_failure_message(
+			"no control on the settings page carries a tooltip -- this case would pass over nothing"
+			).is_greater(PlayerSettings.Setting.size())
+	assert_array(unreachable).override_failure_message(
+			"these controls hold hover text Godot will never ask them for (mouse_filter IGNORE): %s"
+			% ", ".join(unreachable)).is_empty()
+
+func _tooltip_carriers(node: Node) -> Array[Node]:
+	var found: Array[Node] = []
+	var control := node as Control
+	if control != null and control.tooltip_text != "":
+		found.append(node)
+	for child: Node in node.get_children():
+		found.append_array(_tooltip_carriers(child))
+	return found
+
+func _collect_unreachable(node: Node, out: Array[String]) -> void:
+	var control := node as Control
+	if control != null and control.tooltip_text != "" \
+			and control.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		out.append("%s (%s)" % [node.name, node.get_class()])
+	for child: Node in node.get_children():
+		_collect_unreachable(child, out)
