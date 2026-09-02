@@ -30,6 +30,7 @@ const NOTE_IN_MESSAGE := 400
 # What the stamped lines say when nothing answered them (#240, #328). Named so a test can assert
 # the honest sentence rather than the absence of a section.
 const NO_3D_VIEW := "flat 2D (no 3D host)"
+const NO_CAMERA_TRACE := "(no 3D host -- nothing drives a camera trace)"
 const DEFAULT_LOOK := "(default)"
 const NO_DEVTOOLS := "closed"
 
@@ -39,6 +40,12 @@ var game   # untyped back-ref: game.gd has no class_name
 # subtree keeps no upward path to the 3D scene, which is why the Look host and HoverPresenter's
 # pointer source arrive the same way. Unset = a flat Main.tscn launch, which the report says.
 var view_source: Callable
+
+# ...and the SEQUENCE that got it there (#669), pushed the same way and from the same place. A
+# second Callable rather than a richer first one: "what is the camera doing" and "what did it just
+# do" are two questions with two answers, which is the same reason the View and Look lines below
+# have two homes. Unset = a flat launch, which the section says.
+var trace_source: Callable
 
 var _uploader: ReportUploader
 var _card: ReportPanel
@@ -125,7 +132,7 @@ func report(state_name: String, kind: Kind, note: String, frame: Image) -> Dicti
 		return {"dir": "", "sent": false}
 	var look: String = game.scenario_manager.current_look_preset
 	md.store_string(build_report_text(stamp, state_name, kind, note, squad, plan, units, _log_tail(),
-		_view_note(), look, _devtools_note()))
+		_view_note(), look, _devtools_note(), _trace_note()))
 	md.close()
 
 	if frame == null:
@@ -217,6 +224,12 @@ func _view_note() -> String:
 	var note: String = view_source.call()
 	return note
 
+func _trace_note() -> String:
+	if not trace_source.is_valid():
+		return ""
+	var note: String = trace_source.call()
+	return note
+
 # The Discord message body, derived from the same four facts report() writes into report.md so the
 # channel and the attachment can never disagree. The note is truncated HERE only -- the full text
 # is always in report.md, which is attached to the same message.
@@ -239,7 +252,7 @@ static func build_summary(stamp: String, state_name: String, kind: Kind, note: S
 # Pure + static so it is testable without a game scene, the capture/save split again.
 static func build_report_text(stamp: String, state_name: String, kind: Kind, note: String,
 		squad: Squad, plan: ResolvedPlan, units: Array[Unit], log_tail: String,
-		view_note := "", look_note := "", devtools_note := "") -> String:
+		view_note := "", look_note := "", devtools_note := "", trace_note := "") -> String:
 	var out := "# %s report %s\n\n" % [Kind.keys()[kind].to_lower().capitalize(), stamp]
 
 	out += "## What they wrote\n\n"
@@ -304,6 +317,11 @@ static func build_report_text(stamp: String, state_name: String, kind: Kind, not
 			squad_note,
 		]
 			
+	# WHAT THE CAMERA JUST DID (#669). Below the board and above the log because it is evidence of
+	# the same kind as the log tail -- a sequence, read to find out what happened in what order --
+	# while everything above is the state the report is ABOUT.
+	out += "\n## Camera trace\n\n%s\n" % (NO_CAMERA_TRACE if trace_note == "" else trace_note)
+
 	out += "\n## Engine log (last %d lines)\n\n```\n%s\n```\n" % [LOG_TAIL_LINES, log_tail]
 	return out
 

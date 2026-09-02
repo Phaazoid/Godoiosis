@@ -747,3 +747,94 @@ func test_the_settled_frame_floor_reads_the_targets_not_the_easing_channels() ->
 			"the settled floor is not composed from the target channels -- a mid-ease death "
 			+ "leaves the frame descending onto the burst's sockets").is_equal_approx(
 			expected, 0.001)
+
+
+func test_the_live_frame_floor_and_its_settled_twin_agree_once_nothing_is_easing() -> void:
+	# The pair is only readable as a pair if they are the same composition -- so on a rig with
+	# every channel arrived they must be the SAME NUMBER, and any gap in a report is then a gap
+	# that means something (#669).
+	#
+	# frame() rather than set_zoom() to settle the distance, and the reason is worth writing down:
+	# the aim, lift and drop eases all take the headless escape in _process and land in one frame,
+	# but the DISTANCE lerp does not -- it is the smoothing blend, asymptotic, and a set_zoom is
+	# still ~12% of the way there after an idle frame. frame() assigns _camera.position.z outright,
+	# which is the only door that leaves the channel exactly arrived.
+	var rig := _rig()
+	rig.frame(AABB(Vector3(0.0, 0.0, 0.0), Vector3(8.0, 1.0, 8.0)))
+	rig.lift_to(Vector3(0.0, 3.0, 0.0))
+	rig.drop_to(2.0)
+	await await_idle_frame()
+
+	assert_float(_camera().position.z).override_failure_message(
+			"the fixture never settled the distance, so the case would pass or fail on how far "
+			+ "one frame of smoothing got -- not on the composition").is_equal_approx(
+			rig._target_distance, 0.001)
+
+	assert_float(rig.live_frame_floor()).override_failure_message(
+			"the two floors disagree on a settled rig, so the pair cannot be read as "
+			+ "live-versus-target -- one of them is composing from something else").is_equal_approx(
+			rig.settled_frame_floor(), 0.001)
+
+
+func test_the_live_frame_floor_sits_above_the_settled_one_while_a_channel_is_still_falling() -> void:
+	# Round 8's law, made readable: an anchor measured off the LIVE frame can be descended onto by
+	# a channel still settling. No process between the writes and the read -- headless that IS
+	# mid-ease, the shape the settled case above uses.
+	var rig := _rig()
+	rig.hold_at(Vector3(4.0, 6.0, 4.0))
+	await await_idle_frame()
+	rig.drop_to(5.0)
+
+	assert_float(rig.live_frame_floor()).override_failure_message(
+			"the live floor already reads the target drop -- the two numbers say the same thing "
+			+ "and the report cannot show how far the frame still has to descend").is_greater(
+			rig.settled_frame_floor())
+
+
+# ---- the camera trace (#669) ----
+
+func test_the_zoom_door_names_itself_in_the_trace() -> void:
+	var rig := _rig()
+	var before: int = rig.trace._entries.size()
+	rig.set_zoom(9.0)
+
+	assert_int(rig.trace._entries.size()).override_failure_message(
+			"the one distance door recorded nothing -- widen_to_fit, frame, pose, restore_view "
+			+ "and the wheel all arrive there, so the trace loses every zoom at once").is_equal(
+			before + 1)
+	assert_str(rig.trace._entries[-1]["event"]).contains("zoom")
+
+
+func test_re_asserting_the_distance_it_already_has_is_not_a_moment() -> void:
+	# battle3d re-asserts the playback distance on several edges. A row reading "11.0 -> 11.0"
+	# stands where a cause should be, and enough of them evict the causes.
+	var rig := _rig()
+	rig.set_zoom(9.0)
+	var after_real_zoom: int = rig.trace._entries.size()
+	rig.set_zoom(9.0)
+
+	assert_int(rig.trace._entries.size()).override_failure_message(
+			"a no-op zoom wrote a row -- the trace fills with restatements").is_equal(
+			after_real_zoom)
+
+
+func test_the_heartbeat_sees_a_channel_written_past_every_door() -> void:
+	# THE CASE THAT JUSTIFIES THE HEARTBEAT. stash_view() zeroes _drop and _target_drop by direct
+	# assignment -- no door, no mutator -- and restore_view() assigns _target_yaw_degrees the same
+	# way. A trace hooked on the rig's doors would show the borrow and then silently disagree with
+	# the camera about where it was. Reading the channels where they ENDED UP cannot miss it.
+	var rig := _rig()
+	rig.drop_to(6.0)
+	await await_idle_frame()
+	assert_float(rig._target_drop).override_failure_message(
+			"the fixture never got the rig into a pit; the case cannot say anything").is_equal_approx(
+			6.0, 0.001)
+
+	rig.stash_view()   # zeroes the drop outright, past every door
+	await await_idle_frame()
+
+	var last: Dictionary = rig.trace._entries[-1]["channels"]
+	assert_float(last["drop_target"]).override_failure_message(
+			"the trace still shows the rig deep in a pit it left -- a direct field write went "
+			+ "unrecorded, which is exactly what a door-hooked trace cannot see").is_equal_approx(
+			0.0, 0.001)

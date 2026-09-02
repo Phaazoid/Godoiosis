@@ -153,6 +153,16 @@ var _held_drop := 0.0
 # ...and which unit the shot is trained on, BY ID, an edge detector for the zoom (#602 round 4).
 # An id rather than a ref so a body freed mid-beat cannot wedge the edge, and 0 is "nobody".
 var _trained_seen_id := 0
+# ...and last frame's death show (#669), so the trace can say when it began and when it cleared.
+# A DIFF KEY on another store's fact, which is normally the #308 mistake -- declared here because
+# the store it copies is a bool with no richer form, and because its whole failure mode is a
+# missing trace row: nothing reads it to decide where the camera goes. The camera's own hold reads
+# _unit_mirror.death_show_live() live, below, exactly as it did before this existed.
+var _death_show_seen := false
+# ...and last frame's DEFERRAL (#669): a trained release that is due while the death show outranks
+# it. Its own latch rather than a read of the two above, because the deferral is a state they
+# COMPOSE and its rising edge is the moment worth a row. Trace-only, like _death_show_seen.
+var _release_deferred := false
 
 
 func _ready() -> void:
@@ -163,6 +173,10 @@ func _ready() -> void:
 	# The SAME push, one layer down (#240): a bug report names the angle it was seen from.
 	# Unconditional, because F3 files a report in demo_mode too.
 	game.bug_reporter.view_source = _describe_view
+	# ...and the SEQUENCE that got it there (#669), beside it rather than folded into it: the View
+	# line answers "what is the camera doing", the trace answers "what did it just do", and the two
+	# questions have two homes for the reason the report already keeps View and Look apart.
+	game.bug_reporter.trace_source = _describe_trace
 	var dev_overlay: Node = _main.get_node_or_null("DevOverlay")
 	if dev_overlay is Window:
 		(dev_overlay as Window).visible = false
@@ -617,7 +631,16 @@ func _describe_view() -> String:
 	# to decode from pixels alone: a stuck lift, a held drop or a frozen clock is a number here and
 	# a diagnosis nowhere else. Live/target pairs where a channel eases, so a report says both
 	# where the camera IS and where it is trying to be.
-	return "%s -- yaw %.0f deg, zoom %.1f, centred on %s [lift %.1f, drop %.1f->%.1f, dist->%.1f, tscale %.2f, staged %d, flight %s]" % [
+	# ...and WHICH HOLDS ARE LIVE, plus where the frame's bottom edge actually is (#669). The
+	# channels above say where the camera IS; without these the report cannot say WHY it is stuck
+	# there, and "why is it held" was the question every #602 round opened with. The floor is the
+	# pair rather than either half: settled alone hides how far the frame still has to descend,
+	# live alone is the reading round 8 proved you must not anchor anything to.
+	var cam: CameraController = game.camera_controller
+	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
+	return ("%s -- yaw %.0f deg, zoom %.1f, centred on %s [lift %.1f, drop %.1f->%.1f, dist->%.1f, "
+			+ "tscale %.2f, staged %d, flight %s] holds: lock %s, death show %s, following %s | "
+			+ "floor %.2f live / %.2f settled") % [
 		View.keys()[view],
 		_rig.rotation_degrees.y,
 		_camera.position.z,
@@ -628,7 +651,21 @@ func _describe_view() -> String:
 		Engine.time_scale,
 		BoardSpace.staged_cells().size(),
 		"yes" if BoardSpace.flight_active() else "no",
+		"yes" if cam.playback_locked else "no",
+		"yes" if _unit_mirror.death_show_live() else "no",
+		trained.get_unit_name() if trained != null else "nobody",
+		_rig.live_frame_floor(),
+		_rig.settled_frame_floor(),
 	]
+
+
+# The SEQUENCE the View line above cannot carry (#669), pushed at BugReporter in _ready beside it.
+#
+# Composed here for the reason the view note is -- only this scene knows what its own rig fields
+# MEAN -- but the rendering is the trace's own: it holds the entries, so it is what knows how to
+# lay them out, and build_report_text stays pure either way.
+func _describe_trace() -> String:
+	return _rig.trace.render(Time.get_ticks_msec())
 
 
 # --- Hosting the 2D game (stage 4c) ---------------------------------------------------
@@ -794,6 +831,7 @@ func _mirror_camera() -> void:
 	# live under an AI turn a per-frame snap would fight the player's own drag.
 	if cam.playback_locked != _playback_owned_camera:
 		_playback_owned_camera = cam.playback_locked
+		_rig.note_event("playback lock %s" % ("ACQUIRED" if _playback_owned_camera else "released"))
 		if _playback_owned_camera:
 			# BEFORE the two resets below, or it stashes the reset rather than the player's own
 			# framing. One edge serves every case the dev named (dev, 2026-08-26): a pass claims and
@@ -842,6 +880,13 @@ func _mirror_camera() -> void:
 	# releases. Mirrored under the return -- where beat_profile sits -- it would hold the last pass's
 	# answer and leave every bar on the board up for ever.
 	_unit_mirror.cinematic_playback = cam.playback_cinematic
+	# ...and whether a void death's cubes are still in the air (#669), traced ABOVE the gate for the
+	# reason the depth is: the show's flag clears in UnitMirror's own _process, so its END can land
+	# after playback has let go, and an edge polled below the return would never see it.
+	var show_live: bool = _unit_mirror.death_show_live()
+	if show_live != _death_show_seen:
+		_death_show_seen = show_live
+		_rig.note_event("death show %s" % ("BEGAN" if show_live else "ended"))
 	if not cam.playback_locked:
 		return
 	# The 2D camera answers WHERE on the board; the board answers HOW HIGH. It used to keep
@@ -859,6 +904,8 @@ func _mirror_camera() -> void:
 	# a per-frame set_zoom would stomp them.
 	if cam.shot_cells != _stage_cells_solved:
 		_stage_cells_solved = cam.shot_cells.duplicate()
+		_rig.note_event("stage %s" % ("cleared" if _stage_cells_solved.is_empty()
+				else "published (%d cells)" % _stage_cells_solved.size()))
 		_rig.set_zoom(_rig.playback_distance)
 		if not _stage_cells_solved.is_empty():
 			_stage_height = _solve_stage_height(_stage_cells_solved)
@@ -876,8 +923,20 @@ func _mirror_camera() -> void:
 	var trained: Unit = cam.follow_unit if is_instance_valid(cam.follow_unit) else null
 	var trained_id := trained.get_instance_id() if trained != null else 0
 	var show_holds := trained == null and _unit_mirror.death_show_live()
+	# THE ROUND-8 LINE (#669). This state -- a release edge is due AND the death show is outranking
+	# it -- is precisely what eight rounds of screenshots could not show: a deferred release and a
+	# skipped one leave the same camera in the same place one frame later, and only the ORDER tells
+	# them apart. Its OWN latch, on its own rising edge: _trained_seen_id deliberately does not
+	# advance while the show holds, so the condition stays true every frame the cubes are in the
+	# air, and _death_show_seen is already set by the edge above and so cannot serve as the gate.
+	var release_deferred: bool = show_holds and trained_id != _trained_seen_id
+	if release_deferred != _release_deferred:
+		_release_deferred = release_deferred
+		if release_deferred:
+			_rig.note_event("trained release DEFERRED (death show)")
 	if not show_holds and trained_id != _trained_seen_id:
 		_trained_seen_id = trained_id
+		_rig.note_event("follow -> %s" % (trained.get_unit_name() if trained != null else "nobody"))
 		_rig.set_zoom(Pacing.TRAINED_DISTANCE if trained != null else _rig.playback_distance)
 	var flat := BoardSpace.of_pixels(cam.global_position, 0.0)
 	var aim := _aim_over(flat.x, flat.z)
