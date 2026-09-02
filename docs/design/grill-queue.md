@@ -2,7 +2,7 @@
 
 **Status: LIVING LIST (created 2026-07-05 at the dev's request).** The curated queue of design decisions awaiting a grill session — *not* an exhaustive dump of every open fork (each design doc keeps its own). Claude maintains this; when a session completes, its entry moves to **Done** with the date and where the canon landed. Detailed context for the A-items: [coherence-audit-2026-07-05.md](coherence-audit-2026-07-05.md).
 
-**Canon checked through #565 (2026-08-26).**
+**Canon checked through #687 (2026-09-02).**
 
 ## Next up — meaty sessions
 
@@ -18,7 +18,7 @@
 
 ## Quick hits — single-decision scale
 
-*(empty — quick hit 16 resolved 2026-08-09, see Done)*
+17. **The action queue's shape** — [#685](https://github.com/Phaazoid/Godoiosis/issues/685), filed out of [#659](https://github.com/Phaazoid/Godoiosis/issues/659) with the dev's own addendum: *"the action queue could use a visual redesign in general. It's a very old shape - one I hand created pretty early on."* The ticket is a LOOK, so it owes a grill before any plan rather than one built off inferred taste. Not a blank sheet: the CONTENT vocabulary is settled canon ([visual-clarity.md](visual-clarity.md) — volley grouping, derived/indented rows, the `hp->hp` readout, drag-reorder as the order's answer), the clipping has a diagnosis (the panel's containers do not hold their own children), and two filed tickets constrain whatever shape it lands on: [#462](https://github.com/Phaazoid/Godoiosis/issues/462) (which step of a running pass the queue is on) and [#119](https://github.com/Phaazoid/Godoiosis/issues/119) (scrolling back through past queues).
 
 ## Parked — real sessions with prerequisites
 
